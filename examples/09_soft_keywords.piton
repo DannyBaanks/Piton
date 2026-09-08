@@ -1,0 +1,43 @@
+importar asyncio
+
+tipo Nombre = str
+tipo Conteo = dict[str, int]
+
+funcion saludar(nombre: Nombre) -> Nombre:
+    devolver f"hola {nombre}"
+
+funcion contar_elementos(items: list[str]) -> Conteo:
+    conteo: Conteo = {}
+    para item en items:
+        segun item:
+            caso "Danny":
+                conteo[item] = 100
+            caso _:
+                conteo[item] = longitud(item)
+    devolver conteo
+
+clase Caja[T]:
+    funcion __init__(self, valor: T):
+        self.valor = valor
+
+    funcion obtener(self) -> T:
+        devolver self.valor
+
+asincrono funcion main():
+    nombre: Nombre = "Danny"
+    imprimir(nombre)
+
+    elementos = ["Danny", "x", "Danny", "yy"]
+    conteo = contar_elementos(elementos)
+    imprimir(conteo)
+
+    caja = Caja[int](42)
+    imprimir(caja.obtener())
+
+    segun nombre:
+        caso "Danny":
+            imprimir("es Danny")
+        caso _:
+            imprimir("otro")
+
+asyncio.run(main())

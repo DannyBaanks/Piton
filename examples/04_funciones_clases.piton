@@ -1,0 +1,12 @@
+clase Saludador:
+    funcion __init__(self, prefijo):
+        self.prefijo = prefijo
+
+    funcion saludar(self, nombre):
+        si no nombre:
+            devolver "¿y tú quién eres alv?"
+        devolver self.prefijo + nombre
+
+saludador = Saludador("qué onda ")
+imprimir(saludador.saludar("Danny"))
+imprimir(saludador.saludar(""))

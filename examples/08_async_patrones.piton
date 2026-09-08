@@ -1,0 +1,45 @@
+importar asyncio
+
+tipo Nombres = list[str]
+
+asincrono funcion duplicar(valor):
+    esperar asyncio.sleep(0)
+    devolver valor * 2
+
+funcion describir(valor):
+    segun valor:
+        caso {"nombre": nombre, "activo": Verdadero}:
+            devolver f"activo: {nombre}"
+        caso [primero, *resto] si resto:
+            cantidad = longitud(resto)
+            devolver f"lista: {primero}+{cantidad}"
+        caso Nada:
+            devolver "nada"
+        caso _:
+            devolver "otro"
+
+funcion crear_contador():
+    total = 0
+
+    funcion incrementar():
+        no_local total
+        total += 1
+        devolver total
+
+    devolver incrementar
+
+asincrono funcion principal():
+    datos = {"temporal": Verdadero}
+    afirmar datos["temporal"] es Verdadero
+    borrar datos["temporal"]
+    afirmar "temporal" no en datos
+
+    imprimir(describir({"nombre": "Danny", "activo": Verdadero}))
+    imprimir(describir([1, 2, 3]))
+    imprimir(describir(Nada))
+
+    contador = crear_contador()
+    contador()
+    imprimir(esperar duplicar(contador()))
+
+asyncio.run(principal())

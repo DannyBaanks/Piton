@@ -1,0 +1,13 @@
+importar sys
+
+funcion saludar(nombre):
+    si no nombre:
+        devolver "¿y tú quién eres alv?"
+    sino:
+        devolver "qué onda " + nombre
+
+personas = ["Danny", "Ada", ""]
+para indice, persona en enumerar(personas):
+    imprimir(indice, saludar(persona))
+
+imprimir("argumentos:", sys.argv[1:])

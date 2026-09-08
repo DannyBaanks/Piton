@@ -1,0 +1,13 @@
+total = 0
+
+para i en rango(6):
+    si i == 2:
+        continuar
+    si i == 5:
+        romper
+    total += i
+
+mientras total < 10:
+    total += 1
+
+imprimir(total)

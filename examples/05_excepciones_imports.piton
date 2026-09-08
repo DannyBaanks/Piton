@@ -1,0 +1,8 @@
+desde math importar sqrt como raiz
+
+intentar:
+    imprimir(raiz(9))
+excepto ValueError como error:
+    imprimir(error)
+finalmente:
+    imprimir("listo")

@@ -1,0 +1,4 @@
+segun = 1
+caso = 2
+tipo = 3
+imprimir(segun, caso, tipo)

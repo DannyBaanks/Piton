@@ -1,0 +1,2 @@
+nombre = entrada()
+imprimir("hola " + nombre)

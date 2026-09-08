@@ -1,0 +1,15 @@
+# si sino para funcion devolver imprimir: este comentario queda igual
+texto = "si sino para funcion devolver imprimir"
+sistema = "sis"
+parasol = "sol"
+sinoidal = "onda"
+funcionaria = "Ada"
+
+clase Caja:
+    funcion imprimir(self):
+        devolver "atributo intacto"
+
+objeto = Caja()
+imprimir(texto)
+imprimir(sistema, parasol, sinoidal, funcionaria)
+imprimir(objeto.imprimir())

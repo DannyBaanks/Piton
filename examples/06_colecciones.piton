@@ -1,0 +1,4 @@
+cuadrados = [x * x para x en rango(6) si x % 2 == 0]
+datos = diccionario(nombre="Pitón", activo=Verdadero, faltante=Nada)
+imprimir(cuadrados)
+imprimir(longitud(datos), datos["activo"], datos["faltante"])

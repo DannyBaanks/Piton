@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "piton-lenguaje"
+version = "1.0.0"
+description = "Frontend en español de México para Python: traduce .piton y ejecuta con CPython"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Danny" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = []
+
+[project.scripts]
+piton = "piton.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["piton*"]
