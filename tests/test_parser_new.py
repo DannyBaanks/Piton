@@ -1,14 +1,12 @@
-#!/usr/bin/env python3
-"""Test rápido del parser nuevo vs translator actual."""
-import sys
-sys.path.insert(0, r"C:\Development\ISyCo Git\PITON")
+"""Comparación estructural del parser nuevo y el traductor de referencia."""
+import ast
+import unittest
 
 from piton.parser import parse
 from piton.backend_python import generate_python_from_cst
 from piton.translator import traducir_fuente
 
-# Tests simples
-tests = [
+CASES = [
     # Básico
     'imprimir("hola")\n',
     # Variables
@@ -37,38 +35,18 @@ tests = [
     'nombre = "mundo"\nimprimir(f"hola {nombre}")\n',
 ]
 
-print("=" * 60)
-print("COMPARACIÓN: Parser nuevo (CST) vs Translator actual (tokenize)")
-print("=" * 60)
 
-for i, fuente in enumerate(tests, 1):
-    print(f"\n--- Test {i} ---")
-    print(f"Pitón:\n{fuente.strip()}")
+class ParserParityTests(unittest.TestCase):
+    def test_parser_and_translator_generate_equivalent_ast(self) -> None:
+        for source in CASES:
+            with self.subTest(source=source):
+                generated = generate_python_from_cst(parse(source))
+                translated = traducir_fuente(source, "test.piton")
+                self.assertEqual(
+                    ast.dump(ast.parse(generated), include_attributes=False),
+                    ast.dump(ast.parse(translated), include_attributes=False),
+                )
 
-    try:
-        # Parser nuevo
-        cst = parse(fuente)
-        py_new = generate_python_from_cst(cst)
-        print(f"Parser nuevo OK")
-    except Exception as e:
-        py_new = f"ERROR: {e}"
-        print(f"Parser nuevo FAIL: {e}")
 
-    try:
-        # Translator actual
-        py_old = traducir_fuente(fuente, "test.piton")
-        print(f"Translator actual OK")
-    except Exception as e:
-        py_old = f"ERROR: {e}"
-        print(f"Translator actual FAIL: {e}")
-
-    print(f"Nuevo:\n{py_new.strip()}")
-    print(f"Actual:\n{py_old.strip()}")
-
-    if py_new.strip() == py_old.strip():
-        print("✓ IGUALES")
-    else:
-        print("✗ DIFERENTES")
-
-print("\n" + "=" * 60)
-print("FIN")
+if __name__ == "__main__":
+    unittest.main()

@@ -120,6 +120,14 @@ def freeze_value_model() -> dict[str, Any]:
         "tags": {kind.name: kind.value for kind in ValueKind},
         "immediates": ["NONE", "BOOL", "INT"],
         "handles": ["FLOAT_HANDLE", "OBJECT_HANDLE"],
+        "object_sub_tags": {
+            "STR": 5,
+            "LIST": 6,
+            "TUPLE": 7,
+            "DICT": 8,
+            "SET": 9,
+            "BIGINT": 10,
+        },
         "abi": {
             "name": WINDOWS_X64.name,
             "argument_registers": WINDOWS_X64.argument_registers,

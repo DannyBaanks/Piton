@@ -145,7 +145,7 @@ dependen de CPython**. Hay dos backends:
 [x] Colecciones: listas, tuplas, diccionarios, conjuntos
 [x] Acceso a elementos: get_item, collection_len
 [x] Heap objects: object_new, set_attr, get_attr, method_call
-[x] Excepciones tipadas: raise ValueError("x") / except ValueError
+[x] Excepciones tipadas: raise/except/finally con flag-based unwind
 [x] Closures inmutables: lambda con capturas por valor
 [x] Generadores finitos puros (inline, sin frames suspendidos)
 [x] Clases simples: campos escalar + __init__ + métodos directos
@@ -154,6 +154,25 @@ dependen de CPython**. Hay dos backends:
 [x] math.sqrt nativo: SSE sqrtsd
 [x] División entera/piso: coincide con Python
 ```
+
+### Compilar desde la CLI
+
+```powershell
+# PE Windows x86-64
+py -m piton compilar examples\01_hola.piton --backend=x86 --output hola.exe
+
+# ELF Linux x86-64 mediante WSL
+py -m piton compilar examples\01_hola.piton --backend=linux --output hola-linux
+```
+
+Para producir un recibo con hashes, imports PE, ejecución con entorno vacío y
+comparación contra el oracle congelado:
+
+```powershell
+py -m piton compilar examples\01_hola.piton --backend=x86 --output build\native-subset-1\hola.exe --evidencia build\native-subset-1\receipt.json
+```
+
+El contrato exacto vive en `NATIVE_SUBSET_1_0.md`.
 
 ### Qué NO compila nativamente (rechazado o pendiente)
 
@@ -201,25 +220,32 @@ nativo contra CPython 3.12.4:
 py -m unittest tests.test_phase5 -v
 ```
 
-Salida: ~130 tests OK con certeza binaria PE vs CPython.
+Salida verificada: 37 tests OK del backend PE y su corpus diferencial.
 
 ### Dashboard
 
 ```powershell
-py -m piton.final_dashboard --format markdown
+py -m piton.final_dashboard --format summary --native-receipt build\native-subset-1\receipt.json
 ```
 
 Gates activos:
 
 | Gate | Estado |
 |---|---|
+| NATIVE_SUBSET_1_0 | PASS |
 | GRAMMAR_PARITY | PASS |
+| SEMANTIC_DIFFERENTIAL_CORPUS | PARTIAL |
 | CLEAN_MACHINE_EXECUTION | PASS |
 | X86_64_LINUX | PARTIAL |
 | X86_64_WINDOWS | PARTIAL |
-| NATIVE_RUNTIME | PARTIAL |
-| NATIVE_EXCEPTION_MODEL | PARTIAL |
+| NATIVE_RUNTIME | PASS |
+| NATIVE_EXCEPTION_MODEL | PASS |
+| NATIVE_IMPORT_SYSTEM | PARTIAL |
+| NATIVE_OBJECT_PROTOCOL | PARTIAL |
+| NATIVE_ASYNC | PARTIAL |
+| NATIVE_STDLIB_DECLARED_SCOPE | PARTIAL |
 | CPYTHON_EXECUTION_DEPENDENCY | PARTIAL |
+| DYNAMIC_RUNTIME_V1 | PASS |
 | FULL_PARITY | NOT_DEMONSTRATED |
 
 `PARTIAL` significa que el subconjunto demostrado pasa; el alcance completo
@@ -229,8 +255,8 @@ para afirmar la afirmación.
 ### Estado nativo verificado (2026-09-08)
 
 ```text
-130/130 tests pass
-36/36 evidence gates PASS
+149/149 tests pass
+Frontend evidence script: exit 0; Linux/macOS frontend host permanece NOT_DEMONSTRATED
 9/9 Unicode byte-identical vs CPython 3.12.4
 14/14 BigInt Win64 differential tests
 13/13 BigInt Linux differential tests
@@ -332,7 +358,7 @@ py -m unittest discover -s tests -v
 Resultado real en CPython 3.12.4:
 
 ```text
-Ran 130 tests
+Ran 149 tests
 
 OK
 ```
@@ -343,7 +369,8 @@ Resumen ejecutable de evidencia:
 py tests\evidence.py
 ```
 
-Salida real: 36/36 gates PASS.
+Salida real: exit 0. El script separa `WINDOWS = PASS` de
+`LINUX_MACOS = NOT_DEMONSTRATED`; no infiere plataformas no ejecutadas.
 
 ## Estructura
 
@@ -361,6 +388,7 @@ PITON/
 |   |-- linux_x86.py        # Backend Linux ELF (GCC freestanding)
 |   |-- native_runtime.c    # Runtime C11 vinculado a cada PE
 |   |-- native_differential.py  # Diferential oracle (nativo vs CPython)
+|   |-- native_evidence.py      # Recibo verificable del Native Subset 1.0
 |   |-- call_runtime.py     # Closures + excepciones
 |   |-- async_runtime.py    # Async runtime
 |   |-- object_protocol.py  # Protocolo de objetos
@@ -386,6 +414,7 @@ PITON/
 |   `-- test_cli_and_corpus.py
 |-- GUIA.md                  # Guia operativa comandos reales
 |-- NATIVE_COMPATIBILITY.md  # Matriz de compatibilidad nativa
+|-- NATIVE_SUBSET_1_0.md     # Contrato del milestone x86 acotado
 |-- ABI.md                   # ABI nativa
 |-- ROADMAP.md
 `-- README.md

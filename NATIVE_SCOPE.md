@@ -6,6 +6,11 @@
 **Fecha:** 2026-09-07
 **Estado:** BORRADOR PARA DECISIÓN — se congela en Fase 4
 
+> Documento histórico del MVP planeado antes del backend. El contrato
+> ejecutable vigente es `NATIVE_SUBSET_1_0.md`; la matriz viva está en
+> `NATIVE_COMPATIBILITY.md`. Las exclusiones originales de este borrador no
+> describen la implementación actual.
+
 ---
 
 ## 1. Objetivo de la Fase 5

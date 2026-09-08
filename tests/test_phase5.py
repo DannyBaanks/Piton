@@ -165,13 +165,67 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
-    def test_x86_rejects_finally_until_unwind_exists(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "finally"):
-                compile_native(
-                    'intentar:\n    imprimir("x")\nfinalmente:\n    imprimir("done")\n',
-                    Path(directory) / "program.exe",
-                )
+    def test_x86_finally_runs_after_try(self):
+        source = (
+            'intentar:\n'
+            '    imprimir("try")\n'
+            'finalmente:\n'
+            '    imprimir("finally")\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_finally_runs_after_except(self):
+        source = (
+            'intentar:\n'
+            '    lanzar ValueError("boom")\n'
+            'excepto ValueError:\n'
+            '    imprimir("caught")\n'
+            'finalmente:\n'
+            '    imprimir("finally")\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_finally_runs_on_no_exception(self):
+        source = (
+            'x = 1\n'
+            'intentar:\n'
+            '    x = x + 1\n'
+            'finalmente:\n'
+            '    imprimir(x)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_except_computation(self):
+        source = (
+            'intentar:\n'
+            '    lanzar ValueError("boom")\n'
+            '    imprimir("should not reach")\n'
+            'excepto ValueError:\n'
+            '    x = 10 + 20\n'
+            '    imprimir(x)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_finally_with_try_computation(self):
+        source = (
+            'x = 0\n'
+            'intentar:\n'
+            '    x = 5 * 3\n'
+            'finalmente:\n'
+            '    imprimir(x)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_uncaught_exception_exits(self):
+        source = 'lanzar ValueError("uncaught")\n'
+        result = compare_native_to_cpython(source)
+        self.assertFalse(result.equivalent)
+        self.assertIn(b"ValueError", result.native.stderr)
 
     def test_x86_finite_pure_generator_for_loop(self):
         source = (
@@ -261,6 +315,59 @@ class Phase5Gates(unittest.TestCase):
 
     def test_x86_bigint_arithmetic(self):
         source = "imprimir(1180591620717411303424 + 1)\n"
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_dict_print_and_lookup(self):
+        corpus = (
+            "imprimir({1: 2, 3: 4})\n",
+            "imprimir({1: 2, 3: 4}[3])\n",
+            "d = {10: 20, 30: 40}\nimprimir(d[10])\nimprimir(d[30])\n",
+        )
+        for source in corpus:
+            with self.subTest(source=source):
+                result = compare_native_to_cpython(source)
+                self.assertTrue(result.equivalent, result)
+
+    def test_x86_set_print_and_len(self):
+        corpus = (
+            "imprimir({1, 2, 3})\n",
+            "imprimir(longitud({1, 2, 2, 3}))\n",
+        )
+        for source in corpus:
+            with self.subTest(source=source):
+                result = compare_native_to_cpython(source)
+                self.assertTrue(result.equivalent, result)
+
+    def test_x86_tuple_print_and_lookup(self):
+        corpus = (
+            "imprimir((1, 2, 3))\n",
+            "imprimir((10, 20)[1])\n",
+            "t = (5,)\nimprimir(t)\nimprimir(longitud(t))\n",
+        )
+        for source in corpus:
+            with self.subTest(source=source):
+                result = compare_native_to_cpython(source)
+                self.assertTrue(result.equivalent, result)
+
+    def test_x86_collection_reassignment_cleanup(self):
+        source = (
+            "x = [1, 2, 3]\n"
+            "x = [4, 5]\n"
+            "x = [6]\n"
+            "imprimir(x)\n"
+            "imprimir(longitud(x))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_dict_reassignment_cleanup(self):
+        source = (
+            "d = {1: 10, 2: 20}\n"
+            "d = {3: 30}\n"
+            "imprimir(d)\n"
+            "imprimir(longitud(d))\n"
+        )
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 

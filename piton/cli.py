@@ -8,8 +8,10 @@ import token
 import tokenize
 from pathlib import Path
 
+from .linux_x86 import compile_native_linux
 from .runtime import ejecutar_archivo
 from .translator import PitonSyntaxError, analizar_tokens, leer_fuente, traducir_archivo
+from .x86 import NativeBuildError, compile_native_files
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -40,6 +42,12 @@ def _parser() -> argparse.ArgumentParser:
     ast_cmd = subcomandos.add_parser("ast", help="muestra el AST de Python generado")
     ast_cmd.add_argument("archivo", type=Path)
     ast_cmd.add_argument("-x", "--estricto", action="store_true", help="rechaza nombres ambiguos de soft keywords")
+
+    compilar = subcomandos.add_parser("compilar", help="compila un archivo Pitón a x86-64 nativo")
+    compilar.add_argument("archivo", type=Path)
+    compilar.add_argument("--backend", choices=("x86", "linux"), default="x86")
+    compilar.add_argument("-o", "--output", "--salida", dest="salida", type=Path)
+    compilar.add_argument("--evidencia", type=Path, help="escribe un recibo JSON verificable (backend x86)")
 
     return parser
 
@@ -85,9 +93,36 @@ def main(argv: list[str] | None = None) -> int:
             traducido = traducir_fuente(fuente, str(args.archivo), estricto=estricto)
             arbol = ast.parse(traducido)
             print(ast.dump(arbol, indent=2))
+        elif args.comando == "compilar":
+            salida = args.salida
+            if salida is None:
+                if args.backend == "x86":
+                    salida = args.archivo.with_suffix(".exe")
+                elif args.archivo.suffix:
+                    salida = args.archivo.with_suffix("")
+                else:
+                    salida = args.archivo.with_name(f"{args.archivo.name}.native")
+            if salida.resolve() == args.archivo.resolve():
+                raise NativeBuildError("native output cannot overwrite the source file")
+            if args.backend == "x86":
+                artefacto = compile_native_files(args.archivo, salida)
+            else:
+                if args.evidencia:
+                    raise NativeBuildError("--evidencia solo está disponible para el backend x86")
+                artefacto = compile_native_linux(leer_fuente(args.archivo), salida)
+            print(f"PITON_NATIVE_BUILD = PASS ({artefacto})")
+            if args.evidencia:
+                from .native_evidence import build_windows_evidence
+                recibo = build_windows_evidence(args.archivo, artefacto, args.evidencia)
+                print(f"PITON_NATIVE_SUBSET_1_0 = {recibo['native_subset_1_0']} ({args.evidencia.resolve()})")
+                if recibo["native_subset_1_0"] != "PASS":
+                    raise NativeBuildError("native evidence gates failed")
     except PitonSyntaxError as error:
         print(error, file=sys.stderr)
         return 2
+    except NativeBuildError as error:
+        print(f"PITON_NATIVE_BUILD_ERROR\n{error}", file=sys.stderr)
+        return 1
     except OSError as error:
         print(f"PITON_IO_ERROR\n{error}", file=sys.stderr)
         return 1

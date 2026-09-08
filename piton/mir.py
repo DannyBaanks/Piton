@@ -324,29 +324,63 @@ class MIRLowerer:
         self._lower_statements(builder, node.orelse)
 
     def _lower_try(self, builder: _Builder, node: HIRNode) -> None:
-        if node.finalbody or node.orelse:
-            raise MIRLoweringError("native try does not support else or finally yet")
-        if len(node.handlers) != 1:
-            raise MIRLoweringError("native try requires exactly one except handler")
-        handler = node.handlers[0]
-        if not hasattr(handler, "body") or handler.name or handler.is_star:
-            raise MIRLoweringError("native except does not support binding or except* yet")
+        if node.orelse:
+            raise MIRLoweringError("native try does not support else yet")
+        if len(node.handlers) > 1:
+            raise MIRLoweringError("native try supports at most one except handler")
+        finally_body = list(getattr(node, "finalbody", []) or [])
+
+        handler_block = None
         accepted = None
-        if handler.type_ is not None:
-            if handler.type_.kind != HIRKind.LOAD:
-                raise MIRLoweringError("native except type must be a builtin exception name")
-            accepted = handler.type_.name
-        handler_block = builder.new_block()
         end_block = builder.new_block()
-        builder.exception_handlers.append((handler_block.label, accepted))
+        try_body_block = builder.new_block()
+        finally_block = builder.new_block() if finally_body else None
+
+        if node.handlers:
+            handler = node.handlers[0]
+            if not hasattr(handler, "body") or handler.name or handler.is_star:
+                raise MIRLoweringError("native except does not support binding or except* yet")
+            handler_block = builder.new_block()
+            accepted = None
+            if handler.type_ is not None:
+                if handler.type_.kind != HIRKind.LOAD:
+                    raise MIRLoweringError("native except type must be a builtin exception name")
+                accepted = handler.type_.name
+
+        # try_push
+        builder.emit("try_push")
+        builder.emit("jump", try_body_block.label)
+
+        # try body block
+        builder.current = try_body_block
+        if handler_block:
+            builder.exception_handlers.append((handler_block.label, accepted))
         self._lower_statements(builder, node.body)
-        builder.exception_handlers.pop()
-        if not builder.current.instructions or builder.current.instructions[-1].op not in {"jump", "return"}:
+        if handler_block:
+            builder.exception_handlers.pop()
+        builder.emit("try_pop")
+        if finally_body:
+            builder.emit("jump", finally_block.label)
+        else:
             builder.emit("jump", end_block.label)
-        builder.current = handler_block
-        self._lower_statements(builder, handler.body)
-        if not builder.current.instructions or builder.current.instructions[-1].op not in {"jump", "return"}:
+
+        # handler block (reached via raise_typed's catch_flag check)
+        if handler_block:
+            builder.current = handler_block
+            builder.emit("catch_clear")
+            self._lower_statements(builder, handler.body)
+            builder.emit("try_pop")
+            if finally_body:
+                builder.emit("jump", finally_block.label)
+            else:
+                builder.emit("jump", end_block.label)
+
+        # finally block
+        if finally_body:
+            builder.current = finally_block
+            self._lower_statements(builder, finally_body)
             builder.emit("jump", end_block.label)
+
         builder.current = end_block
 
     def _lower_raise(self, builder: _Builder, node: HIRNode) -> None:
@@ -359,11 +393,13 @@ class MIRLowerer:
         if exception_type not in supported or len(node.exc.args) > 1 or node.exc.keywords:
             raise MIRLoweringError("unsupported native exception constructor")
         payload = self._lower_expr(builder, node.exc.args[0]) if node.exc.args else None
+        # Find the active handler block for the catch_flag check
+        handler_label = None
         for label, accepted in reversed(builder.exception_handlers):
             if accepted is None or accepted == "Exception" or accepted == exception_type:
-                builder.emit("jump", label)
-                return
-        builder.emit("raise_typed", exception_type, payload)
+                handler_label = label
+                break
+        builder.emit("raise_typed", exception_type, payload, handler_label)
 
     def _store(self, builder: _Builder, target: HIRNode, value: Any) -> None:
         if target.kind == HIRKind.STORE:

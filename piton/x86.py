@@ -48,7 +48,16 @@ class Win64NasmEmitter:
             "extern piton_collection_len", "extern piton_collection_get",
             "extern piton_collection_print", "extern piton_collection_free",
             "extern piton_collection_live_count",
+            "extern piton_dict_new", "extern piton_dict_put",
+            "extern piton_dict_len", "extern piton_dict_get",
+            "extern piton_dict_print", "extern piton_dict_free",
+            "extern piton_dict_live_count",
+            "extern piton_set_new", "extern piton_set_add",
+            "extern piton_set_len", "extern piton_set_print",
+            "extern piton_set_free", "extern piton_set_live_count",
             "extern piton_raise",
+            "extern piton_try_push", "extern piton_try_pop", "extern piton_try_set_accepted",
+            "extern piton_catch_flag", "extern piton_catch_type", "extern piton_catch_message", "extern piton_catch_clear",
             "extern piton_object_new", "extern piton_object_set", "extern piton_object_get",
             "extern piton_object_free", "extern piton_object_live_count",
             "extern piton_print_float",
@@ -85,7 +94,9 @@ class Win64NasmEmitter:
             for instruction in block.instructions:
                 self._reserve(instruction.result)
                 if instruction.op == "build_collection" and instruction.result:
-                    self.owned_slots.append((instruction.result, "piton_collection_free"))
+                    coll_kind = instruction.args[0] if instruction.args else ""
+                    free_fn = {"dict": "piton_dict_free", "set": "piton_set_free"}.get(coll_kind, "piton_collection_free")
+                    self.owned_slots.append((instruction.result, free_fn))
                 if instruction.op == "object_new" and instruction.result:
                     self.owned_slots.append((instruction.result, "piton_object_free"))
                 if instruction.op == "store":
@@ -104,15 +115,23 @@ class Win64NasmEmitter:
             for register, name in zip(("rcx", "rdx", "r8", "r9"), function.params):
                 self._store_slot(name, register)
         labels = {block.label: f"{label}_{block.label}" for block in function.blocks}
+        labels["__exit"] = f"{label}__exit"
         for block in function.blocks:
             self.lines.append(f"{labels[block.label]}:")
             for instruction in block.instructions:
                 self._emit_instruction(instruction, labels)
+            if not block.instructions or block.instructions[-1].op not in {"jump", "branch", "return"}:
+                self.lines.append(f"    jmp {labels['__exit']}")
+        self.lines.append(f"{labels['__exit']}:")
         self._emit_cleanup()
         if function.name == "<module>":
             self.lines.extend([
                 "    call piton_collection_live_count", f"    mov {self._address('@scratch0')}, rax",
                 "    call piton_object_live_count", f"    or rax, {self._address('@scratch0')}",
+                f"    mov {self._address('@scratch1')}, rax",
+                "    call piton_dict_live_count", f"    or rax, {self._address('@scratch1')}",
+                f"    mov {self._address('@scratch0')}, rax",
+                "    call piton_set_live_count", f"    or rax, {self._address('@scratch0')}",
                 "    test rax, rax", "    setne al", "    movzx eax, al",
             ])
         else:
@@ -335,41 +354,84 @@ class Win64NasmEmitter:
             self.types[result] = "bool"
         elif op == "build_collection":
             kind, raw_items = args
-            kind_id = {"list": 1, "tuple": 2, "dict": 3, "set": 4}[kind]
-            self.lines.extend([
-                f"    mov rcx, {self._address(result)}",
-                "    call piton_collection_free",
-                f"    mov rcx, {kind_id}",
-                f"    mov rdx, {len(raw_items)}",
-                "    call piton_collection_new",
-                f"    mov {self._address(result)}, rax",
-            ])
-            for index, item in enumerate(raw_items):
-                key, value = item if kind == "dict" else (item, item)
+            if kind == "dict":
                 self.lines.extend([
                     f"    mov rcx, {self._address(result)}",
-                    f"    mov rdx, {index}",
+                    "    call piton_dict_free",
+                    f"    mov rcx, {len(raw_items)}",
+                    "    call piton_dict_new",
+                    f"    mov {self._address(result)}, rax",
                 ])
-                self._load_operand(key, "r8")
-                self._load_operand(value, "r9")
-                self.lines.append("    call piton_collection_put")
+                for index, item in enumerate(raw_items):
+                    key, value = item
+                    self.lines.extend([
+                        f"    mov rcx, {self._address(result)}",
+                    ])
+                    self._load_operand(key, "rdx")
+                    self._load_operand(value, "r8")
+                    self.lines.append("    call piton_dict_put")
+            elif kind == "set":
+                self.lines.extend([
+                    f"    mov rcx, {self._address(result)}",
+                    "    call piton_set_free",
+                    f"    mov rcx, {len(raw_items)}",
+                    "    call piton_set_new",
+                    f"    mov {self._address(result)}, rax",
+                ])
+                for item in raw_items:
+                    self.lines.extend([
+                        f"    mov rcx, {self._address(result)}",
+                    ])
+                    self._load_operand(item, "rdx")
+                    self.lines.append("    call piton_set_add")
+            else:
+                kind_id = {"list": 1, "tuple": 2}[kind]
+                self.lines.extend([
+                    f"    mov rcx, {self._address(result)}",
+                    "    call piton_collection_free",
+                    f"    mov rcx, {kind_id}",
+                    f"    mov rdx, {len(raw_items)}",
+                    "    call piton_collection_new",
+                    f"    mov {self._address(result)}, rax",
+                ])
+                for index, item in enumerate(raw_items):
+                    self.lines.extend([
+                        f"    mov rcx, {self._address(result)}",
+                        f"    mov rdx, {index}",
+                    ])
+                    self._load_operand(item, "r8")
+                    self._load_operand(item, "r9")
+                    self.lines.append("    call piton_collection_put")
             self.types[result] = kind
         elif op == "get_item":
             container, key = args
             container_type = self.types.get(container)
             if container_type not in {"list", "tuple", "dict"}:
                 raise NativeBuildError(f"native subscription not supported for {container_type}")
-            self._load_operand(container, "rcx")
-            self._load_operand(key, "rdx")
-            self.lines.append("    call piton_collection_get")
-            self.lines.append(f"    mov {self._address(result)}, rax")
-            self.types[result] = "int"
+            if container_type == "dict":
+                self._load_operand(container, "rcx")
+                self._load_operand(key, "rdx")
+                self.lines.append("    call piton_dict_get")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            else:
+                self._load_operand(container, "rcx")
+                self._load_operand(key, "rdx")
+                self.lines.append("    call piton_collection_get")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
         elif op == "collection_len":
             collection = args[0]
-            if self.types.get(collection) not in {"list", "tuple", "dict", "set"}:
+            ctype = self.types.get(collection)
+            if ctype not in {"list", "tuple", "dict", "set"}:
                 raise NativeBuildError("native collection_len requires a collection")
             self._load_operand(collection, "rcx")
-            self.lines.append("    call piton_collection_len")
+            if ctype == "dict":
+                self.lines.append("    call piton_dict_len")
+            elif ctype == "set":
+                self.lines.append("    call piton_set_len")
+            else:
+                self.lines.append("    call piton_collection_len")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
         elif op == "object_new":
@@ -413,7 +475,7 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "float"
         elif op == "raise_typed":
-            exception_type, payload = args
+            exception_type, payload, handler_label = args
             self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
             if payload is None:
                 self.lines.append("    xor edx, edx")
@@ -422,6 +484,26 @@ class Win64NasmEmitter:
             else:
                 raise NativeBuildError("native exception payload must be a string")
             self.lines.append("    call piton_raise")
+            if handler_label:
+                # Check if an exception was caught and branch to handler
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+        elif op == "try_push":
+            self.lines.append("    call piton_try_push")
+            if result:
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+        elif op == "try_pop":
+            self.lines.append("    call piton_try_pop")
+        elif op == "catch_flag":
+            self.lines.append("    call piton_catch_flag")
+            if result:
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+        elif op == "catch_clear":
+            self.lines.append("    call piton_catch_clear")
         elif op == "branch":
             condition, yes, no = args
             self._emit_truth_test(condition)
@@ -441,7 +523,12 @@ class Win64NasmEmitter:
                     value_type = self.types.get(value, "int")
                     if value_type in {"list", "tuple", "dict", "set"}:
                         self._load_operand(value, "rcx")
-                        self.lines.append("    call piton_collection_print")
+                        if value_type == "dict":
+                            self.lines.append("    call piton_dict_print")
+                        elif value_type == "set":
+                            self.lines.append("    call piton_set_print")
+                        else:
+                            self.lines.append("    call piton_collection_print")
                         if result:
                             self.lines.append(f"    mov qword {self._address(result)}, 0")
                         return
@@ -485,7 +572,13 @@ class Win64NasmEmitter:
                 if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set"}:
                     raise NativeBuildError("native len currently requires one collection")
                 self._load_operand(values[0], "rcx")
-                self.lines.append("    call piton_collection_len")
+                ctype = self.types.get(values[0])
+                if ctype == "dict":
+                    self.lines.append("    call piton_dict_len")
+                elif ctype == "set":
+                    self.lines.append("    call piton_set_len")
+                else:
+                    self.lines.append("    call piton_collection_len")
                 self.types[result] = "int"
             else:
                 if len(values) > 4:

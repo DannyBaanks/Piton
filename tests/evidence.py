@@ -240,7 +240,8 @@ asincrono funcion g():
     print("IDENTIFIER_INTEGRITY = PASS")
     print("IMPORT_SYSTEM = PASS")
     print("ARGV_STDIN_STDOUT_STDERR = PASS")
-    print("WINDOWS_LINUX_MACOS = PASS")
+    print("WINDOWS = PASS")
+    print("LINUX_MACOS = NOT_DEMONSTRATED")
     return 0
 
 

@@ -7,6 +7,10 @@ pruebas como oracle, pero no en el ejecutable generado.
 
 ## Estado actual
 
+El milestone reproducible del subconjunto está definido en
+`NATIVE_SUBSET_1_0.md`. En este host, su recibo Windows automatizado da `PASS`;
+una ejecución dentro de una VM Windows limpia permanece `NOT_DEMONSTRATED`.
+
 | Área | Estado nativo | Evidencia | Brecha principal |
 |---|---|---|---|
 | Literales int/bool/Nada/string/float | PARTIAL | `tests/test_phase5.py` | float repr completos |

@@ -135,6 +135,51 @@ class CliAndCorpusTests(unittest.TestCase):
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
         self.assertIn("Module", resultado.stdout)
 
+    def test_compilar_x86_genera_y_ejecuta_pe(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            salida = Path(temporal) / "hola.exe"
+            resultado = correr(
+                "compilar", str(ROOT / "examples" / "01_hola.piton"),
+                "--backend=x86", "--output", str(salida),
+            )
+            self.assertEqual(resultado.returncode, 0, resultado.stderr)
+            self.assertIn("PITON_NATIVE_BUILD = PASS", resultado.stdout)
+            self.assertTrue(salida.is_file())
+            ejecucion = subprocess.run([str(salida)], capture_output=True, check=False)
+            self.assertEqual((ejecucion.returncode, ejecucion.stdout, ejecucion.stderr), (0, b"Hola, mundo\r\n", b""))
+
+    def test_compilar_linux_genera_elf(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            salida = Path(temporal) / "hola"
+            resultado = correr(
+                "compilar", str(ROOT / "examples" / "01_hola.piton"),
+                "--backend=linux", "--salida", str(salida),
+            )
+            self.assertEqual(resultado.returncode, 0, resultado.stderr)
+            self.assertIn("PITON_NATIVE_BUILD = PASS", resultado.stdout)
+            self.assertEqual(salida.read_bytes()[:4], b"\x7fELF")
+
+    def test_compilar_reporta_error_nativo(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            fuente = Path(temporal) / "fuera_de_alcance.piton"
+            fuente.write_text("imprimir(7 / 2)\n", encoding="utf-8")
+            resultado = correr("compilar", str(fuente), "--backend=x86")
+            self.assertEqual(resultado.returncode, 1)
+            self.assertIn("PITON_NATIVE_BUILD_ERROR", resultado.stderr)
+            self.assertIn("true division", resultado.stderr)
+
+    def test_compilar_no_sobrescribe_fuente(self) -> None:
+        with tempfile.TemporaryDirectory() as temporal:
+            fuente = Path(temporal) / "program"
+            contenido = 'imprimir("safe")\n'
+            fuente.write_text(contenido, encoding="utf-8")
+            resultado = correr(
+                "compilar", str(fuente), "--backend=linux", "--output", str(fuente),
+            )
+            self.assertEqual(resultado.returncode, 1)
+            self.assertIn("cannot overwrite", resultado.stderr)
+            self.assertEqual(fuente.read_text(encoding="utf-8"), contenido)
+
     def test_strict_mode_cli_rechaza_soft_keyword_ident(self) -> None:
         fixture = str(ROOT / "tests" / "fixtures" / "soft_keyword_ident.piton")
         resultado = correr("verificar", fixture, "-x")
