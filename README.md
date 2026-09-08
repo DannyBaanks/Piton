@@ -138,8 +138,10 @@ dependen de CPython**. Hay dos backends:
 [x] Operadores: +, -, *, /, //, %, **, ==, !=, <, >, <=, >=
 [x] Operadores bit a bit: &, |, ^, ~, <<, >>
 [x] Unarios: +, -, not
+[x] Strings Unicode: UTF-8 byte-identical vs CPython 3.12.4 (café, ñ, 日本語, etc.)
 [x] Concatenación de strings (malloc + memcpy)
 [x] Comparación de strings (strcmp)
+[x] BigInt arbitrary-precision integers (Win64 + Linux, 14/14 + 13/13 differential tests)
 [x] Colecciones: listas, tuplas, diccionarios, conjuntos
 [x] Acceso a elementos: get_item, collection_len
 [x] Heap objects: object_new, set_attr, get_attr, method_call
@@ -156,7 +158,6 @@ dependen de CPython**. Hay dos backends:
 ### Qué NO compila nativamente (rechazado o pendiente)
 
 ```text
-[ ] Bigint arithmetic (literal como string; cálculo rechazado)
 [ ] Closures con celdas mutables / nonlocal
 [ ] Generadores con frames suspendidos / yield from
 [ ] Clases con herencia / metaclasses
@@ -164,7 +165,6 @@ dependen de CPython**. Hay dos backends:
 [ ] Async con suspensión / cancelación / scheduler
 [ ] Stdlib amplia (solo math.sqrt demostrado)
 [ ] FFI nativo / ctypes
-[ ] Unicode beyond ASCII
 ```
 
 ### Regla de oro
@@ -225,6 +225,17 @@ Gates activos:
 `PARTIAL` significa que el subconjunto demostrado pasa; el alcance completo
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
+
+### Estado nativo verificado (2026-09-08)
+
+```text
+130/130 tests pass
+36/36 evidence gates PASS
+9/9 Unicode byte-identical vs CPython 3.12.4
+14/14 BigInt Win64 differential tests
+13/13 BigInt Linux differential tests
+3/3 Linux ELF gates (empty env, chroot, QEMU)
+```
 
 ## Por qué no usa `replace()`
 
