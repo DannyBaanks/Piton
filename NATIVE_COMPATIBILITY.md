@@ -9,14 +9,14 @@ pruebas como oracle, pero no en el ejecutable generado.
 
 | Área | Estado nativo | Evidencia | Brecha principal |
 |---|---|---|---|
-| Literales int/bool/Nada/string/float | PARTIAL | `tests/test_phase5.py` | Unicode y float repr completos |
+| Literales int/bool/Nada/string/float | PARTIAL | `tests/test_phase5.py` | float repr completos |
 | Aritmética entera | PARTIAL | `tests/test_phase5.py` | Overflow a bigint y zero division |
 | Floats | PARTIAL | `tests/test_phase5.py` | división, NaN y repr shortest-roundtrip |
 | Bigints | PARTIAL | `tests/test_phase5.py` | aritmética por limbs |
 | Comparaciones | PARTIAL | `tests/test_phase5.py` | Protocolo dinámico rico |
 | Branch/while | PARTIAL | `tests/test_phase5.py` | `for`, iteradores y control no local |
 | Funciones | PARTIAL | `tests/test_phase5.py` | keywords, closures y excepciones |
-| Strings | PARTIAL | `tests/test_phase5.py` | Unicode completo y lifetime de heap |
+| Strings | PARTIAL | `tests/test_phase5.py` | Unicode completo verificado byte-a-byte contra CPython; lifetime de heap pendiente |
 | Colecciones int | PARTIAL | `tests/test_phase5.py` | nesting, tipos dinámicos, mutación y errores |
 | Heap de colecciones | PARTIAL | contador nativo + stress diferencial | ciclos y objetos heterogéneos |
 | Excepciones | PARTIAL | `tests/test_phase5.py` | unwind, finally y objetos de excepción |

@@ -20,6 +20,9 @@ class NativeBuildError(RuntimeError):
     pass
 
 
+_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted"}
+
+
 class Win64NasmEmitter:
     def __init__(self):
         self.lines: list[str] = []
@@ -31,9 +34,11 @@ class Win64NasmEmitter:
         self.types: dict[str, str] = {}
         self.next_internal_label = 0
         self.owned_slots: list[tuple[str, str]] = []
+        self.bigint_slots: list[str] = []
         self.constants: dict[str, Any] = {}
 
     def emit(self, module: MIRModule) -> str:
+        self.function_names = {function.name for function in module.functions}
         self.lines = [
             "default rel", "extern printf", "extern strcmp", "extern strlen",
             "extern malloc", "extern memcpy", "section .text",
@@ -47,13 +52,17 @@ class Win64NasmEmitter:
             "extern piton_object_new", "extern piton_object_set", "extern piton_object_get",
             "extern piton_object_free", "extern piton_object_live_count",
             "extern piton_print_float",
+            "extern piton_bigint_from_str", "extern piton_bigint_from_i64", "extern piton_bigint_free",
+            "extern piton_bigint_add", "extern piton_bigint_sub", "extern piton_bigint_mul",
+            "extern piton_bigint_neg", "extern piton_bigint_cmp",
+            "extern piton_bigint_floor_div", "extern piton_bigint_mod",
+            "extern piton_bigint_print",
         ]
         for function in module.functions:
             self._emit_function(function)
         self.lines.append("section .rdata")
         for value, label in self.strings.items():
-            escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-            self.lines.append(f'{label}: db "{escaped}", 0')
+            self.lines.append(f"{label}: {self._nasm_db(value)}")
         self.lines.extend([
             'fmt_int: db "%lld", 10, 0',
             'fmt_float: db "%.17g", 10, 0',
@@ -70,6 +79,7 @@ class Win64NasmEmitter:
         self.aliases = {}
         self.types = {}
         self.owned_slots = []
+        self.bigint_slots = []
         self.constants = {}
         for block in function.blocks:
             for instruction in block.instructions:
@@ -150,18 +160,25 @@ class Win64NasmEmitter:
             elif isinstance(value, float):
                 self.types[result] = "float"
             elif isinstance(value, int) and not (-(1 << 60) <= value < (1 << 60)):
-                self.types[result] = "bigint_literal"
+                self.types[result] = "bigint"
             else:
                 self.types[result] = "int"
-            if self.types[result] == "bigint_literal":
-                self.lines.append(f"    lea rax, [{self._string(str(value))}]")
+            if self.types[result] == "bigint":
+                self.lines.extend([
+                    f"    lea rcx, [{self._string(str(value))}]",
+                    "    call piton_bigint_from_str",
+                    f"    mov {self._address(result)}, rax",
+                ])
+                self.bigint_slots.append(result)
             else:
                 self._load_operand(value)
-            self.lines.append(f"    mov {self._address(result)}, rax")
+                self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "load":
             name = args[0]
             self.aliases[result] = name
             self.types[result] = self.types.get(name, "int")
+            if name in self.function_names or name in _BUILTINS:
+                return
             self.lines.append(f"    mov rax, {self._address(name)}")
             self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "store":
@@ -178,8 +195,9 @@ class Win64NasmEmitter:
                     self._emit_string_concat(left, right, result)
                     return
                 raise NativeBuildError(f"native string operator not supported yet: {operator}")
-            if "bigint_literal" in {left_type, right_type}:
-                raise NativeBuildError("native bigint arithmetic requires limb support")
+            if "bigint" in {left_type, right_type}:
+                self._emit_bigint_binary(operator, left, right, result)
+                return
             if "float" in {left_type, right_type}:
                 if operator not in {"+", "-", "*"}:
                     raise NativeBuildError(f"native float operator not supported yet: {operator}")
@@ -233,21 +251,28 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "unary":
             operator, operand = args
-            if self.types.get(operand) == "bigint_literal":
-                value = self.constants.get(operand)
-                if operator == "-" and isinstance(value, int):
-                    self.lines.append(f"    lea rax, [{self._string(str(-value))}]")
-                    self.lines.append(f"    mov {self._address(result)}, rax")
-                    self.types[result] = "bigint_literal"
-                    self.constants[result] = -value
+            if self.types.get(operand) == "bigint":
+                if operator == "-":
+                    self.lines.extend([
+                        f"    mov rcx, {self._address(operand)}",
+                        "    call piton_bigint_neg",
+                        f"    mov {self._address(result)}, rax",
+                    ])
+                    self.types[result] = "bigint"
+                    self.bigint_slots.append(result)
                     return
                 if operator == "+":
-                    self.lines.append(f"    mov rax, {self._address(operand)}")
-                    self.lines.append(f"    mov {self._address(result)}, rax")
-                    self.types[result] = "bigint_literal"
-                    self.constants[result] = value
+                    self.lines.extend([
+                        f"    mov rcx, {self._address(operand)}",
+                        "    call piton_bigint_neg",
+                        "    mov rcx, rax",
+                        "    call piton_bigint_neg",
+                        f"    mov {self._address(result)}, rax",
+                    ])
+                    self.types[result] = "bigint"
+                    self.bigint_slots.append(result)
                     return
-                raise NativeBuildError(f"native bigint unary operator not supported yet: {operator}")
+                raise NativeBuildError(f"native bigint unary operator not supported: {operator}")
             self._load_operand(operand, "rax")
             if self.types.get(operand) == "float" and operator in {"+", "-"}:
                 if operator == "-":
@@ -273,8 +298,9 @@ class Win64NasmEmitter:
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
             numeric_types = {"int", "bool"}
-            if "bigint_literal" in {left_type, right_type}:
-                raise NativeBuildError("native bigint comparison requires limb support")
+            if "bigint" in {left_type, right_type}:
+                self._emit_bigint_compare(operator, left, right, result)
+                return
             float_compare = "float" in {left_type, right_type} and {left_type, right_type} <= {"float", "int", "bool"}
             if float_compare:
                 self._load_float_operand(left, "xmm0")
@@ -391,7 +417,7 @@ class Win64NasmEmitter:
             self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
             if payload is None:
                 self.lines.append("    xor edx, edx")
-            elif self.types.get(payload) in {"str", "bigint_literal"}:
+            elif self.types.get(payload) in {"str", "bigint"}:
                 self._load_operand(payload, "rdx")
             else:
                 raise NativeBuildError("native exception payload must be a string")
@@ -419,6 +445,14 @@ class Win64NasmEmitter:
                         if result:
                             self.lines.append(f"    mov qword {self._address(result)}, 0")
                         return
+                    if value_type == "bigint":
+                        self.lines.extend([
+                            f"    mov rcx, {self._address(value)}",
+                            "    call piton_bigint_print",
+                        ])
+                        if result:
+                            self.lines.append(f"    mov qword {self._address(result)}, 0")
+                        return
                     if value_type == "bool":
                         false_label = self._internal_label("bool_false")
                         ready_label = self._internal_label("bool_ready")
@@ -442,9 +476,6 @@ class Win64NasmEmitter:
                         if result:
                             self.lines.append(f"    mov qword {self._address(result)}, 0")
                         return
-                    elif value_type == "bigint_literal":
-                        self._load_operand(value, "rdx")
-                        fmt = "fmt_str"
                     else:
                         self._load_operand(value, "rdx")
                         fmt = "fmt_str" if value_type == "str" else "fmt_int"
@@ -488,6 +519,23 @@ class Win64NasmEmitter:
             self.strings[value] = f"str_{self.next_string}"
             self.next_string += 1
         return self.strings[value]
+
+    @staticmethod
+    def _nasm_db(value: str) -> str:
+        utf8 = value.encode("utf-8")
+        parts: list[str] = []
+        current: list[str] = []
+        for byte in utf8:
+            if 0x20 <= byte < 0x7f and byte not in (0x22, 0x5c):
+                current.append(chr(byte))
+            else:
+                if current:
+                    parts.append(f'"{"".join(current)}"')
+                    current = []
+                parts.append(f"0x{byte:02x}")
+        if current:
+            parts.append(f'"{"".join(current)}"')
+        return "db " + (", ".join(parts) if parts else '"", 0') + ", 0"
 
     def _internal_label(self, prefix: str) -> str:
         label = f"__piton_{prefix}_{self.next_internal_label}"
@@ -548,6 +596,12 @@ class Win64NasmEmitter:
                 f"    call {free_function}",
                 f"    mov qword {self._address(slot)}, 0",
             ])
+        for slot in self.bigint_slots:
+            self.lines.extend([
+                f"    mov rcx, {self._address(slot)}",
+                "    call piton_bigint_free",
+                f"    mov qword {self._address(slot)}, 0",
+            ])
 
     def _load_float_operand(self, operand: Any, register: str) -> None:
         if self.types.get(operand) == "float":
@@ -555,6 +609,72 @@ class Win64NasmEmitter:
         else:
             self._load_operand(operand, "rax")
             self.lines.append(f"    cvtsi2sd {register}, rax")
+
+    def _emit_bigint_binary(self, operator: str, left: Any, right: Any, result: str) -> None:
+        func = {"+": "piton_bigint_add", "-": "piton_bigint_sub", "*": "piton_bigint_mul",
+                "//": "piton_bigint_floor_div", "%": "piton_bigint_mod"}.get(operator)
+        if not func:
+            raise NativeBuildError(f"native bigint operator not supported: {operator}")
+        left_type = self.types.get(left, "int")
+        right_type = self.types.get(right, "int")
+        scratch0 = self._address("@scratch0")
+        scratch1 = self._address("@scratch1")
+        if left_type == "bigint" and right_type == "bigint":
+            self.lines.extend([
+                f"    mov rcx, {self._address(left)}",
+                f"    mov rdx, {self._address(right)}",
+                f"    call {func}",
+                f"    mov {self._address(result)}, rax",
+            ])
+        elif left_type == "bigint":
+            self.lines.append(f"    mov {scratch0}, rcx")
+            self.lines.extend([f"    mov rcx, {self._address(left)}", f"    mov {scratch0}, rcx"])
+            self._load_operand(right, "rcx")
+            self.lines.extend([
+                "    call piton_bigint_from_i64",
+                f"    mov rdx, rax",
+                f"    mov rcx, {scratch0}",
+                f"    call {func}",
+                f"    mov {self._address(result)}, rax",
+            ])
+        elif right_type == "bigint":
+            self._load_operand(left, "rcx")
+            self.lines.extend([
+                "    call piton_bigint_from_i64",
+                f"    mov {scratch0}, rax",
+                f"    mov rdx, {self._address(right)}",
+                f"    mov rcx, {scratch0}",
+                f"    call {func}",
+                f"    mov {self._address(result)}, rax",
+            ])
+        else:
+            self._load_operand(left, "rcx")
+            self.lines.extend([
+                "    call piton_bigint_from_i64",
+                f"    mov {scratch0}, rax",
+            ])
+            self._load_operand(right, "rcx")
+            self.lines.extend([
+                "    call piton_bigint_from_i64",
+                f"    mov rdx, rax",
+                f"    mov rcx, {scratch0}",
+                f"    call {func}",
+                f"    mov {self._address(result)}, rax",
+            ])
+        self.types[result] = "bigint"
+        self.bigint_slots.append(result)
+
+    def _emit_bigint_compare(self, operator: str, left: Any, right: Any, result: str) -> None:
+        self.lines.extend([
+            f"    mov rcx, {self._address(left)}",
+            f"    mov rdx, {self._address(right)}",
+            "    call piton_bigint_cmp",
+            "    cmp rax, 0",
+        ])
+        condition = {"==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge"}[operator]
+        self.lines.extend([f"    set{condition} al", "    movzx rax, al"])
+        self.lines.append(f"    mov {self._address(result)}, rax")
+        self.types[result] = "bool"
 
 
 def emit_nasm(module: MIRModule) -> str:

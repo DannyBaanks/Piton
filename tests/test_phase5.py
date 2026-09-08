@@ -259,13 +259,10 @@ class Phase5Gates(unittest.TestCase):
                     Path(directory) / "program.exe",
                 )
 
-    def test_x86_rejects_bigint_arithmetic(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "limb support"):
-                compile_native(
-                    "imprimir(1180591620717411303424 + 1)\n",
-                    Path(directory) / "program.exe",
-                )
+    def test_x86_bigint_arithmetic(self):
+        source = "imprimir(1180591620717411303424 + 1)\n"
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
 
 
 if __name__ == "__main__":

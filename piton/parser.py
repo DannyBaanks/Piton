@@ -683,11 +683,8 @@ class Parser:
             val = tok.value
             if val.startswith(("f'", 'f"', "F'", 'F"')):
                 return self._parse_fstring(val, tok)
-            if val.startswith(('"""', "'''")):
-                val = val[3:-3]
-            elif val.startswith(('"', "'")):
-                val = val[1:-1]
-            val = val.encode().decode('unicode_escape')
+            import ast
+            val = ast.literal_eval(val)
             return Constant(value=val).set_pos(tok)
 
         # Identificadores / keywords
