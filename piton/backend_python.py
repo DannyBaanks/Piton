@@ -8,6 +8,7 @@ from piton.hir import (
     If, While, For, Return, Yield, YieldFrom, Raise,
     Try, ExceptHandler, With, WithItem, Match, CaseBlock,
     Load, Store, Delete, Global, Nonlocal,
+    Assign, AnnAssign, AugAssign,
     Const, BinOp, UnOp, Compare, BoolOp, Call, Keyword,
     Attr, Subscr, List, Tuple, Set, Dict,
     ListComp, CompFor, IfExpr, Await,
@@ -34,7 +35,10 @@ class PythonBackend:
 
     def _visit(self, node: HIRNode):
         method_name = f"_gen_{node.kind.name.lower()}"
-        method = getattr(self, method_name, self._gen_generic)
+        method = getattr(self, method_name, None)
+        if method is None:
+            compact_name = f"_gen_{node.kind.name.lower().replace('_', '')}"
+            method = getattr(self, compact_name, self._gen_generic)
         method(node)
 
     def _gen_generic(self, node: HIRNode):
@@ -233,6 +237,22 @@ class PythonBackend:
     def _gen_nonlocal(self, node: Nonlocal):
         self._emit(f"nonlocal {', '.join(node.names)}")
 
+    def _gen_assign(self, node: Assign):
+        targets = ", ".join(self._expr_to_str(target) for target in node.targets)
+        self._emit(f"{targets} = {self._expr_to_str(node.value)}")
+
+    def _gen_ann_assign(self, node: AnnAssign):
+        target = self._expr_to_str(node.target)
+        annotation = self._expr_to_str(node.annotation)
+        value = f" = {self._expr_to_str(node.value)}" if node.value else ""
+        self._emit(f"{target}: {annotation}{value}")
+
+    def _gen_aug_assign(self, node: AugAssign):
+        self._emit(
+            f"{self._expr_to_str(node.target)} {node.op} "
+            f"{self._expr_to_str(node.value)}"
+        )
+
     def _gen_const(self, node: Const) -> str:
         if node.value is None:
             return "None"
@@ -368,8 +388,16 @@ class CSTPythonBackend:
     def _visit(self, node):
         if node is None:
             return
+        class_method = getattr(self, f"_visit_{node.__class__.__name__.lower()}", None)
+        if class_method is not None:
+            return class_method(node)
         method_name = f"_visit_{node.type.name.lower()}"
-        method = getattr(self, method_name, self._visit_generic)
+        method = getattr(self, method_name, None)
+        if method is None:
+            # CST enum names use ``*_stmt`` while handlers use the compact
+            # spelling (exprstmt, ifstmt, ...).
+            compact_name = f"_visit_{node.type.name.lower().replace('_', '')}"
+            method = getattr(self, compact_name, self._visit_generic)
         return method(node)
 
     def _visit_generic(self, node):
@@ -485,8 +513,34 @@ class CSTPythonBackend:
     def _visit_exprstmt(self, node):
         self._emit(self._visit(node.value))
 
+    def _visit_decorator(self, node):
+        return self._visit(node.func)
+
+    def _visit_await(self, node):
+        return f"await {self._visit(node.value)}"
+
+    def _visit_matchstmt(self, node):
+        self._emit(f"match {self._visit(node.subject)}:")
+        self.indent += 1
+        for case in node.cases:
+            self._visit(case)
+        self.indent -= 1
+
+    def _visit_caseblock(self, node):
+        self._emit(f"case {self._visit(node.pattern)}:")
+        self.indent += 1
+        for stmt in node.body:
+            self._visit(stmt)
+        self.indent -= 1
+
     def _visit_name(self, node):
-        return node.id
+        return {
+            "imprimir": "print",
+            "entrada": "input",
+            "rango": "range",
+            "longitud": "len",
+            "abrir": "open",
+        }.get(node.id, node.id)
 
     def _visit_constant(self, node):
         if node.value is None:
@@ -496,6 +550,23 @@ class CSTPythonBackend:
         if isinstance(node.value, str):
             return repr(node.value)
         return str(node.value)
+
+    def _visit_fstringpart(self, node):
+        return node.value
+
+    def _visit_fstringexpr(self, node):
+        value = self._visit(node.value)
+        if node.conversion != -1:
+            value += "!" + chr(node.conversion)
+        if node.format_spec:
+            value += ":" + self._visit(node.format_spec)
+        return "{" + value + "}"
+
+    def _visit_fstring(self, node):
+        return 'f"' + "".join(self._visit(part) for part in node.parts) + '"'
+
+    def _visit_matchsingleton(self, node):
+        return "_" if node.value is None else self._visit_constant(node)
 
     def _visit_binop(self, node):
         return f"({self._visit(node.left)} {node.op} {self._visit(node.right)})"
@@ -545,6 +616,17 @@ class CSTPythonBackend:
                 pairs.append(f"{self._visit(k)}: {self._visit(v)}")
         return f"{{{', '.join(pairs)}}}"
 
+    def _visit_listcomp(self, node):
+        generators = " ".join(self._visit(g) for g in node.generators)
+        return f"[{self._visit(node.elt)} {generators}]"
+
+    def _visit_compfor(self, node):
+        async_kw = "async " if node.is_async else ""
+        result = f"{async_kw}for {self._visit(node.target)} in {self._visit(node.iter)}"
+        if node.ifs:
+            result += " " + " ".join(f"if {self._visit(item)}" for item in node.ifs)
+        return result
+
     def _visit_importstmt(self, node):
         names = ", ".join(self._visit(a) for a in node.names)
         self._emit(f"import {names}")
@@ -591,7 +673,7 @@ class CSTPythonBackend:
                 self._visit(s)
             self.indent -= 1
 
-    def _visit_excephandler(self, node):
+    def _visit_excepthandler(self, node):
         if node.is_star:
             self._emit("except*:")
         elif node.type_:

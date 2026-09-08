@@ -21,3 +21,6 @@ piton = "piton.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["piton*"]
+
+[tool.setuptools.package-data]
+piton = ["native_runtime.c"]

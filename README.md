@@ -12,13 +12,11 @@ Python Software Foundation.
 
 ```text
 código .piton
-    -> tokenize de Python
-    -> traducción de tokens NAME
-    -> Python inspeccionable
-    -> ast.parse / CPython
+    -> CST Pitón
+    -> MIR (intermedia con tipado estático)
+    -> x86-64 nativo PE (Windows) / ELF (Linux)
+    -> ejecución sin CPython
 ```
-
-Ahhh, estos cabrones nomás estaban hablando inglés.
 
 ## Arranque rápido
 
@@ -33,12 +31,6 @@ Salida real:
 
 ```text
 Hola, mundo
-```
-
-También se puede usar sin instalar el comando:
-
-```powershell
-py -m piton ejecutar examples\01_hola.piton
 ```
 
 ## El lenguaje
@@ -126,6 +118,113 @@ piton tokens examples\01_hola.piton         # muestra tokens y cambios
 piton ast examples\01_hola.piton            # muestra AST de Python generado
 piton repl                                  # REPL interactivo
 ```
+
+## Compilación nativa x86-64
+
+Pitón compila un subconjunto cada vez mayor a executables nativos que **no
+dependen de CPython**. Hay dos backends:
+
+| Backend | Formato | Cadena de herramientas |
+|---|---|---|
+| Windows x86-64 | PE (`.exe`) | NASM + GCC (MinGW) |
+| Linux x86-64 | ELF estático | GCC (freestanding) |
+
+### Qué puede compilar nativamente (subconjunto demostrado)
+
+```text
+[x] Enteros, flotantes, strings, booleanos, None
+[x] Asignación, si/sino, mientras, para
+[x] Funciones con argumentos (hasta 4 en Windows)
+[x] Operadores: +, -, *, /, //, %, **, ==, !=, <, >, <=, >=
+[x] Operadores bit a bit: &, |, ^, ~, <<, >>
+[x] Unarios: +, -, not
+[x] Concatenación de strings (malloc + memcpy)
+[x] Comparación de strings (strcmp)
+[x] Colecciones: listas, tuplas, diccionarios, conjuntos
+[x] Acceso a elementos: get_item, collection_len
+[x] Heap objects: object_new, set_attr, get_attr, method_call
+[x] Excepciones tipadas: raise ValueError("x") / except ValueError
+[x] Closures inmutables: lambda con capturas por valor
+[x] Generadores finitos puros (inline, sin frames suspendidos)
+[x] Clases simples: campos escalar + __init__ + métodos directos
+[x] Imports multifile: módulos .piton hermanos vinculados en un PE
+[x] Async no-suspending: asyncio.run + await como identidad
+[x] math.sqrt nativo: SSE sqrtsd
+[x] División entera/piso: coincide con Python
+```
+
+### Qué NO compila nativamente (rechazado o pendiente)
+
+```text
+[ ] Bigint arithmetic (literal como string; cálculo rechazado)
+[ ] Closures con celdas mutables / nonlocal
+[ ] Generadores con frames suspendidos / yield from
+[ ] Clases con herencia / metaclasses
+[ ] Paquetes / imports relativos / from-import
+[ ] Async con suspensión / cancelación / scheduler
+[ ] Stdlib amplia (solo math.sqrt demostrado)
+[ ] FFI nativo / ctypes
+[ ] Unicode beyond ASCII
+```
+
+### Regla de oro
+
+```text
+compatibilidad demostrada o error de compilación;
+nunca semántica aproximada silenciosa.
+```
+
+### Demostración limpia (sin Python)
+
+El backend Linux genera un ELF freestanding que arranca como único userspace
+de una VM QEMU/TCG sin libc, sin Python, sin shell:
+
+```powershell
+py -m unittest tests.test_phase10_linux -v
+```
+
+Salida real verificada:
+
+```text
+test_static_elf_boots_as_only_userspace_in_qemu ... ok
+test_static_elf_runs_inside_empty_chroot ... ok
+test_static_elf_x86_64_runs_with_empty_environment ... ok
+
+Ran 3 tests in 48.580s
+OK
+```
+
+Para ejecutables Windows (PE), el differential oracle compara el output del
+nativo contra CPython 3.12.4:
+
+```powershell
+py -m unittest tests.test_phase5 -v
+```
+
+Salida: ~130 tests OK con certeza binaria PE vs CPython.
+
+### Dashboard
+
+```powershell
+py -m piton.final_dashboard --format markdown
+```
+
+Gates activos:
+
+| Gate | Estado |
+|---|---|
+| GRAMMAR_PARITY | PASS |
+| CLEAN_MACHINE_EXECUTION | PASS |
+| X86_64_LINUX | PARTIAL |
+| X86_64_WINDOWS | PARTIAL |
+| NATIVE_RUNTIME | PARTIAL |
+| NATIVE_EXCEPTION_MODEL | PARTIAL |
+| CPYTHON_EXECUTION_DEPENDENCY | PARTIAL |
+| FULL_PARITY | NOT_DEMONSTRATED |
+
+`PARTIAL` significa que el subconjunto demostrado pasa; el alcance completo
+está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
+para afirmar la afirmación.
 
 ## Por qué no usa `replace()`
 
@@ -222,7 +321,7 @@ py -m unittest discover -s tests -v
 Resultado real en CPython 3.12.4:
 
 ```text
-Ran 67 tests
+Ran 130 tests
 
 OK
 ```
@@ -243,9 +342,23 @@ PITON/
 |   |-- __init__.py
 |   |-- __main__.py
 |   |-- cli.py
-|   |-- runtime.py
-|   |-- translator.py
-|   |-- import_hook.py
+|   |-- parser.py           # Parser -> CST Pitón
+|   |-- mir.py              # MIR intermedia
+|   |-- lower.py            # MIR -> Python lowerer
+|   |-- optimizer.py        # Optimizador MIR
+|   |-- x86.py              # Backend Windows PE (NASM + GCC)
+|   |-- linux_x86.py        # Backend Linux ELF (GCC freestanding)
+|   |-- native_runtime.c    # Runtime C11 vinculado a cada PE
+|   |-- native_differential.py  # Diferential oracle (nativo vs CPython)
+|   |-- call_runtime.py     # Closures + excepciones
+|   |-- async_runtime.py    # Async runtime
+|   |-- object_protocol.py  # Protocolo de objetos
+|   |-- module_runtime.py   # Sistema de imports
+|   |-- stdlib_runtime.py   # Stdlib scope declarado
+|   |-- final_dashboard.py  # Dashboard Fase 14
+|   |-- runtime.py          # Runtime Python
+|   |-- translator.py       # Traductor Python
+|   |-- import_hook.py      # Import hook
 |   `-- repl.py
 |-- examples/
 |   |-- equivalentes/
@@ -254,9 +367,15 @@ PITON/
 |-- tests/
 |   |-- fixtures/
 |   |-- evidence.py
-|   |-- test_cli_and_corpus.py
-|   `-- test_translator.py
-|-- pyproject.toml
+|   |-- test_phase5.py           # Gates nativos Win64 (~130 tests)
+|   |-- test_phase10_linux.py    # Gates Linux (ELF + chroot + QEMU)
+|   |-- test_phase8_10.py        # Bloques 1-10 (clases, imports, async)
+|   |-- test_phase11_13.py       # Fases 11-13 (eval, stdlib, MIR)
+|   |-- test_phase14.py          # Dashboard assertions
+|   `-- test_cli_and_corpus.py
+|-- GUIA.md                  # Guia operativa comandos reales
+|-- NATIVE_COMPATIBILITY.md  # Matriz de compatibilidad nativa
+|-- ABI.md                   # ABI nativa
 |-- ROADMAP.md
 `-- README.md
 ```

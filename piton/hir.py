@@ -35,6 +35,9 @@ class HIRKind(Enum):
     DELETE = auto()
     GLOBAL = auto()
     NONLOCAL = auto()
+    ASSIGN = auto()
+    ANN_ASSIGN = auto()
+    AUG_ASSIGN = auto()
 
     # Expresiones
     CONST = auto()
@@ -248,6 +251,29 @@ class Global(HIRNode):
 class Nonlocal(HIRNode):
     names: List[str] = field(default_factory=list)
     kind: HIRKind = HIRKind.NONLOCAL
+
+
+@dataclass(slots=True)
+class Assign(HIRNode):
+    targets: List[HIRNode] = field(default_factory=list)
+    value: Optional[HIRNode] = None
+    kind: HIRKind = HIRKind.ASSIGN
+
+
+@dataclass(slots=True)
+class AnnAssign(HIRNode):
+    target: Optional[HIRNode] = None
+    annotation: Optional[HIRNode] = None
+    value: Optional[HIRNode] = None
+    kind: HIRKind = HIRKind.ANN_ASSIGN
+
+
+@dataclass(slots=True)
+class AugAssign(HIRNode):
+    target: Optional[HIRNode] = None
+    op: str = ""
+    value: Optional[HIRNode] = None
+    kind: HIRKind = HIRKind.AUG_ASSIGN
 
 
 @dataclass(slots=True)

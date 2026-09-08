@@ -9,6 +9,7 @@ from piton.hir import (
     If, While, For, Return, Yield, YieldFrom, Raise,
     Try, ExceptHandler, With, WithItem, Match, CaseBlock,
     Load, Store, Delete, Global, Nonlocal,
+    Assign as HIRAssign, AnnAssign as HIRAnnAssign, AugAssign as HIRAugAssign,
     Const, BinOp, UnOp, Compare, BoolOp, Call, Keyword,
     Attr, Subscr, List, Tuple, Set, Dict,
     ListComp, CompFor, IfExpr, Await,
@@ -48,7 +49,10 @@ class Lowerer:
 
     def lower(self, cst: CSTNode) -> HIRNode:
         method_name = f"_lower_{cst.type.name.lower()}"
-        method = getattr(self, method_name, self._lower_generic)
+        method = getattr(self, method_name, None)
+        if method is None:
+            compact_name = f"_lower_{cst.type.name.lower().replace('_', '')}"
+            method = getattr(self, compact_name, self._lower_generic)
         return method(cst)
 
     def _lower_generic(self, cst: CSTNode) -> HIRNode:
@@ -160,7 +164,7 @@ class Lowerer:
         return Try(kind=HIRKind.TRY, body=body, handlers=handlers,
                   orelse=orelse, finalbody=finalbody)
 
-    def _lower_excephandler(self, cst: CSTExceptHandler):
+    def _lower_excepthandler(self, cst: CSTExceptHandler):
         type_ = self.lower(cst.type_) if cst.type_ else None
         return ExceptHandler(
             kind=HIRKind.TRY,
@@ -217,28 +221,22 @@ class Lowerer:
         return self.lower(cst.value)
 
     def _lower_assign(self, cst: Assign):
-        # En HIR, asignación es Store + expr
         targets = [self.lower(t) for t in cst.targets]
         value = self.lower(cst.value)
-        # Retornar el value con annotations de targets
-        value.annotations["assign_targets"] = targets
-        return value
+        return HIRAssign(kind=HIRKind.ASSIGN, targets=targets, value=value)
 
     def _lower_annassign(self, cst: AnnAssign):
         target = self.lower(cst.target)
         annotation = self.lower(cst.annotation)
         value = self.lower(cst.value) if cst.value else None
-        result = value if value else annotation
-        result.annotations["annassign_target"] = target
-        result.annotations["annassign_annotation"] = annotation
-        return result
+        return HIRAnnAssign(kind=HIRKind.ANN_ASSIGN, target=target,
+                            annotation=annotation, value=value)
 
     def _lower_augassign(self, cst: AugAssign):
         target = self.lower(cst.target)
         value = self.lower(cst.value)
-        value.annotations["augassign_target"] = target
-        value.annotations["augassign_op"] = cst.op
-        return value
+        return HIRAugAssign(kind=HIRKind.AUG_ASSIGN, target=target,
+                            op=cst.op, value=value)
 
     # Expresiones
     def _lower_name(self, cst: CSTName) -> HIRNode:

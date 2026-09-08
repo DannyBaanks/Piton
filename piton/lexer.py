@@ -257,56 +257,71 @@ class Lexer:
         return Token(type_, value, line, col, start, self.pos)
 
     def _next_token(self) -> Optional[Token]:
-        if self.pos >= len(self.source):
-            return None
+        while True:
+            if self.pos >= len(self.source):
+                if self.pending_dedents:
+                    self.pending_dedents -= 1
+                    return self._make_token(TokenType.DEDENT, "")
+                return None
 
-        ch = self._peek()
+            if self.pending_dedents:
+                self.pending_dedents -= 1
+                return self._make_token(TokenType.DEDENT, "")
 
-        # FIN DE ARCHIVO
-        if ch == "\0":
-            return None
+            ch = self._peek()
 
-        # COMENTARIO
-        if ch == "#":
-            return self._read_comment()
+            # FIN DE ARCHIVO
+            if ch == "\0":
+                return None
 
-        # WHITESPACE (no newline)
-        if ch in " \t\r\f\v":
-            return self._read_whitespace()
+            # COMENTARIO
+            if ch == "#":
+                return self._read_comment()
 
-        # NEWLINE
-        if ch == "\n":
-            return self._read_newline()
+            # WHITESPACE (se ignora)
+            if ch in " \t\r\f\v":
+                self._read_whitespace()
+                continue
 
-        # STRING / F-STRING
-        if ch in "\"'":
-            return self._read_string()
+            # NEWLINE
+            if ch == "\n":
+                tok = self._read_newline()
+                if tok:
+                    return tok
+                continue
 
-        # NÚMERO
-        if ch in NUMBER_START:
-            return self._read_number()
+            # STRING / F-STRING
+            if ch in "\"'":
+                return self._read_string()
 
-        # IDENTIFICADOR / KEYWORD
-        if ch.isalpha() or ch == "_":
-            return self._read_identifier()
+            # NÚMERO
+            if ch in NUMBER_START:
+                return self._read_number()
 
-        # OPERADORES Y PUNTUACIÓN
-        for tok_type, regex in SIMPLE_REGEX:
-            match = regex.match(self.source, self.pos)
-            if match:
-                value = match.group(0)
-                self._advance(len(value))
-                return self._make_token(tok_type, value)
+            # IDENTIFICADOR / KEYWORD
+            if ch in "fF" and self._peek(2) in "\"'":
+                self._advance()
+                return self._read_string()
+            if ch.isalpha() or ch == "_":
+                return self._read_identifier()
 
-        # CARÁCTER NO RECONOCIDO
-        self._advance()
-        return self._make_token(TokenType.ERROR, ch)
+            # OPERADORES Y PUNTUACIÓN
+            for tok_type, regex in SIMPLE_REGEX:
+                match = regex.match(self.source, self.pos)
+                if match:
+                    value = match.group(0)
+                    self._advance(len(value))
+                    return self._make_token(tok_type, value)
 
-    def _read_whitespace(self) -> Token:
-        start = self.pos
+            # CARÁCTER NO RECONOCIDO
+            self._advance()
+            return self._make_token(TokenType.ERROR, ch)
+
+    def _read_whitespace(self) -> None:
+        # Espacios en blanco normales se ignoran (no generan tokens)
         while self._peek() in " \t\r\f\v":
             self._advance()
-        return self._make_token(TokenType.NL, self.source[start:self.pos])
+        return None
 
     def _read_newline(self) -> Token:
         self._advance()  # consume \n
@@ -447,7 +462,7 @@ class Lexer:
         if is_fstring:
             # Para f-strings, tokenizar como STRING simple
             # El parser manejará la interpolación
-            return self._make_token(TokenType.STRING, value)
+            return self._make_token(TokenType.STRING, "f" + value)
 
         return self._make_token(TokenType.STRING, value)
 

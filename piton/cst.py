@@ -31,6 +31,7 @@ class CSTNodeType(Enum):
     CASE_BLOCK = "case_block"  # caso
     IMPORT_STMT = "import_stmt"
     IMPORT_FROM_STMT = "import_from_stmt"
+    ALIAS = "alias"
     GLOBAL_STMT = "global_stmt"
     NONLOCAL_STMT = "nonlocal_stmt"
     ASSERT_STMT = "assert_stmt"
@@ -189,6 +190,7 @@ class ForStmt(CSTNode):
     iter: Optional[CSTNode] = None
     body: List[CSTNode] = field(default_factory=list)
     orelse: List[CSTNode] = field(default_factory=list)
+    is_async: bool = False
     type: CSTNodeType = CSTNodeType.FOR_STMT
 
 
@@ -306,7 +308,7 @@ class ImportFromStmt(CSTNode):
 class Alias(CSTNode):
     name: str = ""
     asname: Optional[str] = None
-    type: CSTNodeType = CSTNodeType.IMPORT_STMT
+    type: CSTNodeType = CSTNodeType.ALIAS
 
 
 @dataclass(slots=True)

@@ -30,3 +30,38 @@ def compilar(fuente: str, archivo: str = "<piton>") -> Any:
     """Public API: compile Pitón source to a Python code object."""
     from .repl import compilar_piton
     return compilar_piton(fuente, archivo)
+
+
+def compile_piton(fuente: str, archivo: str = "<piton>") -> Any:
+    """API explícita para compilar fuente Pitón a un code object Python."""
+    return compilar(fuente, archivo)
+
+
+def exec_piton(fuente: str, globals_: dict[str, Any] | None = None,
+               locals_: dict[str, Any] | None = None, archivo: str = "<piton>") -> dict[str, Any]:
+    """Ejecuta Pitón solo cuando el caller lo solicita explícitamente."""
+    espacio = globals_ if globals_ is not None else {}
+    destino = locals_ if locals_ is not None else espacio
+    exec(compile_piton(fuente, archivo), espacio, destino)
+    return destino
+
+
+def eval_piton(fuente: str, globals_: dict[str, Any] | None = None,
+               locals_: dict[str, Any] | None = None, archivo: str = "<piton>") -> Any:
+    """Evalúa una expresión Pitón mediante una llamada explícita."""
+    espacio = globals_ if globals_ is not None else {}
+    destino = locals_ if locals_ is not None else espacio
+    traducido = traducir_fuente(fuente, archivo)
+    return eval(compile(traducido, archivo, "eval"), espacio, destino)
+
+
+def inspect_piton_source(fuente: str, archivo: str = "<piton>") -> dict[str, Any]:
+    """Devuelve fuente original, Python generado y líneas inspeccionables."""
+    from .translator import traducir_fuente_con_mapa
+    generated, mapping = traducir_fuente_con_mapa(fuente, archivo)
+    return {
+        "filename": archivo,
+        "source": fuente,
+        "generated": generated,
+        "source_map": mapping,
+    }

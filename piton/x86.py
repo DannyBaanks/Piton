@@ -1,0 +1,623 @@
+"""Backend x86-64 Win64 mínimo desde MIR.
+
+El alcance inicial es int/string, variables locales, aritmética, comparaciones,
+branch/jump, funciones simples y ``imprimir`` mediante el CRT de Windows.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+from typing import Any
+
+from piton.lower import lower_cst_to_hir
+from piton.mir import MIRBlock, MIRFunction, MIRInstruction, MIRLoweringError, MIRModule, lower_hir_to_mir
+from piton.parser import parse
+
+
+class NativeBuildError(RuntimeError):
+    pass
+
+
+class Win64NasmEmitter:
+    def __init__(self):
+        self.lines: list[str] = []
+        self.slots: dict[str, int] = {}
+        self.next_slot = 8
+        self.strings: dict[str, str] = {}
+        self.next_string = 0
+        self.aliases: dict[str, str] = {}
+        self.types: dict[str, str] = {}
+        self.next_internal_label = 0
+        self.owned_slots: list[tuple[str, str]] = []
+        self.constants: dict[str, Any] = {}
+
+    def emit(self, module: MIRModule) -> str:
+        self.lines = [
+            "default rel", "extern printf", "extern strcmp", "extern strlen",
+            "extern malloc", "extern memcpy", "section .text",
+        ]
+        self.lines[0:0] = [
+            "extern piton_collection_new", "extern piton_collection_put",
+            "extern piton_collection_len", "extern piton_collection_get",
+            "extern piton_collection_print", "extern piton_collection_free",
+            "extern piton_collection_live_count",
+            "extern piton_raise",
+            "extern piton_object_new", "extern piton_object_set", "extern piton_object_get",
+            "extern piton_object_free", "extern piton_object_live_count",
+            "extern piton_print_float",
+        ]
+        for function in module.functions:
+            self._emit_function(function)
+        self.lines.append("section .rdata")
+        for value, label in self.strings.items():
+            escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+            self.lines.append(f'{label}: db "{escaped}", 0')
+        self.lines.extend([
+            'fmt_int: db "%lld", 10, 0',
+            'fmt_float: db "%.17g", 10, 0',
+            'fmt_str: db "%s", 10, 0',
+            'lit_true: db "True", 0',
+            'lit_false: db "False", 0',
+            'lit_none: db "None", 0',
+        ])
+        return "\n".join(self.lines) + "\n"
+
+    def _emit_function(self, function: MIRFunction) -> None:
+        self.slots = {}
+        self.next_slot = 8
+        self.aliases = {}
+        self.types = {}
+        self.owned_slots = []
+        self.constants = {}
+        for block in function.blocks:
+            for instruction in block.instructions:
+                self._reserve(instruction.result)
+                if instruction.op == "build_collection" and instruction.result:
+                    self.owned_slots.append((instruction.result, "piton_collection_free"))
+                if instruction.op == "object_new" and instruction.result:
+                    self.owned_slots.append((instruction.result, "piton_object_free"))
+                if instruction.op == "store":
+                    self._reserve(instruction.args[0])
+        for scratch in ("@scratch0", "@scratch1", "@scratch2", "@scratch3"):
+            self._reserve(scratch)
+        # Keep the Win64 32-byte shadow area below every local slot.
+        frame = max(48, ((self.next_slot + 32 + 15) // 16) * 16)
+        label = "main" if function.name == "<module>" else function.name
+        self.lines.extend([f"global {label}", f"{label}:", "    push rbp", "    mov rbp, rsp", f"    sub rsp, {frame}"])
+        for slot, _ in self.owned_slots:
+            self.lines.append(f"    mov qword {self._address(slot)}, 0")
+        if len(function.params) > 4:
+            raise NativeBuildError("native calls with more than four parameters are not supported yet")
+        if function.params:
+            for register, name in zip(("rcx", "rdx", "r8", "r9"), function.params):
+                self._store_slot(name, register)
+        labels = {block.label: f"{label}_{block.label}" for block in function.blocks}
+        for block in function.blocks:
+            self.lines.append(f"{labels[block.label]}:")
+            for instruction in block.instructions:
+                self._emit_instruction(instruction, labels)
+        self._emit_cleanup()
+        if function.name == "<module>":
+            self.lines.extend([
+                "    call piton_collection_live_count", f"    mov {self._address('@scratch0')}, rax",
+                "    call piton_object_live_count", f"    or rax, {self._address('@scratch0')}",
+                "    test rax, rax", "    setne al", "    movzx eax, al",
+            ])
+        else:
+            self.lines.append("    xor eax, eax")
+        self.lines.extend(["    leave", "    ret"])
+
+    def _reserve(self, name: str | None) -> None:
+        if name is not None and name not in self.slots:
+            self.slots[name] = self.next_slot
+            self.next_slot += 8
+
+    def _address(self, name: str) -> str:
+        self._reserve(name)
+        return f"[rbp-{self.slots[name]}]"
+
+    def _store_slot(self, name: str, register: str) -> None:
+        self.lines.append(f"    mov {self._address(name)}, {register}")
+
+    def _load_operand(self, operand: Any, register: str = "rax") -> None:
+        if isinstance(operand, str) and operand.startswith("%"):
+            self.lines.append(f"    mov {register}, {self._address(operand)}")
+        elif isinstance(operand, bool):
+            self.lines.append(f"    mov {register}, {int(operand)}")
+        elif isinstance(operand, int):
+            self.lines.append(f"    mov {register}, {operand}")
+        elif isinstance(operand, float):
+            self.lines.append(f"    mov {register}, __float64__({operand!r})")
+        elif operand is None:
+            self.lines.append(f"    xor {register}, {register}")
+        else:
+            label = self._string(str(operand))
+            self.lines.append(f"    lea {register}, [{label}]")
+
+    def _emit_instruction(self, instruction: MIRInstruction, labels: dict[str, str]) -> None:
+        op, args, result = instruction.op, instruction.args, instruction.result
+        if op == "const":
+            value = args[0]
+            self.constants[result] = value
+            if value is None:
+                self.types[result] = "none"
+            elif isinstance(value, bool):
+                self.types[result] = "bool"
+            elif isinstance(value, str):
+                self.types[result] = "str"
+            elif isinstance(value, float):
+                self.types[result] = "float"
+            elif isinstance(value, int) and not (-(1 << 60) <= value < (1 << 60)):
+                self.types[result] = "bigint_literal"
+            else:
+                self.types[result] = "int"
+            if self.types[result] == "bigint_literal":
+                self.lines.append(f"    lea rax, [{self._string(str(value))}]")
+            else:
+                self._load_operand(value)
+            self.lines.append(f"    mov {self._address(result)}, rax")
+        elif op == "load":
+            name = args[0]
+            self.aliases[result] = name
+            self.types[result] = self.types.get(name, "int")
+            self.lines.append(f"    mov rax, {self._address(name)}")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+        elif op == "store":
+            self.lines.append(f"    mov rax, {self._address(args[1]) if isinstance(args[1], str) and args[1].startswith('%') else self._immediate(args[1])}")
+            self.lines.append(f"    mov {self._address(args[0])}, rax")
+            if isinstance(args[1], str):
+                self.types[args[0]] = self.types.get(args[1], "int")
+        elif op == "binary":
+            operator, left, right = args
+            left_type = self.types.get(left, "int")
+            right_type = self.types.get(right, "int")
+            if "str" in {left_type, right_type}:
+                if operator == "+" and left_type == right_type == "str":
+                    self._emit_string_concat(left, right, result)
+                    return
+                raise NativeBuildError(f"native string operator not supported yet: {operator}")
+            if "bigint_literal" in {left_type, right_type}:
+                raise NativeBuildError("native bigint arithmetic requires limb support")
+            if "float" in {left_type, right_type}:
+                if operator not in {"+", "-", "*"}:
+                    raise NativeBuildError(f"native float operator not supported yet: {operator}")
+                self._load_float_operand(left, "xmm0")
+                self._load_float_operand(right, "xmm1")
+                instruction_name = {"+": "addsd", "-": "subsd", "*": "mulsd"}[operator]
+                self.lines.append(f"    {instruction_name} xmm0, xmm1")
+                self.lines.extend(["    movq rax, xmm0", f"    mov {self._address(result)}, rax"])
+                self.types[result] = "float"
+                return
+            self._load_operand(left, "rax")
+            self._load_operand(right, "rcx")
+            if operator == "+":
+                self.lines.append("    add rax, rcx")
+            elif operator == "-":
+                self.lines.append("    sub rax, rcx")
+            elif operator == "*":
+                self.lines.append("    imul rax, rcx")
+            elif operator == "&":
+                self.lines.append("    and rax, rcx")
+            elif operator == "|":
+                self.lines.append("    or rax, rcx")
+            elif operator == "^":
+                self.lines.append("    xor rax, rcx")
+            elif operator == "<<":
+                self.lines.append("    shl rax, cl")
+            elif operator == ">>":
+                self.lines.append("    sar rax, cl")
+            elif operator == "/":
+                raise NativeBuildError("native true division requires float support")
+            elif operator in {"//", "%"}:
+                correction = self._internal_label("floor_done")
+                self.lines.extend([
+                    "    mov r8, rcx",
+                    "    cqo",
+                    "    idiv rcx",
+                    "    test rdx, rdx",
+                    f"    jz {correction}",
+                    "    mov r9, rdx",
+                    "    xor r9, r8",
+                    f"    jns {correction}",
+                    "    dec rax",
+                    "    add rdx, r8",
+                    f"{correction}:",
+                ])
+                if operator == "%":
+                    self.lines.append("    mov rax, rdx")
+            else:
+                raise NativeBuildError(f"unsupported binary operator: {operator}")
+            self.types[result] = "int"
+            self.lines.append(f"    mov {self._address(result)}, rax")
+        elif op == "unary":
+            operator, operand = args
+            if self.types.get(operand) == "bigint_literal":
+                value = self.constants.get(operand)
+                if operator == "-" and isinstance(value, int):
+                    self.lines.append(f"    lea rax, [{self._string(str(-value))}]")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "bigint_literal"
+                    self.constants[result] = -value
+                    return
+                if operator == "+":
+                    self.lines.append(f"    mov rax, {self._address(operand)}")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "bigint_literal"
+                    self.constants[result] = value
+                    return
+                raise NativeBuildError(f"native bigint unary operator not supported yet: {operator}")
+            self._load_operand(operand, "rax")
+            if self.types.get(operand) == "float" and operator in {"+", "-"}:
+                if operator == "-":
+                    self.lines.append("    btc rax, 63")
+                self.types[result] = "float"
+            elif operator == "-":
+                self.lines.append("    neg rax")
+                self.types[result] = "int"
+            elif operator == "+":
+                self.types[result] = self.types.get(operand, "int")
+            elif operator == "~":
+                self.lines.append("    not rax")
+                self.types[result] = "int"
+            elif operator in {"not", "no"}:
+                self._emit_truth_test(operand)
+                self.lines.extend(["    sete al", "    movzx rax, al"])
+                self.types[result] = "bool"
+            else:
+                raise NativeBuildError(f"unsupported unary operator: {operator}")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+        elif op == "compare":
+            operator, left, right = args
+            left_type = self.types.get(left, "int")
+            right_type = self.types.get(right, "int")
+            numeric_types = {"int", "bool"}
+            if "bigint_literal" in {left_type, right_type}:
+                raise NativeBuildError("native bigint comparison requires limb support")
+            float_compare = "float" in {left_type, right_type} and {left_type, right_type} <= {"float", "int", "bool"}
+            if float_compare:
+                self._load_float_operand(left, "xmm0")
+                self._load_float_operand(right, "xmm1")
+                self.lines.append("    ucomisd xmm0, xmm1")
+                condition = {"==": "e", "!=": "ne", "<": "b", "<=": "be", ">": "a", ">=": "ae"}[operator]
+                self.lines.extend([f"    set{condition} al", "    movzx rax, al"])
+                mixed_non_numeric = False
+            else:
+                mixed_non_numeric = left_type != right_type and not {left_type, right_type} <= numeric_types
+            if "float" in {left_type, right_type}:
+                pass
+            elif mixed_non_numeric:
+                if operator not in {"==", "!="}:
+                    raise NativeBuildError(
+                        f"native ordering not supported between {left_type} and {right_type}"
+                    )
+                self.lines.append(f"    mov eax, {int(operator == '!=')}")
+            elif left_type == right_type == "str":
+                self._load_operand(left, "rcx")
+                self._load_operand(right, "rdx")
+                self.lines.extend(["    call strcmp", "    cmp eax, 0"])
+            else:
+                self._load_operand(left, "rax")
+                self._load_operand(right, "rcx")
+                self.lines.append("    cmp rax, rcx")
+            if not mixed_non_numeric and not float_compare:
+                condition = {"==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge"}[operator]
+                self.lines.append(f"    set{condition} al")
+                self.lines.append("    movzx rax, al")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "bool"
+        elif op == "build_collection":
+            kind, raw_items = args
+            kind_id = {"list": 1, "tuple": 2, "dict": 3, "set": 4}[kind]
+            self.lines.extend([
+                f"    mov rcx, {self._address(result)}",
+                "    call piton_collection_free",
+                f"    mov rcx, {kind_id}",
+                f"    mov rdx, {len(raw_items)}",
+                "    call piton_collection_new",
+                f"    mov {self._address(result)}, rax",
+            ])
+            for index, item in enumerate(raw_items):
+                key, value = item if kind == "dict" else (item, item)
+                self.lines.extend([
+                    f"    mov rcx, {self._address(result)}",
+                    f"    mov rdx, {index}",
+                ])
+                self._load_operand(key, "r8")
+                self._load_operand(value, "r9")
+                self.lines.append("    call piton_collection_put")
+            self.types[result] = kind
+        elif op == "get_item":
+            container, key = args
+            container_type = self.types.get(container)
+            if container_type not in {"list", "tuple", "dict"}:
+                raise NativeBuildError(f"native subscription not supported for {container_type}")
+            self._load_operand(container, "rcx")
+            self._load_operand(key, "rdx")
+            self.lines.append("    call piton_collection_get")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "collection_len":
+            collection = args[0]
+            if self.types.get(collection) not in {"list", "tuple", "dict", "set"}:
+                raise NativeBuildError("native collection_len requires a collection")
+            self._load_operand(collection, "rcx")
+            self.lines.append("    call piton_collection_len")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "object_new":
+            class_name = args[0]
+            self.lines.extend([
+                f"    mov rcx, {self._address(result)}", "    call piton_object_free",
+                f"    lea rcx, [{self._string(class_name)}]", "    call piton_object_new",
+                f"    mov {self._address(result)}, rax",
+            ])
+            self.types[result] = f"object:{class_name}"
+        elif op == "set_attr":
+            owner, name, value = args
+            self._load_operand(owner, "rcx")
+            self.lines.append(f"    lea rdx, [{self._string(name)}]")
+            self._load_operand(value, "r8")
+            self.lines.append("    call piton_object_set")
+        elif op == "get_attr":
+            owner, name = args
+            self._load_operand(owner, "rcx")
+            self.lines.append(f"    lea rdx, [{self._string(name)}]")
+            self.lines.append("    call piton_object_get")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "method_call":
+            explicit_class, method_name, owner, raw_values = args
+            owner_type = self.types.get(owner, "")
+            class_name = explicit_class or (owner_type.split(":", 1)[1] if owner_type.startswith("object:") else None)
+            if not class_name:
+                raise NativeBuildError("native method receiver class is not statically known")
+            values = [owner, *raw_values]
+            if len(values) > 4:
+                raise NativeBuildError("native method calls support at most four total arguments")
+            for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
+                self._load_operand(value, register)
+            self.lines.append(f"    call {class_name}__{method_name}")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "math_sqrt":
+            self._load_float_operand(args[0], "xmm0")
+            self.lines.extend(["    sqrtsd xmm0, xmm0", "    movq rax, xmm0"])
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "float"
+        elif op == "raise_typed":
+            exception_type, payload = args
+            self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
+            if payload is None:
+                self.lines.append("    xor edx, edx")
+            elif self.types.get(payload) in {"str", "bigint_literal"}:
+                self._load_operand(payload, "rdx")
+            else:
+                raise NativeBuildError("native exception payload must be a string")
+            self.lines.append("    call piton_raise")
+        elif op == "branch":
+            condition, yes, no = args
+            self._emit_truth_test(condition)
+            self.lines.extend([f"    jne {labels[yes]}", f"    jmp {labels[no]}"])
+        elif op == "jump":
+            self.lines.append(f"    jmp {labels[args[0]]}")
+        elif op == "call":
+            function_operand, call_args = args
+            function_name = self.aliases.get(function_operand, function_operand)
+            values = list(call_args)
+            if function_name in {"imprimir", "print"}:
+                if not values:
+                    self.lines.append("    lea rcx, [fmt_str]")
+                    self.lines.append("    xor edx, edx")
+                else:
+                    value = values[0]
+                    value_type = self.types.get(value, "int")
+                    if value_type in {"list", "tuple", "dict", "set"}:
+                        self._load_operand(value, "rcx")
+                        self.lines.append("    call piton_collection_print")
+                        if result:
+                            self.lines.append(f"    mov qword {self._address(result)}, 0")
+                        return
+                    if value_type == "bool":
+                        false_label = self._internal_label("bool_false")
+                        ready_label = self._internal_label("bool_ready")
+                        self._load_operand(value, "rax")
+                        self.lines.extend([
+                            "    test rax, rax",
+                            f"    jz {false_label}",
+                            "    lea rdx, [lit_true]",
+                            f"    jmp {ready_label}",
+                            f"{false_label}:",
+                            "    lea rdx, [lit_false]",
+                            f"{ready_label}:",
+                        ])
+                        fmt = "fmt_str"
+                    elif value_type == "none":
+                        self.lines.append("    lea rdx, [lit_none]")
+                        fmt = "fmt_str"
+                    elif value_type == "float":
+                        self._load_float_operand(value, "xmm0")
+                        self.lines.append("    call piton_print_float")
+                        if result:
+                            self.lines.append(f"    mov qword {self._address(result)}, 0")
+                        return
+                    elif value_type == "bigint_literal":
+                        self._load_operand(value, "rdx")
+                        fmt = "fmt_str"
+                    else:
+                        self._load_operand(value, "rdx")
+                        fmt = "fmt_str" if value_type == "str" else "fmt_int"
+                    self.lines.append(f"    lea rcx, [{fmt}]")
+                self.lines.extend(["    call printf", "    xor eax, eax"])
+            elif function_name in {"longitud", "len"}:
+                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set"}:
+                    raise NativeBuildError("native len currently requires one collection")
+                self._load_operand(values[0], "rcx")
+                self.lines.append("    call piton_collection_len")
+                self.types[result] = "int"
+            else:
+                if len(values) > 4:
+                    raise NativeBuildError("native calls with more than four arguments are not supported yet")
+                for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
+                    self._load_operand(value, register)
+                self.lines.append(f"    call {function_name}")
+            if result:
+                self.lines.append(f"    mov {self._address(result)}, rax")
+        elif op == "return":
+            if self.types.get(args[0]) in {"list", "tuple", "dict", "set"}:
+                raise NativeBuildError("returning native collections is not supported yet")
+            self._load_operand(args[0], "rax")
+            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+            self._emit_cleanup()
+            self.lines.extend([f"    mov rax, {self._address('@scratch0')}", "    leave", "    ret"])
+        elif op == "runtime_call":
+            raise NativeBuildError(f"runtime operation not supported in native subset: {args[0]}")
+
+    def _immediate(self, value: Any) -> str:
+        if value is None:
+            return "0"
+        if isinstance(value, bool):
+            return str(int(value))
+        if isinstance(value, int):
+            return str(value)
+        return self._string(str(value))
+
+    def _string(self, value: str) -> str:
+        if value not in self.strings:
+            self.strings[value] = f"str_{self.next_string}"
+            self.next_string += 1
+        return self.strings[value]
+
+    def _internal_label(self, prefix: str) -> str:
+        label = f"__piton_{prefix}_{self.next_internal_label}"
+        self.next_internal_label += 1
+        return label
+
+    def _emit_truth_test(self, operand: Any) -> None:
+        if self.types.get(operand, "int") == "str":
+            self._load_operand(operand, "rcx")
+            self.lines.extend(["    call strlen", "    test rax, rax"])
+        elif self.types.get(operand) == "none":
+            self.lines.extend(["    xor eax, eax", "    test rax, rax"])
+        elif self.types.get(operand) == "float":
+            self._load_float_operand(operand, "xmm0")
+            self.lines.extend([
+                "    pxor xmm1, xmm1", "    ucomisd xmm0, xmm1", "    setne al",
+                "    setp dl", "    or al, dl", "    movzx eax, al", "    test eax, eax",
+            ])
+        else:
+            self._load_operand(operand, "rax")
+            self.lines.append("    test rax, rax")
+
+    def _emit_string_concat(self, left: Any, right: Any, result: str) -> None:
+        self._load_operand(left, "rax")
+        self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+        self._load_operand(right, "rax")
+        self.lines.append(f"    mov {self._address('@scratch1')}, rax")
+        self.lines.extend([
+            f"    mov rcx, {self._address('@scratch0')}",
+            "    call strlen",
+            f"    mov {self._address('@scratch2')}, rax",
+            f"    mov rcx, {self._address('@scratch1')}",
+            "    call strlen",
+            f"    mov {self._address('@scratch3')}, rax",
+            f"    add rax, {self._address('@scratch2')}",
+            "    inc rax",
+            "    mov rcx, rax",
+            "    call malloc",
+            f"    mov {self._address(result)}, rax",
+            "    mov rcx, rax",
+            f"    mov rdx, {self._address('@scratch0')}",
+            f"    mov r8, {self._address('@scratch2')}",
+            "    call memcpy",
+            f"    mov rcx, {self._address(result)}",
+            f"    add rcx, {self._address('@scratch2')}",
+            f"    mov rdx, {self._address('@scratch1')}",
+            f"    mov r8, {self._address('@scratch3')}",
+            "    inc r8",
+            "    call memcpy",
+            f"    mov rax, {self._address(result)}",
+        ])
+        self.types[result] = "str"
+
+    def _emit_cleanup(self) -> None:
+        for slot, free_function in self.owned_slots:
+            self.lines.extend([
+                f"    mov rcx, {self._address(slot)}",
+                f"    call {free_function}",
+                f"    mov qword {self._address(slot)}, 0",
+            ])
+
+    def _load_float_operand(self, operand: Any, register: str) -> None:
+        if self.types.get(operand) == "float":
+            self.lines.append(f"    movq {register}, {self._address(operand)}")
+        else:
+            self._load_operand(operand, "rax")
+            self.lines.append(f"    cvtsi2sd {register}, rax")
+
+
+def emit_nasm(module: MIRModule) -> str:
+    return Win64NasmEmitter().emit(module)
+
+
+def compile_native(source: str, output: str | Path) -> Path:
+    hir = lower_cst_to_hir(parse(source))
+    try:
+        mir = lower_hir_to_mir(hir)
+    except MIRLoweringError as error:
+        raise NativeBuildError(str(error)) from error
+    return _compile_native_mir(mir, output)
+
+
+def compile_native_files(entry: str | Path, output: str | Path) -> Path:
+    entry_path = Path(entry).resolve()
+    source = entry_path.read_text(encoding="utf-8-sig")
+    hir = lower_cst_to_hir(parse(source))
+    modules = {}
+    for statement in hir.body:
+        if statement.kind.name != "IMPORT":
+            continue
+        for alias in statement.names:
+            if alias.name in {"asyncio", "math"}:
+                continue
+            if "." in alias.name:
+                raise NativeBuildError("native packages are not supported yet")
+            module_path = entry_path.with_name(f"{alias.name}.piton")
+            if not module_path.is_file():
+                raise NativeBuildError(f"native module not found: {module_path}")
+            modules[alias.name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
+    try:
+        mir = lower_hir_to_mir(hir, modules)
+    except MIRLoweringError as error:
+        raise NativeBuildError(str(error)) from error
+    return _compile_native_mir(mir, output)
+
+
+def _compile_native_mir(mir: MIRModule, output: str | Path) -> Path:
+    nasm = shutil.which("nasm")
+    gcc = shutil.which("gcc")
+    if not nasm or not gcc:
+        raise NativeBuildError("Fase 5 requiere nasm y gcc en PATH")
+    output_path = Path(output).resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="piton-native-") as directory:
+        directory_path = Path(directory)
+        assembly = directory_path / "program.asm"
+        object_file = directory_path / "program.obj"
+        runtime_object = directory_path / "native_runtime.obj"
+        assembly.write_text(emit_nasm(mir), encoding="ascii")
+        assembled = subprocess.run([nasm, "-f", "win64", str(assembly), "-o", str(object_file)], capture_output=True, text=True)
+        if assembled.returncode:
+            raise NativeBuildError(assembled.stderr or assembled.stdout)
+        runtime_source = Path(__file__).with_name("native_runtime.c")
+        runtime_compiled = subprocess.run(
+            [gcc, "-std=c11", "-O2", "-c", str(runtime_source), "-o", str(runtime_object)],
+            capture_output=True, text=True,
+        )
+        if runtime_compiled.returncode:
+            raise NativeBuildError(runtime_compiled.stderr or runtime_compiled.stdout)
+        linked = subprocess.run([gcc, str(object_file), str(runtime_object), "-o", str(output_path), "-lm"], capture_output=True, text=True)
+        if linked.returncode:
+            raise NativeBuildError(linked.stderr or linked.stdout)
+    return output_path

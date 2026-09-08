@@ -139,7 +139,10 @@ class ScopeAnalyzer:
 
     def _visit(self, node: CSTNode):
         method_name = f"_visit_{node.type.name.lower()}"
-        method = getattr(self, method_name, self._visit_generic)
+        method = getattr(self, method_name, None)
+        if method is None:
+            compact_name = f"_visit_{node.type.name.lower().replace('_', '')}"
+            method = getattr(self, compact_name, self._visit_generic)
         method(node)
 
     def _visit_generic(self, node: CSTNode):
@@ -230,13 +233,11 @@ class ScopeAnalyzer:
 
     def _visit_forstmt(self, node: ForStmt):
         self._visit(node.iter)
-        old = self._enter_scope(f"<for:{node.line}>", is_comprehension=False)
         self._visit_target(node.target, "local")
         for stmt in node.body:
             self._visit(stmt)
         for stmt in node.orelse:
             self._visit(stmt)
-        self._exit_scope(old)
 
     def _visit_withstmt(self, node: WithStmt):
         for item in node.items:
