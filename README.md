@@ -263,9 +263,9 @@ para afirmar la afirmación.
 ### Estado nativo verificado (2026-09-08)
 
 ```text
-89/89 tests pass (test_phase5.py + test_phase14.py, Windows PE)
-36/36 Linux ELF tests pass (test_phase10_linux.py)
-125/125 total native tests pass
+97/97 tests pass (test_phase5.py + test_phase14.py, Windows PE)
+41/41 Linux ELF tests pass (test_phase10_linux.py)
+138/138 total native tests pass
 20/20 Windows x86-64 clean execution evidence (evidence_windows.py)
 9/9 Unicode byte-identical vs CPython 3.12.4
 14/14 BigInt Win64 differential tests

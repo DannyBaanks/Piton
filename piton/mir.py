@@ -115,6 +115,8 @@ class MIRLowerer:
         self.async_functions = set()
         self.module_aliases = {}
         self.from_import_aliases = {}  # {local_name: qualified_name}
+        self.function_params: dict[str, list[str]] = {}
+        self.function_defaults: dict[str, dict[str, Any]] = {}
         imported_modules = modules or {}
         if hir.kind == HIRKind.MODULE:
             module_body = getattr(hir, "body", [])
@@ -191,15 +193,17 @@ class MIRLowerer:
         builder = _Builder(qualified_name or node.name, [*captures, *params])
         builder.is_async = bool(getattr(node, "is_async", False))
         builder.module_aliases = dict(self.module_aliases)
+        defaults_map: dict[str, Any] = {}
         if args:
             raw_defaults = list(getattr(args, "defaults", []) or [])
             default_params = params[-len(raw_defaults):] if raw_defaults else []
-            defaults_map: dict[str, Any] = {}
             for param, default_node in zip(default_params, raw_defaults):
                 if default_node.kind != HIRKind.CONST:
                     raise MIRLoweringError("native function defaults currently support constant values only")
                 defaults_map[param] = default_node.value
             builder.function.defaults = [defaults_map.get(p) for p in params]
+        self.function_params[qualified_name or node.name] = list(params)
+        self.function_defaults[qualified_name or node.name] = defaults_map
         local_names = set(params) | self._assigned_names(body)
         for nested in (item for item in body if item.kind == HIRKind.FUNC_DEF):
             nested_args = getattr(nested, "args", None)
@@ -564,6 +568,8 @@ class MIRLowerer:
                 return result
             closure = builder.closures.get(node.func.name) if node.func.kind == HIRKind.LOAD else None
             if closure:
+                if node.keywords:
+                    raise MIRLoweringError("native closure calls do not support keyword arguments yet")
                 lifted_name, capture_names = closure
                 function = builder.temp()
                 builder.emit("load", lifted_name, result=function)
@@ -573,7 +579,13 @@ class MIRLowerer:
                     builder.emit("load", name, result=capture)
                     captures.append(capture)
                 args = (*captures, *(self._lower_expr(builder, arg) for arg in node.args))
+            elif node.func.kind == HIRKind.LOAD and node.keywords:
+                args = self._resolve_call_args(builder, node.func.name, node.args, node.keywords)
+                function = builder.temp()
+                builder.emit("load", node.func.name, result=function)
             else:
+                if node.keywords:
+                    raise MIRLoweringError("native keyword args require a known function")
                 function = self._lower_expr(builder, node.func)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
             result = builder.temp()
@@ -624,6 +636,43 @@ class MIRLowerer:
         result = builder.temp()
         builder.emit("compare", op, left, right, result=result)
         return result
+
+    def _resolve_call_args(
+        self, builder: _Builder, func_name: str,
+        positional: Sequence[HIRNode], keywords: Sequence[HIRNode],
+    ) -> tuple[str, ...]:
+        params = self.function_params.get(func_name)
+        if params is None:
+            raise MIRLoweringError(f"native keyword call requires known function: {func_name}")
+        defaults = self.function_defaults.get(func_name, {})
+        n = len(params)
+        if len(positional) > n:
+            raise MIRLoweringError(f"too many positional arguments to {func_name}")
+        values: list[str | None] = [None] * n
+        for i, arg in enumerate(positional):
+            values[i] = self._lower_expr(builder, arg)
+        for kw in keywords:
+            if kw.arg is None:
+                raise MIRLoweringError("native **kwargs is not supported yet")
+            if kw.arg not in params:
+                raise MIRLoweringError(f"unexpected keyword argument: {kw.arg}")
+            idx = params.index(kw.arg)
+            if values[idx] is not None:
+                raise MIRLoweringError(f"multiple values for argument: {kw.arg}")
+            values[idx] = self._lower_expr(builder, kw.value)
+        filled = [i for i, v in enumerate(values) if v is not None]
+        max_filled = max(filled) if filled else -1
+        for i in range(max_filled + 1):
+            if values[i] is None:
+                if params[i] not in defaults:
+                    raise MIRLoweringError(f"missing required argument: {params[i]}")
+                result = builder.temp()
+                builder.emit("const", defaults[params[i]], result=result)
+                values[i] = result
+        for i, p in enumerate(params):
+            if p not in defaults and values[i] is None:
+                raise MIRLoweringError(f"missing required argument: {p}")
+        return tuple(v for v in values[:max_filled + 1] if v is not None)
 
 
 def lower_hir_to_mir(hir: HIRNode, modules: dict[str, HIRNode] | None = None, from_imports: dict | None = None) -> MIRModule:

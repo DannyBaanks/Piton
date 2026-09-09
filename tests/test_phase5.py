@@ -569,6 +569,43 @@ class Phase5Gates(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "constant"):
                 compile_native('funcion f(n=1 + 2):\n    devolver n\n', Path(directory) / "program.exe")
 
+    # ── FUNCTION_KEYWORD_ARGS_V1 ─────────────────────────────────────────
+
+    def test_x86_kw_simple(self):
+        result = compare_native_to_cpython('funcion saludar(nombre, edad):\n    devolver nombre + edad\nimprimir(saludar(nombre=5, edad=3))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_kw_order(self):
+        result = compare_native_to_cpython('funcion op(a, b, c):\n    devolver a * 100 + b * 10 + c\nimprimir(op(c=3, a=1, b=2))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_kw_with_default(self):
+        result = compare_native_to_cpython('funcion f(a, b=10):\n    devolver a + b\nimprimir(f(a=5))\nimprimir(f(a=5, b=20))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_kw_positional_mix(self):
+        result = compare_native_to_cpython('funcion f(a, b, c=3):\n    devolver a + b + c\nimprimir(f(1, c=10, b=2))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_kw_middle_default_skipped(self):
+        result = compare_native_to_cpython('funcion f(a=1, b=2, c=3):\n    devolver a * 100 + b * 10 + c\nimprimir(f(c=5))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_kw_unexpected_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "unexpected keyword"):
+                compile_native('funcion f(a):\n    devolver a\nimprimir(f(x=1))\n', Path(directory) / "program.exe")
+
+    def test_x86_kw_missing_required_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "missing required"):
+                compile_native('funcion f(a, b):\n    devolver a\nimprimir(f(a=1))\n', Path(directory) / "program.exe")
+
+    def test_x86_kw_duplicate_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "multiple values"):
+                compile_native('funcion f(a):\n    devolver a\nimprimir(f(1, a=2))\n', Path(directory) / "program.exe")
+
     def test_corpus_01_arithmetic_chain(self):
         result = compare_native_to_cpython('x = 10\nb = x * 3 + 7\nc = b // 2\nimprimir(c)\n')
         self.assertTrue(result.equivalent, result)

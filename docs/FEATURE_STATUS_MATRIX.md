@@ -21,7 +21,7 @@ Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 | syntax | PASS | PASS | PASS | `tests/evidence.py` | — |
 | expressions | PASS | PASS | PASS | `test_phase5.py` | — |
 | statements | PASS | PASS | PASS | `test_phase5.py` | — |
-| functions | PARTIAL | PARTIAL | PARTIAL | `test_phase5.py` | default values PASS (FUNCTION_DEFAULTS_V1); kwargs, `*args`/`**kwargs`, recursion, bound methods open |
+| functions | PARTIAL | PARTIAL | PARTIAL | `test_phase5.py` | default values + keyword args PASS (FUNCTION_DEFAULTS_V1 + FUNCTION_KEYWORD_ARGS_V1); `*args`/`**kwargs`, keyword-only, positional-only, recursion, bound methods open |
 | closures | PARTIAL | PARTIAL | PARTIAL | `test_phase5.py` | cells mutables, escape, closures anidadas |
 | exceptions | PASS | PASS | PASS | `test_phase5.py` | re-raise, `from`/cadenas, custom, BaseException |
 | generators | PARTIAL | PARTIAL | NOT_DEMONSTRATED | `test_phase5.py` | frames suspendidos, send/throw/close, `yield from` |

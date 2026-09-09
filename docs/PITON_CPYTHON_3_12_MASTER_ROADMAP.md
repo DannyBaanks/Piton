@@ -161,11 +161,20 @@ afirmación y criterio (los agentes pueden expandirlos siguiendo el esquema de l
   en el call site por el emisor (caller sabe cuántos args pasa).
 - **KNOWN_GAP**: defaults no-constante rechazados (fail-closed); string params
   aún no comparables (limitación de type-tracking, ortogonal).
-- **NEXT**: `FUNCTION_KEYWORD_ARGS_V1`.
+
+`FUNCTION_KEYWORD_ARGS_V1` — keyword arguments por nombre.
+- **CURRENT_STATUS**: **PASS** (13 tests, Win+Linux, byte-idéntico vs CPython).
+- **IMPLEMENTATION**: resolución keyword→posición en lowering MIR usando la
+  firma del callee (`function_params`/`function_defaults`); reordenamiento +
+  relleno de defaults intermedios; fail-closed en keyword inesperado, arg
+  requerido ausente y valor duplicado.
+- **KNOWN_GAP**: `**kwargs`, keyword-only, positional-only abiertos.
 
 `FUNCTION_ARGS_V1` — kwargs, defaults, `*args`/`**kwargs`, keyword-only,
 positional-only.
-- **CURRENT_STATUS**: PARTIAL (defaults `FUNCTION_DEFAULTS_V1` cerrado; resto abierto).
+- **CURRENT_STATUS**: PARTIAL (defaults `FUNCTION_DEFAULTS_V1` y kwargs
+  `FUNCTION_KEYWORD_ARGS_V1` cerrados; `*args`/`**kwargs`/keyword-only/
+  positional-only abiertos).
 - **COMPLEXITY**: MEDIUM.
 
 `CLOSURES_COMPLETE_V1` — cells mutables y escape.
@@ -282,10 +291,11 @@ con sus tests de integración. Nunca por suma automática de partes.
 
 ## 30. Apéndice — primeros 10 gates recomendados (orden de trabajo)
 
-**Completado:** `FUNCTION_DEFAULTS_V1` (defaults constantes, Win+Linux PASS).
+**Completado:** `FUNCTION_DEFAULTS_V1` (defaults constantes) y
+`FUNCTION_KEYWORD_ARGS_V1` (kwargs por nombre), ambos Win+Linux PASS.
 
-1. `FUNCTION_KEYWORD_ARGS_V1` (MEDIUM) — kwargs por nombre; requiere resolver la
-   firma del callee en el call site.
+1. `FUNCTION_VARARGS_V1` (MEDIUM) — `*args`/`**kwargs`, keyword-only,
+   positional-only.
 2. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
 3. `IMPORT_PACKAGE_V1` (MEDIUM) — paquetes + `__init__`.
 4. `MODULE_METADATA_V1` (MEDIUM) — `__name__`/`__file__`/`sys.modules`.

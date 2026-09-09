@@ -222,6 +222,23 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_default_nested_calls(self):
         self._assert_linux_equiv('funcion inc(n=1):\n    devolver n + 1\nimprimir(inc(inc(inc())))\n')
 
+    # ── Linux keyword arguments (FUNCTION_KEYWORD_ARGS_V1) ─────────────
+
+    def test_linux_kw_simple(self):
+        self._assert_linux_equiv('funcion saludar(nombre, edad):\n    devolver nombre + edad\nimprimir(saludar(nombre=5, edad=3))\n')
+
+    def test_linux_kw_order(self):
+        self._assert_linux_equiv('funcion op(a, b, c):\n    devolver a * 100 + b * 10 + c\nimprimir(op(c=3, a=1, b=2))\n')
+
+    def test_linux_kw_with_default(self):
+        self._assert_linux_equiv('funcion f(a, b=10):\n    devolver a + b\nimprimir(f(a=5))\nimprimir(f(a=5, b=20))\n')
+
+    def test_linux_kw_positional_mix(self):
+        self._assert_linux_equiv('funcion f(a, b, c=3):\n    devolver a + b + c\nimprimir(f(1, c=10, b=2))\n')
+
+    def test_linux_kw_middle_default_skipped(self):
+        self._assert_linux_equiv('funcion f(a=1, b=2, c=3):\n    devolver a * 100 + b * 10 + c\nimprimir(f(c=5))\n')
+
 
 if __name__ == "__main__":
     unittest.main()
