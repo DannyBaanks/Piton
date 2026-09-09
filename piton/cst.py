@@ -399,6 +399,7 @@ class BoolOp(CSTNode):
 class Call(CSTNode):
     func: Optional[CSTNode] = None
     args: List[CSTNode] = field(default_factory=list)
+    starred_args: List[CSTNode] = field(default_factory=list)
     keywords: List["Keyword"] = field(default_factory=list)
     type: CSTNodeType = CSTNodeType.CALL
 

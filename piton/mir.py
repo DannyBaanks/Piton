@@ -45,12 +45,16 @@ class MIRFunction:
     params: List[str] = field(default_factory=list)
     blocks: List[MIRBlock] = field(default_factory=list)
     defaults: List[Optional[Any]] = field(default_factory=list)
+    vararg: Optional[str] = None
+    kwarg: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "params": list(self.params),
             "defaults": list(self.defaults),
+            "vararg": self.vararg,
+            "kwarg": self.kwarg,
             "blocks": [block.to_dict() for block in self.blocks],
         }
 
@@ -117,6 +121,10 @@ class MIRLowerer:
         self.from_import_aliases = {}  # {local_name: qualified_name}
         self.function_params: dict[str, list[str]] = {}
         self.function_defaults: dict[str, dict[str, Any]] = {}
+        self.function_varargs: dict[str, str | None] = {}
+        self.function_kwargs: dict[str, str | None] = {}
+        self.function_posonly: dict[str, list[str]] = {}
+        self.function_kwonly: dict[str, list[str]] = {}
         imported_modules = modules or {}
         if hir.kind == HIRKind.MODULE:
             module_body = getattr(hir, "body", [])
@@ -188,23 +196,50 @@ class MIRLowerer:
         captures: tuple[str, ...] = (),
     ) -> None:
         args = getattr(node, "args", None)
+        posonly_params = list(getattr(args, "posonlyargs", []) or []) if args else []
         params = list(getattr(args, "args", []) or []) if args else []
+        kwonly_params = list(getattr(args, "kwonlyargs", []) or []) if args else []
+        positional_params = [*posonly_params, *params]
+        vararg_name = getattr(args, "vararg", None) if args else None
+        kwarg_name = getattr(args, "kwarg", None) if args else None
         body = list(getattr(node, "body", []))
-        builder = _Builder(qualified_name or node.name, [*captures, *params])
+        builder = _Builder(qualified_name or node.name, [*captures, *positional_params])
         builder.is_async = bool(getattr(node, "is_async", False))
         builder.module_aliases = dict(self.module_aliases)
         defaults_map: dict[str, Any] = {}
         if args:
             raw_defaults = list(getattr(args, "defaults", []) or [])
-            default_params = params[-len(raw_defaults):] if raw_defaults else []
+            default_params = positional_params[-len(raw_defaults):] if raw_defaults else []
             for param, default_node in zip(default_params, raw_defaults):
                 if default_node.kind != HIRKind.CONST:
                     raise MIRLoweringError("native function defaults currently support constant values only")
                 defaults_map[param] = default_node.value
-            builder.function.defaults = [defaults_map.get(p) for p in params]
-        self.function_params[qualified_name or node.name] = list(params)
+            for param, default_node in zip(kwonly_params, getattr(args, "kw_defaults", []) or []):
+                if default_node is None:
+                    continue
+                if default_node.kind != HIRKind.CONST:
+                    raise MIRLoweringError("native function defaults currently support constant values only")
+                defaults_map[param] = default_node.value
+        if (
+            (posonly_params or kwonly_params or vararg_name or kwarg_name)
+            and len(positional_params) + len(kwonly_params) + int(bool(vararg_name)) + int(bool(kwarg_name)) > 4
+        ):
+            raise MIRLoweringError("native variadic functions support at most four ABI parameters")
+        if vararg_name:
+            builder.function.vararg = vararg_name
+            builder.function.params.append(vararg_name)
+        builder.function.params.extend(kwonly_params)
+        if kwarg_name:
+            builder.function.kwarg = kwarg_name
+            builder.function.params.append(kwarg_name)
+        builder.function.defaults = [defaults_map.get(p) for p in builder.function.params]
+        self.function_params[qualified_name or node.name] = list(builder.function.params)
         self.function_defaults[qualified_name or node.name] = defaults_map
-        local_names = set(params) | self._assigned_names(body)
+        self.function_varargs[qualified_name or node.name] = vararg_name
+        self.function_kwargs[qualified_name or node.name] = kwarg_name
+        self.function_posonly[qualified_name or node.name] = posonly_params
+        self.function_kwonly[qualified_name or node.name] = kwonly_params
+        local_names = set(builder.function.params) | self._assigned_names(body)
         for nested in (item for item in body if item.kind == HIRKind.FUNC_DEF):
             nested_args = getattr(nested, "args", None)
             nested_params = set(getattr(nested_args, "args", []) or []) if nested_args else set()
@@ -484,6 +519,8 @@ class MIRLowerer:
                 left = self._compare(builder, op, left, self._lower_expr(builder, comparator))
             return left
         if kind == HIRKind.CALL:
+            if getattr(node, "starred_args", []):
+                raise MIRLoweringError("native positional unpacking is not supported yet")
             if node.func.kind == HIRKind.LOAD and node.func.name in self.generators:
                 raise MIRLoweringError("native generator values cannot escape a direct for loop yet")
             if node.func.kind == HIRKind.LOAD and node.func.name in self.async_functions and not builder.awaiting:
@@ -579,6 +616,15 @@ class MIRLowerer:
                     builder.emit("load", name, result=capture)
                     captures.append(capture)
                 args = (*captures, *(self._lower_expr(builder, arg) for arg in node.args))
+            elif node.func.kind == HIRKind.LOAD and (
+                self.function_varargs.get(node.func.name) is not None
+                or self.function_kwargs.get(node.func.name) is not None
+                or self.function_posonly.get(node.func.name)
+                or self.function_kwonly.get(node.func.name)
+            ):
+                args = self._lower_variadic_call(builder, node.func.name, node.args, node.keywords)
+                function = builder.temp()
+                builder.emit("load", node.func.name, result=function)
             elif node.func.kind == HIRKind.LOAD and node.keywords:
                 args = self._resolve_call_args(builder, node.func.name, node.args, node.keywords)
                 function = builder.temp()
@@ -636,6 +682,78 @@ class MIRLowerer:
         result = builder.temp()
         builder.emit("compare", op, left, right, result=result)
         return result
+
+    def _lower_variadic_call(
+        self, builder: _Builder, func_name: str,
+        positional: Sequence[HIRNode], keywords: Sequence[HIRNode],
+    ) -> tuple[str, ...]:
+        positional_only = self.function_posonly[func_name]
+        keyword_only = self.function_kwonly[func_name]
+        vararg = self.function_varargs[func_name]
+        kwarg = self.function_kwargs[func_name]
+        if any(keyword.arg is None for keyword in keywords):
+            raise MIRLoweringError("native keyword unpacking is not supported yet")
+        params = self.function_params[func_name]
+        regular_count = len(params) - len(positional_only) - len(keyword_only) - int(bool(vararg)) - int(bool(kwarg))
+        regular_params = params[len(positional_only):len(positional_only) + regular_count]
+        positional_params = [*positional_only, *regular_params]
+        defaults = self.function_defaults[func_name]
+        positional_values: list[str | None] = [None] * len(positional_params)
+        keyword_values: list[str | None] = [None] * len(keyword_only)
+        for index, arg in enumerate(positional[:len(positional_params)]):
+            positional_values[index] = self._lower_expr(builder, arg)
+        extra_keywords: list[HIRNode] = []
+        for keyword in keywords:
+            if keyword.arg in regular_params:
+                index = len(positional_only) + regular_params.index(keyword.arg)
+                if positional_values[index] is not None:
+                    raise MIRLoweringError(f"multiple values for argument: {keyword.arg}")
+                positional_values[index] = self._lower_expr(builder, keyword.value)
+            elif keyword.arg in keyword_only:
+                index = keyword_only.index(keyword.arg)
+                if keyword_values[index] is not None:
+                    raise MIRLoweringError(f"multiple values for argument: {keyword.arg}")
+                keyword_values[index] = self._lower_expr(builder, keyword.value)
+            else:
+                extra_keywords.append(keyword)
+        for index, name in enumerate(positional_params):
+            if positional_values[index] is None:
+                if name not in defaults:
+                    raise MIRLoweringError(f"missing required argument: {name}")
+                default = builder.temp()
+                builder.emit("const", defaults[name], result=default)
+                positional_values[index] = default
+        for index, name in enumerate(keyword_only):
+            if keyword_values[index] is None:
+                if name not in defaults:
+                    raise MIRLoweringError(f"missing keyword-only argument: {name}")
+                default = builder.temp()
+                builder.emit("const", defaults[name], result=default)
+                keyword_values[index] = default
+        extra_values = tuple(
+            self._lower_expr(builder, arg) for arg in positional[len(positional_params):]
+        )
+        if extra_values and not vararg:
+            raise MIRLoweringError(f"too many positional arguments to {func_name}")
+        if extra_keywords and not kwarg:
+            raise MIRLoweringError(f"unexpected keyword argument: {extra_keywords[0].arg}")
+        packed: list[str] = []
+        if vararg:
+            rest = builder.temp()
+            builder.emit("build_collection", "tuple", extra_values, result=rest)
+            packed.append(rest)
+        if kwarg:
+            items = []
+            for keyword in extra_keywords:
+                key = builder.temp()
+                builder.emit("const", keyword.arg, result=key)
+                items.append((key, self._lower_expr(builder, keyword.value)))
+            rest = builder.temp()
+            builder.emit("build_collection", "dict", tuple(items), result=rest)
+            packed.append(rest)
+        if vararg:
+            return (*positional_values, packed.pop(0), *keyword_values, *packed)
+        return (*positional_values, *keyword_values, *packed)
 
     def _resolve_call_args(
         self, builder: _Builder, func_name: str,

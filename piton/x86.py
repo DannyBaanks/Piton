@@ -98,6 +98,10 @@ class Win64NasmEmitter:
         self.owned_slots = []
         self.bigint_slots = []
         self.constants = {}
+        if function.vararg:
+            self.types[function.vararg] = "tuple"
+        if function.kwarg:
+            self.types[function.kwarg] = "dict"
         for block in function.blocks:
             for instruction in block.instructions:
                 self._reserve(instruction.result)

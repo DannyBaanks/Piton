@@ -606,6 +606,112 @@ class Phase5Gates(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "multiple values"):
                 compile_native('funcion f(a):\n    devolver a\nimprimir(f(1, a=2))\n', Path(directory) / "program.exe")
 
+    # ── FUNCTION_STARARGS_V1 ─────────────────────────────────────────────
+
+    def test_x86_starargs_pure_empty_and_many(self):
+        result = compare_native_to_cpython(
+            'funcion contar(*args):\n'
+            '    devolver longitud(args)\n'
+            'imprimir(contar())\n'
+            'imprimir(contar(1, 2, 3, 4, 5))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_starargs_sum_and_subscript(self):
+        result = compare_native_to_cpython(
+            'funcion resumir(*args):\n'
+            '    devolver sum(args) + args[0] * 10\n'
+            'imprimir(resumir(2, 3, 4))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_starargs_fixed_and_default(self):
+        result = compare_native_to_cpython(
+            'funcion peso(base=1, *extras):\n'
+            '    devolver base * 10 + longitud(extras)\n'
+            'imprimir(peso())\n'
+            'imprimir(peso(5, 7, 9))\n'
+            'imprimir(peso(base=4))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_starargs_unexpected_keyword_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "unexpected keyword"):
+                compile_native(
+                    'funcion f(*args):\n    devolver longitud(args)\nimprimir(f(x=1))\n',
+                    Path(directory) / "program.exe",
+                )
+
+    # ── FUNCTION_KWARGS_V1 ───────────────────────────────────────────────
+
+    def test_x86_kwargs_pure_dict(self):
+        result = compare_native_to_cpython(
+            'funcion leer(**kw):\n'
+            '    devolver longitud(kw) * 10 + kw["x"]\n'
+            'imprimir(leer(x=4, z=8))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_kwargs_fixed_and_starargs(self):
+        result = compare_native_to_cpython(
+            'funcion total(base, *extras, **opciones):\n'
+            '    devolver base + sum(extras) + opciones["extra"]\n'
+            'imprimir(total(1, 2, 3, extra=4))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_kwargs_unpacking_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "unpacking"):
+                compile_native(
+                    'funcion f(**kw):\n    devolver longitud(kw)\nimprimir(f(**{"x": 1}))\n',
+                    Path(directory) / "program.exe",
+                )
+
+    def test_x86_starargs_unpacking_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "positional unpacking"):
+                compile_native(
+                    'funcion f(*args):\n    devolver longitud(args)\nimprimir(f(*[1, 2]))\n',
+                    Path(directory) / "program.exe",
+                )
+
+    # ── FUNCTION_SIGNATURE_MARKERS_V1 ───────────────────────────────────
+
+    def test_x86_positional_only(self):
+        result = compare_native_to_cpython(
+            'funcion unir(a, /, b):\n'
+            '    devolver a * 10 + b\n'
+            'imprimir(unir(2, 3))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_positional_only_keyword_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "missing required"):
+                compile_native(
+                    'funcion unir(a, /, b):\n    devolver a + b\nimprimir(unir(a=2, b=3))\n',
+                    Path(directory) / "program.exe",
+                )
+
+    def test_x86_keyword_only_required_and_default(self):
+        result = compare_native_to_cpython(
+            'funcion escalar(base, *, factor=2, extra):\n'
+            '    devolver base * factor + extra\n'
+            'imprimir(escalar(3, extra=1))\n'
+            'imprimir(escalar(3, factor=4, extra=1))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_signature_markers_combined(self):
+        result = compare_native_to_cpython(
+            'funcion total(base, /, *extras, ajuste=3, **opciones):\n'
+            '    devolver base + sum(extras) + ajuste + opciones["final"]\n'
+            'imprimir(total(1, 2, 3, ajuste=4, final=5))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
     def test_corpus_01_arithmetic_chain(self):
         result = compare_native_to_cpython('x = 10\nb = x * 3 + 7\nc = b // 2\nimprimir(c)\n')
         self.assertTrue(result.equivalent, result)

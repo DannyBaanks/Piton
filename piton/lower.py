@@ -272,8 +272,10 @@ class Lowerer:
     def _lower_call(self, cst: CSTCall):
         func = self.lower(cst.func)
         args = [self.lower(a) for a in cst.args]
+        starred_ids = {id(arg) for arg in cst.starred_args}
+        starred_args = [arg for cst_arg, arg in zip(cst.args, args) if id(cst_arg) in starred_ids]
         keywords = [self.lower(k) for k in cst.keywords]
-        return Call(kind=HIRKind.CALL, func=func, args=args, keywords=keywords)
+        return Call(kind=HIRKind.CALL, func=func, args=args, starred_args=starred_args, keywords=keywords)
 
     def _lower_keyword(self, cst: CSTKeyword):
         value = self.lower(cst.value)

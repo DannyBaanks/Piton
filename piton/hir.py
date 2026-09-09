@@ -316,6 +316,7 @@ class BoolOp(HIRNode):
 class Call(HIRNode):
     func: Optional[HIRNode] = None
     args: List[HIRNode] = field(default_factory=list)
+    starred_args: List[HIRNode] = field(default_factory=list)
     keywords: List["Keyword"] = field(default_factory=list)
     kind: HIRKind = HIRKind.CALL
 

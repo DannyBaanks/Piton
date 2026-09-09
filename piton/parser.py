@@ -582,14 +582,22 @@ class Parser:
 
     def _parse_arguments(self) -> Arguments:
         args = Arguments()
+        keyword_only = False
         while not self._check(TokenType.RPAREN):
-            if self._check(TokenType.STAR):
+            if self._check(TokenType.DOUBLE_STAR):
                 self._advance()
-                if self._check(TokenType.STAR):
-                    self._advance()
-                    args.kwarg = Arg(arg=self._consume(TokenType.NAME).value).set_pos(self._peek())
-                else:
+                args.kwarg = Arg(arg=self._consume(TokenType.NAME).value).set_pos(self._peek())
+            elif self._check(TokenType.STAR):
+                self._advance()
+                keyword_only = True
+                if not self._check(TokenType.COMMA):
                     args.vararg = Arg(arg=self._consume(TokenType.NAME).value).set_pos(self._peek())
+            elif self._check(TokenType.SLASH):
+                if not args.args or args.posonlyargs:
+                    raise ParseError("'/' requires preceding positional parameters", self._peek())
+                self._advance()
+                args.posonlyargs = args.args
+                args.args = []
             else:
                 name = self._consume(TokenType.NAME).value
                 annotation = None
@@ -599,9 +607,13 @@ class Parser:
                 if self._match(TokenType.EQUAL):
                     default = self._parse_expression(0)
                 arg = Arg(arg=name, annotation=annotation).set_pos(self._peek())
-                args.args.append(arg)
-                if default:
-                    args.defaults.append(default)
+                if keyword_only:
+                    args.kwonlyargs.append(arg)
+                    args.kw_defaults.append(default)
+                else:
+                    args.args.append(arg)
+                    if default:
+                        args.defaults.append(default)
             if not self._match(TokenType.COMMA):
                 break
         return args
@@ -850,6 +862,7 @@ class Parser:
     def _parse_call(self, func: CSTNode) -> Call:
         self._consume(TokenType.LPAREN)  # consume '('
         args = []
+        starred_args = []
         keywords = []
         if not self._check(TokenType.RPAREN):
             while True:
@@ -867,6 +880,7 @@ class Parser:
                     else:
                         value = self._parse_expression(0)
                         args.append(value)
+                        starred_args.append(value)
                 elif self._check(TokenType.DOUBLE_STAR):
                     self._advance()
                     value = self._parse_expression(0)
@@ -876,7 +890,7 @@ class Parser:
                 if not self._match(TokenType.COMMA):
                     break
         self._consume(TokenType.RPAREN)
-        return Call(func=func, args=args, keywords=keywords).set_pos(self._peek())
+        return Call(func=func, args=args, starred_args=starred_args, keywords=keywords).set_pos(self._peek())
 
     def _parse_comprehension(self) -> CompFor:
         tok = self._advance()  # 'para'

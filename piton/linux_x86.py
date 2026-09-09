@@ -163,6 +163,10 @@ class LinuxCEmitter:
             lines.append("    long " + ", ".join(f"{_name(slot)}=0" for slot in locals_) + ";")
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
+        if function.vararg:
+            types[function.vararg] = "tuple"
+        if function.kwarg:
+            types[function.kwarg] = "dict"
         bigint_slots: list[str] = []
         for block in function.blocks:
             lines.append(f"{_name(function.name + '_' + block.label)}:")

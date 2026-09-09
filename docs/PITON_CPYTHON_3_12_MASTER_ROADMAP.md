@@ -172,10 +172,18 @@ afirmación y criterio (los agentes pueden expandirlos siguiendo el esquema de l
 
 `FUNCTION_ARGS_V1` — kwargs, defaults, `*args`/`**kwargs`, keyword-only,
 positional-only.
-- **CURRENT_STATUS**: PARTIAL (defaults `FUNCTION_DEFAULTS_V1` y kwargs
-  `FUNCTION_KEYWORD_ARGS_V1` cerrados; `*args`/`**kwargs`/keyword-only/
-  positional-only abiertos).
-- **COMPLEXITY**: MEDIUM.
+- **CURRENT_STATUS**: **PASS** (158 tests total, Win+Linux, byte-idéntico vs CPython).
+- **IMPLEMENTATION**: parser acepta `/` (posonly), `*` (bare kwonly marker,
+  `*args`), `**kwargs`; MIR trackea `function_posonly`/`function_kwonly`/
+  `function_varargs`/`function_kwargs`; `_lower_variadic_call` empaqueta
+  extras posicionales en tuple y extras keyword en dict, preservando orden
+  ABI: posicionales → `*args` tuple → kwonly → `**kwargs` dict (máx. 4
+  parámetros ABI); `starred_args` propagado CST→HIR→MIR; fail-closed en
+  unpacking (`f(*xs)`, `f(**mapping)`), keyword positional-only, keyword
+  inesperado, arg requerido ausente, valor duplicado.
+- **KNOWN_GAP**: call-site unpacking (`f(*xs)`, `f(**mapping)`) rechazado;
+  slack de 4 parámetros ABI; más allá fail-closed.
+- **COMPLEXITY**: MEDIUM → resuelto.
 
 `CLOSURES_COMPLETE_V1` — cells mutables y escape.
 - **DEPENDENCIES**: `FRAME_MODEL_V1`.
@@ -291,20 +299,19 @@ con sus tests de integración. Nunca por suma automática de partes.
 
 ## 30. Apéndice — primeros 10 gates recomendados (orden de trabajo)
 
-**Completado:** `FUNCTION_DEFAULTS_V1` (defaults constantes) y
-`FUNCTION_KEYWORD_ARGS_V1` (kwargs por nombre), ambos Win+Linux PASS.
+**Completado:** `FUNCTION_DEFAULTS_V1` (defaults constantes),
+`FUNCTION_KEYWORD_ARGS_V1` (kwargs por nombre) y `FUNCTION_ARGS_V1`
+(`*args`/`**kwargs`/keyword-only/positional-only), todos Win+Linux PASS.
 
-1. `FUNCTION_VARARGS_V1` (MEDIUM) — `*args`/`**kwargs`, keyword-only,
-   positional-only.
-2. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
-3. `IMPORT_PACKAGE_V1` (MEDIUM) — paquetes + `__init__`.
-4. `MODULE_METADATA_V1` (MEDIUM) — `__name__`/`__file__`/`sys.modules`.
-5. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario.
-6. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare.
-7. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
-8. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 2).
-9. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 2).
-10. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 7).
+1. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
+2. `IMPORT_PACKAGE_V1` (MEDIUM) — paquetes + `__init__`.
+3. `MODULE_METADATA_V1` (MEDIUM) — `__name__`/`__file__`/`sys.modules`.
+4. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario.
+5. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare.
+6. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
+7. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
+8. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
+9. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 6).
 
 ## 31. Gates paralelizables
 

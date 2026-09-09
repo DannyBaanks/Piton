@@ -239,6 +239,36 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_kw_middle_default_skipped(self):
         self._assert_linux_equiv('funcion f(a=1, b=2, c=3):\n    devolver a * 100 + b * 10 + c\nimprimir(f(c=5))\n')
 
+    # ── Linux *args (FUNCTION_STARARGS_V1) ──────────────────────────────
+
+    def test_linux_starargs_pure_empty_and_many(self):
+        self._assert_linux_equiv('funcion contar(*args):\n    devolver longitud(args)\nimprimir(contar())\nimprimir(contar(1, 2, 3, 4, 5))\n')
+
+    def test_linux_starargs_sum_and_subscript(self):
+        self._assert_linux_equiv('funcion resumir(*args):\n    devolver sum(args) + args[0] * 10\nimprimir(resumir(2, 3, 4))\n')
+
+    def test_linux_starargs_fixed_and_default(self):
+        self._assert_linux_equiv('funcion peso(base=1, *extras):\n    devolver base * 10 + longitud(extras)\nimprimir(peso())\nimprimir(peso(5, 7, 9))\nimprimir(peso(base=4))\n')
+
+    # ── Linux **kwargs (FUNCTION_KWARGS_V1) ─────────────────────────────
+
+    def test_linux_kwargs_pure_dict(self):
+        self._assert_linux_equiv('funcion leer(**kw):\n    devolver longitud(kw) * 10 + kw["x"]\nimprimir(leer(x=4, z=8))\n')
+
+    def test_linux_kwargs_fixed_and_starargs(self):
+        self._assert_linux_equiv('funcion total(base, *extras, **opciones):\n    devolver base + sum(extras) + opciones["extra"]\nimprimir(total(1, 2, 3, extra=4))\n')
+
+    # ── Linux signature markers (FUNCTION_SIGNATURE_MARKERS_V1) ─────────
+
+    def test_linux_positional_only(self):
+        self._assert_linux_equiv('funcion unir(a, /, b):\n    devolver a * 10 + b\nimprimir(unir(2, 3))\n')
+
+    def test_linux_keyword_only_required_and_default(self):
+        self._assert_linux_equiv('funcion escalar(base, *, factor=2, extra):\n    devolver base * factor + extra\nimprimir(escalar(3, extra=1))\nimprimir(escalar(3, factor=4, extra=1))\n')
+
+    def test_linux_signature_markers_combined(self):
+        self._assert_linux_equiv('funcion total(base, /, *extras, ajuste=3, **opciones):\n    devolver base + sum(extras) + ajuste + opciones["final"]\nimprimir(total(1, 2, 3, ajuste=4, final=5))\n')
+
 
 if __name__ == "__main__":
     unittest.main()
