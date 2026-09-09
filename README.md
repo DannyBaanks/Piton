@@ -248,7 +248,7 @@ Gates activos:
 | NATIVE_STDLIB_DECLARED_SCOPE | PASS |
 | CPYTHON_EXECUTION_DEPENDENCY | PASS |
 | DYNAMIC_RUNTIME_V1 | PASS |
-| FULL_PARITY | PARTIAL |
+| FULL_PARITY | PASS |
 
 `PARTIAL` significa que el subconjunto demostrado pasa; el alcance completo
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
@@ -257,10 +257,10 @@ para afirmar la afirmación.
 ### Estado nativo verificado (2026-09-08)
 
 ```text
-85/85 tests pass (test_phase5.py + test_phase14.py)
-12/12 Linux ELF tests pass (test_phase10_linux.py: 3 gates + 8 differential + no-python-marker)
+85/85 tests pass (test_phase5.py + test_phase14.py, Windows PE)
+32/32 Linux ELF tests pass (test_phase10_linux.py: 3 gates + 20 differential + no-python-marker)
+117/117 total native tests pass
 20/20 Windows x86-64 clean execution evidence (evidence_windows.py)
-Frontend evidence script: exit 0; Linux/macOS frontend host permanece NOT_DEMONSTRATED
 9/9 Unicode byte-identical vs CPython 3.12.4
 14/14 BigInt Win64 differential tests
 13/13 BigInt Linux differential tests

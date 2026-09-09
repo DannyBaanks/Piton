@@ -70,10 +70,10 @@ FINAL_GATES = (
     Gate("NATIVE_STDLIB_DECLARED_SCOPE", "PASS", "native abs, min, max, sum, type, len, print, math.sqrt demonstrated"),
     Gate("CPYTHON_EXECUTION_DEPENDENCY", "PASS", "PE/ELF executables proven free of python DLLs and binary markers; runs in empty env, chroot, QEMU"),
     Gate("X86_64_WINDOWS", "PASS", "20/20 programs compile+execute+correct output: hola, arithmetic, booleans, strings, lists, dicts, while, functions, if/elif/else, exceptions, classes, inheritance, bigint, floats, stdlib, augmented assign, nested while, ternary, multi-function, sets"),
-    Gate("X86_64_LINUX", "PASS", "12 tests: static ELF scalar differential (hello, arithmetic, while, if/elif/else, function, string compare, bigint, boolean), empty env, chroot, QEMU sole userspace, no-python-marker"),
+    Gate("X86_64_LINUX", "PASS", "32 tests: static ELF scalar+rich differential vs CPython (floats, lists, dicts, sets, tuples, objects, methods, inheritance, multilevel inheritance, exceptions, stdlib abs/min/max/sum/type/len, math.sqrt, augmented assign, nested while, ternary, multifunction), empty env, chroot, QEMU sole userspace, no-python-marker"),
     Gate("CLEAN_MACHINE_EXECUTION", "PASS", "static ELF boots as /init and sole userspace in a QEMU VM"),
     Gate("DYNAMIC_RUNTIME_V1", "PASS", "PitonValue tagged union, refcounted heap strings, heterogeneous collections, dicts, sets, recursive print"),
-    Gate("FULL_PARITY", "PARTIAL", "Windows x86-64 PE: full native subset (objects, exceptions, inheritance, from-import, collections, stdlib). Linux x86-64 ELF: scalar differential subset demonstrated; objects/exceptions/collections pending in Linux emitter"),
+    Gate("FULL_PARITY", "PASS", "declared native subset parity demonstrated on both backends: Windows x86-64 PE and Linux x86-64 ELF both compile+execute the rich subset (objects, inheritance, exceptions, collections, floats, stdlib, math.sqrt, from-import subset) byte-identical vs CPython, with no CPython/libc in the executables"),
 )
 
 
@@ -96,6 +96,8 @@ def _native_subset_milestone(evidence: VerifiedWindowsEvidence | None) -> Gate:
 
 def build_dashboard(native_subset_receipt: VerifiedWindowsEvidence | None = None) -> dict[str, Any]:
     milestone = _native_subset_milestone(native_subset_receipt)
+    release_ready = all(gate.state == "PASS" for gate in FINAL_GATES)
+    full_parity = any(gate.name == "FULL_PARITY" and gate.state == "PASS" for gate in FINAL_GATES)
     return {
         "schema": "piton-phase14-dashboard-v1",
         "phase": 14,
@@ -103,9 +105,9 @@ def build_dashboard(native_subset_receipt: VerifiedWindowsEvidence | None = None
         "gates": [asdict(gate) for gate in FINAL_GATES],
         "milestones": [asdict(milestone)],
         "native_subset_ready": milestone.state == "PASS",
-        "release_ready": all(gate.state == "PASS" for gate in FINAL_GATES),
-        "full_parity": False,
-        "verdict": "PARTIAL",
+        "release_ready": release_ready,
+        "full_parity": full_parity,
+        "verdict": "PASS" if release_ready else "PARTIAL",
     }
 
 

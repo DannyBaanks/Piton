@@ -141,6 +141,73 @@ class Phase10LinuxGates(unittest.TestCase):
             self.assertNotIn(b"python", executable.read_bytes().lower())
             self.assertNotIn(b"cpython", executable.read_bytes().lower())
 
+    # ── Linux differential tests (rich subset, vs CPython oracle) ──────
+
+    def _assert_linux_equiv(self, source: str):
+        rc, native_out, oracle_out, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, f"native stderr={stderr!r}")
+        self.assertEqual(native_out, oracle_out, f"native={native_out!r} oracle={oracle_out!r}")
+
+    def test_linux_rich_floats(self):
+        self._assert_linux_equiv('imprimir(1.5)\nimprimir(-1.5)\nimprimir(1.25 + 2.5)\nimprimir(3.0 * 0.5)\nimprimir(1.5 < 2)\nimprimir(abs(-2.5))\n')
+
+    def test_linux_rich_lists(self):
+        self._assert_linux_equiv('imprimir([1, 2, 3])\nimprimir(longitud([1, 2, 3]))\nimprimir([4, 5][-1])\nimprimir(sum([1, 2, 3, 4, 5]))\n')
+
+    def test_linux_rich_tuples(self):
+        self._assert_linux_equiv('imprimir((1, 2, 3))\nimprimir((10, 20)[1])\nt = (5,)\nimprimir(t)\nimprimir(longitud(t))\n')
+
+    def test_linux_rich_dicts(self):
+        self._assert_linux_equiv('imprimir({1: 2, 3: 4})\nimprimir(longitud({1: 2, 3: 4}))\nimprimir({1: 2}[1])\nd = {10: 20, 30: 40}\nimprimir(d[30])\n')
+
+    def test_linux_rich_sets(self):
+        self._assert_linux_equiv('imprimir({1, 2, 3})\nimprimir(longitud({1, 2, 2, 3}))\n')
+
+    def test_linux_rich_objects(self):
+        self._assert_linux_equiv('clase Punto:\n    funcion __init__(self, px, py):\n        self.px = px\n        self.py = py\np = Punto(3, 4)\nimprimir(p.px)\nimprimir(p.py)\n')
+
+    def test_linux_rich_methods(self):
+        self._assert_linux_equiv('clase Contador:\n    funcion __init__(self):\n        self.valor = 0\n    funcion incrementar(self):\n        self.valor = self.valor + 1\nc = Contador()\nc.incrementar()\nc.incrementar()\nimprimir(c.valor)\n')
+
+    def test_linux_rich_inheritance(self):
+        self._assert_linux_equiv('clase Base:\n    funcion __init__(self, x):\n        self.x = x\n    funcion get_x(self):\n        devolver self.x\nclase Hija(Base):\n    funcion doble(self):\n        devolver self.x * 2\nh = Hija(5)\nimprimir(h.get_x())\nimprimir(h.doble())\n')
+
+    def test_linux_rich_multilevel_inheritance(self):
+        self._assert_linux_equiv('clase A:\n    funcion __init__(self, x):\n        self.x = x\n    funcion get_x(self):\n        devolver self.x\nclase B(A):\n    funcion multiply(self, n):\n        devolver self.x * n\nclase C(B):\n    funcion triple(self):\n        devolver self.x * 3\nc = C(4)\nimprimir(c.get_x())\nimprimir(c.multiply(5))\nimprimir(c.triple())\n')
+
+    def test_linux_rich_exception_caught(self):
+        self._assert_linux_equiv('intentar:\n    lanzar ValueError("x")\nexcepto ValueError:\n    imprimir("caught")\n')
+
+    def test_linux_rich_exception_finally(self):
+        self._assert_linux_equiv('intentar:\n    imprimir("try")\nfinalmente:\n    imprimir("finally")\n')
+
+    def test_linux_rich_exception_after_catch(self):
+        self._assert_linux_equiv('intentar:\n    lanzar ValueError("boom")\n    imprimir("no reach")\nexcepto ValueError:\n    x = 10 + 20\n    imprimir(x)\n')
+
+    def test_linux_rich_stdlib_type(self):
+        self._assert_linux_equiv('imprimir(type(42))\nimprimir(type("hola"))\nimprimir(type(Verdadero))\nimprimir(type(Nada))\n')
+
+    def test_linux_rich_stdlib_min_max_abs(self):
+        self._assert_linux_equiv('imprimir(abs(-42))\nimprimir(min(5, 3))\nimprimir(max(5, 3))\n')
+
+    def test_linux_rich_math_sqrt(self):
+        self._assert_linux_equiv('importar math\nimprimir(math.sqrt(9))\n')
+
+    def test_linux_rich_augmented(self):
+        self._assert_linux_equiv('x = 10\nx += 5\nx *= 2\nx -= 3\nimprimir(x)\n')
+
+    def test_linux_rich_nested_while(self):
+        self._assert_linux_equiv('total = 0\ni = 0\nmientras i < 3:\n    j = 0\n    mientras j < 3:\n        total = total + 1\n        j = j + 1\n    i = i + 1\nimprimir(total)\n')
+
+    def test_linux_rich_ternary_if(self):
+        self._assert_linux_equiv('x = 10\nsi x % 2 == 0:\n    r = "par"\nsino:\n    r = "impar"\nimprimir(r)\n')
+
+    def test_linux_rich_collection_reassign(self):
+        self._assert_linux_equiv('x = [1, 2, 3]\nx = [4, 5]\nimprimir(x)\nimprimir(longitud(x))\n')
+
+    def test_linux_rich_multifunction(self):
+        self._assert_linux_equiv('funcion suma(a, b):\n    devolver a + b\nfuncion producto(a, b):\n    devolver a * b\nimprimir(suma(3, 4))\nimprimir(producto(3, 4))\n')
+
 
 if __name__ == "__main__":
     unittest.main()

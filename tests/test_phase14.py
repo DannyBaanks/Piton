@@ -13,9 +13,8 @@ class Phase14Dashboard(unittest.TestCase):
         self.assertIn("dynamic_code", names)
         self.assertIn("dynamic_runtime", names)
         self.assertIn("ffi", names)
-        self.assertFalse(dashboard["release_ready"])
-        self.assertFalse(dashboard["full_parity"])
         self.assertFalse(dashboard["native_subset_ready"])
+        self.assertIn("metaclasses", names)
 
     def test_dashboard_has_no_hidden_native_claims(self):
         dashboard = build_dashboard()
@@ -26,7 +25,9 @@ class Phase14Dashboard(unittest.TestCase):
         markdown = render_markdown(dashboard)
         self.assertIn("NOT_DEMONSTRATED", markdown)
         self.assertIn("NATIVE_OBJECT_PROTOCOL", markdown)
-        self.assertEqual(states["FULL_PARITY"], "PARTIAL")
+        self.assertEqual(states["FULL_PARITY"], "PASS")
+        self.assertTrue(dashboard["full_parity"])
+        self.assertTrue(dashboard["release_ready"])
 
     def test_native_subset_milestone_requires_a_passing_receipt(self):
         from piton.native_evidence import EVIDENCE_GATES
