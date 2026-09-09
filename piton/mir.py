@@ -212,7 +212,11 @@ class MIRLowerer:
         if cell_vars:
             builder.cell_params = set(cell_vars)
             if qualified_name and qualified_name != node.name:
-                builder.closures[node.name] = (qualified_name, tuple(sorted(cell_vars)))
+                nested_args = getattr(node, "args", None)
+                nested_n_args = len(
+                    list(getattr(nested_args, "posonlyargs", []) or []) + list(getattr(nested_args, "args", []) or [])
+                )
+                builder.closures[node.name] = (qualified_name, tuple(sorted(cell_vars)), nested_n_args)
         defaults_map: dict[str, Any] = {}
         if args:
             raw_defaults = list(getattr(args, "defaults", []) or [])
@@ -251,15 +255,19 @@ class MIRLowerer:
         all_nested_captures: dict[str, tuple[str, tuple[str, ...]]] = {}
         available = local_names | (set(cell_vars) if cell_vars else set())
         for nested in (item for item in body if item.kind == HIRKind.FUNC_DEF):
-            if self._contains_kind(nested.body, {HIRKind.NONLOCAL, HIRKind.GLOBAL}):
-                raise MIRLoweringError("native closures do not support nonlocal or global declarations yet")
+            if self._contains_kind(nested.body, {HIRKind.GLOBAL}):
+                raise MIRLoweringError("native closures do not support global declarations yet")
             nested_captures = tuple(name for name in sorted(self._nested_free_loads(nested)) if name in available)
             lifted_name = f"{builder.function.name}__{nested.name}"
-            all_nested_captures[nested.name] = (lifted_name, nested_captures)
-            builder.closures[nested.name] = (lifted_name, nested_captures)
+            nested_args = getattr(nested, "args", None)
+            nested_n_args = len(
+                list(getattr(nested_args, "posonlyargs", []) or []) + list(getattr(nested_args, "args", []) or [])
+            )
+            all_nested_captures[nested.name] = (lifted_name, nested_captures, nested_n_args)
+            builder.closures[nested.name] = (lifted_name, nested_captures, nested_n_args)
 
         captured_var_names = set()
-        for _, (_, caps) in all_nested_captures.items():
+        for _, (_, caps, _) in all_nested_captures.items():
             captured_var_names.update(caps)
 
         if captured_var_names:
@@ -314,6 +322,12 @@ class MIRLowerer:
         params_here = set(getattr(args, "args", []) or []) if args else set()
         locals_here = params_here | self._assigned_names(node.body)
         free = self._loaded_names(node.body) - locals_here
+        free |= {
+            name
+            for statement in node.body
+            if getattr(statement, "kind", None) == HIRKind.NONLOCAL
+            for name in getattr(statement, "names", [])
+        }
         for nested in (item for item in node.body if item.kind == HIRKind.FUNC_DEF):
             free |= {name for name in self._nested_free_loads(nested) if name not in locals_here}
         return free
@@ -346,9 +360,9 @@ class MIRLowerer:
             result = self._binary(builder, node.op.rstrip("="), left, right)
             self._store(builder, node.target, result)
         elif kind == HIRKind.RETURN:
-            if node.value and node.value.kind == HIRKind.LOAD and node.value.name in builder.closures:
-                raise MIRLoweringError("native closures cannot escape their defining function yet")
             builder.emit("return", self._lower_expr(builder, node.value) if node.value else None)
+        elif kind == HIRKind.NONLOCAL:
+            return
         elif kind == HIRKind.IF:
             self._lower_if(builder, node)
         elif kind == HIRKind.WHILE:
@@ -543,7 +557,15 @@ class MIRLowerer:
             return result
         if kind == HIRKind.LOAD:
             if node.name in builder.closures:
-                raise MIRLoweringError("native closure values are only supported in direct calls")
+                lifted_name, _, n_args = builder.closures[node.name]
+                capture_ops: list[Any] = []
+                for capture_name in builder.closures[node.name][1]:
+                    capture = builder.temp()
+                    builder.emit("load", capture_name, result=capture)
+                    capture_ops.append(capture)
+                result = builder.temp()
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), result=result)
+                return result
             if node.name in builder.cell_params:
                 result = builder.temp()
                 builder.emit("cell_load", node.name, result=result)
@@ -656,7 +678,7 @@ class MIRLowerer:
             if closure:
                 if node.keywords:
                     raise MIRLoweringError("native closure calls do not support keyword arguments yet")
-                lifted_name, capture_names = closure
+                lifted_name, capture_names, _ = closure
                 function = builder.temp()
                 builder.emit("load", lifted_name, result=function)
                 captures = []

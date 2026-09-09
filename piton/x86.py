@@ -75,6 +75,7 @@ class Win64NasmEmitter:
             "extern piton_bigint_neg", "extern piton_bigint_cmp",
             "extern piton_bigint_floor_div", "extern piton_bigint_mod",
             "extern piton_bigint_print",
+            "extern piton_closure_new8", "extern piton_closure_call6",
         ]
         for function in module.functions:
             self._emit_function(function)
@@ -534,6 +535,53 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov r10, {self._address(cell_ptr_name)}")
             self._load_operand(value_arg, "r11")
             self.lines.extend(["    mov [r10], r11", "    mov qword [r10+8], 0"])
+        elif op == "closure_new":
+            lifted_name, n_args, capture_ops = args
+            if len(capture_ops) > 4:
+                raise NativeBuildError("native closure escape with more than four captured cells is not supported yet")
+            self.lines.append("    sub rsp, 64")
+            self.lines.append(f"    lea rcx, [{lifted_name}]")
+            self.lines.append(f"    mov edx, {n_args}")
+            self.lines.append(f"    mov r8d, {len(capture_ops)}")
+            for i, cell in enumerate(capture_ops):
+                self._load_operand(cell, "r10")
+                if i == 0:
+                    self.lines.append("    mov r9, r10")
+                else:
+                    self.lines.append(f"    mov qword [rsp+{24 + i * 8}], r10")
+            for i in range(len(capture_ops), 4):
+                if i == 0:
+                    self.lines.append("    xor r9d, r9d")
+                else:
+                    self.lines.append(f"    mov qword [rsp+{24 + i * 8}], 0")
+            self.lines.append("    call piton_closure_new8")
+            self.lines.append("    add rsp, 64")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "closure"
+        elif op == "closure_call":
+            callee, packed = args
+            argc, *call_args = packed
+            if len(call_args) > 4:
+                raise NativeBuildError("native closure calls with more than four arguments are not supported yet")
+            self.lines.append("    sub rsp, 64")
+            self._load_operand(callee, "rcx")
+            self.lines.append(f"    mov edx, {argc}")
+            for i in range(4):
+                if i < len(call_args):
+                    if i < 2:
+                        self._load_operand(call_args[i], ("r8", "r9")[i])
+                    else:
+                        self._load_operand(call_args[i], "r10")
+                        self.lines.append(f"    mov qword [rsp+{24 + i * 8}], r10")
+                else:
+                    if i < 2:
+                        self.lines.append(f"    xor {('r8d', 'r9d')[i]}, {('r8d', 'r9d')[i]}")
+                    else:
+                        self.lines.append(f"    mov qword [rsp+{24 + i * 8}], 0")
+            self.lines.append("    call piton_closure_call6")
+            self.lines.append("    add rsp, 64")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
         elif op == "raise_typed":
             exception_type, payload, handler_label = args
             self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
@@ -702,15 +750,29 @@ class Win64NasmEmitter:
                 self.types[result] = "str"
             else:
                 values = self._complete_call_args(function_name, list(call_args))
-                if len(values) > 4:
+                argc = len(values)
+                if argc > 4:
                     raise NativeBuildError("native calls with more than four arguments are not supported yet")
-                for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
-                    self._load_operand(value, register)
                 if function_name in self.function_names:
+                    for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
+                        self._load_operand(value, register)
                     self.lines.append(f"    call {function_name}")
                 else:
-                    self._load_operand(function_operand, "rax")
-                    self.lines.append("    call rax")
+                    self.lines.append("    sub rsp, 64")
+                    self._load_operand(function_operand, "rcx")
+                    self.lines.append(f"    mov edx, {argc}")
+                    for index in range(4):
+                        if index < argc and index < 2:
+                            self._load_operand(values[index], ("r8", "r9")[index])
+                        elif index < argc:
+                            self._load_operand(values[index], "r10")
+                            self.lines.append(f"    mov qword [rsp+{24 + index * 8}], r10")
+                        elif index < 2:
+                            self.lines.append(f"    xor {('r8d', 'r9d')[index]}, {('r8d', 'r9d')[index]}")
+                        else:
+                            self.lines.append(f"    mov qword [rsp+{24 + index * 8}], 0")
+                    self.lines.append("    call piton_closure_call6")
+                    self.lines.append("    add rsp, 64")
             if result:
                 self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "return":

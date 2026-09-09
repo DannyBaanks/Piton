@@ -288,6 +288,42 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_immutable_scalar_closure(self):
         self._assert_linux_equiv('funcion exterior(x):\n    factor = 3\n    funcion interior(valor):\n        devolver x + factor * valor\n    devolver interior(4)\nimprimir(exterior(2))\n')
 
+    def test_linux_escaped_closure_callable_later(self):
+        self._assert_linux_equiv('funcion fabricar(x):\n    funcion suma(m):\n        devolver x + m\n    devolver suma\nf = fabricar(40)\nimprimir(f(2))\n')
+
+    def test_linux_nonlocal_counter_mutation(self):
+        self._assert_linux_equiv('funcion contador():\n    n = 0\n    funcion sube(paso):\n        no_local n\n        n = n + paso\n        devolver n\n    devolver sube\nc = contador()\nimprimir(c(5))\nimprimir(c(7))\n')
+
+    def test_linux_nonlocal_write_only_capture(self):
+        self._assert_linux_equiv('funcion contador():\n    n = 0\n    funcion home():\n        no_local n\n        n = n + 1\n    home()\n    home()\n    devolver n\nimprimir(contador())\n')
+
+    def test_linux_callback_plain_function_and_closure(self):
+        self._assert_linux_equiv('funcion cuadrado(n):\n    devolver n*n\nfuncion aplicar(fn, n):\n    devolver fn(n)\nimprimir(aplicar(cuadrado, 9))\nfuncion fab():\n    k = 3\n    funcion doble(x):\n        devolver k * x\n    devolver doble\nd = fab()\nimprimir(aplicar(d, 5))\n')
+
+    def test_linux_closure_two_cells_two_arguments(self):
+        self._assert_linux_equiv('funcion fab():\n    a = 1\n    b = 2\n    funcion suma(x, m):\n        devolver a + b + x + m\n    devolver suma\ns = fab()\nimprimir(s(10, 20))\n')
+
+    def test_linux_independent_closure_instances(self):
+        self._assert_linux_equiv('funcion contador():\n    n = 0\n    funcion sube(paso):\n        no_local n\n        n = n + paso\n        devolver n\n    devolver sube\na = contador()\nb = contador()\nimprimir(a(1))\nimprimir(a(2))\nimprimir(b(10))\n')
+
+    def test_linux_nonlocal_mutual_swap_of_cells(self):
+        self._assert_linux_equiv('funcion fab():\n    m = 1\n    k = 2\n    funcion par(x):\n        no_local m\n        no_local k\n        t = m\n        m = k\n        k = t\n        devolver m + k + x\n    devolver par\np = fab()\nimprimir(p(0))\nimprimir(p(0))\n')
+
+    def test_linux_chained_closure_factories(self):
+        self._assert_linux_equiv('funcion nivel1(x):\n    funcion nivel2():\n        funcion nivel3(m):\n            devolver x + m\n        devolver nivel3\n    devolver nivel2\na = nivel1(100)\nb = a()\nimprimir(b(5))\n')
+
+    def test_linux_closure_arity_fail_closed(self):
+        source = 'funcion fab():\n    k = 3\n    funcion doble(x):\n        devolver k * x\n    devolver doble\nd = fab()\nimprimir(d(2, 4))\n'
+        with tempfile.TemporaryDirectory(prefix="piton-linux-arity-") as directory:
+            executable = compile_native_linux(source, Path(directory) / "program")
+            linux_path = windows_to_wsl_path(executable)
+            run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                capture_output=True, check=False, timeout=10,
+            )
+        self.assertEqual(run.returncode, 2)
+        self.assertIn(b"TypeError: closure called with wrong number of arguments", run.stderr)
+
     # ── Linux packages (IMPORT_PACKAGE_V1) ──────────────────────────────
 
     def _assert_package_equiv(self, package_init, submodules, main):

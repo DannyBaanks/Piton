@@ -17,6 +17,7 @@ PITÓN traduce español de México → semántica CPython 3.12 → x86-64 nativo
 declarado** tiene paridad en ambos backends (117/117 tests, 15 gates PASS).
 Este roadmap descompone el camino hacia **CPython 3.12 language parity** en
 gates pequeños, un gate = una afirmación acotada = un corpus = un veredicto.
+Estado actual: **193/193 tests, 15+ gates PASS** (2026-09-09).
 `FULL_PARITY` está retirado como término; ver `PARITY_DEFINITION.md`.
 
 ## 2. Estado verificado actual (baseline)
@@ -115,7 +116,7 @@ afirmación y criterio (los agentes pueden expandirlos siguiendo el esquema de l
 ### 11. Runtime (M1, M5, M8)
 
 `FRAME_MODEL_V1` — Base de closures y generadores.
-- **CURRENT_STATUS**: **PASS** (175 tests total, Win+Linux, byte-idéntico vs CPython).
+- **CURRENT_STATUS**: **PASS** (193 tests total, Win+Linux, byte-idéntico vs CPython).
 - **PURPOSE**: frames con params, locals, cells y control no local.
 - **IMPLEMENTATION**: captures vía cells heap (16 bytes: valor + type tag) creados
   por `cell_new` al entry de la función definidora (wrapping del valor de params,
@@ -196,8 +197,32 @@ positional-only.
 - **COMPLEXITY**: MEDIUM → resuelto.
 
 `CLOSURES_COMPLETE_V1` — cells mutables y escape.
+- **CURRENT_STATUS**: **PASS** (2026-09-09; Win 10 tests + Linux 9 tests, byte-idéntico vs CPython).
 - **DEPENDENCIES**: `FRAME_MODEL_V1`.
-- **COMPLEXITY**: HIGH.
+- **COMPLEXITY**: HIGH → resuelto.
+- **IMPLEMENTATION**: sin seguimiento estático de flujo — toda llamada no
+  resuelta despacha en runtime. El lowering MIR siempre emite `call`:
+  `closure_new` (wrap de param+cells en `PitonClosure` arena) en
+  `LOAD`/`RETURN` de funciones que capturan, `call` directo si el callee es un
+  nombre de función conocido, y si no el **emisor** genera
+  `piton_closure_call6(callee, argc, a0..a3)` que en runtime inspecciona el
+  objeto;
+  si `callee[0]==PITON_CLOSURE_MAGIC (0x5049544EC10557LL)` valida
+  `argc==n_args` y `n_cells+argc<=4`, desplaza `args` y rellena `cells[]` a la
+  pila x86-64 y llama vía `c->addr`; si no hay magic, invoca el puntero de
+  función plano. Fail-closed: lío de argumentos o límites → rc=2 + stderr
+  `TypeError: closure called with wrong number of arguments` (o "too many
+  captures"). Keyword Piton `no_local` (no `nonlocal`).
+- **O2 Linux gotchas resueltos**: (1) `void _start(void)` en freestanding
+  rompía `rsp%16` — el kernel entra con rsp%16==0 pero gcc compila asumiendo
+  rsp%16==8 → `movaps` del helper fault; el emisor antepone
+  `__asm__("sub $8, %rsp")` a `_start`. (2) El `load` de un nombre de función
+  era no-op; al pasarse la función POR VALOR el temp quedaba sin inicializar →
+  el emitter materializa `(long)&fn` en el slot.
+- **KNOWN_GAP**: límites de 4 captures + 4 args (cells+args<=4, fail-closed);
+  `nonlocal` con sombreado de binding en niveles intermedios aún sin validación
+  de binding estático (CALL-E); escapada a datos globales (carril G).
+- **UNLOCKS**: `GENERATOR_SUSPEND_FRAME_V1`, `COROUTINE_V1`.
 
 ### 14. Generadores (M5)
 
@@ -344,6 +369,7 @@ todos Win+Linux PASS.
 6. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
 7. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
 8. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
+   **PASS.**
 9. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 6).
 
 ## 31. Gates paralelizables
@@ -363,9 +389,15 @@ todos Win+Linux PASS.
 ## 32. Gates arquitectónicos
 
 Exigen `ARCHITECTURE_REVIEW_REQUIRED` y STOP antes de implementar:
-`FRAME_MODEL_V1`, `GENERATOR_SUSPEND_FRAME_V1`, `COROUTINE_V1`,
-`OBJECT_MODEL_RICH_V1`, `DESCRIPTORS_V1`, `METACLASSES_V1`, `THREADING_V1`,
-`MULTIPROCESSING_V1`, y cualquier gate que toque ABI/calling-convention/GC.
+`FRAME_MODEL_V1` (PASS, ver §11), `GENERATOR_SUSPEND_FRAME_V1`,
+`COROUTINE_V1`, `OBJECT_MODEL_RICH_V1`, `DESCRIPTORS_V1`, `METACLASSES_V1`,
+`THREADING_V1`, `MULTIPROCESSING_V1`, y cualquier gate que toque
+ABI/calling-convention/GC.
+
+Nota 2026-09-09: `CLOSURES_COMPLETE_V1` cerró sin reconstruir el modelo de
+frames ni el layout — añadió un objeto closure al arena existente y un helper
+de dispatch (`piton_closure_call6`) sin tocar GC/ABI de llamada, así que no
+exigió esta revisión.
 
 ## 33. Stop conditions
 
@@ -375,7 +407,7 @@ reconstruyas el runtime para cerrar un test pequeño.
 
 ## 34. Conteo actual y veredictos (baseline)
 
-Ver `FEATURE_STATUS_MATRIX.md`. 175/175 tests; gates PASS en el dashboard
+Ver `FEATURE_STATUS_MATRIX.md`. 193/193 tests; gates PASS en el dashboard
 (incl. `FULL_PARITY`, retirado como término en `PARITY_DEFINITION.md`).
 Features PARTIAL: functions, generators, descriptors, dynamic_code,
 introspection, ffi. NOT_DEMONSTRATED: metaclasses, multiprocessing.

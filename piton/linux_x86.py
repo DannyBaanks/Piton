@@ -50,6 +50,10 @@ static void piton_set_add(PitonSet*s,PitonSlot v){for(long i=0;i<s->length;++i)i
 static PitonObject*piton_object_new(const char*name,const char*parent){PitonObject*o=piton_alloc(sizeof(*o));o->class_name=name;o->parent_name=parent;return o;}
 static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].value=v;return;}if(o->length>=32){piton_write(2,"AttributeError\n",15);piton_exit(1);}o->attrs[o->length].name=name;o->attrs[o->length++].value=v;}
 static PitonSlot piton_object_get(PitonObject*o,const char*name){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;piton_write(2,"AttributeError\n",15);piton_exit(1);}
+#define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
+typedef struct{long magic;long addr;long n_args;long n_cells;long cells[4];}PitonClosure;
+static long piton_closure_new8(long addr,long n_args,long n_cells,long c0,long c1,long c2,long c3){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;long cs[4]={c0,c1,c2,c3};for(long i=0;i<n_cells&&i<4;++i)c->cells[i]=cs[i];return(long)c;}
+static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){if(!callee||((long*)callee)[0]!=PITON_CLOSURE_MAGIC)return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);PitonClosure*c=(PitonClosure*)callee;if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;if(total>4){piton_write(2,"TypeError: closure cell count plus arguments exceeds four\n",59);piton_exit(2);}long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);}
 static void piton_print_slot(PitonSlot v);
 static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}if(s->kind==PK_TUPLE&&s->length==1)piton_write(1,",",1);piton_write(1,s->kind==PK_TUPLE?")":"]",1);}
 static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(d->items[i].key);piton_write(1,": ",2);piton_print_slot(d->items[i].value);}piton_write(1,"}",1);}
@@ -143,7 +147,7 @@ class LinuxCEmitter:
                 lines.append(f"static long {_name(function.name)}({params});")
         for function in module.functions:
             lines.extend(self._emit_function(function))
-        lines.append("void _start(void){piton_exit(piton_main());}")
+        lines.append("void _start(void){__asm__(\"sub $8, %rsp\");piton_exit(piton_main());}")
         return "\n".join(lines) + "\n"
 
     def _emit_function(self, function: MIRFunction) -> list[str]:
@@ -256,7 +260,10 @@ class LinuxCEmitter:
             source = args[0]
             aliases[result] = source
             types[result] = types.get(source, "int")
-            if source in _BUILTINS or source in self.function_names:
+            if source in self.function_names:
+                out.append(f"    {_name(result)}=(long)&{_name(source)};")
+                return out
+            if source in _BUILTINS:
                 return out
             out.append(f"    {_name(result)}={_name(source)};")
         elif op == "store":
@@ -424,8 +431,18 @@ class LinuxCEmitter:
                 types[result] = "str"
             else:
                 values = self._complete_call_args(function_name, list(values))
-                encoded_values = ",".join(self._value(value) for value in values)
-                out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
+                if function_name in self.function_names:
+                    encoded_values = ",".join(self._value(value) for value in values)
+                    out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
+                else:
+                    argc = len(values)
+                    if argc > 4:
+                        raise NativeBuildError("Linux calls with more than four arguments are not supported yet")
+                    arg_values = [self._value(value) for value in values]
+                    arg_values += ["0"] * (4 - len(arg_values))
+                    out.append(
+                        f"    {_name(result)}=piton_closure_call6({self._value(args[0])},{argc},{','.join(arg_values)});"
+                    )
                 types[result] = "int"
         elif op == "return":
             out.append(f"    return {self._value(args[0])};")
@@ -454,6 +471,28 @@ class LinuxCEmitter:
         elif op == "cell_store":
             cell_ptr_name, value_arg = args
             out.append(f"    ((long*){_name(cell_ptr_name)})[0]={self._value(value_arg)};")
+        elif op == "closure_new":
+            lifted_name, n_args, capture_ops = args
+            if len(capture_ops) > 4:
+                raise NativeBuildError("Linux closure escape with more than four captured cells is not supported yet")
+            cell_values = [self._value(cap) for cap in capture_ops]
+            cell_values += ["0"] * (4 - len(cell_values))
+            out.append(
+                f"    {_name(result)}=piton_closure_new8((long)&{_name(lifted_name)},{n_args},"
+                f"{len(capture_ops)},{','.join(cell_values)});"
+            )
+            types[result] = "closure"
+        elif op == "closure_call":
+            callee, packed = args
+            argc, *call_args = packed
+            if len(call_args) > 4:
+                raise NativeBuildError("Linux closure calls with more than four arguments are not supported yet")
+            arg_values = [self._value(arg) for arg in call_args]
+            arg_values += ["0"] * (4 - len(arg_values))
+            out.append(
+                f"    {_name(result)}=piton_closure_call6({self._value(callee)},{argc},{','.join(arg_values)});"
+            )
+            types[result] = "int"
         elif op == "set_attr":
             obj, attr, val = args
             out.append(f'    piton_object_set((PitonObject*){self._value(obj)},"{attr}",{self._slot(val, types)});')

@@ -8,7 +8,7 @@ Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 
 ## 1. Línea base verificada (2026-09-09, commit pendiente de push)
 
-- **117/117 tests** (85 Windows + 32 Linux).
+- **193/193 tests** (127 Windows + 66 Linux).
 - Ambos backends ejecutan el subset rico byte-idéntico vs CPython 3.12.4.
 - Ejecutables PE/ELF sin CPython ni libc (freestanding Linux).
 - **15 gates `PASS`** en `piton.final_dashboard` (incl. `FULL_PARITY`, que este
@@ -22,7 +22,7 @@ Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 | expressions | PASS | PASS | PASS | `test_phase5.py` | — |
 | statements | PASS | PASS | PASS | `test_phase5.py` | — |
 | functions | PASS | PASS | PASS | `test_phase5.py` | defaults, kwargs, `*args`, `**kwargs`, positional-only, keyword-only all PASS (FUNCTION_DEFAULTS_V1 + FUNCTION_KEYWORD_ARGS_V1 + FUNCTION_ARGS_V1); call-site unpacking (`f(*xs)`, `f(**d)`) rejected; bound methods still open |
-| closures | PASS* | PASS | PASS | `test_phase5.py` + `test_phase10_linux.py` | FRAME_MODEL_V1 PASS: captures via cells, recursion nativa, closures anidadas con captura transitiva, closure recursivo (Win 6 tests, Linux 4 tests). *Escape y cells mutables rechazados → CLOSURES_COMPLETE_V1 |
+| closures | PASS | PASS | PASS | `test_phase5.py` + `test_phase10_linux.py` | CLOSURES_COMPLETE_V1 PASS 2026-09-09: closure objects con cells mutables y ESCAPE permitido, dispatch por magic en runtime (`piton_closure_call6`), hasta 4 captures + 4 args (fail-closed rc=2 si se excede o argumentos incorrectos), CALL-E; Win 10 tests + Linux 9 tests; `nonlocal`→`no_local`, cells transitivas mutables (swap), callbacks de funciones planas y closures, cadenas de fábricas. Sin seguimiento estático de flujo: toda llamada no-resuelta despacha en runtime |
 | exceptions | PASS | PASS | PASS | `test_phase5.py` | re-raise, `from`/cadenas, custom, BaseException |
 | generators | PARTIAL | PARTIAL | NOT_DEMONSTRATED | `test_phase5.py` | frames suspendidos, send/throw/close, `yield from` |
 | classes | PASS | PASS | PASS | `test_phase5.py` | MRO, super, metaclasses |

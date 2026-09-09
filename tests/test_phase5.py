@@ -149,13 +149,159 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
-    def test_x86_rejects_escaping_closure(self):
+    def test_x86_escaped_closure_callable_later(self):
+        source = (
+            "funcion fabricar(x):\n"
+            "    funcion suma(m):\n"
+            "        devolver x + m\n"
+            "    devolver suma\n"
+            "f = fabricar(40)\n"
+            "imprimir(f(2))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_nonlocal_counter_mutation(self):
+        source = (
+            "funcion contador():\n"
+            "    n = 0\n"
+            "    funcion sube(paso):\n"
+            "        no_local n\n"
+            "        n = n + paso\n"
+            "        devolver n\n"
+            "    devolver sube\n"
+            "c = contador()\n"
+            "imprimir(c(5))\n"
+            "imprimir(c(7))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_nonlocal_write_only_capture(self):
+        source = (
+            "funcion contador():\n"
+            "    n = 0\n"
+            "    funcion home():\n"
+            "        no_local n\n"
+            "        n = n + 1\n"
+            "    home()\n"
+            "    home()\n"
+            "    devolver n\n"
+            "imprimir(contador())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_callback_plain_function_and_closure(self):
+        source = (
+            "funcion cuadrado(n):\n"
+            "    devolver n*n\n"
+            "funcion aplicar(fn, n):\n"
+            "    devolver fn(n)\n"
+            "imprimir(aplicar(cuadrado, 9))\n"
+            "funcion fab():\n"
+            "    k = 3\n"
+            "    funcion doble(x):\n"
+            "        devolver k * x\n"
+            "    devolver doble\n"
+            "d = fab()\n"
+            "imprimir(aplicar(d, 5))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_fn_stored_in_variable(self):
+        source = (
+            "funcion cuadrado(n):\n"
+            "    devolver n*n\n"
+            "g = cuadrado\n"
+            "imprimir(g(9))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_closure_two_cells_two_arguments(self):
+        source = (
+            "funcion fab():\n"
+            "    a = 1\n"
+            "    b = 2\n"
+            "    funcion suma(x, m):\n"
+            "        devolver a + b + x + m\n"
+            "    devolver suma\n"
+            "s = fab()\n"
+            "imprimir(s(10, 20))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_independent_closure_instances(self):
+        source = (
+            "funcion contador():\n"
+            "    n = 0\n"
+            "    funcion sube(paso):\n"
+            "        no_local n\n"
+            "        n = n + paso\n"
+            "        devolver n\n"
+            "    devolver sube\n"
+            "a = contador()\n"
+            "b = contador()\n"
+            "imprimir(a(1))\n"
+            "imprimir(a(2))\n"
+            "imprimir(b(10))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_nonlocal_mutual_swap_of_cells(self):
+        source = (
+            "funcion fab():\n"
+            "    m = 1\n"
+            "    k = 2\n"
+            "    funcion par(x):\n"
+            "        no_local m\n"
+            "        no_local k\n"
+            "        t = m\n"
+            "        m = k\n"
+            "        k = t\n"
+            "        devolver m + k + x\n"
+            "    devolver par\n"
+            "p = fab()\n"
+            "imprimir(p(0))\n"
+            "imprimir(p(0))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_chained_closure_factories(self):
+        source = (
+            "funcion nivel1(x):\n"
+            "    funcion nivel2():\n"
+            "        funcion nivel3(m):\n"
+            "            devolver x + m\n"
+            "        devolver nivel3\n"
+            "    devolver nivel2\n"
+            "a = nivel1(100)\n"
+            "b = a()\n"
+            "imprimir(b(5))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_closure_arity_fail_closed(self):
+        source = (
+            "funcion fab():\n"
+            "    k = 3\n"
+            "    funcion doble(x):\n"
+            "        devolver k * x\n"
+            "    devolver doble\n"
+            "d = fab()\n"
+            "imprimir(d(2, 4))\n"
+        )
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "cannot escape"):
-                compile_native(
-                    "funcion exterior(x):\n    funcion interior():\n        devolver x\n    devolver interior\n",
-                    Path(directory) / "program.exe",
-                )
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn(b"TypeError: closure called with wrong number of arguments", completed.stderr)
 
     def test_x86_native_recursion_factorial(self):
         source = (

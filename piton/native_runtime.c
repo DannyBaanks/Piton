@@ -634,6 +634,52 @@ void piton_set_free(void *raw) {
 
 int64_t piton_set_live_count(void) { return live_sets; }
 
+/* ── Closure escape (CLOSURES_COMPLETE_V1) ───────────────────────────── */
+
+#define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
+
+typedef struct {
+    int64_t magic;
+    int64_t addr;
+    int64_t n_args;
+    int64_t n_cells;
+    int64_t cells[4];
+} PitonClosure;
+
+int64_t piton_closure_new8(int64_t addr, int64_t n_args, int64_t n_cells,
+                           int64_t c0, int64_t c1, int64_t c2, int64_t c3) {
+    PitonClosure *c = calloc(1, sizeof(PitonClosure));
+    c->magic = PITON_CLOSURE_MAGIC;
+    c->addr = addr;
+    c->n_args = n_args;
+    c->n_cells = n_cells;
+    int64_t cs[4] = {c0, c1, c2, c3};
+    for (int i = 0; i < n_cells && i < 4; i++) c->cells[i] = cs[i];
+    return (int64_t)c;
+}
+
+int64_t piton_closure_call6(int64_t callee, int64_t argc,
+                            int64_t a0, int64_t a1, int64_t a2, int64_t a3) {
+    if (!callee || ((int64_t *)callee)[0] != PITON_CLOSURE_MAGIC)
+        return ((int64_t(*)(int64_t, int64_t, int64_t, int64_t))callee)(a0, a1, a2, a3);
+    PitonClosure *c = (PitonClosure *)callee;
+    if (argc != c->n_args) {
+        fprintf(stderr, "TypeError: closure called with wrong number of arguments\n");
+        exit(2);
+    }
+    int64_t total = c->n_cells + argc;
+    if (total > 4) {
+        fprintf(stderr, "TypeError: closure cell count plus arguments exceeds four\n");
+        exit(2);
+    }
+    int64_t x[4] = {a0, a1, a2, a3};
+    for (int i = 0; i < c->n_cells && i < 4; i++) {
+        for (int j = 3; j > i; j--) x[j] = x[j - 1];
+        x[i] = c->cells[i];
+    }
+    return ((int64_t(*)(int64_t, int64_t, int64_t, int64_t))c->addr)(x[0], x[1], x[2], x[3]);
+}
+
 /* ── Object API ────────────────────────────────────────────────────────── */
 
 void *piton_object_new(const char *class_name) {
