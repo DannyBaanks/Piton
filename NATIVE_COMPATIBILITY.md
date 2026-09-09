@@ -24,7 +24,7 @@ una ejecución dentro de una VM Windows limpia permanece `NOT_DEMONSTRATED`.
 | Colecciones int | PARTIAL | `tests/test_phase5.py` | nesting, tipos dinámicos, mutación y errores |
 | Heap de colecciones | PARTIAL | contador nativo + stress diferencial | ciclos y objetos heterogéneos |
 | Excepciones | PARTIAL | `tests/test_phase5.py` | unwind, finally y objetos de excepción |
-| Closures | PARTIAL | `tests/test_phase5.py` | cells mutables, escape y closures anidadas |
+| Closures | PASS | `tests/test_phase5.py` + `test_phase10_linux.py` | FRAME_MODEL_V1 PASS (Win 6 + Linux 4): cells para captures, recursion nativa, closure recursivo, anidadas con capture transitivo. Escape y cells mutables → `CLOSURES_COMPLETE_V1` |
 | Generators | PARTIAL | `tests/test_phase5.py` | frames suspendidos, send/throw/yield from |
 | Clases | PARTIAL | `tests/test_phase5.py` | herencia, descriptors, metaclasses y fields heterogéneos |
 | Imports | PARTIAL | `tests/test_phase5.py` | paquetes, ciclos, from-import y estado de módulo |

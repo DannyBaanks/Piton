@@ -47,6 +47,7 @@ class MIRFunction:
     defaults: List[Optional[Any]] = field(default_factory=list)
     vararg: Optional[str] = None
     kwarg: Optional[str] = None
+    cell_vars: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -55,6 +56,7 @@ class MIRFunction:
             "defaults": list(self.defaults),
             "vararg": self.vararg,
             "kwarg": self.kwarg,
+            "cell_vars": list(self.cell_vars),
             "blocks": [block.to_dict() for block in self.blocks],
         }
 
@@ -79,6 +81,7 @@ class _Builder:
         self.block_counter = 0
         self.current = self.new_block("entry")
         self.closures: dict[str, tuple[str, tuple[str, ...]]] = {}
+        self.cell_params: set[str] = set()
         self.exception_handlers: list[tuple[str, str | None]] = []
         self.loop_counter = 0
         self.module_aliases: dict[str, str] = {}
@@ -193,7 +196,7 @@ class MIRLowerer:
 
     def _lower_function(
         self, node: HIRNode, qualified_name: str | None = None,
-        captures: tuple[str, ...] = (),
+        captures: tuple[str, ...] = (), cell_vars: list[str] | None = None,
     ) -> None:
         args = getattr(node, "args", None)
         posonly_params = list(getattr(args, "posonlyargs", []) or []) if args else []
@@ -206,6 +209,10 @@ class MIRLowerer:
         builder = _Builder(qualified_name or node.name, [*captures, *positional_params])
         builder.is_async = bool(getattr(node, "is_async", False))
         builder.module_aliases = dict(self.module_aliases)
+        if cell_vars:
+            builder.cell_params = set(cell_vars)
+            if qualified_name and qualified_name != node.name:
+                builder.closures[node.name] = (qualified_name, tuple(sorted(cell_vars)))
         defaults_map: dict[str, Any] = {}
         if args:
             raw_defaults = list(getattr(args, "defaults", []) or [])
@@ -240,20 +247,47 @@ class MIRLowerer:
         self.function_posonly[qualified_name or node.name] = posonly_params
         self.function_kwonly[qualified_name or node.name] = kwonly_params
         local_names = set(builder.function.params) | self._assigned_names(body)
+
+        all_nested_captures: dict[str, tuple[str, tuple[str, ...]]] = {}
+        available = local_names | (set(cell_vars) if cell_vars else set())
         for nested in (item for item in body if item.kind == HIRKind.FUNC_DEF):
-            nested_args = getattr(nested, "args", None)
-            nested_params = set(getattr(nested_args, "args", []) or []) if nested_args else set()
-            nested_locals = nested_params | self._assigned_names(nested.body)
             if self._contains_kind(nested.body, {HIRKind.NONLOCAL, HIRKind.GLOBAL}):
                 raise MIRLoweringError("native closures do not support nonlocal or global declarations yet")
-            free_loads = self._loaded_names(nested.body) - nested_locals
-            nested_captures = tuple(name for name in sorted(free_loads) if name in local_names)
+            nested_captures = tuple(name for name in sorted(self._nested_free_loads(nested)) if name in available)
             lifted_name = f"{builder.function.name}__{nested.name}"
+            all_nested_captures[nested.name] = (lifted_name, nested_captures)
             builder.closures[nested.name] = (lifted_name, nested_captures)
-            self._lower_function(nested, lifted_name, nested_captures)
+
+        captured_var_names = set()
+        for _, (_, caps) in all_nested_captures.items():
+            captured_var_names.update(caps)
+
+        if captured_var_names:
+            builder.cell_params = captured_var_names
+            for cap in sorted(captured_var_names):
+                if cap in (captures or ()):
+                    continue
+                if cap in builder.function.params:
+                    cap_val = builder.temp()
+                    builder.emit("load", cap, result=cap_val)
+                else:
+                    cap_val = None
+                cell_ptr = builder.temp()
+                builder.emit("cell_new", cap_val, result=cell_ptr)
+                builder.emit("store", cap, cell_ptr)
+
+        for nested in (item for item in body if item.kind == HIRKind.FUNC_DEF):
+            nested_captures = tuple(name for name in sorted(self._nested_free_loads(nested)) if name in available)
+            lifted_name = f"{builder.function.name}__{nested.name}"
+            inner_cell_vars = [c for c in nested_captures if c in captured_var_names]
+            self._lower_function(nested, lifted_name, nested_captures, cell_vars=inner_cell_vars)
+
         self._lower_statements(builder, [item for item in body if item.kind != HIRKind.FUNC_DEF])
         if not builder.current.instructions or builder.current.instructions[-1].op not in {"return", "jump", "branch"}:
             builder.emit("return", None)
+        builder.function.cell_vars = sorted(captured_var_names)
+        if cell_vars:
+            builder.function.cell_vars = list(cell_vars)
         self.functions.append(builder.function)
 
     def _walk(self, value: Any):
@@ -274,6 +308,15 @@ class MIRLowerer:
             node.name for node in self._walk(body)
             if node.kind == HIRKind.STORE and getattr(node, "name", None)
         }
+
+    def _nested_free_loads(self, node: HIRNode) -> set[str]:
+        args = getattr(node, "args", None)
+        params_here = set(getattr(args, "args", []) or []) if args else set()
+        locals_here = params_here | self._assigned_names(node.body)
+        free = self._loaded_names(node.body) - locals_here
+        for nested in (item for item in node.body if item.kind == HIRKind.FUNC_DEF):
+            free |= {name for name in self._nested_free_loads(nested) if name not in locals_here}
+        return free
 
     def _loaded_names(self, body: Sequence[HIRNode]) -> set[str]:
         return {
@@ -480,7 +523,10 @@ class MIRLowerer:
 
     def _store(self, builder: _Builder, target: HIRNode, value: Any) -> None:
         if target.kind == HIRKind.STORE:
-            builder.emit("store", target.name, value)
+            if target.name in builder.cell_params:
+                builder.emit("cell_store", target.name, value)
+            else:
+                builder.emit("store", target.name, value)
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
@@ -498,9 +544,12 @@ class MIRLowerer:
         if kind == HIRKind.LOAD:
             if node.name in builder.closures:
                 raise MIRLoweringError("native closure values are only supported in direct calls")
-            resolved = self.from_import_aliases.get(node.name, node.name)
+            if node.name in builder.cell_params:
+                result = builder.temp()
+                builder.emit("cell_load", node.name, result=result)
+                return result
             result = builder.temp()
-            builder.emit("load", resolved, result=result)
+            builder.emit("load", self.from_import_aliases.get(node.name, node.name), result=result)
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()

@@ -37,6 +37,7 @@ class Win64NasmEmitter:
         self.owned_slots: list[tuple[str, str]] = []
         self.bigint_slots: list[str] = []
         self.constants: dict[str, Any] = {}
+        self.cell_types: dict[str, str] = {}
 
     def emit(self, module: MIRModule) -> str:
         self.mir_module = module
@@ -210,7 +211,11 @@ class Win64NasmEmitter:
             name = args[0]
             self.aliases[result] = name
             self.types[result] = self.types.get(name, "int")
-            if name in self.function_names or name in _BUILTINS:
+            if name in self.function_names:
+                self.lines.append(f"    lea rax, [{name}]")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                return
+            if name in _BUILTINS:
                 return
             self.lines.append(f"    mov rax, {self._address(name)}")
             self.lines.append(f"    mov {self._address(result)}, rax")
@@ -505,6 +510,30 @@ class Win64NasmEmitter:
             self.lines.extend(["    sqrtsd xmm0, xmm0", "    movq rax, xmm0"])
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "float"
+        elif op == "cell_new":
+            value_arg = args[0]
+            self.lines.extend(["    mov rcx, 16", "    call malloc"])
+            if value_arg is None:
+                self.lines.extend(["    mov qword [rax], 0", "    mov qword [rax+8], 0"])
+            else:
+                self._load_operand(value_arg, "r10")
+                self.lines.extend([f"    mov [rax], r10", f"    mov qword [rax+8], 0"])
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "cell"
+            if value_arg is not None and isinstance(value_arg, str) and value_arg.startswith("%"):
+                self.cell_types[result] = self.types.get(value_arg, "int")
+        elif op == "cell_load":
+            cell_ptr_name = args[0]
+            self.lines.append(f"    mov rax, {self._address(cell_ptr_name)}")
+            self.lines.append("    mov rax, [rax]")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            cell_type = self.cell_types.get(cell_ptr_name, "int")
+            self.types[result] = cell_type
+        elif op == "cell_store":
+            cell_ptr_name, value_arg = args
+            self.lines.append(f"    mov r10, {self._address(cell_ptr_name)}")
+            self._load_operand(value_arg, "r11")
+            self.lines.extend(["    mov [r10], r11", "    mov qword [r10+8], 0"])
         elif op == "raise_typed":
             exception_type, payload, handler_label = args
             self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
@@ -677,7 +706,11 @@ class Win64NasmEmitter:
                     raise NativeBuildError("native calls with more than four arguments are not supported yet")
                 for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
                     self._load_operand(value, register)
-                self.lines.append(f"    call {function_name}")
+                if function_name in self.function_names:
+                    self.lines.append(f"    call {function_name}")
+                else:
+                    self._load_operand(function_operand, "rax")
+                    self.lines.append("    call rax")
             if result:
                 self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "return":

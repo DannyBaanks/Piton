@@ -115,9 +115,19 @@ afirmación y criterio (los agentes pueden expandirlos siguiendo el esquema de l
 ### 11. Runtime (M1, M5, M8)
 
 `FRAME_MODEL_V1` — Base de closures y generadores.
-- **CURRENT_STATUS**: PARTIAL (frames presentes en bootstrap `call_runtime`).
+- **CURRENT_STATUS**: **PASS** (166 tests total, Win+Linux, byte-idéntico vs CPython).
 - **PURPOSE**: frames con params, locals, cells y control no local.
-- **KNOWN_GAP**: células mutables; escape; recursion no probada nativamente.
+- **IMPLEMENTATION**: captures vía cells heap (16 bytes: valor + type tag) creados
+  por `cell_new` al entry de la función definidora (wrapping del valor de params,
+  cell vacía para locals) y accedidos por `cell_load`/`cell_store` en todos los
+  niveles; nested functions reciben cell pointers como params leading (lambda-
+  lifting); MIR `MIRFunction.cell_vars` + `_Builder.cell_params`; autocitación de
+  closures registrada (`builder.closures[node.name] = (lifted, cell_vars)`) para
+  recursión que repasa cells; free-loads transitivos con bubbling
+  (`_nested_free_loads`) para closures anidadas que capturan del abuelo; x86 win64
+  `malloc`-based, linux_x86 via `piton_alloc`.
+- **KNOWN_GAP**: closure escapada y células mutables (`nonlocal`/`global`)
+  rechazadas en MIR — `CLOSURES_COMPLETE_V1`.
 - **DEPENDENCIES**: ninguno.
 - **UNLOCKS**: `CLOSURES_COMPLETE_V1`, `GENERATOR_SUSPEND_FRAME_V1`,
   `COROUTINE_V1`.
@@ -342,7 +352,7 @@ reconstruyas el runtime para cerrar un test pequeño.
 
 ## 34. Conteo actual y veredictos (baseline)
 
-Ver `FEATURE_STATUS_MATRIX.md`. 117/117 tests; 15 gates PASS en el dashboard
+Ver `FEATURE_STATUS_MATRIX.md`. 166/166 tests; gates PASS en el dashboard
 (incl. `FULL_PARITY`, retirado como término en `PARITY_DEFINITION.md`).
-Features PARTIAL: functions, closures, generators, descriptors, dynamic_code,
+Features PARTIAL: functions, generators, descriptors, dynamic_code,
 introspection, ffi. NOT_DEMONSTRATED: metaclasses, multiprocessing.

@@ -269,6 +269,20 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_signature_markers_combined(self):
         self._assert_linux_equiv('funcion total(base, /, *extras, ajuste=3, **opciones):\n    devolver base + sum(extras) + ajuste + opciones["final"]\nimprimir(total(1, 2, 3, ajuste=4, final=5))\n')
 
+    # ── Linux recursion + closures (FRAME_MODEL_V1) ─────────────────────
+
+    def test_linux_native_recursion_factorial(self):
+        self._assert_linux_equiv('funcion factorial(n):\n    si n <= 1:\n        devolver 1\n    devolver n * factorial(n - 1)\nimprimir(factorial(10))\n')
+
+    def test_linux_recursive_closure_with_capture(self):
+        self._assert_linux_equiv('funcion crear():\n    m = 10\n    funcion filtrar(n):\n        si n <= 1:\n            devolver 1 + m - 10\n        devolver n * filtrar(n - 1)\n    devolver filtrar(6)\nimprimir(crear())\n')
+
+    def test_linux_nested_closure_transitive_capture(self):
+        self._assert_linux_equiv('funcion outer(a):\n    b = a + 1\n    funcion mid(c):\n        funcion inner(d):\n            devolver a + b + c + d\n        devolver inner(1)\n    devolver mid(2)\nimprimir(outer(10))\n')
+
+    def test_linux_immutable_scalar_closure(self):
+        self._assert_linux_equiv('funcion exterior(x):\n    factor = 3\n    funcion interior(valor):\n        devolver x + factor * valor\n    devolver interior(4)\nimprimir(exterior(2))\n')
+
 
 if __name__ == "__main__":
     unittest.main()

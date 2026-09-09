@@ -260,12 +260,12 @@ Gates activos:
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-09-08)
+### Estado nativo verificado (2026-09-09)
 
 ```text
-109/109 tests pass (test_phase5.py + test_phase14.py, Windows PE)
-49/49 Linux ELF tests pass (test_phase10_linux.py)
-158/158 total native tests pass
+113/113 tests pass (test_phase5.py + test_phase14.py, Windows PE)
+53/53 Linux ELF tests pass (test_phase10_linux.py)
+166/166 total native tests pass
 20/20 Windows x86-64 clean execution evidence (evidence_windows.py)
 9/9 Unicode byte-identical vs CPython 3.12.4
 14/14 BigInt Win64 differential tests

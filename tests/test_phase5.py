@@ -155,6 +155,56 @@ class Phase5Gates(unittest.TestCase):
                     Path(directory) / "program.exe",
                 )
 
+    def test_x86_native_recursion_factorial(self):
+        source = (
+            "funcion factorial(n):\n"
+            "    si n <= 1:\n"
+            "        devolver 1\n"
+            "    devolver n * factorial(n - 1)\n"
+            "imprimir(factorial(10))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_native_recursion_in_both_backends(self):
+        source = (
+            "funcion fibonacci(n):\n"
+            "    si n <= 1:\n"
+            "        devolver n\n"
+            "    devolver fibonacci(n - 1) + fibonacci(n - 2)\n"
+            "imprimir(fibonacci(20))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_recursive_closure_with_capture(self):
+        source = (
+            "funcion crear():\n"
+            "    m = 10\n"
+            "    funcion filtrar(n):\n"
+            "        si n <= 1:\n"
+            "            devolver 1 + m - 10\n"
+            "        devolver n * filtrar(n - 1)\n"
+            "    devolver filtrar(6)\n"
+            "imprimir(crear())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_nested_closure_transitive_capture(self):
+        source = (
+            "funcion outer(a):\n"
+            "    b = a + 1\n"
+            "    funcion mid(c):\n"
+            "        funcion inner(d):\n"
+            "            devolver a + b + c + d\n"
+            "        devolver inner(1)\n"
+            "    devolver mid(2)\n"
+            "imprimir(outer(10))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
     def test_x86_typed_raise_caught_by_except(self):
         source = (
             'intentar:\n'

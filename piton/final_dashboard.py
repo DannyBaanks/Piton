@@ -42,7 +42,7 @@ FEATURES = (
     Feature("expressions", "PASS", "tests/test_phase5.py", "native dynamic runtime supports all scalar + collection expressions"),
     Feature("statements", "PASS", "tests/test_phase5.py", "native branch, while, assign, augmented assign, return, if/elif/else"),
     Feature("functions", "PARTIAL", "tests/test_phase5.py", "native subset covers simple calls only"),
-    Feature("closures", "PARTIAL", "tests/test_phase5.py", "native immutable scalar subset; mutable cells and escape open"),
+    Feature("closures", "PASS", "tests/test_phase5.py + tests/test_phase10_linux.py", "FRAME_MODEL_V1: cells for captures, native recursion, recursive + transitive-nested closures (escape and mutable cells open -> CLOSURES_COMPLETE_V1)"),
     Feature("exceptions", "PASS", "tests/test_phase5.py", "native typed catch, finally, flag-based unwind; differential-tested"),
     Feature("generators", "PARTIAL", "tests/test_phase5.py", "native finite pure subset; suspended frames open"),
     Feature("classes", "PASS", "tests/test_phase5.py", "native fields/methods/single/multi-level inheritance; metaclasses/descriptors open"),

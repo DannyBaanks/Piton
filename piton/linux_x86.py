@@ -435,6 +435,25 @@ class LinuxCEmitter:
             parent_str = f'"{parent}"' if parent else "0"
             out.append(f'    {_name(result)}=(long)piton_object_new("{cls_name}",{parent_str});')
             types[result] = f"object:{cls_name}"
+        elif op == "cell_new":
+            value_arg = args[0]
+            out.append("    {")
+            out.append("        long*cell=(long*)piton_alloc(16);")
+            if value_arg is None:
+                out.append("        cell[0]=0;")
+            else:
+                out.append(f"        cell[0]={self._value(value_arg)};")
+            out.append("        cell[1]=0;")
+            out.append(f"        {_name(result)}=(long)cell;")
+            out.append("    }")
+            types[result] = "cell"
+        elif op == "cell_load":
+            cell_ptr_name = args[0]
+            out.append(f"    {_name(result)}=((long*){_name(cell_ptr_name)})[0];")
+            types[result] = "int"
+        elif op == "cell_store":
+            cell_ptr_name, value_arg = args
+            out.append(f"    ((long*){_name(cell_ptr_name)})[0]={self._value(value_arg)};")
         elif op == "set_attr":
             obj, attr, val = args
             out.append(f'    piton_object_set((PitonObject*){self._value(obj)},"{attr}",{self._slot(val, types)});')
