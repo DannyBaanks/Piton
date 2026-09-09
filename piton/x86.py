@@ -72,6 +72,7 @@ class Win64NasmEmitter:
             "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_set", "extern piton_object_get",
             "extern piton_object_free", "extern piton_object_live_count",
             "extern piton_print_float",
+            "extern piton_print_value",
             "extern piton_bigint_from_str", "extern piton_bigint_from_i64", "extern piton_bigint_free",
             "extern piton_bigint_add", "extern piton_bigint_sub", "extern piton_bigint_mul",
             "extern piton_bigint_neg", "extern piton_bigint_cmp",
@@ -428,14 +429,14 @@ class Win64NasmEmitter:
         elif op == "get_item":
             container, key = args
             container_type = self.types.get(container)
-            if container_type not in {"list", "tuple", "dict"}:
+            if container_type not in {"list", "tuple", "dict", "dict:module"}:
                 raise NativeBuildError(f"native subscription not supported for {container_type}")
-            if container_type == "dict":
+            if container_type in {"dict", "dict:module"}:
                 self._load_operand(container, "rcx")
                 self._load_operand(key, "rdx")
                 self.lines.append("    call piton_dict_get")
                 self.lines.append(f"    mov {self._address(result)}, rax")
-                self.types[result] = "int"
+                self.types[result] = "object:module" if container_type == "dict:module" else "int"
             else:
                 self._load_operand(container, "rcx")
                 self._load_operand(key, "rdx")
@@ -486,7 +487,12 @@ class Win64NasmEmitter:
             self.lines.append(f"    lea rdx, [{self._string(name)}]")
             self.lines.append("    call piton_object_get")
             self.lines.append(f"    mov {self._address(result)}, rax")
-            self.types[result] = "int"
+            owner_type = self.types.get(owner, "")
+            module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
+            if owner_type == "object:module":
+                self.types[result] = module_attr_types.get(name, "int")
+            else:
+                self.types[result] = "int"
         elif op == "method_call":
             explicit_class, method_name, owner, raw_values = args
             owner_type = self.types.get(owner, "")
@@ -685,6 +691,12 @@ class Win64NasmEmitter:
                     elif value_type == "float":
                         self._load_float_operand(value, "xmm0")
                         self.lines.append("    call piton_print_float")
+                        if result:
+                            self.lines.append(f"    mov qword {self._address(result)}, 0")
+                        return
+                    elif value_type == "module-pkg":
+                        self._load_operand(value, "rcx")
+                        self.lines.append("    call piton_print_value")
                         if result:
                             self.lines.append(f"    mov qword {self._address(result)}, 0")
                         return
@@ -1006,10 +1018,10 @@ def compile_native(source: str, output: str | Path) -> Path:
     for statement in hir.body:
         if getattr(statement, "kind", None) == HIRKind.IMPORT_FROM:
             mod_name = getattr(statement, "module", None)
-            if mod_name and mod_name not in {"asyncio", "math"}:
+            if mod_name and mod_name not in {"asyncio", "math", "sys"}:
                 raise NativeBuildError(f"native from-import requires multi-file compilation: {mod_name}")
             for alias in getattr(statement, "names", []):
-                if mod_name in {"asyncio", "math"}:
+                if mod_name in {"asyncio", "math", "sys"}:
                     from_imports[(mod_name, alias.asname or alias.name)] = True
     try:
         mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
@@ -1048,16 +1060,22 @@ def resolve_native_module(root: Path, dotted: str) -> Path:
     return candidate
 
 
-def _scan_native_modules(entry: Path) -> tuple[dict[str, Any], dict[tuple[str, str], bool]]:
-    """Cargan los módulos nativos (hermano o paquete) referenciados por el entry."""
+def _scan_native_modules(
+    entry: Path,
+) -> tuple[dict[str, Any], dict[tuple[str, str], bool], dict[str, tuple[str, bool]]]:
+    """Cargan los módulos nativos (hermano o paquete) referenciados por el entry.
+
+    Returns ``(modules, from_imports, module_meta)`` where ``module_meta`` maps each
+    dotted module name to ``(resolved file path, is_package)`` for MODULE_METADATA_V1."""
     root = entry.parent
     hir = lower_cst_to_hir(parse(entry.read_text(encoding="utf-8-sig")))
     modules: dict[str, Any] = {}
     from_imports: dict[tuple[str, str], bool] = {}
+    module_meta: dict[str, tuple[str, bool]] = {}
     for statement in hir.body:
         if statement.kind.name == "IMPORT":
             for alias in statement.names:
-                if alias.name in {"asyncio", "math"}:
+                if alias.name in {"asyncio", "math", "sys"}:
                     continue
                 if "." in alias.name:
                     raise NativeBuildError(
@@ -1065,24 +1083,29 @@ def _scan_native_modules(entry: Path) -> tuple[dict[str, Any], dict[tuple[str, s
                         "use 'desde pkg.sub importar fn'"
                     )
                 module_path = resolve_native_module(root, alias.name)
+                module_meta[alias.name] = (str(module_path.resolve()), module_path.name == "__init__.piton")
                 modules[alias.name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
         elif statement.kind.name == "IMPORT_FROM":
             mod_name = getattr(statement, "module", None)
-            if not mod_name or mod_name in {"asyncio", "math"}:
+            if not mod_name or mod_name in {"asyncio", "math", "sys"}:
                 continue
             module_path = resolve_native_module(root, mod_name)
+            module_meta[mod_name] = (str(module_path.resolve()), module_path.name == "__init__.piton")
             modules[mod_name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
             for alias in statement.names:
                 from_imports[(mod_name, alias.asname or alias.name)] = True
-    return modules, from_imports
+    return modules, from_imports, module_meta
 
 
 def compile_native_files(entry: str | Path, output: str | Path) -> Path:
     entry_path = Path(entry).resolve()
     hir = lower_cst_to_hir(parse(entry_path.read_text(encoding="utf-8-sig")))
-    modules, from_imports = _scan_native_modules(entry_path)
+    modules, from_imports, module_meta = _scan_native_modules(entry_path)
     try:
-        mir = lower_hir_to_mir(hir, modules, from_imports=from_imports)
+        mir = lower_hir_to_mir(
+            hir, modules, from_imports=from_imports,
+            entry_file=str(entry_path), module_meta=module_meta,
+        )
     except MIRLoweringError as error:
         raise NativeBuildError(str(error)) from error
     return _compile_native_mir(mir, output)

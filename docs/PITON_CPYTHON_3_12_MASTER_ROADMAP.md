@@ -308,12 +308,54 @@ Backends: Windows (`native_runtime.c`: `piton_raise_unhandled`,
   - Suite en el cierre: 175/175 total (118 Win: 110 phase5 + 3 phase14 + 5
     package · 57 Linux: 53 + 4 package). El total actual de la suite (215) creció
     con CLOSURES_COMPLETE_V1 y las excepciones custom/re-raise.
+- **MODULE_METADATA_V1** — `__name__`/`__package__`/`__file__`/`sys.modules`.
+- **CURRENT_STATUS**: **PASS** (2026-09-09).
+- **DEPENDENCIES**: `IMPORT_CORE` + `IMPORT_PACKAGE_V1`.
+- **COMPLEXITY**: MEDIUM → resuelto.
+- **IMPLEMENTATION**:
+  - Globals `__name__`/`__package__`/`__file__` seedeados por
+    `_lower_module_metadata` en el MIR. Source-mode siempre (`__name__="__main__"`,
+    `__package__=None`, sin `__file__`, espejo exacto de `python -c`); files-mode
+    añade `__file__` con la ruta absoluta del entry (`main.piton`).
+  - Módulo bootstrap `sys` (objeto `module` con `__name__="sys"` y
+    `__package__=""`, que es el valor real del oráculo CPython para built-ins) y
+    su catálogo `modules` (dict nombre → objeto módulo) con `sys`, `__main__` y
+    cada módulo nativo importado por `_scan_native_modules`.
+  - Los módulos importados se seedean en el entry: top-level → `__package__=""`;
+    paquetes → su propio nombre; submódulos → el nombre del paquete padre
+    (`_pkg_.numeros.__package__ == "_pkg_"`).
+  - El compilador conoce `sys` como pseudo-módulo (igual que `asyncio`/`math`):
+    skip en IMPORT/IMPORT_FROM, y `sys.modules["x"]` resuelve por attr-chain
+    tipado: get_attr `modules` → tipo compuesto `dict:module`; get_item sobre
+    `dict:module` → `piton_dict_get` con resultado tipado `object:module`;
+    get_attr sobre `object:module` usa un mapa estático
+    (`__name__`→`str`, `__package__`→`module-pkg`). Así
+    `sys.modules["_pkg_"].__name__` conserva identidad y `__package__`
+    (None o texto) imprime dinámicamente.
+  - `__package__` es polimórfico (None o string) → tipo estático `module-pkg`
+    con impresión en runtime: Win `piton_print_value` (helper en
+    `native_runtime.c`), Linux `piton_print_dynamic`. `value==0 → "None"`,
+    si no, se imprime como string crudo.
+  - Fix estructural Win: las ramas `bool`/`none` del `imprimir` no hacían
+    `return` y el `else` final las pisaba con `fmt_int` → `imprimir(Verdadero)`
+    imprimía `0`. Se reestructuró el dispatch (`bool/None` caen al `lea rcx,
+    [fmt]` compartido; `float`/`module-pkg` retornan antes).
+  - Fix estructural Linux: las claves de dicts literales con strings crudos se
+    emitían con kind `PK_INT` (el default de `_slot` para un string no-temp)
+    mientras la búsqueda usa `PK_STR` → `sys.modules["sys"]` fallaba `KeyError`.
+    Ahora el key se tipa `PK_STR` si es string crudo (`piton_slot((long)"sys",
+    PK_STR)`), alineado con la búsqueda.
+  - Tests: Win 3 (source-mode, files-mode, `entry_file` set en files-mode) +
+    Linux 3 espejos, todos diferenciales vs CPython. Source-mode usa
+    `compare_native_to_cpython(..., sys=True)` (CPython `-c` no pre-bindea `sys`,
+    hay que `importar sys` explícito en ambos lados). Files-mode compara
+    `main.piton` vs `main.py` con el mismo `sys.executable`; `__file__` se
+    verifica no-diferencial (`endswith("main.piton")`) porque la ruta física
+    difiere entre ambos.
 - **KNOWN_GAP**: `importar pkg.sub` (dotted IMPORT) rechazado fail-closed —
-  requiere attr-chain `pkg.sub.fn` en MIR; toca `MODULE_METADATA_V1`. Los
-  módulos importados todavía no pueden importar a su vez (scan del entry
-  solamente, no transitivo).
-`IMPORT_RELATIVE_V1`, `IMPORT_STAR_V1`, `IMPORT_CYCLIC_V1`,
-`MODULE_METADATA_V1` (`__name__`/`__file__`/`__package__`/`sys.modules`).
+  requiere attr-chain `pkg.sub.fn` en MIR. Los módulos importados todavía no
+  pueden importar a su vez (scan del entry solamente, no transitivo).
+`IMPORT_RELATIVE_V1`, `IMPORT_STAR_V1`, `IMPORT_CYCLIC_V1`.
 
 ### 17. Async (M8)
 
@@ -407,13 +449,15 @@ con sus tests de integración. Nunca por suma automática de partes.
 (`*args`/`**kwargs`/keyword-only/positional-only),
 `IMPORT_PACKAGE_V1` (paquetes `__init__`/`__path__` + submódulos
 `desde pkg.sub importar`), `CLOSURES_COMPLETE_V1`, `EXCEPTION_CUSTOM_V1`
-(excepciones de usuario con matching por jerarquía) y `EXCEPTION_RERAISE_V1`
-(`lanzar` bare en handlers exactos), todos Win+Linux PASS.
+(excepciones de usuario con matching por jerarquía), `EXCEPTION_RERAISE_V1`
+(`lanzar` bare en handlers exactos) y `MODULE_METADATA_V1`
+(`__name__`/`__package__`/`__file__`/`sys.modules`), todos Win+Linux PASS.
 
 1. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
 2. `IMPORT_PACKAGE_V1` (MEDIUM) — paquetes + `__init__`. **PASS**. Sigue
-   `MODULE_METADATA_V1` (objetos módulo/runtime) o `IMPORT_RELATIVE_V1`.
+   `IMPORT_RELATIVE_V1`.
 3. `MODULE_METADATA_V1` (MEDIUM) — `__name__`/`__file__`/`sys.modules`.
+   **PASS.**
 4. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario. **PASS.**
 5. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare. **PASS.**
 6. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.

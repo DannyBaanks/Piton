@@ -119,7 +119,12 @@ class MIRLowerer:
         self.async_functions: set[str] = set()
         self.module_aliases: dict[str, str] = {}
 
-    def lower(self, hir: HIRNode, modules: dict[str, HIRNode] | None = None, from_imports: dict | None = None) -> MIRModule:
+    def lower(
+        self, hir: HIRNode, modules: dict[str, HIRNode] | None = None,
+        from_imports: dict | None = None,
+        entry_file: str | None = None,
+        module_meta: dict[str, tuple[str, bool]] | None = None,
+    ) -> MIRModule:
         self.functions = []
         self.generators = {}
         self.classes = {}
@@ -143,13 +148,13 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind == HIRKind.IMPORT:
                     for alias in node.names:
-                        if alias.name not in imported_modules and alias.name not in {"asyncio", "math"}:
+                        if alias.name not in imported_modules and alias.name not in {"asyncio", "math", "sys"}:
                             raise MIRLoweringError(f"native module not supplied: {alias.name}")
                         self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
                     if mod_name:
-                        if mod_name not in imported_modules and mod_name not in {"asyncio", "math"}:
+                        if mod_name not in imported_modules and mod_name not in {"asyncio", "math", "sys"}:
                             raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                         for alias in node.names:
                             local = alias.asname or alias.name
@@ -188,6 +193,7 @@ class MIRLowerer:
                     self._lower_function(node)
             module = _Builder("<module>")
             module.module_aliases = dict(self.module_aliases)
+            self._lower_module_metadata(module, entry_file, module_meta)
             self._lower_statements(module, [node for node in module_body if node.kind != HIRKind.FUNC_DEF])
             self.functions.insert(0, module.function)
         else:
@@ -198,6 +204,52 @@ class MIRLowerer:
         module.classes = dict(self.classes)
         module.class_parents = dict(self.class_parents)
         return module
+
+    def _lower_module_metadata(
+        self, builder: "_Builder", entry_file: str | None, module_meta: dict[str, tuple[str, bool]] | None
+    ) -> None:
+        """MODULE_METADATA_V1: seeds the entry module's metadata globals and the
+        ``sys`` module with its ``modules`` catalog of module objects.
+
+        ``sys`` and ``__main__`` are always present; every imported native module
+        (``module_meta``: dotted name -> (file path, is_package)) is added to the
+        catalog. The entry ``__main__`` object mirrors CPython ``-c`` semantics:
+        ``__name__ = "__main__"``, ``__package__ = None``; ``__file__`` exists only
+        in files-mode (when ``entry_file`` is provided) exactly like a script."""
+        def emit_const(value: Any) -> str:
+            result = builder.temp()
+            builder.emit("const", value, result=result)
+            return result
+
+        def emit_store(name: str, value: str) -> None:
+            builder.emit("store", name, value)
+
+        def module_object(name: str, file: str | None, package: Any) -> str:
+            obj = builder.temp()
+            builder.emit("object_new", "module", None, result=obj)
+            builder.emit("set_attr", obj, "__name__", emit_const(name))
+            builder.emit("set_attr", obj, "__package__", emit_const(package))
+            if file is not None:
+                builder.emit("set_attr", obj, "__file__", emit_const(file))
+            return obj
+
+        emit_store("__name__", emit_const("__main__"))
+        emit_store("__package__", emit_const(None))
+        if entry_file:
+            emit_store("__file__", emit_const(entry_file))
+        sys_obj = module_object("sys", None, "")
+        entries: list[tuple[str, str]] = [
+            ("sys", sys_obj),
+            ("__main__", module_object("__main__", entry_file, None)),
+        ]
+        for name in sorted(module_meta or {}):
+            file_path, is_package = module_meta[name]
+            package = name.rsplit(".", 1)[0] if "." in name else (name if is_package else "")
+            entries.append((name, module_object(name, file_path, package)))
+        modules_dict = builder.temp()
+        builder.emit("build_collection", "dict", tuple(entries), result=modules_dict)
+        builder.emit("set_attr", sys_obj, "modules", modules_dict)
+        builder.emit("store", "sys", sys_obj)
 
     def _lower_function(
         self, node: HIRNode, qualified_name: str | None = None,
@@ -914,8 +966,11 @@ class MIRLowerer:
         return tuple(v for v in values[:max_filled + 1] if v is not None)
 
 
-def lower_hir_to_mir(hir: HIRNode, modules: dict[str, HIRNode] | None = None, from_imports: dict | None = None) -> MIRModule:
-    return MIRLowerer().lower(hir, modules, from_imports=from_imports)
+def lower_hir_to_mir(
+    hir: HIRNode, modules: dict[str, HIRNode] | None = None, from_imports: dict | None = None,
+    entry_file: str | None = None, module_meta: dict[str, tuple[str, bool]] | None = None,
+) -> MIRModule:
+    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)
 
 
 class MIREvaluator:

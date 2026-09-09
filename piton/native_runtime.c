@@ -1050,6 +1050,16 @@ void piton_print_float(double value) {
         printf("%.15g\n", value);
 }
 
+/* MODULE_METADATA_V1: dynamic print for module __package__ (None or text).
+   Native object attributes carry plain string pointers (NOT the tagged
+   encoding), so a zero payload means None and anything else is a C string. */
+void piton_print_value(int64_t value) {
+    if (value == 0)
+        printf("None\n");
+    else
+        printf("%s\n", (const char *)value);
+}
+
 /* ── Stdlib: abs, min, max, sum, type ────────────────────────────────── */
 
 int64_t piton_abs_int(int64_t x) {

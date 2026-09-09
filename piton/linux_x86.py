@@ -132,6 +132,7 @@ class LinuxCEmitter:
             "static usize piton_strlen(const char*s){usize n=0;while(s[n])++n;return n;}",
             "static int piton_strcmp(const char*a,const char*b){while(*a&&*a==*b){++a;++b;}return (unsigned char)*a-(unsigned char)*b;}",
             "static void piton_print_str(const char*s){piton_write(1,s,piton_strlen(s));piton_write(1,\"\\n\",1);}",
+            "static void piton_print_dynamic(long bits){if(!bits){piton_write(1,\"None\",4);}else{piton_write(1,(const char*)bits,piton_strlen((const char*)bits));}}",
             "static void piton_write_int(i64 number){char b[32];usize i=sizeof(b);unsigned long value;if(number<0){piton_write(1,\"-\",1);value=0-(unsigned long)number;}else value=(unsigned long)number;do{b[--i]=(char)(\'0\'+value%10);value/=10;}while(value);piton_write(1,b+i,sizeof(b)-i);}",
             "static void piton_print_int(i64 number){piton_write_int(number);piton_write(1,\"\\n\",1);}",
             "static i64 piton_floor_div(i64 a,i64 b){i64 q=a/b,r=a%b;if(r&&((r<0)!=(b<0)))--q;return q;}",
@@ -380,6 +381,9 @@ class LinuxCEmitter:
                     out.append(f'    piton_bigint_print((void*){_name(values[0])});')
                 elif types.get(values[0]) == "float":
                     out.append(f'    piton_print_float_bits({self._value(values[0])});')
+                elif types.get(values[0]) == "module-pkg":
+                    out.append(f'    piton_print_dynamic({self._value(values[0])});')
+                    out.append('    piton_write(1,"\\n",1);')
                 elif types.get(values[0]) in {"list", "tuple", "dict", "set"}:
                     out.append(f'    piton_print_slot({self._slot(values[0], types)});')
                     out.append('    piton_write(1,"\\n",1);')
@@ -502,7 +506,12 @@ class LinuxCEmitter:
         elif op == "get_attr":
             obj, attr = args
             out.append(f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},"{attr}").bits;')
-            types[result] = "int"
+            owner_type = types.get(obj, "")
+            module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
+            if owner_type == "object:module":
+                types[result] = module_attr_types.get(attr, "int")
+            else:
+                types[result] = "int"
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
             call_args = args[3] if len(args) > 3 else ()
@@ -556,7 +565,9 @@ class LinuxCEmitter:
             elif kind == "dict":
                 out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
                 for index, (key, value) in enumerate(items):
-                    out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},{self._slot(key, types)},{self._slot(value, types)});')
+                    key_is_str = isinstance(key, str) and not key.startswith("%")
+                    key_kind = "PK_STR" if key_is_str else self._kind(types.get(key, "int"))
+                    out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},piton_slot({self._value(key)},{key_kind}),{self._slot(value, types)});')
             elif kind == "set":
                 out.append(f'    {_name(result)}=(long)piton_set_new({len(items)});')
                 for value in items:
@@ -569,11 +580,11 @@ class LinuxCEmitter:
             collection_type = types.get(coll)
             if collection_type in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=piton_seq_get((PitonSeq*){self._value(coll)},{self._value(idx)}).bits;')
-            elif collection_type == "dict":
+            elif collection_type in {"dict", "dict:module"}:
                 out.append(f'    {_name(result)}=piton_dict_get((PitonDict*){self._value(coll)},{self._slot(idx, types)}).bits;')
             else:
                 raise NativeBuildError(f"Linux subscription not supported for {collection_type}")
-            types[result] = "int"
+            types[result] = "object:module" if collection_type == "dict:module" else "int"
         elif op == "collection_len":
             coll = args[0]
             collection_type = types.get(coll)
@@ -626,9 +637,12 @@ def compile_native_linux_files(entry: str | Path, output: str | Path) -> Path:
     submódulos ``desde pkg.sub importar fn``) a ELF con el backend Linux."""
     entry_path = Path(entry).resolve()
     hir = lower_cst_to_hir(parse(entry_path.read_text(encoding="utf-8-sig")))
-    modules, from_imports = _scan_native_modules(entry_path)
+    modules, from_imports, module_meta = _scan_native_modules(entry_path)
     try:
-        mir = lower_hir_to_mir(hir, modules, from_imports=from_imports)
+        mir = lower_hir_to_mir(
+            hir, modules, from_imports=from_imports,
+            entry_file=str(entry_path), module_meta=module_meta,
+        )
     except MIRLoweringError as error:
         raise NativeBuildError(str(error)) from error
     output_path = Path(output).resolve()

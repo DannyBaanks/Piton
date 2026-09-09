@@ -434,6 +434,86 @@ class Phase10LinuxGates(unittest.TestCase):
         main = "desde pkg importar triple\nimprimir(triple(8))\n"
         self._assert_package_equiv(init, None, main)
 
+    # ── MODULE_METADATA_V1 (Linux mirror) ───────────────────────────────
+
+    def test_linux_module_metadata_source_mode_cpython_equiv(self):
+        source = (
+            "importar sys\n"
+            "imprimir(__name__)\n"
+            "imprimir(__package__)\n"
+            'imprimir(sys.modules["__main__"].__name__)\n'
+            'imprimir(sys.modules["__main__"].__package__)\n'
+            'imprimir(sys.modules["sys"].__name__)\n'
+            'imprimir(sys.modules["sys"].__package__)\n'
+        )
+        self._assert_linux_equiv(source)
+
+    def test_linux_module_metadata_files_mode_cpython_equiv(self):
+        main = (
+            "importar sys\nimportar util\nimportar pkg\n"
+            "desde pkg.numeros importar suma\n"
+            "imprimir(util.doble(21))\n"
+            "imprimir(suma(40, 2))\n"
+            'imprimir(sys.modules["util"].__name__)\n'
+            'imprimir(sys.modules["util"].__package__)\n'
+            'imprimir(sys.modules["pkg"].__name__)\n'
+            'imprimir(sys.modules["pkg"].__package__)\n'
+            'imprimir(sys.modules["pkg.numeros"].__name__)\n'
+            'imprimir(sys.modules["pkg.numeros"].__package__)\n'
+            'imprimir(sys.modules["__main__"].__name__)\n'
+            'imprimir(sys.modules["__main__"].__package__)\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-meta-") as directory:
+            root = Path(directory)
+            util_src = "funcion doble(x):\n    devolver x * 2\n"
+            (root / "util.piton").write_text(util_src, encoding="utf-8")
+            (root / "util.py").write_text(traducir_fuente(util_src, "<util>"), encoding="utf-8")
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            init_src = "funcion triple(n):\n    devolver n * 3\n"
+            (pkg_dir / "__init__.piton").write_text(init_src, encoding="utf-8")
+            (pkg_dir / "__init__.py").write_text(traducir_fuente(init_src, "<pkg-init>"), encoding="utf-8")
+            numeros_src = "funcion suma(a, b):\n    devolver a + b\n"
+            (pkg_dir / "numeros.piton").write_text(numeros_src, encoding="utf-8")
+            (pkg_dir / "numeros.py").write_text(traducir_fuente(numeros_src, "<pkg-numeros>"), encoding="utf-8")
+            entry = root / "main.piton"
+            entry.write_text(main, encoding="utf-8")
+            main_py = root / "main.py"
+            main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
+            executable = compile_native_linux_files(entry, root / "program")
+            linux_path = windows_to_wsl_path(executable)
+            native_run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                capture_output=True, check=False, timeout=10,
+            )
+            oracle_run = subprocess.run(
+                [sys.executable, str(main_py)], capture_output=True, check=False, timeout=10,
+            )
+            native_stdout = native_run.stdout.replace(b"\r\n", b"\n")
+            oracle_stdout = oracle_run.stdout.replace(b"\r\n", b"\n")
+            self.assertEqual(
+                (native_run.returncode, native_stdout),
+                (oracle_run.returncode, oracle_stdout),
+                native_run.stderr,
+            )
+
+    def test_linux_module_metadata_entry_file_set_in_files_mode(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-meta-file-") as directory:
+            root = Path(directory)
+            entry = root / "main.piton"
+            entry.write_text("importar sys\nimprimir(__file__)\n", encoding="utf-8")
+            executable = compile_native_linux_files(entry, root / "program")
+            linux_path = windows_to_wsl_path(executable)
+            completed = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                capture_output=True, check=False, timeout=10,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
+            self.assertTrue(
+                completed.stdout.decode(errors="replace").replace("\r", "").strip().endswith("main.piton"),
+                completed.stdout,
+            )
+
     def test_linux_package_missing_init_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-linux-package-fail-") as directory:
             root = Path(directory)
