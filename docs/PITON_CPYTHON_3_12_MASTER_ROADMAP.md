@@ -14,18 +14,20 @@ Modelo: `ROADMAP = AUTORIDAD · TESTS = JUEZ · ARTEFACTOS = EVIDENCIA`.
 
 PITÓN traduce español de México → semántica CPython 3.12 → x86-64 nativo
 (Windows PE y Linux ELF) que corre sin CPython. Hoy, el **subset nativo
-declarado** tiene paridad en ambos backends (117/117 tests, 15 gates PASS).
+declarado** tiene paridad en ambos backends (215/215 tests, 17 gates PASS).
 Este roadmap descompone el camino hacia **CPython 3.12 language parity** en
 gates pequeños, un gate = una afirmación acotada = un corpus = un veredicto.
-Estado actual: **193/193 tests, 15+ gates PASS** (2026-09-09).
+Estado actual: **215/215 tests, 17 gates PASS** (2026-09-09).
 `FULL_PARITY` está retirado como término; ver `PARITY_DEFINITION.md`.
 
 ## 2. Estado verificado actual (baseline)
 
-- Commit `fa071bf`; **117/117 tests** (85 Windows + 32 Linux).
+- Commit `65f825d` (closures) + excepciones custom/re-raise en curso; **215/215
+  tests** (138 Windows + 77 Linux).
 - Backends Windows y Linux ejecutan el subset rico byte-idéntico vs CPython
   3.12.4: floats, list/tuple/dict/set, objetos, herencia (simple y multinivel),
-  excepciones (raise/catch/finally), stdlib (abs/min/max/sum/type/len),
+  closures con escape y cells mutables, excepciones (raise/catch/finally,
+  custom por jerarquía, re-raise bare), stdlib (abs/min/max/sum/type/len),
   `math.sqrt`, augmented assign, while anidado, ternario, multifunción.
 - Ejecutables PE/ELF sin CPython ni libc (Linux freestanding).
 - Linux: ejecución en entorno vacío, chroot vacío y QEMU como único `/init`.
@@ -116,7 +118,7 @@ afirmación y criterio (los agentes pueden expandirlos siguiendo el esquema de l
 ### 11. Runtime (M1, M5, M8)
 
 `FRAME_MODEL_V1` — Base de closures y generadores.
-- **CURRENT_STATUS**: **PASS** (193 tests total, Win+Linux, byte-idéntico vs CPython).
+- **CURRENT_STATUS**: **PASS** (215 tests total, Win+Linux, byte-idéntico vs CPython).
 - **PURPOSE**: frames con params, locals, cells y control no local.
 - **IMPLEMENTATION**: captures vía cells heap (16 bytes: valor + type tag) creados
   por `cell_new` al entry de la función definidora (wrapping del valor de params,
@@ -234,10 +236,55 @@ dependen de `GENERATOR_SUSPEND_FRAME_V1`. COMPLEXITY: HIGH cada uno.
 
 `EXCEPTIONS_ADVANCED_V1` — re-raise, `from`/`__cause__`, custom exceptions,
 BaseException, context, chaining.
-- **CURRENT_STATUS**: PARTIAL (raise/catch/finally tipados demostrados).
+- **CURRENT_STATUS**: **PASS** para custom + re-raise (2026-09-09); siguen
+  `from`/cadenas, BaseException, binding `excepto E as x`, `excepto*`.
 - **COMPLEXITY**: MEDIUM.
-Gates de detalle: `EXCEPTION_RERAISE_V1`, `EXCEPTION_FROM_V1`,
-`EXCEPTION_CUSTOM_V1`, `BASE_EXCEPTION_V1`, `EXCEPTION_CHAIN_V1`.
+Gates de detalle: `EXCEPTION_CUSTOM_V1` (**PASS**), `EXCEPTION_RERAISE_V1`
+(**PASS**), `EXCEPTION_FROM_V1`, `BASE_EXCEPTION_V1`, `EXCEPTION_CHAIN_V1`.
+
+Detalle de los dos gates cerrados (2026-09-09):
+
+- **EXCEPTION_CUSTOM_V1** — excepciones definidas por usuario. `clase E(Exception):`
+  (o subclases de `ValueError`/`TypeError`/`RuntimeError`, o de otra clase custom
+  que cuelgue de `Exception`) se acepta como base de clase en MIR (las bases
+  builtin de excepción quedan exentas del requisito "definir antes"). `lanzar
+  ErrorApp("msg")` acepta como constructor cualquier clase cuya cadena de
+  herencia incluya `Exception`; una clase sin parent custom se rechaza en build
+  ("must subclass Exception"). El matching `excepto` usa la cadena
+  (`_exception_chain`: caminata por `class_parents` + mapa builtin
+  {ValueError, TypeError, RuntimeError}→Exception): un hijo se atrapa por su
+  propia clase, por un ancestro custom, por un builtin ancestro y por
+  `Exception`; un handler no coincidente deja la excepción no-atrapada.
+- **EXCEPTION_RERAISE_V1** — `lanzar` bare en el body de un handler. El
+  entry del handler emite `reraise_save` (snapshot de tipo/mensaje del
+  exception activo) ANTES de `catch_clear`; `lanzar` bare emite `raise_active`
+  que relanza con el tipo guardado y despacha al handler envolvente por los
+  labels estáticos (anidamiento de tries funciona). Fail-closed en MIR: bare
+  `lanzar` fuera de handler ("requires an enclosing except handler") o desde un
+  handler catch-all `excepto Exception:` ("catch-all ... not supported yet").
+  Sin handler envolvente → stderr `tipo: msg` + exit(1) (Win vía
+  `piton_reraise_unhandled` sin búsqueda de stack; la pila runtime sigue
+  teniendo frames spurios accepted-NULL).
+
+Bugs estructurales encontrados y corregidos durante el cierre:
+
+1. **Win tragaba excepciones no-atrapadas dentro de un try con handler que no
+   matcheaba**: `raise_typed` con `handler_label=None` emitía `call piton_raise`,
+   cuya búsqueda de stack casa con CUALQUIER frame pusheado (accepted=NULL en
+   todos — `piton_try_set_accepted` nunca se emite) → flag activado, ignorado,
+   ejecución silenciosa. Fix: con label None se emite `piton_raise_unhandled`
+   (print+exit, sin búsqueda). El caso previo `lanzar ValueError(...)` sin try
+   funcionaba porque la pila estaba vacía.
+2. **Re-raise unhandled en Win también se tragaba**: en el momento del re-raise
+   el frame del try actual sigue pusheado (el `jne` al handler ocurre antes del
+   `try_pop`), así que `piton_reraise` matcheaba y volvía. Fix: `raise_active`
+   con label None emite `piton_reraise_unhandled` directamente.
+
+Backends: Windows (`native_runtime.c`: `piton_raise_unhandled`,
+`piton_reraise_save/reraise/reraise_unhandled`; ops en `x86.py`) y Linux
+(`linux_x86.py`: helpers C `piton_reraise_save/set`, ops `reraise_save` +
+`raise_active` con `goto`/`report_unhandled`+exit). Evidencia: 11 tests Win +
+11 tests Linux nuevos (diferenciales byte-idénticos y negativos fail-closed).
 
 ### 16. Imports (M7)
 
@@ -258,8 +305,9 @@ Gates de detalle: `EXCEPTION_RERAISE_V1`, `EXCEPTION_FROM_V1`,
   - Símbolos nativos dot-normalizados en MIR: `pkg.sub.fn` → `pkg__sub__fn`
     (from-import, lifting de funciones y module-attr call).
   - Nuevo `compile_native_linux_files` en el backend ELF (espejo del Win).
-  - Suite: 175/175 total (118 Win: 110 phase5 + 3 phase14 + 5 package ·
-    57 Linux: 53 + 4 package). Win y Linux byte-idénticos vs CPython.
+  - Suite en el cierre: 175/175 total (118 Win: 110 phase5 + 3 phase14 + 5
+    package · 57 Linux: 53 + 4 package). El total actual de la suite (215) creció
+    con CLOSURES_COMPLETE_V1 y las excepciones custom/re-raise.
 - **KNOWN_GAP**: `importar pkg.sub` (dotted IMPORT) rechazado fail-closed —
   requiere attr-chain `pkg.sub.fn` en MIR; toca `MODULE_METADATA_V1`. Los
   módulos importados todavía no pueden importar a su vez (scan del entry
@@ -356,16 +404,18 @@ con sus tests de integración. Nunca por suma automática de partes.
 
 **Completado:** `FUNCTION_DEFAULTS_V1` (defaults constantes),
 `FUNCTION_KEYWORD_ARGS_V1` (kwargs por nombre), `FUNCTION_ARGS_V1`
-(`*args`/`**kwargs`/keyword-only/positional-only) y `IMPORT_PACKAGE_V1`
-(paquetes `__init__`/`__path__` + submódulos `desde pkg.sub importar`),
-todos Win+Linux PASS.
+(`*args`/`**kwargs`/keyword-only/positional-only),
+`IMPORT_PACKAGE_V1` (paquetes `__init__`/`__path__` + submódulos
+`desde pkg.sub importar`), `CLOSURES_COMPLETE_V1`, `EXCEPTION_CUSTOM_V1`
+(excepciones de usuario con matching por jerarquía) y `EXCEPTION_RERAISE_V1`
+(`lanzar` bare en handlers exactos), todos Win+Linux PASS.
 
 1. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
 2. `IMPORT_PACKAGE_V1` (MEDIUM) — paquetes + `__init__`. **PASS**. Sigue
    `MODULE_METADATA_V1` (objetos módulo/runtime) o `IMPORT_RELATIVE_V1`.
 3. `MODULE_METADATA_V1` (MEDIUM) — `__name__`/`__file__`/`sys.modules`.
-4. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario.
-5. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare.
+4. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario. **PASS.**
+5. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare. **PASS.**
 6. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
 7. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
 8. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
@@ -397,7 +447,9 @@ ABI/calling-convention/GC.
 Nota 2026-09-09: `CLOSURES_COMPLETE_V1` cerró sin reconstruir el modelo de
 frames ni el layout — añadió un objeto closure al arena existente y un helper
 de dispatch (`piton_closure_call6`) sin tocar GC/ABI de llamada, así que no
-exigió esta revisión.
+exigió esta revisión. Lo mismo aplica a `EXCEPTION_CUSTOM_V1` +
+`EXCEPTION_RERAISE_V1`: helpers estáticos de runtime (save/set/unhandled)
+sobre el flag existente, sin cambiar el modelo de frames ni el ABI.
 
 ## 33. Stop conditions
 
@@ -407,7 +459,7 @@ reconstruyas el runtime para cerrar un test pequeño.
 
 ## 34. Conteo actual y veredictos (baseline)
 
-Ver `FEATURE_STATUS_MATRIX.md`. 193/193 tests; gates PASS en el dashboard
+Ver `FEATURE_STATUS_MATRIX.md`. 215/215 tests; gates PASS en el dashboard
 (incl. `FULL_PARITY`, retirado como término en `PARITY_DEFINITION.md`).
 Features PARTIAL: functions, generators, descriptors, dynamic_code,
 introspection, ffi. NOT_DEMONSTRATED: metaclasses, multiprocessing.

@@ -65,6 +65,9 @@ static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i)r+=s
 static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";default:return"<class 'object'>";}}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;}
+static const char*piton_reraise_type=0;static const char*piton_reraise_message=0;
+static void piton_reraise_save(void){piton_reraise_type=piton_exc_type;piton_reraise_message=piton_exc_message;}
+static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=piton_reraise_message;}
 static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;}
 static void piton_report_unhandled(void){piton_write(2,piton_exc_type,piton_strlen(piton_exc_type));piton_write(2,": ",2);if(piton_exc_message)piton_write(2,piton_exc_message,piton_strlen(piton_exc_message));piton_write(2,"\n",1);}
 """
@@ -529,6 +532,15 @@ class LinuxCEmitter:
             types[result] = "bool"
         elif op == "catch_clear":
             out.append('    piton_catch_clear();')
+        elif op == "reraise_save":
+            out.append('    piton_reraise_save();')
+        elif op == "raise_active":
+            exc_type, handler_label = args
+            out.append(f'    piton_reraise_set("{exc_type}");')
+            if handler_label:
+                out.append(f"    goto {_name(function.name + '_' + handler_label)};")
+            else:
+                out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
         elif op == "math_sqrt":
             operand = self._value(args[0])
             if types.get(args[0]) != "float":

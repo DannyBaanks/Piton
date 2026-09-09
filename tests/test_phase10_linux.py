@@ -189,6 +189,56 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_rich_exception_after_catch(self):
         self._assert_linux_equiv('intentar:\n    lanzar ValueError("boom")\n    imprimir("no reach")\nexcepto ValueError:\n    x = 10 + 20\n    imprimir(x)\n')
 
+    def test_linux_custom_exception_caught_by_exact_type(self):
+        self._assert_linux_equiv('clase ErrorApp(Exception):\n    funcion __init__(self, m):\n        self.m = m\nintentar:\n    lanzar ErrorApp("boom")\nexcepto ErrorApp:\n    imprimir("caught-app")\n')
+
+    def test_linux_custom_exception_caught_by_Exception_base(self):
+        self._assert_linux_equiv('clase ErrorApp(Exception):\n    funcion __init__(self, m):\n        self.m = m\nintentar:\n    lanzar ErrorApp("boom")\nexcepto Exception:\n    imprimir("base")\n')
+
+    def test_linux_custom_exception_subclass_caught_by_base(self):
+        self._assert_linux_equiv('clase ErrorBase(Exception):\n    funcion __init__(self, m):\n        self.m = m\nclase ErrorHijo(ErrorBase):\n    funcion __init__(self, m):\n        self.m = m\nintentar:\n    lanzar ErrorHijo("desc")\nexcepto ErrorBase:\n    imprimir("caught-hijo")\n')
+
+    def test_linux_custom_exception_subclass_of_valueerror(self):
+        self._assert_linux_equiv('clase ErrorApp(ValueError):\n    funcion __init__(self, m):\n        self.m = m\nintentar:\n    lanzar ErrorApp("boom")\nexcepto ValueError:\n    imprimir("caught-val")\n')
+
+    def test_linux_bare_reraise_to_outer_handler(self):
+        self._assert_linux_equiv('intentar:\n    intentar:\n        lanzar ValueError("boom")\n    excepto ValueError:\n        imprimir("inner")\n        lanzar\nexcepto ValueError:\n    imprimir("outer")\n')
+
+    def test_linux_bare_reraise_custom_to_base(self):
+        self._assert_linux_equiv('clase ErrorApp(Exception):\n    funcion __init__(self, m):\n        self.m = m\nintentar:\n    intentar:\n        lanzar ErrorApp("x")\n    excepto ErrorApp:\n        imprimir("inner")\n        lanzar\nexcepto Exception:\n    imprimir("outer")\n')
+
+    def test_linux_custom_exception_uncaught_exits_with_message(self):
+        source = 'clase ErrorApp(Exception):\n    funcion __init__(self, m):\n        self.m = m\nintentar:\n    lanzar ErrorApp("boom")\nexcepto ValueError:\n    imprimir("no match")\n'
+        rc, native_out, oracle_out, stderr = self._run_linux_diff(source)
+        self.assertNotEqual(rc, 0)
+        self.assertIn(b"ErrorApp", stderr)
+
+    def test_linux_bare_reraise_unhandled_exits(self):
+        source = 'intentar:\n    lanzar ValueError("boom")\nexcepto ValueError:\n    lanzar\nimprimir("never")\n'
+        rc, native_out, oracle_out, stderr = self._run_linux_diff(source)
+        self.assertNotEqual(rc, 0)
+        self.assertIn(b"ValueError", stderr)
+
+    def test_linux_raise_plain_class_rejected(self):
+        from piton.linux_x86 import NativeBuildError, compile_native_linux
+        with tempfile.TemporaryDirectory(prefix="piton-linux-diff-") as directory:
+            source = "clase Punto:\n    funcion __init__(self, x):\n        self.x = x\nlanzar Punto(3)\n"
+            with self.assertRaisesRegex(NativeBuildError, "subclass Exception"):
+                compile_native_linux(source, Path(directory) / "program")
+
+    def test_linux_bare_reraise_outside_handler_rejected(self):
+        from piton.linux_x86 import NativeBuildError, compile_native_linux
+        with tempfile.TemporaryDirectory(prefix="piton-linux-diff-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "requires an enclosing except handler"):
+                compile_native_linux("funcion f():\n    lanzar\nf()\n", Path(directory) / "program")
+
+    def test_linux_bare_reraise_from_catchall_rejected(self):
+        from piton.linux_x86 import NativeBuildError, compile_native_linux
+        with tempfile.TemporaryDirectory(prefix="piton-linux-diff-") as directory:
+            source = 'intentar:\n    lanzar ValueError("x")\nexcepto Exception:\n    lanzar\nimprimir("done")\n'
+            with self.assertRaisesRegex(NativeBuildError, "catch-all"):
+                compile_native_linux(source, Path(directory) / "program")
+
     def test_linux_rich_stdlib_type(self):
         self._assert_linux_equiv('imprimir(type(42))\nimprimir(type("hola"))\nimprimir(type(Verdadero))\nimprimir(type(Nada))\n')
 

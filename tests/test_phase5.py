@@ -425,6 +425,146 @@ class Phase5Gates(unittest.TestCase):
         self.assertFalse(result.equivalent)
         self.assertIn(b"ValueError", result.native.stderr)
 
+    def test_x86_custom_exception_caught_by_exact_type(self):
+        source = (
+            "clase ErrorApp(Exception):\n"
+            "    funcion __init__(self, m):\n"
+            "        self.m = m\n"
+            "intentar:\n"
+            "    lanzar ErrorApp(\"boom\")\n"
+            "excepto ErrorApp:\n"
+            "    imprimir(\"caught-app\")\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_custom_exception_caught_by_Exception_base(self):
+        source = (
+            "clase ErrorApp(Exception):\n"
+            "    funcion __init__(self, m):\n"
+            "        self.m = m\n"
+            "intentar:\n"
+            "    lanzar ErrorApp(\"boom\")\n"
+            "excepto Exception:\n"
+            "    imprimir(\"base\")\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_custom_exception_uncaught_exits_with_message(self):
+        source = (
+            "clase ErrorApp(Exception):\n"
+            "    funcion __init__(self, m):\n"
+            "        self.m = m\n"
+            "intentar:\n"
+            "    lanzar ErrorApp(\"boom\")\n"
+            "excepto ValueError:\n"
+            "    imprimir(\"no match\")\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertFalse(result.equivalent)
+        self.assertIn(b"ErrorApp", result.native.stderr)
+
+    def test_x86_custom_exception_subclass_caught_by_base(self):
+        source = (
+            "clase ErrorBase(Exception):\n"
+            "    funcion __init__(self, m):\n"
+            "        self.m = m\n"
+            "clase ErrorHijo(ErrorBase):\n"
+            "    funcion __init__(self, m):\n"
+            "        self.m = m\n"
+            "intentar:\n"
+            "    lanzar ErrorHijo(\"desc\")\n"
+            "excepto ErrorBase:\n"
+            "    imprimir(\"caught-hijo\")\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_custom_exception_subclass_of_valueerror(self):
+        source = (
+            "clase ErrorApp(ValueError):\n"
+            "    funcion __init__(self, m):\n"
+            "        self.m = m\n"
+            "intentar:\n"
+            "    lanzar ErrorApp(\"boom\")\n"
+            "excepto ValueError:\n"
+            "    imprimir(\"caught-val\")\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_bare_reraise_to_outer_handler(self):
+        source = (
+            'intentar:\n'
+            '    intentar:\n'
+            '        lanzar ValueError("boom")\n'
+            '    excepto ValueError:\n'
+            '        imprimir("inner")\n'
+            '        lanzar\n'
+            'excepto ValueError:\n'
+            '    imprimir("outer")\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_bare_reraise_custom_to_base(self):
+        source = (
+            "clase ErrorApp(Exception):\n"
+            "    funcion __init__(self, m):\n"
+            "        self.m = m\n"
+            "intentar:\n"
+            "    intentar:\n"
+            "        lanzar ErrorApp(\"x\")\n"
+            "    excepto ErrorApp:\n"
+            "        imprimir(\"inner\")\n"
+            "        lanzar\n"
+            "excepto Exception:\n"
+            "    imprimir(\"outer\")\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_bare_reraise_unhandled_exits(self):
+        source = (
+            'intentar:\n'
+            '    lanzar ValueError("boom")\n'
+            'excepto ValueError:\n'
+            '    lanzar\n'
+            'imprimir("never")\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertFalse(result.equivalent)
+        self.assertIn(b"ValueError", result.native.stderr)
+
+    def test_x86_bare_reraise_outside_handler_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "requires an enclosing except handler"):
+                compile_native("funcion f():\n    lanzar\nf()\n", Path(directory) / "program.exe")
+
+    def test_x86_bare_reraise_from_catchall_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            source = (
+                'intentar:\n'
+                '    lanzar ValueError("x")\n'
+                'excepto Exception:\n'
+                '    lanzar\n'
+                'imprimir("done")\n'
+            )
+            with self.assertRaisesRegex(Exception, "catch-all"):
+                compile_native(source, Path(directory) / "program.exe")
+
+    def test_x86_raise_plain_class_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            source = (
+                "clase Punto:\n"
+                "    funcion __init__(self, x):\n"
+                "        self.x = x\n"
+                "lanzar Punto(3)\n"
+            )
+            with self.assertRaisesRegex(Exception, "subclass Exception"):
+                compile_native(source, Path(directory) / "program.exe")
+
     def test_x86_abs_int(self):
         result = compare_native_to_cpython('imprimir(abs(-42))\n')
         self.assertTrue(result.equivalent, result)

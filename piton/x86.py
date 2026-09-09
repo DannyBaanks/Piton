@@ -61,8 +61,10 @@ class Win64NasmEmitter:
             "extern piton_set_len", "extern piton_set_print",
             "extern piton_set_free", "extern piton_set_live_count",
             "extern piton_raise",
+            "extern piton_raise_unhandled",
             "extern piton_try_push", "extern piton_try_pop", "extern piton_try_set_accepted",
             "extern piton_catch_flag", "extern piton_catch_type", "extern piton_catch_message", "extern piton_catch_clear",
+            "extern piton_reraise_save", "extern piton_reraise", "extern piton_reraise_unhandled",
             "extern piton_abs_int", "extern piton_abs_float",
             "extern piton_min_int", "extern piton_max_int", "extern piton_min_float", "extern piton_max_float",
             "extern piton_sum_collection", "extern piton_sum_dict", "extern piton_sum_set",
@@ -591,13 +593,16 @@ class Win64NasmEmitter:
                 self._load_operand(payload, "rdx")
             else:
                 raise NativeBuildError("native exception payload must be a string")
-            self.lines.append("    call piton_raise")
             if handler_label:
                 # Check if an exception was caught and branch to handler
+                self.lines.append("    call piton_raise")
                 self.lines.append("    call piton_catch_flag")
                 self.lines.append("    test rax, rax")
                 target = labels.get(handler_label, handler_label)
                 self.lines.append(f"    jne {target}")
+            else:
+                # No statically-matching handler: report and exit (no stack search)
+                self.lines.append("    call piton_raise_unhandled")
         elif op == "try_push":
             self.lines.append("    call piton_try_push")
             if result:
@@ -612,6 +617,18 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
         elif op == "catch_clear":
             self.lines.append("    call piton_catch_clear")
+        elif op == "reraise_save":
+            self.lines.append("    call piton_reraise_save")
+        elif op == "raise_active":
+            exception_type, handler_label = args
+            if handler_label:
+                self.lines.append("    call piton_reraise")
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+            else:
+                self.lines.append("    call piton_reraise_unhandled")
         elif op == "branch":
             condition, yes, no = args
             self._emit_truth_test(condition)

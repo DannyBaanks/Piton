@@ -8,10 +8,10 @@ Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 
 ## 1. Línea base verificada (2026-09-09, commit pendiente de push)
 
-- **193/193 tests** (127 Windows + 66 Linux).
+- **215/215 tests** (138 Windows + 77 Linux).
 - Ambos backends ejecutan el subset rico byte-idéntico vs CPython 3.12.4.
 - Ejecutables PE/ELF sin CPython ni libc (freestanding Linux).
-- **15 gates `PASS`** en `piton.final_dashboard` (incl. `FULL_PARITY`, que este
+- **17 gates `PASS`** en `piton.final_dashboard` (incl. `FULL_PARITY`, que este
   roadmap retira como término; ver `PARITY_DEFINITION.md`).
 
 ## 2. Matriz de features
@@ -23,7 +23,7 @@ Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 | statements | PASS | PASS | PASS | `test_phase5.py` | — |
 | functions | PASS | PASS | PASS | `test_phase5.py` | defaults, kwargs, `*args`, `**kwargs`, positional-only, keyword-only all PASS (FUNCTION_DEFAULTS_V1 + FUNCTION_KEYWORD_ARGS_V1 + FUNCTION_ARGS_V1); call-site unpacking (`f(*xs)`, `f(**d)`) rejected; bound methods still open |
 | closures | PASS | PASS | PASS | `test_phase5.py` + `test_phase10_linux.py` | CLOSURES_COMPLETE_V1 PASS 2026-09-09: closure objects con cells mutables y ESCAPE permitido, dispatch por magic en runtime (`piton_closure_call6`), hasta 4 captures + 4 args (fail-closed rc=2 si se excede o argumentos incorrectos), CALL-E; Win 10 tests + Linux 9 tests; `nonlocal`→`no_local`, cells transitivas mutables (swap), callbacks de funciones planas y closures, cadenas de fábricas. Sin seguimiento estático de flujo: toda llamada no-resuelta despacha en runtime |
-| exceptions | PASS | PASS | PASS | `test_phase5.py` | re-raise, `from`/cadenas, custom, BaseException |
+| exceptions | PASS | PASS | PASS | `test_phase5.py` + `test_phase10_linux.py` | EXCEPTION_CUSTOM_V1 + EXCEPTION_RERAISE_V1 PASS 2026-09-09: excepciones de usuario (`clase E(Exception):` o subclases; matching por cadena de herencia en ambos backends, hijo atrapado por ancestro custom/builtin/`Exception`), `lanzar` bare en handlers exactos (anidado despacha al envolvente). Quedan: `from`/cadenas, BaseException, binding `excepto E as x`, `excepto*`, bare re-raise desde catch-all (fail-closed hoy) |
 | generators | PARTIAL | PARTIAL | NOT_DEMONSTRATED | `test_phase5.py` | frames suspendidos, send/throw/close, `yield from` |
 | classes | PASS | PASS | PASS | `test_phase5.py` | MRO, super, metaclasses |
 | descriptors | PARTIAL | PARTIAL | PARTIAL | `object_protocol.py` | bootstrap; native abierto |

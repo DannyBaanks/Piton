@@ -9,6 +9,9 @@ from typing import Any, Dict, List, Optional, Sequence
 from piton.hir import HIRKind, HIRNode
 
 
+_BUILTIN_EXCEPTIONS = {"Exception", "ValueError", "TypeError", "RuntimeError"}
+
+
 class MIRLoweringError(RuntimeError):
     pass
 
@@ -83,6 +86,8 @@ class _Builder:
         self.closures: dict[str, tuple[str, tuple[str, ...]]] = {}
         self.cell_params: set[str] = set()
         self.exception_handlers: list[tuple[str, str | None]] = []
+        self.in_except_handler = False
+        self.reraise_type: str | None = None
         self.loop_counter = 0
         self.module_aliases: dict[str, str] = {}
         self.is_async = False
@@ -165,7 +170,7 @@ class MIRLowerer:
                 if len(node.bases) > 1:
                     raise MIRLoweringError("native classes support at most one base class")
                 parent_name = node.bases[0].name if node.bases else None
-                if parent_name and parent_name not in self.classes:
+                if parent_name and parent_name not in self.classes and parent_name not in _BUILTIN_EXCEPTIONS:
                     raise MIRLoweringError(f"native base class '{parent_name}' must be defined before '{node.name}'")
                 self.classes[node.name] = {method.name for method in node.body}
                 self.class_parents[node.name] = parent_name
@@ -501,8 +506,15 @@ class MIRLowerer:
         # handler block (reached via raise_typed's catch_flag check)
         if handler_block:
             builder.current = handler_block
+            builder.emit("reraise_save")
             builder.emit("catch_clear")
+            previous_reraise_type = builder.reraise_type
+            previous_in_handler = builder.in_except_handler
+            builder.reraise_type = accepted
+            builder.in_except_handler = True
             self._lower_statements(builder, handler.body)
+            builder.reraise_type = previous_reraise_type
+            builder.in_except_handler = previous_in_handler
             builder.emit("try_pop")
             if finally_body:
                 builder.emit("jump", finally_block.label)
@@ -518,22 +530,60 @@ class MIRLowerer:
         builder.current = end_block
 
     def _lower_raise(self, builder: _Builder, node: HIRNode) -> None:
-        if node.exc is None or node.cause is not None:
-            raise MIRLoweringError("native raise requires an explicit exception without cause")
+        if node.cause is not None:
+            raise MIRLoweringError("native raise does not support an explicit cause yet")
+        if node.exc is None:
+            self._lower_reraise(builder)
+            return
         if node.exc.kind != HIRKind.CALL or node.exc.func.kind != HIRKind.LOAD:
-            raise MIRLoweringError("native raise requires a builtin exception constructor")
+            raise MIRLoweringError("native raise requires a call to an exception constructor")
         exception_type = node.exc.func.name
-        supported = {"Exception", "ValueError", "TypeError", "RuntimeError"}
-        if exception_type not in supported or len(node.exc.args) > 1 or node.exc.keywords:
+        if exception_type in _BUILTIN_EXCEPTIONS:
+            pass
+        elif exception_type in self.classes:
+            if "Exception" not in self._exception_chain(exception_type):
+                raise MIRLoweringError(
+                    f"native custom exception '{exception_type}' must subclass Exception"
+                )
+        else:
+            raise MIRLoweringError(f"unsupported native exception type '{exception_type}'")
+        if len(node.exc.args) > 1 or node.exc.keywords:
             raise MIRLoweringError("unsupported native exception constructor")
         payload = self._lower_expr(builder, node.exc.args[0]) if node.exc.args else None
-        # Find the active handler block for the catch_flag check
-        handler_label = None
-        for label, accepted in reversed(builder.exception_handlers):
-            if accepted is None or accepted == "Exception" or accepted == exception_type:
-                handler_label = label
-                break
+        handler_label = self._find_exception_handler(builder, exception_type)
         builder.emit("raise_typed", exception_type, payload, handler_label)
+
+    def _lower_reraise(self, builder: _Builder) -> None:
+        if not builder.in_except_handler:
+            raise MIRLoweringError("native bare re-raise requires an enclosing except handler")
+        if builder.reraise_type in (None, "Exception"):
+            raise MIRLoweringError(
+                "native bare re-raise from a catch-all (excepto Exception) handler is not supported yet"
+            )
+        handler_label = self._find_exception_handler(builder, builder.reraise_type)
+        builder.emit("raise_active", builder.reraise_type, handler_label)
+
+    def _exception_chain(self, name: str) -> list[str]:
+        chain: list[str] = []
+        current: str | None = name
+        seen: set[str] = set()
+        while current and current not in seen:
+            seen.add(current)
+            chain.append(current)
+            if current in _BUILTIN_EXCEPTIONS:
+                current = "Exception" if current != "Exception" else None
+            else:
+                current = self.class_parents.get(current)
+        return chain
+
+    def _find_exception_handler(
+        self, builder: _Builder, exception_type: str
+    ) -> str | None:
+        chain = self._exception_chain(exception_type)
+        for label, accepted in reversed(builder.exception_handlers):
+            if accepted is None or accepted == "Exception" or accepted in chain:
+                return label
+        return None
 
     def _store(self, builder: _Builder, target: HIRNode, value: Any) -> None:
         if target.kind == HIRKind.STORE:

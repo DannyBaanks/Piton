@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+void piton_raise_unhandled(const char *type, const char *message);
+
 /* ── PitonValue: tagged 64-bit value (wire format) ────────────────────── */
 
 enum {
@@ -974,9 +976,15 @@ void piton_raise(const char *type, const char *message) {
         }
     }
     /* No handler found — print and exit */
+    piton_raise_unhandled(type, message);
+}
+
+/* Report an exception with no statically-matching handler and exit. */
+void piton_raise_unhandled(const char *type, const char *message) {
     fprintf(stderr, "%s", type ? type : "Exception");
     if (message && *message) fprintf(stderr, ": %s", message);
     fputc('\n', stderr);
+    fflush(stderr);
     exit(1);
 }
 
@@ -1000,6 +1008,39 @@ void piton_catch_clear(void) {
     piton_exception_active = 0;
     piton_exception_type = NULL;
     piton_exception_message = NULL;
+}
+
+/* Saved exception state for bare re-raise (piton identifies a handler statically). */
+static const char *piton_reraise_type = NULL;
+static const char *piton_reraise_message = NULL;
+
+/* Snapshot the active exception before the handler clears catch state. */
+void piton_reraise_save(void) {
+    piton_reraise_type = piton_exception_type;
+    piton_reraise_message = piton_exception_message;
+}
+
+/* Re-raise the handler's caught exception; falls through to print+exit when unhandled. */
+void piton_reraise(void) {
+    const char *type = piton_reraise_type;
+    const char *message = piton_reraise_message;
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            return;
+        }
+    }
+    piton_raise_unhandled(type, message);
+}
+
+/* Re-raise when no statically-matching handler exists (no stack search). */
+void piton_reraise_unhandled(void) {
+    piton_raise_unhandled(piton_reraise_type, piton_reraise_message);
 }
 
 void piton_print_float(double value) {
