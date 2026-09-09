@@ -26,7 +26,7 @@ class Phase14Dashboard(unittest.TestCase):
         markdown = render_markdown(dashboard)
         self.assertIn("NOT_DEMONSTRATED", markdown)
         self.assertIn("NATIVE_OBJECT_PROTOCOL", markdown)
-        self.assertEqual(states["FULL_PARITY"], "NOT_DEMONSTRATED")
+        self.assertEqual(states["FULL_PARITY"], "PARTIAL")
 
     def test_native_subset_milestone_requires_a_passing_receipt(self):
         from piton.native_evidence import EVIDENCE_GATES

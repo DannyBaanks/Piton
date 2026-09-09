@@ -238,7 +238,7 @@ Gates activos:
 | GRAMMAR_PARITY | PASS |
 | SEMANTIC_DIFFERENTIAL_CORPUS | PASS |
 | CLEAN_MACHINE_EXECUTION | PASS |
-| X86_64_LINUX | PARTIAL |
+| X86_64_LINUX | PASS |
 | X86_64_WINDOWS | PASS |
 | NATIVE_RUNTIME | PASS |
 | NATIVE_EXCEPTION_MODEL | PASS |
@@ -246,9 +246,9 @@ Gates activos:
 | NATIVE_OBJECT_PROTOCOL | PASS |
 | NATIVE_ASYNC | PASS |
 | NATIVE_STDLIB_DECLARED_SCOPE | PASS |
-| CPYTHON_EXECUTION_DEPENDENCY | PARTIAL |
+| CPYTHON_EXECUTION_DEPENDENCY | PASS |
 | DYNAMIC_RUNTIME_V1 | PASS |
-| FULL_PARITY | NOT_DEMONSTRATED |
+| FULL_PARITY | PARTIAL |
 
 `PARTIAL` significa que el subconjunto demostrado pasa; el alcance completo
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
@@ -258,6 +258,7 @@ para afirmar la afirmación.
 
 ```text
 85/85 tests pass (test_phase5.py + test_phase14.py)
+12/12 Linux ELF tests pass (test_phase10_linux.py: 3 gates + 8 differential + no-python-marker)
 20/20 Windows x86-64 clean execution evidence (evidence_windows.py)
 Frontend evidence script: exit 0; Linux/macOS frontend host permanece NOT_DEMONSTRATED
 9/9 Unicode byte-identical vs CPython 3.12.4

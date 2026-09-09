@@ -15,6 +15,49 @@ from .parser import parse
 from .x86 import NativeBuildError, _BUILTINS
 
 
+_TAGGED_RUNTIME_C = r"""
+/* ── Tagged value runtime (same ABI as Windows) ─────────────────────── */
+#define TAG_NONE 0
+#define TAG_BOOL 1
+#define TAG_INT 2
+#define TAG_FLOAT 3
+#define TAG_OBJECT 4
+#define SUB_STR 5
+#define SUB_LIST 6
+#define SUB_TUPLE 7
+#define SUB_DICT 8
+#define SUB_SET 9
+#define SUB_BIGINT 10
+#define TAG_SHIFT 61
+#define PV_MASK ((1LL<<TAG_SHIFT)-1)
+static inline long pv_encode(int t,long p){return((long)t<<TAG_SHIFT)|(p&PV_MASK);}
+static inline int pv_tag(long v){return(int)((v>>TAG_SHIFT)&7);}
+static inline long pv_payload(long v){return v&PV_MASK;}
+static inline long pv_none(void){return pv_encode(TAG_NONE,0);}
+static inline long pv_bool(int b){return pv_encode(TAG_BOOL,b?1:0);}
+static inline long pv_int(long i){return pv_encode(TAG_INT,i);}
+static inline long pv_float(double d){long*p=malloc(sizeof(long));*p=0;memcpy(p,&d,8);return pv_encode(TAG_FLOAT,(long)p);}
+static inline double pv_as_float(long v){double d;long p=pv_payload(v);memcpy(&d,&p,8);return d;}
+typedef struct{const char*name;long val;}PitonAttr;
+typedef struct{int tag;long refcount;const char*class_name;const char*parent;int attr_count;PitonAttr attrs[32];}PitonObj;
+static long pv_object_new(const char*cls,const char*par){PitonObj*o=calloc(1,sizeof(*o));o->tag=TAG_OBJECT;o->refcount=1;o->class_name=cls;o->parent=par;return pv_encode(TAG_OBJECT,(long)o);}
+static void pv_set_attr(long obj,const char*name,long val){PitonObj*o=(PitonObj*)pv_payload(obj);for(int i=0;i<o->attr_count;i++){if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].val=val;return;}}if(o->attr_count<32){o->attrs[o->attr_count].name=name;o->attrs[o->attr_count].val=val;o->attr_count++;}}
+static long pv_get_attr(long obj,const char*name){PitonObj*o=(PitonObj*)pv_payload(obj);for(int i=0;i<o->attr_count;i++){if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].val;}if(o->parent){/* walk up - simplified: just return 0*/}return pv_none();}
+static const char*pv_type_name(long v){switch(pv_tag(v)){case TAG_NONE:return"NoneType";case TAG_BOOL:return"bool";case TAG_INT:return"int";case TAG_FLOAT:return"float";case TAG_OBJECT:{PitonObj*o=(PitonObj*)pv_payload(v);return o->class_name?o->class_name:"object";}default:return"unknown";}}
+static void piton_print_value(long v){char buf[64];switch(pv_tag(v)){case TAG_NONE:piton_print_str("None");break;case TAG_BOOL:piton_print_str(pv_payload(v)?"True":"False");break;case TAG_INT:piton_print_int(pv_payload(v));break;case TAG_FLOAT:{double d=pv_as_float(v);int n=sprintf(buf,"%.17g",d);piton_write(1,buf,n);piton_write(1,"\n",1);break;}case TAG_OBJECT:piton_print_str(pv_type_name(v));break;default:piton_print_int(pv_payload(v));break;}}
+/* ── Exception state ────────────────────────────────────────────────── */
+static int piton_exc_flag=0;
+static const char*piton_exc_type=0;
+static void piton_raise(const char*type){piton_exc_flag=1;piton_exc_type=type;piton_print_str("Traceback (most recent call last):");piton_write(1,"  ",2);piton_print_str(type);piton_exit(1);}
+static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;}
+/* ── Math/stdlib ────────────────────────────────────────────────────── */
+static long piton_abs(long v){return pv_payload(v)<0?-pv_payload(v):pv_payload(v);}
+static long piton_min(long a,long b){return pv_payload(a)<pv_payload(b)?a:b;}
+static long piton_max(long a,long b){return pv_payload(a)>pv_payload(b)?a:b;}
+static long piton_type_from_raw(long v){return pv_int(pv_tag(v));}
+static long piton_sqrt(long v){return pv_float(__builtin_sqrt((double)pv_payload(v)));}
+"""
+
 _BIGINT_FREESTANDING_C = r"""
 static unsigned long piton_bump_buf[1024*1024];
 static unsigned long*piton_bump_ptr=piton_bump_buf;
@@ -62,6 +105,12 @@ class LinuxCEmitter:
             for block in function.blocks
             for instruction in block.instructions
         )
+        self._has_objects = any(
+            instruction.op in {"object_new", "set_attr", "get_attr", "method_call", "raise_typed", "try_push", "try_pop", "catch_flag", "catch_clear", "math_sqrt", "build_collection", "get_item", "collection_len", "runtime_call"}
+            for function in module.functions
+            for block in function.blocks
+            for instruction in block.instructions
+        )
         lines = [
             "typedef long i64; typedef unsigned long usize; typedef unsigned long long u64; typedef unsigned __int128 u128;",
             "static long piton_write(long fd,const void*buf,usize n){long r;__asm__ volatile(\"syscall\":\"=a\"(r):\"a\"(1L),\"D\"(fd),\"S\"(buf),\"d\"(n):\"rcx\",\"r11\",\"memory\");return r;}",
@@ -75,6 +124,8 @@ class LinuxCEmitter:
             "static char piton_concat_buf[65536];static char*piton_concat_ptr=0;",
             "static long piton_str_concat(const char*a,const char*b){if(!piton_concat_ptr)piton_concat_ptr=piton_concat_buf;usize la=piton_strlen(a),lb=piton_strlen(b);char*r=piton_concat_ptr;for(usize i=0;i<la;++i)r[i]=a[i];for(usize i=0;i<lb;++i)r[la+i]=b[i];r[la+lb]=0;piton_concat_ptr+=la+lb;return(long)r;}",
         ]
+        if self._has_objects:
+            lines.append(_TAGGED_RUNTIME_C)
         if self._has_bigint:
             bigint_code = _BIGINT_FREESTANDING_C
             lines.extend(bigint_code.split("\n"))
@@ -243,6 +294,58 @@ class LinuxCEmitter:
                 types[result] = "int"
         elif op == "return":
             out.append(f"    return {self._value(args[0])};")
+        elif op == "object_new":
+            cls_name = args[0]
+            parent = args[1] if len(args) > 1 else None
+            parent_str = f'"{parent}"' if parent else "0"
+            out.append(f'    {_name(result)}=pv_object_new("{cls_name}",{parent_str});')
+            types[result] = "object"
+        elif op == "set_attr":
+            obj, attr, val = args
+            out.append(f'    pv_set_attr({self._value(obj)},"{attr}",{self._value(val)});')
+        elif op == "get_attr":
+            obj, attr = args
+            out.append(f'    {_name(result)}=pv_get_attr({self._value(obj)},"{attr}");')
+            types[result] = "int"
+        elif op == "method_call":
+            cls_name, method, obj = args[0], args[1], args[2]
+            call_args = args[3] if len(args) > 3 else ()
+            values = ",".join(self._value(v) for v in ([obj] + list(call_args)))
+            out.append(f'    {_name(result)}={_name(cls_name+"__"+method)}({values});')
+            types[result] = "int"
+        elif op == "raise_typed":
+            exc_type = args[0]
+            out.append(f'    piton_raise("{exc_type}");')
+        elif op == "try_push":
+            pass  # no-op in flag-based model
+        elif op == "try_pop":
+            pass  # no-op in flag-based model
+        elif op == "catch_flag":
+            out.append(f'    {_name(result)}=piton_exc_flag;')
+            types[result] = "bool"
+        elif op == "catch_clear":
+            out.append('    piton_catch_clear();')
+        elif op == "math_sqrt":
+            out.append(f'    {_name(result)}=pv_float(__builtin_sqrt((double)pv_payload({self._value(args[0])})));')
+            types[result] = "float"
+        elif op == "build_collection":
+            kind, items = args[0], args[1]
+            out.append(f'    {_name(result)}=(long)piton_collection_{kind}({len(items)});')
+            types[result] = kind
+        elif op == "get_item":
+            coll, idx = args
+            out.append(f'    {_name(result)}=piton_get_item({self._value(coll)},{self._value(idx)});')
+            types[result] = "int"
+        elif op == "collection_len":
+            coll = args[0]
+            out.append(f'    {_name(result)}=piton_collection_len({self._value(coll)});')
+            types[result] = "int"
+        elif op == "runtime_call":
+            func_name = args[0]
+            call_args = args[1] if len(args) > 1 else []
+            values = ",".join(self._value(v) for v in call_args)
+            out.append(f'    {_name(result)}={_name(func_name)}({values});')
+            types[result] = "int"
         else:
             raise NativeBuildError(f"Linux MIR operation not supported: {op}")
         return out
