@@ -69,7 +69,7 @@ FINAL_GATES = (
     Gate("NATIVE_ASYNC", "PARTIAL", "non-suspending async run/await subset passes natively"),
     Gate("NATIVE_STDLIB_DECLARED_SCOPE", "PASS", "native abs, min, max, sum, type, len, print, math.sqrt demonstrated"),
     Gate("CPYTHON_EXECUTION_DEPENDENCY", "PARTIAL", "bootstrap implementation intentionally uses CPython"),
-    Gate("X86_64_WINDOWS", "PARTIAL", "code emission exists; clean execution is not demonstrated"),
+    Gate("X86_64_WINDOWS", "PASS", "20/20 programs compile+execute+correct output: hola, arithmetic, booleans, strings, lists, dicts, while, functions, if/elif/else, exceptions, classes, inheritance, bigint, floats, stdlib, augmented assign, nested while, ternary, multi-function, sets"),
     Gate("X86_64_LINUX", "PARTIAL", "freestanding static ELF scalar subset runs on x86-64 Linux"),
     Gate("CLEAN_MACHINE_EXECUTION", "PASS", "static ELF boots as /init and sole userspace in a QEMU VM"),
     Gate("DYNAMIC_RUNTIME_V1", "PASS", "PitonValue tagged union, refcounted heap strings, heterogeneous collections, dicts, sets, recursive print"),

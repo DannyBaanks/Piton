@@ -238,7 +238,7 @@ Gates activos:
 | SEMANTIC_DIFFERENTIAL_CORPUS | PASS |
 | CLEAN_MACHINE_EXECUTION | PASS |
 | X86_64_LINUX | PARTIAL |
-| X86_64_WINDOWS | PARTIAL |
+| X86_64_WINDOWS | PASS |
 | NATIVE_RUNTIME | PASS |
 | NATIVE_EXCEPTION_MODEL | PASS |
 | NATIVE_IMPORT_SYSTEM | PARTIAL |
@@ -257,6 +257,7 @@ para afirmar la afirmación.
 
 ```text
 73/73 differential tests pass (test_phase5.py)
+20/20 Windows x86-64 clean execution evidence (evidence_windows.py)
 Frontend evidence script: exit 0; Linux/macOS frontend host permanece NOT_DEMONSTRATED
 9/9 Unicode byte-identical vs CPython 3.12.4
 14/14 BigInt Win64 differential tests
