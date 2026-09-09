@@ -38,6 +38,8 @@ class Win64NasmEmitter:
         self.constants: dict[str, Any] = {}
 
     def emit(self, module: MIRModule) -> str:
+        self.mir_module = module
+        self.mir_module_classes = getattr(module, 'classes', {})
         self.function_names = {function.name for function in module.functions}
         self.lines = [
             "default rel", "extern printf", "extern strcmp", "extern strlen",
@@ -58,7 +60,11 @@ class Win64NasmEmitter:
             "extern piton_raise",
             "extern piton_try_push", "extern piton_try_pop", "extern piton_try_set_accepted",
             "extern piton_catch_flag", "extern piton_catch_type", "extern piton_catch_message", "extern piton_catch_clear",
-            "extern piton_object_new", "extern piton_object_set", "extern piton_object_get",
+            "extern piton_abs_int", "extern piton_abs_float",
+            "extern piton_min_int", "extern piton_max_int", "extern piton_min_float", "extern piton_max_float",
+            "extern piton_sum_collection", "extern piton_sum_dict", "extern piton_sum_set",
+            "extern piton_type_name", "extern piton_type_from_raw",
+            "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_set", "extern piton_object_get",
             "extern piton_object_free", "extern piton_object_live_count",
             "extern piton_print_float",
             "extern piton_bigint_from_str", "extern piton_bigint_from_i64", "extern piton_bigint_free",
@@ -435,12 +441,22 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
         elif op == "object_new":
-            class_name = args[0]
+            class_name, parent_name = args
             self.lines.extend([
                 f"    mov rcx, {self._address(result)}", "    call piton_object_free",
-                f"    lea rcx, [{self._string(class_name)}]", "    call piton_object_new",
-                f"    mov {self._address(result)}, rax",
             ])
+            if parent_name:
+                self.lines.extend([
+                    f"    lea rcx, [{self._string(class_name)}]",
+                    f"    lea rdx, [{self._string(parent_name)}]",
+                    "    call piton_object_new_with_parent",
+                ])
+            else:
+                self.lines.extend([
+                    f"    lea rcx, [{self._string(class_name)}]",
+                    "    call piton_object_new",
+                ])
+            self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = f"object:{class_name}"
         elif op == "set_attr":
             owner, name, value = args
@@ -461,12 +477,19 @@ class Win64NasmEmitter:
             class_name = explicit_class or (owner_type.split(":", 1)[1] if owner_type.startswith("object:") else None)
             if not class_name:
                 raise NativeBuildError("native method receiver class is not statically known")
+            # Resolve method through inheritance chain
+            resolved_class = class_name
+            class_parents = getattr(self.mir_module, 'class_parents', {})
+            while resolved_class and method_name not in self.mir_module_classes.get(resolved_class, set()):
+                resolved_class = class_parents.get(resolved_class)
+            if not resolved_class:
+                resolved_class = class_name  # fallback to original
             values = [owner, *raw_values]
             if len(values) > 4:
                 raise NativeBuildError("native method calls support at most four total arguments")
             for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
                 self._load_operand(value, register)
-            self.lines.append(f"    call {class_name}__{method_name}")
+            self.lines.append(f"    call {resolved_class}__{method_name}")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
         elif op == "math_sqrt":
@@ -580,6 +603,66 @@ class Win64NasmEmitter:
                 else:
                     self.lines.append("    call piton_collection_len")
                 self.types[result] = "int"
+            elif function_name == "abs":
+                if len(values) != 1:
+                    raise NativeBuildError("native abs requires one argument")
+                vtype = self.types.get(values[0])
+                if vtype == "float":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.extend(["    movq xmm0, rcx", "    call piton_abs_float"])
+                    self.lines.append("    movq rax, xmm0")
+                    self.types[result] = "float"
+                else:
+                    self._load_operand(values[0], "rax")
+                    self.lines.append("    mov rcx, rax")
+                    self.lines.append("    call piton_abs_int")
+                    self.types[result] = "int"
+            elif function_name in {"min", "max"}:
+                if len(values) != 2:
+                    raise NativeBuildError("native min/max requires two arguments")
+                vtype = self.types.get(values[0])
+                fn = "piton_min_int" if function_name == "min" else "piton_max_int"
+                if vtype == "float":
+                    fn = "piton_min_float" if function_name == "min" else "piton_max_float"
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.extend(["    movq xmm0, rcx", "    movq xmm1, rdx", f"    call {fn}"])
+                    self.lines.append("    movq rax, xmm0")
+                    self.types[result] = "float"
+                else:
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.append(f"    call {fn}")
+                    self.types[result] = "int"
+            elif function_name == "sum":
+                if len(values) != 1:
+                    raise NativeBuildError("native sum requires one collection")
+                ctype = self.types.get(values[0])
+                if ctype == "dict":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_sum_dict")
+                elif ctype == "set":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_sum_set")
+                else:
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_sum_collection")
+                self.types[result] = "int"
+            elif function_name == "type":
+                if len(values) != 1:
+                    raise NativeBuildError("native type requires one argument")
+                vtype = self.types.get(values[0], "int")
+                # Map emitter type to sub_tag for piton_type_from_raw
+                type_tag_map = {
+                    "none": 0, "bool": 1, "int": 2, "float": 3,
+                    "str": 5, "list": 6, "tuple": 7, "dict": 8, "set": 9, "bigint": 10,
+                }
+                type_tag = type_tag_map.get(vtype, 2)
+                self._load_operand(values[0], "rcx")
+                self.lines.append(f"    mov rdx, {type_tag}")
+                self.lines.append("    call piton_type_from_raw")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "str"
             else:
                 if len(values) > 4:
                     raise NativeBuildError("native calls with more than four arguments are not supported yet")

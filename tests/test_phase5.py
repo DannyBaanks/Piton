@@ -227,6 +227,46 @@ class Phase5Gates(unittest.TestCase):
         self.assertFalse(result.equivalent)
         self.assertIn(b"ValueError", result.native.stderr)
 
+    def test_x86_abs_int(self):
+        result = compare_native_to_cpython('imprimir(abs(-42))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_abs_float(self):
+        result = compare_native_to_cpython('imprimir(abs(-3.14))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_min_max_int(self):
+        result = compare_native_to_cpython('imprimir(min(10, 20))\nimprimir(max(10, 20))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_min_max_float(self):
+        result = compare_native_to_cpython('imprimir(min(1.5, 2.5))\nimprimir(max(1.5, 2.5))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_sum_list(self):
+        result = compare_native_to_cpython('imprimir(sum([1, 2, 3]))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_type_int(self):
+        result = compare_native_to_cpython('imprimir(type(42))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_type_str(self):
+        result = compare_native_to_cpython('imprimir(type("hola"))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_type_list(self):
+        result = compare_native_to_cpython('imprimir(type([1, 2]))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_type_bool(self):
+        result = compare_native_to_cpython('imprimir(type(Verdadero))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_type_none(self):
+        result = compare_native_to_cpython('imprimir(type(Nada))\n')
+        self.assertTrue(result.equivalent, result)
+
     def test_x86_finite_pure_generator_for_loop(self):
         source = (
             "funcion valores():\n"
@@ -261,13 +301,43 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
-    def test_x86_rejects_class_inheritance(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "no inheritance"):
-                compile_native(
-                    "clase Base:\n    pasar\nclase Hija(Base):\n    pasar\n",
-                    Path(directory) / "program.exe",
-                )
+    def test_x86_simple_inheritance(self):
+        source = (
+            'clase Base:\n'
+            '    funcion __init__(self, x):\n'
+            '        self.x = x\n'
+            '    funcion get_x(self):\n'
+            '        devolver self.x\n'
+            'clase Hija(Base):\n'
+            '    funcion doble(self):\n'
+            '        devolver self.x * 2\n'
+            'h = Hija(5)\n'
+            'imprimir(h.get_x())\n'
+            'imprimir(h.doble())\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_multilevel_inheritance(self):
+        source = (
+            'clase A:\n'
+            '    funcion __init__(self, x):\n'
+            '        self.x = x\n'
+            '    funcion get_x(self):\n'
+            '        devolver self.x\n'
+            'clase B(A):\n'
+            '    funcion multiply(self, n):\n'
+            '        devolver self.x * n\n'
+            'clase C(B):\n'
+            '    funcion triple(self):\n'
+            '        devolver self.x * 3\n'
+            'c = C(4)\n'
+            'imprimir(c.get_x())\n'
+            'imprimir(c.multiply(5))\n'
+            'imprimir(c.triple())\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
 
     def test_x86_multifile_native_module(self):
         with tempfile.TemporaryDirectory(prefix="piton-multifile-") as directory:
@@ -369,6 +439,149 @@ class Phase5Gates(unittest.TestCase):
             "imprimir(longitud(d))\n"
         )
         result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    # ── Semantic Differential Corpus (25 programs) ──────────────────────
+
+    def test_corpus_01_arithmetic_chain(self):
+        result = compare_native_to_cpython('x = 10\nb = x * 3 + 7\nc = b // 2\nimprimir(c)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_02_boolean_logic(self):
+        result = compare_native_to_cpython('imprimir(Verdadero == Verdadero)\nimprimir(Falso != Verdadero)\nimprimir(no Verdadero)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_03_comparison_chain(self):
+        result = compare_native_to_cpython('imprimir(1 < 2)\nimprimir(3 >= 3)\nimprimir("a" == "a")\nimprimir(1 != 2)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_04_string_ops(self):
+        result = compare_native_to_cpython('s = "hola"\nimprimir(s == "hola")\nimprimir(s != "mundo")\nimprimir(type(s))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_05_list_basics(self):
+        result = compare_native_to_cpython('l = [10, 20, 30]\nimprimir(longitud(l))\nimprimir(l)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_06_dict_basics(self):
+        result = compare_native_to_cpython('d = {1: "uno", 2: "dos"}\nimprimir(longitud(d))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_07_set_basics(self):
+        result = compare_native_to_cpython('s = {1, 2, 3}\nimprimir(longitud(s))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_08_while_loop(self):
+        result = compare_native_to_cpython('x = 0\nmientras x < 5:\n    x = x + 1\nimprimir(x)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_09_for_loop(self):
+        result = compare_native_to_cpython('suma = 0\ni = 0\nmientras i < 5:\n    suma = suma + i\n    i = i + 1\nimprimir(suma)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_10_function_call(self):
+        result = compare_native_to_cpython('funcion cuadrado(x):\n    devolver x * x\nimprimir(cuadrado(7))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_11_if_elif_else(self):
+        result = compare_native_to_cpython('x = 15\nsi x > 20:\n    imprimir("grande")\nsino_si x > 10:\n    imprimir("medio")\nsino:\n    imprimir("chico")\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_12_nested_loops(self):
+        result = compare_native_to_cpython('total = 0\ni = 0\nmientras i < 3:\n    j = 0\n    mientras j < 3:\n        total = total + 1\n        j = j + 1\n    i = i + 1\nimprimir(total)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_13_abs_min_max(self):
+        result = compare_native_to_cpython('imprimir(abs(-10))\nimprimir(min(5, 3))\nimprimir(max(5, 3))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_14_type_check(self):
+        result = compare_native_to_cpython('imprimir(type(42))\nimprimir(type("hola"))\nimprimir(type(Verdadero))\nimprimir(type(Nada))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_15_exception_caught(self):
+        result = compare_native_to_cpython('intentar:\n    lanzar ValueError("test")\nexcepto ValueError:\n    imprimir("caught")\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_16_finally_block(self):
+        result = compare_native_to_cpython('intentar:\n    imprimir("try")\nfinalmente:\n    imprimir("finally")\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_17_class_basic(self):
+        source = (
+            'clase Punto:\n'
+            '    funcion __init__(self, px, py):\n'
+            '        self.px = px\n'
+            '        self.py = py\n'
+            'p = Punto(3, 4)\n'
+            'imprimir(p.px)\n'
+            'imprimir(p.py)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_18_class_method(self):
+        source = (
+            'clase Contador:\n'
+            '    funcion __init__(self):\n'
+            '        self.valor = 0\n'
+            '    funcion incrementar(self):\n'
+            '        self.valor = self.valor + 1\n'
+            'c = Contador()\n'
+            'c.incrementar()\n'
+            'c.incrementar()\n'
+            'imprimir(c.valor)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_19_class_inheritance(self):
+        source = (
+            'clase Base:\n'
+            '    funcion __init__(self, x):\n'
+            '        self.x = x\n'
+            '    funcion get_x(self):\n'
+            '        devolver self.x\n'
+            'clase Hija(Base):\n'
+            '    funcion doble(self):\n'
+            '        devolver self.x * 2\n'
+            'h = Hija(5)\n'
+            'imprimir(h.get_x())\n'
+            'imprimir(h.doble())\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_20_bigint(self):
+        result = compare_native_to_cpython('x = 1000000000000000000000000\nb = x * 2\nimprimir(b)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_21_float_ops(self):
+        result = compare_native_to_cpython('x = 3.14\nb = x * 2\nimprimir(b)\nimprimir(abs(-2.5))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_22_ternary(self):
+        result = compare_native_to_cpython('x = 10\nsi x % 2 == 0:\n    r = "par"\nsino:\n    r = "impar"\nimprimir(r)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_23_augmented_assign(self):
+        result = compare_native_to_cpython('x = 10\nx += 5\nx *= 2\nx -= 3\nimprimir(x)\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_24_multiple_functions(self):
+        source = (
+            'funcion suma(a, b):\n'
+            '    devolver a + b\n'
+            'funcion producto(a, b):\n'
+            '    devolver a * b\n'
+            'imprimir(suma(3, 4))\n'
+            'imprimir(producto(3, 4))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_corpus_25_sum_collection(self):
+        result = compare_native_to_cpython('imprimir(sum([1, 2, 3, 4, 5]))\nimprimir(sum({10, 20, 30}))\n')
         self.assertTrue(result.equivalent, result)
 
 

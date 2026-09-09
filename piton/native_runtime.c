@@ -119,6 +119,7 @@ typedef struct {
 typedef struct {
     PitonHeader header;
     const char *class_name;
+    const char *parent_class_name;  /* NULL if no parent */
     int64_t length;
     PitonAttribute attributes[16];
 } PitonObject;
@@ -640,8 +641,29 @@ void *piton_object_new(const char *class_name) {
     o->header.sub_tag = 0;
     o->header.refcount = 1;
     o->class_name = class_name;
+    o->parent_class_name = NULL;
     ++live_objects;
     return o;
+}
+
+void *piton_object_new_with_parent(const char *class_name, const char *parent_class_name) {
+    PitonObject *o = calloc(1, sizeof(*o));
+    o->header.sub_tag = 0;
+    o->header.refcount = 1;
+    o->class_name = class_name;
+    o->parent_class_name = parent_class_name;
+    ++live_objects;
+    return o;
+}
+
+const char *piton_object_class_name(void *raw) {
+    PitonObject *o = raw;
+    return o ? o->class_name : NULL;
+}
+
+const char *piton_object_parent_class_name(void *raw) {
+    PitonObject *o = raw;
+    return o ? o->parent_class_name : NULL;
 }
 
 void piton_object_set(void *raw, const char *name, int64_t value) {
@@ -939,6 +961,114 @@ void piton_print_float(double value) {
         printf("%.1f\n", value);
     else
         printf("%.15g\n", value);
+}
+
+/* ── Stdlib: abs, min, max, sum, type ────────────────────────────────── */
+
+int64_t piton_abs_int(int64_t x) {
+    return x < 0 ? -x : x;
+}
+
+double piton_abs_float(double x) {
+    return fabs(x);
+}
+
+int64_t piton_min_int(int64_t a, int64_t b) {
+    return a < b ? a : b;
+}
+
+int64_t piton_max_int(int64_t a, int64_t b) {
+    return a > b ? a : b;
+}
+
+double piton_min_float(double a, double b) {
+    return a < b ? a : b;
+}
+
+double piton_max_float(double a, double b) {
+    return a > b ? a : b;
+}
+
+int64_t piton_sum_collection(void *raw) {
+    PitonCollection *c = raw;
+    if (!c) return 0;
+    int64_t total = 0;
+    for (int64_t i = 0; i < c->length; ++i) {
+        int64_t v = c->items[i];
+        if (pv_tag(v) == PITON_TAG_INT)
+            total += pv_payload_signed(v);
+        else if (pv_tag(v) == PITON_TAG_FLOAT) {
+            double *fp = (double *)(uintptr_t)pv_payload(v);
+            total += (int64_t)*fp;
+        }
+    }
+    return total;
+}
+
+int64_t piton_sum_dict(void *raw) {
+    PitonDict *d = raw;
+    if (!d) return 0;
+    int64_t total = 0;
+    for (int64_t i = 0; i < d->length; ++i) {
+        int64_t v = d->entries[i].value;
+        if (pv_tag(v) == PITON_TAG_INT)
+            total += pv_payload_signed(v);
+    }
+    return total;
+}
+
+int64_t piton_sum_set(void *raw) {
+    PitonSet *s = raw;
+    if (!s) return 0;
+    int64_t total = 0;
+    for (int64_t i = 0; i < s->length; ++i) {
+        int64_t v = s->items[i];
+        if (pv_tag(v) == PITON_TAG_INT)
+            total += pv_payload_signed(v);
+    }
+    return total;
+}
+
+const char *piton_type_name(int64_t value) {
+    uint8_t tag = (uint8_t)((uint64_t)value >> 61);
+    switch (tag) {
+        case PITON_TAG_NONE:   return "NoneType";
+        case PITON_TAG_BOOL:   return "bool";
+        case PITON_TAG_INT:    return "int";
+        case PITON_TAG_FLOAT:  return "float";
+        case PITON_TAG_OBJECT: {
+            int64_t ptr = (int64_t)((uint64_t)value & 0x1FFFFFFFFFFFFFFFULL);
+            if (!ptr) return "NoneType";
+            PitonHeader *h = (PitonHeader *)(uintptr_t)ptr;
+            switch (h->sub_tag) {
+                case SUB_TAG_STR:      return "str";
+                case SUB_TAG_LIST:     return "list";
+                case SUB_TAG_TUPLE:    return "tuple";
+                case SUB_TAG_DICT:     return "dict";
+                case SUB_TAG_SET:      return "set";
+                case SUB_TAG_BIGINT:   return "int";
+                default:               return "object";
+            }
+        }
+        default: return "unknown";
+    }
+}
+
+/* Type name from raw pointer + explicit type tag (for emitter-passed values) */
+const char *piton_type_from_raw(int64_t raw_ptr, int64_t type_tag) {
+    switch (type_tag) {
+        case 0: return "<class 'NoneType'>";
+        case 1: return "<class 'bool'>";
+        case 2: return "<class 'int'>";
+        case 3: return "<class 'float'>";
+        case 5: return "<class 'str'>";
+        case 6: return "<class 'list'>";
+        case 7: return "<class 'tuple'>";
+        case 8: return "<class 'dict'>";
+        case 9: return "<class 'set'>";
+        case 10: return "<class 'int'>";
+        default: return "<class 'object'>";
+    }
 }
 
 /* ── Live count totals ────────────────────────────────────────────────── */

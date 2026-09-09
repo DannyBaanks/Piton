@@ -12,7 +12,10 @@ def optimize_mir(module: MIRModule, level: int = 0) -> MIRModule:
     if level not in (0, 1, 2):
         raise ValueError("optimization level must be 0, 1 or 2")
     if level == 0:
-        return MIRModule([MIRFunction(f.name, list(f.params), [MIRBlock(b.label, list(b.instructions)) for b in f.blocks]) for f in module.functions])
+        result = MIRModule([MIRFunction(f.name, list(f.params), [MIRBlock(b.label, list(b.instructions)) for b in f.blocks]) for f in module.functions])
+        result.classes = dict(module.classes)
+        result.class_parents = dict(module.class_parents)
+        return result
     functions = []
     for function in module.functions:
         blocks = []
@@ -34,4 +37,7 @@ def optimize_mir(module: MIRModule, level: int = 0) -> MIRModule:
                 instructions.append(instruction)
             blocks.append(MIRBlock(block.label, instructions))
         functions.append(MIRFunction(function.name, list(function.params), blocks))
-    return MIRModule(functions)
+    result = MIRModule(functions)
+    result.classes = dict(module.classes)
+    result.class_parents = dict(module.class_parents)
+    return result

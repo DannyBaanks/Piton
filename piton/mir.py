@@ -56,6 +56,8 @@ class MIRFunction:
 @dataclass(slots=True)
 class MIRModule:
     functions: List[MIRFunction] = field(default_factory=list)
+    classes: dict = field(default_factory=dict)
+    class_parents: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {"functions": [function.to_dict() for function in self.functions]}
@@ -107,6 +109,7 @@ class MIRLowerer:
         self.functions = []
         self.generators = {}
         self.classes = {}
+        self.class_parents = {}
         self.async_functions = set()
         self.module_aliases = {}
         imported_modules = modules or {}
@@ -130,9 +133,15 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
-                if node.bases or node.keywords or node.decorators or any(item.kind != HIRKind.FUNC_DEF for item in node.body):
-                    raise MIRLoweringError("native classes currently require methods only and no inheritance")
+                if node.keywords or node.decorators or any(item.kind != HIRKind.FUNC_DEF for item in node.body):
+                    raise MIRLoweringError("native classes currently require methods only, no keywords or decorators")
+                if len(node.bases) > 1:
+                    raise MIRLoweringError("native classes support at most one base class")
+                parent_name = node.bases[0].name if node.bases else None
+                if parent_name and parent_name not in self.classes:
+                    raise MIRLoweringError(f"native base class '{parent_name}' must be defined before '{node.name}'")
                 self.classes[node.name] = {method.name for method in node.body}
+                self.class_parents[node.name] = parent_name
                 for method in node.body:
                     self._lower_function(method, f"{node.name}__{method.name}")
             for node in module_body:
@@ -153,7 +162,10 @@ class MIRLowerer:
             builder = _Builder("<module>")
             self._lower_statement(builder, hir)
             self.functions.append(builder.function)
-        return MIRModule(self.functions)
+        module = MIRModule(self.functions)
+        module.classes = dict(self.classes)
+        module.class_parents = dict(self.class_parents)
+        return module
 
     def _lower_function(
         self, node: HIRNode, qualified_name: str | None = None,
@@ -262,8 +274,11 @@ class MIRLowerer:
         self._lower_statements(builder, node.body)
         builder.emit("jump", end_block.label)
         builder.current = else_block
-        self._lower_statements(builder, node.orelse)
-        builder.emit("jump", end_block.label)
+        if len(node.orelse) == 1 and node.orelse[0].kind == HIRKind.IF:
+            self._lower_if(builder, node.orelse[0])
+        else:
+            self._lower_statements(builder, node.orelse)
+            builder.emit("jump", end_block.label)
         builder.current = end_block
 
     def _lower_while(self, builder: _Builder, node: HIRNode) -> None:
@@ -449,11 +464,30 @@ class MIRLowerer:
                 if node.keywords:
                     raise MIRLoweringError("native class constructors do not support keyword arguments yet")
                 result = builder.temp()
-                builder.emit("object_new", node.func.name, result=result)
-                if "__init__" in self.classes[node.func.name]:
+                parent_name = self.class_parents.get(node.func.name)
+                builder.emit("object_new", node.func.name, parent_name, result=result)
+                # Check if class or any parent has __init__
+                has_init = "__init__" in self.classes[node.func.name]
+                check_class = node.func.name
+                while not has_init and check_class:
+                    check_class = self.class_parents.get(check_class)
+                    if check_class and check_class in self.classes:
+                        has_init = "__init__" in self.classes[check_class]
+                init_class = node.func.name
+                if not has_init:
+                    # Walk up to find which class defines __init__
+                    c = node.func.name
+                    while c:
+                        parent = self.class_parents.get(c)
+                        if parent and parent in self.classes and "__init__" in self.classes[parent]:
+                            init_class = parent
+                            has_init = True
+                            break
+                        c = parent
+                if has_init:
                     args = (result, *(self._lower_expr(builder, arg) for arg in node.args))
                     ignored = builder.temp()
-                    builder.emit("method_call", node.func.name, "__init__", result, args[1:], result=ignored)
+                    builder.emit("method_call", init_class, "__init__", result, args[1:], result=ignored)
                 elif node.args:
                     raise MIRLoweringError("native class without __init__ takes no arguments")
                 return result

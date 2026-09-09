@@ -238,7 +238,12 @@ class Parser:
             else:
                 self._advance()
                 self._consume(TokenType.COLON)
-                orelse = self._parse_block()
+                else_body = self._parse_block()
+                if orelse:
+                    orelse[-1].orelse = else_body
+                else:
+                    orelse = else_body
+                break
         return IfStmt(test=test, body=body, orelse=orelse).set_pos(tok)
 
     def _parse_while(self) -> WhileStmt:
