@@ -44,11 +44,13 @@ class MIRFunction:
     name: str
     params: List[str] = field(default_factory=list)
     blocks: List[MIRBlock] = field(default_factory=list)
+    defaults: List[Optional[Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "params": list(self.params),
+            "defaults": list(self.defaults),
             "blocks": [block.to_dict() for block in self.blocks],
         }
 
@@ -189,6 +191,15 @@ class MIRLowerer:
         builder = _Builder(qualified_name or node.name, [*captures, *params])
         builder.is_async = bool(getattr(node, "is_async", False))
         builder.module_aliases = dict(self.module_aliases)
+        if args:
+            raw_defaults = list(getattr(args, "defaults", []) or [])
+            default_params = params[-len(raw_defaults):] if raw_defaults else []
+            defaults_map: dict[str, Any] = {}
+            for param, default_node in zip(default_params, raw_defaults):
+                if default_node.kind != HIRKind.CONST:
+                    raise MIRLoweringError("native function defaults currently support constant values only")
+                defaults_map[param] = default_node.value
+            builder.function.defaults = [defaults_map.get(p) for p in params]
         local_names = set(params) | self._assigned_names(body)
         for nested in (item for item in body if item.kind == HIRKind.FUNC_DEF):
             nested_args = getattr(nested, "args", None)

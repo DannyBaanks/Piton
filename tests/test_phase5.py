@@ -552,6 +552,23 @@ class Phase5Gates(unittest.TestCase):
 
     # ── Semantic Differential Corpus (25 programs) ──────────────────────
 
+    def test_x86_function_default_int(self):
+        result = compare_native_to_cpython('funcion saludar(n=10):\n    devolver n + 1\nimprimir(saludar())\nimprimir(saludar(5))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_function_default_bool(self):
+        result = compare_native_to_cpython('funcion flag(marcar=Verdadero):\n    si marcar:\n        devolver 1\n    sino:\n        devolver 0\nimprimir(flag())\nimprimir(flag(Falso))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_function_multiple_defaults_partial(self):
+        result = compare_native_to_cpython('funcion op(a=1, b=2, c=3):\n    devolver a + b + c\nimprimir(op())\nimprimir(op(10))\nimprimir(op(10, 20))\nimprimir(op(10, 20, 30))\n')
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_function_default_non_const_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "constant"):
+                compile_native('funcion f(n=1 + 2):\n    devolver n\n', Path(directory) / "program.exe")
+
     def test_corpus_01_arithmetic_chain(self):
         result = compare_native_to_cpython('x = 10\nb = x * 3 + 7\nc = b // 2\nimprimir(c)\n')
         self.assertTrue(result.equivalent, result)

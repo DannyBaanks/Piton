@@ -208,6 +208,20 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_rich_multifunction(self):
         self._assert_linux_equiv('funcion suma(a, b):\n    devolver a + b\nfuncion producto(a, b):\n    devolver a * b\nimprimir(suma(3, 4))\nimprimir(producto(3, 4))\n')
 
+    # ── Linux function default values (FUNCTION_DEFAULTS_V1) ───────────
+
+    def test_linux_default_int(self):
+        self._assert_linux_equiv('funcion saludar(n=10):\n    devolver n + 1\nimprimir(saludar())\nimprimir(saludar(5))\n')
+
+    def test_linux_default_bool(self):
+        self._assert_linux_equiv('funcion flag(marcar=Verdadero):\n    si marcar:\n        devolver 1\n    sino:\n        devolver 0\nimprimir(flag())\nimprimir(flag(Falso))\n')
+
+    def test_linux_default_multiple_partial(self):
+        self._assert_linux_equiv('funcion op(a=1, b=2, c=3):\n    devolver a + b + c\nimprimir(op())\nimprimir(op(10))\nimprimir(op(10, 20))\nimprimir(op(10, 20, 30))\n')
+
+    def test_linux_default_nested_calls(self):
+        self._assert_linux_equiv('funcion inc(n=1):\n    devolver n + 1\nimprimir(inc(inc(inc())))\n')
+
 
 if __name__ == "__main__":
     unittest.main()

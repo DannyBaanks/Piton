@@ -42,6 +42,7 @@ class Win64NasmEmitter:
         self.mir_module = module
         self.mir_module_classes = getattr(module, 'classes', {})
         self.function_names = {function.name for function in module.functions}
+        self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self.lines = [
             "default rel", "extern printf", "extern strcmp", "extern strlen",
             "extern malloc", "extern memcpy", "section .text",
@@ -110,6 +111,8 @@ class Win64NasmEmitter:
                     self._reserve(instruction.args[0])
         for scratch in ("@scratch0", "@scratch1", "@scratch2", "@scratch3"):
             self._reserve(scratch)
+        for default_slot in ("%d0", "%d1", "%d2", "%d3"):
+            self._reserve(default_slot)
         # Keep the Win64 32-byte shadow area below every local slot.
         frame = max(48, ((self.next_slot + 32 + 15) // 16) * 16)
         label = "main" if function.name == "<module>" else function.name
@@ -665,6 +668,7 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "str"
             else:
+                values = self._complete_call_args(function_name, list(call_args))
                 if len(values) > 4:
                     raise NativeBuildError("native calls with more than four arguments are not supported yet")
                 for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
@@ -690,6 +694,28 @@ class Win64NasmEmitter:
         if isinstance(value, int):
             return str(value)
         return self._string(str(value))
+
+    def _complete_call_args(self, function_name: str, values: list[Any]) -> list[Any]:
+        defaults = self.function_defaults.get(function_name)
+        if not defaults:
+            return values
+        while len(values) < len(defaults):
+            default_value = defaults[len(values)]
+            if default_value is None:
+                break
+            const_temp = f"%d{len(values)}"
+            self._emit_const_into(const_temp, default_value)
+            values.append(const_temp)
+        return values
+
+    def _emit_const_into(self, temp: str, value: Any) -> None:
+        if isinstance(value, str):
+            self.lines.append(f"    lea rcx, [{self._string(value)}]")
+            self.lines.append(f"    mov {self._address(temp)}, rcx")
+            self.types[temp] = "str"
+        else:
+            self.lines.append(f"    mov qword {self._address(temp)}, {self._immediate(value)}")
+            self.types[temp] = "none" if value is None else "bool" if isinstance(value, bool) else "int"
 
     def _string(self, value: str) -> str:
         if value not in self.strings:

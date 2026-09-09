@@ -109,6 +109,7 @@ class LinuxCEmitter:
         self.classes = getattr(module, "classes", {})
         self.class_parents = getattr(module, "class_parents", {})
         self.function_names = {function.name for function in module.functions}
+        self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self._has_bigint = any(
             instruction.op == "const" and instruction.args
             and isinstance(instruction.args[0], int) and abs(instruction.args[0]) > 9223372036854775807
@@ -180,12 +181,16 @@ class LinuxCEmitter:
     def _value(self, value: Any) -> str:
         if isinstance(value, str) and value.startswith("%"):
             return _name(value)
+        if isinstance(value, str):
+            return f"(long){json.dumps(value)}"
         if value is None:
             return "0"
         if isinstance(value, bool):
             return str(int(value))
         if isinstance(value, int):
             return str(value)
+        if isinstance(value, float):
+            return f"piton_double_bits({value.hex()})"
         raise NativeBuildError(f"Linux scalar backend cannot encode {value!r}")
 
     @staticmethod
@@ -207,6 +212,17 @@ class LinuxCEmitter:
                 return current
             current = self.class_parents.get(current)
         raise NativeBuildError(f"native method not found: {class_name}.{method}")
+
+    def _complete_call_args(self, function_name: str, values: list[Any]) -> list[Any]:
+        defaults = self.function_defaults.get(function_name)
+        if not defaults:
+            return values
+        while len(values) < len(defaults):
+            default_value = defaults[len(values)]
+            if default_value is None:
+                break
+            values.append(default_value)
+        return values
 
     def _emit_instruction(
         self, instruction: MIRInstruction, function: MIRFunction,
@@ -403,6 +419,7 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(types.get(values[0], 'int'))});")
                 types[result] = "str"
             else:
+                values = self._complete_call_args(function_name, list(values))
                 encoded_values = ",".join(self._value(value) for value in values)
                 out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
                 types[result] = "int"

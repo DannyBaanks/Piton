@@ -22,6 +22,12 @@ código .piton
 
 Requiere CPython 3.12 o posterior. Fue probado con CPython 3.12.4 en Windows.
 
+> **Documentación de autoridad para continuar PITÓN:** si vas a trabajar en
+> paridad con CPython 3.12, lee primero `docs/PITON_CPYTHON_3_12_MASTER_ROADMAP.md`
+> y `docs/FRESH_SESSION_HANDOFF.md`. Ver también `docs/PARITY_DEFINITION.md`,
+> `docs/CPYTHON_PARITY_DEPENDENCY_DAG.md`, `docs/FEATURE_STATUS_MATRIX.md` y
+> `docs/STDLIB_PARITY_MATRIX.md`.
+
 ```powershell
 py -m pip install -e . --no-build-isolation
 piton ejecutar examples\01_hola.piton
@@ -257,9 +263,9 @@ para afirmar la afirmación.
 ### Estado nativo verificado (2026-09-08)
 
 ```text
-85/85 tests pass (test_phase5.py + test_phase14.py, Windows PE)
-32/32 Linux ELF tests pass (test_phase10_linux.py: 3 gates + 20 differential + no-python-marker)
-117/117 total native tests pass
+89/89 tests pass (test_phase5.py + test_phase14.py, Windows PE)
+36/36 Linux ELF tests pass (test_phase10_linux.py)
+125/125 total native tests pass
 20/20 Windows x86-64 clean execution evidence (evidence_windows.py)
 9/9 Unicode byte-identical vs CPython 3.12.4
 14/14 BigInt Win64 differential tests
