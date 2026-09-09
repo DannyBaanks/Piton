@@ -939,36 +939,69 @@ def compile_native(source: str, output: str | Path) -> Path:
     return _compile_native_mir(mir, output)
 
 
-def compile_native_files(entry: str | Path, output: str | Path) -> Path:
-    entry_path = Path(entry).resolve()
-    source = entry_path.read_text(encoding="utf-8-sig")
-    hir = lower_cst_to_hir(parse(source))
-    modules = {}
-    from_imports = {}  # {(module_name, local_name): True}
+def resolve_native_module(root: Path, dotted: str) -> Path:
+    """Resuelve un módulo nativo: hermano (``x.piton``), paquete (``x/__init__.piton``)
+    o submódulo (``pkg/sub.piton``). Fail-closed con mensaje claro en cada caso."""
+    parts = dotted.split(".")
+    if len(parts) == 1:
+        direct = root / f"{parts[0]}.piton"
+        if direct.is_file():
+            return direct
+        package_init = root / parts[0] / "__init__.piton"
+        if package_init.is_file():
+            return package_init
+        raise NativeBuildError(f"native module not found: {parts[0]}")
+    package_dir = root / parts[0]
+    if not (package_dir / "__init__.piton").is_file():
+        raise NativeBuildError(
+            f"native module not found: '{dotted}' requires package '{parts[0]}' with __init__.piton"
+        )
+    current = package_dir
+    for part in parts[1:-1]:
+        current = current / part
+        if not (current / "__init__.piton").is_file():
+            raise NativeBuildError(
+                f"native module not found: package '{current.name}' requires __init__.piton"
+            )
+    candidate = current / f"{parts[-1]}.piton"
+    if not candidate.is_file():
+        raise NativeBuildError(f"native module not found: {dotted}")
+    return candidate
+
+
+def _scan_native_modules(entry: Path) -> tuple[dict[str, Any], dict[tuple[str, str], bool]]:
+    """Cargan los módulos nativos (hermano o paquete) referenciados por el entry."""
+    root = entry.parent
+    hir = lower_cst_to_hir(parse(entry.read_text(encoding="utf-8-sig")))
+    modules: dict[str, Any] = {}
+    from_imports: dict[tuple[str, str], bool] = {}
     for statement in hir.body:
         if statement.kind.name == "IMPORT":
             for alias in statement.names:
                 if alias.name in {"asyncio", "math"}:
                     continue
                 if "." in alias.name:
-                    raise NativeBuildError("native packages are not supported yet")
-                module_path = entry_path.with_name(f"{alias.name}.piton")
-                if not module_path.is_file():
-                    raise NativeBuildError(f"native module not found: {module_path}")
+                    raise NativeBuildError(
+                        "'importar pkg.sub' (dotted package import) is not supported yet; "
+                        "use 'desde pkg.sub importar fn'"
+                    )
+                module_path = resolve_native_module(root, alias.name)
                 modules[alias.name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
         elif statement.kind.name == "IMPORT_FROM":
             mod_name = getattr(statement, "module", None)
             if not mod_name or mod_name in {"asyncio", "math"}:
                 continue
-            if "." in mod_name:
-                raise NativeBuildError("native packages are not supported yet")
-            module_path = entry_path.with_name(f"{mod_name}.piton")
-            if not module_path.is_file():
-                raise NativeBuildError(f"native module not found: {module_path}")
-            if mod_name not in modules:
-                modules[mod_name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
+            module_path = resolve_native_module(root, mod_name)
+            modules[mod_name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
             for alias in statement.names:
                 from_imports[(mod_name, alias.asname or alias.name)] = True
+    return modules, from_imports
+
+
+def compile_native_files(entry: str | Path, output: str | Path) -> Path:
+    entry_path = Path(entry).resolve()
+    hir = lower_cst_to_hir(parse(entry_path.read_text(encoding="utf-8-sig")))
+    modules, from_imports = _scan_native_modules(entry_path)
     try:
         mir = lower_hir_to_mir(hir, modules, from_imports=from_imports)
     except MIRLoweringError as error:

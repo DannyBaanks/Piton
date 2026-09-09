@@ -27,7 +27,7 @@ una ejecución dentro de una VM Windows limpia permanece `NOT_DEMONSTRATED`.
 | Closures | PASS | `tests/test_phase5.py` + `test_phase10_linux.py` | FRAME_MODEL_V1 PASS (Win 6 + Linux 4): cells para captures, recursion nativa, closure recursivo, anidadas con capture transitivo. Escape y cells mutables → `CLOSURES_COMPLETE_V1` |
 | Generators | PARTIAL | `tests/test_phase5.py` | frames suspendidos, send/throw/yield from |
 | Clases | PARTIAL | `tests/test_phase5.py` | herencia, descriptors, metaclasses y fields heterogéneos |
-| Imports | PARTIAL | `tests/test_phase5.py` | paquetes, ciclos, from-import y estado de módulo |
+| Imports | PASS | `tests/test_phase5.py` + `test_phase10_linux.py` | IMPORT_PACKAGE_V1 PASS (Win 5 + Linux 4): paquetes con `__init__.piton`, `pkg.fn()` via module-attr, `desde pkg importar fn`, submódulos `desde pkg.sub importar fn`, byte-idénticos vs CPython. `importar pkg.sub`, ciclos, star, relative y estado de módulo → `IMPORT_RELATIVE_V1`/`MODULE_METADATA_V1` |
 | Async | PARTIAL | `tests/test_phase5.py` | suspensión, cancellation y scheduler |
 | Stdlib/FFI | PARTIAL | `tests/test_phase5.py` | solo `math.sqrt`; módulos y ABI restantes |
 | Linux x86-64 | PARTIAL | `tests/test_phase10_linux.py` | backend ELF escalar; runtime rico pendiente |

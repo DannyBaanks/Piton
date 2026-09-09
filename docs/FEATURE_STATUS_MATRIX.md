@@ -6,7 +6,7 @@
 
 Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 
-## 1. Línea base verificada (2026-09-08, commit `fa071bf`)
+## 1. Línea base verificada (2026-09-09, commit pendiente de push)
 
 - **117/117 tests** (85 Windows + 32 Linux).
 - Ambos backends ejecutan el subset rico byte-idéntico vs CPython 3.12.4.
@@ -28,7 +28,7 @@ Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 | classes | PASS | PASS | PASS | `test_phase5.py` | MRO, super, metaclasses |
 | descriptors | PARTIAL | PARTIAL | PARTIAL | `object_protocol.py` | bootstrap; native abierto |
 | metaclasses | NOT_DEMONSTRATED | NOT_DEMONSTRATED | NOT_DEMONSTRATED | `ROADMAP.md` | no implementado |
-| imports | PASS | PASS | PARTIAL | `test_phase5.py` | packages, ciclos, star, relative, cache, sys.modules |
+| imports | PASS | PASS | PASS | `test_phase5.py` + `test_phase10_linux.py` | IMPORT_PACKAGE_V1 PASS: paquetes con `__init__.piton`, `pkg.fn()` via module-attr, `desde pkg importar fn`, submódulos `desde pkg.sub importar fn` Win+Linux byte-idénticos vs CPython (Win 5 tests, Linux 4 tests). Sigue: `importar pkg.sub`, ciclos, star, relative, cache, sys.modules (`MODULE_METADATA_V1`/`IMPORT_RELATIVE_V1`) |
 | async | PASS | PASS | NOT_DEMONSTRATED | `test_phase5.py` | scheduler/concurrent, suspension real |
 | stdlib | PASS | PASS | PASS | `test_phase5.py` | abs/min/max/sum/type/len/print/math.sqrt |
 | dynamic_code | PARTIAL | PARTIAL | NOT_DEMONSTRATED | `runtime.py` | bootstrap APIs; ejecución nativa ausente |

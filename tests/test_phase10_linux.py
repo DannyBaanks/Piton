@@ -6,7 +6,12 @@ import tempfile
 from pathlib import Path
 import unittest
 
-from piton.linux_x86 import build_single_file_initramfs, compile_native_linux, windows_to_wsl_path
+from piton.linux_x86 import (
+    build_single_file_initramfs,
+    compile_native_linux,
+    compile_native_linux_files,
+    windows_to_wsl_path,
+)
 from piton.translator import traducir_fuente
 
 
@@ -282,6 +287,78 @@ class Phase10LinuxGates(unittest.TestCase):
 
     def test_linux_immutable_scalar_closure(self):
         self._assert_linux_equiv('funcion exterior(x):\n    factor = 3\n    funcion interior(valor):\n        devolver x + factor * valor\n    devolver interior(4)\nimprimir(exterior(2))\n')
+
+    # ── Linux packages (IMPORT_PACKAGE_V1) ──────────────────────────────
+
+    def _assert_package_equiv(self, package_init, submodules, main):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-package-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text(package_init, encoding="utf-8")
+            (pkg_dir / "__init__.py").write_text(
+                traducir_fuente(package_init, "<pkg-init>"), encoding="utf-8"
+            )
+            for sub_name, sub_src in (submodules or {}).items():
+                (pkg_dir / f"{sub_name}.piton").write_text(sub_src, encoding="utf-8")
+                (pkg_dir / f"{sub_name}.py").write_text(
+                    traducir_fuente(sub_src, f"<pkg-{sub_name}>"), encoding="utf-8"
+                )
+            entry = root / "main.piton"
+            entry.write_text(main, encoding="utf-8")
+            main_py = root / "main.py"
+            main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
+            executable = compile_native_linux_files(entry, root / "program")
+            linux_path = windows_to_wsl_path(executable)
+            native_run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                capture_output=True, check=False, timeout=10,
+            )
+            oracle_run = subprocess.run(
+                [sys.executable, str(main_py)], capture_output=True, check=False, timeout=10,
+            )
+            native_stdout = native_run.stdout.replace(b"\r\n", b"\n")
+            oracle_stdout = oracle_run.stdout.replace(b"\r\n", b"\n")
+            self.assertEqual(
+                (native_run.returncode, native_stdout),
+                (oracle_run.returncode, oracle_stdout),
+                native_run.stderr,
+            )
+
+    def test_linux_package_import_uses_init(self):
+        init = "funcion cuadrado(n):\n    devolver n * n\n"
+        main = "importar pkg\nimprimir(pkg.cuadrado(7))\n"
+        self._assert_package_equiv(init, None, main)
+
+    def test_linux_package_from_import_submodule(self):
+        init = "funcion doble(x):\n    devolver x * 2\n"
+        submodules = {
+            "numeros": "funcion suma(a, b):\n    devolver a + b\n",
+        }
+        main = (
+            "importar pkg\n"
+            "desde pkg.numeros importar suma\n"
+            "imprimir(pkg.doble(21))\n"
+            "imprimir(suma(40, 2))\n"
+        )
+        self._assert_package_equiv(init, submodules, main)
+
+    def test_linux_package_from_import_init_function(self):
+        init = "funcion triple(n):\n    devolver n * 3\n"
+        main = "desde pkg importar triple\nimprimir(triple(8))\n"
+        self._assert_package_equiv(init, None, main)
+
+    def test_linux_package_missing_init_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-package-fail-") as directory:
+            root = Path(directory)
+            root.joinpath("pkg").mkdir()
+            (root / "pkg" / "sub.piton").write_text(
+                "funcion fn():\n    devolver 1\n", encoding="utf-8"
+            )
+            entry = root / "main.piton"
+            entry.write_text("desde pkg.sub importar fn\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "requires package"):
+                compile_native_linux_files(entry, root / "program")
 
 
 if __name__ == "__main__":

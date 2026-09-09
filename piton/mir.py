@@ -151,12 +151,12 @@ class MIRLowerer:
                             if mod_name in {"asyncio", "math"}:
                                 self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
                             else:
-                                self.from_import_aliases[local] = f"{mod_name}__{alias.name}"
+                                self.from_import_aliases[local] = f"{mod_name.replace('.', '__')}__{alias.name}"
             for module_name, imported in sorted(imported_modules.items()):
                 for item in imported.body:
                     if item.kind != HIRKind.FUNC_DEF:
                         raise MIRLoweringError("native imported modules currently support functions only")
-                    self._lower_function(item, f"{module_name}__{item.name}")
+                    self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
@@ -639,7 +639,7 @@ class MIRLowerer:
                     builder.emit("math_sqrt", value, result=result)
                     return result
                 function = builder.temp()
-                builder.emit("load", f"{module_name}__{node.func.attr}", result=function)
+                builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
                 builder.emit("call", function, args, result=result)

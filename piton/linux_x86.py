@@ -12,7 +12,7 @@ from typing import Any
 from .lower import lower_cst_to_hir
 from .mir import MIRFunction, MIRInstruction, MIRLoweringError, MIRModule, lower_hir_to_mir
 from .parser import parse
-from .x86 import NativeBuildError, _BUILTINS
+from .x86 import NativeBuildError, _BUILTINS, _scan_native_modules
 
 
 _RICH_FREESTANDING_C = r"""
@@ -550,6 +550,34 @@ def windows_to_wsl_path(path: str | Path) -> str:
 def compile_native_linux(source: str, output: str | Path) -> Path:
     try:
         mir = lower_hir_to_mir(lower_cst_to_hir(parse(source)))
+    except MIRLoweringError as error:
+        raise NativeBuildError(str(error)) from error
+    output_path = Path(output).resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="piton-linux-") as directory:
+        c_path = Path(directory) / "program.c"
+        c_path.write_text(LinuxCEmitter().emit(mir), encoding="utf-8")
+        completed = subprocess.run(
+            [
+                "wsl.exe", "gcc", "-std=c11", "-O2", "-ffreestanding",
+                "-fno-stack-protector", "-fno-pie", "-no-pie", "-nostdlib", "-static",
+                windows_to_wsl_path(c_path), "-o", windows_to_wsl_path(output_path),
+            ],
+            capture_output=True, text=True, check=False,
+        )
+        if completed.returncode:
+            raise NativeBuildError(completed.stderr or completed.stdout)
+    return output_path
+
+
+def compile_native_linux_files(entry: str | Path, output: str | Path) -> Path:
+    """Compila un entry multi-módulo (hermanos, paquetes con ``__init__.piton``,
+    submódulos ``desde pkg.sub importar fn``) a ELF con el backend Linux."""
+    entry_path = Path(entry).resolve()
+    hir = lower_cst_to_hir(parse(entry_path.read_text(encoding="utf-8-sig")))
+    modules, from_imports = _scan_native_modules(entry_path)
+    try:
+        mir = lower_hir_to_mir(hir, modules, from_imports=from_imports)
     except MIRLoweringError as error:
         raise NativeBuildError(str(error)) from error
     output_path = Path(output).resolve()

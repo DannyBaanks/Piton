@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
-from piton.x86 import compile_native, compile_native_files
+from piton.x86 import NativeBuildError, compile_native, compile_native_files
 from piton.native_differential import compare_native_to_cpython
+from piton.translator import traducir_fuente
 
 
 class Phase5Gates(unittest.TestCase):
@@ -475,6 +477,93 @@ class Phase5Gates(unittest.TestCase):
             executable = compile_native_files(entry, root / "program.exe")
             completed = subprocess.run([str(executable)], capture_output=True, check=False)
             self.assertEqual((completed.returncode, completed.stdout), (0, b"10\r\n15\r\n"))
+
+    def _assert_package_equiv(self, package_init, submodules, main):
+        with tempfile.TemporaryDirectory(prefix="piton-package-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text(package_init, encoding="utf-8")
+            (pkg_dir / "__init__.py").write_text(
+                traducir_fuente(package_init, "<pkg-init>"), encoding="utf-8"
+            )
+            for sub_name, sub_src in (submodules or {}).items():
+                (pkg_dir / f"{sub_name}.piton").write_text(sub_src, encoding="utf-8")
+                (pkg_dir / f"{sub_name}.py").write_text(
+                    traducir_fuente(sub_src, f"<pkg-{sub_name}>"), encoding="utf-8"
+                )
+            entry = root / "main.piton"
+            entry.write_text(main, encoding="utf-8")
+            main_py = root / "main.py"
+            main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
+            executable = compile_native_files(entry, root / "program.exe")
+            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
+            oracle_run = subprocess.run([sys.executable, str(main_py)], capture_output=True, check=False)
+            self.assertEqual(
+                (native_run.returncode, native_run.stdout),
+                (oracle_run.returncode, oracle_run.stdout),
+                native_run.stderr,
+            )
+
+    def test_x86_package_import_uses_init(self):
+        init = "funcion cuadrado(n):\n    devolver n * n\n"
+        main = "importar pkg\nimprimir(pkg.cuadrado(7))\n"
+        self._assert_package_equiv(
+            init,
+            None,
+            main,
+        )
+
+    def test_x86_package_from_import_init_function(self):
+        init = "funcion triple(n):\n    devolver n * 3\n"
+        main = "desde pkg importar triple\nimprimir(triple(8))\n"
+        self._assert_package_equiv(
+            init,
+            None,
+            main,
+        )
+
+    def test_x86_package_init_and_submodule_combined(self):
+        init = "funcion doble(x):\n    devolver x * 2\n"
+        submodules = {
+            "numeros": "funcion suma(a, b):\n    devolver a + b\n",
+        }
+        main = (
+            "importar pkg\n"
+            "desde pkg.numeros importar suma\n"
+            "imprimir(pkg.doble(21))\n"
+            "imprimir(suma(40, 2))\n"
+        )
+        self._assert_package_equiv(
+            init,
+            submodules,
+            main,
+        )
+
+    def test_x86_package_missing_init_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-package-fail-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "sub.piton").write_text(
+                "funcion fn():\n    devolver 1\n", encoding="utf-8"
+            )
+            entry = root / "main.piton"
+            entry.write_text("desde pkg.sub importar fn\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "requires package"):
+                compile_native_files(entry, root / "program.exe")
+
+    def test_x86_dotted_import_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-package-fail-") as directory:
+            root = Path(directory)
+            root.joinpath("pkg").mkdir()
+            (root / "pkg" / "__init__.piton").write_text(
+                "funcion fn():\n    devolver 1\n", encoding="utf-8"
+            )
+            entry = root / "main.piton"
+            entry.write_text("importar pkg.sub\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "not supported yet"):
+                compile_native_files(entry, root / "program.exe")
 
     def test_x86_async_run_await_and_math_stdlib(self):
         source = (

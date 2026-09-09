@@ -115,7 +115,7 @@ afirmación y criterio (los agentes pueden expandirlos siguiendo el esquema de l
 ### 11. Runtime (M1, M5, M8)
 
 `FRAME_MODEL_V1` — Base de closures y generadores.
-- **CURRENT_STATUS**: **PASS** (166 tests total, Win+Linux, byte-idéntico vs CPython).
+- **CURRENT_STATUS**: **PASS** (175 tests total, Win+Linux, byte-idéntico vs CPython).
 - **PURPOSE**: frames con params, locals, cells y control no local.
 - **IMPLEMENTATION**: captures vía cells heap (16 bytes: valor + type tag) creados
   por `cell_new` al entry de la función definidora (wrapping del valor de params,
@@ -217,8 +217,28 @@ Gates de detalle: `EXCEPTION_RERAISE_V1`, `EXCEPTION_FROM_V1`,
 ### 16. Imports (M7)
 
 `IMPORT_PACKAGE_V1` — paquetes con `__init__` y `__path__`.
-- **CURRENT_STATUS**: NOT_DEMONSTRATED (solo hermanos + from-import).
-- **COMPLEXITY**: MEDIUM.
+- **CURRENT_STATUS**: **PASS** (2026-09-09).
+- **DEPENDENCIES**: `IMPORT_CORE` (módulo hermano + from-import).
+- **COMPLEXITY**: MEDIUM → resuelto.
+- **IMPLEMENTATION**:
+  - El parser acepta paths dotted (`importar pkg`, `desde pkg.sub importar fn`)
+    — el CSP de `desde . importar` (relative, level) queda intacto.
+  - Resolución package-aware `resolve_native_module(root, dotted)`: módulo
+    hermano (`x.piton`) primero; si no, paquete (`x/__init__.piton`); para
+    `a.b[.c]` exige `a/__init__.piton` en cada nivel y resuelve
+    `a/b.piton`. Fail-closed con mensajes ("native module not found",
+    "... requires package ... with __init__.piton").
+  - `_scan_native_modules(entry)` compartido por los backends: levanta
+    hermanos y paquetes a HIR y devuelve `(modules, from_imports)`.
+  - Símbolos nativos dot-normalizados en MIR: `pkg.sub.fn` → `pkg__sub__fn`
+    (from-import, lifting de funciones y module-attr call).
+  - Nuevo `compile_native_linux_files` en el backend ELF (espejo del Win).
+  - Suite: 175/175 total (118 Win: 110 phase5 + 3 phase14 + 5 package ·
+    57 Linux: 53 + 4 package). Win y Linux byte-idénticos vs CPython.
+- **KNOWN_GAP**: `importar pkg.sub` (dotted IMPORT) rechazado fail-closed —
+  requiere attr-chain `pkg.sub.fn` en MIR; toca `MODULE_METADATA_V1`. Los
+  módulos importados todavía no pueden importar a su vez (scan del entry
+  solamente, no transitivo).
 `IMPORT_RELATIVE_V1`, `IMPORT_STAR_V1`, `IMPORT_CYCLIC_V1`,
 `MODULE_METADATA_V1` (`__name__`/`__file__`/`__package__`/`sys.modules`).
 
@@ -310,11 +330,14 @@ con sus tests de integración. Nunca por suma automática de partes.
 ## 30. Apéndice — primeros 10 gates recomendados (orden de trabajo)
 
 **Completado:** `FUNCTION_DEFAULTS_V1` (defaults constantes),
-`FUNCTION_KEYWORD_ARGS_V1` (kwargs por nombre) y `FUNCTION_ARGS_V1`
-(`*args`/`**kwargs`/keyword-only/positional-only), todos Win+Linux PASS.
+`FUNCTION_KEYWORD_ARGS_V1` (kwargs por nombre), `FUNCTION_ARGS_V1`
+(`*args`/`**kwargs`/keyword-only/positional-only) y `IMPORT_PACKAGE_V1`
+(paquetes `__init__`/`__path__` + submódulos `desde pkg.sub importar`),
+todos Win+Linux PASS.
 
 1. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
-2. `IMPORT_PACKAGE_V1` (MEDIUM) — paquetes + `__init__`.
+2. `IMPORT_PACKAGE_V1` (MEDIUM) — paquetes + `__init__`. **PASS**. Sigue
+   `MODULE_METADATA_V1` (objetos módulo/runtime) o `IMPORT_RELATIVE_V1`.
 3. `MODULE_METADATA_V1` (MEDIUM) — `__name__`/`__file__`/`sys.modules`.
 4. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario.
 5. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare.
@@ -352,7 +375,7 @@ reconstruyas el runtime para cerrar un test pequeño.
 
 ## 34. Conteo actual y veredictos (baseline)
 
-Ver `FEATURE_STATUS_MATRIX.md`. 166/166 tests; gates PASS en el dashboard
+Ver `FEATURE_STATUS_MATRIX.md`. 175/175 tests; gates PASS en el dashboard
 (incl. `FULL_PARITY`, retirado como término en `PARITY_DEFINITION.md`).
 Features PARTIAL: functions, generators, descriptors, dynamic_code,
 introspection, ffi. NOT_DEMONSTRATED: metaclasses, multiprocessing.

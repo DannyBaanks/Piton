@@ -48,7 +48,7 @@ FEATURES = (
     Feature("classes", "PASS", "tests/test_phase5.py", "native fields/methods/single/multi-level inheritance; metaclasses/descriptors open"),
     Feature("descriptors", "PARTIAL", "piton/object_protocol.py", "bootstrap only; native gate open"),
     Feature("metaclasses", "NOT_DEMONSTRATED", "ROADMAP.md", "not implemented"),
-    Feature("imports", "PASS", "tests/test_phase5.py", "importar + desde X importar Y, math/asyncio builtins; packages/cycles open"),
+    Feature("imports", "PASS", "tests/test_phase5.py + tests/test_phase10_linux.py", "IMPORT_PACKAGE_V1: paquetes con __init__.piton, pkg.fn(), desde pkg importar fn, submódulos desde pkg.sub importar fn Win+Linux (importar pkg.sub / cycles / star open -> MODULE_METADATA_V1, IMPORT_RELATIVE_V1)"),
     Feature("async", "PASS", "tests/test_phase5.py", "async def + await + asyncio.run differential-tested; scheduler/concurrent open"),
     Feature("stdlib", "PASS", "tests/test_phase5.py", "native abs, min, max, sum, type, len, print, math.sqrt"),
     Feature("dynamic_code", "PARTIAL", "piton/runtime.py", "explicit bootstrap APIs; native execution absent"),

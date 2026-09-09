@@ -433,6 +433,8 @@ class Parser:
         names = []
         while True:
             name = self._consume(TokenType.NAME).value
+            while self._match(TokenType.DOT) and self._check(TokenType.NAME):
+                name += "." + self._consume(TokenType.NAME).value
             asname = None
             if self._check(TokenType.NAME) and self._peek().value == "como":
                 self._advance()
@@ -450,6 +452,8 @@ class Parser:
         module = None
         if self._check(TokenType.NAME):
             module = self._consume(TokenType.NAME).value
+            while self._match(TokenType.DOT) and self._check(TokenType.NAME):
+                module += "." + self._consume(TokenType.NAME).value
         self._consume(TokenType.NAME)  # 'importar'
         names = []
         while True:
