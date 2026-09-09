@@ -361,6 +361,71 @@ class Phase5Gates(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "module not found"):
                 compile_native_files(entry, root / "program.exe")
 
+    def test_x86_from_import_single_function(self):
+        with tempfile.TemporaryDirectory(prefix="piton-fromimport-") as directory:
+            root = Path(directory)
+            (root / "mathlib.piton").write_text(
+                "funcion cuadrado(n):\n    devolver n * n\n", encoding="utf-8"
+            )
+            entry = root / "main.piton"
+            entry.write_text(
+                "desde mathlib importar cuadrado\nimprimir(cuadrado(7))\n", encoding="utf-8"
+            )
+            executable = compile_native_files(entry, root / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual((completed.returncode, completed.stdout), (0, b"49\r\n"))
+
+    def test_x86_from_import_multiple_functions(self):
+        with tempfile.TemporaryDirectory(prefix="piton-fromimport-") as directory:
+            root = Path(directory)
+            (root / "ops.piton").write_text(
+                "funcion suma(a, b):\n    devolver a + b\n"
+                "funcion resta(a, b):\n    devolver a - b\n",
+                encoding="utf-8",
+            )
+            entry = root / "main.piton"
+            entry.write_text(
+                "desde ops importar suma, resta\nimprimir(suma(10, 3))\nimprimir(resta(10, 3))\n",
+                encoding="utf-8",
+            )
+            executable = compile_native_files(entry, root / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual((completed.returncode, completed.stdout), (0, b"13\r\n7\r\n"))
+
+    def test_x86_from_import_missing_module_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-fromimport-") as directory:
+            root = Path(directory)
+            entry = root / "main.piton"
+            entry.write_text("desde fantasma importar algo\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "module not found"):
+                compile_native_files(entry, root / "program.exe")
+
+    def test_x86_from_import_math(self):
+        source = (
+            "desde math importar sqrt\n"
+            "imprimir(sqrt(16))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_import_and_from_import_combined(self):
+        with tempfile.TemporaryDirectory(prefix="piton-combined-") as directory:
+            root = Path(directory)
+            (root / "utils.piton").write_text(
+                "funcion doble(x):\n    devolver x * 2\n"
+                "funcion triple(x):\n    devolver x * 3\n",
+                encoding="utf-8",
+            )
+            entry = root / "main.piton"
+            entry.write_text(
+                "importar utils\ndesde utils importar triple\n"
+                "imprimir(utils.doble(5))\nimprimir(triple(5))\n",
+                encoding="utf-8",
+            )
+            executable = compile_native_files(entry, root / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual((completed.returncode, completed.stdout), (0, b"10\r\n15\r\n"))
+
     def test_x86_async_run_await_and_math_stdlib(self):
         source = (
             "importar asyncio\n"
@@ -380,6 +445,50 @@ class Phase5Gates(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "must be awaited"):
                 compile_native(
                     "asincrono funcion valor():\n    devolver 1\nx = valor()\n",
+                    Path(directory) / "program.exe",
+                )
+
+    def test_x86_async_simple_coroutine(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion saludar():\n"
+            '    imprimir("hola")\n'
+            "asyncio.run(saludar())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_async_nested_await(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion interior():\n"
+            "    devolver 10\n"
+            "asincrono funcion exterior():\n"
+            "    v = esperar interior()\n"
+            "    imprimir(v)\n"
+            "asyncio.run(exterior())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_async_with_computation(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion calcular(n):\n"
+            "    devolver n * n + 1\n"
+            "asincrono funcion principal():\n"
+            "    r = esperar calcular(5)\n"
+            "    imprimir(r)\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_async_rejects_await_outside_async(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "await is only valid"):
+                compile_native(
+                    "devolver esperar 1\n",
                     Path(directory) / "program.exe",
                 )
 

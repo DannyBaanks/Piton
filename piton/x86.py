@@ -12,6 +12,7 @@ import tempfile
 from typing import Any
 
 from piton.lower import lower_cst_to_hir
+from piton.hir import HIRKind
 from piton.mir import MIRBlock, MIRFunction, MIRInstruction, MIRLoweringError, MIRModule, lower_hir_to_mir
 from piton.parser import parse
 
@@ -859,8 +860,17 @@ def emit_nasm(module: MIRModule) -> str:
 
 def compile_native(source: str, output: str | Path) -> Path:
     hir = lower_cst_to_hir(parse(source))
+    from_imports = {}
+    for statement in hir.body:
+        if getattr(statement, "kind", None) == HIRKind.IMPORT_FROM:
+            mod_name = getattr(statement, "module", None)
+            if mod_name and mod_name not in {"asyncio", "math"}:
+                raise NativeBuildError(f"native from-import requires multi-file compilation: {mod_name}")
+            for alias in getattr(statement, "names", []):
+                if mod_name in {"asyncio", "math"}:
+                    from_imports[(mod_name, alias.asname or alias.name)] = True
     try:
-        mir = lower_hir_to_mir(hir)
+        mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
     except MIRLoweringError as error:
         raise NativeBuildError(str(error)) from error
     return _compile_native_mir(mir, output)
@@ -871,20 +881,33 @@ def compile_native_files(entry: str | Path, output: str | Path) -> Path:
     source = entry_path.read_text(encoding="utf-8-sig")
     hir = lower_cst_to_hir(parse(source))
     modules = {}
+    from_imports = {}  # {(module_name, local_name): True}
     for statement in hir.body:
-        if statement.kind.name != "IMPORT":
-            continue
-        for alias in statement.names:
-            if alias.name in {"asyncio", "math"}:
+        if statement.kind.name == "IMPORT":
+            for alias in statement.names:
+                if alias.name in {"asyncio", "math"}:
+                    continue
+                if "." in alias.name:
+                    raise NativeBuildError("native packages are not supported yet")
+                module_path = entry_path.with_name(f"{alias.name}.piton")
+                if not module_path.is_file():
+                    raise NativeBuildError(f"native module not found: {module_path}")
+                modules[alias.name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
+        elif statement.kind.name == "IMPORT_FROM":
+            mod_name = getattr(statement, "module", None)
+            if not mod_name or mod_name in {"asyncio", "math"}:
                 continue
-            if "." in alias.name:
+            if "." in mod_name:
                 raise NativeBuildError("native packages are not supported yet")
-            module_path = entry_path.with_name(f"{alias.name}.piton")
+            module_path = entry_path.with_name(f"{mod_name}.piton")
             if not module_path.is_file():
                 raise NativeBuildError(f"native module not found: {module_path}")
-            modules[alias.name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
+            if mod_name not in modules:
+                modules[mod_name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
+            for alias in statement.names:
+                from_imports[(mod_name, alias.asname or alias.name)] = True
     try:
-        mir = lower_hir_to_mir(hir, modules)
+        mir = lower_hir_to_mir(hir, modules, from_imports=from_imports)
     except MIRLoweringError as error:
         raise NativeBuildError(str(error)) from error
     return _compile_native_mir(mir, output)

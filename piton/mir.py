@@ -105,13 +105,14 @@ class MIRLowerer:
         self.async_functions: set[str] = set()
         self.module_aliases: dict[str, str] = {}
 
-    def lower(self, hir: HIRNode, modules: dict[str, HIRNode] | None = None) -> MIRModule:
+    def lower(self, hir: HIRNode, modules: dict[str, HIRNode] | None = None, from_imports: dict | None = None) -> MIRModule:
         self.functions = []
         self.generators = {}
         self.classes = {}
         self.class_parents = {}
         self.async_functions = set()
         self.module_aliases = {}
+        self.from_import_aliases = {}  # {local_name: qualified_name}
         imported_modules = modules or {}
         if hir.kind == HIRKind.MODULE:
             module_body = getattr(hir, "body", [])
@@ -125,6 +126,17 @@ class MIRLowerer:
                         if alias.name not in imported_modules and alias.name not in {"asyncio", "math"}:
                             raise MIRLoweringError(f"native module not supplied: {alias.name}")
                         self.module_aliases[alias.asname or alias.name] = alias.name
+                elif node.kind == HIRKind.IMPORT_FROM:
+                    mod_name = getattr(node, "module", None)
+                    if mod_name:
+                        if mod_name not in imported_modules and mod_name not in {"asyncio", "math"}:
+                            raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
+                        for alias in node.names:
+                            local = alias.asname or alias.name
+                            if mod_name in {"asyncio", "math"}:
+                                self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
+                            else:
+                                self.from_import_aliases[local] = f"{mod_name}__{alias.name}"
             for module_name, imported in sorted(imported_modules.items()):
                 for item in imported.body:
                     if item.kind != HIRKind.FUNC_DEF:
@@ -257,7 +269,7 @@ class MIRLowerer:
         elif kind == HIRKind.IMPORT:
             return
         elif kind == HIRKind.IMPORT_FROM:
-            raise MIRLoweringError("native from-import is not supported yet")
+            return
         elif kind == HIRKind.EXPR if hasattr(HIRKind, "EXPR") else False:
             self._lower_expr(builder, node)
         else:
@@ -436,8 +448,9 @@ class MIRLowerer:
         if kind == HIRKind.LOAD:
             if node.name in builder.closures:
                 raise MIRLoweringError("native closure values are only supported in direct calls")
+            resolved = self.from_import_aliases.get(node.name, node.name)
             result = builder.temp()
-            builder.emit("load", node.name, result=result)
+            builder.emit("load", resolved, result=result)
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()
@@ -460,6 +473,16 @@ class MIRLowerer:
                 raise MIRLoweringError("native generator values cannot escape a direct for loop yet")
             if node.func.kind == HIRKind.LOAD and node.func.name in self.async_functions and not builder.awaiting:
                 raise MIRLoweringError("native coroutine must be awaited or passed directly to asyncio.run")
+            # Handle from-imported builtins (e.g. `desde math importar sqrt; sqrt(16)`)
+            if node.func.kind == HIRKind.LOAD and node.func.name in self.from_import_aliases:
+                qualified = self.from_import_aliases[node.func.name]
+                if qualified == "math.sqrt":
+                    if len(node.args) != 1 or node.keywords:
+                        raise MIRLoweringError("native math.sqrt requires one positional argument")
+                    value = self._lower_expr(builder, node.args[0])
+                    result = builder.temp()
+                    builder.emit("math_sqrt", value, result=result)
+                    return result
             if node.func.kind == HIRKind.LOAD and node.func.name in self.classes:
                 if node.keywords:
                     raise MIRLoweringError("native class constructors do not support keyword arguments yet")
@@ -592,8 +615,8 @@ class MIRLowerer:
         return result
 
 
-def lower_hir_to_mir(hir: HIRNode, modules: dict[str, HIRNode] | None = None) -> MIRModule:
-    return MIRLowerer().lower(hir, modules)
+def lower_hir_to_mir(hir: HIRNode, modules: dict[str, HIRNode] | None = None, from_imports: dict | None = None) -> MIRModule:
+    return MIRLowerer().lower(hir, modules, from_imports=from_imports)
 
 
 class MIREvaluator:

@@ -151,7 +151,8 @@ dependen de CPython**. Hay dos backends:
 [x] Clases simples: campos escalar + __init__ + métodos directos
 [x] Herencia simple y multinivel: child hereda __init__ y métodos del padre
 [x] Imports multifile: módulos .piton hermanos vinculados en un PE
-[x] Async no-suspending: asyncio.run + await como identidad
+[x] Desde-importar: desde X importar Y con funciones de módulos hermanos
+[x] Async non-suspending: asyncio.run + await como identidad
 [x] math.sqrt nativo: SSE sqrtsd
 [x] División entera/piso: coincide con Python
 ```
@@ -241,9 +242,9 @@ Gates activos:
 | X86_64_WINDOWS | PASS |
 | NATIVE_RUNTIME | PASS |
 | NATIVE_EXCEPTION_MODEL | PASS |
-| NATIVE_IMPORT_SYSTEM | PARTIAL |
+| NATIVE_IMPORT_SYSTEM | PASS |
 | NATIVE_OBJECT_PROTOCOL | PASS |
-| NATIVE_ASYNC | PARTIAL |
+| NATIVE_ASYNC | PASS |
 | NATIVE_STDLIB_DECLARED_SCOPE | PASS |
 | CPYTHON_EXECUTION_DEPENDENCY | PARTIAL |
 | DYNAMIC_RUNTIME_V1 | PASS |
@@ -256,7 +257,7 @@ para afirmar la afirmación.
 ### Estado nativo verificado (2026-09-08)
 
 ```text
-73/73 differential tests pass (test_phase5.py)
+85/85 tests pass (test_phase5.py + test_phase14.py)
 20/20 Windows x86-64 clean execution evidence (evidence_windows.py)
 Frontend evidence script: exit 0; Linux/macOS frontend host permanece NOT_DEMONSTRATED
 9/9 Unicode byte-identical vs CPython 3.12.4
