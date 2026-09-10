@@ -51,6 +51,7 @@ class MIRFunction:
     vararg: Optional[str] = None
     kwarg: Optional[str] = None
     cell_vars: List[str] = field(default_factory=list)
+    self_class: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +70,7 @@ class MIRModule:
     functions: List[MIRFunction] = field(default_factory=list)
     classes: dict = field(default_factory=dict)
     class_parents: dict = field(default_factory=dict)
+    class_mro: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {"functions": [function.to_dict() for function in self.functions]}
@@ -91,6 +93,8 @@ class _Builder:
         self.loop_counter = 0
         self.module_aliases: dict[str, str] = {}
         self.from_import_aliases: dict[str, str] = {}
+        self.super_class: str | None = None
+        self.super_self: str | None = None
         self.is_async = False
         self.awaiting = False
 
@@ -117,6 +121,10 @@ class MIRLowerer:
         self.functions: List[MIRFunction] = []
         self.generators: dict[str, tuple[HIRNode, ...]] = {}
         self.classes: dict[str, set[str]] = {}
+        self.class_parents: dict[str, str | None] = {}
+        self.class_base_list: dict[str, list[str]] = {}
+        self.class_mro: dict[str, list[str]] = {}
+        self._mro_memo: dict[str, list[str]] = {}
         self.async_functions: set[str] = set()
         self.module_aliases: dict[str, str] = {}
 
@@ -130,6 +138,9 @@ class MIRLowerer:
         self.generators = {}
         self.classes = {}
         self.class_parents = {}
+        self.class_base_list = {}
+        self.class_mro = {}
+        self._mro_memo = {}
         self.async_functions = set()
         self.module_aliases = {}
         self.from_import_aliases = {}  # {local_name: qualified_name}
@@ -209,15 +220,21 @@ class MIRLowerer:
                     continue
                 if node.keywords or node.decorators or any(item.kind != HIRKind.FUNC_DEF for item in node.body):
                     raise MIRLoweringError("native classes currently require methods only, no keywords or decorators")
-                if len(node.bases) > 1:
-                    raise MIRLoweringError("native classes support at most one base class")
-                parent_name = node.bases[0].name if node.bases else None
-                if parent_name and parent_name not in self.classes and parent_name not in _BUILTIN_EXCEPTIONS:
-                    raise MIRLoweringError(f"native base class '{parent_name}' must be defined before '{node.name}'")
+                bases = [base.name for base in node.bases if getattr(base, "name", None)]
+                for base in bases:
+                    if base not in self.classes and base not in _BUILTIN_EXCEPTIONS:
+                        raise MIRLoweringError(f"native base class '{base}' must be defined before '{node.name}'")
                 self.classes[node.name] = {method.name for method in node.body}
-                self.class_parents[node.name] = parent_name
+                self.class_base_list[node.name] = bases
+                self.class_parents[node.name] = bases[0] if bases else None
                 for method in node.body:
-                    self._lower_function(method, f"{node.name}__{method.name}")
+                    method_params = list(getattr(getattr(method, "args", None), "args", []) or [])
+                    method_params = [*list(getattr(getattr(method, "args", None), "posonlyargs", []) or []), *method_params]
+                    super_self = method_params[0] if method_params else None
+                    self._lower_function(
+                        method, f"{node.name}__{method.name}",
+                        super_context=(node.name, super_self) if super_self else None,
+                    )
             for node in module_body:
                 if node.kind == HIRKind.FUNC_DEF and any(item.kind in {HIRKind.YIELD, HIRKind.YIELD_FROM} for item in node.body):
                     args = getattr(node, "args", None)
@@ -241,7 +258,71 @@ class MIRLowerer:
         module = MIRModule(self.functions)
         module.classes = dict(self.classes)
         module.class_parents = dict(self.class_parents)
+        self._finalize_mro()
+        module.class_mro = dict(self.class_mro)
         return module
+
+    def _compute_mro(self, name: str) -> list[str] | None:
+        """C3 linearization for ``name``, memoized. Returns the full MRO (head +
+        ancestors) or ``None`` on an inconsistent merge (spurious callers already
+        validated every base is defined or a builtin exception, so a failure here
+        is a genuine C3 conflict and must fail closed just like CPython's
+        TypeError. Builtin exception bases are leaves ``[name]``; builtin classes
+        are not user-linearizable into the graph and may only appear as leaves
+        when they are the lone base."""
+        if name in self._mro_memo:
+            return self._mro_memo[name]
+        bases = self.class_base_list.get(name) or []
+        if not bases:
+            self._mro_memo[name] = [name]
+            return [name]
+        seqs: list[list[str]] = []
+        for base in bases:
+            sub = self._compute_mro(base)
+            if sub is None:
+                self._mro_memo[name] = None
+                return None
+            seqs.append(list(sub))
+            seqs.append([base])
+        merged: list[str] = []
+        all_bases = list(bases)
+        for s in seqs:
+            for b in s:
+                if b not in all_bases:
+                    all_bases.append(b)
+        for _ in range(len(all_bases) + 2):
+            candidate = None
+            for s in seqs:
+                if not s:
+                    continue
+                head = s[0]
+                if all(head not in tail[1:] for tail in seqs):
+                    candidate = head
+                    break
+            if candidate is None:
+                self._mro_memo[name] = None
+                return None
+            merged.append(candidate)
+            for s in seqs:
+                if s and s[0] == candidate:
+                    s.pop(0)
+            if all(not s for s in seqs):
+                break
+        if any(s for s in seqs):
+            self._mro_memo[name] = None
+            return None
+        self._mro_memo[name] = [name, *merged]
+        return self._mro_memo[name]
+
+    def _finalize_mro(self) -> None:
+        for name in list(self.class_base_list) + [n for n in self.classes if n not in self.class_base_list]:
+            mro = self._compute_mro(name)
+            if mro is None:
+                raise MIRLoweringError(
+                    f"native class '{name}' has an inconsistent method resolution order (C3 merge); "
+                    "cannot construct a linearization for multiple inheritance"
+                )
+            self.class_mro[name] = mro
 
     def _build_module_scope(self, module_name: str, imported: HIRNode) -> tuple[dict[str, str], dict[str, str]]:
         """Per-module name scope for an imported module body: imported module
@@ -366,6 +447,7 @@ class MIRLowerer:
     def _lower_function(
         self, node: HIRNode, qualified_name: str | None = None,
         captures: tuple[str, ...] = (), cell_vars: list[str] | None = None,
+        super_context: tuple[str, str] | None = None,
     ) -> None:
         args = getattr(node, "args", None)
         posonly_params = list(getattr(args, "posonlyargs", []) or []) if args else []
@@ -376,6 +458,9 @@ class MIRLowerer:
         kwarg_name = getattr(args, "kwarg", None) if args else None
         body = list(getattr(node, "body", []))
         builder = _Builder(qualified_name or node.name, [*captures, *positional_params])
+        if super_context:
+            builder.super_class, builder.super_self = super_context
+            builder.function.self_class = super_context[0]
         builder.is_async = bool(getattr(node, "is_async", False))
         if self._module_scope_stack:
             scope_names, scope_modules = self._module_scope_stack[-1]
@@ -743,7 +828,11 @@ class MIRLowerer:
             if current in _BUILTIN_EXCEPTIONS:
                 current = "Exception" if current != "Exception" else None
             else:
-                current = self.class_parents.get(current)
+                mro = self._mro_memo.get(current) or self._compute_mro(current)
+                if mro and len(mro) > 1 and mro[1] not in seen:
+                    current = mro[1]
+                else:
+                    current = self.class_parents.get(current)
         return chain
 
     def _find_exception_handler(
@@ -779,6 +868,42 @@ class MIRLowerer:
             if current.name not in {"asyncio", "math", "sys"}:
                 return current.name, list(reversed(attrs))
         return None
+
+    def _lower_super_call(self, builder: _Builder, attr: str, user_args: tuple) -> str:
+        if not builder.super_class:
+            raise MIRLoweringError("native super() must be called directly inside a class method")
+        mro = self._mro_memo.get(builder.super_class) or self._compute_mro(builder.super_class)
+        if not mro:
+            raise MIRLoweringError(
+                f"native super() error: class '{builder.super_class}' has no consistent MRO"
+            )
+        current_class = builder.super_class
+        found_current = False
+        next_class = None
+        for cls in mro:
+            if found_current:
+                if cls in self.classes and attr in self.classes.get(cls, set()):
+                    next_class = cls
+                    break
+                continue
+            if cls == current_class:
+                found_current = True
+        if next_class is None:
+            raise MIRLoweringError(
+                f"native super().{attr}: no base class in MRO of '{current_class}' defines '{attr}'"
+            )
+        if builder.super_self in builder.cell_params:
+            receiver = builder.temp()
+            builder.emit("cell_load", builder.super_self, result=receiver)
+        else:
+            receiver = builder.temp()
+            builder.emit("load", builder.super_self, result=receiver)
+        args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+        if len(args) > 3:
+            raise MIRLoweringError("native super() method calls support at most 3 user arguments")
+        result = builder.temp()
+        builder.emit("method_call", next_class, attr, receiver, args, result=result)
+        return result
 
     def _lower_expr(self, builder: _Builder, node: Optional[HIRNode]) -> Any:
         if node is None:
@@ -823,6 +948,11 @@ class MIRLowerer:
                 left = self._compare(builder, op, left, self._lower_expr(builder, comparator))
             return left
         if kind == HIRKind.CALL:
+            if node.func.kind == HIRKind.LOAD and node.func.name == "super":
+                raise MIRLoweringError(
+                    "native super() must appear as super().method(...) directly inside a "
+                    "class method call"
+                )
             if getattr(node, "starred_args", []):
                 raise MIRLoweringError("native positional unpacking is not supported yet")
             if node.func.kind == HIRKind.LOAD and node.func.name in self.generators:
@@ -845,25 +975,13 @@ class MIRLowerer:
                 result = builder.temp()
                 parent_name = self.class_parents.get(node.func.name)
                 builder.emit("object_new", node.func.name, parent_name, result=result)
-                # Check if class or any parent has __init__
-                has_init = "__init__" in self.classes[node.func.name]
-                check_class = node.func.name
-                while not has_init and check_class:
-                    check_class = self.class_parents.get(check_class)
-                    if check_class and check_class in self.classes:
-                        has_init = "__init__" in self.classes[check_class]
-                init_class = node.func.name
-                if not has_init:
-                    # Walk up to find which class defines __init__
-                    c = node.func.name
-                    while c:
-                        parent = self.class_parents.get(c)
-                        if parent and parent in self.classes and "__init__" in self.classes[parent]:
-                            init_class = parent
-                            has_init = True
-                            break
-                        c = parent
-                if has_init:
+                mro = self._mro_memo.get(node.func.name) or self._compute_mro(node.func.name)
+                init_class = None
+                for cls in (mro or ()):
+                    if cls in self.classes and "__init__" in self.classes[cls]:
+                        init_class = cls
+                        break
+                if init_class is not None:
                     args = (result, *(self._lower_expr(builder, arg) for arg in node.args))
                     ignored = builder.temp()
                     builder.emit("method_call", init_class, "__init__", result, args[1:], result=ignored)
@@ -916,6 +1034,15 @@ class MIRLowerer:
             if node.func.kind == HIRKind.ATTR:
                 if node.keywords:
                     raise MIRLoweringError("native method calls do not support keyword arguments yet")
+                super_call = node.func.value if node.func.value.kind == HIRKind.CALL else None
+                if (
+                    super_call is not None
+                    and len(super_call.args) == 0
+                    and not getattr(super_call, "keywords", None)
+                    and super_call.func.kind == HIRKind.LOAD
+                    and super_call.func.name == "super"
+                ):
+                    return self._lower_super_call(builder, node.func.attr, node.args)
                 owner = self._lower_expr(builder, node.func.value)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
@@ -980,6 +1107,20 @@ class MIRLowerer:
                 raise MIRLoweringError(
                     "native module attribute value access is not supported yet; "
                     "use module function calls (e.g. 'pkg.sub.fn(...)')"
+                )
+            if builder.super_class and node.value.kind == HIRKind.LOAD and node.value.name == "super":
+                raise MIRLoweringError(
+                    "native super() must appear as super().method(...) directly inside a "
+                    "class method call; bare attribute access on super() is not supported"
+                )
+            if (
+                node.value.kind == HIRKind.CALL
+                and len(getattr(node.value, "args", None) or []) == 0
+                and node.value.func.kind == HIRKind.LOAD
+                and node.value.func.name == "super"
+            ):
+                raise MIRLoweringError(
+                    "native super().attr is only supported as super().attr(...) (a call)"
                 )
             result = builder.temp()
             builder.emit("get_attr", self._lower_expr(builder, node.value), node.attr, result=result)

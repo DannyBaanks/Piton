@@ -733,7 +733,7 @@ class Parser:
 
             # Llamada: nombre seguido de (
             if self._check(TokenType.LPAREN):
-                return self._parse_call(Name(id=val, ctx="Load").set_pos(tok))
+                return self._parse_postfix(self._parse_call(Name(id=val, ctx="Load").set_pos(tok)))
 
             # Atributo/subscript: nombre seguido de . o [
             node = Name(id=val, ctx="Load").set_pos(tok)

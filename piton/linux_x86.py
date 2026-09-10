@@ -115,6 +115,7 @@ class LinuxCEmitter:
         self.module = module
         self.classes = getattr(module, "classes", {})
         self.class_parents = getattr(module, "class_parents", {})
+        self.class_mro = getattr(module, "class_mro", {})
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self._has_bigint = any(
@@ -175,6 +176,8 @@ class LinuxCEmitter:
             types[function.vararg] = "tuple"
         if function.kwarg:
             types[function.kwarg] = "dict"
+        if function.self_class and function.params:
+            types[function.params[0]] = f"object:{function.self_class}"
         bigint_slots: list[str] = []
         for block in function.blocks:
             lines.append(f"{_name(function.name + '_' + block.label)}:")
@@ -218,6 +221,9 @@ class LinuxCEmitter:
         return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
 
     def _resolve_method(self, class_name: str, method: str) -> str:
+        for candidate in self.class_mro.get(class_name, []):
+            if method in self.classes.get(candidate, set()):
+                return candidate
         current = class_name
         while current:
             if method in self.classes.get(current, set()):

@@ -680,6 +680,156 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_multi_inheritance_method_resolution(self):
+        source = (
+            'clase A:\n'
+            '    funcion saludo(self):\n'
+            '        devolver 1\n'
+            'clase B:\n'
+            '    funcion saludo(self):\n'
+            '        devolver 2\n'
+            'clase C(A, B):\n'
+            '    funcion doble(self):\n'
+            '        devolver self.saludo() + self.saludo()\n'
+            'c = C()\n'
+            'imprimir(c.saludo())\n'
+            'imprimir(c.doble())\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_multi_inheritance_diamond(self):
+        source = (
+            'clase Base:\n'
+            '    funcion mensaje(self):\n'
+            '        devolver 5\n'
+            'clase Izq(Base):\n'
+            '    funcion extra(self):\n'
+            '        devolver 3\n'
+            'clase Der(Base):\n'
+            '    funcion mensaje(self):\n'
+            '        devolver 7\n'
+            'clase Fin(Izq, Der):\n'
+            '    funcion total(self):\n'
+            '        devolver self.mensaje() + self.extra()\n'
+            'f = Fin()\n'
+            'imprimir(f.mensaje())\n'
+            'imprimir(f.total())\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_super_chain_method_override(self):
+        source = (
+            'clase A:\n'
+            '    funcion valor(self):\n'
+            '        devolver 1\n'
+            'clase B(A):\n'
+            '    funcion valor(self):\n'
+            '        devolver super().valor() + 10\n'
+            'clase C(B):\n'
+            '    funcion valor(self):\n'
+            '        devolver super().valor() + 100\n'
+            'c = C()\n'
+            'imprimir(c.valor())\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_super_with_user_arguments(self):
+        source = (
+            'clase A:\n'
+            '    funcion add(self, a, b):\n'
+            '        devolver a + b\n'
+            'clase B(A):\n'
+            '    funcion add(self, a, b):\n'
+            '        devolver super().add(a, b) + 1\n'
+            'b = B()\n'
+            'imprimir(b.add(3, 4))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_super_in_constructor_chain(self):
+        source = (
+            'clase A:\n'
+            '    funcion __init__(self, x):\n'
+            '        self.x = x\n'
+            '    funcion get_x(self):\n'
+            '        devolver self.x\n'
+            'clase B(A):\n'
+            '    funcion __init__(self, x, val):\n'
+            '        self.v = val\n'
+            '        super().__init__(x)\n'
+            '    funcion get_v(self):\n'
+            '        devolver self.v\n'
+            'b = B(10, 20)\n'
+            'imprimir(b.get_x())\n'
+            'imprimir(b.get_v())\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_multi_inheritance_c3_conflict_fails_closed(self):
+        source = (
+            'clase O:\n'
+            '    funcion m(self):\n'
+            '        devolver 1\n'
+            'clase X(O):\n'
+            '    funcion m(self):\n'
+            '        devolver 1\n'
+            'clase Y(O):\n'
+            '    funcion m(self):\n'
+            '        devolver 2\n'
+            'clase First(X, Y):\n'
+            '    funcion m(self):\n'
+            '        devolver 3\n'
+            'clase Second(Y, X):\n'
+            '    funcion m(self):\n'
+            '        devolver 4\n'
+            'clase E(First, Second):\n'
+            '    funcion m(self):\n'
+            '        devolver 5\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-c3-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "inconsistent method resolution order"):
+                compile_native(source, Path(directory) / "program.exe")
+
+    def test_x86_super_outside_method_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-super-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "directly inside a class method"):
+                compile_native("super().x()\n", Path(directory) / "program.exe")
+
+    def test_x86_super_bare_value_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-super-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "directly inside a class method"):
+                compile_native("x = super()\n", Path(directory) / "program.exe")
+
+    def test_x86_super_undefined_attribute_fails_closed(self):
+        source = (
+            'clase A:\n'
+            '    funcion f(self):\n'
+            '        devolver super().g()\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-super-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "no base class in MRO"):
+                compile_native(source, Path(directory) / "program.exe")
+
+    def test_x86_self_method_call_in_plain_class(self):
+        source = (
+            'clase Caja:\n'
+            '    funcion __init__(self, valor):\n'
+            '        self.valor = valor\n'
+            '    funcion base(self):\n'
+            '        devolver self.valor\n'
+            '    funcion doble(self):\n'
+            '        devolver self.base() * 2\n'
+            'caja = Caja(21)\n'
+            'imprimir(caja.doble())\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
     def test_x86_multifile_native_module(self):
         with tempfile.TemporaryDirectory(prefix="piton-multifile-") as directory:
             root = Path(directory)

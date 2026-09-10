@@ -156,11 +156,38 @@ afirmación y criterio (los agentes pueden expandirlos siguiendo el esquema de l
 ### 12. Object model (M3)
 
 `OBJECT_MODEL_RICH_V1` — MRO + super + attribute lookup dinámico.
-- **CURRENT_STATUS**: PARTIAL (herencia lineal demostrada; MRO no).
+- **CURRENT_STATUS**: **PASS** (2026-09-09; Win 16 + Linux 11, byte-idéntico vs CPython).
 - **DEPENDENCIES**: `OBJECT_PROTOCOL` (PASS).
 - **UNLOCKS**: `DESCRIPTORS_V1`, `METACLASSES_V1`.
-- **PASS**: diamonds, super cooperativo, shadowing.
-- **COMPLEXITY**: HIGH.
+- **PASS**: memory MRO C3 con bases múltiples (dispatch de métodos por MRO en
+  ambos backends), `super().metodo(...)` (cero args, resolución estática tras la
+  clase actual) en cadenas de herencia y constructores, llamadas a métodos sobre
+  `self` (tipo estático de `self` propagado). Fail-closed: conflicto C3 (espejo
+  del `TypeError` de CPython), `super()` fuera de método, `super().attr` como
+  valor, atributo inexistente en MRO.
+- **IMPLEMENTATION**:
+  - MIR: `_compute_mro` (C3, memoizado en `_mro_memo`, bases validadas contra
+    `self.classes`/`_BUILTIN_EXCEPTIONS`; las builtin exceptions son hojas
+    `[name]`); `_finalize_mro` cierra la tabla `MIRModule.class_mro` al final de
+    `lower()`; el loop de clases registra `class_base_list` (ya sin rechazo de
+    base única) y baja cada método con `super_context=(node.name, super_self)`.
+  - super zero-arg: `_lower_super_call` resuelve la primera clase después de la
+    actual en el MRO y emite `method_call(next_class, attr, receiver, args)` —
+    `super_self` se pasa como 2º mock y nunca se propaga a builders hijos, así
+    que `super` dentro de closures anidadas falla cerrado por diseño.
+  - `MIRFunction.self_class`: el codegen tipea el primer parámetro como
+    `object:{Class}` para habilitar `self.metodo()` dentro de métodos (nueva
+    superficie; ningún test previo llamaba métodos sobre `self`).
+  - Constructor `__init__` y `_exception_chain` migrados a resolver por MRO.
+  - Parser: el camino Name-call envuelve `_parse_call` en `_parse_postfix`,
+    habilitando `foo().bar()` en general (requisito para `super().nombre()`).
+- **KNOWN_GAP**: super cooperativo en diamante con `self` de tipo subtipo difiere
+  de CPython (la resolución estática usa la clase del método receptor, no el
+  tipo dinámico del objeto) → fuera de tests y documentado como limitación;
+  `super(X, obj)` (dos args) rechazado; descriptors, properties y metaclasses
+  siguen abiertos. Superficie del gate: métodos con retornos/args int (un
+  string devuelto por call se imprime como puntero — los tests usan solo ints).
+- **COMPLEXITY**: HIGH → resuelto.
 
 `DESCRIPTORS_V1` — `__get__/__set__/__delete__/__set_name__`.
 - **DEPENDENCIES**: `OBJECT_MODEL_RICH_V1`.
@@ -540,7 +567,8 @@ con sus tests de integración. Nunca por suma automática de partes.
 (`__name__`/`__package__`/`__file__`/`sys.modules`), `IMPORT_RELATIVE_V1`
 (`importar pkg.sub`, `desde . importar x`, attr-chain `pkg.sub.fn()`),
 `IMPORT_STAR_V1` (`desde pkg importar *`, privadas excluidas) e
-`IMPORT_CYCLIC_V1` (ciclos de imports con orden de inicialización CPython),
+`IMPORT_CYCLIC_V1` (ciclos de imports con orden de inicialización CPython) y
+`OBJECT_MODEL_RICH_V1` (MRO C3 + super zero-arg + `self.metodo()`),
 todos Win+Linux PASS.
 
 1. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
@@ -552,7 +580,7 @@ todos Win+Linux PASS.
 6. `IMPORT_CYCLIC_V1` (MEDIUM) — ciclos de imports con orden CPython. **PASS**.
 7. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario. **PASS.**
 8. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare. **PASS.**
-9. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
+9. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super. **PASS.**
 10. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
 11. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
     **PASS.**

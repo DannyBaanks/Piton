@@ -181,6 +181,81 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_rich_multilevel_inheritance(self):
         self._assert_linux_equiv('clase A:\n    funcion __init__(self, x):\n        self.x = x\n    funcion get_x(self):\n        devolver self.x\nclase B(A):\n    funcion multiply(self, n):\n        devolver self.x * n\nclase C(B):\n    funcion triple(self):\n        devolver self.x * 3\nc = C(4)\nimprimir(c.get_x())\nimprimir(c.multiply(5))\nimprimir(c.triple())\n')
 
+    def test_linux_multi_inheritance_method_resolution(self):
+        self._assert_linux_equiv(
+            'clase A:\n    funcion saludo(self):\n        devolver 1\n'
+            'clase B:\n    funcion saludo(self):\n        devolver 2\n'
+            'clase C(A, B):\n    funcion doble(self):\n        devolver self.saludo() + self.saludo()\n'
+            'c = C()\nimprimir(c.saludo())\nimprimir(c.doble())\n'
+        )
+
+    def test_linux_multi_inheritance_diamond(self):
+        self._assert_linux_equiv(
+            'clase Base:\n    funcion mensaje(self):\n        devolver 5\n'
+            'clase Izq(Base):\n    funcion extra(self):\n        devolver 3\n'
+            'clase Der(Base):\n    funcion mensaje(self):\n        devolver 7\n'
+            'clase Fin(Izq, Der):\n    funcion total(self):\n        devolver self.mensaje() + self.extra()\n'
+            'f = Fin()\nimprimir(f.mensaje())\nimprimir(f.total())\n'
+        )
+
+    def test_linux_super_chain_method_override(self):
+        self._assert_linux_equiv(
+            'clase A:\n    funcion valor(self):\n        devolver 1\n'
+            'clase B(A):\n    funcion valor(self):\n        devolver super().valor() + 10\n'
+            'clase C(B):\n    funcion valor(self):\n        devolver super().valor() + 100\n'
+            'c = C()\nimprimir(c.valor())\n'
+        )
+
+    def test_linux_super_with_user_arguments(self):
+        self._assert_linux_equiv(
+            'clase A:\n    funcion add(self, a, b):\n        devolver a + b\n'
+            'clase B(A):\n    funcion add(self, a, b):\n        devolver super().add(a, b) + 1\n'
+            'b = B()\nimprimir(b.add(3, 4))\n'
+        )
+
+    def test_linux_super_in_constructor_chain(self):
+        self._assert_linux_equiv(
+            'clase A:\n    funcion __init__(self, x):\n        self.x = x\n'
+            '    funcion get_x(self):\n        devolver self.x\n'
+            'clase B(A):\n    funcion __init__(self, x, val):\n        self.v = val\n'
+            '        super().__init__(x)\n    funcion get_v(self):\n        devolver self.v\n'
+            'b = B(10, 20)\nimprimir(b.get_x())\nimprimir(b.get_v())\n'
+        )
+
+    def test_linux_self_method_call_in_plain_class(self):
+        self._assert_linux_equiv(
+            'clase Caja:\n    funcion __init__(self, valor):\n        self.valor = valor\n'
+            '    funcion base(self):\n        devolver self.valor\n'
+            '    funcion doble(self):\n        devolver self.base() * 2\n'
+            'caja = Caja(21)\nimprimir(caja.doble())\n'
+        )
+
+    def test_linux_multi_inheritance_c3_conflict_fails_closed(self):
+        source = (
+            'clase O:\n    funcion m(self):\n        devolver 1\n'
+            'clase X(O):\n    funcion m(self):\n        devolver 1\n'
+            'clase Y(O):\n    funcion m(self):\n        devolver 2\n'
+            'clase First(X, Y):\n    funcion m(self):\n        devolver 3\n'
+            'clase Second(Y, X):\n    funcion m(self):\n        devolver 4\n'
+            'clase E(First, Second):\n    funcion m(self):\n        devolver 5\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-c3-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "inconsistent method resolution order"):
+                compile_native_linux(source, Path(directory) / "program")
+
+    def test_linux_super_outside_method_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-super-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "directly inside a class method"):
+                compile_native_linux("super().x()\n", Path(directory) / "program")
+
+    def test_linux_super_undefined_attribute_fails_closed(self):
+        source = (
+            'clase A:\n    funcion f(self):\n        devolver super().g()\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-super-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "no base class in MRO"):
+                compile_native_linux(source, Path(directory) / "program")
+
     def test_linux_rich_exception_caught(self):
         self._assert_linux_equiv('intentar:\n    lanzar ValueError("x")\nexcepto ValueError:\n    imprimir("caught")\n')
 

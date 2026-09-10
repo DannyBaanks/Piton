@@ -42,6 +42,7 @@ class Win64NasmEmitter:
     def emit(self, module: MIRModule) -> str:
         self.mir_module = module
         self.mir_module_classes = getattr(module, 'classes', {})
+        self.mir_module_class_mro = getattr(module, 'class_mro', {})
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self.lines = [
@@ -133,6 +134,8 @@ class Win64NasmEmitter:
         if function.params:
             for register, name in zip(("rcx", "rdx", "r8", "r9"), function.params):
                 self._store_slot(name, register)
+        if function.self_class and function.params:
+            self.types[function.params[0]] = f"object:{function.self_class}"
         labels = {block.label: f"{label}_{block.label}" for block in function.blocks}
         labels["__exit"] = f"{label}__exit"
         for block in function.blocks:
@@ -499,11 +502,17 @@ class Win64NasmEmitter:
             class_name = explicit_class or (owner_type.split(":", 1)[1] if owner_type.startswith("object:") else None)
             if not class_name:
                 raise NativeBuildError("native method receiver class is not statically known")
-            # Resolve method through inheritance chain
-            resolved_class = class_name
-            class_parents = getattr(self.mir_module, 'class_parents', {})
-            while resolved_class and method_name not in self.mir_module_classes.get(resolved_class, set()):
-                resolved_class = class_parents.get(resolved_class)
+            # Resolve method through MRO (C3), fallback to parent chain
+            resolved_class = None
+            for candidate in self.mir_module_class_mro.get(class_name, []):
+                if method_name in self.mir_module_classes.get(candidate, set()):
+                    resolved_class = candidate
+                    break
+            if resolved_class is None:
+                class_parents = getattr(self.mir_module, 'class_parents', {})
+                resolved_class = class_name
+                while resolved_class and method_name not in self.mir_module_classes.get(resolved_class, set()):
+                    resolved_class = class_parents.get(resolved_class)
             if not resolved_class:
                 resolved_class = class_name  # fallback to original
             values = [owner, *raw_values]
