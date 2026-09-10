@@ -71,6 +71,7 @@ class MIRModule:
     classes: dict = field(default_factory=dict)
     class_parents: dict = field(default_factory=dict)
     class_mro: dict = field(default_factory=dict)
+    class_properties: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {"functions": [function.to_dict() for function in self.functions]}
@@ -125,6 +126,7 @@ class MIRLowerer:
         self.class_base_list: dict[str, list[str]] = {}
         self.class_mro: dict[str, list[str]] = {}
         self._mro_memo: dict[str, list[str]] = {}
+        self.class_properties: dict[str, dict[str, dict[str, str | None]]] = {}
         self.async_functions: set[str] = set()
         self.module_aliases: dict[str, str] = {}
 
@@ -141,6 +143,7 @@ class MIRLowerer:
         self.class_base_list = {}
         self.class_mro = {}
         self._mro_memo = {}
+        self.class_properties = {}
         self.async_functions = set()
         self.module_aliases = {}
         self.from_import_aliases = {}  # {local_name: qualified_name}
@@ -218,23 +221,40 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
-                if node.keywords or node.decorators or any(item.kind != HIRKind.FUNC_DEF for item in node.body):
-                    raise MIRLoweringError("native classes currently require methods only, no keywords or decorators")
+                if node.keywords or node.decorators or any(
+                    item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS}
+                    for item in node.body
+                ):
+                    raise MIRLoweringError("native classes currently require methods only, no keywords or class-level decorators")
                 bases = [base.name for base in node.bases if getattr(base, "name", None)]
                 for base in bases:
                     if base not in self.classes and base not in _BUILTIN_EXCEPTIONS:
                         raise MIRLoweringError(f"native base class '{base}' must be defined before '{node.name}'")
-                self.classes[node.name] = {method.name for method in node.body}
+                self.classes[node.name] = set()
                 self.class_base_list[node.name] = bases
                 self.class_parents[node.name] = bases[0] if bases else None
+                property_methods: dict[str, dict[str, str | None]] = {}
+                used_symbols: set[str] = set()
                 for method in node.body:
+                    if method.kind == HIRKind.PASS:
+                        continue
+                    symbol, role, prop_name = self._class_method_symbol(node.name, method, property_methods)
+                    if used_symbols and symbol in used_symbols:
+                        raise MIRLoweringError(
+                            f"native '{node.name}.{method.name}' collides with another member lowered to symbol '{symbol}'"
+                        )
+                    used_symbols.add(symbol)
                     method_params = list(getattr(getattr(method, "args", None), "args", []) or [])
                     method_params = [*list(getattr(getattr(method, "args", None), "posonlyargs", []) or []), *method_params]
                     super_self = method_params[0] if method_params else None
                     self._lower_function(
-                        method, f"{node.name}__{method.name}",
+                        method, symbol,
                         super_context=(node.name, super_self) if super_self else None,
                     )
+                    if role is None:
+                        self.classes[node.name].add(method.name)
+                    else:
+                        self.class_properties.setdefault(node.name, {}).setdefault(prop_name, {})[role] = symbol
             for node in module_body:
                 if node.kind == HIRKind.FUNC_DEF and any(item.kind in {HIRKind.YIELD, HIRKind.YIELD_FROM} for item in node.body):
                     args = getattr(node, "args", None)
@@ -260,6 +280,7 @@ class MIRLowerer:
         module.class_parents = dict(self.class_parents)
         self._finalize_mro()
         module.class_mro = dict(self.class_mro)
+        module.class_properties = dict(self.class_properties)
         return module
 
     def _compute_mro(self, name: str) -> list[str] | None:
@@ -639,6 +660,12 @@ class MIRLowerer:
             return
         elif kind == HIRKind.EXPR if hasattr(HIRKind, "EXPR") else False:
             self._lower_expr(builder, node)
+        elif kind == HIRKind.DELETE:
+            for target in node.targets:
+                if target.kind != HIRKind.ATTR:
+                    raise MIRLoweringError("native del currently supports only attribute deletion (del obj.attr)")
+                owner = self._lower_expr(builder, target.value)
+                builder.emit("del_attr", owner, target.attr)
         else:
             if kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
                 self._lower_expr(builder, node)
@@ -843,6 +870,44 @@ class MIRLowerer:
             if accepted is None or accepted == "Exception" or accepted in chain:
                 return label
         return None
+
+    def _class_method_symbol(self, class_name: str, method: HIRNode, property_methods: dict[str, dict[str, str | None]]) -> tuple[str, str | None, str]:
+        """Classifies one class-body method and returns ``(symbol, role, prop)``.
+
+        ``role`` is ``"getter"``/``"setter"``/``"deleter"`` for the supported
+        ``@property`` / ``@<name>.setter`` / ``@<name>.deleter`` decorators,
+        ``None`` for an ordinary method (the only other accepted form). For
+        ordinary methods ``prop`` is the method name (unused). Anything else
+        fails closed.
+        """
+        decorators = list(getattr(method, "decorators", None) or [])
+        if len(decorators) > 1:
+            raise MIRLoweringError("native class methods support at most one @property decorator")
+        if not decorators:
+            return f"{class_name}__{method.name}", None, method.name
+        decorator = decorators[0]
+        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) == "property":
+            if method.name in property_methods:
+                raise MIRLoweringError(f"native duplicate @property '{method.name}' on '{class_name}'")
+            property_methods[method.name] = {"getter": None, "setter": None, "deleter": None}
+            return f"{class_name}__{method.name}", "getter", method.name
+        if decorator.kind == HIRKind.ATTR:
+            prop = getattr(decorator, "attr", "")
+            if getattr(getattr(decorator, "value", None), "kind", None) != HIRKind.LOAD:
+                raise MIRLoweringError(f"native property decorator '@{method.name}.{prop}' must reference the property name")
+            if getattr(decorator.value, "name", None) != method.name:
+                raise MIRLoweringError(f"native property decorator '@{decorator.value.name}.{prop}' must match the method name '{method.name}'")
+            if prop not in {"setter", "deleter"}:
+                raise MIRLoweringError("native class methods support only @property, @<name>.setter, @<name>.deleter")
+            existing = property_methods.get(method.name)
+            if existing is None:
+                raise MIRLoweringError(
+                    f"native @{method.name}.{prop} requires the property getter '@property def {method.name}' first in class '{class_name}'"
+                )
+            if existing[prop] is not None:
+                raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
+            return f"{class_name}__{method.name}__{prop}", prop, method.name
+        raise MIRLoweringError(f"native class methods support only @property, @<name>.setter, @<name>.deleter")
 
     def _store(self, builder: _Builder, target: HIRNode, value: Any) -> None:
         if target.kind == HIRKind.STORE:

@@ -184,14 +184,16 @@ afirmación y criterio (los agentes pueden expandirlos siguiendo el esquema de l
 - **KNOWN_GAP**: super cooperativo en diamante con `self` de tipo subtipo difiere
   de CPython (la resolución estática usa la clase del método receptor, no el
   tipo dinámico del objeto) → fuera de tests y documentado como limitación;
-  `super(X, obj)` (dos args) rechazado; descriptors, properties y metaclasses
-  siguen abiertos. Superficie del gate: métodos con retornos/args int (un
+  `super(X, obj)` (dos args) rechazado; metaclasses siguen abiertas (descriptors y properties completados por `DESCRIPTORS_V1`). Superficie del gate: métodos con retornos/args int (un
   string devuelto por call se imprime como puntero — los tests usan solo ints).
 - **COMPLEXITY**: HIGH → resuelto.
 
-`DESCRIPTORS_V1` — `__get__/__set__/__delete__/__set_name__`.
+`DESCRIPTORS_V1` — `@property` data descriptor estático.
+- **CURRENT_STATUS**: **PASS** (2026-09-09; Win 12 + Linux 9, byte-idéntico vs CPython en el lado feliz, fail-closed espejado).
+- **IMPLEMENTATION**: static `@property` data descriptor sobre métodos de clases nativas: `@property` (getter), `@<name>.setter`, `@<name>.deleter`. `lower.py` baja decoradores (`_lower_decorator`) y `borrar obj.attr` (`_lower_delstmt` → `Attr(ctx="Del")`); MIR registra `class_properties` en el módulo (símbolos `{Class}__{prop}` / `__setter` / `__deleter`) y NO registra los nombres de property como métodos; los backends (`x86.py`/`linux_x86.py`) resuelven `_resolve_property_class` por MRO y rutean `get_attr`/`set_attr`/`del_attr` a getter/setter/deleter. Delta: el body de clase admite `pasar`.
+- **KNOWN_GAP**: clases descriptor de usuario (`__get__`/`__set__`/`__delete__`/`__set_name__`) requieren objetos de clase en runtime → fuera del gate. Fail-closed espejo CPython: set/del sin setter/deleter (`property 'x' of 'P' object has no setter`/`has no deleter`), `obj.x()` (`not a method`), `@x.setter` sin getter (`requires the property getter`), decorador desconocido (`only @property`), duplicado (`duplicate`), `borrar` no-property (`is not a property`).
 - **DEPENDENCIES**: `OBJECT_MODEL_RICH_V1`.
-- **COMPLEXITY**: HIGH.
+- **COMPLEXITY**: HIGH → resuelto.
 
 ### 13. Funciones (M1, M4)
 
@@ -584,7 +586,7 @@ todos Win+Linux PASS.
 10. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
 11. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
     **PASS.**
-12. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 8).
+12. `DESCRIPTORS_V1` (HIGH) — `@property` data descriptor estático (depende de 8). **PASS** (2026-09-09; Win 12 + Linux 9).
 
 ## 31. Gates paralelizables
 
@@ -625,5 +627,5 @@ reconstruyas el runtime para cerrar un test pequeño.
 
 Ver `FEATURE_STATUS_MATRIX.md`. 215/215 tests; gates PASS en el dashboard
 (incl. `FULL_PARITY`, retirado como término en `PARITY_DEFINITION.md`).
-Features PARTIAL: functions, generators, descriptors, dynamic_code,
+Features PARTIAL: functions, generators, dynamic_code,
 introspection, ffi. NOT_DEMONSTRATED: metaclasses, multiprocessing.

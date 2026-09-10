@@ -1858,6 +1858,196 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython('imprimir(sum([1, 2, 3, 4, 5]))\nimprimir(sum({10, 20, 30}))\n')
         self.assertTrue(result.equivalent, result)
 
+    def test_descriptors_property_getter(self):
+        source = (
+            'clase P:\n'
+            '    funcion __init__(self):\n'
+            '        self.campos = 41\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver self.campos + 1\n'
+            'p = P()\n'
+            'imprimir(p.x)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_descriptors_property_get_set(self):
+        source = (
+            'clase P:\n'
+            '    funcion __init__(self):\n'
+            '        self.campos = 0\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver self.campos\n'
+            '    @x.setter\n'
+            '    funcion x(self, v):\n'
+            '        self.campos = v * 2\n'
+            'p = P()\n'
+            'p.x = 5\n'
+            'imprimir(p.x)\n'
+            'p.x = 10\n'
+            'imprimir(p.x)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_descriptors_property_get_set_del(self):
+        source = (
+            'clase P:\n'
+            '    funcion __init__(self):\n'
+            '        self.campos = 0\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver self.campos\n'
+            '    @x.setter\n'
+            '    funcion x(self, v):\n'
+            '        self.campos = v\n'
+            '    @x.deleter\n'
+            '    funcion x(self):\n'
+            '        self.campos = -1\n'
+            'p = P()\n'
+            'p.x = 5\n'
+            'imprimir(p.x)\n'
+            'borrar p.x\n'
+            'imprimir(p.x)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_descriptors_property_inheritance_mro(self):
+        source = (
+            'clase Base:\n'
+            '    funcion __init__(self):\n'
+            '        self.campos = 3\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver self.campos\n'
+            '    @x.setter\n'
+            '    funcion x(self, v):\n'
+            '        self.campos = v\n'
+            'clase Hija(Base):\n'
+            '    pasar\n'
+            'h = Hija()\n'
+            'imprimir(h.x)\n'
+            'h.x = 9\n'
+            'imprimir(h.x)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_descriptors_property_shadow_in_subclass(self):
+        source = (
+            'clase Base:\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+            'clase Hija(Base):\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 2\n'
+            'h = Hija()\n'
+            'imprimir(h.x)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_descriptors_property_set_on_getter_only_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+            'p = P()\n'
+            'p.x = 5\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-prop-set-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "property 'x' of 'P' object has no setter"):
+                compile_native(source, Path(directory) / "program.exe")
+
+    def test_descriptors_property_del_on_getter_only_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+            'p = P()\n'
+            'borrar p.x\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-prop-del-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "property 'x' of 'P' object has no deleter"):
+                compile_native(source, Path(directory) / "program.exe")
+
+    def test_descriptors_property_call_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+            'p = P()\n'
+            'imprimir(p.x())\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-prop-call-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "not a method"):
+                compile_native(source, Path(directory) / "program.exe")
+
+    def test_descriptors_setter_without_getter_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @x.setter\n'
+            '    funcion x(self, v):\n'
+            '        pass\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-prop-mismatch-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "requires the property getter"):
+                compile_native(source, Path(directory) / "program.exe")
+
+    def test_descriptors_unknown_class_decorator_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @miclase\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-prop-unknown-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "only @property"):
+                compile_native(source, Path(directory) / "program.exe")
+
+    def test_descriptors_duplicate_property_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 2\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-prop-dup-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "duplicate"):
+                compile_native(source, Path(directory) / "program.exe")
+
+    def test_descriptors_del_non_property_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    funcion __init__(self):\n'
+            '        self.campos = 0\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver self.campos\n'
+            '    @x.setter\n'
+            '    funcion x(self, v):\n'
+            '        self.campos = v\n'
+            '    @x.deleter\n'
+            '    funcion x(self):\n'
+            '        self.campos = -1\n'
+            'p = P()\n'
+            'borrar p.campos\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-prop-del-nonprop-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "is not a property"):
+                compile_native(source, Path(directory) / "program.exe")
+
 
 if __name__ == "__main__":
     unittest.main()

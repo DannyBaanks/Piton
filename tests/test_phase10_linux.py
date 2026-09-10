@@ -898,6 +898,144 @@ class Phase10LinuxGates(unittest.TestCase):
         main = "importar a\nimprimir(a.fa(7))\n"
         self._assert_sibling_equiv_linux(modules, main)
 
+    def test_linux_descriptors_property_get_set_del(self):
+        source = (
+            'clase P:\n'
+            '    funcion __init__(self):\n'
+            '        self.campos = 0\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver self.campos\n'
+            '    @x.setter\n'
+            '    funcion x(self, v):\n'
+            '        self.campos = v\n'
+            '    @x.deleter\n'
+            '    funcion x(self):\n'
+            '        self.campos = -1\n'
+            'p = P()\n'
+            'p.x = 5\n'
+            'imprimir(p.x)\n'
+            'borrar p.x\n'
+            'imprimir(p.x)\n'
+        )
+        self._assert_linux_equiv(source)
+
+    def test_linux_descriptors_property_inheritance(self):
+        source = (
+            'clase Base:\n'
+            '    funcion __init__(self):\n'
+            '        self.campos = 3\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver self.campos\n'
+            '    @x.setter\n'
+            '    funcion x(self, v):\n'
+            '        self.campos = v\n'
+            'clase Hija(Base):\n'
+            '    pasar\n'
+            'h = Hija()\n'
+            'imprimir(h.x)\n'
+            'h.x = 9\n'
+            'imprimir(h.x)\n'
+        )
+        self._assert_linux_equiv(source)
+
+    def test_linux_descriptors_set_on_getter_only_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+            'p = P()\n'
+            'p.x = 5\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-prop-set-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "property 'x' of 'P' object has no setter"):
+                compile_native_linux(source, Path(directory) / "program")
+
+    def test_linux_descriptors_del_on_getter_only_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+            'p = P()\n'
+            'borrar p.x\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-prop-del-fail-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "property 'x' of 'P' object has no deleter"):
+                compile_native_linux(source, Path(directory) / "program")
+
+    def test_linux_descriptors_property_call_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+            'p = P()\n'
+            'imprimir(p.x())\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-prop-call-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "not a method"):
+                compile_native_linux(source, Path(directory) / "program")
+
+    def test_linux_descriptors_setter_without_getter_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @x.setter\n'
+            '    funcion x(self, v):\n'
+            '        pass\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-prop-err-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "requires the property getter"):
+                compile_native_linux(source, Path(directory) / "program")
+
+    def test_linux_descriptors_unknown_decorator_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @miclase\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-prop-dec-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "only @property"):
+                compile_native_linux(source, Path(directory) / "program")
+
+    def test_linux_descriptors_duplicate_property_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 1\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver 2\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-prop-dup-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "duplicate"):
+                compile_native_linux(source, Path(directory) / "program")
+
+    def test_linux_descriptors_del_non_property_fails_closed(self):
+        source = (
+            'clase P:\n'
+            '    funcion __init__(self):\n'
+            '        self.campos = 0\n'
+            '    @property\n'
+            '    funcion x(self):\n'
+            '        devolver self.campos\n'
+            '    @x.setter\n'
+            '    funcion x(self, v):\n'
+            '        self.campos = v\n'
+            '    @x.deleter\n'
+            '    funcion x(self):\n'
+            '        self.campos = -1\n'
+            'p = P()\n'
+            'borrar p.campos\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-del-nonprop-") as directory:
+            with self.assertRaisesRegex(NativeBuildError, "is not a property"):
+                compile_native_linux(source, Path(directory) / "program")
+
 
 if __name__ == "__main__":
     unittest.main()

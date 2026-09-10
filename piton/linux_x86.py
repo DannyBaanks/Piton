@@ -112,10 +112,11 @@ class LinuxCEmitter:
         self.function_names: set[str] = set()
 
     def emit(self, module: MIRModule) -> str:
-        self.module = module
+        self.mir_module = module
         self.classes = getattr(module, "classes", {})
         self.class_parents = getattr(module, "class_parents", {})
         self.class_mro = getattr(module, "class_mro", {})
+        self.class_properties = getattr(module, "class_properties", {})
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self._has_bigint = any(
@@ -230,6 +231,15 @@ class LinuxCEmitter:
                 return current
             current = self.class_parents.get(current)
         raise NativeBuildError(f"native method not found: {class_name}.{method}")
+
+    def _resolve_property_class(self, owner_type: str, name: str) -> str | None:
+        if not owner_type.startswith("object:"):
+            return None
+        class_name = owner_type.split(":", 1)[1]
+        for candidate in self.class_mro.get(class_name, []):
+            if name in self.class_properties.get(candidate, {}):
+                return candidate
+        return None
 
     def _complete_call_args(self, function_name: str, values: list[Any]) -> list[Any]:
         defaults = self.function_defaults.get(function_name)
@@ -508,16 +518,43 @@ class LinuxCEmitter:
             types[result] = "int"
         elif op == "set_attr":
             obj, attr, val = args
-            out.append(f'    piton_object_set((PitonObject*){self._value(obj)},"{attr}",{self._slot(val, types)});')
+            owner_type = types.get(obj, "")
+            prop_class = self._resolve_property_class(owner_type, attr)
+            if prop_class is not None:
+                setter = self.class_properties[prop_class][attr].get("setter")
+                if not setter:
+                    raise NativeBuildError(f"property '{attr}' of '{owner_type.split(':', 1)[1]}' object has no setter")
+                out.append(f'    {_name(setter)}({self._value(obj)},{self._value(val)});')
+            else:
+                out.append(f'    piton_object_set((PitonObject*){self._value(obj)},"{attr}",{self._slot(val, types)});')
         elif op == "get_attr":
             obj, attr = args
-            out.append(f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},"{attr}").bits;')
             owner_type = types.get(obj, "")
+            prop_class = self._resolve_property_class(owner_type, attr)
             module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
-            if owner_type == "object:module":
-                types[result] = module_attr_types.get(attr, "int")
-            else:
+            if prop_class is not None:
+                getter = self.class_properties[prop_class][attr]["getter"]
+                out.append(f'    {_name(result)}={_name(getter)}({self._value(obj)});')
                 types[result] = "int"
+            else:
+                out.append(f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},"{attr}").bits;')
+                if owner_type == "object:module":
+                    types[result] = module_attr_types.get(attr, "int")
+                else:
+                    types[result] = "int"
+        elif op == "del_attr":
+            obj, attr = args
+            owner_type = types.get(obj, "")
+            prop_class = self._resolve_property_class(owner_type, attr)
+            if prop_class is not None:
+                deleter = self.class_properties[prop_class][attr].get("deleter")
+                if not deleter:
+                    raise NativeBuildError(f"property '{attr}' of '{owner_type.split(':', 1)[1]}' object has no deleter")
+                out.append(f'    {_name(deleter)}({self._value(obj)});')
+            else:
+                raise NativeBuildError(
+                    f"native del on '{attr}' is not a property of a natively-typed object"
+                )
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
             call_args = args[3] if len(args) > 3 else ()
@@ -526,6 +563,10 @@ class LinuxCEmitter:
                 if not owner_type.startswith("object:"):
                     raise NativeBuildError("Linux method receiver class is not statically known")
                 cls_name = owner_type.split(":", 1)[1]
+                if self._resolve_property_class(owner_type, method) is not None:
+                    raise NativeBuildError(
+                        f"native property '{method}' of '{cls_name}' object is not a method (calling a property is unsupported)"
+                    )
             cls_name = self._resolve_method(cls_name, method)
             values = ",".join(self._value(v) for v in ([obj] + list(call_args)))
             out.append(f'    {_name(result)}={_name(cls_name+"__"+method)}({values});')

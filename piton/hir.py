@@ -28,6 +28,7 @@ class HIRKind(Enum):
     TRY = auto()
     WITH = auto()
     MATCH = auto()
+    PASS = auto()
 
     # Variables
     LOAD = auto()

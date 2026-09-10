@@ -221,6 +221,9 @@ class Lowerer:
     def _lower_exprstmt(self, cst: ExprStmt):
         return self.lower(cst.value)
 
+    def _lower_passstmt(self, cst):
+        return HIRNode(kind=HIRKind.PASS)
+
     def _lower_assign(self, cst: Assign):
         targets = [self.lower(t) for t in cst.targets]
         value = self.lower(cst.value)
@@ -336,6 +339,19 @@ class Lowerer:
     def _lower_await(self, cst: CWAwait):
         value = self.lower(cst.value)
         return Await(kind=HIRKind.AWAIT, value=value)
+
+    def _lower_decorator(self, cst: "Decorator"):
+        return self.lower(cst.func) if cst.func else HIRNode(kind=HIRKind.MODULE)
+
+    def _lower_delstmt(self, cst: "DelStmt"):
+        targets = []
+        for target in cst.targets:
+            if target.type.name == "attribute":
+                value = self.lower(target.value)
+                targets.append(Attr(kind=HIRKind.ATTR, value=value, attr=target.attr, ctx="Del"))
+            else:
+                targets.append(self.lower(target))
+        return Delete(kind=HIRKind.DELETE, targets=targets)
 
 
 def lower_cst_to_hir(cst: CSTNode) -> HIRNode:

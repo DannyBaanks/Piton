@@ -43,6 +43,7 @@ class Win64NasmEmitter:
         self.mir_module = module
         self.mir_module_classes = getattr(module, 'classes', {})
         self.mir_module_class_mro = getattr(module, 'class_mro', {})
+        self.mir_module_class_properties = getattr(module, 'class_properties', {})
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self.lines = [
@@ -168,6 +169,18 @@ class Win64NasmEmitter:
     def _address(self, name: str) -> str:
         self._reserve(name)
         return f"[rbp-{self.slots[name]}]"
+
+    def _resolve_property_class(self, owner_type: str, name: str) -> str | None:
+        """Returns the MRO class that declares property ``name`` for an owner
+        statically typed ``object:<Class>``; None if the owner type is not a
+        native class or the attribute is not a property."""
+        if not owner_type.startswith("object:"):
+            return None
+        class_name = owner_type.split(":", 1)[1]
+        for candidate in self.mir_module_class_mro.get(class_name, []):
+            if name in self.mir_module_class_properties.get(candidate, {}):
+                return candidate
+        return None
 
     def _store_slot(self, name: str, register: str) -> None:
         self.lines.append(f"    mov {self._address(name)}, {register}")
@@ -480,22 +493,54 @@ class Win64NasmEmitter:
             self.types[result] = f"object:{class_name}"
         elif op == "set_attr":
             owner, name, value = args
-            self._load_operand(owner, "rcx")
-            self.lines.append(f"    lea rdx, [{self._string(name)}]")
-            self._load_operand(value, "r8")
-            self.lines.append("    call piton_object_set")
+            owner_type = self.types.get(owner, "")
+            prop_class = self._resolve_property_class(owner_type, name)
+            if prop_class is not None:
+                setter = self.mir_module_class_properties[prop_class][name].get("setter")
+                if not setter:
+                    raise NativeBuildError(f"property '{name}' of '{owner_type.split(':', 1)[1]}' object has no setter")
+                self._load_operand(owner, "rcx")
+                self._load_operand(value, "rdx")
+                self.lines.append(f"    call {setter}")
+            else:
+                self._load_operand(owner, "rcx")
+                self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                self._load_operand(value, "r8")
+                self.lines.append("    call piton_object_set")
         elif op == "get_attr":
             owner, name = args
-            self._load_operand(owner, "rcx")
-            self.lines.append(f"    lea rdx, [{self._string(name)}]")
-            self.lines.append("    call piton_object_get")
-            self.lines.append(f"    mov {self._address(result)}, rax")
             owner_type = self.types.get(owner, "")
+            prop_class = self._resolve_property_class(owner_type, name)
             module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
-            if owner_type == "object:module":
-                self.types[result] = module_attr_types.get(name, "int")
-            else:
+            if prop_class is not None:
+                getter = self.mir_module_class_properties[prop_class][name]["getter"]
+                self._load_operand(owner, "rcx")
+                self.lines.append(f"    call {getter}")
+                self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
+            else:
+                self._load_operand(owner, "rcx")
+                self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                self.lines.append("    call piton_object_get")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                if owner_type == "object:module":
+                    self.types[result] = module_attr_types.get(name, "int")
+                else:
+                    self.types[result] = "int"
+        elif op == "del_attr":
+            owner, name = args
+            owner_type = self.types.get(owner, "")
+            prop_class = self._resolve_property_class(owner_type, name)
+            if prop_class is not None:
+                deleter = self.mir_module_class_properties[prop_class][name].get("deleter")
+                if not deleter:
+                    raise NativeBuildError(f"property '{name}' of '{owner_type.split(':', 1)[1]}' object has no deleter")
+                self._load_operand(owner, "rcx")
+                self.lines.append(f"    call {deleter}")
+            else:
+                raise NativeBuildError(
+                    f"native del on '{name}' is not a property of a natively-typed object"
+                )
         elif op == "method_call":
             explicit_class, method_name, owner, raw_values = args
             owner_type = self.types.get(owner, "")
@@ -515,6 +560,10 @@ class Win64NasmEmitter:
                     resolved_class = class_parents.get(resolved_class)
             if not resolved_class:
                 resolved_class = class_name  # fallback to original
+            if self._resolve_property_class(owner_type, method_name) is not None:
+                raise NativeBuildError(
+                    f"native property '{method_name}' of '{class_name}' object is not a method (calling a property is unsupported)"
+                )
             values = [owner, *raw_values]
             if len(values) > 4:
                 raise NativeBuildError("native method calls support at most four total arguments")
