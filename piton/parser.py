@@ -455,6 +455,11 @@ class Parser:
             while self._match(TokenType.DOT) and self._check(TokenType.NAME):
                 module += "." + self._consume(TokenType.NAME).value
         self._consume(TokenType.NAME)  # 'importar'
+        if self._match(TokenType.STAR):
+            # `desde pkg importar *` — import star (entry-level binding).
+            return ImportFromStmt(
+                module=module, names=[Alias(name="*")], level=level, is_star=True
+            ).set_pos(tok)
         names = []
         while True:
             name = self._consume(TokenType.NAME).value

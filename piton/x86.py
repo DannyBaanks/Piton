@@ -1131,6 +1131,7 @@ def _scan_native_modules(
             elif statement.kind.name == "IMPORT_FROM":
                 level = getattr(statement, "level", 0) or 0
                 mod_name = getattr(statement, "module", None)
+                is_star = bool(getattr(statement, "is_star", False))
                 if level:
                     if is_entry(package):
                         raise NativeBuildError(
@@ -1142,6 +1143,11 @@ def _scan_native_modules(
                             "native relative imports beyond one level ('desde .. importar ...') "
                             "are not supported yet"
                         )
+                    if is_star:
+                        raise NativeBuildError(
+                            "native star imports ('desde . importar *') are only supported "
+                            "at the entry module, not inside imported modules"
+                        )
                     if not mod_name:
                         for alias in statement.names:
                             register_chain(f"{package}.{alias.asname or alias.name}")
@@ -1151,7 +1157,16 @@ def _scan_native_modules(
                     if not mod_name or mod_name in {"asyncio", "math", "sys"}:
                         continue
                     register_chain(mod_name)
-                    if is_entry(package):
+                    if not is_entry(package):
+                        if is_star:
+                            raise NativeBuildError(
+                                "native star imports ('desde X importar *') are only supported "
+                                "at the entry module, not inside imported modules"
+                            )
+                        continue
+                    if is_star:
+                        from_imports[(mod_name, "*")] = True
+                    else:
                         for alias in statement.names:
                             from_imports[(mod_name, alias.asname or alias.name)] = True
 

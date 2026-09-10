@@ -206,6 +206,7 @@ class Lowerer:
             module=cst.module,
             names=names,
             level=cst.level,
+            is_star=cst.is_star,
         )
 
     def _lower_alias(self, cst: CSTAlias):

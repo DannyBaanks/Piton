@@ -651,6 +651,92 @@ class Phase10LinuxGates(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "keyword arguments"):
                 compile_native_linux_files(entry, root / "program")
 
+    # ── IMPORT_STAR_V1 (Linux mirror) ───────────────────────────────────
+
+    def test_linux_star_from_package_equiv(self):
+        init = (
+            "funcion cuadrado(n):\n    devolver n * n\n"
+            "funcion doble(n):\n    devolver n * 2\n"
+            "funcion _privada(n):\n    devolver n\n"
+        )
+        main = (
+            "desde pkg importar *\n"
+            "imprimir(cuadrado(6))\n"
+            "imprimir(doble(21))\n"
+        )
+        self._assert_package_equiv(init, None, main)
+
+    def test_linux_star_from_standalone_module_equiv(self):
+        module_src = "funcion resta(a, b):\n    devolver a - b\nfuncion doble(n):\n    devolver n * 2\n"
+        main = (
+            "desde lib importar *\n"
+            "imprimir(resta(100, 7))\n"
+            "imprimir(doble(21))\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-linux-star-lib-") as directory:
+            root = Path(directory)
+            (root / "lib.piton").write_text(module_src, encoding="utf-8")
+            (root / "lib.py").write_text(traducir_fuente(module_src, "<lib>"), encoding="utf-8")
+            entry = root / "main.piton"
+            entry.write_text(main, encoding="utf-8")
+            main_py = root / "main.py"
+            main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
+            executable = compile_native_linux_files(entry, root / "program")
+            linux_path = windows_to_wsl_path(executable)
+            native_run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                capture_output=True, check=False, timeout=10,
+            )
+            oracle_run = subprocess.run(
+                [sys.executable, str(main_py)], capture_output=True, check=False, timeout=10,
+            )
+            native_stdout = native_run.stdout.replace(b"\r\n", b"\n")
+            oracle_stdout = oracle_run.stdout.replace(b"\r\n", b"\n")
+            self.assertEqual(
+                (native_run.returncode, native_stdout),
+                (oracle_run.returncode, oracle_stdout),
+                native_run.stderr,
+            )
+
+    def test_linux_star_from_dotted_submodule_equiv(self):
+        init = ""
+        submodules = {
+            "tools": "funcion suma(a, b):\n    devolver a + b\nfuncion producto(a, b):\n    devolver a * b\n",
+        }
+        main = (
+            "desde pkg.tools importar *\n"
+            "imprimir(suma(40, 2))\n"
+            "imprimir(producto(6, 7))\n"
+        )
+        self._assert_package_equiv(init, submodules, main)
+
+    def test_linux_star_relative_in_entry_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-star-entry-") as directory:
+            root = Path(directory)
+            entry = root / "main.piton"
+            entry.write_text("desde . importar *\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "no parent package"):
+                compile_native_linux_files(entry, root / "program")
+
+    def test_linux_star_in_package_init_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-star-init-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text("desde . importar *\n", encoding="utf-8")
+            entry = root / "main.piton"
+            entry.write_text("importar pkg\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "entry module"):
+                compile_native_linux_files(entry, root / "program")
+
+    def test_linux_star_from_builtin_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-star-builtin-") as directory:
+            root = Path(directory)
+            entry = root / "main.piton"
+            entry.write_text("desde math importar *\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "builtin modules"):
+                compile_native_linux_files(entry, root / "program")
+
 
 if __name__ == "__main__":
     unittest.main()

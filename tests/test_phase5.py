@@ -7,9 +7,12 @@ import subprocess
 import tempfile
 import unittest
 
-from piton.x86 import NativeBuildError, compile_native, compile_native_files
+from piton.x86 import NativeBuildError, compile_native, compile_native_files, _scan_native_modules
 from piton.native_differential import compare_native_to_cpython
 from piton.translator import traducir_fuente
+from piton.parser import parse
+from piton.lower import lower_cst_to_hir
+from piton.mir import MIRLowerer
 
 
 class Phase5Gates(unittest.TestCase):
@@ -1073,6 +1076,130 @@ class Phase5Gates(unittest.TestCase):
             entry.write_text("importar pkg.sub\n", encoding="utf-8")
             with self.assertRaisesRegex(Exception, "module not found"):
                 compile_native_files(entry, root / "program.exe")
+
+    # ── IMPORT_STAR_V1 ──────────────────────────────────────────────────
+
+    def _star_alias_map(self, root, main_src, *, module_files=None, pkg_init=None, submodules=None):
+        entry = root / "main.piton"
+        entry.write_text(main_src, encoding="utf-8")
+        for name, src in (module_files or {}).items():
+            (root / name).write_text(src, encoding="utf-8")
+        if pkg_init is not None:
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text(pkg_init, encoding="utf-8")
+            for name, src in (submodules or {}).items():
+                (pkg_dir / f"{name}.piton").write_text(src, encoding="utf-8")
+        modules, from_imports, module_meta = _scan_native_modules(entry)
+        hir = lower_cst_to_hir(parse(entry.read_text(encoding="utf-8-sig")))
+        lowerer = MIRLowerer()
+        lowerer.lower(
+            hir, modules, from_imports=from_imports,
+            entry_file=str(entry), module_meta=module_meta,
+        )
+        return lowerer.from_import_aliases
+
+    def test_x86_star_from_package_excludes_private(self):
+        with tempfile.TemporaryDirectory(prefix="piton-star-priv-") as directory:
+            root = Path(directory)
+            aliases = self._star_alias_map(
+                root,
+                "desde pkg importar *\n",
+                pkg_init=(
+                    "funcion cuadrado(n):\n    devolver n * n\n"
+                    "funcion doble(n):\n    devolver n * 2\n"
+                    "funcion _privada(n):\n    devolver n\n"
+                ),
+            )
+            self.assertEqual(aliases["cuadrado"], "pkg__cuadrado")
+            self.assertEqual(aliases["doble"], "pkg__doble")
+            self.assertNotIn("_privada", aliases)
+
+    def test_x86_star_from_package_equiv(self):
+        init = (
+            "funcion cuadrado(n):\n    devolver n * n\n"
+            "funcion doble(n):\n    devolver n * 2\n"
+            "funcion _privada(n):\n    devolver n\n"
+        )
+        main = (
+            "desde pkg importar *\n"
+            "imprimir(cuadrado(6))\n"
+            "imprimir(doble(21))\n"
+        )
+        self._assert_package_equiv(init, None, main)
+
+    def test_x86_star_from_standalone_module_equiv(self):
+        module_src = "funcion resta(a, b):\n    devolver a - b\nfuncion doble(n):\n    devolver n * 2\n"
+        main = (
+            "desde lib importar *\n"
+            "imprimir(resta(100, 7))\n"
+            "imprimir(doble(21))\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-star-lib-") as directory:
+            root = Path(directory)
+            (root / "lib.piton").write_text(module_src, encoding="utf-8")
+            (root / "lib.py").write_text(traducir_fuente(module_src, "<lib>"), encoding="utf-8")
+            entry = root / "main.piton"
+            entry.write_text(main, encoding="utf-8")
+            main_py = root / "main.py"
+            main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
+            executable = compile_native_files(entry, root / "program.exe")
+            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
+            oracle_run = subprocess.run([sys.executable, str(main_py)], capture_output=True, check=False)
+            self.assertEqual(
+                (native_run.returncode, native_run.stdout),
+                (oracle_run.returncode, oracle_run.stdout),
+                native_run.stderr,
+            )
+
+    def test_x86_star_from_dotted_submodule_equiv(self):
+        init = ""
+        submodules = {
+            "tools": "funcion suma(a, b):\n    devolver a + b\nfuncion producto(a, b):\n    devolver a * b\n",
+        }
+        main = (
+            "desde pkg.tools importar *\n"
+            "imprimir(suma(40, 2))\n"
+            "imprimir(producto(6, 7))\n"
+        )
+        self._assert_package_equiv(init, submodules, main)
+
+    def test_x86_star_relative_in_entry_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-star-entry-") as directory:
+            root = Path(directory)
+            entry = root / "main.piton"
+            entry.write_text("desde . importar *\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "no parent package"):
+                compile_native_files(entry, root / "program.exe")
+
+    def test_x86_star_in_package_init_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-star-init-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text("desde . importar *\n", encoding="utf-8")
+            entry = root / "main.piton"
+            entry.write_text("importar pkg\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "entry module"):
+                compile_native_files(entry, root / "program.exe")
+
+    def test_x86_star_from_builtin_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-star-builtin-") as directory:
+            root = Path(directory)
+            entry = root / "main.piton"
+            entry.write_text("desde math importar *\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "builtin modules"):
+                compile_native_files(entry, root / "program.exe")
+
+    def test_x86_star_mixed_with_explicit_names_fails_closed(self):
+        for star_source in (
+            "desde m importar a, *\n",
+            "desde m importar *, a\n",
+            "importar *\n",
+        ):
+            with self.subTest(source=star_source):
+                with self.assertRaises(Exception):
+                    parse(star_source)
 
     def test_x86_async_run_await_and_math_stdlib(self):
         source = (

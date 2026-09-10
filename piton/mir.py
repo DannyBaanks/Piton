@@ -166,6 +166,18 @@ class MIRLowerer:
                         self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
+                    if getattr(node, "is_star", False):
+                        if mod_name in {"asyncio", "math", "sys"}:
+                            raise MIRLoweringError("native star imports from builtin modules are not supported")
+                        if not mod_name or getattr(node, "level", 0) or 0 > 0:
+                            raise MIRLoweringError("native relative star imports are not supported")
+                        if mod_name not in imported_modules:
+                            raise MIRLoweringError(f"native star import module not supplied: {mod_name}")
+                        prefix = f"{mod_name.replace('.', '__')}__"
+                        for item in imported_modules[mod_name].body:
+                            if item.kind == HIRKind.FUNC_DEF and not item.name.startswith("_"):
+                                self.from_import_aliases[item.name] = f"{prefix}{item.name}"
+                        continue
                     if mod_name:
                         if mod_name not in imported_modules and mod_name not in {"asyncio", "math", "sys"}:
                             raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")

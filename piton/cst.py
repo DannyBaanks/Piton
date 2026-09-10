@@ -301,6 +301,7 @@ class ImportFromStmt(CSTNode):
     module: Optional[str] = None
     names: List["Alias"] = field(default_factory=list)
     level: int = 0
+    is_star: bool = False
     type: CSTNodeType = CSTNodeType.IMPORT_FROM_STMT
 
 

@@ -376,8 +376,34 @@ Backends: Windows (`native_runtime.c`: `piton_raise_unhandled`,
     CPython) no tiene paquete padre → relative fail-closed ("no parent package");
     `desde ..` (>1 nivel) fail-closed.
   - Tests: Win 8 + Linux 6 (diferenciales vs CPython + negativos).
-- **KNOWN_GAP_NEXT**: `desde ..` / `desde ...` a varios niveles (fail-closed),
-  `importar *` y ciclos de imports (`IMPORT_STAR_V1`, `IMPORT_CYCLIC_V1`).
+- **KNOWN_GAP_NEXT**: `desde ..` / `desde ...` a varios niveles (fail-closed) y
+  ciclos de imports (`IMPORT_CYCLIC_V1`).
+- **IMPORT_STAR_V1** — `desde pkg importar *` + exclusión de privadas.
+- **CURRENT_STATUS**: **PASS** (2026-09-09).
+- **DEPENDENCIES**: `IMPORT_CORE` + `IMPORT_PACKAGE_V1` + `IMPORT_RELATIVE_V1`.
+- **COMPLEXITY**: MEDIUM → resuelto.
+- **IMPLEMENTATION**:
+  - Parser: `*` como único nombre de `desde ... importar *` (marca `is_star` en
+    CST/HIR; `Alias(name="*")`). Cualquier mezcla (`desde m importar a, *`,
+    `desde m importar *, a`) y `importar *` se rechazan en parse, espejo exacto
+    del SyntaxError de CPython.
+  - Traductor: `desde m importar *` → `from m import *` (el token `*` pasa).
+  - MIR: el binding de star itera el body del módulo destino y liga cada
+    `funcion` pública como nombre desnudo (`cuadrado` → símbolo calificado
+    `pkg__cuadrado`); las privadas `_prefijo` se excluyen (comportamiento de
+    CPython sin `__all__`). Aplica a paquetes (`__init__`), módulos sueltos y
+    submódulos dotted (`pkg.tools`).
+  - Scan: star absoluto en el entry → binding; star relativo en el entry → ya
+    fail-closed ("no parent package"); star dentro de un módulo importado →
+    fail-closed ("entry module") porque los bindings solo existen en el entry;
+    star desde builtins (`math`) → fail-closed.
+  - Límite documentado: los bindings de star son funciones del body del módulo
+    destino; nombres propagados por imports dentro de ese módulo (p. ej.
+    `pkg/__init__` re-exportando `desde .sub importar f`) no entran en el star
+    set, porque los bodies importados no se ejecutan.
+  - Tests: Win 14 (diferenciales de paquete/módulo/submódulo, exclusión de
+    privadas white-box en el MIR, negativos de relative/builtin/mezcla) + Linux
+    6 espejos.
 
 ### 17. Async (M8)
 
@@ -473,8 +499,9 @@ con sus tests de integración. Nunca por suma automática de partes.
 `desde pkg.sub importar`), `CLOSURES_COMPLETE_V1`, `EXCEPTION_CUSTOM_V1`
 (excepciones de usuario con matching por jerarquía), `EXCEPTION_RERAISE_V1`
 (`lanzar` bare en handlers exactos), `MODULE_METADATA_V1`
-(`__name__`/`__package__`/`__file__`/`sys.modules`) e `IMPORT_RELATIVE_V1`
-(`importar pkg.sub`, `desde . importar x`, attr-chain `pkg.sub.fn()`),
+(`__name__`/`__package__`/`__file__`/`sys.modules`), `IMPORT_RELATIVE_V1`
+(`importar pkg.sub`, `desde . importar x`, attr-chain `pkg.sub.fn()`) e
+`IMPORT_STAR_V1` (`desde pkg importar *`, privadas excluidas),
 todos Win+Linux PASS.
 
 1. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
@@ -482,13 +509,14 @@ todos Win+Linux PASS.
 3. `MODULE_METADATA_V1` (MEDIUM) — `__name__`/`__file__`/`sys.modules`.
    **PASS.**
 4. `IMPORT_RELATIVE_V1` (MEDIUM) — dotted + relative + attr-chain. **PASS**.
-5. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario. **PASS.**
-6. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare. **PASS.**
-7. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
-8. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
-9. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
-   **PASS.**
-10. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 6).
+5. `IMPORT_STAR_V1` (MEDIUM) — `desde pkg importar *`. **PASS**.
+6. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario. **PASS.**
+7. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare. **PASS.**
+8. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
+9. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
+10. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
+    **PASS.**
+11. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 8).
 
 ## 31. Gates paralelizables
 

@@ -412,6 +412,7 @@ class ImportFrom(HIRNode):
     module: Optional[str] = None
     names: List["Alias"] = field(default_factory=list)
     level: int = 0
+    is_star: bool = False
     kind: HIRKind = HIRKind.IMPORT_FROM
 
 
