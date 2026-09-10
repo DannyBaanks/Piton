@@ -148,7 +148,20 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind == HIRKind.IMPORT:
                     for alias in node.names:
-                        if alias.name not in imported_modules and alias.name not in {"asyncio", "math", "sys"}:
+                        if alias.name in {"asyncio", "math", "sys"}:
+                            self.module_aliases[alias.asname or alias.name] = alias.name
+                            continue
+                        if "." in alias.name:
+                            top = alias.name.split(".")[0]
+                            if top not in imported_modules:
+                                raise MIRLoweringError(f"native module not supplied: {alias.name}")
+                            if alias.asname:
+                                self.module_aliases[alias.asname] = alias.name
+                            else:
+                                self.module_aliases[alias.name] = top
+                                self.module_aliases[top] = top
+                            continue
+                        if alias.name not in imported_modules:
                             raise MIRLoweringError(f"native module not supplied: {alias.name}")
                         self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
@@ -164,9 +177,10 @@ class MIRLowerer:
                                 self.from_import_aliases[local] = f"{mod_name.replace('.', '__')}__{alias.name}"
             for module_name, imported in sorted(imported_modules.items()):
                 for item in imported.body:
-                    if item.kind != HIRKind.FUNC_DEF:
+                    if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM}:
                         raise MIRLoweringError("native imported modules currently support functions only")
-                    self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
+                    if item.kind == HIRKind.FUNC_DEF:
+                        self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
@@ -649,6 +663,19 @@ class MIRLowerer:
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
+    def _module_attr_chain(self, builder: "_Builder", node: Optional[HIRNode]) -> Optional[tuple[str, list[str]]]:
+        """Returns ``(alias, [attr, ...])`` when ``node`` is an attribute chain
+        rooted at a module alias load (``pkg.sub``, ``pkg.obj.met``); None otherwise."""
+        attrs: list[str] = []
+        current = node
+        while getattr(current, "kind", None) == HIRKind.ATTR:
+            attrs.append(current.attr)
+            current = current.value
+        if getattr(current, "kind", None) == HIRKind.LOAD and current.name in builder.module_aliases:
+            if current.name not in {"asyncio", "math", "sys"}:
+                return current.name, list(reversed(attrs))
+        return None
+
     def _lower_expr(self, builder: _Builder, node: Optional[HIRNode]) -> Any:
         if node is None:
             return None
@@ -739,6 +766,20 @@ class MIRLowerer:
                 elif node.args:
                     raise MIRLoweringError("native class without __init__ takes no arguments")
                 return result
+            if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.ATTR:
+                chain = self._module_attr_chain(builder, node.func)
+                if chain is not None:
+                    if node.keywords:
+                        raise MIRLoweringError("native module calls do not support keyword arguments yet")
+                    alias_name, attrs = chain
+                    module_name = builder.module_aliases[alias_name]
+                    symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
+                    function = builder.temp()
+                    builder.emit("load", symbol, result=function)
+                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                    result = builder.temp()
+                    builder.emit("call", function, args, result=result)
+                    return result
             if (
                 node.func.kind == HIRKind.ATTR
                 and node.func.value.kind == HIRKind.LOAD
@@ -831,6 +872,11 @@ class MIRLowerer:
             )
             return result
         if kind == HIRKind.ATTR:
+            if self._module_attr_chain(builder, node) is not None:
+                raise MIRLoweringError(
+                    "native module attribute value access is not supported yet; "
+                    "use module function calls (e.g. 'pkg.sub.fn(...)')"
+                )
             result = builder.temp()
             builder.emit("get_attr", self._lower_expr(builder, node.value), node.attr, result=result)
             return result

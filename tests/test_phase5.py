@@ -911,7 +911,158 @@ class Phase5Gates(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "requires package"):
                 compile_native_files(entry, root / "program.exe")
 
-    def test_x86_dotted_import_fails_closed(self):
+    # ── IMPORT_RELATIVE_V1 ──────────────────────────────────────────────
+
+    def test_x86_relative_from_import_in_package_equiv(self):
+        init = (
+            "funcion triple(n):\n    devolver n * 3\n"
+            "desde . importar numeros\n"
+            "desde .operaciones importar resta\n"
+        )
+        submodules = {
+            "numeros": "funcion suma(a, b):\n    devolver a + b\n",
+            "operaciones": "funcion resta(a, b):\n    devolver a - b\n",
+        }
+        main = (
+            "importar pkg\nimportar sys\n"
+            "imprimir(pkg.triple(3))\n"
+            "imprimir(pkg.numeros.suma(20, 22))\n"
+            "imprimir(pkg.operaciones.resta(100, 7))\n"
+            'imprimir(sys.modules["pkg"].__package__)\n'
+            'imprimir(sys.modules["pkg.numeros"].__name__)\n'
+            'imprimir(sys.modules["pkg.numeros"].__package__)\n'
+            'imprimir(sys.modules["pkg.operaciones"].__package__)\n'
+        )
+        self._assert_package_equiv(init, submodules, main)
+
+    def test_x86_dotted_import_binds_top_and_chain_calls(self):
+        with tempfile.TemporaryDirectory(prefix="piton-dotted-") as directory:
+            root = Path(directory)
+            pkg2 = root / "pkg2"
+            pkg2.mkdir()
+            (pkg2 / "__init__.piton").write_text("", encoding="utf-8")
+            (pkg2 / "__init__.py").write_text("", encoding="utf-8")
+            sub = pkg2 / "subpkg"
+            sub.mkdir()
+            sub_init = (
+                "funcion agrupar(n):\n    devolver n + 1\n"
+                "desde . importar deep\n"
+                "desde .otro importar doble\n"
+            )
+            (sub / "__init__.piton").write_text(sub_init, encoding="utf-8")
+            (sub / "__init__.py").write_text(
+                traducir_fuente(sub_init, "<subpkg-init>"), encoding="utf-8"
+            )
+            deep_src = "funcion canal(n):\n    devolver n * 100\n"
+            (sub / "deep.piton").write_text(deep_src, encoding="utf-8")
+            (sub / "deep.py").write_text(traducir_fuente(deep_src, "<deep>"), encoding="utf-8")
+            otro_src = "funcion doble(n):\n    devolver n * 2\n"
+            (sub / "otro.piton").write_text(otro_src, encoding="utf-8")
+            (sub / "otro.py").write_text(traducir_fuente(otro_src, "<otro>"), encoding="utf-8")
+            main = (
+                "importar pkg2.subpkg\n"
+                "imprimir(pkg2.subpkg.deep.canal(7))\n"
+                "imprimir(pkg2.subpkg.otro.doble(21))\n"
+                "imprimir(pkg2.subpkg.agrupar(1))\n"
+            )
+            entry = root / "main.piton"
+            entry.write_text(main, encoding="utf-8")
+            main_py = root / "main.py"
+            main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
+            executable = compile_native_files(entry, root / "program.exe")
+            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
+            oracle_run = subprocess.run([sys.executable, str(main_py)], capture_output=True, check=False)
+            self.assertEqual(
+                (native_run.returncode, native_run.stdout),
+                (oracle_run.returncode, oracle_run.stdout),
+                native_run.stderr,
+            )
+
+    def test_x86_dotted_import_asname_binds_top(self):
+        with tempfile.TemporaryDirectory(prefix="piton-dotted-") as directory:
+            root = Path(directory)
+            pkg2 = root / "pkg2"
+            pkg2.mkdir()
+            (pkg2 / "__init__.piton").write_text("", encoding="utf-8")
+            (pkg2 / "__init__.py").write_text("", encoding="utf-8")
+            sub = pkg2 / "subpkg"
+            sub.mkdir()
+            sub_init = "funcion agrupar(n):\n    devolver n + 1\ndesde . importar deep\n"
+            (sub / "__init__.piton").write_text(sub_init, encoding="utf-8")
+            (sub / "__init__.py").write_text(traducir_fuente(sub_init, "<subpkg-init>"), encoding="utf-8")
+            (sub / "deep.piton").write_text("funcion canal(n):\n    devolver n * 100\n", encoding="utf-8")
+            (sub / "deep.py").write_text(
+                traducir_fuente("funcion canal(n):\n    devolver n * 100\n", "<deep>"), encoding="utf-8"
+            )
+            main = (
+                "importar pkg2.subpkg como P\n"
+                "imprimir(P.deep.canal(3))\n"
+                "imprimir(P.agrupar(2))\n"
+            )
+            entry = root / "main.piton"
+            entry.write_text(main, encoding="utf-8")
+            main_py = root / "main.py"
+            main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
+            executable = compile_native_files(entry, root / "program.exe")
+            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
+            oracle_run = subprocess.run([sys.executable, str(main_py)], capture_output=True, check=False)
+            self.assertEqual(
+                (native_run.returncode, native_run.stdout),
+                (oracle_run.returncode, oracle_run.stdout),
+                native_run.stderr,
+            )
+
+    def test_x86_relative_import_in_entry_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-relative-entry-") as directory:
+            root = Path(directory)
+            entry = root / "main.piton"
+            entry.write_text("desde . importar numeros\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "no parent package"):
+                compile_native_files(entry, root / "program.exe")
+
+    def test_x86_relative_import_beyond_one_level_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-relative-deep-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text(
+                "desde .. importar otro\n", encoding="utf-8"
+            )
+            entry = root / "main.piton"
+            entry.write_text("importar pkg\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "beyond one level"):
+                compile_native_files(entry, root / "program.exe")
+
+    def test_x86_module_attribute_value_access_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-module-attr-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text(
+                "funcion fn():\n    devolver 1\n", encoding="utf-8"
+            )
+            entry = root / "main.piton"
+            entry.write_text("importar pkg\nimprimir(pkg.numeros)\n", encoding="utf-8")
+            with self.assertRaisesRegex(Exception, "module function calls"):
+                compile_native_files(entry, root / "program.exe")
+
+    def test_x86_module_attr_chain_keyword_args_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-module-kw-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            pkg_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text("", encoding="utf-8")
+            (pkg_dir / "numeros.piton").write_text(
+                "funcion suma(a, b):\n    devolver a + b\n", encoding="utf-8"
+            )
+            entry = root / "main.piton"
+            entry.write_text(
+                "importar pkg\nimprimir(pkg.numeros.suma(a=1, b=2))\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(Exception, "keyword arguments"):
+                compile_native_files(entry, root / "program.exe")
+
+    def test_x86_dotted_import_missing_module_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-package-fail-") as directory:
             root = Path(directory)
             root.joinpath("pkg").mkdir()
@@ -920,7 +1071,7 @@ class Phase5Gates(unittest.TestCase):
             )
             entry = root / "main.piton"
             entry.write_text("importar pkg.sub\n", encoding="utf-8")
-            with self.assertRaisesRegex(Exception, "not supported yet"):
+            with self.assertRaisesRegex(Exception, "module not found"):
                 compile_native_files(entry, root / "program.exe")
 
     def test_x86_async_run_await_and_math_stdlib(self):

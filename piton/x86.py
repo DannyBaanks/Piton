@@ -1041,6 +1041,10 @@ def resolve_native_module(root: Path, dotted: str) -> Path:
         package_init = root / parts[0] / "__init__.piton"
         if package_init.is_file():
             return package_init
+        if (root / parts[0]).is_dir():
+            raise NativeBuildError(
+                f"native module not found: '{parts[0]}' requires package '{parts[0]}' with __init__.piton"
+            )
         raise NativeBuildError(f"native module not found: {parts[0]}")
     package_dir = root / parts[0]
     if not (package_dir / "__init__.piton").is_file():
@@ -1055,45 +1059,120 @@ def resolve_native_module(root: Path, dotted: str) -> Path:
                 f"native module not found: package '{current.name}' requires __init__.piton"
             )
     candidate = current / f"{parts[-1]}.piton"
-    if not candidate.is_file():
-        raise NativeBuildError(f"native module not found: {dotted}")
-    return candidate
+    if candidate.is_file():
+        return candidate
+    sub_package_init = current / parts[-1] / "__init__.piton"
+    if sub_package_init.is_file():
+        return sub_package_init
+    raise NativeBuildError(f"native module not found: {dotted}")
 
 
 def _scan_native_modules(
     entry: Path,
 ) -> tuple[dict[str, Any], dict[tuple[str, str], bool], dict[str, tuple[str, bool]]]:
-    """Cargan los módulos nativos (hermano o paquete) referenciados por el entry.
+    """Cargan los módulos nativos (hermano, paquete o submódulo) referenciados
+    por el entry, cerrando transitivamente ANY import statement the scanned
+    modules contain (IMPORT_RELATIVE_V1).
 
-    Returns ``(modules, from_imports, module_meta)`` where ``module_meta`` maps each
-    dotted module name to ``(resolved file path, is_package)`` for MODULE_METADATA_V1."""
+    Returns ``(modules, from_imports, module_meta)``:
+    - ``modules``: dotted name -> HIR for every reachable module (package
+      intermediates included), used to lift their functions with qualified names
+      (``pkg__numeros__suma``).
+    - ``from_imports``: entry-level ``(mod, sym)`` bindings.
+    - ``module_meta``: dotted name -> (abs path, is_package) for the sys.modules
+      catalog.
+
+    Relative imports (``desde . importar x`` / ``desde .x importar f``) are
+    resolved against the package context of the module that CONTAINS them: a
+    package's ``__init__.piton`` resolves against its own dotted name; the entry
+    script (like CPython ``python main.py``) has no parent package, so any
+    relative import in it is rejected fail-closed with the same meaning as
+    CPython's ImportError. Relative imports beyond one level (``desde ..``) stay
+    fail-closed."""
     root = entry.parent
-    hir = lower_cst_to_hir(parse(entry.read_text(encoding="utf-8-sig")))
     modules: dict[str, Any] = {}
-    from_imports: dict[tuple[str, str], bool] = {}
     module_meta: dict[str, tuple[str, bool]] = {}
-    for statement in hir.body:
-        if statement.kind.name == "IMPORT":
-            for alias in statement.names:
-                if alias.name in {"asyncio", "math", "sys"}:
-                    continue
-                if "." in alias.name:
-                    raise NativeBuildError(
-                        "'importar pkg.sub' (dotted package import) is not supported yet; "
-                        "use 'desde pkg.sub importar fn'"
-                    )
-                module_path = resolve_native_module(root, alias.name)
-                module_meta[alias.name] = (str(module_path.resolve()), module_path.name == "__init__.piton")
-                modules[alias.name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
-        elif statement.kind.name == "IMPORT_FROM":
-            mod_name = getattr(statement, "module", None)
-            if not mod_name or mod_name in {"asyncio", "math", "sys"}:
+    from_imports: dict[tuple[str, str], bool] = {}
+
+    def parse_path(path: Path) -> Any:
+        return lower_cst_to_hir(parse(path.read_text(encoding="utf-8-sig")))
+
+    def register(dotted: str, path: Path, is_package: bool) -> None:
+        if dotted in modules:
+            return
+        modules[dotted] = parse_path(path)
+        module_meta[dotted] = (str(path.resolve()), is_package)
+
+    def register_chain(dotted: str) -> None:
+        """Registers ``pkg``, ``pkg.sub``, ... up to ``dotted`` by resolving every
+        intermediate package on disk; fail-closed when any missing."""
+        parts = dotted.split(".")
+        for length in range(1, len(parts) + 1):
+            prefix = ".".join(parts[:length])
+            if prefix in modules or prefix in {"asyncio", "math", "sys"}:
                 continue
-            module_path = resolve_native_module(root, mod_name)
-            module_meta[mod_name] = (str(module_path.resolve()), module_path.name == "__init__.piton")
-            modules[mod_name] = lower_cst_to_hir(parse(module_path.read_text(encoding="utf-8-sig")))
-            for alias in statement.names:
-                from_imports[(mod_name, alias.asname or alias.name)] = True
+            path = resolve_native_module(root, prefix)
+            register(prefix, path, path.name == "__init__.piton")
+
+    def is_entry(package: str | None) -> bool:
+        return package == "<entry>"
+
+    def scan_module_hir(hir: Any, dotted: str, package: str) -> None:
+        """Processes one module body, queuing every module it imports. ``dotted``
+        identifies the module for relative resolution when it is a package
+        (``__init__``); entry top-level passes ``package="<entry>"`` (no parent
+        package)."""
+        for statement in hir.body:
+            if statement.kind.name == "IMPORT":
+                for alias in statement.names:
+                    if alias.name in {"asyncio", "math", "sys"}:
+                        continue
+                    register_chain(alias.name)
+            elif statement.kind.name == "IMPORT_FROM":
+                level = getattr(statement, "level", 0) or 0
+                mod_name = getattr(statement, "module", None)
+                if level:
+                    if is_entry(package):
+                        raise NativeBuildError(
+                            "native relative import ('desde . importar ...') in the entry module "
+                            "is not supported: like CPython scripts it has no parent package"
+                        )
+                    if level > 1:
+                        raise NativeBuildError(
+                            "native relative imports beyond one level ('desde .. importar ...') "
+                            "are not supported yet"
+                        )
+                    if not mod_name:
+                        for alias in statement.names:
+                            register_chain(f"{package}.{alias.asname or alias.name}")
+                    else:
+                        register_chain(f"{package}.{mod_name}")
+                else:
+                    if not mod_name or mod_name in {"asyncio", "math", "sys"}:
+                        continue
+                    register_chain(mod_name)
+                    if is_entry(package):
+                        for alias in statement.names:
+                            from_imports[(mod_name, alias.asname or alias.name)] = True
+
+    entry_hir = parse_path(entry)
+    # Entry module: top-level (no package context; relative imports fail-closed).
+    scan_module_hir(entry_hir, "", "<entry>")
+    # Fixed point: every module registered above may itself import siblings
+    # (relative against its own package context) or further absolute modules.
+    pending = True
+    while pending:
+        pending = False
+        for dotted, hir in list(modules.items()):
+            path, is_package = module_meta[dotted]
+            if is_package:
+                package_ctx = dotted  # __init__ resolves relative against itself
+            else:
+                package_ctx = dotted.rsplit(".", 1)[0] if "." in dotted else "<entry>"
+            before = set(modules)
+            scan_module_hir(hir, dotted, package_ctx)
+            if set(modules) != before:
+                pending = True
     return modules, from_imports, module_meta
 
 

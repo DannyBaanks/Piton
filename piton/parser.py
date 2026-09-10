@@ -450,7 +450,7 @@ class Parser:
         while self._match(TokenType.DOT):
             level += 1
         module = None
-        if self._check(TokenType.NAME):
+        if self._check(TokenType.NAME) and self._peek().value != "importar":
             module = self._consume(TokenType.NAME).value
             while self._match(TokenType.DOT) and self._check(TokenType.NAME):
                 module += "." + self._consume(TokenType.NAME).value

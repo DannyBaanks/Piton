@@ -324,7 +324,10 @@ def analizar_tokens(
             anterior = _anterior_significativo(tokens, indice)
             es_atributo = anterior is not None and anterior.type == token.OP and anterior.string == "."
 
-            if not es_atributo and actual.string in HARD_KEYWORDS:
+            if actual.string in HARD_KEYWORDS:
+                # Hard keywords translate everywhere, including after a dot so
+                # `desde . importar x` becomes `from . import x`; a hard keyword
+                # can never be a valid attribute name (unlike soft keywords).
                 reemplazo = HARD_KEYWORDS[actual.string]
                 categoria = "keyword"
                 inicio_stmt = False

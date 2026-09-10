@@ -352,10 +352,32 @@ Backends: Windows (`native_runtime.c`: `piton_raise_unhandled`,
     `main.piton` vs `main.py` con el mismo `sys.executable`; `__file__` se
     verifica no-diferencial (`endswith("main.piton")`) porque la ruta física
     difiere entre ambos.
-- **KNOWN_GAP**: `importar pkg.sub` (dotted IMPORT) rechazado fail-closed —
-  requiere attr-chain `pkg.sub.fn` en MIR. Los módulos importados todavía no
-  pueden importar a su vez (scan del entry solamente, no transitivo).
-`IMPORT_RELATIVE_V1`, `IMPORT_STAR_V1`, `IMPORT_CYCLIC_V1`.
+- **KNOWN_GAP (resuelto por `IMPORT_RELATIVE_V1` 2026-09-09)**: `importar pkg.sub`
+  pasa de fail-closed a soportado (attr-chain `pkg.sub.fn`), y el scan ya es
+  transitivo (BFS sobre los módulos importados).
+- **IMPORT_RELATIVE_V1** — `importar pkg.sub` + `desde . importar x` + attr-chain.
+- **CURRENT_STATUS**: **PASS** (2026-09-09).
+- **DEPENDENCIES**: `IMPORT_CORE` + `IMPORT_PACKAGE_V1` + `MODULE_METADATA_V1`.
+- **COMPLEXITY**: MEDIUM → resuelto.
+- **IMPLEMENTATION**:
+  - Traductor: las keywords duras ahora se traducen también después de un `.`
+    (las soft keywords `segun/caso/tipo` siguen siendo atributos), así
+    `desde . importar numeros` → `from . import numeros`.
+  - Parser: `_parse_import_from` distingue `desde . importar` (sin módulo) de
+    `desde .operaciones importar` (sin consumirse `importar` como nombre).
+  - MIR: el binding de `importar pkg.sub` liga el paquete top (con `como P`,
+    el módulo más profundo, espejo CPython `import a.b.c as X`); el body de un
+    módulo importado puede contener IMPORT/IMPORT_FROM además de `funcion`;
+    `pkg.sub.fn()` baja por `_module_attr_chain` a un símbolo estático
+    `pkg__sub__fn`; atributos de módulo fuera de una llamada → fail-closed.
+  - Scan: BFS en punto fijo — cada módulo registrado puede importar hermanos
+    relativos contra su propio contexto de paquete y absolutos; `desde . importar
+    numeros` registra `pkg.numeros` como sub-módulo; el entry (como script
+    CPython) no tiene paquete padre → relative fail-closed ("no parent package");
+    `desde ..` (>1 nivel) fail-closed.
+  - Tests: Win 8 + Linux 6 (diferenciales vs CPython + negativos).
+- **KNOWN_GAP_NEXT**: `desde ..` / `desde ...` a varios niveles (fail-closed),
+  `importar *` y ciclos de imports (`IMPORT_STAR_V1`, `IMPORT_CYCLIC_V1`).
 
 ### 17. Async (M8)
 
@@ -450,21 +472,23 @@ con sus tests de integración. Nunca por suma automática de partes.
 `IMPORT_PACKAGE_V1` (paquetes `__init__`/`__path__` + submódulos
 `desde pkg.sub importar`), `CLOSURES_COMPLETE_V1`, `EXCEPTION_CUSTOM_V1`
 (excepciones de usuario con matching por jerarquía), `EXCEPTION_RERAISE_V1`
-(`lanzar` bare en handlers exactos) y `MODULE_METADATA_V1`
-(`__name__`/`__package__`/`__file__`/`sys.modules`), todos Win+Linux PASS.
+(`lanzar` bare en handlers exactos), `MODULE_METADATA_V1`
+(`__name__`/`__package__`/`__file__`/`sys.modules`) e `IMPORT_RELATIVE_V1`
+(`importar pkg.sub`, `desde . importar x`, attr-chain `pkg.sub.fn()`),
+todos Win+Linux PASS.
 
 1. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
-2. `IMPORT_PACKAGE_V1` (MEDIUM) — paquetes + `__init__`. **PASS**. Sigue
-   `IMPORT_RELATIVE_V1`.
+2. `IMPORT_PACKAGE_V1` (MEDIUM) — paquetes + `__init__`. **PASS**.
 3. `MODULE_METADATA_V1` (MEDIUM) — `__name__`/`__file__`/`sys.modules`.
    **PASS.**
-4. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario. **PASS.**
-5. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare. **PASS.**
-6. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
-7. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
-8. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
+4. `IMPORT_RELATIVE_V1` (MEDIUM) — dotted + relative + attr-chain. **PASS**.
+5. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario. **PASS.**
+6. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare. **PASS.**
+7. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
+8. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
+9. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
    **PASS.**
-9. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 6).
+10. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 6).
 
 ## 31. Gates paralelizables
 
