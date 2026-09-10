@@ -1188,6 +1188,94 @@ def _scan_native_modules(
             scan_module_hir(hir, dotted, package_ctx)
             if set(modules) != before:
                 pending = True
+
+    # IMPORT_CYCLIC_V1: imported module bodies are static-lifted, never
+    # executed, but the ALLOWED import shapes must mirror what CPython actually
+    # runs. CPython executes a from-import by first fully importing the target
+    # (so a cyclic `desde X importar N` succeeds iff X is not mid-initialization
+    # or N was already bound when the importing statement ran; otherwise it
+    # raises ImportError "cannot import name"). We simulate that order over the
+    # static bodies and fail-closed where CPython would raise.
+    states: dict[str, str] = {}
+    live: dict[str, set[str]] = {}
+
+    def from_import(package_ctx: str, statement: Any, names: set[str]) -> None:
+        level = getattr(statement, "level", 0) or 0
+        mod_name = getattr(statement, "module", None)
+        is_star = bool(getattr(statement, "is_star", False))
+        if is_star:
+            return
+        if level:
+            if not mod_name:
+                for alias in statement.names:
+                    simulate_execute(f"{package_ctx}.{alias.asname or alias.name}")
+                    names.add(alias.asname or alias.name)
+                return
+            target = f"{package_ctx}.{mod_name}"
+        else:
+            target = mod_name
+        if not target:
+            return
+        for length in range(1, len(target.split(".")) + 1):
+            simulate_execute(".".join(target.split(".")[:length]))
+        if target in {"asyncio", "math", "sys"}:
+            for alias in statement.names:
+                names.add(alias.asname or alias.name)
+            return
+        if states.get(target) == "IN_PROGRESS":
+            for alias in statement.names:
+                if alias.name not in live.get(target, ()):
+                    raise NativeBuildError(
+                        f"native from-import 'desde {target} importar {alias.name}' "
+                        f"fails like CPython: cannot import name '{alias.name}' from "
+                        f"partially initialized module '{target}'"
+                    )
+        else:
+            for alias in statement.names:
+                if alias.name not in live[target]:
+                    raise NativeBuildError(
+                        f"native from-import 'desde {target} importar {alias.name}' "
+                        f"fails like CPython: cannot import name '{alias.name}' from "
+                        f"module '{target}'"
+                    )
+        for alias in statement.names:
+            names.add(alias.asname or alias.name)
+
+    def simulate_execute(dotted: str) -> None:
+        if dotted in states or dotted in {"asyncio", "math", "sys"}:
+            return
+        states[dotted] = "IN_PROGRESS"
+        hir = modules[dotted]
+        meta_is_package = module_meta[dotted][1]
+        package_ctx = dotted if meta_is_package else (dotted.rsplit(".", 1)[0] if "." in dotted else "<entry>")
+        names = live.setdefault(dotted, set())
+        for statement in hir.body:
+            kind = statement.kind.name
+            if kind == "FUNC_DEF":
+                names.add(statement.name)
+            elif kind == "IMPORT":
+                for alias in statement.names:
+                    if alias.name in {"asyncio", "math", "sys"}:
+                        continue
+                    for length in range(1, len(alias.name.split(".")) + 1):
+                        simulate_execute(".".join(alias.name.split(".")[:length]))
+                    names.add(alias.asname or alias.name.split(".")[0])
+                    if not alias.asname:
+                        names.add(alias.name.split(".")[0])
+            elif kind == "IMPORT_FROM":
+                from_import(package_ctx, statement, names)
+        states[dotted] = "DONE"
+
+    entry_names: set[str] = set()
+    for statement in entry_hir.body:
+        if statement.kind.name == "IMPORT":
+            for alias in statement.names:
+                if alias.name in {"asyncio", "math", "sys"}:
+                    continue
+                for length in range(1, len(alias.name.split(".")) + 1):
+                    simulate_execute(".".join(alias.name.split(".")[:length]))
+        elif statement.kind.name == "IMPORT_FROM":
+            from_import("<entry>", statement, entry_names)
     return modules, from_imports, module_meta
 
 

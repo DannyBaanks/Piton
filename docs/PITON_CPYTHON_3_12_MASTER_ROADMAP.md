@@ -376,8 +376,7 @@ Backends: Windows (`native_runtime.c`: `piton_raise_unhandled`,
     CPython) no tiene paquete padre → relative fail-closed ("no parent package");
     `desde ..` (>1 nivel) fail-closed.
   - Tests: Win 8 + Linux 6 (diferenciales vs CPython + negativos).
-- **KNOWN_GAP_NEXT**: `desde ..` / `desde ...` a varios niveles (fail-closed) y
-  ciclos de imports (`IMPORT_CYCLIC_V1`).
+- **KNOWN_GAP_NEXT**: `desde ..` / `desde ...` a varios niveles (fail-closed).
 - **IMPORT_STAR_V1** — `desde pkg importar *` + exclusión de privadas.
 - **CURRENT_STATUS**: **PASS** (2026-09-09).
 - **DEPENDENCIES**: `IMPORT_CORE` + `IMPORT_PACKAGE_V1` + `IMPORT_RELATIVE_V1`.
@@ -404,6 +403,45 @@ Backends: Windows (`native_runtime.c`: `piton_raise_unhandled`,
   - Tests: Win 14 (diferenciales de paquete/módulo/submódulo, exclusión de
     privadas white-box en el MIR, negativos de relative/builtin/mezcla) + Linux
     6 espejos.
+- **IMPORT_CYCLIC_V1** — ciclos de imports entre módulos nativos con el orden de
+  inicialización de CPython.
+- **CURRENT_STATUS**: **PASS** (2026-09-09).
+- **DEPENDENCIES**: `IMPORT_RELATIVE_V1` + `IMPORT_STAR_V1`.
+- **COMPLEXITY**: MEDIUM → resuelto.
+- **IMPLEMENTATION**:
+  - Descubrimiento: el scan ya cerraba transitivamente ciclos en punto fijo
+    (guarda `dotted in modules`); el déficit era de BINDING, no de topología.
+    Un body de módulo importado no se ejecuta — solo se levanta — así que
+    necesitaba su PROPIO scope de nombres: llamadas desnudas entre funciones
+    del mismo módulo (`doble(x)` dentro de `cuadrado`), aliases de
+    `desde X importar f` dentro de módulos, y `importar X` dentro de módulos.
+    Sin eso, un símbolo caía al nombre plano → símbolo inexistente → crash
+    nativo (heap corruption 0xC0000374 reproducido en sonda).
+  - MIR: `_build_module_scope` construye por módulo `(names, modules)` — las
+    `funcion` del propio módulo ligadas a `mod__fn`, los from-imports (absolutos
+    y relativos `desde .` / `desde .mod`) resueltos contra el contexto de
+    paquete del módulo (`is_package` decide si el base es el propio dotted o su
+    padre), star dentro de módulos importados sigue fail-closed ("entry
+    module"). Se apilan con `_module_scope_stack` durante el lifting y cada
+    `_Builder` recibe `module_aliases` + `from_import_aliases` del scope
+    activo; los `_load`/calls leen del builder (el `<module>` del entry también
+    recibe sus mapas). El scope solo existe mientras baja el módulo, así que
+    closures anidadas lo heredan.
+  - Scan: simulación estática del orden de ejecución de CPython. Cada módulo
+    pasa por NOT_STARTED → IN_PROGRESS → DONE con su `live` namespace (nombres
+    ligados por `funcion`, `importar` y `desde ... importar` a medida que se
+    "ejecutan" las sentencias). Un from-import dispara primero el import
+    completo del target (cadena dotted incluida); si el target sigue
+    IN_PROGRESS (ciclo) se comprueba que el nombre ya esté ligado; si no,
+    fail-closed espejo de `ImportError: cannot import name 'N' from partially
+    initialized module 'M'`. Un `importar X` en mitad de un ciclo siempre
+    funciona, como en CPython (el import de un módulo en progreso es no-op).
+  - Alineación adicional con CPython: un from-import de un nombre que el módulo
+    destino nunca define también falla-closed ("cannot import name"), en lugar
+    de compilar un símbolo ausente.
+  - Tests: Win 4 + Linux 4 (ciclo mutuo positivo diferencial con llamadas
+    cruzadas, negativo "defined after" → ImportError espejo, llamada desnuda
+    same-module dentro de un módulo importado, ciclo de `importar` plano OK).
 
 ### 17. Async (M8)
 
@@ -500,8 +538,9 @@ con sus tests de integración. Nunca por suma automática de partes.
 (excepciones de usuario con matching por jerarquía), `EXCEPTION_RERAISE_V1`
 (`lanzar` bare en handlers exactos), `MODULE_METADATA_V1`
 (`__name__`/`__package__`/`__file__`/`sys.modules`), `IMPORT_RELATIVE_V1`
-(`importar pkg.sub`, `desde . importar x`, attr-chain `pkg.sub.fn()`) e
-`IMPORT_STAR_V1` (`desde pkg importar *`, privadas excluidas),
+(`importar pkg.sub`, `desde . importar x`, attr-chain `pkg.sub.fn()`),
+`IMPORT_STAR_V1` (`desde pkg importar *`, privadas excluidas) e
+`IMPORT_CYCLIC_V1` (ciclos de imports con orden de inicialización CPython),
 todos Win+Linux PASS.
 
 1. `FRAME_MODEL_V1` (ARCHITECTURAL) — base de closures/generadores/coroutines.
@@ -510,13 +549,14 @@ todos Win+Linux PASS.
    **PASS.**
 4. `IMPORT_RELATIVE_V1` (MEDIUM) — dotted + relative + attr-chain. **PASS**.
 5. `IMPORT_STAR_V1` (MEDIUM) — `desde pkg importar *`. **PASS**.
-6. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario. **PASS.**
-7. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare. **PASS.**
-8. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
-9. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
-10. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
+6. `IMPORT_CYCLIC_V1` (MEDIUM) — ciclos de imports con orden CPython. **PASS**.
+7. `EXCEPTION_CUSTOM_V1` (LOW) — excepciones definidas por usuario. **PASS.**
+8. `EXCEPTION_RERAISE_V1` (LOW) — re-raise bare. **PASS.**
+9. `OBJECT_MODEL_RICH_V1` (HIGH) — MRO + super.
+10. `GENERATOR_SUSPEND_FRAME_V1` (HIGH) — frames suspendidos (depende de 1).
+11. `CLOSURES_COMPLETE_V1` (HIGH) — cells mutables y escape (depende de 1).
     **PASS.**
-11. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 8).
+12. `DESCRIPTORS_V1` (HIGH) — descriptors (depende de 8).
 
 ## 31. Gates paralelizables
 

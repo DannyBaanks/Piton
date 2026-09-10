@@ -90,6 +90,7 @@ class _Builder:
         self.reraise_type: str | None = None
         self.loop_counter = 0
         self.module_aliases: dict[str, str] = {}
+        self.from_import_aliases: dict[str, str] = {}
         self.is_async = False
         self.awaiting = False
 
@@ -132,6 +133,8 @@ class MIRLowerer:
         self.async_functions = set()
         self.module_aliases = {}
         self.from_import_aliases = {}  # {local_name: qualified_name}
+        self._module_scope_stack: list[tuple[dict[str, str], dict[str, str]]] = []
+        self.module_meta = module_meta or {}
         self.function_params: dict[str, list[str]] = {}
         self.function_defaults: dict[str, dict[str, Any]] = {}
         self.function_varargs: dict[str, str | None] = {}
@@ -139,6 +142,7 @@ class MIRLowerer:
         self.function_posonly: dict[str, list[str]] = {}
         self.function_kwonly: dict[str, list[str]] = {}
         imported_modules = modules or {}
+        self.imported_modules = imported_modules
         if hir.kind == HIRKind.MODULE:
             module_body = getattr(hir, "body", [])
             self.async_functions = {
@@ -191,8 +195,15 @@ class MIRLowerer:
                 for item in imported.body:
                     if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM}:
                         raise MIRLoweringError("native imported modules currently support functions only")
-                    if item.kind == HIRKind.FUNC_DEF:
-                        self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
+            for module_name, imported in sorted(imported_modules.items()):
+                scope_names, scope_modules = self._build_module_scope(module_name, imported)
+                self._module_scope_stack.append((scope_names, scope_modules))
+                try:
+                    for item in imported.body:
+                        if item.kind == HIRKind.FUNC_DEF:
+                            self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
+                finally:
+                    self._module_scope_stack.pop()
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
@@ -219,6 +230,7 @@ class MIRLowerer:
                     self._lower_function(node)
             module = _Builder("<module>")
             module.module_aliases = dict(self.module_aliases)
+            module.from_import_aliases = dict(self.from_import_aliases)
             self._lower_module_metadata(module, entry_file, module_meta)
             self._lower_statements(module, [node for node in module_body if node.kind != HIRKind.FUNC_DEF])
             self.functions.insert(0, module.function)
@@ -230,6 +242,80 @@ class MIRLowerer:
         module.classes = dict(self.classes)
         module.class_parents = dict(self.class_parents)
         return module
+
+    def _build_module_scope(self, module_name: str, imported: HIRNode) -> tuple[dict[str, str], dict[str, str]]:
+        """Per-module name scope for an imported module body: imported module
+        bodies are NOT executed, so their functions must resolve same-module
+        names, from-imports and module aliases against the module's OWN context
+        (IMPORT_CYCLIC_V1), never the entry's. Returns ``(names, modules)``:
+        names = local callable name -> qualified symbol, modules = local alias
+        -> dotted module."""
+        names: dict[str, str] = {}
+        modules: dict[str, str] = {}
+        meta = self.module_meta.get(module_name)
+        is_package = bool(meta and meta[1])
+        base = module_name.rsplit(".", 1)[0] if ("." in module_name and not is_package) else module_name
+        for item in imported.body:
+            if item.kind == HIRKind.FUNC_DEF:
+                names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
+            elif item.kind == HIRKind.IMPORT:
+                for alias in item.names:
+                    if alias.name in {"asyncio", "math", "sys"}:
+                        modules[alias.asname or alias.name] = alias.name
+                        continue
+                    if "." in alias.name:
+                        top = alias.name.split(".")[0]
+                        if top not in self.imported_modules:
+                            raise MIRLoweringError(f"native module not supplied: {alias.name}")
+                        if alias.asname:
+                            modules[alias.asname] = alias.name
+                        else:
+                            modules[alias.name] = top
+                            modules[top] = top
+                        continue
+                    if alias.name not in self.imported_modules:
+                        raise MIRLoweringError(f"native module not supplied: {alias.name}")
+                    modules[alias.asname or alias.name] = alias.name
+            elif item.kind == HIRKind.IMPORT_FROM:
+                mod_name = getattr(item, "module", None)
+                level = getattr(item, "level", 0) or 0
+                is_star = bool(getattr(item, "is_star", False))
+                if level == 1:
+                    if is_star:
+                        raise MIRLoweringError("native star imports are only supported at the entry module")
+                    if mod_name:
+                        target = f"{base}.{mod_name}"
+                        if target not in self.imported_modules:
+                            raise MIRLoweringError(f"native from-import module not supplied: {target}")
+                        for alias in item.names:
+                            names[alias.asname or alias.name] = f"{target.replace('.', '__')}__{alias.name}"
+                    else:
+                        for alias in item.names:
+                            target = f"{base}.{alias.asname or alias.name}"
+                            if target not in self.imported_modules:
+                                raise MIRLoweringError(f"native module not supplied: {target}")
+                            modules[alias.asname or alias.name] = target
+                    continue
+                if mod_name in {"asyncio", "math", "sys"}:
+                    for alias in item.names:
+                        names[alias.asname or alias.name] = f"{mod_name}.{alias.name}"
+                    continue
+                if is_star:
+                    if not mod_name:
+                        raise MIRLoweringError("native relative star imports are not supported")
+                    if mod_name not in self.imported_modules:
+                        raise MIRLoweringError(f"native star import module not supplied: {mod_name}")
+                    prefix = f"{mod_name.replace('.', '__')}__"
+                    for item2 in self.imported_modules[mod_name].body:
+                        if item2.kind == HIRKind.FUNC_DEF and not item2.name.startswith("_"):
+                            names[item2.name] = f"{prefix}{item2.name}"
+                    continue
+                if mod_name:
+                    if mod_name not in self.imported_modules:
+                        raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
+                    for alias in item.names:
+                        names[alias.asname or alias.name] = f"{mod_name.replace('.', '__')}__{alias.name}"
+        return names, modules
 
     def _lower_module_metadata(
         self, builder: "_Builder", entry_file: str | None, module_meta: dict[str, tuple[str, bool]] | None
@@ -291,7 +377,13 @@ class MIRLowerer:
         body = list(getattr(node, "body", []))
         builder = _Builder(qualified_name or node.name, [*captures, *positional_params])
         builder.is_async = bool(getattr(node, "is_async", False))
-        builder.module_aliases = dict(self.module_aliases)
+        if self._module_scope_stack:
+            scope_names, scope_modules = self._module_scope_stack[-1]
+            builder.module_aliases = dict(scope_modules)
+            builder.from_import_aliases = dict(scope_names)
+        else:
+            builder.module_aliases = dict(self.module_aliases)
+            builder.from_import_aliases = dict(self.from_import_aliases)
         if cell_vars:
             builder.cell_params = set(cell_vars)
             if qualified_name and qualified_name != node.name:
@@ -712,7 +804,7 @@ class MIRLowerer:
                 builder.emit("cell_load", node.name, result=result)
                 return result
             result = builder.temp()
-            builder.emit("load", self.from_import_aliases.get(node.name, node.name), result=result)
+            builder.emit("load", builder.from_import_aliases.get(node.name, node.name), result=result)
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()
@@ -738,8 +830,8 @@ class MIRLowerer:
             if node.func.kind == HIRKind.LOAD and node.func.name in self.async_functions and not builder.awaiting:
                 raise MIRLoweringError("native coroutine must be awaited or passed directly to asyncio.run")
             # Handle from-imported builtins (e.g. `desde math importar sqrt; sqrt(16)`)
-            if node.func.kind == HIRKind.LOAD and node.func.name in self.from_import_aliases:
-                qualified = self.from_import_aliases[node.func.name]
+            if node.func.kind == HIRKind.LOAD and node.func.name in builder.from_import_aliases:
+                qualified = builder.from_import_aliases[node.func.name]
                 if qualified == "math.sqrt":
                     if len(node.args) != 1 or node.keywords:
                         raise MIRLoweringError("native math.sqrt requires one positional argument")

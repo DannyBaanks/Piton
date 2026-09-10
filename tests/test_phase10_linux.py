@@ -13,6 +13,7 @@ from piton.linux_x86 import (
     windows_to_wsl_path,
 )
 from piton.translator import traducir_fuente
+from piton.x86 import NativeBuildError
 
 
 class Phase10LinuxGates(unittest.TestCase):
@@ -736,6 +737,91 @@ class Phase10LinuxGates(unittest.TestCase):
             entry.write_text("desde math importar *\n", encoding="utf-8")
             with self.assertRaisesRegex(Exception, "builtin modules"):
                 compile_native_linux_files(entry, root / "program")
+
+    # ── IMPORT_CYCLIC_V1 (Linux mirror) ─────────────────────────────────
+
+    def _assert_sibling_equiv_linux(self, module_files, main):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-cycle-") as directory:
+            root = Path(directory)
+            for mod_name, src in module_files.items():
+                (root / f"{mod_name}.piton").write_text(src, encoding="utf-8")
+                (root / f"{mod_name}.py").write_text(traducir_fuente(src, f"<{mod_name}>"), encoding="utf-8")
+            (root / "main.piton").write_text(main, encoding="utf-8")
+            (root / "main.py").write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
+            executable = compile_native_linux_files(root / "main.piton", root / "program")
+            native_run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(executable)],
+                capture_output=True, check=False, timeout=10,
+            )
+            oracle_run = subprocess.run(
+                [sys.executable, str(root / "main.py")], capture_output=True, check=False, timeout=10,
+            )
+            self.assertEqual(
+                (native_run.returncode, native_run.stdout.replace(b"\r\n", b"\n")),
+                (oracle_run.returncode, oracle_run.stdout.replace(b"\r\n", b"\n")),
+                native_run.stderr,
+            )
+
+    def test_linux_cyclic_mutual_from_import_ok(self):
+        modules = {
+            "a": (
+                "funcion fa(a):\n"
+                "    devolver a + 1\n"
+                "desde b importar fb\n"
+                "funcion fab(a):\n"
+                "    devolver fb(a) + 10\n"
+            ),
+            "b": (
+                "funcion fb(a):\n"
+                "    devolver a * 2\n"
+                "desde a importar fa\n"
+                "funcion fba(a):\n"
+                "    devolver fa(a) + 100\n"
+            ),
+        }
+        main = (
+            "importar a\n"
+            "importar b\n"
+            "imprimir(a.fa(1))\n"
+            "imprimir(a.fab(10))\n"
+            "imprimir(b.fb(5))\n"
+            "imprimir(b.fba(3))\n"
+        )
+        self._assert_sibling_equiv_linux(modules, main)
+
+    def test_linux_cyclic_from_import_defined_before_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-cycle-fail-") as directory:
+            root = Path(directory)
+            (root / "a.piton").write_text(
+                "desde b importar fb\nfuncion fa(a):\n    devolver a\n", encoding="utf-8"
+            )
+            (root / "b.piton").write_text(
+                "desde a importar fa\nfuncion fb(a):\n    devolver a\n", encoding="utf-8"
+            )
+            entry = root / "main.piton"
+            entry.write_text("importar a\n", encoding="utf-8")
+            with self.assertRaisesRegex(NativeBuildError, "partially initialized"):
+                compile_native_linux_files(entry, root / "program")
+
+    def test_linux_cyclic_same_module_bare_call_in_imported_module(self):
+        modules = {
+            "m": (
+                "funcion doble(x):\n"
+                "    devolver x * 2\n"
+                "funcion cuadrado(x):\n"
+                "    devolver doble(x) * doble(x)\n"
+            ),
+        }
+        main = "importar m\nimprimir(m.cuadrado(3))\n"
+        self._assert_sibling_equiv_linux(modules, main)
+
+    def test_linux_cyclic_plain_import_cycle_ok(self):
+        modules = {
+            "a": "importar b\nfuncion fa(x):\n    devolver b.fb(x) + 1\n",
+            "b": "importar a\nfuncion fb(x):\n    devolver x * 3\n",
+        }
+        main = "importar a\nimprimir(a.fa(7))\n"
+        self._assert_sibling_equiv_linux(modules, main)
 
 
 if __name__ == "__main__":
