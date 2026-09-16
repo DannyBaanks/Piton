@@ -23,6 +23,58 @@ class NativeBuildError(RuntimeError):
 
 _BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted"}
 
+PITON_GEN_MAX_SLOTS = 64
+PITON_GEN_LOCAL_BASE = 48
+# ASYNC_GENERATOR_V1: the LAST persisted slot of every PitonGenerator object is
+# reserved as the "await marker" flag for async-generator driving. A data yield
+# (producir / agen_emit) clears it; an await yield (esperar / gen_yield inside an
+# async generator) sets it, so piton_agen_next can distinguish "yielded data"
+# from "yielded a coroutine to run" without dereferencing arbitrary data values.
+# Layout indices 0..62 are user data; index 63 is the flag.
+PITON_GEN_AWAIT_FLAG_SLOT = 63
+PITON_GEN_AWAIT_FLAG_OFFSET = PITON_GEN_LOCAL_BASE + PITON_GEN_AWAIT_FLAG_SLOT * 8
+
+
+def generator_slot_layout(function: MIRFunction) -> dict[str, int]:
+    """Shared heap-persisted slot order for generator bodies (Win64 and Linux).
+
+    Every mutable slot (params, temps, stored names) must survive across
+    suspension points, so both backends mirror it into the generator object
+    at the same index. Scratch slots (``@scratch*``/``%d*``) are transient
+    within one instruction and are never live across a yield.
+    """
+    if function.frame_abi:
+        raise NativeBuildError(f"native generator '{function.name}' with frame ABI is not supported yet")
+    if function.cell_vars:
+        raise NativeBuildError(f"native generator '{function.name}' with closures is not supported yet")
+    if function.vararg or function.kwarg:
+        raise NativeBuildError(f"native generator '{function.name}' with *args/**kwargs is not supported yet")
+    order: list[str] = []
+    seen: set[str] = set()
+
+    def add(name: Any) -> None:
+        if not isinstance(name, str) or name in seen:
+            return
+        if name in ("@scratch0", "@scratch1", "@scratch2", "@scratch3",
+                    "%d0", "%d1", "%d2", "%d3", "@gen_ptr", "@gen_result"):
+            return
+        seen.add(name)
+        order.append(name)
+
+    for param in function.params:
+        add(param)
+    for block in function.blocks:
+        for instruction in block.instructions:
+            add(instruction.result)
+            if instruction.op == "store" and instruction.args:
+                add(instruction.args[0])
+    if len(order) >= PITON_GEN_MAX_SLOTS:
+        raise NativeBuildError(
+            f"native generator '{function.name}' needs {len(order)} persisted slots "
+            f"(max {PITON_GEN_MAX_SLOTS - 1}; slot {PITON_GEN_AWAIT_FLAG_SLOT} is reserved for the async-generator await marker)"
+        )
+    return {name: index for index, name in enumerate(order)}
+
 
 class Win64NasmEmitter:
     def __init__(self):
@@ -38,6 +90,19 @@ class Win64NasmEmitter:
         self.bigint_slots: list[str] = []
         self.constants: dict[str, Any] = {}
         self.cell_types: dict[str, str] = {}
+        self.generator_layouts: dict[str, dict[str, int]] = {}
+        self._gen_resume_labels: list[str] = []
+        self._gen_yield_counter = 0
+
+    def _generator_layout(self, function: MIRFunction) -> dict[str, int]:
+        """Compute the heap-persisted slot order for a generator body.
+
+        Every mutable slot (params, temps, stored names) must survive across
+        ``ret`` suspension points, so it is mirrored into ``PitonGenerator.locals``.
+        Scratch slots (``@scratch*``/``%d*``) are transient within one
+        instruction and are never live across a yield.
+        """
+        return generator_slot_layout(function)
 
     def emit(self, module: MIRModule) -> str:
         self.mir_module = module
@@ -46,13 +111,37 @@ class Win64NasmEmitter:
         self.mir_module_class_properties = getattr(module, 'class_properties', {})
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
+        self.function_param_map = {function.name: list(function.params) for function in module.functions}
+        self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
+        # CALL_UNPACKING_DYNAMIC4_V1: temp/local names of dicts proven to be
+        # built from constant-string keys (the only **-unpackable dicts).
+        self.strkey_dict_temps: set[str] = set()
+        # Per-call-site `dq` tables of parameter names for dict unpacking,
+        # emitted into .rdata at the end of the module.
+        self.unpack_tables: list[tuple[str, list[str]]] = []
+        self.generator_layouts = {}
+        for function in module.functions:
+            if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
+                self.generator_layouts[function.name] = self._generator_layout(function)
         self.lines = [
             "default rel", "extern printf", "extern strcmp", "extern strlen",
             "extern malloc", "extern memcpy", "section .text",
         ]
         self.lines[0:0] = [
             "extern piton_collection_new", "extern piton_collection_put",
+            "extern piton_collection_put_tagged", "extern pv_int",
             "extern piton_collection_len", "extern piton_collection_get",
+            "extern piton_list_append",
+            "extern piton_genexpr_new", "extern piton_genexpr_iter", "extern piton_genexpr_next", "extern piton_genexpr_free",
+            "extern piton_gen_new", "extern piton_gen_next", "extern piton_gen_send", "extern piton_gen_throw", "extern piton_gen_close", "extern piton_gen_free", "extern piton_gen_collect",
+            "extern piton_coro_run", "extern piton_agen_next",
+            "extern piton_event_run", "extern piton_task_new", "extern piton_task_cancel", "extern piton_sleep0", "extern piton_gather_new", "extern piton_gather_add",
+            "extern piton_sorted_new",
+            "extern piton_iterator_new_any", "extern piton_iterator_next_any",
+            "extern piton_enumerate_new", "extern piton_enumerate_next",
+            "extern piton_reversed_new", "extern piton_reversed_next",
+            "extern piton_zip_new", "extern piton_zip_next",
+            "extern piton_callback_iterator_new", "extern piton_callback_iterator_next",
             "extern piton_collection_print", "extern piton_collection_free",
             "extern piton_collection_live_count",
             "extern piton_dict_new", "extern piton_dict_put",
@@ -65,7 +154,7 @@ class Win64NasmEmitter:
             "extern piton_raise",
             "extern piton_raise_unhandled",
             "extern piton_try_push", "extern piton_try_pop", "extern piton_try_set_accepted",
-            "extern piton_catch_flag", "extern piton_catch_type", "extern piton_catch_message", "extern piton_catch_clear",
+            "extern piton_catch_flag", "extern piton_catch_type", "extern piton_catch_message", "extern piton_catch_message_safe", "extern piton_catch_clear",
             "extern piton_reraise_save", "extern piton_reraise", "extern piton_reraise_unhandled",
             "extern piton_abs_int", "extern piton_abs_float",
             "extern piton_min_int", "extern piton_max_int", "extern piton_min_float", "extern piton_max_float",
@@ -81,12 +170,23 @@ class Win64NasmEmitter:
             "extern piton_bigint_floor_div", "extern piton_bigint_mod",
             "extern piton_bigint_print",
             "extern piton_closure_new8", "extern piton_closure_call6",
+            "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
+            "extern piton_frame_call",
+            "extern piton_unpack_seq4", "extern piton_dict_unpack4",
         ]
         for function in module.functions:
             self._emit_function(function)
         self.lines.append("section .rdata")
+        # Intern param-name strings BEFORE dumping the string table, so the
+        # call_unpack name tables can reference them.
+        for _table_label, table_names in self.unpack_tables:
+            for name in table_names:
+                self._string(name)
         for value, label in self.strings.items():
             self.lines.append(f"{label}: {self._nasm_db(value)}")
+        for table_label, table_names in self.unpack_tables:
+            refs = ", ".join(self._string(name) for name in table_names)
+            self.lines.append(f"{table_label}: dq {refs}")
         self.lines.extend([
             'fmt_int: db "%lld", 10, 0',
             'fmt_float: db "%.17g", 10, 0',
@@ -98,6 +198,10 @@ class Win64NasmEmitter:
         return "\n".join(self.lines) + "\n"
 
     def _emit_function(self, function: MIRFunction) -> None:
+        self.function = function
+        if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
+            self._emit_generator_function(function)
+            return
         self.slots = {}
         self.next_slot = 8
         self.aliases = {}
@@ -116,27 +220,52 @@ class Win64NasmEmitter:
                     coll_kind = instruction.args[0] if instruction.args else ""
                     free_fn = {"dict": "piton_dict_free", "set": "piton_set_free"}.get(coll_kind, "piton_collection_free")
                     self.owned_slots.append((instruction.result, free_fn))
+                if instruction.op == "genexpr_new" and instruction.result:
+                    self.owned_slots.append((instruction.result, "piton_genexpr_free"))
+                if instruction.op == "gen_init" and instruction.result:
+                    self.owned_slots.append((instruction.result, "piton_gen_free"))
                 if instruction.op == "object_new" and instruction.result:
                     self.owned_slots.append((instruction.result, "piton_object_free"))
                 if instruction.op == "store":
                     self._reserve(instruction.args[0])
+                if instruction.op == "call_unpack":
+                    for unpack_slot in ("@unpack_buf0", "@unpack_buf1", "@unpack_buf2", "@unpack_buf3", "@unpack_filled", "@unpack_mask"):
+                        self._reserve(unpack_slot)
         for scratch in ("@scratch0", "@scratch1", "@scratch2", "@scratch3"):
             self._reserve(scratch)
         for default_slot in ("%d0", "%d1", "%d2", "%d3"):
             self._reserve(default_slot)
+        # Reserve parameter slots BEFORE computing the frame: the Win64 ABI
+        # shadow area starts at rsp, so params stored deeper than next_slot
+        # (created later by _store_slot) would land inside [rsp..rsp+31] and
+        # get clobbered by every callee, particularly printf's varargs spill.
+        for name in function.params:
+            self._reserve(name)
         # Keep the Win64 32-byte shadow area below every local slot.
         frame = max(48, ((self.next_slot + 32 + 15) // 16) * 16)
         label = "main" if function.name == "<module>" else function.name
         self.lines.extend([f"global {label}", f"{label}:", "    push rbp", "    mov rbp, rsp", f"    sub rsp, {frame}"])
         for slot, _ in self.owned_slots:
             self.lines.append(f"    mov qword {self._address(slot)}, 0")
-        if len(function.params) > 4:
+        if not function.frame_abi and len(function.params) > 4:
             raise NativeBuildError("native calls with more than four parameters are not supported yet")
-        if function.params:
+        if function.frame_abi:
+            for index, name in enumerate(function.params):
+                self.lines.extend([
+                    f"    mov rax, [rcx+{index * 8}]",
+                    f"    mov {self._address(name)}, rax",
+                ])
+        elif function.params:
             for register, name in zip(("rcx", "rdx", "r8", "r9"), function.params):
                 self._store_slot(name, register)
         if function.self_class and function.params:
             self.types[function.params[0]] = f"object:{function.self_class}"
+        # WITH_PROTOCOL_V1: __exit__(self, tipo, mensaje, tb) receives the
+        # exception type-name and message as strings (V1: type NAME, not the
+        # exception object; traceback is passed as None).
+        if function.name.endswith("__exit__") and len(function.params) >= 3:
+            self.types[function.params[1]] = "str"
+            self.types[function.params[2]] = "str"
         labels = {block.label: f"{label}_{block.label}" for block in function.blocks}
         labels["__exit"] = f"{label}__exit"
         for block in function.blocks:
@@ -160,6 +289,163 @@ class Win64NasmEmitter:
         else:
             self.lines.append("    xor eax, eax")
         self.lines.extend(["    leave", "    ret"])
+
+    def _emit_generator_function(self, function: MIRFunction) -> None:
+        """Emit a suspendible generator body as a state machine.
+
+        Calling convention (Win64): ``RCX = PitonGenerator*``, ``RAX = yielded value``.
+        All mutable slots are mirrored into ``gen->locals`` so they survive ``ret``.
+        ``gen->state`` (offset 8) selects the resume point; ``gen->finished``
+        (offset 16) is set once the body completes. Locals start at offset 32.
+        """
+        layout = self.generator_layouts.get(function.name)
+        if layout is None:
+            raise NativeBuildError(f"native generator '{function.name}' has no persisted-slot layout")
+        self.slots = {}
+        self.next_slot = 8
+        self.aliases = {}
+        self.types = {}
+        self.owned_slots = []
+        self.bigint_slots = []
+        self.constants = {}
+        if function.vararg:
+            self.types[function.vararg] = "tuple"
+        if function.kwarg:
+            self.types[function.kwarg] = "dict"
+        for block in function.blocks:
+            for instruction in block.instructions:
+                self._reserve(instruction.result)
+                if instruction.op == "build_collection" and instruction.result:
+                    coll_kind = instruction.args[0] if instruction.args else ""
+                    free_fn = {"dict": "piton_dict_free", "set": "piton_set_free"}.get(coll_kind, "piton_collection_free")
+                    self.owned_slots.append((instruction.result, free_fn))
+                if instruction.op == "genexpr_new" and instruction.result:
+                    self.owned_slots.append((instruction.result, "piton_genexpr_free"))
+                if instruction.op == "gen_init" and instruction.result:
+                    self.owned_slots.append((instruction.result, "piton_gen_free"))
+                if instruction.op == "object_new" and instruction.result:
+                    self.owned_slots.append((instruction.result, "piton_object_free"))
+                if instruction.op == "store":
+                    self._reserve(instruction.args[0])
+        self._reserve("@gen_ptr")
+        for scratch in ("@scratch0", "@scratch1", "@scratch2", "@scratch3"):
+            self._reserve(scratch)
+        for default_slot in ("%d0", "%d1", "%d2", "%d3"):
+            self._reserve(default_slot)
+        # Reserve parameter slots before computing the frame (see comment in
+        # _emit_function: params must not land inside the Win64 shadow area).
+        for name in function.params:
+            self._reserve(name)
+        frame = max(48, ((self.next_slot + 32 + 15) // 16) * 16)
+        label = function.name
+        self.lines.extend([f"global {label}", f"{label}:", "    push rbp", "    mov rbp, rsp", f"    sub rsp, {frame}"])
+        self.lines.append(f"    mov {self._address('@gen_ptr')}, rcx")
+        # Restore persisted slots from the heap generator object.
+        ordered = sorted(layout.items(), key=lambda item: item[1])
+        for slot, index in ordered:
+            self.lines.extend([
+                f"    mov rcx, {self._address('@gen_ptr')}",
+                f"    mov rax, [rcx+{PITON_GEN_LOCAL_BASE + index * 8}]",
+                f"    mov {self._address(slot)}, rax",
+            ])
+        # Dispatch on the saved resume state (0 = first entry).
+        yield_count = sum(
+            1 for block in function.blocks for instruction in block.instructions if instruction.op in {"gen_yield", "agen_emit"}
+        )
+        self._gen_resume_labels = [f"{label}_genresume_{i}" for i in range(1, yield_count + 1)]
+        self._gen_yield_counter = 0
+        if yield_count:
+            self.lines.extend([
+                f"    mov rcx, {self._address('@gen_ptr')}",
+                "    mov rax, [rcx+8]",
+                "    test rax, rax",
+                f"    jz {label}_{function.blocks[0].label}",
+            ])
+            for resume_id, resume_label in enumerate(self._gen_resume_labels, start=1):
+                self.lines.extend([
+                    f"    cmp rax, {resume_id}",
+                    f"    je {resume_label}",
+                ])
+            self.lines.append(f"    jmp {label}__exit")
+        labels = {block.label: f"{label}_{block.label}" for block in function.blocks}
+        labels["__exit"] = f"{label}__exit"
+        for block in function.blocks:
+            self.lines.append(f"{labels[block.label]}:")
+            for instruction in block.instructions:
+                self._emit_instruction(instruction, labels)
+            if not block.instructions or block.instructions[-1].op not in {"jump", "branch", "return"}:
+                self.lines.append(f"    jmp {labels['__exit']}")
+        self.lines.append(f"{labels['__exit']}:")
+        self._emit_cleanup()
+        self.lines.extend([
+            f"    mov rcx, {self._address('@gen_ptr')}",
+            "    mov qword [rcx+16], 1",
+            "    xor eax, eax",
+            "    leave", "    ret",
+        ])
+
+    def _emit_gen_save(self, layout: dict[str, int]) -> None:
+        ordered = sorted(layout.items(), key=lambda item: item[1])
+        self.lines.append(f"    mov rcx, {self._address('@gen_ptr')}")
+        for slot, index in ordered:
+            self.lines.extend([
+                f"    mov rax, {self._address(slot)}",
+                f"    mov [rcx+{PITON_GEN_LOCAL_BASE + index * 8}], rax",
+            ])
+
+    def _emit_gen_suspend(self, value: Any, result: Optional[str], await_flag: bool) -> None:
+        """Emit one suspension point for a generator / coroutine / async-generator body.
+
+        Saves all persisted slots, stores the resume id in ``state``, writes the
+        async-generator await marker into reserved slot 63 (1 = the yielded value
+        is a coroutine to run — used by ``esperar``; 0 = plain data — used by
+        ``producir``), returns the yielded value, then emits the resume label that
+        reloads ``sent_value`` into the yield's result slot.
+        """
+        layout = self.generator_layouts.get(self.function.name, {})
+        self._load_operand(value, "rax")
+        # _emit_gen_save clobbers rax: stash the yielded value aside first.
+        self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+        self._emit_gen_save(layout)
+        self.lines.append(f"    mov rax, {self._address('@scratch0')}")
+        resume_id = self._gen_yield_counter + 1
+        self._gen_yield_counter += 1
+        self.lines.extend([
+            f"    mov rcx, {self._address('@gen_ptr')}",
+            f"    mov qword [rcx+8], {resume_id}",
+            f"    mov qword [rcx+{PITON_GEN_AWAIT_FLAG_OFFSET}], {1 if await_flag else 0}",
+            "    leave", "    ret",
+        ])
+        resume_label = (
+            self._gen_resume_labels[resume_id - 1]
+            if resume_id - 1 < len(self._gen_resume_labels)
+            else f"{self.function.name}_genresume_{resume_id}"
+        )
+        self.lines.append(f"{resume_label}:")
+        # Load sent_value from generator struct (offset 32) into yield result slot
+        self.lines.extend([
+            f"    mov rcx, {self._address('@gen_ptr')}",
+            "    mov rax, [rcx+32]",          # sent_value
+            "    mov qword [rcx+32], 0",       # clear sent_value
+        ])
+        if result:
+            result_type = self.types.get(value, "int") if isinstance(value, str) else "int"
+            if result_type == "gather":
+                # TASK_SCHEDULER_V1: awaiting a gather yields a real list, so the
+                # result is statically a list (print/index dispatch). The coroutine
+                # body owns it: register so _emit_cleanup frees it at gen exit,
+                # keeping the teardown live-count tripwire quiet.
+                awaited_type = "list"
+                self.owned_slots.append((result, "piton_collection_free"))
+                result_type = "gather"
+            elif result_type == "task":
+                # TASK_SCHEDULER_V1: awaiting a task yields the task's result
+                # value (an int in the native subset) — never the task itself.
+                awaited_type = "int"
+            else:
+                awaited_type = result_type
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = awaited_type
 
     def _reserve(self, name: str | None) -> None:
         if name is not None and name not in self.slots:
@@ -202,7 +488,110 @@ class Win64NasmEmitter:
 
     def _emit_instruction(self, instruction: MIRInstruction, labels: dict[str, str]) -> None:
         op, args, result = instruction.op, instruction.args, instruction.result
-        if op == "const":
+        if op == "iter_new":
+            source = args[0]
+            source_type = self.types.get(source, "")
+            if source_type in {"genexpr", "iterator:genexpr"}:
+                self._load_operand(source, "rcx")
+                self.lines.append("    call piton_genexpr_iter")
+                self.types[result] = "iterator:genexpr"
+            elif source_type == "generator":
+                self._load_operand(source, "rcx")
+                self.lines.append(f"    mov {self._address(result)}, rcx")
+                self.types[result] = "generator"
+            elif source_type.startswith("object:"):
+                class_name = source_type.split(":", 1)[1]
+                resolved_class = next(
+                    (candidate for candidate in self.mir_module_class_mro.get(class_name, [])
+                     if "__iter__" in self.mir_module_classes.get(candidate, set())),
+                    None,
+                )
+                if resolved_class is None:
+                    raise NativeBuildError(f"native iter requires '{class_name}.__iter__'")
+                self._load_operand(source, "rcx")
+                self.lines.append(f"    call {resolved_class}____iter__")
+                self.types[result] = f"iterator:object:{class_name}"
+            else:
+                self._load_operand(source, "rcx")
+                self.lines.append("    call piton_iterator_new_any")
+                self.types[result] = f"iterator:{source_type or 'unknown'}"
+            self.lines.append(f"    mov {self._address(result)}, rax")
+        elif op == "builtin_iter_new":
+            builtin, source, start = args
+            if builtin != "enumerate":
+                if builtin == "reversed":
+                    if self.types.get(source) not in {"list", "tuple"}:
+                        raise NativeBuildError("native reversed currently requires a list or tuple")
+                    self._load_operand(source, "rcx")
+                    self.lines.append("    call piton_reversed_new")
+                elif builtin == "zip":
+                    left, right = source
+                    if self.types.get(left) not in {"list", "tuple"} or self.types.get(right) not in {"list", "tuple"}:
+                        raise NativeBuildError("native zip currently requires two lists or tuples")
+                    self._load_operand(left, "rcx"); self._load_operand(right, "rdx")
+                    self.lines.append("    call piton_zip_new")
+                elif builtin in {"map", "filter"}:
+                    if self.types.get(source) not in {"list", "tuple"}:
+                        raise NativeBuildError("native map/filter require a list or tuple")
+                    self._load_operand(source, "rcx")
+                    if self.types.get(start) == "closure":
+                        self._load_operand(start, "rdx")
+                    else:
+                        callback_name = self.aliases.get(start)
+                        if callback_name not in self.function_names:
+                            raise NativeBuildError("native map/filter require a known unary callback")
+                        self.lines.append(f"    lea rdx, [{callback_name}]")
+                    self.lines.append(f"    mov r8, {1 if builtin == 'filter' else 0}")
+                    self.lines.append("    call piton_callback_iterator_new")
+                else:
+                    raise NativeBuildError(f"native builtin iterator not supported: {builtin}")
+            else:
+                if self.types.get(source) not in {"list", "tuple"}:
+                    raise NativeBuildError("native enumerate currently requires a list or tuple")
+                self._load_operand(source, "rcx")
+                self._load_operand(start if start is not None else 0, "rdx")
+                self.lines.append("    call piton_enumerate_new")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = f"iterator:{builtin}"
+        elif op == "iter_next":
+            iterator, handler_label = args[0], args[1]
+            iterator_type = self.types.get(iterator, "")
+            if iterator_type in {"genexpr", "iterator:genexpr"}:
+                self._load_operand(iterator, "rcx")
+                self.lines.append("    call piton_genexpr_next")
+            elif iterator_type == "generator":
+                self._load_operand(iterator, "rcx")
+                self.lines.append("    call piton_gen_next")
+            elif iterator_type.startswith("iterator:object:") or iterator_type.startswith("object:"):
+                class_name = iterator_type.split(":", 2)[2] if iterator_type.startswith("iterator:") else iterator_type.split(":", 1)[1]
+                resolved_class = next(
+                    (candidate for candidate in self.mir_module_class_mro.get(class_name, [])
+                     if "__next__" in self.mir_module_classes.get(candidate, set())),
+                    None,
+                )
+                if resolved_class is None:
+                    raise NativeBuildError(f"native next requires '{class_name}.__next__'")
+                self._load_operand(iterator, "rcx")
+                self.lines.append(f"    call {resolved_class}____next__")
+            else:
+                self._load_operand(iterator, "rcx")
+                if iterator_type == "iterator:enumerate":
+                    self.lines.append("    call piton_enumerate_next")
+                elif iterator_type == "iterator:reversed":
+                    self.lines.append("    call piton_reversed_next")
+                elif iterator_type == "iterator:zip":
+                    self.lines.append("    call piton_zip_next")
+                elif iterator_type in {"iterator:map", "iterator:filter"}:
+                    self.lines.append("    call piton_callback_iterator_next")
+                else:
+                    self.lines.append("    call piton_iterator_next_any")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:dict" else "int"
+            self.lines.append("    call piton_catch_flag")
+            self.lines.append("    test rax, rax")
+            if handler_label:
+                self.lines.append(f"    jne {labels[handler_label]}")
+        elif op == "const":
             value = args[0]
             self.constants[result] = value
             if value is None:
@@ -235,15 +624,19 @@ class Win64NasmEmitter:
                 self.lines.append(f"    lea rax, [{name}]")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 return
-            if name in _BUILTINS:
+            if name in _BUILTINS and name not in self.slots:
                 return
             self.lines.append(f"    mov rax, {self._address(name)}")
             self.lines.append(f"    mov {self._address(result)}, rax")
+            if name in self.strkey_dict_temps:
+                self.strkey_dict_temps.add(result)
         elif op == "store":
             self.lines.append(f"    mov rax, {self._address(args[1]) if isinstance(args[1], str) and args[1].startswith('%') else self._immediate(args[1])}")
             self.lines.append(f"    mov {self._address(args[0])}, rax")
             if isinstance(args[1], str):
                 self.types[args[0]] = self.types.get(args[1], "int")
+                if args[1] in self.strkey_dict_temps:
+                    self.strkey_dict_temps.add(args[0])
         elif op == "binary":
             operator, left, right = args
             left_type = self.types.get(left, "int")
@@ -409,6 +802,8 @@ class Win64NasmEmitter:
                     self._load_operand(key, "rdx")
                     self._load_operand(value, "r8")
                     self.lines.append("    call piton_dict_put")
+                if all(self.types.get(key) == "str" for key, _ in raw_items):
+                    self.strkey_dict_temps.add(result)
             elif kind == "set":
                 self.lines.extend([
                     f"    mov rcx, {self._address(result)}",
@@ -438,9 +833,14 @@ class Win64NasmEmitter:
                         f"    mov rcx, {self._address(result)}",
                         f"    mov rdx, {index}",
                     ])
-                    self._load_operand(item, "r8")
-                    self._load_operand(item, "r9")
-                    self.lines.append("    call piton_collection_put")
+                    item_type = self.types.get(item, "int")
+                    if item_type in {"list", "tuple", "dict", "set"} or item_type.startswith("object:"):
+                        self._load_operand(item, "r8")
+                        self.lines.append("    call piton_collection_put_tagged")
+                    else:
+                        self._load_operand(item, "r8")
+                        self._load_operand(item, "r9")
+                        self.lines.append("    call piton_collection_put")
             self.types[result] = kind
         elif op == "get_item":
             container, key = args
@@ -473,6 +873,155 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_collection_len")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
+        elif op == "list_append":
+            collection, value = args
+            ctype = self.types.get(collection)
+            if ctype != "list":
+                raise NativeBuildError("native list_append requires a list")
+            vtype = self.types.get(value, "int")
+            type_tag = 0 if vtype == "int" else 1
+            self._load_operand(collection, "rcx")
+            self._load_operand(value, "rdx")
+            self.lines.append(f"    mov r8, {type_tag}")
+            self.lines.append("    call piton_list_append")
+        elif op == "genexpr_new":
+            source = args[0]
+            if self.types.get(source) != "list":
+                raise NativeBuildError("native genexpr requires a list-backed sequence")
+            self._load_operand(source, "rcx")
+            self.lines.append("    call piton_genexpr_new")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "genexpr"
+        elif op == "gen_init":
+            func_name = args[0]
+            gen_args = tuple(args[1]) if len(args) > 1 and args[1] else ()
+            layout = self.generator_layouts.get(func_name)
+            if layout is None:
+                raise NativeBuildError(f"native generator '{func_name}' has no persisted-slot layout")
+            params = next(
+                (function.params for function in self.mir_module.functions if function.name == func_name),
+                [],
+            )
+            if len(gen_args) != len(params):
+                raise NativeBuildError(
+                    f"native generator '{func_name}' called with wrong number of arguments "
+                    "(defaults not supported yet)"
+                )
+            if len(gen_args) > 4:
+                raise NativeBuildError("native generator calls with more than four arguments are not supported yet")
+            self.lines.append(f"    lea rcx, [{func_name}]")
+            self.lines.append(f"    mov rdx, {len(layout)}")
+            self.lines.append("    call piton_gen_new")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            for arg, param in zip(gen_args, params):
+                index = layout[param]
+                self._load_operand(arg, "rax")
+                self.lines.append(f"    mov rcx, {self._address(result)}")
+                self.lines.append(f"    mov [rcx+{PITON_GEN_LOCAL_BASE + index * 8}], rax")
+            self.types[result] = "generator"
+        elif op == "gen_collect":
+            gen_ref = args[0]
+            self._load_operand(gen_ref, "rcx")
+            self.lines.append("    call piton_gen_collect")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "list"
+        elif op == "gen_next":
+            gen_ref = args[0]
+            self._load_operand(gen_ref, "rcx")
+            self.lines.append("    call piton_gen_next")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "gen_send":
+            gen_ref, send_value, handler_label = args
+            self._load_operand(gen_ref, "rcx")
+            self._load_operand(send_value, "rdx")
+            self.lines.append("    call piton_gen_send")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+            self.lines.append("    call piton_catch_flag")
+            self.lines.append("    test rax, rax")
+            target = labels.get(handler_label, handler_label) if handler_label else labels['__exit']
+            self.lines.append(f"    jne {target}")
+        elif op == "gen_throw":
+            gen_ref, exc_type, handler_label = args
+            self._load_operand(gen_ref, "rcx")
+            self.lines.append(f"    lea rdx, [{self._string(exc_type)}]")
+            self.lines.append("    call piton_gen_throw")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+            self.lines.append("    call piton_catch_flag")
+            self.lines.append("    test rax, rax")
+            target = labels.get(handler_label, handler_label) if handler_label else labels['__exit']
+            self.lines.append(f"    jne {target}")
+        elif op == "gen_close":
+            gen_ref = args[0]
+            self._load_operand(gen_ref, "rcx")
+            self.lines.append("    call piton_gen_close")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "coro_run":
+            coro_ref = args[0]
+            self._load_operand(coro_ref, "rcx")
+            self.lines.append("    call piton_coro_run")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "event_run":
+            coro_ref = args[0]
+            self._load_operand(coro_ref, "rcx")
+            self.lines.append("    call piton_event_run")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "task_new":
+            coro_ref = args[0]
+            self._load_operand(coro_ref, "rcx")
+            self.lines.append("    call piton_task_new")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "task"
+        elif op == "task_cancel":
+            task_ref = args[0]
+            self._load_operand(task_ref, "rcx")
+            self.lines.append("    call piton_task_cancel")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "sleep0":
+            delay = args[0]
+            self._load_operand(delay, "rcx")
+            self.lines.append("    call piton_sleep0")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "gather_new":
+            n = args[0]
+            self.lines.append(f"    mov rcx, {int(n)}")
+            self.lines.append("    call piton_gather_new")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "gather"
+        elif op == "gather_add":
+            gather_ref, index, task_ref = args
+            self._load_operand(gather_ref, "rcx")
+            self.lines.append(f"    mov rdx, {int(index)}")
+            self._load_operand(task_ref, "r8")
+            self.lines.append("    call piton_gather_add")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "set_add":
+            collection, value = args
+            if self.types.get(collection) != "set":
+                raise NativeBuildError("native set_add requires a set")
+            if self.types.get(value, "int") != "int":
+                raise NativeBuildError("native set comprehensions currently require integer elements")
+            self._load_operand(collection, "rcx")
+            self._load_operand(value, "rdx")
+            self.lines.append("    call piton_set_add")
+        elif op == "dict_put":
+            collection, key, value = args
+            if self.types.get(collection) != "dict":
+                raise NativeBuildError("native dict_put requires a dict")
+            if self.types.get(key, "int") != "int" or self.types.get(value, "int") != "int":
+                raise NativeBuildError("native dict comprehensions currently require integer keys and values")
+            self._load_operand(collection, "rcx")
+            self._load_operand(key, "rdx")
+            self._load_operand(value, "r8")
+            self.lines.append("    call piton_dict_put")
         elif op == "object_new":
             class_name, parent_name = args
             self.lines.extend([
@@ -519,6 +1068,45 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
             else:
+                if owner_type == "closure" and name == "__self__":
+                    self._load_operand(owner, "rcx")
+                    self.lines.append("    call piton_bound_method_self")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "int"
+                    return
+                resolved_method = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.mir_module_class_mro.get(class_name, []):
+                        if name in self.mir_module_classes.get(candidate, set()):
+                            resolved_method = candidate
+                            break
+                    if resolved_method is None and name in self.mir_module_classes.get(class_name, set()):
+                        resolved_method = class_name
+                if resolved_method is not None:
+                    params = self.function_param_map.get(f"{resolved_method}__{name}") or []
+                    if not params:
+                        raise NativeBuildError(f"bound method '{name}' has no native signature")
+                    target = f"{resolved_method}__{name}"
+                    if self.function_frame_abi.get(target, False):
+                        frame_size = ((8 + 32 + 15) // 16) * 16
+                        self.lines.append(f"    sub rsp, {frame_size}")
+                        self._load_operand(owner, "r10")
+                        self.lines.append("    mov qword [rsp+32], r10")
+                        self.lines.extend([
+                            f"    lea rcx, [{target}]", f"    mov edx, {len(params)-1}",
+                            "    mov r8d, 1", "    lea r9, [rsp+32]",
+                            "    call piton_closure_new_frame", f"    add rsp, {frame_size}",
+                            f"    mov {self._address(result)}, rax",
+                        ])
+                    else:
+                        self._load_operand(owner, "r8")
+                        self.lines.extend([
+                            f"    lea rcx, [{target}]", f"    mov edx, {len(params) - 1}",
+                            "    call piton_bound_method_new", f"    mov {self._address(result)}, rax",
+                        ])
+                    self.types[result] = "closure"
+                    return
                 self._load_operand(owner, "rcx")
                 self.lines.append(f"    lea rdx, [{self._string(name)}]")
                 self.lines.append("    call piton_object_get")
@@ -565,11 +1153,20 @@ class Win64NasmEmitter:
                     f"native property '{method_name}' of '{class_name}' object is not a method (calling a property is unsupported)"
                 )
             values = [owner, *raw_values]
-            if len(values) > 4:
-                raise NativeBuildError("native method calls support at most four total arguments")
-            for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
-                self._load_operand(value, register)
-            self.lines.append(f"    call {resolved_class}__{method_name}")
+            target = f"{resolved_class}__{method_name}"
+            if self.function_frame_abi.get(target, False):
+                frame_size = ((len(values) * 8 + 32 + 15) // 16) * 16
+                self.lines.append(f"    sub rsp, {frame_size}")
+                for index, value in enumerate(values):
+                    self._load_operand(value, "r10")
+                    self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
+                self.lines.extend(["    lea rcx, [" + target + "]", f"    mov edx, {len(values)}", "    lea r8, [rsp+32]", "    call piton_frame_call", f"    add rsp, {frame_size}"])
+            else:
+                if len(values) > 4:
+                    raise NativeBuildError("native method calls support at most four total arguments")
+                for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
+                    self._load_operand(value, register)
+                self.lines.append(f"    call {target}")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
         elif op == "math_sqrt":
@@ -603,49 +1200,52 @@ class Win64NasmEmitter:
             self.lines.extend(["    mov [r10], r11", "    mov qword [r10+8], 0"])
         elif op == "closure_new":
             lifted_name, n_args, capture_ops = args
-            if len(capture_ops) > 4:
-                raise NativeBuildError("native closure escape with more than four captured cells is not supported yet")
-            self.lines.append("    sub rsp, 64")
-            self.lines.append(f"    lea rcx, [{lifted_name}]")
-            self.lines.append(f"    mov edx, {n_args}")
-            self.lines.append(f"    mov r8d, {len(capture_ops)}")
+            frame_size = ((len(capture_ops) * 8 + 32 + 15) // 16) * 16
+            self.lines.append(f"    sub rsp, {frame_size}")
             for i, cell in enumerate(capture_ops):
                 self._load_operand(cell, "r10")
-                if i == 0:
-                    self.lines.append("    mov r9, r10")
-                else:
-                    self.lines.append(f"    mov qword [rsp+{24 + i * 8}], r10")
-            for i in range(len(capture_ops), 4):
-                if i == 0:
-                    self.lines.append("    xor r9d, r9d")
-                else:
-                    self.lines.append(f"    mov qword [rsp+{24 + i * 8}], 0")
-            self.lines.append("    call piton_closure_new8")
-            self.lines.append("    add rsp, 64")
+                self.lines.append(f"    mov qword [rsp+32+{i * 8}], r10")
+            self.lines.extend([
+                f"    lea rcx, [{lifted_name}]",
+                f"    mov edx, {n_args}",
+                f"    mov r8d, {len(capture_ops)}",
+                "    lea r9, [rsp+32]",
+                "    call piton_closure_new_frame",
+                f"    add rsp, {frame_size}",
+            ])
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "closure"
+        elif op == "frame_call":
+            callee, call_args = args
+            frame_size = ((len(call_args) * 8 + 32 + 15) // 16) * 16
+            self.lines.append(f"    sub rsp, {frame_size}")
+            for i, value in enumerate(call_args):
+                self._load_operand(value, "r10")
+                self.lines.append(f"    mov qword [rsp+32+{i * 8}], r10")
+            self.lines.extend([
+                f"    mov rcx, {self._address(callee)}",
+                f"    mov edx, {len(call_args)}",
+                "    lea r8, [rsp+32]",
+                "    call piton_frame_call",
+                f"    add rsp, {frame_size}",
+                f"    mov {self._address(result)}, rax",
+            ])
+            self.types[result] = "int"
         elif op == "closure_call":
             callee, packed = args
             argc, *call_args = packed
-            if len(call_args) > 4:
-                raise NativeBuildError("native closure calls with more than four arguments are not supported yet")
-            self.lines.append("    sub rsp, 64")
-            self._load_operand(callee, "rcx")
-            self.lines.append(f"    mov edx, {argc}")
-            for i in range(4):
-                if i < len(call_args):
-                    if i < 2:
-                        self._load_operand(call_args[i], ("r8", "r9")[i])
-                    else:
-                        self._load_operand(call_args[i], "r10")
-                        self.lines.append(f"    mov qword [rsp+{24 + i * 8}], r10")
-                else:
-                    if i < 2:
-                        self.lines.append(f"    xor {('r8d', 'r9d')[i]}, {('r8d', 'r9d')[i]}")
-                    else:
-                        self.lines.append(f"    mov qword [rsp+{24 + i * 8}], 0")
-            self.lines.append("    call piton_closure_call6")
-            self.lines.append("    add rsp, 64")
+            frame_size = ((len(call_args) * 8 + 32 + 15) // 16) * 16
+            self.lines.append(f"    sub rsp, {frame_size}")
+            for i, value in enumerate(call_args):
+                self._load_operand(value, "r10")
+                self.lines.append(f"    mov qword [rsp+32+{i * 8}], r10")
+            self.lines.extend([
+                f"    mov rcx, {self._address(callee)}",
+                f"    mov edx, {argc}",
+                "    lea r8, [rsp+32]",
+                "    call piton_closure_call_frame",
+                f"    add rsp, {frame_size}",
+            ])
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
         elif op == "raise_typed":
@@ -665,8 +1265,13 @@ class Win64NasmEmitter:
                 target = labels.get(handler_label, handler_label)
                 self.lines.append(f"    jne {target}")
             else:
-                # No statically-matching handler: report and exit (no stack search)
-                self.lines.append("    call piton_raise_unhandled")
+                if exception_type == "StopIteration":
+                    # Let the caller's next() operation route the signal to its handler.
+                    self.lines.append("    call piton_raise")
+                    self.lines.append(f"    jmp {labels['__exit']}")
+                else:
+                    # No statically-matching handler: report and exit (no stack search)
+                    self.lines.append("    call piton_raise_unhandled")
         elif op == "try_push":
             self.lines.append("    call piton_try_push")
             if result:
@@ -681,10 +1286,35 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
         elif op == "catch_clear":
             self.lines.append("    call piton_catch_clear")
+        elif op == "catch_bind":
+            self.lines.append("    call piton_catch_message_safe")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "str"
+        elif op == "catch_type":
+            # Raw pointer to the statically-interned exception type name.
+            self.lines.append("    call piton_catch_type")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "str"
+        elif op == "catch_message":
+            self.lines.append("    call piton_catch_message_safe")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "str"
         elif op == "reraise_save":
             self.lines.append("    call piton_reraise_save")
         elif op == "raise_active":
             exception_type, handler_label = args
+            if handler_label:
+                self.lines.append("    call piton_reraise")
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+            else:
+                self.lines.append("    call piton_reraise_unhandled")
+        elif op == "raise_active_dynamic":
+            # Dynamic re-raise: type comes from the saved reraise globals
+            # (piton_reraise), label is the statically-chosen handler.
+            (handler_label,) = args
             if handler_label:
                 self.lines.append("    call piton_reraise")
                 self.lines.append("    call piton_catch_flag")
@@ -835,40 +1465,310 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_type_from_raw")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "str"
+            elif function_name in {"sorted", "ordenar"}:
+                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple"}:
+                    raise NativeBuildError("native sorted currently requires one list or tuple")
+                self._load_operand(values[0], "rcx")
+                self.lines.append("    call piton_sorted_new")
+                self.types[result] = "list"
             else:
-                values = self._complete_call_args(function_name, list(call_args))
-                argc = len(values)
-                if argc > 4:
-                    raise NativeBuildError("native calls with more than four arguments are not supported yet")
-                if function_name in self.function_names:
-                    for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
-                        self._load_operand(value, register)
-                    self.lines.append(f"    call {function_name}")
+                if function_operand and isinstance(function_operand, str) and "." in function_operand:
+                    parts = function_operand.split(".", 1)
+                    class_name, method_name = parts
+                    call_args_list = list(call_args)
+                    self._emit_method_call(class_name, method_name, call_args_list, result)
                 else:
-                    self.lines.append("    sub rsp, 64")
-                    self._load_operand(function_operand, "rcx")
-                    self.lines.append(f"    mov edx, {argc}")
-                    for index in range(4):
-                        if index < argc and index < 2:
-                            self._load_operand(values[index], ("r8", "r9")[index])
-                        elif index < argc:
-                            self._load_operand(values[index], "r10")
-                            self.lines.append(f"    mov qword [rsp+{24 + index * 8}], r10")
-                        elif index < 2:
-                            self.lines.append(f"    xor {('r8d', 'r9d')[index]}, {('r8d', 'r9d')[index]}")
-                        else:
-                            self.lines.append(f"    mov qword [rsp+{24 + index * 8}], 0")
-                    self.lines.append("    call piton_closure_call6")
-                    self.lines.append("    add rsp, 64")
+                    values = self._complete_call_args(function_name, list(call_args))
+                    argc = len(values)
+                    if function_name in self.function_names:
+                        for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
+                            self._load_operand(value, register)
+                        self.lines.append(f"    call {function_name}")
+                    else:
+                        frame_size = ((argc * 8 + 32 + 15) // 16) * 16
+                        self.lines.append(f"    sub rsp, {frame_size}")
+                        for index, value in enumerate(values):
+                            self._load_operand(value, "r10")
+                            self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
+                        self.lines.extend([
+                            f"    mov rcx, {self._address(function_operand)}",
+                            f"    mov edx, {argc}",
+                            "    lea r8, [rsp+32]",
+                            "    call piton_closure_call_frame",
+                            f"    add rsp, {frame_size}",
+                        ])
             if result:
                 self.lines.append(f"    mov {self._address(result)}, rax")
+                if not self.types.get(result):
+                    self.types[result] = "int"
+        elif op == "call_unpack":
+            # CALL_UNPACKING_DYNAMIC4_V1: runtime expansion of *seq / **mapping
+            # for a statically-known callee with a plain signature (<=4 params).
+            func_name, pos_parts, kw_parts, handler_label = args
+            if getattr(self.function, "is_generator", False) or getattr(self.function, "is_coroutine", False):
+                raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 is not supported inside generator bodies yet")
+            if func_name not in self.function_names:
+                raise NativeBuildError("native dynamic call unpacking requires a module-level function callee")
+            f_params = self.function_param_map.get(func_name) or []
+            if not f_params or len(f_params) > 4:
+                raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 supports callees with one to four parameters")
+            f_defaults = self.function_defaults.get(func_name) or []
+            n_params = len(f_params)
+            for part in pos_parts:
+                if part[0] == "star" and self.types.get(part[1]) not in {"list", "tuple"}:
+                    raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1: * operand must be a statically-known list or tuple")
+            for part in kw_parts:
+                if part[0] == "kwstar":
+                    if self.types.get(part[2]) != "dict" or part[2] not in self.strkey_dict_temps:
+                        raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1: ** operand must be a dict with constant string keys")
+            site = self._internal_label("unpack")
+            buf = [f"@unpack_buf{i}" for i in range(4)]
+            filled = "@unpack_filled"
+            mask = "@unpack_mask"
+            # The helpers write outward with out4[i], i.e. ascending addresses;
+            # reserved frame slots descend (buf0 > buf1 > buf2 > buf3), so the
+            # array base must be the LAST reserved slot (lowest address) and
+            # every param index i is addressed as [base + i*8].
+            base = f"@unpack_buf3"
+            UNBOUND = 0x504954554E424E44  # "PITUNBND" arg-slot sentinel
+
+            self.lines.append(f"    mov qword {self._address(filled)}, 0")
+            self.lines.append(f"    mov qword {self._address(mask)}, 0")
+            # Pre-fill: default value if any, otherwise the unbound sentinel.
+            # (rbx is callee-saved under Win64; the base pointer scratch is rdx,
+            # rebuilt before every use because helper calls clobber it.)
+            for idx in range(4):
+                dv = f_defaults[idx] if idx < len(f_defaults) and idx < n_params else None
+                if idx >= n_params or dv is None:
+                    self.lines.append(f"    mov rax, {UNBOUND}")
+                    self.lines.append(f"    lea rdx, {self._address(base)}")
+                    self.lines.append(f"    mov [rdx + {idx * 8}], rax")
+                else:
+                    if isinstance(dv, str):
+                        self.lines.append(f"    lea rax, [{self._string(dv)}]")
+                    elif isinstance(dv, bool):
+                        self.lines.append(f"    mov rax, {1 if dv else 0}")
+                    elif isinstance(dv, int):
+                        self.lines.append(f"    mov rax, {dv}")
+                    else:
+                        raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1: only int/bool/str defaults are supported")
+                    self.lines.append(f"    lea rdx, {self._address(base)}")
+                    self.lines.append(f"    mov [rdx + {idx * 8}], rax")
+            for part in pos_parts:
+                if part[0] == "value":
+                    self.lines.append(f"    mov rcx, {self._address(filled)}")
+                    self.lines.append(f"    cmp rcx, {n_params}")
+                    self.lines.append(f"    jae {site}_too_many")
+                    self._load_operand(part[1], "rax")
+                    self.lines.append(f"    lea rdx, {self._address(base)}")
+                    self.lines.append("    mov [rdx + rcx*8], rax")
+                    self.lines.append("    mov r10, 1")
+                    self.lines.append("    shl r10, cl")
+                    self.lines.append(f"    or {self._address(mask)}, r10")
+                    self.lines.append(f"    add qword {self._address(filled)}, 1")
+                else:  # star
+                    self._load_operand(part[1], "rcx")
+                    self.lines.append(f"    mov rdx, {n_params}")
+                    self.lines.append(f"    sub rdx, {self._address(filled)}")
+                    self.lines.append(f"    mov r8, {self._address(filled)}")
+                    self.lines.append(f"    lea r9, {self._address(base)}")
+                    self.lines.append("    lea r8, [r9 + r8*8]")
+                    self.lines.append("    call piton_unpack_seq4")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append(f"    js {site}_runtime_err")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append(f"    jz {site}_star_skip")
+                    # mask |= ((1 << count) - 1) << filled
+                    self.lines.append("    mov r10, 1")
+                    self.lines.append("    mov rcx, rax")
+                    self.lines.append("    shl r10, cl")
+                    self.lines.append("    dec r10")
+                    self.lines.append(f"    mov rcx, {self._address(filled)}")
+                    self.lines.append("    shl r10, cl")
+                    self.lines.append(f"    or {self._address(mask)}, r10")
+                    self.lines.append(f"    add qword {self._address(filled)}, rax")
+                    self.lines.append(f"{site}_star_skip:")
+            for part in kw_parts:
+                if part[0] == "keyword":
+                    name, value = part[1], part[2]
+                    if name not in f_params:
+                        raise NativeBuildError(f"unexpected keyword argument: {name}")
+                    idx = f_params.index(name)
+                    self.lines.append(f"    mov rcx, {self._address(mask)}")
+                    self.lines.append(f"    bt rcx, {idx}")
+                    self.lines.append(f"    jc {site}_dup")
+                    self.lines.append(f"    or qword {self._address(mask)}, {1 << idx}")
+                    self._load_operand(value, "rax")
+                    self.lines.append(f"    lea rdx, {self._address(base)}")
+                    self.lines.append(f"    mov [rdx + {idx * 8}], rax")
+                else:  # kwstar
+                    table_label = f"__piton_unpack_names_{len(self.unpack_tables)}"
+                    self.unpack_tables.append((table_label, list(f_params)))
+                    self._load_operand(part[2], "rcx")
+                    self.lines.append(f"    lea rdx, [{table_label}]")
+                    self.lines.append(f"    mov r8d, {n_params}")
+                    self.lines.append(f"    lea r9, {self._address(base)}")
+                    self.lines.extend([
+                        "    sub rsp, 48",
+                        f"    lea rax, {self._address(mask)}",
+                        "    mov [rsp + 32], rax",
+                        "    call piton_dict_unpack4",
+                        "    add rsp, 48",
+                    ])
+                    self.lines.append("    test rax, rax")
+                    self.lines.append(f"    js {site}_runtime_err")
+            # Missing required argument check via the sentinel.
+            for idx in range(n_params):
+                has_default = idx < len(f_defaults) and f_defaults[idx] is not None
+                if has_default:
+                    continue
+                self.lines.append(f"    lea rdx, {self._address(base)}")
+                self.lines.append(f"    mov rax, [rdx + {idx * 8}]")
+                self.lines.append(f"    mov rcx, {UNBOUND}")
+                self.lines.append("    cmp rax, rcx")
+                self.lines.append(f"    je {site}_missing")
+            self.lines.append(f"    lea rdx, {self._address(base)}")
+            self.lines.append("    mov rcx, [rdx + 0]")
+            if n_params > 2:
+                self.lines.append("    mov r8, [rdx + 16]")
+            if n_params > 3:
+                self.lines.append("    mov r9, [rdx + 24]")
+            if n_params > 1:
+                self.lines.append("    mov rdx, [rdx + 8]")
+            self.lines.append(f"    call {func_name}")
+            if result:
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                if not self.types.get(result):
+                    self.types[result] = "int"
+            self.lines.append(f"    jmp {site}_done")
+            self.lines.extend([
+                f"{site}_too_many:",
+                f"    lea rcx, [{self._string('TypeError')}]",
+                f"    lea rdx, [{self._string('too many positional arguments for call')}]",
+                f"    jmp {site}_raise",
+                f"{site}_missing:",
+                f"    lea rcx, [{self._string('TypeError')}]",
+                f"    lea rdx, [{self._string('missing required positional argument')}]",
+                f"    jmp {site}_raise",
+                f"{site}_dup:",
+                f"    lea rcx, [{self._string('TypeError')}]",
+                f"    lea rdx, [{self._string('multiple values for argument')}]",
+                f"{site}_raise:",
+                "    call piton_raise",
+                f"{site}_runtime_err:",
+            ])
+            if handler_label:
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jne {labels.get(handler_label, handler_label)}")
+                # The runtime flagged an exception but this static site is the
+                # one that handles it; loop exits through the handler above.
+            else:
+                self.lines.append(f"    lea rcx, [{self._string('TypeError')}]")
+                self.lines.append(f"    lea rdx, [{self._string('call unpacking failed')}]")
+                self.lines.append("    call piton_raise_unhandled")
+            self.lines.append(f"{site}_done:")
+        elif op == "gen_yield":
+            if getattr(self.function, "is_generator", False) or getattr(self.function, "is_coroutine", False):
+                self._emit_gen_suspend(args[0] if args else None, result, await_flag=getattr(self.function, "is_async_generator", False))
+                return
+            value = args[0] if args else None
+            gen_list = "@gen_result"
+            if gen_list not in self.types:
+                self._reserve(gen_list)
+                self.lines.append("    mov ecx, 1")
+                self.lines.append("    mov edx, 16")
+                self.lines.append("    call piton_collection_new")
+                self.lines.append(f"    mov {self._address(gen_list)}, rax")
+                self.types[gen_list] = "list"
+            if value is not None:
+                self._load_operand(value, "rdx")
+                self.lines.append(f"    mov rcx, {self._address(gen_list)}")
+                self.lines.append("    xor r8, r8")
+                self.lines.append("    call piton_list_append")
+            if result:
+                self.types[result] = "list"
+        elif op == "agen_emit":
+            if not getattr(self.function, "is_async_generator", False):
+                raise NativeBuildError("agen_emit outside an async generator body is not supported")
+            # ASYNC_GENERATOR_V1: a data yield (producir) inside an async
+            # generator. Structurally identical to gen_yield but clears the
+            # await marker so piton_agen_next returns the value as data instead
+            # of running it as a coroutine.
+            self._emit_gen_suspend(args[0] if args else None, result, await_flag=False)
+            return
+        elif op == "agen_next":
+            if not args:
+                raise NativeBuildError("agen_next requires an async generator operand")
+            self._load_operand(args[0], "rcx")
+            self.lines.append("    call piton_agen_next")
+            if result:
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                if not self.types.get(result):
+                    self.types[result] = "int"
+            return
+        elif op == "agen_done":
+            if not args:
+                raise NativeBuildError("agen_done requires an async generator operand")
+            self.lines.append(f"    mov rcx, {self._address(args[0])}")
+            self.lines.append("    mov rax, [rcx+16]")   # finished flag
+            if result:
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                if not self.types.get(result):
+                    self.types[result] = "int"
+            return
         elif op == "return":
-            if self.types.get(args[0]) in {"list", "tuple", "dict", "set"}:
-                raise NativeBuildError("returning native collections is not supported yet")
-            self._load_operand(args[0], "rax")
-            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
-            self._emit_cleanup()
-            self.lines.extend([f"    mov rax, {self._address('@scratch0')}", "    leave", "    ret"])
+            if getattr(self.function, "is_coroutine", False):
+                # A coroutine's return value is the result awaited by the caller.
+                if args[0] is not None and args[0] != "None":
+                    self._load_operand(args[0], "rax")
+                else:
+                    self.lines.append("    xor eax, eax")
+                # _emit_cleanup frees owned slots (the awaited inner coroutine)
+                # and may clobber rax: stash the return value across it.
+                self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                self._emit_cleanup()
+                self.lines.extend([
+                    f"    mov rax, {self._address('@scratch0')}",
+                    f"    mov rcx, {self._address('@gen_ptr')}",
+                    "    mov qword [rcx+16], 1",
+                    "    leave", "    ret",
+                ])
+                return
+            if getattr(self.function, "is_generator", False):
+                if args[0] is not None and args[0] != "None":
+                    raise NativeBuildError(
+                        f"native generator '{self.function.name}' with a return value is not supported yet"
+                    )
+                self._emit_cleanup()
+                self.lines.extend([
+                    f"    mov rcx, {self._address('@gen_ptr')}",
+                    "    mov qword [rcx+16], 1",
+                    "    xor eax, eax",
+                    "    leave", "    ret",
+                ])
+                return
+            is_gen_return = (args[0] is None or args[0] == "None") and "@gen_result" in self.types
+            if is_gen_return:
+                self.lines.append(f"    mov rax, {self._address('@gen_result')}")
+                self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                self._emit_cleanup()
+                self.lines.extend([
+                    f"    mov rcx, {self._address('@scratch0')}",
+                    "    call piton_genexpr_new",
+                    f"    mov {self._address('@scratch1')}, rax",
+                    f"    mov rcx, {self._address('@scratch0')}",
+                    "    call piton_collection_free",
+                    f"    mov rax, {self._address('@scratch1')}",
+                    "    leave", "    ret",
+                ])
+            else:
+                if self.types.get(args[0]) in {"list", "tuple", "dict", "set"}:
+                    raise NativeBuildError("returning native collections is not supported yet")
+                self._load_operand(args[0], "rax")
+                self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                self._emit_cleanup()
+                self.lines.extend([f"    mov rax, {self._address('@scratch0')}", "    leave", "    ret"])
         elif op == "runtime_call":
             raise NativeBuildError(f"runtime operation not supported in native subset: {args[0]}")
 

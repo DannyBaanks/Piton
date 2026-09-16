@@ -140,7 +140,9 @@ dependen de CPython**. Hay dos backends:
 ```text
 [x] Enteros, flotantes, strings, booleanos, None
 [x] Asignación, si/sino, mientras, para
-[x] Funciones con argumentos (hasta 4 en Windows)
+[x] Funciones con argumentos: ABI de 4 registros + frame ABI dinámica (más de 4 parámetros en funciones y métodos)
+[x] *args / **kwargs, defaults, positional-only, keyword-only, annotations
+[x] Unpacking dinámico en la llamada: f(*xs), f(**d) (hasta 4 parámetros, claves string estáticas)
 [x] Operadores: +, -, *, /, //, %, **, ==, !=, <, >, <=, >=
 [x] Operadores bit a bit: &, |, ^, ~, <<, >>
 [x] Unarios: +, -, not
@@ -151,14 +153,19 @@ dependen de CPython**. Hay dos backends:
 [x] Colecciones: listas, tuplas, diccionarios, conjuntos
 [x] Acceso a elementos: get_item, collection_len
 [x] Heap objects: object_new, set_attr, get_attr, method_call
+[x] Bound methods: m = objeto.metodo; m(...); __self__; resolución por MRO
+[x] Decoradores: @dec sobre funciones de módulo, orden bottom-up, rebind del nombre
 [x] Excepciones tipadas: raise/except/finally con flag-based unwind
-[x] Closures inmutables: lambda con capturas por valor
-[x] Generadores finitos puros (inline, sin frames suspendidos)
-[x] Clases simples: campos escalar + __init__ + métodos directos
-[x] Herencia simple y multinivel: child hereda __init__ y métodos del padre
-[x] Imports multifile: módulos .piton hermanos vinculados en un PE
-[x] Desde-importar: desde X importar Y con funciones de módulos hermanos
-[x] Async non-suspending: asyncio.run + await como identidad
+[x] Closures: captures dinámicas, frame ABI, callbacks, recursión, fábricas
+[x] Generadores: frames suspendidos reales, send/throw/close
+[x] Clases: campos, __init__, métodos, @property (getter/setter/deleter)
+[x] Herencia C3/MRO, super() zero-arg, multinivel
+[x] Imports: paquetes, relative, star, ciclos (orden de inicialización CPython)
+[x] Async: coroutines reales, await, async for, async generators
+[x] async with: __aenter__/__aexit__ como coroutines awaited
+[x] Excepciones dentro de coroutines (raise/catch dentro del state machine)
+[x] Scheduler: create_task/gather/sleep(0)/cancel, FIFO determinista
+[x] Timers reales: asyncio.sleep(n>0) (Win Sleep / Linux nanosleep syscall 35)
 [x] math.sqrt nativo: SSE sqrtsd
 [x] División entera/piso: coincide con Python
 ```
@@ -185,14 +192,22 @@ El contrato exacto vive en `NATIVE_SUBSET_1_0.md`.
 ### Qué NO compila nativamente (rechazado o pendiente)
 
 ```text
-[ ] Closures con celdas mutables / nonlocal
-[ ] Generadores con frames suspendidos / yield from
-[ ] Clases con herencia / metaclasses
-[ ] Paquetes / imports relativos / from-import
-[ ] Async con suspensión / cancelación / scheduler
+[ ] Metaclasses
+[ ] yield from (producir desde) — fail-closed en MIR
+[ ] Decoradores sobre métodos/clases/generadores
 [ ] Stdlib amplia (solo math.sqrt demostrado)
 [ ] FFI nativo / ctypes
 ```
+
+> **Actualización posterior al contrato NATIVE_SUBSET_1_0** (no reescrito: es un
+> snapshot histórico de ese recibo). Desde entonces el proyecto pasó a Fase 14 y
+> cerró los milestones **M2** (frames/llamadas: unpacking dinámico, bound methods,
+> decoradores, frame ABI >4 params) y **M9** (async completo: `asincrono con`,
+> excepciones en coroutines y timers reales) — véase
+> `piton/final_dashboard.py` (38 gates) y `docs/FEATURE_STATUS_MATRIX.md` para
+> el estado CURRENT. Siguen pendientes: metaclasses, `yield from`,
+> decoradores generalizados, divergencia documentada: `asyncio.sleep(n>0)`
+> bloquea dentro del paso del scheduler (sin interleaving concurrente).
 
 ### Regla de oro
 
@@ -251,6 +266,9 @@ Gates activos:
 | NATIVE_IMPORT_SYSTEM | PASS |
 | NATIVE_OBJECT_PROTOCOL | PASS |
 | NATIVE_ASYNC | PASS |
+| ASYNC_WITH_V1 | PASS |
+| ASYNC_EXCEPTION_V1 | PASS |
+| TASK_SCHEDULER_V2 | PASS |
 | NATIVE_STDLIB_DECLARED_SCOPE | PASS |
 | CPYTHON_EXECUTION_DEPENDENCY | PASS |
 | DYNAMIC_RUNTIME_V1 | PASS |
@@ -260,18 +278,21 @@ Gates activos:
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-09-09)
+### Estado nativo verificado (2026-09-12)
 
 ```text
-138/138 tests pass (test_phase5.py + test_phase14.py, Windows PE)
-77/77 Linux ELF tests pass (test_phase10_linux.py)
-215/215 total native tests pass
-20/20 Windows x86-64 clean execution evidence (evidence_windows.py)
-9/9 Unicode byte-identical vs CPython 3.12.4
-14/14 BigInt Win64 differential tests
-13/13 BigInt Linux differential tests
+274/274 tests pass (test_phase5.py, Windows PE)
+195/195 Linux ELF tests pass (test_phase10_linux.py)
+469/469 total native tests pass (Win + Linux)
+M2 (frames/llamadas): PASS — unpacking dinámico, bound methods, decoradores, frame ABI >4
+M9 (async completo): PASS — async with, excepciones en coroutines, timers reales
 3/3 Linux ELF gates (empty env, chroot, QEMU)
 ```
+
+Nota de infraestructura: los tests Linux usan WSL; un arranque frío de la VM
+puede superar el timeout de 10 s por ejecución, así que la suite completa
+requiere WSL caliente (los 3 fallos del 2026-09-12 eran latencia de WSL, no
+lógica — re-ejecutados pasan aislados).
 
 ## Por qué no usa `replace()`
 

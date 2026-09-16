@@ -4,7 +4,8 @@
 > tomar el siguiente gate y avanzar test por test. Complementa (no reemplaza)
 > `ROADMAP.md` (historial de fases), `PARITY_DEFINITION.md`,
 > `CPYTHON_PARITY_DEPENDENCY_DAG.md`, `FEATURE_STATUS_MATRIX.md` y
-> `FRESH_SESSION_HANDOFF.md`.
+> `FRESH_SESSION_HANDOFF.md`. Para la ejecución diaria por milestones, ver
+> `ROADMAP_100_PERCENT_MILESTONES.md`.
 
 Modelo: `ROADMAP = AUTORIDAD · TESTS = JUEZ · ARTEFACTOS = EVIDENCIA`.
 
@@ -222,9 +223,12 @@ positional-only.
   ABI: posicionales → `*args` tuple → kwonly → `**kwargs` dict (máx. 4
   parámetros ABI); `starred_args` propagado CST→HIR→MIR; fail-closed en
   unpacking (`f(*xs)`, `f(**mapping)`), keyword positional-only, keyword
-  inesperado, arg requerido ausente, valor duplicado.
-- **KNOWN_GAP**: call-site unpacking (`f(*xs)`, `f(**mapping)`) rechazado;
-  slack de 4 parámetros ABI; más allá fail-closed.
+  inesperado, arg requerido ausente, valor duplicado. `CALL_UNPACKING_LITERAL_V1`
+  añade expansión de literales `list`/`tuple`/`dict` en Win+Linux (Win 3 +
+  Linux 2 tests).
+- **KNOWN_GAP**: expansión dinámica (`f(*xs)`, `f(**mapping)`) aún rechazada;
+  el ABI actual limita a 4 parámetros físicos. Requiere un ABI de llamada por
+  frame/vector antes de cerrar el unpacking general.
 - **COMPLEXITY**: MEDIUM → resuelto.
 
 `CLOSURES_COMPLETE_V1` — cells mutables y escape.
@@ -236,30 +240,31 @@ positional-only.
   `closure_new` (wrap de param+cells en `PitonClosure` arena) en
   `LOAD`/`RETURN` de funciones que capturan, `call` directo si el callee es un
   nombre de función conocido, y si no el **emisor** genera
-  `piton_closure_call6(callee, argc, a0..a3)` que en runtime inspecciona el
-  objeto;
-  si `callee[0]==PITON_CLOSURE_MAGIC (0x5049544EC10557LL)` valida
-  `argc==n_args` y `n_cells+argc<=4`, desplaza `args` y rellena `cells[]` a la
-  pila x86-64 y llama vía `c->addr`; si no hay magic, invoca el puntero de
-  función plano. Fail-closed: lío de argumentos o límites → rc=2 + stderr
-  `TypeError: closure called with wrong number of arguments` (o "too many
-  captures"). Keyword Piton `no_local` (no `nonlocal`).
+   `piton_closure_call_frame(callee, argc, args)` / `piton_frame_call(addr,
+   argc, args)` con funciones levantadas de firma `long* frame`; el runtime
+   conserva `piton_closure_call6` como compatibilidad temporal. Los captures
+   se almacenan dinámicamente en `PitonClosure` y el frame concatena captures +
+   argumentos sin límite artificial de cuatro. Funciones planas de ABI antiguo
+   mantienen el límite de cuatro y fallan cerrado si se invocan por dispatcher
+   con más. Keyword Piton `no_local` (no `nonlocal`).
 - **O2 Linux gotchas resueltos**: (1) `void _start(void)` en freestanding
   rompía `rsp%16` — el kernel entra con rsp%16==0 pero gcc compila asumiendo
   rsp%16==8 → `movaps` del helper fault; el emisor antepone
   `__asm__("sub $8, %rsp")` a `_start`. (2) El `load` de un nombre de función
   era no-op; al pasarse la función POR VALOR el temp quedaba sin inicializar →
   el emitter materializa `(long)&fn` en el slot.
-- **KNOWN_GAP**: límites de 4 captures + 4 args (cells+args<=4, fail-closed);
-  `nonlocal` con sombreado de binding en niveles intermedios aún sin validación
+- **KNOWN_GAP**: `nonlocal` con sombreado de binding en niveles intermedios aún sin validación
   de binding estático (CALL-E); escapada a datos globales (carril G).
 - **UNLOCKS**: `GENERATOR_SUSPEND_FRAME_V1`, `COROUTINE_V1`.
 
 ### 14. Generadores (M5)
 
+`GENERATOR_FRAME_V1` (suspensión real) — **PASS** 2026-09-12 en el subset
+escalar Win+Linux (ver matriz: máquina de estados sobre `PitonGenerator`,
+lazy `gen_init`, `StopIteration` al agotar, instancias independientes).
 `GENERATOR_SEND_V1`, `GENERATOR_THROW_V1`, `GENERATOR_CLOSE_V1`,
-`YIELD_FROM_V1`, `GENERATOREXIT_V1`. Todos `NOT_DEMONSTRATED`,
-dependen de `GENERATOR_SUSPEND_FRAME_V1`. COMPLEXITY: HIGH cada uno.
+`YIELD_FROM_V1`, `GENERATOREXIT_V1` siguen `NOT_DEMONSTRATED`.
+COMPLEXITY: HIGH cada uno.
 
 ### 15. Excepciones (M6)
 
@@ -610,10 +615,10 @@ Exigen `ARCHITECTURE_REVIEW_REQUIRED` y STOP antes de implementar:
 `THREADING_V1`, `MULTIPROCESSING_V1`, y cualquier gate que toque
 ABI/calling-convention/GC.
 
-Nota 2026-09-09: `CLOSURES_COMPLETE_V1` cerró sin reconstruir el modelo de
-frames ni el layout — añadió un objeto closure al arena existente y un helper
-de dispatch (`piton_closure_call6`) sin tocar GC/ABI de llamada, así que no
-exigió esta revisión. Lo mismo aplica a `EXCEPTION_CUSTOM_V1` +
+Nota 2026-09-10: comenzó la migración frame ABI de closures: las funciones
+levantadas usan `long* frame`, captures dinámicos y dispatch separado. Falta
+cerrar la evidencia de >4 captures/args, lifetime/GC de esos arrays y migrar
+closures variádicas. Lo mismo aplica a `EXCEPTION_CUSTOM_V1` +
 `EXCEPTION_RERAISE_V1`: helpers estáticos de runtime (save/set/unhandled)
 sobre el flag existente, sin cambiar el modelo de frames ni el ABI.
 

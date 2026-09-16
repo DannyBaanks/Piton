@@ -21,6 +21,8 @@ class HIRKind(Enum):
     IF = auto()
     WHILE = auto()
     FOR = auto()
+    BREAK = auto()
+    CONTINUE = auto()
     RETURN = auto()
     YIELD = auto()
     YIELD_FROM = auto()
@@ -149,6 +151,16 @@ class For(HIRNode):
     orelse: List[HIRNode] = field(default_factory=list)
     is_async: bool = False
     kind: HIRKind = HIRKind.FOR
+
+
+@dataclass(slots=True)
+class Break(HIRNode):
+    kind: HIRKind = HIRKind.BREAK
+
+
+@dataclass(slots=True)
+class Continue(HIRNode):
+    kind: HIRKind = HIRKind.CONTINUE
 
 
 @dataclass(slots=True)
@@ -377,6 +389,28 @@ class ListComp(HIRNode):
     elt: Optional[HIRNode] = None
     generators: List["CompFor"] = field(default_factory=list)
     kind: HIRKind = HIRKind.LIST_COMP
+
+
+@dataclass(slots=True)
+class SetComp(HIRNode):
+    elt: Optional[HIRNode] = None
+    generators: List["CompFor"] = field(default_factory=list)
+    kind: HIRKind = HIRKind.SET_COMP
+
+
+@dataclass(slots=True)
+class DictComp(HIRNode):
+    key: Optional[HIRNode] = None
+    value: Optional[HIRNode] = None
+    generators: List["CompFor"] = field(default_factory=list)
+    kind: HIRKind = HIRKind.DICT_COMP
+
+
+@dataclass(slots=True)
+class GenExpr(HIRNode):
+    elt: Optional[HIRNode] = None
+    generators: List["CompFor"] = field(default_factory=list)
+    kind: HIRKind = HIRKind.GEN_EXPR
 
 
 @dataclass(slots=True)
