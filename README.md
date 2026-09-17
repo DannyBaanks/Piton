@@ -155,6 +155,7 @@ dependen de CPython**. Hay dos backends:
 [x] Heap objects: object_new, set_attr, get_attr, method_call
 [x] Bound methods: m = objeto.metodo; m(...); __self__; resolución por MRO
 [x] Decoradores: @dec sobre funciones de módulo, orden bottom-up, rebind del nombre
+[x] Lanzar X desde Y (causa almacenada y visible), BaseException catch-all, bare lanzar desde catch-all propaga
 [x] Excepciones tipadas: raise/except/finally con flag-based unwind
 [x] Closures: captures dinámicas, frame ABI, callbacks, recursión, fábricas
 [x] Generadores: frames suspendidos reales, send/throw/close
@@ -166,6 +167,7 @@ dependen de CPython**. Hay dos backends:
 [x] Excepciones dentro de coroutines (raise/catch dentro del state machine)
 [x] Scheduler: create_task/gather/sleep(0)/cancel, FIFO determinista
 [x] Timers reales: asyncio.sleep(n>0) (Win Sleep / Linux nanosleep syscall 35)
+[x] With múltiple: con A() como a, B() como b (nested lowering)
 [x] math.sqrt nativo: SSE sqrtsd
 [x] División entera/piso: coincide con Python
 ```
@@ -281,11 +283,16 @@ para afirmar la afirmación.
 ### Estado nativo verificado (2026-09-12)
 
 ```text
-274/274 tests pass (test_phase5.py, Windows PE)
-195/195 Linux ELF tests pass (test_phase10_linux.py)
-469/469 total native tests pass (Win + Linux)
+285/285 tests pass (test_phase5.py, Windows PE)
+206/206 Linux ELF tests pass (test_phase10_linux.py)
+491/491 total native tests pass (Win + Linux)
 M2 (frames/llamadas): PASS — unpacking dinámico, bound methods, decoradores, frame ABI >4
+M3 (closures): PASS — variadic closures (pack de *resto en runtime dispatch)
+M4 (iteradores): PASS — iter(callable, sentinel), next(it, default)
+M5 (generadores): PASS — yield from, devolver v almacenado
+M7 (excepciones): PASS — raise from, BaseException, reraise desde catch-all
 M9 (async completo): PASS — async with, excepciones en coroutines, timers reales
+M10 (with): PASS — con A(), B() multi-item anidado
 3/3 Linux ELF gates (empty env, chroot, QEMU)
 ```
 

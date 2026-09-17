@@ -136,6 +136,7 @@ class Win64NasmEmitter:
             "extern piton_gen_new", "extern piton_gen_next", "extern piton_gen_send", "extern piton_gen_throw", "extern piton_gen_close", "extern piton_gen_free", "extern piton_gen_collect", "extern piton_gen_return_set", "extern piton_gen_return_value",
             "extern piton_coro_run", "extern piton_agen_next",
             "extern piton_event_run", "extern piton_task_new", "extern piton_task_cancel", "extern piton_sleep0", "extern piton_gather_new", "extern piton_gather_add",
+            "extern piton_raise_chain",
             "extern piton_sorted_new",
             "extern piton_iterator_new_any", "extern piton_iterator_next_any",
             "extern piton_calliter_new", "extern piton_calliter_next",
@@ -1265,6 +1266,36 @@ class Win64NasmEmitter:
             ])
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
+        elif op == "raise_chain":
+            # EXCEPTION_CHAINING_V1: raise with a recorded cause (both must be
+            # exception constructors). The cause persists until catch_clear
+            # consumes it; the raise then moves through the standard flag path
+            # ('with' body, direct handler, or the unhandled printer).
+            exception_type, payload, cause_type, cause_payload, handler_label = args
+            self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
+            if payload is None:
+                self.lines.append("    xor edx, edx")
+            elif self.types.get(payload) == "str":
+                self._load_operand(payload, "rdx")
+            else:
+                raise NativeBuildError("native raise-chain payload must be a string")
+            self.lines.append(f"    lea r8, [{self._string(cause_type)}]")
+            if cause_payload is None:
+                self.lines.append("    xor r9d, r9d")
+            elif self.types.get(cause_payload) == "str":
+                self._load_operand(cause_payload, "r9")
+            else:
+                raise NativeBuildError("native raise-chain cause payload must be a string")
+            if handler_label:
+                self.lines.append("    call piton_raise_chain")
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+            else:
+                # handler=None per MIR: the runtime stack is empty here, so
+                # piton_raise_chain falls through to the unhandled printer.
+                self.lines.append("    call piton_raise_chain")
         elif op == "raise_typed":
             exception_type, payload, handler_label = args
             self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")

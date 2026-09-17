@@ -140,12 +140,14 @@ static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i)r+
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
 static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";default:return"<class 'object'>";}}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
+static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
 static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;}
+static void piton_raise_chain_set(const char*type,const char*message,const char*cause_type,const char*cause_msg){piton_exc_cause_type=cause_type;piton_exc_cause_msg=cause_msg;piton_raise_set(type,message);}
 static const char*piton_reraise_type=0;static const char*piton_reraise_message=0;
 static void piton_reraise_save(void){piton_reraise_type=piton_exc_type;piton_reraise_message=piton_exc_message;}
 static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=piton_reraise_message;}
-static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;}
-static void piton_report_unhandled(void){piton_write(2,piton_exc_type,piton_strlen(piton_exc_type));piton_write(2,": ",2);if(piton_exc_message)piton_write(2,piton_exc_message,piton_strlen(piton_exc_message));piton_write(2,"\n",1);}
+static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;}
+static void piton_report_unhandled(void){if(piton_exc_cause_type){piton_write(2,piton_exc_cause_type,piton_strlen(piton_exc_cause_type));if(piton_exc_cause_msg&&piton_exc_cause_msg[0]){piton_write(2,": ",2);piton_write(2,piton_exc_cause_msg,piton_strlen(piton_exc_cause_msg));}piton_write(2," -> causada por\n",16);}piton_write(2,piton_exc_type,piton_strlen(piton_exc_type));piton_write(2,": ",2);if(piton_exc_message)piton_write(2,piton_exc_message,piton_strlen(piton_exc_message));piton_write(2,"\n",1);}
 """
 
 _BIGINT_FREESTANDING_C = r"""
@@ -892,6 +894,15 @@ class LinuxCEmitter:
             else:
                 out.append(f'    {_name(result)}={_name(target)}({values});')
             types[result] = "int"
+        elif op == "raise_chain":
+            exc_type, payload, cause_type, cause_payload, handler_label = args
+            message = f"(const char*){self._value(payload)}" if payload is not None else '""'
+            cause_msg = f"(const char*){self._value(cause_payload)}" if cause_payload is not None else '""'
+            out.append(f'    piton_raise_chain_set("{exc_type}",{message},"{cause_type}",{cause_msg});')
+            if handler_label:
+                out.append(f"    goto {_name(function.name + '_' + handler_label)};")
+            else:
+                out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
         elif op == "raise_typed":
             exc_type, payload, handler_label = args
             message = f"(const char*){self._value(payload)}" if payload is not None else '""'
@@ -931,10 +942,10 @@ class LinuxCEmitter:
             else:
                 out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
         elif op == "raise_active_dynamic":
-            # Dynamic re-raise: type stays the runtime one (piton_exc_type is
-            # still the body's original type here), label is static.
+            # Dynamic re-raise: read the reraise slots (the handler may have
+            # already cleared the live exception state via catch_clear).
             (handler_label,) = args
-            out.append("    piton_reraise_set(piton_exc_type);")
+            out.append("    piton_reraise_set(piton_reraise_type);")
             if handler_label:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:

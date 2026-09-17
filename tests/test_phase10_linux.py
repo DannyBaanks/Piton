@@ -309,11 +309,37 @@ class Phase10LinuxGates(unittest.TestCase):
                 compile_native_linux("funcion f():\n    lanzar\nf()\n", Path(directory) / "program")
 
     def test_linux_bare_reraise_from_catchall_rejected(self):
-        from piton.linux_x86 import NativeBuildError, compile_native_linux
+        # RERAISE_COMPLETE_V1: no longer rejected — re-raise propagates with
+        # the runtime type and dies unhandled with exit 1 (nothing enclosing).
+        from piton.linux_x86 import compile_native_linux
         with tempfile.TemporaryDirectory(prefix="piton-linux-diff-") as directory:
             source = 'intentar:\n    lanzar ValueError("x")\nexcepto Exception:\n    lanzar\nimprimir("done")\n'
-            with self.assertRaisesRegex(NativeBuildError, "catch-all"):
-                compile_native_linux(source, Path(directory) / "program")
+            executable = compile_native_linux(source, Path(directory) / "program")
+            linux_path = windows_to_wsl_path(executable)
+            run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                capture_output=True, check=False,
+            )
+            self.assertEqual(run.returncode, 1)
+            self.assertIn(b"ValueError", run.stderr)
+
+    def test_linux_with_multiple_items(self):
+        self._assert_linux_equiv(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n        devolver 1\n'
+            '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+            'con CM() como a, CM() como b:\n    imprimir(a + b)\n'
+        )
+
+    def test_linux_with_multiple_propagates(self):
+        self._assert_linux_equiv(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n        devolver 1\n'
+            '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+            'intentar:\n'
+            '    con CM() como a, CM() como b:\n        lanzar ValueError("x")\n'
+            'excepto ValueError:\n    imprimir("caught")\n'
+        )
 
     def test_linux_rich_stdlib_type(self):
         self._assert_linux_equiv('imprimir(type(42))\nimprimir(type("hola"))\nimprimir(type(Verdadero))\nimprimir(type(Nada))\n')
@@ -1705,6 +1731,31 @@ class GeneratorsLinux(unittest.TestCase):
         self.assert_linux_matches(
             'intentar:\n'
             '    lanzar ValueError("boom")\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+
+        )
+
+    def test_linux_async_raise_with_cause_chain_caught(self):
+        self.assert_linux_matches(
+            'intentar:\n'
+            '    lanzar ValueError("externo") desde TypeError("causa")\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+
+    def test_linux_base_exception_catches_anything(self):
+        self.assert_linux_matches(
+            'intentar:\n    lanzar TypeError("c1")\nexcepto BaseException como e:\n    imprimir("caught")\n'
+        )
+
+    def test_linux_bare_reraise_from_catchall_handler(self):
+        self.assert_linux_matches(
+            'intentar:\n'
+            '    intentar:\n'
+            '        lanzar ValueError("boom2")\n'
+            '    excepto Exception:\n'
+            '        lanzar\n'
             'excepto ValueError como e:\n'
             '    imprimir(e)\n'
         )

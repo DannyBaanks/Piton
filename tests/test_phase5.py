@@ -719,6 +719,9 @@ class Phase5Gates(unittest.TestCase):
                 compile_native("funcion f():\n    lanzar\nf()\n", Path(directory) / "program.exe")
 
     def test_x86_bare_reraise_from_catchall_rejected(self):
+        # RERAISE_COMPLETE_V1: catch-all bare re-raise now propagates with the
+        # runtime type through the static handler chain (no textual change
+        # beyond the normal unhandled exit when no enclosing handler exists).
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             source = (
                 'intentar:\n'
@@ -727,8 +730,10 @@ class Phase5Gates(unittest.TestCase):
                 '    lanzar\n'
                 'imprimir("done")\n'
             )
-            with self.assertRaisesRegex(Exception, "catch-all"):
-                compile_native(source, Path(directory) / "program.exe")
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 1)
+            self.assertIn("ValueError", completed.stderr.decode(errors="replace"))
 
     def test_x86_raise_plain_class_rejected(self):
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
@@ -3193,15 +3198,29 @@ class WithProtocolNativeV1(unittest.TestCase):
                 )
 
     def test_with_multiple_items_fails_closed(self):
+        # WITH_MULTIPLE_V1 closed the old fail: nested lowers are real
         with tempfile.TemporaryDirectory(prefix="piton-with-multi-") as directory:
-            with self.assertRaisesRegex(Exception, "single context manager"):
-                compile_native(
-                    'clase CM:\n'
-                    '    funcion __enter__(self):\n        devolver 1\n'
-                    '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
-                    'con CM() como a, CM() como b:\n    imprimir(a)\n',
-                    Path(directory) / "program.exe",
-                )
+            executable = compile_native(
+                'clase CM:\n'
+                '    funcion __enter__(self):\n        devolver 1\n'
+                '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+                'con CM() como a, CM() como b:\n    imprimir(a + b)\n',
+                Path(directory) / "program.exe",
+            )
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0)
+            self.assertEqual(completed.stdout, b"2\r\n")
+
+    def test_with_multiple_suppress_and_propagate(self):
+        result = compare_native_to_cpython(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n        devolver 1\n'
+            '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+            'intentar:\n'
+            '    con CM() como a, CM() como b:\n        lanzar ValueError("x")\n'
+            'excepto ValueError:\n    imprimir("caught")\n'
+        )
+        self.assertTrue(result.equivalent, result)
 
     def test_with_async_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-with-async-") as directory:
@@ -3214,6 +3233,47 @@ class WithProtocolNativeV1(unittest.TestCase):
                     '    asincrono con CM() como y:\n        imprimir(y)\n',
                     Path(directory) / "program.exe",
                 )
+
+    def test_async_raise_with_cause_chain_caught(self):
+        # EXCEPTION_CHAINING_V1: the cause rides along; catching the outer type
+        # gives us the outer message (the cause shows only when unhandled).
+        result = compare_native_to_cpython(
+            'intentar:\n'
+            '    lanzar ValueError("externo") desde TypeError("causa")\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_raise_from_chain_visible_unhandled(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            executable = compile_native(
+                'lanzar ValueError("externo") desde TypeError("causa")\n',
+                Path(directory) / "program.exe",
+            )
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            stderr = completed.stderr.decode(errors="replace")
+            self.assertNotEqual(completed.returncode, 0, stderr)
+            self.assertIn("TypeError", stderr)
+            self.assertIn("ValueError", stderr)
+
+    def test_base_exception_catches_anything(self):
+        result = compare_native_to_cpython(
+            'intentar:\n    lanzar TypeError("c1")\nexcepto BaseException como e:\n    imprimir("caught")\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_bare_reraise_from_catchall_handler(self):
+        result = compare_native_to_cpython(
+            'intentar:\n'
+            '    intentar:\n'
+            '        lanzar ValueError("boom2")\n'
+            '    excepto Exception:\n'
+            '        lanzar\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+        self.assertTrue(result.equivalent, result)
 
     def test_async_with_awaits_enter_and_exit(self):
         result = compare_native_to_cpython(

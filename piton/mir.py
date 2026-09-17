@@ -6,10 +6,10 @@ import json
 import operator
 from typing import Any, Dict, List, Optional, Sequence
 
-from piton.hir import HIRKind, HIRNode, Keyword
+from piton.hir import HIRKind, HIRNode, Keyword, With
 
 
-_BUILTIN_EXCEPTIONS = {"Exception", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
+_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
 
 # TASK_SCHEDULER_V1 magic values, mirrored with native_runtime.c / linux_x86.py.
 PITON_TASK_MAGIC = 0x5049544E54414B4B
@@ -169,7 +169,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "set_add": "WRITE",
     "try_push": "WRITE", "try_pop": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
-    "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE",
+    "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE",
     "task_new": "WRITE", "task_cancel": "WRITE", "gather_add": "WRITE",
     # IO
     "sleep0": "IO",
@@ -1364,9 +1364,19 @@ class MIRLowerer:
         """
         is_async_with = bool(getattr(node, "is_async", False))
         if len(node.items) != 1:
-            raise MIRLoweringError(
-                "native with supports a single context manager for now"
+            # WITH_MULTIPLE_V1: multiple managers lower as nested withs —
+            # inner __exit__ runs first, matching CPython.
+            if len(node.items) == 0:
+                raise MIRLoweringError("with requires at least one context manager")
+            first = node.items[0]
+            rest = list(node.items[1:])
+            first_node = With(
+                items=[first],
+                body=[With(items=rest, body=node.body, is_async=node.is_async)],
+                is_async=node.is_async,
             )
+            self._lower_with(builder, first_node)
+            return
         item = node.items[0]
         expr = item.context_expr
         if (
@@ -1452,19 +1462,15 @@ class MIRLowerer:
         # propagate: falsy __exit__ → re-raise the RUNTIME exception
         builder.current = propagate_block
         builder.emit("try_pop")
-        re_raise_type = self._innermost_static_accepted(builder)
-        handler_label = (
-            self._find_exception_handler(builder, re_raise_type)
-            if re_raise_type is not None
-            else None
-        )
+        # RERAISE_COMPLETE_V1: raise_active_dynamic accepts ANY enclosing
+        # handler (including catch-alls and nested withs), because the route
+        # only needs a label, not a static type. None → unhandled exit.
+        handler_label = builder.exception_handlers[-1][0] if builder.exception_handlers else None
         builder.emit("raise_active_dynamic", handler_label)
 
         builder.current = end_block
 
     def _lower_raise(self, builder: _Builder, node: HIRNode) -> None:
-        if node.cause is not None:
-            raise MIRLoweringError("native raise does not support an explicit cause yet")
         if node.exc is None:
             self._lower_reraise(builder)
             return
@@ -1484,33 +1490,65 @@ class MIRLowerer:
             raise MIRLoweringError("unsupported native exception constructor")
         payload = self._lower_expr(builder, node.exc.args[0]) if node.exc.args else None
         handler_label = self._find_exception_handler(builder, exception_type)
-        builder.emit("raise_typed", exception_type, payload, handler_label)
+        if node.cause is not None:
+            # EXCEPTION_CHAINING_V1: lanzar A(...) desde B(...) records the
+            # cause on the exception record; `desde Nada` suppresses it.
+            cause_type = None
+            cause_payload = None
+            if node.cause.kind == HIRKind.CONST and node.cause.value is None:
+                pass
+            elif node.cause.kind == HIRKind.CALL and node.cause.func.kind == HIRKind.LOAD:
+                cause_type = node.cause.func.name
+                if cause_type not in _BUILTIN_EXCEPTIONS and cause_type not in self.classes:
+                    raise MIRLoweringError(
+                        f"native raise-cause requires a builtin or Exception subclass, got '{cause_type}'"
+                    )
+                if len(node.cause.args) > 1 or node.cause.keywords:
+                    raise MIRLoweringError("native raise-cause constructor is limited to one positional argument")
+                cause_payload = self._lower_expr(builder, node.cause.args[0]) if node.cause.args else None
+            else:
+                raise MIRLoweringError("native raise supports `desde` only with an exception constructor or Nada")
+        if node.cause is not None and cause_type is not None:
+            builder.emit("raise_chain", exception_type, payload, cause_type, cause_payload, handler_label)
+        else:
+            builder.emit("raise_typed", exception_type, payload, handler_label)
 
     def _lower_reraise(self, builder: _Builder) -> None:
         if not builder.in_except_handler:
             raise MIRLoweringError("native bare re-raise requires an enclosing except handler")
-        if builder.reraise_type in (None, "Exception"):
-            raise MIRLoweringError(
-                "native bare re-raise from a catch-all (excepto Exception) handler is not supported yet"
-            )
+        # RERAISE_COMPLETE_V1: bare lanzar from a catch-all re-raises with the
+        # runtime type kept in the reraise slots — mirrors the with-body rule:
+        # route one frame out, unhandled exit if there is none.
+        if builder.reraise_type in (None, "Exception", "BaseException"):
+            # exception_handlers already popped the current handler before its
+            # body is lowered, so [-1] IS the enclosing one.
+            outer = builder.exception_handlers[-1][0] if builder.exception_handlers else None
+            builder.emit("raise_active_dynamic", outer)
+            return
         handler_label = self._find_exception_handler(builder, builder.reraise_type)
         builder.emit("raise_active", builder.reraise_type, handler_label)
 
     def _exception_chain(self, name: str) -> list[str]:
+        # BASE_EXCEPTION_V1: the chain terminates at BaseException; every
+        # builtin root and user Exception subclass eventually reaches it.
         chain: list[str] = []
         current: str | None = name
         seen: set[str] = set()
         while current and current not in seen:
             seen.add(current)
             chain.append(current)
+            if current == "BaseException":
+                break
             if current in _BUILTIN_EXCEPTIONS:
-                current = "Exception" if current != "Exception" else None
+                current = "Exception" if current != "Exception" else "BaseException"
             else:
                 mro = self._mro_memo.get(current) or self._compute_mro(current)
                 if mro and len(mro) > 1 and mro[1] not in seen:
                     current = mro[1]
                 else:
                     current = self.class_parents.get(current)
+        if chain and chain[-1] != "BaseException":
+            chain.append("BaseException")
         return chain
 
     def _find_exception_handler(
@@ -1518,7 +1556,7 @@ class MIRLowerer:
     ) -> str | None:
         chain = self._exception_chain(exception_type)
         for label, accepted in reversed(builder.exception_handlers):
-            if accepted is None or accepted == "Exception" or accepted in chain:
+            if accepted is None or accepted in {"Exception", "BaseException"} or accepted in chain:
                 return label
         return None
 

@@ -1994,12 +1994,32 @@ void piton_raise(const char *type, const char *message) {
 }
 
 /* Report an exception with no statically-matching handler and exit. */
+static const char *piton_exception_cause_type = NULL;
+static const char *piton_exception_cause_msg = NULL;
+
 void piton_raise_unhandled(const char *type, const char *message) {
+    /* EXCEPTION_CHAINING_V1: the cause prints first, like CPython's
+     * "__cause__" chain in the traceback (text-only model — no frames). */
+    if (piton_exception_cause_type) {
+        fprintf(stderr, "%s", piton_exception_cause_type);
+        if (piton_exception_cause_msg && *piton_exception_cause_msg)
+            fprintf(stderr, ": %s", piton_exception_cause_msg);
+        fprintf(stderr, " -> causada por\n");
+    }
     fprintf(stderr, "%s", type ? type : "Exception");
     if (message && *message) fprintf(stderr, ": %s", message);
     fputc('\n', stderr);
     fflush(stderr);
     exit(1);
+}
+
+/* EXCEPTION_CHAINING_V1: raise with an explicit cause. The cause must outlive
+ * the handler probe, so it is recorded BEFORE the raise runs. */
+void piton_raise_chain(const char *type, const char *message,
+                       const char *cause_type, const char *cause_msg) {
+    piton_exception_cause_type = cause_type;
+    piton_exception_cause_msg = cause_msg;
+    piton_raise(type, message);
 }
 
 /* Check if an exception was caught (for the emitter to test after try_push). */
@@ -2027,6 +2047,8 @@ void piton_catch_clear(void) {
     piton_exception_active = 0;
     piton_exception_type = NULL;
     piton_exception_message = NULL;
+    piton_exception_cause_type = NULL;
+    piton_exception_cause_msg = NULL;
 }
 
 /* Saved exception state for bare re-raise (piton identifies a handler statically). */
