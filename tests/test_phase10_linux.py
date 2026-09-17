@@ -341,6 +341,36 @@ class Phase10LinuxGates(unittest.TestCase):
             'excepto ValueError:\n    imprimir("caught")\n'
         )
 
+    def test_linux_class_getattr_hook_missing(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 7\n'
+            '    funcion __getattr__(self, nombre):\n'
+            '        devolver 99\n'
+            'c = C()\n'
+            'imprimir(c.noExiste)\n'
+        )
+
+    def test_linux_class_setattr_hook(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __setattr__(self, nombre, valor):\n'
+            '        imprimir(valor)\n'
+            'c = C()\n'
+            'c.x = 5\n'
+        )
+
+    def test_linux_class_delattr_hook(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __delattr__(self, nombre):\n'
+            '        imprimir("del")\n'
+            'c = C()\n'
+            'c.x = 1\n'
+            'borrar c.x\n'
+        )
+
     def test_linux_rich_stdlib_type(self):
         self._assert_linux_equiv('imprimir(type(42))\nimprimir(type("hola"))\nimprimir(type(Verdadero))\nimprimir(type(Nada))\n')
 

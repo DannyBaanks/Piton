@@ -1757,6 +1757,26 @@ int64_t piton_object_get(void *raw, const char *name) {
     return pv_none();
 }
 
+/* ATTRIBUTE_LOOKUP_V2: read-through access that first consults the object's
+ * field map (normal lookup) and, on a miss, delegates to the class-defined
+ * __getattr__(self, name). The hook is a plain native function, so its own
+ * piton_object_get inside is never rerouted (no recursion). */
+int64_t piton_object_lookup(void *raw, const char *name, int64_t fallback) {
+    PitonObject *o = raw;
+    if (!o || !name) {
+        piton_raise_unhandled("AttributeError", "attribute lookup on invalid object");
+        return 0;
+    }
+    for (int64_t i = 0; i < o->length; ++i)
+        if (strcmp(o->attributes[i].name, name) == 0) {
+            int64_t v = o->attributes[i].value;
+            if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+            if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+            return v;
+        }
+    return ((int64_t (*)(int64_t, const char *))fallback)((int64_t)o, name);
+}
+
 void piton_object_free(void *raw) {
     if (!raw) return;
     PitonObject *o = raw;

@@ -162,7 +162,7 @@ class Win64NasmEmitter:
             "extern piton_min_int", "extern piton_max_int", "extern piton_min_float", "extern piton_max_float",
             "extern piton_sum_collection", "extern piton_sum_dict", "extern piton_sum_set",
             "extern piton_type_name", "extern piton_type_from_raw",
-            "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_set", "extern piton_object_get",
+            "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_set", "extern piton_object_get", "extern piton_object_lookup",
             "extern piton_object_free", "extern piton_object_live_count",
             "extern piton_print_float",
             "extern piton_print_value",
@@ -1069,10 +1069,32 @@ class Win64NasmEmitter:
                 self._load_operand(value, "rdx")
                 self.lines.append(f"    call {setter}")
             else:
-                self._load_operand(owner, "rcx")
-                self.lines.append(f"    lea rdx, [{self._string(name)}]")
-                self._load_operand(value, "r8")
-                self.lines.append("    call piton_object_set")
+                # ATTRIBUTE_LOOKUP_V2: __setattr__ hook routes normal stores
+                # through the hook; the hook's own body bypasses itself
+                # (documented V1: inside __setattr__ body, self.x = stores hit
+                # the raw object directly, same as super().__setattr__).
+                hook = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.mir_module_class_mro.get(class_name, []):
+                        if "__setattr__" in self.mir_module_classes.get(candidate, set()):
+                            hook = candidate
+                            break
+                    if hook is None and "__setattr__" in self.mir_module_classes.get(class_name, set()):
+                        hook = class_name
+                # Bypass when we ARE inside the hook of that class (self-recurse guard)
+                current_is_hook = self.function.name.endswith("__setattr__") and hook is not None
+                if hook is not None and not current_is_hook:
+                    target = f"{hook}____setattr__"
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self._load_operand(value, "r8")
+                    self.lines.append(f"    call {target}")
+                else:
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self._load_operand(value, "r8")
+                    self.lines.append("    call piton_object_set")
         elif op == "get_attr":
             owner, name = args
             owner_type = self.types.get(owner, "")
@@ -1124,6 +1146,27 @@ class Win64NasmEmitter:
                         ])
                     self.types[result] = "closure"
                     return
+                # ATTRIBUTE_LOOKUP_V2: __getattr__ hook — only when the class
+                # defines it AND the name is NOT a known method (methods must
+                # always win, they are resolved above); fields lookup first at
+                # runtime, missing → hook.
+                getattr_class = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.mir_module_class_mro.get(class_name, []):
+                        if "__getattr__" in self.mir_module_classes.get(candidate, set()):
+                            getattr_class = candidate
+                            break
+                    if getattr_class is None and "__getattr__" in self.mir_module_classes.get(class_name, set()):
+                        getattr_class = class_name
+                if getattr_class is not None:
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self.lines.append(f"    lea r8, [{getattr_class}____getattr__]")
+                    self.lines.append("    call piton_object_lookup")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "int"
+                    return
                 self._load_operand(owner, "rcx")
                 self.lines.append(f"    lea rdx, [{self._string(name)}]")
                 self.lines.append("    call piton_object_get")
@@ -1143,9 +1186,27 @@ class Win64NasmEmitter:
                 self._load_operand(owner, "rcx")
                 self.lines.append(f"    call {deleter}")
             else:
-                raise NativeBuildError(
-                    f"native del on '{name}' is not a property of a natively-typed object"
-                )
+                # ATTRIBUTE_LOOKUP_V2: __delattr__ hook, with the same
+                # inside-the-hook bypass as __setattr__.
+                hook = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.mir_module_class_mro.get(class_name, []):
+                        if "__delattr__" in self.mir_module_classes.get(candidate, set()):
+                            hook = candidate
+                            break
+                    if hook is None and "__delattr__" in self.mir_module_classes.get(class_name, set()):
+                        hook = class_name
+                current_is_hook = self.function.name.endswith("__delattr__") and hook is not None
+                if hook is not None and not current_is_hook:
+                    target = f"{hook}____delattr__"
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self.lines.append(f"    call {target}")
+                else:
+                    raise NativeBuildError(
+                        f"native del on '{name}' is not a property of a natively-typed object"
+                    )
         elif op == "method_call":
             explicit_class, method_name, owner, raw_values = args
             owner_type = self.types.get(owner, "")

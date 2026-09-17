@@ -118,6 +118,7 @@ static long piton_gen_collect(long raw){PitonGenerator*g=(PitonGenerator*)raw;if
 static PitonObject*piton_object_new(const char*name,const char*parent){PitonObject*o=piton_alloc(sizeof(*o));o->class_name=name;o->parent_name=parent;return o;}
 static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].value=v;return;}if(o->length>=32){piton_write(2,"AttributeError\n",15);piton_exit(1);}o->attrs[o->length].name=name;o->attrs[o->length++].value=v;}
 static PitonSlot piton_object_get(PitonObject*o,const char*name){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;piton_write(2,"AttributeError\n",15);piton_exit(1);}
+static long piton_object_lookup(PitonObject*o,const char*name,long fallback){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;return ((long(*)(long,long))fallback)((long)o,(long)name);}
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
 #define PITON_BOUND_METHOD_MAGIC 0x5049544E424D4554LL
 typedef struct{long magic;long addr;long n_args;long n_cells;long*cells;long has_vararg;}PitonClosure;
@@ -819,7 +820,22 @@ class LinuxCEmitter:
                     raise NativeBuildError(f"property '{attr}' of '{owner_type.split(':', 1)[1]}' object has no setter")
                 out.append(f'    {_name(setter)}({self._value(obj)},{self._value(val)});')
             else:
-                out.append(f'    piton_object_set((PitonObject*){self._value(obj)},"{attr}",{self._slot(val, types)});')
+                # ATTRIBUTE_LOOKUP_V2: __setattr__ hook routes normal stores;
+                # the hook body itself stores raw (bypass, mirror of Win).
+                hook = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.class_mro.get(class_name, []):
+                        if "__setattr__" in self.classes.get(candidate, set()):
+                            hook = candidate
+                            break
+                    if hook is None and "__setattr__" in self.classes.get(class_name, set()):
+                        hook = class_name
+                current_is_hook = function.name.endswith("__setattr__") and hook is not None
+                if hook is not None and not current_is_hook:
+                    out.append(f'    ((long(*)(long,long,long))(long)&{_name(hook+"__"+"__setattr__")})({self._value(obj)},(long){json.dumps(attr)},{self._value(val)});')
+                else:
+                    out.append(f'    piton_object_set((PitonObject*){self._value(obj)},"{attr}",{self._slot(val, types)});')
         elif op == "get_attr":
             obj, attr = args
             owner_type = types.get(obj, "")
@@ -854,6 +870,20 @@ class LinuxCEmitter:
                         out.append(f'    {_name(result)}=piton_bound_method_new((long)&{_name(target)},{len(params)-1},(long){self._value(obj)});')
                     types[result] = "closure"
                     return out
+                # ATTRIBUTE_LOOKUP_V2: __getattr__ hook after method resolution
+                getattr_class = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.class_mro.get(class_name, []):
+                        if "__getattr__" in self.classes.get(candidate, set()):
+                            getattr_class = candidate
+                            break
+                    if getattr_class is None and "__getattr__" in self.classes.get(class_name, set()):
+                        getattr_class = class_name
+                if getattr_class is not None:
+                    out.append(f'    {_name(result)}=piton_object_lookup((PitonObject*){self._value(obj)},{json.dumps(attr)},(long)&{_name(getattr_class+"__"+"__getattr__")});')
+                    types[result] = "int"
+                    return out
                 out.append(f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},"{attr}").bits;')
                 if owner_type == "object:module":
                     types[result] = module_attr_types.get(attr, "int")
@@ -869,9 +899,22 @@ class LinuxCEmitter:
                     raise NativeBuildError(f"property '{attr}' of '{owner_type.split(':', 1)[1]}' object has no deleter")
                 out.append(f'    {_name(deleter)}({self._value(obj)});')
             else:
-                raise NativeBuildError(
-                    f"native del on '{attr}' is not a property of a natively-typed object"
-                )
+                hook = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.class_mro.get(class_name, []):
+                        if "__delattr__" in self.classes.get(candidate, set()):
+                            hook = candidate
+                            break
+                    if hook is None and "__delattr__" in self.classes.get(class_name, set()):
+                        hook = class_name
+                current_is_hook = function.name.endswith("__delattr__") and hook is not None
+                if hook is not None and not current_is_hook:
+                    out.append(f'    ((long(*)(long,long))(long)&{_name(hook+"__"+"__delattr__")})({self._value(obj)},(long){json.dumps(attr)});')
+                else:
+                    raise NativeBuildError(
+                        f"native del on '{attr}' is not a property of a natively-typed object"
+                    )
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
             call_args = args[3] if len(args) > 3 else ()

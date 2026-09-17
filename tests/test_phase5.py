@@ -3222,6 +3222,52 @@ class WithProtocolNativeV1(unittest.TestCase):
         )
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_class_getattr_hook_missing(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 7\n'
+            '    funcion __getattr__(self, nombre):\n'
+            '        devolver 99\n'
+            'c = C()\n'
+            'imprimir(c.noExiste)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_getattr_field_wins_over_hook(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 7\n'
+            '    funcion __getattr__(self, nombre):\n'
+            '        devolver 99\n'
+            'c = C()\n'
+            'x = c.x\n'
+            'imprimir(x)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_setattr_hook(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __setattr__(self, nombre, valor):\n'
+            '        imprimir(valor)\n'
+            'c = C()\n'
+            'c.x = 5\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_delattr_hook(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __delattr__(self, nombre):\n'
+            '        imprimir("del")\n'
+            'c = C()\n'
+            'c.x = 1\n'
+            'borrar c.x\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
     def test_with_async_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-with-async-") as directory:
             with self.assertRaisesRegex(Exception, "__aenter__"):
