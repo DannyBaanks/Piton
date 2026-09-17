@@ -106,6 +106,44 @@ class Phase5Gates(unittest.TestCase):
         )
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_variadic_closure_escape(self):
+        result = compare_native_to_cpython(
+            "funcion fabrica():\n"
+            "    base = 10\n"
+            "    funcion escapada(x, *resto):\n"
+            "        devolver base + x + sum(resto)\n"
+            "    devolver escapada\n"
+            "f = fabrica()\n"
+            "imprimir(f(1, 2, 3))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_iter_callable_sentinel(self):
+        result = compare_native_to_cpython(
+            "funcion contador():\n"
+            "    x = 3\n"
+            "    funcion fuente():\n"
+            "        no_local x\n"
+            "        x = x - 1\n"
+            "        devolver x\n"
+            "    devolver fuente\n"
+            "f = contador()\n"
+            "it = iter(f, 0)\n"
+            "imprimir(next(it))\n"
+            "imprimir(next(it))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_next_with_default(self):
+        result = compare_native_to_cpython(
+            "xs = [7]\n"
+            "it = iter(xs)\n"
+            "imprimir(next(it))\n"
+            "imprimir(next(it, -1))\n"
+            "imprimir(next(it, -2))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
     def test_x86_integer_collections(self):
         corpus = (
             "imprimir([1, 2, 3])\nimprimir(longitud([1, 2, 3]))\nimprimir([4, 5][-1])\n",
@@ -989,6 +1027,41 @@ class Phase5Gates(unittest.TestCase):
                     "imprimir(next(x))\n",
                     Path(directory) / "program.exe",
                 )
+
+    def test_x86_yield_from_delegates_subgen_values(self):
+        result = compare_native_to_cpython(
+            "funcion sub():\n"
+            "    producir 1\n    producir 2\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n    producir 9\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(next(g))\nimprimir(next(g))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_yield_from_sends_forward(self):
+        result = compare_native_to_cpython(
+            "funcion sub():\n"
+            "    producir 1\n    producir 2\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(g.send(5))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_return_value_completes(self):
+        result = compare_native_to_cpython(
+            "funcion sub():\n"
+            "    producir 1\n"
+            "    devolver 99\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n"
+            "    producir 7\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(next(g))\n"
+        )
+        self.assertTrue(result.equivalent, result)
 
     def test_x86_simple_class_fields_and_method(self):
         source = (

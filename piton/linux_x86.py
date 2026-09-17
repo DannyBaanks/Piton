@@ -76,6 +76,11 @@ typedef struct{long magic,index;PitonSeq*seq;long(*callback)(long);}PitonCallbac
 static long piton_callback_invoke(long,long);
 static long piton_callback_iterator_new(void*raw,long callback,long filter){PitonSeq*s=(PitonSeq*)raw;if(!s||!callback||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map/filter requires an iterable and unary callback\n",62);piton_exit(1);}PitonCallbackIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL|(filter?1:0);i->seq=s;i->callback=(long(*)(long))callback;return(long)i;}
 static long piton_callback_iterator_next(long raw){PitonCallbackIterator*i=(PitonCallbackIterator*)raw;if(!i||((i->magic&~1L)!=0x5049544E17E2LL)){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}while(i->index<i->seq->length){long value=i->seq->items[i->index++].bits;long mapped=piton_callback_invoke((long)i->callback,value);if((i->magic&1)&&!mapped)continue;return(i->magic&1)?value:mapped;}piton_raise_set("StopIteration","");return 0;}
+typedef struct{long magic,callback,sentinel;}PitonCallIter;
+static long piton_closure_call_frame(long,long,long*);
+static long piton_calliter_new(long callback,long sentinel){PitonCallIter*i=piton_alloc(sizeof(*i));i->magic=0x50495443414C4954LL;i->callback=callback;i->sentinel=sentinel;return(long)i;}
+static long piton_calliter_next(long raw){PitonCallIter*i=(PitonCallIter*)raw;if(!i||i->magic!=0x50495443414C4954LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long v=piton_closure_call_frame(i->callback,0,(long*)0);if(v==i->sentinel){piton_raise_set("StopIteration","");return 0;}return v;}
+/* M5: slot 62 = generator return value (int subset); slot 63 reserved for async await marker */
 static long piton_sorted_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: sorted() argument is not iterable\n",46);piton_exit(1);}PitonSeq*r=piton_seq_new(PK_LIST,s->length);for(long i=0;i<s->length;++i)r->items[i]=s->items[i];for(long i=1;i<r->length;++i){PitonSlot v=r->items[i];long j=i;while(j>0&&r->items[j-1].bits>v.bits){r->items[j]=r->items[j-1];--j;}r->items[j]=v;}return(long)r;}
 #define PITON_GEN_MAGIC 0x5049544E47654ELL
 #define PITON_GEN_MAX_SLOTS 64
@@ -115,14 +120,14 @@ static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){for(long
 static PitonSlot piton_object_get(PitonObject*o,const char*name){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;piton_write(2,"AttributeError\n",15);piton_exit(1);}
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
 #define PITON_BOUND_METHOD_MAGIC 0x5049544E424D4554LL
-typedef struct{long magic;long addr;long n_args;long n_cells;long*cells;}PitonClosure;
+typedef struct{long magic;long addr;long n_args;long n_cells;long*cells;long has_vararg;}PitonClosure;
 typedef struct{long magic;long addr;long self;long n_args;}PitonBoundMethod;
 static long piton_bound_method_new(long addr,long n_args,long self){PitonBoundMethod*m=piton_alloc(sizeof(*m));m->magic=PITON_BOUND_METHOD_MAGIC;m->addr=addr;m->self=self;m->n_args=n_args;return(long)m;}
 static long piton_bound_method_self(long raw){PitonBoundMethod*m=(PitonBoundMethod*)raw;if(!m||m->magic!=PITON_BOUND_METHOD_MAGIC){piton_write(2,"AttributeError: bound method has no __self__\n",45);piton_exit(1);}return m->self;}
-static long piton_closure_new8(long addr,long n_args,long n_cells,long c0,long c1,long c2,long c3){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->cells=piton_alloc((usize)n_cells*sizeof(long));long cs[4]={c0,c1,c2,c3};for(long i=0;i<n_cells&&i<4;++i)c->cells[i]=cs[i];return(long)c;}
+static long piton_closure_new8(long addr,long n_args,long n_cells,long c0,long c1,long c2,long c3){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=0;c->cells=piton_alloc((usize)n_cells*sizeof(long));long cs[4]={c0,c1,c2,c3};for(long i=0;i<n_cells&&i<4;++i)c->cells[i]=cs[i];return(long)c;}
 static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){if(!callee||((long*)callee)[0]!=PITON_CLOSURE_MAGIC)return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);PitonClosure*c=(PitonClosure*)callee;if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;if(total>4){piton_write(2,"TypeError: closure cell count plus arguments exceeds four\n",59);piton_exit(2);}long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);}
-static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->cells=piton_alloc((usize)n_cells*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];return(long)c;}
-static long piton_closure_call_frame(long callee,long argc,long*args){if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<argc;++i)frame[c->n_cells+i]=args[i];return((long(*)(long*))c->addr)(frame);}
+static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells,long has_vararg){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=has_vararg;c->cells=piton_alloc((usize)(n_cells?n_cells:1)*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];return(long)c;}
+static long piton_closure_call_frame(long callee,long argc,long*args){if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
 static long piton_callback_invoke(long callback,long value){long args[1]={value};return piton_closure_call_frame(callback,1,args);}
 static long piton_frame_call(long addr,long argc,long*args){long*frame=piton_alloc((usize)argc*sizeof(long));for(long i=0;i<argc;++i)frame[i]=args[i];return((long(*)(long*))addr)(frame);}
 static void piton_print_slot(PitonSlot v);
@@ -459,7 +464,10 @@ class LinuxCEmitter:
             types[result] = f"iterator:{source_type or 'unknown'}"
         elif op == "builtin_iter_new":
             builtin, source, start = args
-            if builtin == "enumerate":
+            if builtin == "calliter":
+                callable_src, sentinel_src = source
+                out.append(f"    {_name(result)}=piton_calliter_new({self._value(callable_src)},{self._value(sentinel_src)});")
+            elif builtin == "enumerate":
                 if types.get(source) not in {"list", "tuple"}:
                     raise NativeBuildError("native enumerate currently requires a list or tuple")
                 start_value = self._value(start) if start is not None else "0"
@@ -485,15 +493,6 @@ class LinuxCEmitter:
             else:
                 raise NativeBuildError(f"native builtin iterator not supported: {builtin}")
             types[result] = f"iterator:{builtin}"
-        elif op == "builtin_iter_new":
-            builtin, source, start = args
-            if builtin != "enumerate":
-                raise NativeBuildError(f"native builtin iterator not supported: {builtin}")
-            if types.get(source) not in {"list", "tuple"}:
-                raise NativeBuildError("native enumerate currently requires a list or tuple")
-            start_value = self._value(start) if start is not None else "0"
-            out.append(f"    {_name(result)}=piton_enumerate_new((void*){self._value(source)},{start_value});")
-            types[result] = "iterator:enumerate"
         elif op == "iter_next":
             iterator, handler_label = args[0], args[1]
             iterator_type = types.get(iterator, "")
@@ -506,7 +505,7 @@ class LinuxCEmitter:
                 method_class = self._resolve_method(class_name, "__next__")
                 out.append(f"    {_name(result)}={_name(method_class+'__'+'__next__')}({self._value(iterator)});")
             else:
-                next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next"}.get(iterator_type, "piton_iterator_next_any")
+                next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
                 out.append(f"    {_name(result)}={next_helper}({self._value(iterator)});")
             types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:dict" else "int"
             out.append("    if(piton_exc_flag){")
@@ -750,9 +749,7 @@ class LinuxCEmitter:
                 return out
             if getattr(function, "is_generator", False):
                 if args[0] is not None and args[0] != "None":
-                    raise NativeBuildError(
-                        f"native generator '{function.name}' with a return value is not supported yet"
-                    )
+                    out.append(f"    piton_gen->slots[62]={self._value(args[0])};")
                 out.append("    piton_gen->finished=1;")
                 out.append("    return 0;")
                 return out
@@ -783,11 +780,11 @@ class LinuxCEmitter:
             cell_ptr_name, value_arg = args
             out.append(f"    ((long*){_name(cell_ptr_name)})[0]={self._value(value_arg)};")
         elif op == "closure_new":
-            lifted_name, n_args, capture_ops = args
+            lifted_name, n_args, capture_ops, has_vararg = args
             cell_values = [self._value(cap) for cap in capture_ops]
             out.append(
                 f"    {_name(result)}=piton_closure_new_frame((long)&{_name(lifted_name)},{n_args},"
-                f"{len(capture_ops)},(long[]){{ {','.join(cell_values)} }});"
+                f"{len(capture_ops)},(long[]){{ {','.join(cell_values)} }},{int(has_vararg)});"
             )
             types[result] = "closure"
         elif op == "frame_call":
@@ -850,7 +847,7 @@ class LinuxCEmitter:
                         raise NativeBuildError(f"bound method '{attr}' has no native signature")
                     target = f"{resolved_method}__{attr}"
                     if self.function_frame_abi.get(target, False):
-                        out.append(f'    {_name(result)}=piton_closure_new_frame((long)&{_name(target)},{len(params)-1},1,(long[]){{(long){self._value(obj)}}});')
+                        out.append(f'    {_name(result)}=piton_closure_new_frame((long)&{_name(target)},{len(params)-1},1,(long[]){{(long){self._value(obj)}}},0);')
                     else:
                         out.append(f'    {_name(result)}=piton_bound_method_new((long)&{_name(target)},{len(params)-1},(long){self._value(obj)});')
                     types[result] = "closure"
@@ -1109,6 +1106,10 @@ class LinuxCEmitter:
         elif op == "gather_add":
             gather_ref, index, task_ref = args
             out.append(f"    {_name(result)}=piton_gather_add({self._value(gather_ref)},{int(index)},{self._value(task_ref)});")
+            types[result] = "int"
+        elif op == "gen_retval":
+            gen_ref = args[0]
+            out.append(f"    {_name(result)}=((PitonGenerator*){self._value(gen_ref)})->slots[62];")
             types[result] = "int"
         elif op == "gen_send":
             gen_ref, send_value, handler_label = args

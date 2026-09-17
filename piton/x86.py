@@ -133,11 +133,12 @@ class Win64NasmEmitter:
             "extern piton_collection_len", "extern piton_collection_get",
             "extern piton_list_append",
             "extern piton_genexpr_new", "extern piton_genexpr_iter", "extern piton_genexpr_next", "extern piton_genexpr_free",
-            "extern piton_gen_new", "extern piton_gen_next", "extern piton_gen_send", "extern piton_gen_throw", "extern piton_gen_close", "extern piton_gen_free", "extern piton_gen_collect",
+            "extern piton_gen_new", "extern piton_gen_next", "extern piton_gen_send", "extern piton_gen_throw", "extern piton_gen_close", "extern piton_gen_free", "extern piton_gen_collect", "extern piton_gen_return_set", "extern piton_gen_return_value",
             "extern piton_coro_run", "extern piton_agen_next",
             "extern piton_event_run", "extern piton_task_new", "extern piton_task_cancel", "extern piton_sleep0", "extern piton_gather_new", "extern piton_gather_add",
             "extern piton_sorted_new",
             "extern piton_iterator_new_any", "extern piton_iterator_next_any",
+            "extern piton_calliter_new", "extern piton_calliter_next",
             "extern piton_enumerate_new", "extern piton_enumerate_next",
             "extern piton_reversed_new", "extern piton_reversed_next",
             "extern piton_zip_new", "extern piton_zip_next",
@@ -518,7 +519,14 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "builtin_iter_new":
             builtin, source, start = args
-            if builtin != "enumerate":
+            if builtin == "calliter":
+                # ITER_PROTOCOL_V2: iter(callable, sentinel); element type of
+                # the callable is the raw 0-arg call result (int subset).
+                callable_src, sentinel_src = source
+                self._load_operand(callable_src, "rcx")
+                self._load_operand(sentinel_src, "rdx")
+                self.lines.append("    call piton_calliter_new")
+            elif builtin != "enumerate":
                 if builtin == "reversed":
                     if self.types.get(source) not in {"list", "tuple"}:
                         raise NativeBuildError("native reversed currently requires a list or tuple")
@@ -583,6 +591,8 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_zip_next")
                 elif iterator_type in {"iterator:map", "iterator:filter"}:
                     self.lines.append("    call piton_callback_iterator_next")
+                elif iterator_type == "iterator:calliter":
+                    self.lines.append("    call piton_calliter_next")
                 else:
                     self.lines.append("    call piton_iterator_next_any")
             self.lines.append(f"    mov {self._address(result)}, rax")
@@ -931,6 +941,12 @@ class Win64NasmEmitter:
             self.lines.append("    call piton_gen_next")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
+        elif op == "gen_retval":
+            gen_ref = args[0]
+            self._load_operand(gen_ref, "rcx")
+            self.lines.append("    call piton_gen_return_value")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
         elif op == "gen_send":
             gen_ref, send_value, handler_label = args
             self._load_operand(gen_ref, "rcx")
@@ -1199,17 +1215,18 @@ class Win64NasmEmitter:
             self._load_operand(value_arg, "r11")
             self.lines.extend(["    mov [r10], r11", "    mov qword [r10+8], 0"])
         elif op == "closure_new":
-            lifted_name, n_args, capture_ops = args
-            frame_size = ((len(capture_ops) * 8 + 32 + 15) // 16) * 16
+            lifted_name, n_args, capture_ops, has_vararg = args
+            frame_size = ((len(capture_ops) * 8 + 48 + 15) // 16) * 16
             self.lines.append(f"    sub rsp, {frame_size}")
             for i, cell in enumerate(capture_ops):
                 self._load_operand(cell, "r10")
-                self.lines.append(f"    mov qword [rsp+32+{i * 8}], r10")
+                self.lines.append(f"    mov qword [rsp+40+{i * 8}], r10")
+            self.lines.append(f"    mov qword [rsp+32], {int(has_vararg)}")
             self.lines.extend([
                 f"    lea rcx, [{lifted_name}]",
                 f"    mov edx, {n_args}",
                 f"    mov r8d, {len(capture_ops)}",
-                "    lea r9, [rsp+32]",
+                "    lea r9, [rsp+40]",
                 "    call piton_closure_new_frame",
                 f"    add rsp, {frame_size}",
             ])
@@ -1737,9 +1754,12 @@ class Win64NasmEmitter:
                 return
             if getattr(self.function, "is_generator", False):
                 if args[0] is not None and args[0] != "None":
-                    raise NativeBuildError(
-                        f"native generator '{self.function.name}' with a return value is not supported yet"
-                    )
+                    # M5: generator return value (int subset) — stored on the
+                    # generator object, exposed via piton_gen_return_value when
+                    # the generator stops.
+                    self._load_operand(args[0], "rdx")
+                    self.lines.append(f"    mov rcx, {self._address('@gen_ptr')}")
+                    self.lines.append("    call piton_gen_return_set")
                 self._emit_cleanup()
                 self.lines.extend([
                     f"    mov rcx, {self._address('@gen_ptr')}",

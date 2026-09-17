@@ -652,6 +652,41 @@ class Phase10LinuxGates(unittest.TestCase):
             'imprimir(f(6, 7, 8, 9, 10))\n'
         )
 
+    def test_linux_variadic_closure_escape(self):
+        self._assert_linux_equiv(
+            "funcion fabrica():\n"
+            "    base = 10\n"
+            "    funcion escapada(x, *resto):\n"
+            "        devolver base + x + sum(resto)\n"
+            "    devolver escapada\n"
+            "f = fabrica()\n"
+            "imprimir(f(1, 2, 3))\n"
+        )
+
+    def test_linux_iter_callable_sentinel(self):
+        self._assert_linux_equiv(
+            "funcion contador():\n"
+            "    x = 3\n"
+            "    funcion fuente():\n"
+            "        no_local x\n"
+            "        x = x - 1\n"
+            "        devolver x\n"
+            "    devolver fuente\n"
+            "f = contador()\n"
+            "it = iter(f, 0)\n"
+            "imprimir(next(it))\n"
+            "imprimir(next(it))\n"
+        )
+
+    def test_linux_next_with_default(self):
+        self._assert_linux_equiv(
+            "xs = [7]\n"
+            "it = iter(xs)\n"
+            "imprimir(next(it))\n"
+            "imprimir(next(it, -1))\n"
+            "imprimir(next(it, -2))\n"
+        )
+
     def test_linux_immutable_scalar_closure(self):
         self._assert_linux_equiv('funcion exterior(x):\n    factor = 3\n    funcion interior(valor):\n        devolver x + factor * valor\n    devolver interior(4)\nimprimir(exterior(2))\n')
 
@@ -1632,6 +1667,38 @@ class GeneratorsLinux(unittest.TestCase):
             "x.close()\n"
             "x.close()\n"
             "imprimir(7)\n"
+        )
+
+    def test_linux_yield_from_delegates_subgen_values(self):
+        self.assert_linux_matches(
+            "funcion sub():\n"
+            "    producir 1\n    producir 2\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n    producir 9\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(next(g))\nimprimir(next(g))\n"
+        )
+
+    def test_linux_yield_from_sends_forward(self):
+        self.assert_linux_matches(
+            "funcion sub():\n"
+            "    producir 1\n    producir 2\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(g.send(5))\n"
+        )
+
+    def test_linux_generator_return_value_completes(self):
+        self.assert_linux_matches(
+            "funcion sub():\n"
+            "    producir 1\n"
+            "    devolver 99\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n"
+            "    producir 7\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(next(g))\n"
         )
 
     def test_linux_exception_binding_as_name(self):

@@ -313,6 +313,26 @@ int64_t piton_zip_next(void *raw) {
 typedef struct { int64_t magic, index; PitonCollection *collection; int64_t (*callback)(int64_t); } PitonCallbackIterator;
 int64_t piton_callback_invoke(int64_t callback, int64_t value);
 
+/* ITER_PROTOCOL_V2: iter(callable, sentinel) — call the 0-arg callable until
+ * it returns the sentinel, then StopIteration (int subset, raw bits compare). */
+#define PITON_CALLITER_MAGIC 0x50495443414C4954LL
+typedef struct { int64_t magic, callback, sentinel; } PitonCallIter;
+int64_t piton_closure_call_frame(int64_t callee, int64_t argc, const int64_t *args);
+
+void *piton_calliter_new(int64_t callback, int64_t sentinel) {
+    PitonCallIter *it = calloc(1, sizeof(*it));
+    it->magic = PITON_CALLITER_MAGIC; it->callback = callback; it->sentinel = sentinel;
+    return it;
+}
+int64_t piton_calliter_next(void *raw) {
+    PitonCallIter *it = raw;
+    if (!it || it->magic != PITON_CALLITER_MAGIC)
+        piton_raise_unhandled("TypeError", "object is not an iterator");
+    int64_t value = piton_closure_call_frame(it->callback, 0, NULL);
+    if (value == it->sentinel) { piton_raise("StopIteration", ""); return 0; }
+    return value;
+}
+
 void *piton_callback_iterator_new(void *raw, int64_t callback, int64_t filter_mode) {
     PitonCollection *collection = raw;
     if (!collection || (collection->header.sub_tag != SUB_TAG_LIST && collection->header.sub_tag != SUB_TAG_TUPLE) || !callback)
@@ -824,6 +844,7 @@ typedef struct {
     piton_gen_func_t func;                 /* pointer to generator body */
     int64_t locals[PITON_GEN_MAX_LOCALS];  /* saved local variables (encoded PitonValues) */
     int64_t n_locals;                      /* number of locals used */
+    int64_t return_value;                  /* M5: generator return value (int subset, 0 = None) */
 } PitonGenerator;
 
 void *piton_gen_new(void *func, int64_t n_locals) {
@@ -883,7 +904,23 @@ int64_t piton_gen_send(void *raw, int64_t value) {
     return result;
 }
 
+/* M5: generator return value (int subset; 0 = None for void returns) */
+int64_t piton_gen_return_set(void *raw, int64_t value) {
+    /* ONLY called when the backend compiles a `devolver v` inside a generator. */
+    PitonGenerator *g = raw;
+    if (g && g->magic == PITON_GEN_MAGIC) g->return_value = value;
+    return 0;
+}
+int64_t piton_gen_return_value(void *raw) {
+    PitonGenerator *g = raw;
+    if (!g || g->magic != PITON_GEN_MAGIC)
+        piton_raise_unhandled("TypeError", "object is not a generator");
+    return g->return_value;
+}
+
 void piton_gen_free(void *raw) {
+
+
     PitonGenerator *gen = raw;
     if (!gen) return;
     gen->magic = 0;
@@ -1531,9 +1568,10 @@ int64_t piton_set_live_count(void) { return live_sets; }
 typedef struct {
     int64_t magic;
     int64_t addr;
-    int64_t n_args;
+    int64_t n_args;        /* fixed params (closures with *args keep the count WITHOUT the vararg slot) */
     int64_t n_cells;
     int64_t *cells;
+    int64_t has_vararg;    /* VARIADIC_CLOSURE_V1: pack extras into a tuple at frame[n_cells+n_args] */
 } PitonClosure;
 
 #define PITON_BOUND_METHOD_MAGIC 0x5049544E424D4554LL
@@ -1565,13 +1603,14 @@ int64_t piton_closure_new8(int64_t addr, int64_t n_args, int64_t n_cells,
 }
 
 int64_t piton_closure_new_frame(int64_t addr, int64_t n_args,
-                                int64_t n_cells, const int64_t *cells) {
+                                int64_t n_cells, const int64_t *cells, int64_t has_vararg) {
     PitonClosure *c = calloc(1, sizeof(PitonClosure));
     c->magic = PITON_CLOSURE_MAGIC;
     c->addr = addr;
     c->n_args = n_args;
     c->n_cells = n_cells;
-    c->cells = calloc((size_t)n_cells, sizeof(*c->cells));
+    c->has_vararg = has_vararg;
+    c->cells = calloc((size_t)(n_cells ? n_cells : 1), sizeof(*c->cells));
     if (n_cells > 0) memcpy(c->cells, cells, (size_t)n_cells * sizeof(*c->cells));
     return (int64_t)c;
 }
@@ -1619,14 +1658,27 @@ int64_t piton_closure_call_frame(int64_t callee, int64_t argc,
         return ((int64_t(*)(int64_t, int64_t, int64_t, int64_t))callee)(a[0], a[1], a[2], a[3]);
     }
     PitonClosure *c = (PitonClosure *)callee;
-    if (argc != c->n_args) {
+    if (argc != c->n_args && !(c->has_vararg && argc > c->n_args)) {
         fprintf(stderr, "TypeError: closure called with wrong number of arguments\n");
         exit(2);
     }
-    int64_t total = c->n_cells + argc;
+    /* VARIADIC_CLOSURE_V1: extras pack into a tuple at frame[n_cells+n_args].
+     * Elements are raw int bits (runtime cannot recover tags) -> int subset. */
+    int64_t extra = (c->has_vararg && argc > c->n_args) ? argc - c->n_args : 0;
+    int64_t total = c->n_cells + c->n_args + (c->has_vararg ? 1 : 0);
     int64_t *frame = calloc((size_t)total, sizeof(*frame));
     if (c->n_cells > 0) memcpy(frame, c->cells, (size_t)c->n_cells * sizeof(*frame));
-    if (argc > 0) memcpy(frame + c->n_cells, args, (size_t)argc * sizeof(*frame));
+    int64_t fixed = argc < c->n_args ? argc : c->n_args;
+    if (fixed > 0) memcpy(frame + c->n_cells, args, (size_t)fixed * sizeof(*frame));
+    if (c->has_vararg) {
+        void *tuple = piton_collection_new(2 /*tuple*/, extra);
+        /* VARIADIC_CLOSURE_V1 runtime-internal buffer: its lifetime is
+         * managed by the call dispatcher (arena until process exit, M13 owns
+         * real GC); it is excluded from the user-space live-count tripwire. */
+        --live_collections;
+        for (int64_t i = 0; i < extra; ++i) piton_collection_put(tuple, i, 0, args[c->n_args + i]);
+        frame[c->n_cells + c->n_args] = (int64_t)tuple;
+    }
     int64_t result = ((int64_t(*)(int64_t *))c->addr)(frame);
     free(frame);
     return result;

@@ -180,6 +180,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "iter_new": "OPAQUE", "builtin_iter_new": "OPAQUE", "iter_next": "OPAQUE",
     "gen_yield": "OPAQUE", "gen_send": "OPAQUE", "gen_throw": "OPAQUE",
     "gen_close": "OPAQUE", "gen_next": "OPAQUE", "gen_collect": "OPAQUE",
+    "gen_retval": "READ",
     "agen_emit": "OPAQUE", "agen_next": "OPAQUE", "agen_done": "OPAQUE",
     "event_run": "OPAQUE", "coro_run": "OPAQUE",
 }
@@ -981,12 +982,45 @@ class MIRLowerer:
             builder.current = after_block
             return
         elif kind == HIRKind.YIELD_FROM:
-            # YIELD_FROM_V1: delegation (with send/throw propagation) is not yet
-            # implemented. Fail closed rather than silently yielding the source
-            # object as a single value (which is what the naive lowering did).
-            raise MIRLoweringError(
-                "native 'producir desde' (yield from) is not supported yet"
+            # YIELD_FROM_V1: delegation to a generator object. send(None) ==
+            # next() inside the sub, and the sub return value is captured from
+            # the generator slot into the enclosing statement context (the MIR
+            # statement form discards it — assignment form is V2).
+            # Scope deliberately bounded: the source must be a call to a known
+            # generator function (so it lowers to gen_init) or a name bound to
+            # a generator value. Anything else is fail-closed.
+            if not builder.is_async and not getattr(builder.function, "is_generator", False):
+                raise MIRLoweringError("'producir desde' is only valid inside a generator")
+            source_node = node.value
+            is_gen_call = (
+                source_node.kind == HIRKind.CALL
+                and source_node.func.kind == HIRKind.LOAD
+                and source_node.func.name in self.generators
             )
+            if not is_gen_call:
+                raise MIRLoweringError(
+                    "native yield from over non-generator values (lists, dicts) is not supported yet; use producir desde gen(...) with a generator"
+                )
+            sub = self._lower_expr(builder, node.value)
+            done = builder.new_block()
+            loop = builder.new_block()
+            v0 = builder.temp()
+            builder.emit("try_push")
+            builder.emit("iter_next", sub, done.label, result=v0)
+            builder.emit("jump", loop.label)
+            builder.current = loop
+            sent = builder.temp()
+            builder.emit("gen_yield", v0, result=sent)
+            nxt = builder.temp()
+            builder.emit("gen_send", sub, sent, done.label, result=nxt)
+            builder.emit("store", v0, nxt)
+            builder.emit("jump", loop.label)
+            builder.current = done
+            builder.emit("catch_clear")
+            builder.emit("try_pop")
+            retv = builder.temp()
+            builder.emit("gen_retval", sub, result=retv)
+            return
         elif kind == HIRKind.NONLOCAL:
             return
         elif kind == HIRKind.IF:
@@ -1604,7 +1638,10 @@ class MIRLowerer:
                     builder.emit("load", capture_name, result=capture)
                     capture_ops.append(capture)
                 result = builder.temp()
-                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), result=result)
+                # VARIADIC_CLOSURE_V1: variadic lifted functions mark the
+                # closure so the dispatcher packs extras into a tuple.
+                has_vararg = 1 if self.function_varargs.get(lifted_name) else 0
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg, result=result)
                 return result
             if node.name in builder.cell_params:
                 result = builder.temp()
@@ -1641,7 +1678,7 @@ class MIRLowerer:
                 builder.emit("cell_new", capture, result=cell)
                 capture_ops.append(cell)
             result = builder.temp()
-            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), result=result)
+            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0, result=result)
             return result
         if kind == HIRKind.CALL:
             if self._call_has_dynamic_unpack(node):
@@ -1653,23 +1690,46 @@ class MIRLowerer:
                     "class method call"
                 )
             if node.func.kind == HIRKind.LOAD and node.func.name in {"iter", "iterar"}:
-                if len(node.args) != 1 or node.keywords:
-                    raise MIRLoweringError("native iter requires one positional argument")
+                if len(node.args) not in {1, 2} or node.keywords:
+                    raise MIRLoweringError("native iter requires one iterable or callable+sentinel")
+                if len(node.args) == 2:
+                    # ITER_PROTOCOL callback form: iter(callable, sentinel)
+                    callable_expr = self._lower_expr(builder, node.args[0])
+                    sentinel_expr = self._lower_expr(builder, node.args[1])
+                    result = builder.temp()
+                    builder.emit("builtin_iter_new", "calliter", (callable_expr, sentinel_expr), None, result=result)
+                    return result
                 value = self._lower_expr(builder, node.args[0])
                 result = builder.temp()
                 builder.emit("iter_new", value, result=result)
                 return result
             if node.func.kind == HIRKind.LOAD and node.func.name in {"next", "siguiente"}:
-                if len(node.args) != 1 or node.keywords:
-                    raise MIRLoweringError("native next requires one positional argument")
+                if len(node.args) not in {1, 2} or node.keywords:
+                    raise MIRLoweringError("native next requires one iterator and optional default")
                 iterator = self._lower_expr(builder, node.args[0])
                 result = builder.temp()
-                builder.emit(
-                    "iter_next",
-                    iterator,
-                    self._find_exception_handler(builder, "StopIteration"),
-                    result=result,
-                )
+                if len(node.args) == 1:
+                    builder.emit(
+                        "iter_next",
+                        iterator,
+                        self._find_exception_handler(builder, "StopIteration"),
+                        result=result,
+                    )
+                    return result
+                # next(it, default): on StopIteration, bind default instead of propagating.
+                default_val = self._lower_expr(builder, node.args[1])
+                handler = builder.new_block()
+                end = builder.new_block()
+                builder.emit("try_push")
+                builder.emit("iter_next", iterator, handler.label, result=result)
+                builder.emit("try_pop")
+                builder.emit("jump", end.label)
+                builder.current = handler
+                builder.emit("catch_clear")
+                builder.emit("try_pop")
+                builder.emit("store", result, default_val)
+                builder.emit("jump", end.label)
+                builder.current = end
                 return result
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.LOAD:
                 attr_name = node.func.attr
