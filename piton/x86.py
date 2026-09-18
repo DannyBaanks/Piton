@@ -759,6 +759,54 @@ class Win64NasmEmitter:
             operator, left, right = args
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
+            # SPECIAL_METHOD_LOOKUP_V1: `==` over native class instances
+            # dispatches to the class-defined __eq__ (MRO resolved), same as
+            # CPython. Fallback: object identity (cmp on *values*, documented).
+            if operator == "==" and (
+                left_type.startswith("object:") or right_type.startswith("object:")
+            ):
+                owner_side = left_type if left_type.startswith("object:") else right_type
+                cls_name = owner_side.split(":", 1)[1]
+                eq_cls = None
+                for candidate in self.mir_module_class_mro.get(cls_name, []):
+                    if "__eq__" in self.mir_module_classes.get(candidate, set()):
+                        eq_cls = candidate
+                        break
+                if eq_cls is None and "__eq__" in self.mir_module_classes.get(cls_name, set()):
+                    eq_cls = cls_name
+                if eq_cls is not None:
+                    target = f"{eq_cls}____eq__"
+                    frame_vals = [left, right]
+                    if self.function_frame_abi.get(target, False):
+                        frame_size = ((len(frame_vals) * 8 + 32 + 15) // 16) * 16
+                        self.lines.append(f"    sub rsp, {frame_size}")
+                        for index, value in enumerate(frame_vals):
+                            self._load_operand(value, "r10")
+                            self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
+                        self.lines.extend([
+                            f"    lea rcx, [{target}]",
+                            f"    mov edx, {len(frame_vals)}",
+                            "    lea r8, [rsp+32]",
+                            "    call piton_frame_call",
+                            f"    add rsp, {frame_size}",
+                        ])
+                    else:
+                        for register, value in zip(("rcx", "rdx", "r8", "r9"), frame_vals):
+                            self._load_operand(value, register)
+                        self.lines.append(f"    call {target}")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "bool"
+                    return
+            if operator == "es":
+                # Identidad / no-igualdad equivalente para el subset:
+                # compara punteros (objetos) o valores (escalares).
+                self._load_operand(left, "rax")
+                self._load_operand(right, "rcx")
+                self.lines.append("    cmp rax, rcx")
+                self.lines.extend(["    sete al", "    movzx rax, al"])
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+                return
             numeric_types = {"int", "bool"}
             if "bigint" in {left_type, right_type}:
                 self._emit_bigint_compare(operator, left, right, result)

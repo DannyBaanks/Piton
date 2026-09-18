@@ -1,0 +1,6 @@
+M6 SPECIAL_METHOD_LOOKUP_V1 + identity operator 2026-09-17: `==` despacha a
+clase.__eq__ (resolved via MRO) when either side is a native object, operand
+types obtained by the strutured `compare` lowering; `es` (identidad) is
+supported on both backends — the old compare op didn't have an entry for it
+and now handles it directly; frame ABI path honoured for >1-arg __eq__
+methods. updated dashboard with a new gate row. 506 tests pass.

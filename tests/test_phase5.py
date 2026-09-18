@@ -3312,6 +3312,34 @@ class WithProtocolNativeV1(unittest.TestCase):
         )
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_class_eq_custom_dispatch(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self, v):\n'
+            '        self.v = v\n'
+            '    funcion __eq__(self, otra):\n'
+            '        devolver self.v == otra.v\n'
+            'a = C(7)\n'
+            'b = C(7)\n'
+            'c = C(9)\n'
+            'imprimir(a == b)\n'
+            'imprimir(a == c)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_is_identity(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 1\n'
+            'a = C()\n'
+            'b = a\n'
+            'c = C()\n'
+            'imprimir(a es b)\n'
+            'imprimir(a es c)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
     def test_with_async_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-with-async-") as directory:
             with self.assertRaisesRegex(Exception, "__aenter__"):

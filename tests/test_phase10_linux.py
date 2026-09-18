@@ -382,6 +382,30 @@ class Phase10LinuxGates(unittest.TestCase):
             'imprimir(c(21))\n'
         )
 
+    def test_linux_class_eq_custom_dispatch(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self, v):\n'
+            '        self.v = v\n'
+            '    funcion __eq__(self, otra):\n'
+            '        devolver self.v == otra.v\n'
+            'a = C(7)\n'
+            'b = C(7)\n'
+            'imprimir(a == b)\n'
+        )
+
+    def test_linux_class_is_identity(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 1\n'
+            'a = C()\n'
+            'b = a\n'
+            'c = C()\n'
+            'imprimir(a es b)\n'
+            'imprimir(a es c)\n'
+        )
+
     def test_linux_rich_stdlib_type(self):
         self._assert_linux_equiv('imprimir(type(42))\nimprimir(type("hola"))\nimprimir(type(Verdadero))\nimprimir(type(Nada))\n')
 

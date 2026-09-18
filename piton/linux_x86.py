@@ -629,8 +629,31 @@ class LinuxCEmitter:
             types[result] = "int"
         elif op == "compare":
             operator, left, right = args
+            if operator == "es":
+                out.append(f"    {_name(result)}=({self._value(left)} == {self._value(right)});")
+                types[result] = "bool"
+                return out
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
+            if operator == "==" and (left_type.startswith("object:") or right_type.startswith("object:")):
+                owner_side = left_type if left_type.startswith("object:") else right_type
+                cls_name = owner_side.split(":", 1)[1]
+                eq_cls = None
+                for candidate in self.class_mro.get(cls_name, []):
+                    if "__eq__" in self.classes.get(candidate, set()):
+                        eq_cls = candidate
+                        break
+                if eq_cls is None and "__eq__" in self.classes.get(cls_name, set()):
+                    eq_cls = cls_name
+                if eq_cls is not None:
+                    target = _name(eq_cls + "__" + "__eq__")
+                    frame_args = ",".join(self._value(v) for v in (left, right))
+                    if self.function_frame_abi.get(eq_cls + "____eq__", False):
+                        out.append(f'    {{long _ee_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},2,_ee_args);}}')
+                    else:
+                        out.append(f"    {_name(result)}={target}({frame_args});")
+                    types[result] = "bool"
+                    return out
             if left_type == "bigint" or right_type == "bigint":
                 out.append(f"    {_name(result)}=(piton_bigint_cmp((void*){_name(left)},(void*){_name(right)}) {operator} 0);")
                 types[result] = "bool"
