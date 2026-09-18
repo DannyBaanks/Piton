@@ -3340,6 +3340,28 @@ class WithProtocolNativeV1(unittest.TestCase):
         )
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_class_str_dispatch(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self, v):\n'
+            '        self.v = v\n'
+            '    funcion __str__(self):\n'
+            '        devolver "caja"\n'
+            'imprimir(C(1))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_len_dispatch(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.n = 5\n'
+            '    funcion __len__(self):\n'
+            '        devolver self.n\n'
+            'imprimir(longitud(C()))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
     def test_with_async_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-with-async-") as directory:
             with self.assertRaisesRegex(Exception, "__aenter__"):

@@ -1497,6 +1497,27 @@ class Win64NasmEmitter:
                 else:
                     value = values[0]
                     value_type = self.types.get(value, "int")
+                    # SPECIAL_METHOD_LOOKUP_V1: print(obj) despacha a __str__
+                    # cuando existe (MRO); el método devuelve una str.
+                    if value_type.startswith("object:"):
+                        cls_name = value_type.split(":", 1)[1]
+                        str_cls = None
+                        for candidate in self.mir_module_class_mro.get(cls_name, []):
+                            if "__str__" in self.mir_module_classes.get(candidate, set()):
+                                str_cls = candidate
+                                break
+                        if str_cls is None and "__str__" in self.mir_module_classes.get(cls_name, set()):
+                            str_cls = cls_name
+                        if str_cls is not None:
+                            self._load_operand(value, "rcx")
+                            self.lines.append(f"    call {str_cls}____str__")
+                            self.lines.append(f"    mov {self._address(result)}, rax")
+                            self._load_operand(result, "rdx")
+                            self.lines.append("    lea rcx, [fmt_str]")
+                            self.lines.extend(["    call printf", "    xor eax, eax"])
+                            if result:
+                                self.lines.append(f"    mov qword {self._address(result)}, 0")
+                            return
                     if value_type in {"list", "tuple", "dict", "set"}:
                         self._load_operand(value, "rcx")
                         if value_type == "dict":
@@ -1551,6 +1572,24 @@ class Win64NasmEmitter:
                     self.lines.append(f"    lea rcx, [{fmt}]")
                 self.lines.extend(["    call printf", "    xor eax, eax"])
             elif function_name in {"longitud", "len"}:
+                if values:
+                    v0_type = self.types.get(values[0], "")
+                    if v0_type.startswith("object:"):
+                        cls_name = v0_type.split(":", 1)[1]
+                        len_cls = None
+                        for candidate in self.mir_module_class_mro.get(cls_name, []):
+                            if "__len__" in self.mir_module_classes.get(candidate, set()):
+                                len_cls = candidate
+                                break
+                        if len_cls is None and "__len__" in self.mir_module_classes.get(cls_name, set()):
+                            len_cls = cls_name
+                        if len_cls is not None:
+                            target = f"{len_cls}____len__"
+                            self._load_operand(values[0], "rcx")
+                            self.lines.append(f"    call {target}")
+                            self.lines.append(f"    mov {self._address(result)}, rax")
+                            self.types[result] = "int"
+                            return
                 if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set"}:
                     raise NativeBuildError("native len currently requires one collection")
                 self._load_operand(values[0], "rcx")

@@ -680,26 +680,56 @@ class LinuxCEmitter:
             if function_name in {"imprimir", "print"}:
                 if not values:
                     out.append('    piton_write(1,"\\n",1);')
-                elif types.get(values[0]) == "str":
-                    out.append(f'    piton_print_str((char*){self._value(values[0])});')
-                elif types.get(values[0]) == "bool":
-                    out.append(f'    piton_print_str({self._value(values[0])}?"True":"False");')
-                elif types.get(values[0]) == "none":
-                    out.append('    piton_print_str("None");')
-                elif types.get(values[0]) == "bigint":
-                    out.append(f'    piton_bigint_print((void*){_name(values[0])});')
-                elif types.get(values[0]) == "float":
-                    out.append(f'    piton_print_float_bits({self._value(values[0])});')
-                elif types.get(values[0]) == "module-pkg":
-                    out.append(f'    piton_print_dynamic({self._value(values[0])});')
-                    out.append('    piton_write(1,"\\n",1);')
-                elif types.get(values[0]) in {"list", "tuple", "dict", "set"}:
-                    out.append(f'    piton_print_slot({self._slot(values[0], types)});')
-                    out.append('    piton_write(1,"\\n",1);')
                 else:
-                    out.append(f'    piton_print_int((long){self._value(values[0])});')
+                    v0_type = types.get(values[0], "int")
+                    if v0_type.startswith("object:"):
+                        cls_name = v0_type.split(":", 1)[1]
+                        str_cls = None
+                        for candidate in self.class_mro.get(cls_name, []):
+                            if "__str__" in self.classes.get(candidate, set()):
+                                str_cls = candidate
+                                break
+                        if str_cls is None and "__str__" in self.classes.get(cls_name, set()):
+                            str_cls = cls_name
+                        if str_cls is not None:
+                            out.append(f'    piton_print_str((const char*){_name(str_cls+"__"+"__str__")}({self._value(values[0])}));')
+                            out.append(f"    {_name(result)}=0;")
+                            return out
+                    if types.get(values[0]) == "str":
+                        out.append(f'    piton_print_str((char*){self._value(values[0])});')
+                    elif types.get(values[0]) == "bool":
+                        out.append(f'    piton_print_str({self._value(values[0])}?"True":"False");')
+                    elif types.get(values[0]) == "none":
+                        out.append('    piton_print_str("None");')
+                    elif types.get(values[0]) == "bigint":
+                        out.append(f'    piton_bigint_print((void*){_name(values[0])});')
+                    elif types.get(values[0]) == "float":
+                        out.append(f'    piton_print_float_bits({self._value(values[0])});')
+                    elif types.get(values[0]) == "module-pkg":
+                        out.append(f'    piton_print_dynamic({self._value(values[0])});')
+                        out.append('    piton_write(1,"\\n",1);')
+                    elif types.get(values[0]) in {"list", "tuple", "dict", "set"}:
+                        out.append(f'    piton_print_slot({self._slot(values[0], types)});')
+                        out.append('    piton_write(1,"\\n",1);')
+                    else:
+                        out.append(f'    piton_print_int((long){self._value(values[0])});')
                 out.append(f"    {_name(result)}=0;")
             elif function_name in {"longitud", "len"}:
+                if values:
+                    v0_type = types.get(values[0], "")
+                    if v0_type.startswith("object:"):
+                        cls_name = v0_type.split(":", 1)[1]
+                        len_cls = None
+                        for candidate in self.class_mro.get(cls_name, []):
+                            if "__len__" in self.classes.get(candidate, set()):
+                                len_cls = candidate
+                                break
+                        if len_cls is None and "__len__" in self.classes.get(cls_name, set()):
+                            len_cls = cls_name
+                        if len_cls is not None:
+                            out.append(f'    {_name(result)}={_name(len_cls+"__"+"__len__")}({self._value(values[0])});')
+                            types[result] = "int"
+                            return out
                 if len(values) != 1 or types.get(values[0]) not in {"list", "tuple", "dict", "set"}:
                     raise NativeBuildError("Linux len requires one collection")
                 value_type = types[values[0]]

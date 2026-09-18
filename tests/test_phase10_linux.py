@@ -406,6 +406,26 @@ class Phase10LinuxGates(unittest.TestCase):
             'imprimir(a es c)\n'
         )
 
+    def test_linux_class_str_dispatch(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self, v):\n'
+            '        self.v = v\n'
+            '    funcion __str__(self):\n'
+            '        devolver "caja"\n'
+            'imprimir(C(1))\n'
+        )
+
+    def test_linux_class_len_dispatch(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.n = 5\n'
+            '    funcion __len__(self):\n'
+            '        devolver self.n\n'
+            'imprimir(longitud(C()))\n'
+        )
+
     def test_linux_rich_stdlib_type(self):
         self._assert_linux_equiv('imprimir(type(42))\nimprimir(type("hola"))\nimprimir(type(Verdadero))\nimprimir(type(Nada))\n')
 
