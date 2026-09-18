@@ -1594,18 +1594,55 @@ class Win64NasmEmitter:
                             self._load_operand(value, register)
                         self.lines.append(f"    call {function_name}")
                     else:
-                        frame_size = ((argc * 8 + 32 + 15) // 16) * 16
-                        self.lines.append(f"    sub rsp, {frame_size}")
-                        for index, value in enumerate(values):
-                            self._load_operand(value, "r10")
-                            self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
-                        self.lines.extend([
-                            f"    mov rcx, {self._address(function_operand)}",
-                            f"    mov edx, {argc}",
-                            "    lea r8, [rsp+32]",
-                            "    call piton_closure_call_frame",
-                            f"    add rsp, {frame_size}",
-                        ])
+                        # CALLABLE_PROTOCOL_V1: calling a class instance whose
+                        # class defines __call__ routes to Class.__call__. The
+                        # instance is statically typed, so this is a compile
+                        # time decision, not a runtime sniff.
+                        caller_type = self.types.get(function_operand, "")
+                        call_owner = None
+                        if caller_type.startswith("object:"):
+                            cls = caller_type.split(":", 1)[1]
+                            for candidate in self.mir_module_class_mro.get(cls, []):
+                                if "__call__" in self.mir_module_classes.get(candidate, set()):
+                                    call_owner = candidate
+                                    break
+                            if call_owner is None and "__call__" in self.mir_module_classes.get(cls, set()):
+                                call_owner = cls
+                        if call_owner is not None:
+                            target = f"{call_owner}__" + "__call__"
+                            call_values = [function_operand, *values]
+                            if len(call_values) > 4 and not self.function_frame_abi.get(target, False):
+                                raise NativeBuildError("native __call__ supports at most three explicit arguments")
+                            if self.function_frame_abi.get(target, False):
+                                frame_size = ((len(call_values) * 8 + 32 + 15) // 16) * 16
+                                self.lines.append(f"    sub rsp, {frame_size}")
+                                for index, value in enumerate(call_values):
+                                    self._load_operand(value, "r10")
+                                    self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
+                                self.lines.extend([
+                                    f"    lea rcx, [{target}]",
+                                    f"    mov edx, {len(call_values)}",
+                                    "    lea r8, [rsp+32]",
+                                    "    call piton_frame_call",
+                                    f"    add rsp, {frame_size}",
+                                ])
+                            else:
+                                for register, value in zip(("rcx", "rdx", "r8", "r9"), call_values):
+                                    self._load_operand(value, register)
+                                self.lines.append(f"    call {target}")
+                        else:
+                            frame_size = ((argc * 8 + 32 + 15) // 16) * 16
+                            self.lines.append(f"    sub rsp, {frame_size}")
+                            for index, value in enumerate(values):
+                                self._load_operand(value, "r10")
+                                self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
+                            self.lines.extend([
+                                f"    mov rcx, {self._address(function_operand)}",
+                                f"    mov edx, {argc}",
+                                "    lea r8, [rsp+32]",
+                                "    call piton_closure_call_frame",
+                                f"    add rsp, {frame_size}",
+                            ])
             if result:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 if not self.types.get(result):
@@ -2208,21 +2245,27 @@ def _scan_native_modules(
                             "native relative import ('desde . importar ...') in the entry module "
                             "is not supported: like CPython scripts it has no parent package"
                         )
-                    if level > 1:
-                        raise NativeBuildError(
-                            "native relative imports beyond one level ('desde .. importar ...') "
-                            "are not supported yet"
-                        )
                     if is_star:
                         raise NativeBuildError(
                             "native star imports ('desde . importar *') are only supported "
                             "at the entry module, not inside imported modules"
                         )
+                    # M8 IMPORT_RELATIVE_V2: N levels — drop (level-1)
+                    # segments from the module's own package context.
+                    up = level - 1
+                    base = package
+                    if up > 0:
+                        head = base.split(".")
+                        if up > len(head) - 1:
+                            raise NativeBuildError(
+                                f"relative import level {level} escapes the package at '{base}'"
+                            )
+                        base = ".".join(head[:-up])
                     if not mod_name:
                         for alias in statement.names:
-                            register_chain(f"{package}.{alias.asname or alias.name}")
+                            register_chain(f"{base}.{alias.asname or alias.name}")
                     else:
-                        register_chain(f"{package}.{mod_name}")
+                        register_chain(f"{base}.{mod_name}")
                 else:
                     if not mod_name or mod_name in {"asyncio", "math", "sys"}:
                         continue
@@ -2276,6 +2319,15 @@ def _scan_native_modules(
         if is_star:
             return
         if level:
+            # M8 IMPORT_RELATIVE_V2: level-1 correction against package_ctx
+            up = level - 1
+            if up > 0:
+                head = package_ctx.split(".")
+                if up > len(head) - 1:
+                    raise NativeBuildError(
+                        f"relative import level {level} escapes the package at '{package_ctx}'"
+                    )
+                package_ctx = ".".join(head[:-up])
             if not mod_name:
                 for alias in statement.names:
                     simulate_execute(f"{package_ctx}.{alias.asname or alias.name}")

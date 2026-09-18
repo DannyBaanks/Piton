@@ -371,6 +371,17 @@ class Phase10LinuxGates(unittest.TestCase):
             'borrar c.x\n'
         )
 
+    def test_linux_class_call_routes_to_call(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self, base):\n'
+            '        self.base = base\n'
+            '    funcion __call__(self, x):\n'
+            '        devolver self.base + x\n'
+            'c = C(10)\n'
+            'imprimir(c(21))\n'
+        )
+
     def test_linux_rich_stdlib_type(self):
         self._assert_linux_equiv('imprimir(type(42))\nimprimir(type("hola"))\nimprimir(type(Verdadero))\nimprimir(type(Nada))\n')
 
@@ -1027,8 +1038,38 @@ class Phase10LinuxGates(unittest.TestCase):
             )
             entry = root / "main.piton"
             entry.write_text("importar pkg\n", encoding="utf-8")
-            with self.assertRaisesRegex(Exception, "beyond one level"):
+            # M8: N levels now allowed — `..` from a 1-segment package fails
+            # because it escapes the top package, not because "level too deep".
+            with self.assertRaisesRegex(Exception, "escapes the package"):
                 compile_native_linux_files(entry, root / "program")
+
+    def test_linux_relative_two_levels_up_supported(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-rel2-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            sub_dir = pkg_dir / "sub"
+            pkg_dir.mkdir(); sub_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text("pasar\n", encoding="utf-8")
+            (sub_dir / "__init__.piton").write_text("pasar\n", encoding="utf-8")
+            (pkg_dir / "comun.piton").write_text(
+                "funcion comun_x():\n    devolver 100\n", encoding="utf-8"
+            )
+            (sub_dir / "deep.piton").write_text(
+                "desde .. importar comun\n"
+                "funcion doble(x):\n    devolver comun.comun_x() + x\n",
+                encoding="utf-8",
+            )
+            entry = root / "main.piton"
+            entry.write_text(
+                "desde pkg.sub.deep importar doble\n"
+                "imprimir(doble(3))\n", encoding="utf-8"
+            )
+            executable = compile_native_linux_files(entry, root / "program")
+            run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(executable)],
+                capture_output=True, check=False,
+            )
+            self.assertEqual((run.returncode, run.stdout), (0, b"103\n"))
 
     def test_linux_module_attribute_value_access_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-linux-module-attr-") as directory:

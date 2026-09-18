@@ -733,13 +733,35 @@ class LinuxCEmitter:
                     encoded_values = ",".join(self._value(value) for value in values)
                     out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
                 else:
-                    argc = len(values)
-                    arg_values = ",".join(self._value(value) for value in values)
-                    out.append(f"    {{long _frame_args[]={{ {arg_values} }};")
-                    out.append(
-                        f"    {_name(result)}=piton_closure_call_frame({self._value(args[0])},{argc},_frame_args);"
-                    )
-                    out.append("    }")
+                    # CALLABLE_PROTOCOL_V1: calling a statically-typed class
+                    # instance routes to <Class>__call__ if defined.
+                    caller_type = types.get(args[0], "")
+                    call_owner = None
+                    if caller_type.startswith("object:"):
+                        cls = caller_type.split(":", 1)[1]
+                        for candidate in self.class_mro.get(cls, []):
+                            if "__call__" in self.classes.get(candidate, set()):
+                                call_owner = candidate
+                                break
+                        if call_owner is None and "__call__" in self.classes.get(cls, set()):
+                            call_owner = cls
+                    if call_owner is not None:
+                        target = _name(call_owner + "__" + "__call__")
+                        call_values = [args[0], *values]
+                        if self.function_frame_abi.get(f"{call_owner}__" + "__call__", False):
+                            args_c = ",".join(self._value(v) for v in call_values)
+                            out.append(f'    {{long _cv_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{target},{len(call_values)},_cv_args);}}')
+                        else:
+                            encoded_values = ",".join(self._value(v) for v in call_values)
+                            out.append(f"    {_name(result)}={target}({encoded_values});")
+                    else:
+                        argc = len(values)
+                        arg_values = ",".join(self._value(value) for value in values)
+                        out.append(f"    {{long _frame_args[]={{ {arg_values} }};")
+                        out.append(
+                            f"    {_name(result)}=piton_closure_call_frame({self._value(args[0])},{argc},_frame_args);"
+                        )
+                        out.append("    }")
                 types[result] = "int"
         elif op == "return":
             if getattr(function, "is_coroutine", False):

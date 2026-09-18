@@ -404,8 +404,8 @@ class MIRLowerer:
                                 self.from_import_aliases[local] = f"{mod_name.replace('.', '__')}__{alias.name}"
             for module_name, imported in sorted(imported_modules.items()):
                 for item in imported.body:
-                    if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM}:
-                        raise MIRLoweringError("native imported modules currently support functions only")
+                    if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM, HIRKind.PASS}:
+                        raise MIRLoweringError("native imported modules currently support functions, imports, and pasar only")
             for module_name, imported in sorted(imported_modules.items()):
                 scope_names, scope_modules = self._build_module_scope(module_name, imported)
                 self._module_scope_stack.append((scope_names, scope_modules))
@@ -636,7 +636,17 @@ class MIRLowerer:
                 mod_name = getattr(item, "module", None)
                 level = getattr(item, "level", 0) or 0
                 is_star = bool(getattr(item, "is_star", False))
-                if level == 1:
+                if level >= 1:
+                    # M8 IMPORT_RELATIVE_V2: N levels supported. Drop (level-1)
+                    # trailing segments of base so `desde .. importar x` walks up.
+                    up = level - 1
+                    if up > 0:
+                        head = base.split(".")
+                        if up > len(head) - 1:
+                            raise MIRLoweringError(
+                                f"relative import level {level} escapes the package at '{base}'"
+                            )
+                        base = ".".join(head[:-up])
                     if is_star:
                         raise MIRLoweringError("native star imports are only supported at the entry module")
                     if mod_name:
@@ -1684,6 +1694,15 @@ class MIRLowerer:
             if node.name in builder.cell_params:
                 result = builder.temp()
                 builder.emit("cell_load", node.name, result=result)
+                return result
+            # M8: aliases de módulo creados por `desde .. importar X` dentro
+            # de un paquete son marcadores estáticos. Si el nombre del alias
+            # resuelve a un módulo importado, emitimos un placeholder (None) en
+            # vez de un load que no existe en el backend.
+            alias_target = builder.module_aliases.get(node.name)
+            if alias_target and alias_target != node.name and alias_target in self.imported_modules:
+                result = builder.temp()
+                builder.emit("const", None, result=result)
                 return result
             result = builder.temp()
             builder.emit("load", builder.from_import_aliases.get(node.name, node.name), result=result)

@@ -1640,8 +1640,40 @@ class Phase5Gates(unittest.TestCase):
             )
             entry = root / "main.piton"
             entry.write_text("importar pkg\n", encoding="utf-8")
-            with self.assertRaisesRegex(Exception, "beyond one level"):
+            # M8 IMPORT_RELATIVE_V2: the guard's reach is now the package scope
+            # (N levels allowed); `..` from a 1-segment package escapes it, so
+            # the fail-closed trigger moved from counting levels to the escape
+            # check. Message updated accordingly.
+            with self.assertRaisesRegex(Exception, "escapes the package"):
                 compile_native_files(entry, root / "program.exe")
+
+    def test_x86_relative_two_levels_up_supported(self):
+        # desde .. importar desde un submodule (separes, package context becomes
+        # 'pkg.sub', '..' strips one segment → resolves en pkg).
+        with tempfile.TemporaryDirectory(prefix="piton-relative-two-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            sub_dir = pkg_dir / "sub"
+            pkg_dir.mkdir(); sub_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text("pasar\n", encoding="utf-8")
+            (sub_dir / "__init__.piton").write_text("pasar\n", encoding="utf-8")
+            (pkg_dir / "comun.piton").write_text(
+                "funcion comun_x():\n    devolver 100\n", encoding="utf-8",
+            )
+            (sub_dir / "deep.piton").write_text(
+                "desde .. importar comun\n"
+                "funcion doble(x):\n    devolver comun.comun_x() + x\n",
+                encoding="utf-8",
+            )
+            entry = root / "main.piton"
+            entry.write_text(
+                "desde pkg.sub.deep importar doble\n"
+                "imprimir(doble(3))\n", encoding="utf-8"
+            )
+            executable = compile_native_files(entry, root / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
+            self.assertEqual(completed.stdout, b"103\r\n")
 
     def test_x86_module_attribute_value_access_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-module-attr-") as directory:
@@ -3265,6 +3297,18 @@ class WithProtocolNativeV1(unittest.TestCase):
             'c = C()\n'
             'c.x = 1\n'
             'borrar c.x\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_call_routes_to_call(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self, base):\n'
+            '        self.base = base\n'
+            '    funcion __call__(self, x):\n'
+            '        devolver self.base + x\n'
+            'c = C(10)\n'
+            'imprimir(c(21))\n'
         )
         self.assertTrue(result.equivalent, result)
 

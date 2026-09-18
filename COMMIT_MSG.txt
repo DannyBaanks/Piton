@@ -1,0 +1,18 @@
+M8 PASS 2026-09-17: relative imports N-levels + attribute hooks.
+
+IMPORT_RELATIVE_V2: `desde .. importar x` (and N levels) works; MIR lowers
+with base walks up (level-1) segments; fail-closed only at package escape
+(when the top package would have nothing left). Fix also covers the x86
+scanner's historical "beyond one level" limit.
+
+The new relative tests needed __init__ bodies with pasar-only + real callers,
+which exposed a real MIR bug: nested module scope building had a stale
+branch that misplaced from-import aliases for level-0 imports — fixed.
+
+Tests: +5 (W x86_cyclic_mutual_from_import_ok survived, +W relative two
+ levels, +W relative entry rejects, +Linux equivalents) -> 502/500 final.
+DASHBOARD: gates.py new IMPORT_RELATIVE_V2 + ATTRIBUTE_LOOKUP_V1 +
+CALLABLE_PROTOCOL_V1.
+README: estado nativo verificado bump + M8 row added.
+
+No host mutation. Tests: pytest tests/test_phase5.py tests/test_phase10_linux.py -q → 502 passed.
