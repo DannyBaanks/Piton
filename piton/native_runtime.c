@@ -2187,6 +2187,158 @@ int64_t piton_sum_set(void *raw) {
     return total;
 }
 
+/* ── M14 BUILTINS_CORE_V2 ─────────────────────────────────────────────────
+   Matriz declarada (paridad Win/Linux):
+     ord(str)        -> int   (UTF-8 completo; TypeError si len != 1 char)
+     chr(int)        -> str   (UTF-8 encode; ValueError fuera de 0..0x10FFFF)
+     bin(int)        -> str   ("0b...", negativos "-0b...")
+     pow(int,int>=0) -> int
+     pow(float,int)  -> float (exponente entero, negativos incluidos)
+     any/all(list|tuple) -> bool (truthiness por tag; str vacio = False)
+     round(int)      -> int   (identidad)
+     round(float)    -> int   (half-to-even, como CPython)
+   Fuera de la matriz = fail-closed con raise explícito.
+   ─────────────────────────────────────────────────────────────────────── */
+
+static inline int piton_value_truthy(int64_t v) {
+    switch (pv_tag(v)) {
+        case PITON_TAG_NONE: return 0;
+        case PITON_TAG_BOOL: return pv_payload(v) ? 1 : 0;
+        case PITON_TAG_INT:  return pv_payload_signed(v) != 0;
+        case PITON_TAG_FLOAT: {
+            double *fp = (double *)(uintptr_t)pv_payload(v);
+            return fp && *fp != 0.0;
+        }
+        case PITON_TAG_OBJECT: {
+            int64_t ptr = (int64_t)pv_payload(v);
+            if (!ptr) return 0;
+            PitonHeader *h = (PitonHeader *)(uintptr_t)ptr;
+            if (h->sub_tag == SUB_TAG_STR) {
+                const char *s = (const char *)(uintptr_t)(ptr + sizeof(PitonHeader));
+                return s[0] != '\0';
+            }
+            if (h->sub_tag == SUB_TAG_LIST || h->sub_tag == SUB_TAG_TUPLE)
+                return ((PitonCollection *)(uintptr_t)ptr)->length > 0;
+            return 1;
+        }
+        default: return 1;
+    }
+}
+
+int64_t piton_all_iterable(void *raw) {
+    PitonCollection *c = raw;
+    if (!c) return 1;
+    for (int64_t i = 0; i < c->length; ++i)
+        if (!piton_value_truthy(c->items[i])) return 0;
+    return 1;
+}
+
+int64_t piton_any_iterable(void *raw) {
+    PitonCollection *c = raw;
+    if (!c) return 0;
+    for (int64_t i = 0; i < c->length; ++i)
+        if (piton_value_truthy(c->items[i])) return 1;
+    return 0;
+}
+
+int64_t piton_pow_int(int64_t b, int64_t e) {
+    if (e < 0) {
+        piton_raise("TypeError", "pow() negative exponent unsupported (M14 v1)");
+        return 0;
+    }
+    int64_t acc = 1;
+    while (e > 0) {
+        if (e & 1) acc *= b;
+        b *= b;
+        e >>= 1;
+    }
+    return acc;
+}
+
+double piton_pow_float(double b, int64_t e) {
+    int neg = e < 0;
+    if (neg) e = -e;
+    double acc = 1.0;
+    while (e > 0) {
+        if (e & 1) acc *= b;
+        b *= b;
+        e >>= 1;
+    }
+    return neg ? 1.0 / acc : acc;
+}
+
+int64_t piton_ord(const char *s) {
+    if (!s || !s[0]) {
+        piton_raise("TypeError", "ord() expected a character, but string of length 0 found");
+        return 0;
+    }
+    const unsigned char *u = (const unsigned char *)s;
+    int64_t cp; int len;
+    if (u[0] < 0x80) { cp = u[0]; len = 1; }
+    else if ((u[0] & 0xE0) == 0xC0) { cp = u[0] & 0x1F; len = 2; }
+    else if ((u[0] & 0xF0) == 0xE0) { cp = u[0] & 0x0F; len = 3; }
+    else if ((u[0] & 0xF8) == 0xF0) { cp = u[0] & 0x07; len = 4; }
+    else {
+        piton_raise("TypeError", "ord() received invalid UTF-8");
+        return 0;
+    }
+    for (int i = 1; i < len; ++i) cp = (cp << 6) | (u[i] & 0x3F);
+    if (s[len] != '\0') {
+        piton_raise("TypeError", "ord() expected a character, but string of length >1 found");
+        return 0;
+    }
+    return cp;
+}
+
+int64_t piton_chr(int64_t cp) {
+    if (cp < 0 || cp > 0x10FFFF) {
+        piton_raise("ValueError", "chr() arg not in range(0x110000)");
+        return 0;
+    }
+    char *p = (char *)malloc(5);
+    if (cp < 0x80) {
+        p[0] = (char)cp; p[1] = 0;
+    } else if (cp < 0x800) {
+        p[0] = (char)(0xC0 | (cp >> 6)); p[1] = (char)(0x80 | (cp & 0x3F)); p[2] = 0;
+    } else if (cp < 0x10000) {
+        p[0] = (char)(0xE0 | (cp >> 12)); p[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        p[2] = (char)(0x80 | (cp & 0x3F)); p[3] = 0;
+    } else {
+        p[0] = (char)(0xF0 | (cp >> 18)); p[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
+        p[2] = (char)(0x80 | ((cp >> 6) & 0x3F)); p[3] = (char)(0x80 | (cp & 0x3F)); p[4] = 0;
+    }
+    return (int64_t)p;
+}
+
+int64_t piton_bin(int64_t v) {
+    char *p = (char *)malloc(70);
+    size_t o = 0;
+    uint64_t m;
+    if (v < 0) { p[o++] = '-'; m = (uint64_t)(-(v + 1)) + 1; }
+    else m = (uint64_t)v;
+    p[o++] = '0'; p[o++] = 'b';
+    char tmp[64]; int n = 0;
+    do { tmp[n++] = (char)('0' + (m & 1)); m >>= 1; } while (m);
+    while (n) p[o++] = tmp[--n];
+    p[o] = 0;
+    return (int64_t)p;
+}
+
+int64_t piton_round_float(double x) {
+    double ax = x < 0 ? -x : x;
+    if (ax >= 9.0e18) {
+        piton_raise("OverflowError", "round() float too large to convert to int");
+        return 0;
+    }
+    int64_t t = (int64_t)ax;
+    double frac = ax - (double)t;
+    int64_t r;
+    if (frac > 0.5) r = t + 1;
+    else if (frac < 0.5) r = t;
+    else r = (t & 1) ? t + 1 : t;     /* half-to-even */
+    return x < 0 ? -r : r;
+}
+
 const char *piton_type_name(int64_t value) {
     uint8_t tag = (uint8_t)((uint64_t)value >> 61);
     switch (tag) {

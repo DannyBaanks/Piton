@@ -766,6 +766,61 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython('imprimir(sum([1, 2, 3]))\n')
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_builtins_core_v2(self):
+        # M14 BUILTINS_CORE_V2: all/any/bin/chr/ord/pow/round con paridad CPython.
+        result = compare_native_to_cpython(
+            'imprimir(ord("A"))\n'
+            'imprimir(ord("ñ"))\n'
+            'imprimir(chr(97))\n'
+            'imprimir(bin(-7))\n'
+            'imprimir(bin(7))\n'
+            'imprimir(pow(2, 10))\n'
+            'imprimir(pow(2.5, 3))\n'
+            'imprimir(pow(2.0, -1))\n'
+            'imprimir(any([0, 0, 4]))\n'
+            'imprimir(all([1, 0]))\n'
+            'imprimir(any([]))\n'
+            'imprimir(all([]))\n'
+            'imprimir(round(2.5))\n'
+            'imprimir(round(3.5))\n'
+            'imprimir(round(-2.5))\n'
+            'imprimir(round(7))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_builtins_core_v2_fail_closed_catchable(self):
+        # Las violaciones fuera de la matriz M14 v1 levantan excepciones
+        # capturables por intentar/excepto (no terminan el proceso).
+        output, _ = self.build_run(
+            'intentar:\n'
+            '    x = ord("")\n'
+            '    imprimir(x)\n'
+            'excepto TypeError:\n'
+            '    imprimir("ord-vacio TypeError atrapado")\n'
+            'intentar:\n'
+            '    y = chr(2000000)\n'
+            '    imprimir(y)\n'
+            'excepto ValueError:\n'
+            '    imprimir("chr-rango ValueError atrapado")\n'
+            'intentar:\n'
+            '    z = pow(2, -1)\n'
+            '    imprimir(z)\n'
+            'excepto TypeError:\n'
+            '    imprimir("pow-neg fail-closed atrapado")\n'
+            'intentar:\n'
+            '    w = ord("ab")\n'
+            '    imprimir(w)\n'
+            'excepto TypeError:\n'
+            '    imprimir("ord-multichar TypeError atrapado")\n'
+        )
+        self.assertEqual(
+            output,
+            "ord-vacio TypeError atrapado\r\n"
+            "chr-rango ValueError atrapado\r\n"
+            "pow-neg fail-closed atrapado\r\n"
+            "ord-multichar TypeError atrapado\r\n",
+        )
+
     def test_x86_type_int(self):
         result = compare_native_to_cpython('imprimir(type(42))\n')
         self.assertTrue(result.equivalent, result)

@@ -280,19 +280,21 @@ Gates activos:
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-09-12)
+### Estado nativo verificado (2026-09-18)
 
 ```text
-285/285 tests pass (test_phase5.py, Windows PE)
-206/206 Linux ELF tests pass (test_phase10_linux.py)
-491/491 total native tests pass (Win + Linux)
+632/632 tests pass (suite tests/ completa: Win PE + Linux ELF + MIR + efectos)
 M2 (frames/llamadas): PASS — unpacking dinámico, bound methods, decoradores, frame ABI >4
 M3 (closures): PASS — variadic closures (pack de *resto en runtime dispatch)
 M4 (iteradores): PASS — iter(callable, sentinel), next(it, default)
 M5 (generadores): PASS — yield from, devolver v almacenado
+M6 (modelo de objetos): PASS — __getattr__/__setattr__/__delattr__, __call__, __eq__/__len__/__str__ por MRO, identidad `es`
 M7 (excepciones): PASS — raise from, BaseException, reraise desde catch-all
 M9 (async completo): PASS — async with, excepciones en coroutines, timers reales
 M10 (with): PASS — con A(), B() multi-item anidado
+M14 (builtins tier 1, primer corte): PASS — BUILTINS_CORE_V2 (all/any/bin/chr/ord/pow/round,
+      UTF-8 completo, round half-even, excepciones capturables; divergencias declaradas:
+      pow(int, neg), any/all solo list|tuple, round sin ndigits)
 3/3 Linux ELF gates (empty env, chroot, QEMU)
 ```
 

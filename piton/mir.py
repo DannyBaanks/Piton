@@ -308,6 +308,16 @@ class _Builder:
         return result
 
 
+def _active_handler(builder: "_Builder") -> str | None:
+    """Handler label of the innermost active try-block, if any.
+
+    M14: ``call`` ops embed it so builtins that raise (pow/ord/chr/round…)
+    route to user ``intentar/excepto`` handlers on both backends instead of
+    always aborting the process.
+    """
+    return builder.exception_handlers[-1][0] if builder.exception_handlers else None
+
+
 class MIRLowerer:
     def __init__(self):
         self.functions: List[MIRFunction] = []
@@ -947,7 +957,7 @@ class MIRLowerer:
                 decorator_value = builder.temp()
                 builder.emit("load", decorator.name, result=decorator_value)
                 applied = builder.temp()
-                builder.emit("call", decorator_value, (current,), result=applied)
+                builder.emit("call", decorator_value, (current,), _active_handler(builder), result=applied)
                 current = applied
             builder.emit("store", node.name, current)
         elif kind == HIRKind.ASSIGN:
@@ -1930,7 +1940,7 @@ class MIRLowerer:
                     builder.emit("load", symbol, result=function)
                     args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                     result = builder.temp()
-                    builder.emit("call", function, args, result=result)
+                    builder.emit("call", function, args, _active_handler(builder), result=result)
                     return result
             if (
                 node.func.kind == HIRKind.ATTR
@@ -2016,7 +2026,7 @@ class MIRLowerer:
                 builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
-                builder.emit("call", function, args, result=result)
+                builder.emit("call", function, args, _active_handler(builder), result=result)
                 return result
             if node.func.kind == HIRKind.ATTR:
                 if node.keywords:
@@ -2087,7 +2097,7 @@ class MIRLowerer:
             if node.func.kind == HIRKind.LOAD and self.function_frame_abi.get(node.func.name, False):
                 builder.emit("frame_call", function, args, result=result)
             else:
-                builder.emit("call", function, args, result=result)
+                builder.emit("call", function, args, _active_handler(builder), result=result)
             return result
         if kind in {HIRKind.LIST, HIRKind.TUPLE, HIRKind.SET}:
             items = tuple(self._lower_expr(builder, item) for item in node.elts)

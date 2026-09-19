@@ -20,7 +20,7 @@ Estados y modos: `NATIVE` (runtime propio), `REIMPLEMENTED` (lógica propia),
 
 | Módulo | Tier | Nivel objetivo | Estado actual | Modo | Deps | Win | Linux |
 |---|---|---|---|---|---|---|---|
-| builtins (print/len/type/abs/min/max/sum/int/str/float/bool/list/tuple/dict/set/range) | 0 | completo | PARTIAL | NATIVE | — | PASS | PASS |
+| builtins (print/len/type/abs/min/max/sum/int/str/float/bool/list/tuple/dict/set/range/all/any/bin/chr/ord/pow/round/sorted) | 0 | completo | PARTIAL (BUILTINS_CORE_V2 PASS 2026-09-18; divergencias: pow(int,neg) TypeError, any/all solo list\|tuple, round sin ndigits) | NATIVE | — | PASS | PASS |
 | math | 1 | Tier1 | PASS (sqrt) | NATIVE | floats | PASS | PASS |
 | sys | 1 | Tier1 | NOT_DEMONSTRATED | REIMPLEMENTED | argv/env | ND | ND |
 | os | 3 | Tier3 | NOT_DEMONSTRATED | BRIDGED | fs | ND | ND |

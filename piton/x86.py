@@ -21,7 +21,7 @@ class NativeBuildError(RuntimeError):
     pass
 
 
-_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted"}
+_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "round", "redondear"}
 
 PITON_GEN_MAX_SLOTS = 64
 PITON_GEN_LOCAL_BASE = 48
@@ -161,6 +161,9 @@ class Win64NasmEmitter:
             "extern piton_abs_int", "extern piton_abs_float",
             "extern piton_min_int", "extern piton_max_int", "extern piton_min_float", "extern piton_max_float",
             "extern piton_sum_collection", "extern piton_sum_dict", "extern piton_sum_set",
+            "extern piton_all_iterable", "extern piton_any_iterable",
+            "extern piton_pow_int", "extern piton_pow_float",
+            "extern piton_ord", "extern piton_chr", "extern piton_bin", "extern piton_round_float",
             "extern piton_type_name", "extern piton_type_from_raw",
             "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_set", "extern piton_object_get", "extern piton_object_lookup",
             "extern piton_object_free", "extern piton_object_live_count",
@@ -1487,7 +1490,8 @@ class Win64NasmEmitter:
         elif op == "jump":
             self.lines.append(f"    jmp {labels[args[0]]}")
         elif op == "call":
-            function_operand, call_args = args
+            function_operand, call_args = args[0], args[1]
+            call_handler = args[2] if len(args) > 2 else None
             function_name = self.aliases.get(function_operand, function_operand)
             values = list(call_args)
             if function_name in {"imprimir", "print"}:
@@ -1615,6 +1619,79 @@ class Win64NasmEmitter:
                     self.lines.append("    mov rcx, rax")
                     self.lines.append("    call piton_abs_int")
                     self.types[result] = "int"
+            elif function_name in {"all", "any"}:
+                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple"}:
+                    raise NativeBuildError(f"native {function_name} requires one list or tuple (M14 v1)")
+                helper = "piton_all_iterable" if function_name == "all" else "piton_any_iterable"
+                self._load_operand(values[0], "rcx")
+                self.lines.append(f"    call {helper}")
+                if call_handler is not None:
+                    self.lines.append("    call piton_catch_flag")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                self.types[result] = "bool"
+            elif function_name == "pow":
+                if len(values) != 2:
+                    raise NativeBuildError("native pow requires exactly two arguments (M14 v1)")
+                base_type = self.types.get(values[0])
+                if base_type == "float":
+                    if self.types.get(values[1]) not in {"int", "bool"}:
+                        raise NativeBuildError("native pow(float, e) requires an int exponent (M14 v1)")
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    movq xmm0, rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.append("    call piton_pow_float")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                    self.lines.append("    movq rax, xmm0")
+                    self.types[result] = "float"
+                elif base_type in {"int", "bool"}:
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.append("    call piton_pow_int")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                    self.types[result] = "int"
+                else:
+                    raise NativeBuildError("native pow requires int or float base (M14 v1)")
+            elif function_name in {"ord", "chr", "bin"}:
+                if len(values) != 1:
+                    raise NativeBuildError(f"native {function_name} requires exactly one argument")
+                arg_type = self.types.get(values[0])
+                result_type = "int" if function_name == "ord" else "str"
+                if function_name in {"chr", "bin"} and arg_type not in {"int", "bool"}:
+                    raise NativeBuildError(f"native {function_name} requires an int argument")
+                if function_name == "ord" and arg_type != "str":
+                    raise NativeBuildError("native ord requires a str argument")
+                helper = f"piton_{function_name}"
+                self._load_operand(values[0], "rcx")
+                self.lines.append(f"    call {helper}")
+                if call_handler is not None:
+                    self.lines.append("    call piton_catch_flag")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                self.types[result] = result_type
+            elif function_name in {"round", "redondear"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native round requires exactly one argument (M14 v1; ndigits not supported)")
+                vtype = self.types.get(values[0])
+                if vtype == "float":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    movq xmm0, rcx")
+                    self.lines.append("    call piton_round_float")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                elif vtype in {"int", "bool"}:
+                    self._load_operand(values[0], "rax")
+                else:
+                    raise NativeBuildError("native round requires int or float")
+                self.types[result] = "int"
             elif function_name in {"min", "max"}:
                 if len(values) != 2:
                     raise NativeBuildError("native min/max requires two arguments")

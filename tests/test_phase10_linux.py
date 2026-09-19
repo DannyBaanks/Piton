@@ -607,6 +607,49 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_sorted_builtin(self):
         self._assert_linux_equiv('imprimir(sorted([3, 1, 2]))\n')
 
+    def test_linux_builtins_core_v2(self):
+        # M14 BUILTINS_CORE_V2: paridad CPython en Linux para
+        # all/any/bin/chr/ord/pow/round.
+        self._assert_linux_equiv(
+            'imprimir(ord("A"))\n'
+            'imprimir(ord("ñ"))\n'
+            'imprimir(chr(97))\n'
+            'imprimir(bin(-7))\n'
+            'imprimir(bin(7))\n'
+            'imprimir(pow(2, 10))\n'
+            'imprimir(pow(2.5, 3))\n'
+            'imprimir(pow(2.0, -1))\n'
+            'imprimir(any([0, 0, 4]))\n'
+            'imprimir(all([1, 0]))\n'
+            'imprimir(any([]))\n'
+            'imprimir(all([]))\n'
+            'imprimir(round(2.5))\n'
+            'imprimir(round(3.5))\n'
+            'imprimir(round(-2.5))\n'
+            'imprimir(round(7))\n'
+        )
+
+    def test_linux_builtins_core_v2_fail_closed_catchable(self):
+        # Las violaciones fuera de la matriz M14 v1 son excepciones
+        # capturables por intentar/excepto (también bajo WSL).
+        self._assert_linux_equiv(
+            'intentar:\n'
+            '    a = ord("")\n'
+            '    imprimir(a)\n'
+            'excepto TypeError:\n'
+            '    imprimir("ord-vacio TypeError atrapado")\n'
+            'intentar:\n'
+            '    b = chr(2000000)\n'
+            '    imprimir(b)\n'
+            'excepto ValueError:\n'
+            '    imprimir("chr-rango ValueError atrapado")\n'
+            'intentar:\n'
+            '    c = ord("ab")\n'
+            '    imprimir(c)\n'
+            'excepto TypeError:\n'
+            '    imprimir("ord-multichar TypeError atrapado")\n'
+        )
+
     def test_linux_starargs_sum_and_subscript(self):
         self._assert_linux_equiv('funcion resumir(*args):\n    devolver sum(args) + args[0] * 10\nimprimir(resumir(2, 3, 4))\n')
 

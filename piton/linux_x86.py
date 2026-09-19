@@ -140,6 +140,16 @@ static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i)r+=s
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i)r+=d->items[i].key.bits;return r;}
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
 static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";default:return"<class 'object'>";}}
+/* M14 BUILTINS_CORE_V2 (matriz declarada; ver native_runtime.c) */
+static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;default:return v.bits!=0;}}
+static long piton_all_seq(PitonSeq*s){if(!s)return 1;for(long i=0;i<s->length;++i)if(!piton_slot_truthy(s->items[i]))return 0;return 1;}
+static long piton_any_seq(PitonSeq*s){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_truthy(s->items[i]))return 1;return 0;}
+static long piton_pow_int(long b,long e){if(e<0){piton_raise_set("TypeError","pow() negative exponent unsupported (M14 v1)");return 0;}long acc=1;while(e>0){if(e&1)acc*=b;b*=b;e>>=1;}return acc;}
+static long piton_pow_float(long bb,long e){double b=piton_bits_double(bb);long neg=e<0;if(neg)e=-e;double acc=1.0;while(e>0){if(e&1)acc*=b;b*=b;e>>=1;}if(neg)acc=1.0/acc;return piton_double_bits(acc);}
+static long piton_ord(const char*s){if(!s||!s[0]){piton_raise_set("TypeError","ord() expected a character, but string of length 0 found");return 0;}const unsigned char*u=(const unsigned char*)s;long cp;long n;if(u[0]<0x80){cp=u[0];n=1;}else if((u[0]&0xE0)==0xC0){cp=u[0]&0x1F;n=2;}else if((u[0]&0xF0)==0xE0){cp=u[0]&0x0F;n=3;}else if((u[0]&0xF8)==0xF0){cp=u[0]&0x07;n=4;}else{piton_raise_set("TypeError","ord() received invalid UTF-8");return 0;}for(long i=1;i<n;++i)cp=(cp<<6)|(u[i]&0x3F);if(s[n]){piton_raise_set("TypeError","ord() expected a character, but string of length >1 found");return 0;}return cp;}
+static long piton_chr(long cp){if(cp<0||cp>0x10FFFF){piton_raise_set("ValueError","chr() arg not in range(0x110000)");return 0;}char*p=piton_alloc(5);if(cp<0x80){p[0]=(char)cp;p[1]=0;}else if(cp<0x800){p[0]=(char)(0xC0|(cp>>6));p[1]=(char)(0x80|(cp&0x3F));p[2]=0;}else if(cp<0x10000){p[0]=(char)(0xE0|(cp>>12));p[1]=(char)(0x80|((cp>>6)&0x3F));p[2]=(char)(0x80|(cp&0x3F));p[3]=0;}else{p[0]=(char)(0xF0|(cp>>18));p[1]=(char)(0x80|((cp>>12)&0x3F));p[2]=(char)(0x80|((cp>>6)&0x3F));p[3]=(char)(0x80|(cp&0x3F));p[4]=0;}return(long)p;}
+static long piton_bin(long v){char*p=piton_alloc(70);usize o=0;unsigned long m;if(v<0){p[o++]='-';m=(unsigned long)(-(v+1))+1;}else m=(unsigned long)v;p[o++]='0';p[o++]='b';char tmp[64];long n=0;do{tmp[n++]=(char)('0'+(m&1));m>>=1;}while(m);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
+static long piton_round_float(long bits){double x=piton_bits_double(bits);double ax=x<0?-x:x;if(ax>=9.0e18){piton_raise_set("OverflowError","round() float too large to convert to int");return 0;}long t=(long)ax;double frac=ax-(double)t;long r;if(frac>0.5)r=t+1;else if(frac<0.5)r=t;else r=(t&1)?t+1:t;return x<0?-r:r;}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
 static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;}
@@ -677,6 +687,7 @@ class LinuxCEmitter:
         elif op == "call":
             function_name = aliases.get(args[0], args[0])
             values = list(args[1])
+            call_handler = args[2] if len(args) > 2 else None
             if function_name in {"imprimir", "print"}:
                 if not values:
                     out.append('    piton_write(1,"\\n",1);')
@@ -750,6 +761,64 @@ class LinuxCEmitter:
                 else:
                     out.append(f"    {_name(result)}={self._value(values[0])}<0?-{self._value(values[0])}:{self._value(values[0])};")
                     types[result] = "int"
+            elif function_name in {"all", "any"}:
+                if len(values) != 1 or types.get(values[0]) not in {"list", "tuple"}:
+                    raise NativeBuildError(f"Linux {function_name} requires one list or tuple (M14 v1)")
+                helper = "piton_all_seq" if function_name == "all" else "piton_any_seq"
+                out.append(f"    {_name(result)}={helper}((PitonSeq*){self._value(values[0])});")
+                types[result] = "bool"
+            elif function_name == "pow":
+                if len(values) != 2:
+                    raise NativeBuildError("Linux pow requires exactly two arguments (M14 v1)")
+                base_type = types.get(values[0])
+                if base_type == "float":
+                    if types.get(values[1]) not in {"int", "bool"}:
+                        raise NativeBuildError("Linux pow(float, e) requires an int exponent (M14 v1)")
+                    out.append(f"    {_name(result)}=piton_pow_float({self._value(values[0])},{self._value(values[1])});")
+                    types[result] = "float"
+                elif base_type in {"int", "bool"}:
+                    out.append(f"    {_name(result)}=piton_pow_int({self._value(values[0])},{self._value(values[1])});")
+                    types[result] = "int"
+                else:
+                    raise NativeBuildError("Linux pow requires int or float base (M14 v1)")
+                if call_handler is not None:
+                    out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + call_handler)};}}")
+                else:
+                    out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
+            elif function_name in {"ord", "chr", "bin"}:
+                if len(values) != 1:
+                    raise NativeBuildError(f"Linux {function_name} requires exactly one argument")
+                arg_type = types.get(values[0])
+                if function_name in {"chr", "bin"} and arg_type not in {"int", "bool"}:
+                    raise NativeBuildError(f"Linux {function_name} requires an int argument")
+                if function_name == "ord" and arg_type != "str":
+                    raise NativeBuildError("Linux ord requires a str argument")
+                helper = f"piton_{function_name}"
+                if function_name == "ord":
+                    out.append(f"    {_name(result)}={helper}((const char*){self._value(values[0])});")
+                    types[result] = "int"
+                else:
+                    out.append(f"    {_name(result)}={helper}({self._value(values[0])});")
+                    types[result] = "str"
+                if call_handler is not None:
+                    out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + call_handler)};}}")
+                else:
+                    out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
+            elif function_name in {"round", "redondear"}:
+                if len(values) != 1:
+                    raise NativeBuildError("Linux round requires exactly one argument (M14 v1; ndigits not supported)")
+                arg_type = types.get(values[0])
+                if arg_type == "float":
+                    out.append(f"    {_name(result)}=piton_round_float({self._value(values[0])});")
+                elif arg_type in {"int", "bool"}:
+                    out.append(f"    {_name(result)}={self._value(values[0])};")
+                else:
+                    raise NativeBuildError("Linux round requires int or float")
+                types[result] = "int"
+                if call_handler is not None:
+                    out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + call_handler)};}}")
+                else:
+                    out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
             elif function_name in {"min", "max"}:
                 if len(values) != 2:
                     raise NativeBuildError("Linux min/max requires two arguments")
