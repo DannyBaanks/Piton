@@ -164,6 +164,12 @@ class Win64NasmEmitter:
             "extern piton_all_iterable", "extern piton_any_iterable",
             "extern piton_pow_int", "extern piton_pow_float",
             "extern piton_ord", "extern piton_chr", "extern piton_bin", "extern piton_round_float",
+            "extern piton_int_from_str", "extern piton_float_from_str",
+            "extern piton_str_from_int", "extern piton_str_from_bool",
+            "extern piton_str_from_none", "extern piton_str_from_float",
+            "extern piton_str_truthy",
+            "extern piton_math_floor", "extern piton_math_ceil", "extern piton_math_trunc",
+            "extern piton_math_fabs", "extern piton_math_gcd",
             "extern piton_type_name", "extern piton_type_from_raw",
             "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_set", "extern piton_object_get", "extern piton_object_lookup",
             "extern piton_object_free", "extern piton_object_live_count",
@@ -1303,6 +1309,40 @@ class Win64NasmEmitter:
             self.lines.extend(["    sqrtsd xmm0, xmm0", "    movq rax, xmm0"])
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "float"
+        elif op in {"math_floor", "math_ceil", "math_trunc", "math_fabs"}:
+            handler_label = args[1] if len(args) > 1 else None
+            helper = f"piton_{op}"
+            operand_type = self.types.get(args[0])
+            if operand_type == "float":
+                self._load_operand(args[0], "rcx")
+                self.lines.append("    movq xmm0, rcx")
+            else:
+                self._load_operand(args[0], "rax")
+                self.lines.append("    cvtsi2sd xmm0, rax")
+            self.lines.append(f"    call {helper}")
+            if handler_label is not None:
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jne {labels.get(handler_label, handler_label)}")
+            if op == "math_fabs":
+                self.lines.append("    movq rax, xmm0")
+                self.types[result] = "float"
+            else:
+                self.types[result] = "int"
+            self.lines.append(f"    mov {self._address(result)}, rax")
+        elif op == "math_gcd":
+            handler_label = args[2] if len(args) > 2 else None
+            if self.types.get(args[0]) not in {"int", "bool"} or self.types.get(args[1]) not in {"int", "bool"}:
+                raise NativeBuildError("native math.gcd requires int arguments")
+            self._load_operand(args[0], "rcx")
+            self._load_operand(args[1], "rdx")
+            self.lines.append("    call piton_math_gcd")
+            if handler_label is not None:
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jne {labels.get(handler_label, handler_label)}")
+            self.types[result] = "int"
+            self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "cell_new":
             value_arg = args[0]
             self.lines.extend(["    mov rcx, 16", "    call malloc"])
@@ -1692,6 +1732,100 @@ class Win64NasmEmitter:
                 else:
                     raise NativeBuildError("native round requires int or float")
                 self.types[result] = "int"
+            elif function_name in {"entero", "int"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native int requires exactly one argument")
+                vtype = self.types.get(values[0])
+                if vtype in {"int", "bool"}:
+                    self._load_operand(values[0], "rax")
+                elif vtype == "float":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    movq xmm0, rcx")
+                    self.lines.append("    cvttsd2si rax, xmm0")
+                elif vtype == "str":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_int_from_str")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                else:
+                    raise NativeBuildError("native int() requires int, float or str (M14 v1)")
+                self.types[result] = "int"
+            elif function_name in {"decimal", "float"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native float requires exactly one argument")
+                vtype = self.types.get(values[0])
+                if vtype in {"int", "bool"}:
+                    self._load_operand(values[0], "rax")
+                    self.lines.append("    cvtsi2sd xmm0, rax")
+                    self.lines.append("    movq rax, xmm0")
+                elif vtype == "float":
+                    self._load_operand(values[0], "rax")
+                elif vtype == "str":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_float_from_str")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                    self.lines.append("    movq rax, xmm0")
+                else:
+                    raise NativeBuildError("native float() requires int, float or str (M14 v1)")
+                self.types[result] = "float"
+            elif function_name in {"texto", "str"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native str requires exactly one argument")
+                vtype = self.types.get(values[0])
+                if vtype in {"int", "bigint"}:
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_str_from_int")
+                elif vtype == "float":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    movq xmm0, rcx")
+                    self.lines.append("    call piton_str_from_float")
+                elif vtype == "bool":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_str_from_bool")
+                elif vtype == "none":
+                    self.lines.append("    call piton_str_from_none")
+                elif vtype == "str":
+                    self._load_operand(values[0], "rax")
+                else:
+                    raise NativeBuildError("native str() requires int/float/bool/None/str (M14 v1)")
+                self.types[result] = "str"
+            elif function_name in {"booleano", "bool"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native bool requires exactly one argument")
+                vtype = self.types.get(values[0])
+                if vtype in {"int", "bool"}:
+                    self._load_operand(values[0], "rax")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append("    setnz al")
+                    self.lines.append("    movzx eax, al")
+                elif vtype == "float":
+                    # bits != 0 y != -0.0: mascara de signo (NaN es True, como CPython)
+                    self._load_operand(values[0], "rax")
+                    self.lines.append("    mov rcx, 0x7FFFFFFFFFFFFFFF")
+                    self.lines.append("    and rax, rcx")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append("    setnz al")
+                    self.lines.append("    movzx eax, al")
+                elif vtype == "str":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_str_truthy")
+                elif vtype in {"list", "tuple", "dict", "set"}:
+                    len_helper = {"dict": "piton_dict_len", "set": "piton_set_len"}.get(vtype, "piton_collection_len")
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append(f"    call {len_helper}")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append("    setnz al")
+                    self.lines.append("    movzx eax, al")
+                elif vtype == "none":
+                    self.lines.append("    xor eax, eax")
+                else:
+                    raise NativeBuildError("native bool() requires int/float/str/collection/None (M14 v1)")
+                self.types[result] = "bool"
             elif function_name in {"min", "max"}:
                 if len(values) != 2:
                     raise NativeBuildError("native min/max requires two arguments")

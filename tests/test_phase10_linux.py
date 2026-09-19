@@ -629,6 +629,66 @@ class Phase10LinuxGates(unittest.TestCase):
             'imprimir(round(7))\n'
         )
 
+    def test_linux_type_conversion_v1(self):
+        # M14 TYPE_CONVERSION_V1: paridad CPython en Linux.
+        self._assert_linux_equiv(
+            'imprimir(entero("42"))\n'
+            'imprimir(entero(" -17 "))\n'
+            'imprimir(entero(2.9))\n'
+            'imprimir(entero(-2.9))\n'
+            'imprimir(entero(Verdadero))\n'
+            'imprimir(texto(42))\n'
+            'imprimir(texto(2.5))\n'
+            'imprimir(texto(3.0))\n'
+            'imprimir(texto(15.625))\n'
+            'imprimir(texto(Verdadero))\n'
+            'imprimir(texto(Nada))\n'
+            'imprimir(texto("hola"))\n'
+            'imprimir(decimal(3))\n'
+            'imprimir(decimal("-0.5"))\n'
+            'imprimir(decimal(Verdadero))\n'
+            'imprimir(booleano(0))\n'
+            'imprimir(booleano(-1))\n'
+            'imprimir(booleano(0.0))\n'
+            'imprimir(booleano(-0.0))\n'
+            'imprimir(booleano("x"))\n'
+            'imprimir(booleano(""))\n'
+            'imprimir(booleano([]))\n'
+            'imprimir(booleano([0]))\n'
+            'imprimir(booleano(Nada))\n'
+        )
+
+    def test_linux_math_tier1_v1(self):
+        # M14 MATH_TIER1_V1: sqrt/floor/ceil/trunc/fabs/gcd + pi/e.
+        self._assert_linux_equiv(
+            'importar math\n'
+            'imprimir(math.sqrt(9))\n'
+            'imprimir(math.floor(2.7))\n'
+            'imprimir(math.floor(-2.3))\n'
+            'imprimir(math.ceil(2.1))\n'
+            'imprimir(math.ceil(-2.9))\n'
+            'imprimir(math.trunc(-2.9))\n'
+            'imprimir(math.fabs(-3.5))\n'
+            'imprimir(math.gcd(12, 18))\n'
+            'imprimir(math.gcd(0, 7))\n'
+            'imprimir(math.floor(math.pi * 1000))\n'
+            'imprimir(math.floor(math.e * 100))\n'
+        )
+
+    def test_linux_type_conversion_fail_closed_catchable(self):
+        self._assert_linux_equiv(
+            'intentar:\n'
+            '    n = entero("abc")\n'
+            '    imprimir(n)\n'
+            'excepto ValueError:\n'
+            '    imprimir("int-invalido ValueError atrapado")\n'
+            'intentar:\n'
+            '    m = decimal("xyz")\n'
+            '    imprimir(m)\n'
+            'excepto ValueError:\n'
+            '    imprimir("float-invalido ValueError atrapado")\n'
+        )
+
     def test_linux_builtins_core_v2_fail_closed_catchable(self):
         # Las violaciones fuera de la matriz M14 v1 son excepciones
         # capturables por intentar/excepto (también bajo WSL).

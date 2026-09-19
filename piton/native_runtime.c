@@ -2339,6 +2339,83 @@ int64_t piton_round_float(double x) {
     return x < 0 ? -r : r;
 }
 
+/* ── M14 TYPE_CONVERSION_V1 + MATH_TIER1_V1 ──────────────────────────────
+   Matriz declarada (paridad Win/Linux):
+     entero/int:   int/bool → identidad; float → trunc hacia cero;
+                   str base 10 con espacios alrededor;
+                   str invalida → ValueError CAPTURABLE (no crash)
+     decimal/float: int/bool → double; float → identidad;
+                   str parse double; invalida → ValueError capturable
+     texto/str:    int/float/bool/None/str → cadena con el MISMO formato
+                   que imprimir() (coherencia interna declarada; float no es
+                   repr completo CPython → divergencia heredada del printer)
+     booleano/bool: truthiness por tipo (int!=0, float!=0.0, str!="",
+                   coleccion no vacia, None→False)
+     math: floor/ceil/trunc (float→int), fabs (float→float),
+           gcd(int,int) (valor absoluto, euclides), pi/e constantes.
+   ─────────────────────────────────────────────────────────────────────── */
+
+int64_t piton_int_from_str(const char *s) {
+    if (!s) { piton_raise("TypeError", "int() argument must be a string"); return 0; }
+    while (*s == ' ' || *s == '\t' || *s == '\n') ++s;
+    if (!*s) { piton_raise("ValueError", "invalid literal for int() with base 10"); return 0; }
+    char *end = NULL;
+    int64_t v = (int64_t)_strtoi64(s, &end, 10);
+    if (end == s) { piton_raise("ValueError", "invalid literal for int() with base 10"); return 0; }
+    while (*end == ' ' || *end == '\t' || *end == '\n') ++end;
+    if (*end) { piton_raise("ValueError", "invalid literal for int() with base 10"); return 0; }
+    return v;
+}
+
+double piton_float_from_str(const char *s) {
+    if (!s) { piton_raise("TypeError", "float() argument must be a string"); return 0.0; }
+    while (*s == ' ' || *s == '\t' || *s == '\n') ++s;
+    if (!*s) { piton_raise("ValueError", "could not convert string to float"); return 0.0; }
+    char *end = NULL;
+    double v = strtod(s, &end);
+    if (end == s) { piton_raise("ValueError", "could not convert string to float"); return 0.0; }
+    while (*end == ' ' || *end == '\t' || *end == '\n') ++end;
+    if (*end) { piton_raise("ValueError", "could not convert string to float"); return 0.0; }
+    return v;
+}
+
+int64_t piton_str_from_int(int64_t v) {
+    char *p = (char *)malloc(24);
+    sprintf(p, "%lld", (long long)v);
+    return (int64_t)p;
+}
+
+int64_t piton_str_from_bool(int64_t v) {
+    return (int64_t)(v ? "True" : "False");
+}
+
+int64_t piton_str_from_none(void) {
+    return (int64_t)"None";
+}
+
+int64_t piton_str_from_float(double x) {
+    char *p = (char *)malloc(40);
+    if (isfinite(x) && trunc(x) == x) sprintf(p, "%.1f", x);
+    else sprintf(p, "%.15g", x);
+    return (int64_t)p;
+}
+
+int64_t piton_str_truthy(const char *s) {
+    return (s && s[0]) ? 1 : 0;
+}
+
+int64_t piton_math_floor(double x) { return (int64_t)floor(x); }
+int64_t piton_math_ceil(double x)  { return (int64_t)ceil(x); }
+int64_t piton_math_trunc(double x) { return (int64_t)trunc(x); }
+double  piton_math_fabs(double x)  { return fabs(x); }
+
+int64_t piton_math_gcd(int64_t a, int64_t b) {
+    if (a < 0) a = -a;
+    if (b < 0) b = -b;
+    while (b) { int64_t t = a % b; a = b; b = t; }
+    return a;
+}
+
 const char *piton_type_name(int64_t value) {
     uint8_t tag = (uint8_t)((uint64_t)value >> 61);
     switch (tag) {

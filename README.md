@@ -280,10 +280,12 @@ Gates activos:
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-09-18)
+### Estado nativo verificado (2026-09-19)
 
 ```text
-632/632 tests pass (suite tests/ completa: Win PE + Linux ELF + MIR + efectos)
+300/300 tests pass (test_phase5.py, Windows PE)
+220/220 tests pass (test_phase10_linux.py, Linux ELF)
+520/520 backend tests pass (Win + Linux, incluyendo M14)
 M2 (frames/llamadas): PASS — unpacking dinámico, bound methods, decoradores, frame ABI >4
 M3 (closures): PASS — variadic closures (pack de *resto en runtime dispatch)
 M4 (iteradores): PASS — iter(callable, sentinel), next(it, default)
@@ -292,11 +294,16 @@ M6 (modelo de objetos): PASS — __getattr__/__setattr__/__delattr__, __call__, 
 M7 (excepciones): PASS — raise from, BaseException, reraise desde catch-all
 M9 (async completo): PASS — async with, excepciones en coroutines, timers reales
 M10 (with): PASS — con A(), B() multi-item anidado
-M14 (builtins tier 1, primer corte): PASS — BUILTINS_CORE_V2 (all/any/bin/chr/ord/pow/round,
-      UTF-8 completo, round half-even, excepciones capturables; divergencias declaradas:
+M14 (builtins tier 1): PASS — BUILTINS_CORE_V2 + TYPE_CONVERSION_V1 + MATH_TIER1_V1
+      (all/any/bin/chr/ord/pow/round; int/float/str/bool; sqrt/floor/ceil/trunc/fabs/gcd,
+      pi/e; UTF-8 completo, round half-even, excepciones capturables; divergencias:
       pow(int, neg), any/all solo list|tuple, round sin ndigits)
 3/3 Linux ELF gates (empty env, chroot, QEMU)
 ```
+
+Nota de regresión: las suites backend están verificadas 520/520. Algunas pruebas
+CLI/evidence compilan artefactos externos y pueden superar el timeout del host
+(WSL/toolchain); no se cuentan como PASS hasta completar esa ejecución.
 
 Nota de infraestructura: los tests Linux usan WSL; un arranque frío de la VM
 puede superar el timeout de 10 s por ejecución, así que la suite completa

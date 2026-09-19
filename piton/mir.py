@@ -158,6 +158,8 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "jump": "PURE", "branch": "PURE", "return": "PURE",
     "binary": "PURE", "unary": "PURE", "compare": "PURE",
     "math_sqrt": "PURE",
+    "math_floor": "PURE", "math_ceil": "PURE", "math_trunc": "PURE",
+    "math_fabs": "PURE", "math_gcd": "PURE",
     "object_new": "PURE", "closure_new": "PURE", "cell_new": "PURE",
     "build_collection": "PURE", "genexpr_new": "PURE", "gen_init": "PURE",
     "gather_new": "PURE",
@@ -2016,12 +2018,29 @@ class MIRLowerer:
                         builder.emit("gather_add", result, index, task, result=slot)
                     return result
                 if module_name == "math":
-                    if node.func.attr != "sqrt" or len(node.args) != 1 or node.keywords:
-                        raise MIRLoweringError("native math currently supports sqrt(value) only")
-                    value = self._lower_expr(builder, node.args[0])
-                    result = builder.temp()
-                    builder.emit("math_sqrt", value, result=result)
-                    return result
+                    attr = node.func.attr
+                    kwargs_rejected = node.keywords
+                    if kwargs_rejected:
+                        raise MIRLoweringError("native math does not support keyword arguments")
+                    if attr == "sqrt" and len(node.args) == 1:
+                        value = self._lower_expr(builder, node.args[0])
+                        result = builder.temp()
+                        builder.emit("math_sqrt", value, result=result)
+                        return result
+                    if attr in {"floor", "ceil", "trunc", "fabs"} and len(node.args) == 1:
+                        value = self._lower_expr(builder, node.args[0])
+                        result = builder.temp()
+                        builder.emit(f"math_{attr}", value, _active_handler(builder), result=result)
+                        return result
+                    if attr == "gcd" and len(node.args) == 2:
+                        left = self._lower_expr(builder, node.args[0])
+                        right = self._lower_expr(builder, node.args[1])
+                        result = builder.temp()
+                        builder.emit("math_gcd", left, right, _active_handler(builder), result=result)
+                        return result
+                    raise MIRLoweringError(
+                        "native math supports sqrt/floor/ceil/trunc/fabs(x) and gcd(a, b) (MATH_TIER1_V1)"
+                    )
                 function = builder.temp()
                 builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
@@ -2120,6 +2139,19 @@ class MIRLowerer:
             )
             return result
         if kind == HIRKind.ATTR:
+            # MATH_TIER1_V1: math.pi / math.e lower to float constants.
+            # (_module_attr_chain deliberately excludes asyncio/math/sys, so we
+            #  match the module alias directly here.)
+            if (
+                node.value.kind == HIRKind.LOAD
+                and node.value.name in builder.module_aliases
+                and builder.module_aliases[node.value.name] == "math"
+                and node.attr in {"pi", "e"}
+            ):
+                result = builder.temp()
+                const_value = 3.141592653589793 if node.attr == "pi" else 2.718281828459045
+                builder.emit("const", const_value, result=result)
+                return result
             if self._module_attr_chain(builder, node) is not None:
                 raise MIRLoweringError(
                     "native module attribute value access is not supported yet; "
