@@ -145,6 +145,7 @@ class Win64NasmEmitter:
             "extern piton_zip_new", "extern piton_zip_next",
             "extern piton_callback_iterator_new", "extern piton_callback_iterator_next",
             "extern piton_collection_print", "extern piton_collection_free",
+            "extern piton_gc_collect",
             "extern piton_collection_live_count",
             "extern piton_dict_new", "extern piton_dict_put",
             "extern piton_dict_len", "extern piton_dict_get",
@@ -171,7 +172,8 @@ class Win64NasmEmitter:
             "extern piton_math_floor", "extern piton_math_ceil", "extern piton_math_trunc",
             "extern piton_math_fabs", "extern piton_math_gcd",
             "extern piton_type_name", "extern piton_type_from_raw",
-            "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_set", "extern piton_object_get", "extern piton_object_lookup",
+            "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_new_with_finalizer", "extern piton_object_set", "extern piton_object_set_tagged", "extern piton_object_get", "extern piton_object_lookup",
+
             "extern piton_object_free", "extern piton_object_live_count",
             "extern piton_print_float",
             "extern piton_print_value",
@@ -289,6 +291,7 @@ class Win64NasmEmitter:
         self._emit_cleanup()
         if function.name == "<module>":
             self.lines.extend([
+                "    call piton_gc_collect",
                 "    call piton_collection_live_count", f"    mov {self._address('@scratch0')}, rax",
                 "    call piton_object_live_count", f"    or rax, {self._address('@scratch0')}",
                 f"    mov {self._address('@scratch1')}, rax",
@@ -1098,20 +1101,33 @@ class Win64NasmEmitter:
             self.lines.append("    call piton_dict_put")
         elif op == "object_new":
             class_name, parent_name = args
+            finalizer_class = None
+            for candidate in self.mir_module_class_mro.get(class_name, []):
+                if "__del__" in self.mir_module_classes.get(candidate, set()):
+                    finalizer_class = candidate
+                    break
+            if finalizer_class is None and "__del__" in self.mir_module_classes.get(class_name, set()):
+                finalizer_class = class_name
+            finalizer_name = f"{finalizer_class}____del__" if finalizer_class else None
+            if finalizer_name:
+                finalizer_params = self.function_param_map.get(finalizer_name) or []
+                if len(finalizer_params) != 1:
+                    raise NativeBuildError("native __del__ must take exactly self (FINALIZERS_V1)")
+                if self.function_frame_abi.get(finalizer_name, False):
+                    raise NativeBuildError("native __del__ cannot use the frame ABI yet (FINALIZERS_V1)")
             self.lines.extend([
                 f"    mov rcx, {self._address(result)}", "    call piton_object_free",
             ])
+            self.lines.append(f"    lea rcx, [{self._string(class_name)}]")
             if parent_name:
-                self.lines.extend([
-                    f"    lea rcx, [{self._string(class_name)}]",
-                    f"    lea rdx, [{self._string(parent_name)}]",
-                    "    call piton_object_new_with_parent",
-                ])
+                self.lines.append(f"    lea rdx, [{self._string(parent_name)}]")
             else:
-                self.lines.extend([
-                    f"    lea rcx, [{self._string(class_name)}]",
-                    "    call piton_object_new",
-                ])
+                self.lines.append("    xor edx, edx")
+            if finalizer_name:
+                self.lines.append(f"    lea r8, [{finalizer_name}]")
+            else:
+                self.lines.append("    xor r8d, r8d")
+            self.lines.append("    call piton_object_new_with_finalizer")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = f"object:{class_name}"
         elif op == "set_attr":
@@ -1151,7 +1167,11 @@ class Win64NasmEmitter:
                     self._load_operand(owner, "rcx")
                     self.lines.append(f"    lea rdx, [{self._string(name)}]")
                     self._load_operand(value, "r8")
-                    self.lines.append("    call piton_object_set")
+                    value_type = self.types.get(value, "int")
+                    if value_type.startswith("object:"):
+                        self.lines.append("    call piton_object_set_tagged")
+                    else:
+                        self.lines.append("    call piton_object_set")
         elif op == "get_attr":
             owner, name = args
             owner_type = self.types.get(owner, "")

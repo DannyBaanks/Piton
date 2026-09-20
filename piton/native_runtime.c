@@ -28,6 +28,7 @@ enum {
     SUB_TAG_DICT    = 8,
     SUB_TAG_SET     = 9,
     SUB_TAG_BIGINT  = 10,
+    SUB_TAG_OBJECT  = 11,
 };
 
 /* Encoded wire format: same as ABI — 3-bit tag in high bits, 61-bit payload. */
@@ -124,6 +125,7 @@ int64_t piton_iterator_next(void *raw) {
 }
 
 static int64_t live_collections = 0;
+static void piton_gc_unregister(void *ptr);
 
 /* ── PitonDict ────────────────────────────────────────────────────────── */
 
@@ -208,6 +210,7 @@ void *piton_sorted_new(void *raw) {
         piton_raise_unhandled("TypeError", "sorted() argument is not iterable");
     PitonCollection *result = piton_collection_new(1, source->length);
     --live_collections;
+    piton_gc_unregister(result);
     for (int64_t i = 0; i < source->length; ++i) {
         int64_t value = source->items[i];
         if (pv_tag(value) != PITON_TAG_INT) piton_raise_unhandled("TypeError", "native sorted requires integers");
@@ -254,6 +257,7 @@ int64_t piton_enumerate_next(void *raw) {
     /* Adapter results are temporary values; the current native lifetime gate
        cannot reclaim escaped tuple temporaries, so do not count them as roots. */
     --live_collections;
+    piton_gc_unregister(pair);
     pair->length = 2;
     pair->items[0] = pv_int(iterator->start + index);
     pair->items[1] = iterator->collection->items[index];
@@ -306,6 +310,7 @@ int64_t piton_zip_next(void *raw) {
     int64_t index = iterator->index++;
     PitonCollection *pair = piton_collection_new(SUB_TAG_TUPLE, 2);
     --live_collections;
+    piton_gc_unregister(pair);
     pair->length = 2; pair->items[0] = iterator->left->items[index]; pair->items[1] = iterator->right->items[index];
     return (int64_t)pair;
 }
@@ -367,15 +372,18 @@ typedef struct {
     int64_t value;  /* encoded PitonValue */
 } PitonAttribute;
 
-typedef struct {
+typedef struct PitonObject {
     PitonHeader header;
     const char *class_name;
     const char *parent_class_name;  /* NULL if no parent */
     int64_t length;
     PitonAttribute attributes[16];
+    int64_t finalizer;        /* generated __del__ function, or 0 */
+    int64_t finalizer_called;
 } PitonObject;
 
 static int64_t live_objects = 0;
+
 
 /* ── PitonBigInt ──────────────────────────────────────────────────────── */
 
@@ -392,6 +400,46 @@ typedef struct {
 static void piton_value_deep_free(int64_t v);
 static void piton_value_print_inner(int64_t v, int recursing);
 static int piton_value_eq_raw(int64_t a, int64_t b);
+void piton_value_incref(int64_t v);
+static void piton_object_run_finalizer(PitonObject *o);
+
+/* ── M13 GC registry ────────────────────────────────────────────────────
+ * Container-capable heap nodes are registered independently of their
+ * refcount.  The shutdown collector can then break remaining cyclic edges
+ * safely even when refcounting alone cannot destroy them. */
+
+static void **gc_nodes = NULL;
+static size_t gc_count = 0;
+static size_t gc_capacity = 0;
+
+static int piton_gc_registered(const void *ptr) {
+    for (size_t i = 0; i < gc_count; ++i)
+        if (gc_nodes[i] == ptr) return 1;
+    return 0;
+}
+
+static void piton_gc_register(void *ptr) {
+    if (!ptr || piton_gc_registered(ptr)) return;
+    if (gc_count == gc_capacity) {
+        size_t next = gc_capacity ? gc_capacity * 2 : 16;
+        void **grown = realloc(gc_nodes, next * sizeof(*grown));
+        if (!grown) {
+            fprintf(stderr, "MemoryError: GC registry exhausted\n");
+            exit(1);
+        }
+        gc_nodes = grown;
+        gc_capacity = next;
+    }
+    gc_nodes[gc_count++] = ptr;
+}
+
+static void piton_gc_unregister(void *ptr) {
+    for (size_t i = 0; i < gc_count; ++i) {
+        if (gc_nodes[i] != ptr) continue;
+        gc_nodes[i] = gc_nodes[--gc_count];
+        return;
+    }
+}
 
 /* ── Refcount ──────────────────────────────────────────────────────────── */
 
@@ -589,6 +637,7 @@ static void piton_value_deep_free(int64_t v) {
     case SUB_TAG_LIST: case SUB_TAG_TUPLE: {
         PitonCollection *c = ptr;
         for (int64_t i = 0; i < c->length; ++i) piton_value_deep_free(c->items[i]);
+        piton_gc_unregister(c);
         free(c->items); free(c);
         --live_collections;
         break;
@@ -599,6 +648,7 @@ static void piton_value_deep_free(int64_t v) {
             piton_value_deep_free(d->entries[i].key);
             piton_value_deep_free(d->entries[i].value);
         }
+        piton_gc_unregister(d);
         free(d->entries); free(d);
         --live_dicts;
         break;
@@ -606,6 +656,7 @@ static void piton_value_deep_free(int64_t v) {
     case SUB_TAG_SET: {
         PitonSet *s = ptr;
         for (int64_t i = 0; i < s->length; ++i) piton_value_deep_free(s->items[i]);
+        piton_gc_unregister(s);
         free(s->items); free(s);
         --live_sets;
         break;
@@ -615,6 +666,17 @@ static void piton_value_deep_free(int64_t v) {
         free(bi->limbs); free(bi);
         break;
     }
+    case SUB_TAG_OBJECT: {
+        PitonObject *o = ptr;
+        piton_gc_unregister(o);
+        piton_object_run_finalizer(o);
+        for (int64_t i = 0; i < o->length; ++i)
+            piton_value_deep_free(o->attributes[i].value);
+        free(o);
+        --live_objects;
+        break;
+    }
+
     default: free(ptr); break;
     }
 }
@@ -733,6 +795,7 @@ void *piton_collection_new(int64_t kind, int64_t capacity) {
     c->kind = kind;
     c->capacity = capacity;
     if (capacity > 0) c->items = calloc((size_t)capacity, sizeof(int64_t));
+    piton_gc_register(c);
     ++live_collections;
     return c;
 }
@@ -1389,6 +1452,7 @@ void *piton_dict_new(int64_t capacity) {
     d->header.refcount = 1;
     d->capacity = capacity;
     if (capacity > 0) d->entries = calloc((size_t)capacity, sizeof(PitonDictEntry));
+    piton_gc_register(d);
     ++live_dicts;
     return d;
 }
@@ -1525,6 +1589,7 @@ void *piton_set_new(int64_t capacity) {
     s->header.refcount = 1;
     s->capacity = capacity;
     if (capacity > 0) s->items = calloc((size_t)capacity, sizeof(int64_t));
+    piton_gc_register(s);
     ++live_sets;
     return s;
 }
@@ -1676,6 +1741,7 @@ int64_t piton_closure_call_frame(int64_t callee, int64_t argc,
          * managed by the call dispatcher (arena until process exit, M13 owns
          * real GC); it is excluded from the user-space live-count tripwire. */
         --live_collections;
+        piton_gc_unregister(tuple);
         for (int64_t i = 0; i < extra; ++i) piton_collection_put(tuple, i, 0, args[c->n_args + i]);
         frame[c->n_cells + c->n_args] = (int64_t)tuple;
     }
@@ -1700,22 +1766,37 @@ int64_t piton_frame_call(int64_t addr, int64_t argc, const int64_t *args) {
 
 void *piton_object_new(const char *class_name) {
     PitonObject *o = calloc(1, sizeof(*o));
-    o->header.sub_tag = 0;
+    o->header.sub_tag = SUB_TAG_OBJECT;
     o->header.refcount = 1;
     o->class_name = class_name;
     o->parent_class_name = NULL;
+    piton_gc_register(o);
     ++live_objects;
     return o;
 }
 
 void *piton_object_new_with_parent(const char *class_name, const char *parent_class_name) {
     PitonObject *o = calloc(1, sizeof(*o));
-    o->header.sub_tag = 0;
+    o->header.sub_tag = SUB_TAG_OBJECT;
     o->header.refcount = 1;
     o->class_name = class_name;
     o->parent_class_name = parent_class_name;
+    piton_gc_register(o);
     ++live_objects;
     return o;
+}
+
+void *piton_object_new_with_finalizer(const char *class_name, const char *parent_class_name, int64_t finalizer) {
+    PitonObject *o = piton_object_new_with_parent(class_name, parent_class_name);
+    o->finalizer = finalizer;
+    o->finalizer_called = 0;
+    return o;
+}
+
+static void piton_object_run_finalizer(PitonObject *o) {
+    if (!o || !o->finalizer || o->finalizer_called) return;
+    o->finalizer_called = 1;
+    (void)((int64_t (*)(int64_t))o->finalizer)((int64_t)o);
 }
 
 const char *piton_object_class_name(void *raw) {
@@ -1742,6 +1823,26 @@ void piton_object_set(void *raw, const char *name, int64_t value) {
     o->attributes[o->length].name = name;
     o->attributes[o->length].value = ev;
     ++o->length;
+}
+
+/* Store a native object pointer as an owned tagged value.  The old setter
+ * remains the integer-only ABI used by existing generated code. */
+void piton_object_set_tagged(void *raw, const char *name, int64_t raw_ptr) {
+    PitonObject *o = raw;
+    if (!o || !name || !raw_ptr) return;
+    int64_t ev = pv_encode(PITON_TAG_OBJECT, raw_ptr);
+    for (int64_t i = 0; i < o->length; ++i)
+        if (strcmp(o->attributes[i].name, name) == 0) {
+            piton_value_deep_free(o->attributes[i].value);
+            o->attributes[i].value = ev;
+            piton_value_incref(ev);
+            return;
+        }
+    if (o->length >= 16) return;
+    o->attributes[o->length].name = name;
+    o->attributes[o->length].value = ev;
+    ++o->length;
+    piton_value_incref(ev);
 }
 
 int64_t piton_object_get(void *raw, const char *name) {
@@ -1779,12 +1880,111 @@ int64_t piton_object_lookup(void *raw, const char *name, int64_t fallback) {
 
 void piton_object_free(void *raw) {
     if (!raw) return;
-    PitonObject *o = raw;
-    for (int64_t i = 0; i < o->length; ++i)
-        piton_value_deep_free(o->attributes[i].value);
-    free(o);
-    --live_objects;
+    piton_value_deep_free(pv_encode(PITON_TAG_OBJECT, (int64_t)raw));
 }
+
+/* ── M13 cycle collector (Windows runtime) ───────────────────────────── */
+
+static void piton_gc_detach_node(void *raw) {
+    if (!raw) return;
+    PitonHeader *h = raw;
+    int64_t none = pv_none();
+    switch (h->sub_tag) {
+    case SUB_TAG_LIST: case SUB_TAG_TUPLE: {
+        PitonCollection *c = raw;
+        for (int64_t i = 0; i < c->length; ++i) {
+            int64_t child = c->items[i];
+            c->items[i] = none;
+            piton_value_deep_free(child);
+        }
+        break;
+    }
+    case SUB_TAG_DICT: {
+        PitonDict *d = raw;
+        for (int64_t i = 0; i < d->length; ++i) {
+            int64_t key = d->entries[i].key;
+            int64_t value = d->entries[i].value;
+            d->entries[i].key = none;
+            d->entries[i].value = none;
+            piton_value_deep_free(key);
+            piton_value_deep_free(value);
+        }
+        break;
+    }
+    case SUB_TAG_SET: {
+        PitonSet *s = raw;
+        for (int64_t i = 0; i < s->length; ++i) {
+            int64_t child = s->items[i];
+            s->items[i] = none;
+            piton_value_deep_free(child);
+        }
+        break;
+    }
+    case SUB_TAG_OBJECT: {
+        PitonObject *o = raw;
+        piton_object_run_finalizer(o);
+        for (int64_t i = 0; i < o->length; ++i) {
+            int64_t child = o->attributes[i].value;
+            o->attributes[i].value = none;
+            piton_value_deep_free(child);
+        }
+        break;
+    }
+    default: break;
+    }
+}
+
+static void piton_gc_free_node(void *raw) {
+    if (!raw) return;
+    PitonHeader *h = raw;
+    piton_gc_unregister(raw);
+    switch (h->sub_tag) {
+    case SUB_TAG_LIST: case SUB_TAG_TUPLE: {
+        PitonCollection *c = raw;
+        free(c->items); free(c); --live_collections;
+        break;
+    }
+    case SUB_TAG_DICT: {
+        PitonDict *d = raw;
+        free(d->entries); free(d); --live_dicts;
+        break;
+    }
+    case SUB_TAG_SET: {
+        PitonSet *s = raw;
+        free(s->items); free(s); --live_sets;
+        break;
+    }
+    case SUB_TAG_OBJECT: {
+        PitonObject *o = raw;
+        free(o); --live_objects;
+        break;
+    }
+    default: break;
+    }
+}
+
+/* After module-owned roots are released, every registered node that remains is
+ * unreachable except through a cycle.  Protect the whole snapshot, cut its
+ * cyclic edges, then reclaim all shells.  This avoids recursive frees on a
+ * cyclic graph while preserving normal refcounting before collection. */
+void piton_gc_collect(void) {
+    size_t n = gc_count;
+    if (!n) return;
+    void **snapshot = malloc(n * sizeof(*snapshot));
+    if (!snapshot) {
+        fprintf(stderr, "MemoryError: GC snapshot allocation failed\n");
+        exit(1);
+    }
+    memcpy(snapshot, gc_nodes, n * sizeof(*snapshot));
+    for (size_t i = 0; i < n; ++i) {
+        PitonHeader *h = snapshot[i];
+        ++h->refcount;
+    }
+    for (size_t i = 0; i < n; ++i) piton_gc_detach_node(snapshot[i]);
+    for (size_t i = 0; i < n; ++i) piton_gc_free_node(snapshot[i]);
+    free(snapshot);
+}
+
 
 int64_t piton_object_live_count(void) { return live_objects; }
 

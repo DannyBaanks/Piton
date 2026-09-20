@@ -6,12 +6,12 @@
 
 Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 
-## 1. Línea base verificada (2026-09-12, commit pendiente de push)
+## 1. Línea base verificada (2026-09-19)
 
 - **418 tests collected** (247 Windows + 171 Linux), suites principales pasan.
 - Ambos backends ejecutan el subset rico byte-idéntico vs CPython 3.12.4.
 - Ejecutables PE/ELF sin CPython ni libc (freestanding Linux).
-- **30 gates `PASS`** en `piton.final_dashboard` (incl. `FULL_PARITY`, que este
+- **53 gates `PASS`** en `piton.final_dashboard` (incl. `FULL_PARITY`, que este
   roadmap retira como término; ver `PARITY_DEFINITION.md`).
 
 ## 2. Matriz de features
@@ -35,7 +35,7 @@ Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 | introspection | PARTIAL | PARTIAL | NOT_DEMONSTRATED | `runtime.py` | source contract only |
 | multiprocessing | NOT_DEMONSTRATED | NOT_DEMONSTRATED | NOT_DEMONSTRATED | `ROADMAP.md` | Windows spawn no demostrado |
 | ffi | PARTIAL | PARTIAL | NOT_DEMONSTRATED | `stdlib_runtime.py` | superficie ctypes; independencia nativa abierta |
-| dynamic_runtime | PASS | PASS | PASS | `native_runtime.c` | tagged union, refcounted heap, colecciones |
+| dynamic_runtime | PASS | PASS | PASS | `native_runtime.c` + `test_phase5.py` + `test_phase10_linux.py` | tagged union, refcounted heap, colecciones; `LIFETIME_CONTRACT_V1` mediante `con`; `FINALIZERS_V1` PASS (`__del__` una vez al final, Win+Linux); `GC_CYCLES_V1` PASS: Windows `gc_nodes[]` + `piton_gc_collect()`; Linux freelist heap + refcounting + GC idéntico (C-harness CycleGCNativeV1 Win + CycleGCLinuxV1 Linux). Dict/set cycles, `gc.collect()` público y recolección en mitad de programa siguen abiertos |
 
 ## 3. Taxonomía de superficies restantes de CPython 3.12
 

@@ -3254,7 +3254,73 @@ class ComprehensionsV2Native(unittest.TestCase):
         )
 
 
+class CycleGCNativeV1(unittest.TestCase):
+    """M13 GC_CYCLES_V1 runtime slice on Win64: direct cycle-observation tests."""
+
+    def test_gc_collects_list_self_cycle_and_object_graph(self):
+        gcc = "gcc"
+        runtime = Path(__file__).resolve().parents[1] / "piton" / "native_runtime.c"
+        source = r'''
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+extern void *piton_collection_new(int64_t kind, int64_t capacity);
+extern void piton_list_append(void *raw, int64_t value, int64_t type_tag);
+extern void piton_collection_free(void *raw);
+extern void *piton_object_new(const char *class_name);
+extern void piton_object_set_tagged(void *raw, const char *name, int64_t raw_ptr);
+extern void piton_object_free(void *raw);
+extern void piton_gc_collect(void);
+extern int64_t piton_total_live_count(void);
+
+static void expect_count(const char *name, int64_t expected) {
+    int64_t actual = piton_total_live_count();
+    if (actual != expected) {
+        fprintf(stderr, "%s: expected=%lld actual=%lld\n", name,
+                (long long)expected, (long long)actual);
+        exit(1);
+    }
+}
+
+int main(void) {
+    void *self_list = piton_collection_new(1, 0);
+    piton_list_append(self_list, (int64_t)self_list, 1);
+    piton_collection_free(self_list);
+    expect_count("list self-cycle before collect", 1);
+    piton_gc_collect();
+    expect_count("list self-cycle after collect", 0);
+
+    void *owner = piton_object_new("Nodo");
+    void *items = piton_collection_new(1, 0);
+    piton_object_set_tagged(owner, "items", (int64_t)items);
+    piton_list_append(items, (int64_t)owner, 1);
+    piton_object_free(owner);
+    piton_collection_free(items);
+    expect_count("object-list cycle before collect", 2);
+    piton_gc_collect();
+    expect_count("object-list cycle after collect", 0);
+
+    piton_gc_collect();
+    expect_count("empty collect", 0);
+    return 0;
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="piton-gc-v1-") as directory:
+            parseable = Path(directory) / "gc_cycle_test.exe"
+            harness = Path(directory) / "gc_cycle_test.c"
+            harness.write_text(source, encoding="utf-8")
+            built = subprocess.run(
+                [gcc, "-std=c11", "-O2", str(harness), str(runtime), "-o", str(parseable), "-lm"],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(built.returncode, 0, built.stderr)
+            completed = subprocess.run([str(parseable)], capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+
 class WithProtocolNativeV1(unittest.TestCase):
+
     """M10 — WITH_PROTOCOL_V1: `con CM() como x:` with exception unwind and
     suppression, differential vs CPython 3.12."""
 
@@ -3274,6 +3340,19 @@ class WithProtocolNativeV1(unittest.TestCase):
             'con CM() como x:\n'
             '    imprimir("body")\n'
             '    imprimir(x)\n'
+        )
+
+    def test_m13_self_cycle_reclaimed_at_module_teardown(self):
+        """M13 GC_CYCLES_V1 first slice: mutual object cycles tear down safely."""
+        self.assert_native_matches(
+            'clase Nodo:\n'
+            '    funcion __init__(self):\n'
+            '        self.ref = self\n'
+            'a = Nodo()\n'
+            'b = Nodo()\n'
+            'a.ref = b\n'
+            'b.ref = a\n'
+            'imprimir("ok")\n'
         )
 
     def test_with_exception_propagates_to_handler(self):
@@ -3565,6 +3644,34 @@ class WithProtocolNativeV1(unittest.TestCase):
             'imprimir(asyncio.run(run_async()))\n'
         )
         self.assertTrue(result.equivalent, result)
+
+
+class FinalizersNativeV1(unittest.TestCase):
+    """M13 FINALIZERS_V1: __del__ runs exactly once before program exit."""
+
+    def assert_native_matches(self, source):
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_finalizer_runs_at_exit(self):
+        self.assert_native_matches(
+            'clase Recurso:\n'
+            '    funcion __del__(self):\n'
+            '        imprimir("cerrado")\n'
+            'r = Recurso()\n'
+            'imprimir("listo")\n'
+        )
+
+    def test_finalizer_runs_once_for_self_cycle(self):
+        self.assert_native_matches(
+            'clase Nodo:\n'
+            '    funcion __init__(self):\n'
+            '        self.ref = self\n'
+            '    funcion __del__(self):\n'
+            '        imprimir("del")\n'
+            'Nodo()\n'
+            'imprimir("ok")\n'
+        )
 
 
 if __name__ == "__main__":
