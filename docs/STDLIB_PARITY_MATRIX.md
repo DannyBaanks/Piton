@@ -20,10 +20,10 @@ Estados y modos: `NATIVE` (runtime propio), `REIMPLEMENTED` (lógica propia),
 
 | Módulo | Tier | Nivel objetivo | Estado actual | Modo | Deps | Win | Linux |
 |---|---|---|---|---|---|---|---|
-| builtins (print/len/type/abs/min/max/sum/int/str/float/bool/list/tuple/dict/set/range) | 0 | completo | PARTIAL | NATIVE | — | PASS | PASS |
-| math | 1 | Tier1 | PARTIAL (sqrt, floor, ceil, sin, cos, log) | NATIVE | floats | PARTIAL | PASS |
-| sys | 1 | Tier1 | PARTIAL (exit, argv) | REIMPLEMENTED | argv/env | PARTIAL | PASS |
-| os | 3 | Tier3 | PARTIAL (name) | BRIDGED | fs | PARTIAL | PASS |
+| builtins (print/len/type/abs/min/max/sum/int/str/float/bool/list/tuple/dict/set/range/all/any/bin/chr/ord/pow/round/sorted) | 0 | completo | PARTIAL (BUILTINS_CORE_V2 PASS 2026-09-18; divergencias: pow(int,neg) TypeError, any/all solo list\|tuple, round sin ndigits) | NATIVE | — | PASS | PASS |
+| math | 1 | Tier1 | PASS (MATH_TIER1_V1 2026-09-19: sqrt/floor/ceil/trunc/fabs/gcd + pi/e) | NATIVE | floats | PASS | PASS |
+| sys | 1 | Tier1 | NOT_DEMONSTRATED | REIMPLEMENTED | argv/env | ND | ND |
+| os | 3 | Tier3 | NOT_DEMONSTRATED | BRIDGED | fs | ND | ND |
 | time | 3 | Tier3 | NOT_DEMONSTRATED | REIMPLEMENTED | syscalls | ND | ND |
 | json | 2 | Tier2 | NOT_DEMONSTRATED | REIMPLEMENTED | strings/dict | ND | ND |
 | collections | 1 | Tier1 | NOT_DEMONSTRATED | REIMPLEMENTED | containers | ND | ND |

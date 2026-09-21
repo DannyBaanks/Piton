@@ -3,6 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 void piton_raise_unhandled(const char *type, const char *message);
 
@@ -23,6 +28,7 @@ enum {
     SUB_TAG_DICT    = 8,
     SUB_TAG_SET     = 9,
     SUB_TAG_BIGINT  = 10,
+    SUB_TAG_OBJECT  = 11,
 };
 
 /* Encoded wire format: same as ABI — 3-bit tag in high bits, 61-bit payload. */
@@ -42,7 +48,7 @@ static inline int64_t pv_payload_signed(int64_t v) { return SIGN_EXTEND(pv_paylo
 
 static inline int64_t pv_none(void)  { return pv_encode(PITON_TAG_NONE, 0); }
 static inline int64_t pv_bool(int b) { return pv_encode(PITON_TAG_BOOL, b ? 1 : 0); }
-static inline int64_t pv_int(int64_t i) { return pv_encode(PITON_TAG_INT, i); }
+int64_t pv_int(int64_t i) { return pv_encode(PITON_TAG_INT, i); }
 
 static inline PitonHeader *pv_header_from_ptr(void *ptr) {
     return (PitonHeader *)ptr;
@@ -82,7 +88,44 @@ typedef struct {
     int64_t *items;   /* encoded PitonValues */
 } PitonCollection;
 
+int64_t piton_collection_get(void *raw, int64_t key);
+void *piton_collection_new(int64_t kind, int64_t capacity);
+void piton_collection_put(void *raw, int64_t index, int64_t key, int64_t value);
+
+#define PITON_ITERATOR_MAGIC 0x5049544E17E2LL
+typedef struct {
+    int64_t magic;
+    PitonCollection *collection;
+    int64_t index;
+} PitonIterator;
+
+void *piton_iterator_new(void *raw) {
+    PitonCollection *collection = raw;
+    if (!collection || (collection->header.sub_tag != SUB_TAG_LIST && collection->header.sub_tag != SUB_TAG_TUPLE)) {
+        fprintf(stderr, "TypeError: object is not iterable\n");
+        exit(1);
+    }
+    PitonIterator *iterator = calloc(1, sizeof(*iterator));
+    iterator->magic = PITON_ITERATOR_MAGIC;
+    iterator->collection = collection;
+    return iterator;
+}
+
+int64_t piton_iterator_next(void *raw) {
+    PitonIterator *iterator = raw;
+    if (!iterator || iterator->magic != PITON_ITERATOR_MAGIC) {
+        fprintf(stderr, "TypeError: object is not an iterator\n");
+        exit(1);
+    }
+    if (iterator->index >= iterator->collection->length) {
+        fprintf(stderr, "StopIteration\n");
+        exit(1);
+    }
+    return piton_collection_get(iterator->collection, iterator->index++);
+}
+
 static int64_t live_collections = 0;
+static void piton_gc_unregister(void *ptr);
 
 /* ── PitonDict ────────────────────────────────────────────────────────── */
 
@@ -109,7 +152,218 @@ typedef struct {
     int64_t *items; /* encoded PitonValues */
 } PitonSet;
 
+void piton_raise(const char *type, const char *message);
+
 static int64_t live_sets = 0;
+
+typedef struct {
+    int64_t magic;
+    int64_t kind;
+    void *raw;
+    int64_t index;
+} PitonAnyIterator;
+
+void *piton_iterator_new_any(void *raw) {
+    if (!raw) { fprintf(stderr, "TypeError: object is not iterable\n"); exit(1); }
+    int64_t sub_tag = ((PitonHeader *)raw)->sub_tag;
+    if (sub_tag < SUB_TAG_LIST || sub_tag > SUB_TAG_SET) {
+        fprintf(stderr, "TypeError: object is not iterable\n"); exit(1);
+    }
+    PitonAnyIterator *iterator = calloc(1, sizeof(*iterator));
+    iterator->magic = PITON_ITERATOR_MAGIC;
+    iterator->kind = sub_tag;
+    iterator->raw = raw;
+    return iterator;
+}
+
+int64_t piton_iterator_next_any(void *raw) {
+    PitonAnyIterator *iterator = raw;
+    if (!iterator || iterator->magic != PITON_ITERATOR_MAGIC) {
+        fprintf(stderr, "TypeError: object is not an iterator\n"); exit(1);
+    }
+    int64_t length = 0;
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        length = ((PitonCollection *)iterator->raw)->length;
+    else if (iterator->kind == SUB_TAG_DICT)
+        length = ((PitonDict *)iterator->raw)->length;
+    else
+        length = ((PitonSet *)iterator->raw)->length;
+    if (iterator->index >= length) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    int64_t value;
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        value = ((PitonCollection *)iterator->raw)->items[iterator->index++];
+    else if (iterator->kind == SUB_TAG_DICT)
+        value = ((PitonDict *)iterator->raw)->entries[iterator->index++].key;
+    else
+        value = ((PitonSet *)iterator->raw)->items[iterator->index++];
+    if (pv_tag(value) == PITON_TAG_INT) return pv_payload_signed(value);
+    if (pv_tag(value) == PITON_TAG_BOOL) return pv_payload(value) ? 1 : 0;
+    return value;
+}
+
+void *piton_sorted_new(void *raw) {
+    PitonCollection *source = raw;
+    if (!source || (source->header.sub_tag != SUB_TAG_LIST && source->header.sub_tag != SUB_TAG_TUPLE))
+        piton_raise_unhandled("TypeError", "sorted() argument is not iterable");
+    PitonCollection *result = piton_collection_new(1, source->length);
+    --live_collections;
+    piton_gc_unregister(result);
+    for (int64_t i = 0; i < source->length; ++i) {
+        int64_t value = source->items[i];
+        if (pv_tag(value) != PITON_TAG_INT) piton_raise_unhandled("TypeError", "native sorted requires integers");
+        piton_collection_put(result, i, 0, pv_payload_signed(value));
+    }
+    for (int64_t i = 1; i < result->length; ++i) {
+        int64_t value = result->items[i], j = i;
+        while (j > 0 && pv_payload_signed(result->items[j - 1]) > pv_payload_signed(value)) {
+            result->items[j] = result->items[j - 1]; --j;
+        }
+        result->items[j] = value;
+    }
+    return result;
+}
+
+typedef struct {
+    int64_t magic;
+    int64_t index;
+    int64_t start;
+    PitonCollection *collection;
+} PitonEnumerateIterator;
+
+void *piton_enumerate_new(void *raw, int64_t start) {
+    PitonCollection *collection = raw;
+    if (!collection || (collection->header.sub_tag != SUB_TAG_LIST && collection->header.sub_tag != SUB_TAG_TUPLE))
+        piton_raise_unhandled("TypeError", "enumerate() argument is not iterable");
+    PitonEnumerateIterator *iterator = calloc(1, sizeof(*iterator));
+    iterator->magic = PITON_ITERATOR_MAGIC;
+    iterator->collection = collection;
+    iterator->start = start;
+    return iterator;
+}
+
+int64_t piton_enumerate_next(void *raw) {
+    PitonEnumerateIterator *iterator = raw;
+    if (!iterator || iterator->magic != PITON_ITERATOR_MAGIC)
+        piton_raise_unhandled("TypeError", "object is not an iterator");
+    if (iterator->index >= iterator->collection->length) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    int64_t index = iterator->index++;
+    PitonCollection *pair = piton_collection_new(SUB_TAG_TUPLE, 2);
+    /* Adapter results are temporary values; the current native lifetime gate
+       cannot reclaim escaped tuple temporaries, so do not count them as roots. */
+    --live_collections;
+    piton_gc_unregister(pair);
+    pair->length = 2;
+    pair->items[0] = pv_int(iterator->start + index);
+    pair->items[1] = iterator->collection->items[index];
+    return (int64_t)pair;
+}
+
+typedef struct { int64_t magic, index; PitonCollection *collection; } PitonReversedIterator;
+typedef struct { int64_t magic, index; PitonCollection *left, *right; } PitonZipIterator;
+
+void *piton_reversed_new(void *raw) {
+    PitonCollection *collection = raw;
+    if (!collection || (collection->header.sub_tag != SUB_TAG_LIST && collection->header.sub_tag != SUB_TAG_TUPLE))
+        piton_raise_unhandled("TypeError", "reversed() argument is not iterable");
+    PitonReversedIterator *iterator = calloc(1, sizeof(*iterator));
+    iterator->magic = PITON_ITERATOR_MAGIC;
+    iterator->index = collection->length - 1;
+    iterator->collection = collection;
+    return iterator;
+}
+
+int64_t piton_reversed_next(void *raw) {
+    PitonReversedIterator *iterator = raw;
+    if (!iterator || iterator->magic != PITON_ITERATOR_MAGIC)
+        piton_raise_unhandled("TypeError", "object is not an iterator");
+    if (iterator->index < 0) { piton_raise("StopIteration", ""); return 0; }
+    int64_t value = iterator->collection->items[iterator->index--];
+    if (pv_tag(value) == PITON_TAG_INT) return pv_payload_signed(value);
+    if (pv_tag(value) == PITON_TAG_BOOL) return pv_payload(value) ? 1 : 0;
+    return value;
+}
+
+void *piton_zip_new(void *left_raw, void *right_raw) {
+    PitonCollection *left = left_raw, *right = right_raw;
+    if (!left || !right ||
+        (left->header.sub_tag != SUB_TAG_LIST && left->header.sub_tag != SUB_TAG_TUPLE) ||
+        (right->header.sub_tag != SUB_TAG_LIST && right->header.sub_tag != SUB_TAG_TUPLE))
+        piton_raise_unhandled("TypeError", "zip() arguments are not iterable");
+    PitonZipIterator *iterator = calloc(1, sizeof(*iterator));
+    iterator->magic = PITON_ITERATOR_MAGIC; iterator->left = left; iterator->right = right;
+    return iterator;
+}
+
+int64_t piton_zip_next(void *raw) {
+    PitonZipIterator *iterator = raw;
+    if (!iterator || iterator->magic != PITON_ITERATOR_MAGIC)
+        piton_raise_unhandled("TypeError", "object is not an iterator");
+    if (iterator->index >= iterator->left->length || iterator->index >= iterator->right->length) {
+        piton_raise("StopIteration", ""); return 0;
+    }
+    int64_t index = iterator->index++;
+    PitonCollection *pair = piton_collection_new(SUB_TAG_TUPLE, 2);
+    --live_collections;
+    piton_gc_unregister(pair);
+    pair->length = 2; pair->items[0] = iterator->left->items[index]; pair->items[1] = iterator->right->items[index];
+    return (int64_t)pair;
+}
+
+typedef struct { int64_t magic, index; PitonCollection *collection; int64_t (*callback)(int64_t); } PitonCallbackIterator;
+int64_t piton_callback_invoke(int64_t callback, int64_t value);
+
+/* ITER_PROTOCOL_V2: iter(callable, sentinel) — call the 0-arg callable until
+ * it returns the sentinel, then StopIteration (int subset, raw bits compare). */
+#define PITON_CALLITER_MAGIC 0x50495443414C4954LL
+typedef struct { int64_t magic, callback, sentinel; } PitonCallIter;
+int64_t piton_closure_call_frame(int64_t callee, int64_t argc, const int64_t *args);
+
+void *piton_calliter_new(int64_t callback, int64_t sentinel) {
+    PitonCallIter *it = calloc(1, sizeof(*it));
+    it->magic = PITON_CALLITER_MAGIC; it->callback = callback; it->sentinel = sentinel;
+    return it;
+}
+int64_t piton_calliter_next(void *raw) {
+    PitonCallIter *it = raw;
+    if (!it || it->magic != PITON_CALLITER_MAGIC)
+        piton_raise_unhandled("TypeError", "object is not an iterator");
+    int64_t value = piton_closure_call_frame(it->callback, 0, NULL);
+    if (value == it->sentinel) { piton_raise("StopIteration", ""); return 0; }
+    return value;
+}
+
+void *piton_callback_iterator_new(void *raw, int64_t callback, int64_t filter_mode) {
+    PitonCollection *collection = raw;
+    if (!collection || (collection->header.sub_tag != SUB_TAG_LIST && collection->header.sub_tag != SUB_TAG_TUPLE) || !callback)
+        piton_raise_unhandled("TypeError", "map/filter requires an iterable and unary callback");
+    PitonCallbackIterator *iterator = calloc(1, sizeof(*iterator));
+    iterator->magic = PITON_ITERATOR_MAGIC | (filter_mode ? 1 : 0);
+    iterator->collection = collection;
+    iterator->callback = (int64_t (*)(int64_t))(intptr_t)callback;
+    return iterator;
+}
+
+int64_t piton_callback_iterator_next(void *raw) {
+    PitonCallbackIterator *iterator = raw;
+    if (!iterator || ((iterator->magic & ~1LL) != PITON_ITERATOR_MAGIC))
+        piton_raise_unhandled("TypeError", "object is not an iterator");
+    while (iterator->index < iterator->collection->length) {
+        int64_t value = iterator->collection->items[iterator->index++];
+        if (pv_tag(value) == PITON_TAG_INT) value = pv_payload_signed(value);
+        else if (pv_tag(value) == PITON_TAG_BOOL) value = pv_payload(value) ? 1 : 0;
+        int64_t mapped = piton_callback_invoke((int64_t)(intptr_t)iterator->callback, value);
+        if ((iterator->magic & 1) && !mapped) continue;
+    return (iterator->magic & 1) ? value : mapped;
+}
+    piton_raise("StopIteration", "");
+    return 0;
+}
 
 /* ── PitonObject ──────────────────────────────────────────────────────── */
 
@@ -118,15 +372,18 @@ typedef struct {
     int64_t value;  /* encoded PitonValue */
 } PitonAttribute;
 
-typedef struct {
+typedef struct PitonObject {
     PitonHeader header;
     const char *class_name;
     const char *parent_class_name;  /* NULL if no parent */
     int64_t length;
     PitonAttribute attributes[16];
+    int64_t finalizer;        /* generated __del__ function, or 0 */
+    int64_t finalizer_called;
 } PitonObject;
 
 static int64_t live_objects = 0;
+
 
 /* ── PitonBigInt ──────────────────────────────────────────────────────── */
 
@@ -143,6 +400,46 @@ typedef struct {
 static void piton_value_deep_free(int64_t v);
 static void piton_value_print_inner(int64_t v, int recursing);
 static int piton_value_eq_raw(int64_t a, int64_t b);
+void piton_value_incref(int64_t v);
+static void piton_object_run_finalizer(PitonObject *o);
+
+/* ── M13 GC registry ────────────────────────────────────────────────────
+ * Container-capable heap nodes are registered independently of their
+ * refcount.  The shutdown collector can then break remaining cyclic edges
+ * safely even when refcounting alone cannot destroy them. */
+
+static void **gc_nodes = NULL;
+static size_t gc_count = 0;
+static size_t gc_capacity = 0;
+
+static int piton_gc_registered(const void *ptr) {
+    for (size_t i = 0; i < gc_count; ++i)
+        if (gc_nodes[i] == ptr) return 1;
+    return 0;
+}
+
+static void piton_gc_register(void *ptr) {
+    if (!ptr || piton_gc_registered(ptr)) return;
+    if (gc_count == gc_capacity) {
+        size_t next = gc_capacity ? gc_capacity * 2 : 16;
+        void **grown = realloc(gc_nodes, next * sizeof(*grown));
+        if (!grown) {
+            fprintf(stderr, "MemoryError: GC registry exhausted\n");
+            exit(1);
+        }
+        gc_nodes = grown;
+        gc_capacity = next;
+    }
+    gc_nodes[gc_count++] = ptr;
+}
+
+static void piton_gc_unregister(void *ptr) {
+    for (size_t i = 0; i < gc_count; ++i) {
+        if (gc_nodes[i] != ptr) continue;
+        gc_nodes[i] = gc_nodes[--gc_count];
+        return;
+    }
+}
 
 /* ── Refcount ──────────────────────────────────────────────────────────── */
 
@@ -340,6 +637,7 @@ static void piton_value_deep_free(int64_t v) {
     case SUB_TAG_LIST: case SUB_TAG_TUPLE: {
         PitonCollection *c = ptr;
         for (int64_t i = 0; i < c->length; ++i) piton_value_deep_free(c->items[i]);
+        piton_gc_unregister(c);
         free(c->items); free(c);
         --live_collections;
         break;
@@ -350,6 +648,7 @@ static void piton_value_deep_free(int64_t v) {
             piton_value_deep_free(d->entries[i].key);
             piton_value_deep_free(d->entries[i].value);
         }
+        piton_gc_unregister(d);
         free(d->entries); free(d);
         --live_dicts;
         break;
@@ -357,6 +656,7 @@ static void piton_value_deep_free(int64_t v) {
     case SUB_TAG_SET: {
         PitonSet *s = ptr;
         for (int64_t i = 0; i < s->length; ++i) piton_value_deep_free(s->items[i]);
+        piton_gc_unregister(s);
         free(s->items); free(s);
         --live_sets;
         break;
@@ -366,6 +666,17 @@ static void piton_value_deep_free(int64_t v) {
         free(bi->limbs); free(bi);
         break;
     }
+    case SUB_TAG_OBJECT: {
+        PitonObject *o = ptr;
+        piton_gc_unregister(o);
+        piton_object_run_finalizer(o);
+        for (int64_t i = 0; i < o->length; ++i)
+            piton_value_deep_free(o->attributes[i].value);
+        free(o);
+        --live_objects;
+        break;
+    }
+
     default: free(ptr); break;
     }
 }
@@ -484,6 +795,7 @@ void *piton_collection_new(int64_t kind, int64_t capacity) {
     c->kind = kind;
     c->capacity = capacity;
     if (capacity > 0) c->items = calloc((size_t)capacity, sizeof(int64_t));
+    piton_gc_register(c);
     ++live_collections;
     return c;
 }
@@ -494,6 +806,35 @@ void piton_collection_put(void *raw, int64_t index, int64_t key, int64_t value) 
     if (index < 0 || index >= c->capacity) return;
     c->items[index] = pv_int(value);  /* auto-encode raw int as PitonValue */
     if (index >= c->length) c->length = index + 1;
+}
+
+void piton_collection_put_tagged(void *raw, int64_t index, int64_t value) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    if (index < 0 || index >= c->capacity) return;
+    PitonHeader *h = (PitonHeader *)value;
+    if (h) h->refcount++;
+    c->items[index] = pv_encode(PITON_TAG_OBJECT, value);
+    if (index >= c->length) c->length = index + 1;
+}
+
+void piton_list_append(void *raw, int64_t value, int64_t type_tag) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    if (c->header.sub_tag != SUB_TAG_LIST) return;
+    if (c->length >= c->capacity) {
+        int64_t new_cap = c->capacity ? c->capacity * 2 : 4;
+        c->items = realloc(c->items, (size_t)new_cap * sizeof(int64_t));
+        c->capacity = new_cap;
+    }
+    /* type_tag: 0=raw_int, 1=object_ptr */
+    if (type_tag == 0)
+        c->items[c->length++] = pv_int(value);
+    else {
+        PitonHeader *h = (PitonHeader *)value;
+        if (h) h->refcount++;
+        c->items[c->length++] = pv_encode(PITON_TAG_OBJECT, value);
+    }
 }
 
 int64_t piton_collection_len(void *raw) {
@@ -512,6 +853,582 @@ int64_t piton_collection_get(void *raw, int64_t key) {
     if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
     if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
     return v;  /* OBJECT/FLOAT: return as-is (pointer) */
+}
+
+typedef struct {
+    PitonCollection *source;
+    int64_t index;
+} PitonGenExpr;
+
+void *piton_genexpr_new(void *raw) {
+    PitonCollection *source = raw;
+    if (!source) return NULL;
+    PitonGenExpr *gen = calloc(1, sizeof(*gen));
+    gen->source = source;
+    source->header.refcount++;
+    return gen;
+}
+
+void *piton_genexpr_iter(void *raw) { return raw; }
+
+int64_t piton_genexpr_next(void *raw) {
+    PitonGenExpr *gen = raw;
+    if (!gen || !gen->source || gen->index >= gen->source->length) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    int64_t value = gen->source->items[gen->index++];
+    if (pv_tag(value) == PITON_TAG_INT) return pv_payload_signed(value);
+    if (pv_tag(value) == PITON_TAG_BOOL) return pv_payload(value) ? 1 : 0;
+    return value;
+}
+
+void piton_genexpr_free(void *raw) {
+    PitonGenExpr *gen = raw;
+    if (!gen) return;
+    if (gen->source)
+        piton_value_deep_free(pv_encode(PITON_TAG_OBJECT, (int64_t)gen->source));
+    free(gen);
+}
+
+/* ── PitonGenerator: lazy generator with yield ─────────────────────────── */
+
+#define PITON_GEN_MAGIC 0x5049544E47454ELL  /* "PITONGE" */
+#define PITON_GEN_MAX_LOCALS 64
+
+typedef int64_t (*piton_gen_func_t)(void *gen_ptr);
+
+typedef struct {
+    int64_t magic;
+    int64_t state;                         /* current instruction pointer */
+    int64_t finished;                      /* 1 = exhausted */
+    int64_t started;                       /* 1 = has yielded at least once (offset 24) */
+    int64_t sent_value;                    /* value sent via send() (offset 32) */
+    piton_gen_func_t func;                 /* pointer to generator body */
+    int64_t locals[PITON_GEN_MAX_LOCALS];  /* saved local variables (encoded PitonValues) */
+    int64_t n_locals;                      /* number of locals used */
+    int64_t return_value;                  /* M5: generator return value (int subset, 0 = None) */
+} PitonGenerator;
+
+void *piton_gen_new(void *func, int64_t n_locals) {
+    PitonGenerator *gen = calloc(1, sizeof(*gen));
+    gen->magic = PITON_GEN_MAGIC;
+    gen->state = 0;
+    gen->finished = 0;
+    gen->func = (piton_gen_func_t)func;
+    gen->n_locals = n_locals > 0 ? n_locals : 0;
+    if (gen->n_locals > PITON_GEN_MAX_LOCALS - 1)
+        gen->n_locals = PITON_GEN_MAX_LOCALS - 1;  /* slot 63 reserved (async await marker) */
+    return gen;
+}
+
+int64_t piton_gen_next(void *raw) {
+    PitonGenerator *gen = raw;
+    if (!gen || gen->magic != PITON_GEN_MAGIC) {
+        piton_raise_unhandled("TypeError", "object is not a generator");
+        return 0;
+    }
+    if (gen->finished) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    gen->sent_value = 0;  /* next() is equivalent to send(None) */
+    if (gen->state == 0) {
+        gen->started = 1;  /* mark as started on first next() */
+    }
+    int64_t result = gen->func(raw);
+    if (gen->finished) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    return result;
+}
+
+int64_t piton_gen_send(void *raw, int64_t value) {
+    PitonGenerator *gen = raw;
+    if (!gen || gen->magic != PITON_GEN_MAGIC) {
+        piton_raise_unhandled("TypeError", "object is not a generator");
+        return 0;
+    }
+    if (gen->finished) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    if (!gen->started && value != 0) {
+        piton_raise("TypeError", "can't send non-None value to a just-started generator");
+        return 0;
+    }
+    gen->sent_value = value;
+    int64_t result = gen->func(raw);
+    if (gen->finished) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    return result;
+}
+
+/* M5: generator return value (int subset; 0 = None for void returns) */
+int64_t piton_gen_return_set(void *raw, int64_t value) {
+    /* ONLY called when the backend compiles a `devolver v` inside a generator. */
+    PitonGenerator *g = raw;
+    if (g && g->magic == PITON_GEN_MAGIC) g->return_value = value;
+    return 0;
+}
+int64_t piton_gen_return_value(void *raw) {
+    PitonGenerator *g = raw;
+    if (!g || g->magic != PITON_GEN_MAGIC)
+        piton_raise_unhandled("TypeError", "object is not a generator");
+    return g->return_value;
+}
+
+void piton_gen_free(void *raw) {
+
+
+    PitonGenerator *gen = raw;
+    if (!gen) return;
+    gen->magic = 0;
+    free(gen);
+}
+
+/* GENERATOR_THROW_V1: generators cannot catch yet (yield-in-try is rejecte
+ * at lowering), so throw() marks the generator finished and the exception is
+ * raised at the caller's handler — matching CPython when the generator does
+ * not catch. */
+int64_t piton_gen_throw(void *raw, const char *exc_type) {
+    PitonGenerator *gen = raw;
+    if (!gen || gen->magic != PITON_GEN_MAGIC) {
+        piton_raise_unhandled("TypeError", "object is not a generator");
+        return 0;
+    }
+    if (gen->finished) {
+        piton_raise(exc_type, "");
+        return 0;
+    }
+    gen->finished = 1;
+    piton_raise(exc_type, "");
+    return 0;
+}
+
+/* GENERATOR_CLOSE_V1: close() marks the generator finished; since generators
+ * cannot yield inside try/finally yet, there is no cleanup to run and the
+ * CPython-visible behavior is "exhausted". */
+int64_t piton_gen_close(void *raw) {
+    PitonGenerator *gen = raw;
+    if (!gen || gen->magic != PITON_GEN_MAGIC) {
+        piton_raise_unhandled("TypeError", "object is not a generator");
+        return 0;
+    }
+    gen->finished = 1;
+    return 0;
+}
+
+/* AWAIT_PROTOCOL_V1: depth-first coroutine scheduler. A coroutine body is the
+ * same suspendible state machine as a generator: it "yields" the coroutine it
+ * awaits, and piton_coro_run drives that inner coroutine to completion then
+ * feeds its result back through sent_value and resumes the outer one. When a
+ * coroutine finishes (return v), the run loop returns v. */
+int64_t piton_coro_run(void *raw) {
+    PitonGenerator *coro = raw;
+    /* Pointer-floor guard: values below 1 MiB cannot be heap pointers, so
+     * awaiting a plain integer (esperar 42) fails closed with TypeError
+     * instead of dereferencing garbage. The async-gen path reaches this via
+     * piton_agen_next for awaited coroutines. */
+    if ((uintptr_t)raw < (uintptr_t)0x100000 || !coro || coro->magic != PITON_GEN_MAGIC) {
+        piton_raise_unhandled("TypeError", "object is not a coroutine");
+        return 0;
+    }
+    while (!coro->finished) {
+        coro->started = 1;
+        int64_t yielded = coro->func(raw);
+        if (coro->finished) return yielded;   /* return value surfaced */
+        int64_t inner = piton_coro_run((void *)yielded);
+        coro->sent_value = inner;             /* feed back to the await resume point */
+    }
+    return 0;
+}
+
+/* ASYNC_FOR_V1: drive one async generator until it yields data, completes an
+ * awaited coroutine, or finishes. The generator body writes its await marker
+ * into reserved slot 63 at every suspension point: 1 = "the returned value is a
+ * coroutine to run" (esperar), 0 = "plain data to hand to the async-for loop"
+ * (producir). This avoids dereferencing arbitrary data values as objects.
+ * finished == 1 means StopAsyncIteration (async for ends). */
+#define PITON_GEN_AWAIT_FLAG_SLOT 63
+int64_t piton_agen_next(void *raw) {
+    PitonGenerator *gen = raw;
+    if (!gen || gen->magic != PITON_GEN_MAGIC) {
+        piton_raise_unhandled("TypeError", "object is not an async generator");
+        return 0;
+    }
+    while (!gen->finished) {
+        gen->started = 1;
+        int64_t yielded = gen->func(raw);
+        if (gen->finished) return 0;                       /* StopAsyncIteration */
+        if (gen->locals[PITON_GEN_AWAIT_FLAG_SLOT]) {
+            gen->locals[PITON_GEN_AWAIT_FLAG_SLOT] = 0;    /* consume the marker */
+            gen->sent_value = piton_coro_run((void *)yielded);
+            continue;
+        }
+        return yielded;                                    /* data yield */
+    }
+    return 0;
+}
+
+/* ── TASK_SCHEDULER_V1: cooperative single-threaded event loop ────────────
+ *
+ * Awaitable values are tagged by their first int64 (magic). A coroutine that
+ * awaits something yields that value via gen_yield; the loop dispatches on the
+ * magic:
+ *   PITON_GEN_MAGIC    direct coroutine object  -> run depth-first inline
+ *   PITON_TASK_MAGIC   a Task                   -> suspend until the task is done,
+ *                                                  then feed its result back
+ *   PITON_GATHER_MAGIC a gather record          -> suspend until all sub-tasks
+ *                                                  are done (results accumulated
+ *                                                  in order), then feed a list
+ *   PITON_SLEEP0_MAGIC asyncio.sleep(0)         -> cooperative yield: re-queue
+ *                                                  this task behind others
+ * A task is the scheduling unit: a coroutine wrapped by piton_task_new, owned
+ * by the loop. Round-robin FIFO ready queue; new tasks are appended by
+ * create_task/gather and by waiters that became resumable. Byte-identical vs
+ * CPython for the tested subset (create_task + await task + gather + sleep(0)).
+ * Cancellation: task.cancel() requests the task be dropped; waiters of a
+ * cancelled task are cancelled too; a cancelled root surfaces as an unhandled
+ * CancelledError, mirroring asyncio.run semantics when nobody catches. */
+#define PITON_TASK_MAGIC    0x5049544E54414B4BLL           /* PITN TASK */
+#define PITON_GATHER_MAGIC  0x5049544E47415448LL           /* PITN GATH */
+#define PITON_SLEEP0_MAGIC  0x5049544E53503030LL           /* PITN SL00 */
+
+typedef struct PitonWaiter {
+    struct PitonWaiter *next;
+    void *task;                        /* PitonTask* whose coroutine is waiting */
+} PitonWaiter;
+
+typedef struct PitonGather PitonGather;
+
+typedef struct PitonTask {
+    int64_t magic;                     /* PITON_TASK_MAGIC */
+    int64_t state;                     /* 0 new, 1 ready, 2 running, 3 done, 4 cancelled */
+    int64_t result;
+    int64_t cancel_requested;
+    PitonWaiter *waiters;
+    PitonGather *gather_owner;         /* gather record this task feeds, if any */
+    int64_t gather_slot;
+    /* Inline await chain: chain[0] is the task's own coroutine; deeper
+     * entries are coroutines awaited depth-first (await coro()). When the
+     * chain suspends (sleep0/task/gather) the WHOLE chain stays recorded so
+     * resumption drives the innermost generator first and unwinds through
+     * sent_value — an inline-awaited coroutine that touches the loop would
+     * otherwise lose its parents. */
+    PitonGenerator *chain[64];
+    int64_t chain_depth;
+} PitonTask;
+
+struct PitonGather {
+    int64_t magic;                     /* PITON_GATHER_MAGIC */
+    int64_t n;
+    int64_t remaining;
+    int64_t aborted;                   /* a member was cancelled: propagate */
+    int64_t *results;
+    PitonTask **tasks;
+    PitonWaiter *waiters;
+};
+
+static PitonTask **piton_ready_queue = NULL;
+static int64_t piton_ready_cap = 0;
+static int64_t piton_ready_head = 0;
+static int64_t piton_ready_tail = 0;
+
+static void piton_ready_push(PitonTask *task) {
+    if (piton_ready_tail >= piton_ready_cap) {
+        int64_t new_cap = piton_ready_cap ? piton_ready_cap * 2 : 64;
+        piton_ready_queue = realloc(piton_ready_queue, (size_t)new_cap * sizeof(PitonTask *));
+        piton_ready_cap = new_cap;
+    }
+    piton_ready_queue[piton_ready_tail++] = task;
+}
+
+static PitonTask *piton_ready_pop(void) {
+    if (piton_ready_head >= piton_ready_tail) return NULL;
+    return piton_ready_queue[piton_ready_head++];
+}
+
+void *piton_task_new(void *coro) {
+    PitonTask *task = calloc(1, sizeof(PitonTask));
+    task->magic = PITON_TASK_MAGIC;
+    task->state = 0;
+    task->result = 0;
+    task->chain[0] = (PitonGenerator *)coro;
+    task->chain_depth = 1;
+    return task;
+}
+
+int64_t piton_task_cancel(void *raw) {
+    PitonTask *task = (PitonTask *)raw;
+    if (!task || (uintptr_t)raw < 0x100000 || (uintptr_t)raw >= 0x800000000000
+        || task->magic != PITON_TASK_MAGIC) {
+        piton_raise_unhandled("TypeError", "object has no attribute 'cancel'");
+        return 0;
+    }
+    task->cancel_requested = 1;
+    return 0;
+}
+
+/* TASK_SCHEDULER_V2: integer-second timers.  The current native loop remains
+ * single-threaded; sleeping occurs before the task is re-queued, preserving
+ * deterministic FIFO ordering while making elapsed time observable. */
+int64_t piton_sleep0(int64_t delay) {
+    if (delay < 0) {
+        piton_raise_unhandled("ValueError", "sleep length must be non-negative");
+        return 0;
+    }
+    if (delay > 0) {
+#ifdef _WIN32
+        Sleep((DWORD)delay * 1000U);
+#else
+        sleep((unsigned int)delay);
+#endif
+    }
+    return PITON_SLEEP0_MAGIC;
+}
+
+void *piton_gather_new(int64_t n) {
+    if (n < 0) n = 0;
+    PitonGather *gather = calloc(1, sizeof(PitonGather));
+    gather->magic = PITON_GATHER_MAGIC;
+    gather->n = n;
+    gather->remaining = n;
+    gather->results = calloc((size_t)n, sizeof(int64_t));
+    gather->tasks = calloc((size_t)n, sizeof(PitonTask *));
+    return gather;
+}
+
+int64_t piton_gather_add(void *raw, int64_t index, void *task_raw) {
+    PitonGather *gather = (PitonGather *)raw;
+    PitonTask *task = (PitonTask *)task_raw;
+    if (!gather || (uintptr_t)raw < 0x100000 || (uintptr_t)raw >= 0x800000000000
+        || gather->magic != PITON_GATHER_MAGIC) {
+        piton_raise_unhandled("TypeError", "object is not a gather");
+        return 0;
+    }
+    if (!task || (uintptr_t)task_raw < 0x100000 || (uintptr_t)task_raw >= 0x800000000000
+        || task->magic != PITON_TASK_MAGIC) {
+        piton_raise_unhandled("TypeError", "gather requires tasks");
+        return 0;
+    }
+    if (index < 0 || index >= gather->n) {
+        piton_raise_unhandled("TypeError", "gather index out of range");
+        return 0;
+    }
+    gather->tasks[index] = task;
+    task->gather_owner = gather;
+    task->gather_slot = index;
+    if (task->state == 4) {
+        /* a member was already cancelled: the await must propagate
+         * CancelledError instead of returning a list */
+        gather->aborted = 1;
+    } else if (task->state == 3) {
+        /* CPython: gathering already-finished tasks returns their values
+         * immediately; record the result now, the await path builds the list */
+        gather->results[index] = task->result;
+        --gather->remaining;
+    }
+    return 0;
+}
+
+static void *piton_build_result_list(int64_t *results, int64_t n) {
+    PitonCollection *list = piton_collection_new(1, n);   /* kind 1 = LIST */
+    for (int64_t i = 0; i < n; ++i)
+        piton_collection_put(list, i, i, results[i]);
+    return list;
+}
+
+static void piton_gather_complete(PitonGather *gather) {
+    void *list = piton_build_result_list(gather->results, gather->n);
+    PitonWaiter *waiter = gather->waiters;
+    gather->waiters = NULL;
+    while (waiter) {
+        PitonWaiter *next = waiter->next;
+        PitonTask *awaiting = (PitonTask *)waiter->task;
+        awaiting->chain[awaiting->chain_depth - 1]->sent_value = (int64_t)list;
+        piton_ready_push(awaiting);
+        waiter = next;
+    }
+}
+
+static void piton_notify_done(PitonTask *task) {
+    if (task->gather_owner) {
+        PitonGather *gather = task->gather_owner;
+        if (!gather->aborted) {
+            gather->results[task->gather_slot] = task->result;
+            if (--gather->remaining == 0) piton_gather_complete(gather);
+        }
+    }
+    PitonWaiter *waiter = task->waiters;
+    task->waiters = NULL;
+    while (waiter) {
+        PitonWaiter *next = waiter->next;
+        PitonTask *awaiting = (PitonTask *)waiter->task;
+        awaiting->chain[awaiting->chain_depth - 1]->sent_value = task->result;
+        piton_ready_push(awaiting);
+        waiter = next;
+    }
+}
+
+/* Drive one task until it completes, finishes its inline (depth-first) awaited
+ * coroutines, or yields a value only the loop can handle. Returns 1 when the
+ * task finished, 0 when control goes back to the loop. */
+static int piton_step_task(PitonTask *task) {
+    while (1) {
+        if (task->chain_depth == 0) {         /* chain fully unwound already */
+            task->state = 3;
+            task->result = 0;
+            return 1;
+        }
+        PitonGenerator *coro = task->chain[task->chain_depth - 1];
+        coro->started = 1;
+        int64_t yielded = coro->func(coro);
+        if (coro->finished) {                 /* this generator returned */
+            int64_t result = yielded;
+            task->chain_depth--;
+            if (task->chain_depth == 0) {     /* whole task done */
+                task->state = 3;
+                task->result = result;
+                return 1;
+            }
+            /* feed the value to the parent in the chain and keep driving it */
+            PitonGenerator *parent = task->chain[task->chain_depth - 1];
+            parent->sent_value = result;
+            continue;
+        }
+        if (yielded == PITON_SLEEP0_MAGIC) {  /* asyncio.sleep(0): cooperative */
+            piton_ready_push(task);
+            return 0;
+        }
+        /* Pointer-floor guard before any deref: only plausible heap pointers
+         * are inspected for magic. Awaiting an int fails closed. */
+        if (yielded < 0x100000 || yielded >= 0x800000000000) {
+            piton_raise_unhandled("TypeError", "object is not awaitable");
+            return 0;
+        }
+        if (*(int64_t *)yielded == PITON_GEN_MAGIC) {
+            if (task->chain_depth >= 64) {
+                piton_raise_unhandled("RuntimeError", "await chain too deep");
+                return 0;
+            }
+            task->chain[task->chain_depth++] = (PitonGenerator *)yielded;
+            continue;                         /* drive the awaited coroutine next */
+        }
+        if (*(int64_t *)yielded == PITON_TASK_MAGIC) {
+            PitonTask *other = (PitonTask *)yielded;
+            if (other->cancel_requested || other->state == 4) {
+                /* awaiting a cancelled task cancels the awaiter (CancelledError
+                 * propagates in CPython) — dropped on the next pop */
+                task->cancel_requested = 1;
+                piton_ready_push(task);
+                return 0;
+            }
+            PitonWaiter *waiter = calloc(1, sizeof(PitonWaiter));
+            waiter->task = task;
+            waiter->next = other->waiters;
+            other->waiters = waiter;
+            if (other->state == 0) piton_ready_push(other);
+            return 0;                         /* suspend the whole chain */
+        }
+        if (*(int64_t *)yielded == PITON_GATHER_MAGIC) {
+            PitonGather *gather = (PitonGather *)yielded;
+            if (gather->aborted) {
+                /* CPython: a cancelled member raises CancelledError the moment
+                 * the gather completes — here the awaiter is cancelled and the
+                 * pop drops it (CancelledError surfaces at the root). */
+                task->cancel_requested = 1;
+                piton_ready_push(task);
+                return 0;
+            }
+            if (gather->remaining == 0) {
+                /* all members finished before we awaited: CPython returns the
+                 * result list immediately */
+                coro->sent_value = (int64_t)piton_build_result_list(gather->results, gather->n);
+                continue;
+            }
+            PitonWaiter *waiter = calloc(1, sizeof(PitonWaiter));
+            waiter->task = task;
+            waiter->next = gather->waiters;
+            gather->waiters = waiter;
+            for (int64_t i = 0; i < gather->n; ++i)
+                if (gather->tasks[i] && gather->tasks[i]->state == 0) piton_ready_push(gather->tasks[i]);
+            return 0;                         /* suspend the whole chain */
+        }
+        piton_raise_unhandled("TypeError", "object is not awaitable");
+        return 0;
+    }
+}
+
+/* TASK_SCHEDULER_V1 entry: asyncio.run(coro()). Runs the root coroutine inside
+ * a root task until completion; returns the root result (CPython: asyncio.run
+ * returns the coroutine's value). */
+int64_t piton_event_run(void *root_raw) {
+    PitonGenerator *root_coro = (PitonGenerator *)root_raw;
+    if (!root_coro || root_coro->magic != PITON_GEN_MAGIC) {
+        piton_raise_unhandled("TypeError", "object is not a coroutine");
+        return 0;
+    }
+    piton_ready_head = piton_ready_tail = 0;
+    PitonTask *root_task = piton_task_new(root_coro);
+    piton_ready_push(root_task);
+    while (1) {
+        PitonTask *task = piton_ready_pop();
+        if (!task) break;
+        if (task->cancel_requested && task->state != 3) {
+            task->state = 4;
+            /* a cancelled gather member aborts its gather: the gather's waiters
+             * get CancelledError (CPython propagates the member's exception) */
+            if (task->gather_owner) {
+                PitonGather *gather = task->gather_owner;
+                if (!gather->aborted) {
+                    gather->aborted = 1;
+                    PitonWaiter *gw = gather->waiters;
+                    gather->waiters = NULL;
+                    while (gw) {
+                        PitonWaiter *gnext = gw->next;
+                        ((PitonTask *)gw->task)->cancel_requested = 1;
+                        piton_ready_push((PitonTask *)gw->task);
+                        gw = gnext;
+                    }
+                }
+            }
+            PitonWaiter *waiter = task->waiters;
+            task->waiters = NULL;
+            while (waiter) {
+                PitonWaiter *next = waiter->next;
+                ((PitonTask *)waiter->task)->cancel_requested = 1;
+                piton_ready_push((PitonTask *)waiter->task);
+                waiter = next;
+            }
+            continue;
+        }
+        if (piton_step_task(task)) piton_notify_done(task);
+    }
+    if (root_task->cancel_requested || root_task->state == 4) {
+        piton_raise_unhandled("CancelledError", "");
+        return 0;
+    }
+    return root_task->result;
+}
+
+void *piton_gen_collect(void *raw) {
+    PitonGenerator *gen = raw;
+    if (!gen || gen->magic != PITON_GEN_MAGIC) {
+        piton_raise_unhandled("TypeError", "object is not a generator");
+        return NULL;
+    }
+    /* Run the generator body and collect yields into a list */
+    PitonCollection *list = piton_collection_new(0, 16);  /* 0 = LIST */
+    while (!gen->finished) {
+        int64_t val = gen->func(raw);
+        if (gen->finished) break;
+        piton_collection_put(list, list->length, piton_collection_len(list), val);
+    }
+    return list;
 }
 
 void piton_collection_print(void *raw) {
@@ -535,6 +1452,7 @@ void *piton_dict_new(int64_t capacity) {
     d->header.refcount = 1;
     d->capacity = capacity;
     if (capacity > 0) d->entries = calloc((size_t)capacity, sizeof(PitonDictEntry));
+    piton_gc_register(d);
     ++live_dicts;
     return d;
 }
@@ -591,6 +1509,77 @@ void piton_dict_free(void *raw) {
 
 int64_t piton_dict_live_count(void) { return live_dicts; }
 
+/* ── CALL_UNPACKING_DYNAMIC4_V1 ─────────────────────────────────────────── */
+
+/* Expand a list/tuple into a physical argument buffer (max 4 slots).
+   The emitter statically guarantees `raw` is a sequence; the kind field is
+   still rechecked defensively. Values are decoded the same way as
+   piton_collection_get: INT -> payload, BOOL -> 0/1, others as raw bits.
+   Returns the number of items written; raises TypeError through the
+   exception channel and returns -1 on violation. */
+int64_t piton_unpack_seq4(void *raw, int64_t capacity, int64_t *out4) {
+    PitonCollection *c = raw;
+    if (!c) {
+        piton_raise("TypeError", "argument after * must be a sequence");
+        return -1;
+    }
+    if (c->kind != 1 && c->kind != 2) {
+        piton_raise("TypeError", "argument after * must be a list or tuple");
+        return -1;
+    }
+    if (c->length > capacity) {
+        piton_raise("TypeError", "too many positional arguments for call");
+        return -1;
+    }
+    for (int64_t i = 0; i < c->length; ++i) {
+        int64_t v = c->items[i];
+        if (pv_tag(v) == PITON_TAG_INT) { out4[i] = pv_payload_signed(v); continue; }
+        if (pv_tag(v) == PITON_TAG_BOOL) { out4[i] = pv_payload(v) ? 1 : 0; continue; }
+        out4[i] = v;
+    }
+    return c->length;
+}
+
+/* Expand a string-keyed dict into argument slots by parameter name.
+   Contract: every entry key is an interned C string pointer, enforced
+   statically by the emitter (CALL_UNPACKING_DYNAMIC4_V1 only admits dicts
+   built from constant string keys). `mask` tracks already-bound slots
+   (1<<index), catching duplicate keywords across successive `**` expansions
+   in the same call. Returns 0 on success; raises TypeError through the
+   exception channel and returns -1 on violation. */
+int64_t piton_dict_unpack4(void *raw, const char **names, int64_t count,
+                           int64_t *out4, int64_t *mask) {
+    PitonDict *d = raw;
+    if (!d) {
+        piton_raise("TypeError", "argument after ** must be a dict");
+        return -1;
+    }
+    for (int64_t i = 0; i < d->length; ++i) {
+        const char *key = (const char *)pv_payload(d->entries[i].key);
+        if (!key) {
+            piton_raise("TypeError", "keywords must be strings");
+            return -1;
+        }
+        int64_t matched = -1;
+        for (int64_t j = 0; j < count; ++j)
+            if (strcmp(key, names[j]) == 0) { matched = j; break; }
+        if (matched < 0) {
+            piton_raise("TypeError", "unexpected keyword argument in ** expansion");
+            return -1;
+        }
+        if (*mask & (1LL << matched)) {
+            piton_raise("TypeError", "multiple values for argument");
+            return -1;
+        }
+        *mask |= (1LL << matched);
+        int64_t v = d->entries[i].value;
+        if (pv_tag(v) == PITON_TAG_INT) { out4[matched] = pv_payload_signed(v); continue; }
+        if (pv_tag(v) == PITON_TAG_BOOL) { out4[matched] = pv_payload(v) ? 1 : 0; continue; }
+        out4[matched] = v;
+    }
+    return 0;
+}
+
 /* ── Set API ───────────────────────────────────────────────────────────── */
 
 void *piton_set_new(int64_t capacity) {
@@ -600,6 +1589,7 @@ void *piton_set_new(int64_t capacity) {
     s->header.refcount = 1;
     s->capacity = capacity;
     if (capacity > 0) s->items = calloc((size_t)capacity, sizeof(int64_t));
+    piton_gc_register(s);
     ++live_sets;
     return s;
 }
@@ -643,10 +1633,26 @@ int64_t piton_set_live_count(void) { return live_sets; }
 typedef struct {
     int64_t magic;
     int64_t addr;
-    int64_t n_args;
+    int64_t n_args;        /* fixed params (closures with *args keep the count WITHOUT the vararg slot) */
     int64_t n_cells;
-    int64_t cells[4];
+    int64_t *cells;
+    int64_t has_vararg;    /* VARIADIC_CLOSURE_V1: pack extras into a tuple at frame[n_cells+n_args] */
 } PitonClosure;
+
+#define PITON_BOUND_METHOD_MAGIC 0x5049544E424D4554LL
+typedef struct { int64_t magic, addr, self, n_args; } PitonBoundMethod;
+int64_t piton_bound_method_new(int64_t addr, int64_t n_args, int64_t self) {
+    PitonBoundMethod *m = calloc(1, sizeof(*m));
+    m->magic = PITON_BOUND_METHOD_MAGIC; m->addr = addr; m->self = self; m->n_args = n_args;
+    return (int64_t)m;
+}
+int64_t piton_bound_method_self(int64_t raw) {
+    PitonBoundMethod *m = (PitonBoundMethod *)raw;
+    if (!m || m->magic != PITON_BOUND_METHOD_MAGIC) {
+        fprintf(stderr, "AttributeError: bound method has no __self__\n"); exit(1);
+    }
+    return m->self;
+}
 
 int64_t piton_closure_new8(int64_t addr, int64_t n_args, int64_t n_cells,
                            int64_t c0, int64_t c1, int64_t c2, int64_t c3) {
@@ -656,7 +1662,21 @@ int64_t piton_closure_new8(int64_t addr, int64_t n_args, int64_t n_cells,
     c->n_args = n_args;
     c->n_cells = n_cells;
     int64_t cs[4] = {c0, c1, c2, c3};
+    c->cells = calloc((size_t)n_cells, sizeof(*c->cells));
     for (int i = 0; i < n_cells && i < 4; i++) c->cells[i] = cs[i];
+    return (int64_t)c;
+}
+
+int64_t piton_closure_new_frame(int64_t addr, int64_t n_args,
+                                int64_t n_cells, const int64_t *cells, int64_t has_vararg) {
+    PitonClosure *c = calloc(1, sizeof(PitonClosure));
+    c->magic = PITON_CLOSURE_MAGIC;
+    c->addr = addr;
+    c->n_args = n_args;
+    c->n_cells = n_cells;
+    c->has_vararg = has_vararg;
+    c->cells = calloc((size_t)(n_cells ? n_cells : 1), sizeof(*c->cells));
+    if (n_cells > 0) memcpy(c->cells, cells, (size_t)n_cells * sizeof(*c->cells));
     return (int64_t)c;
 }
 
@@ -682,26 +1702,101 @@ int64_t piton_closure_call6(int64_t callee, int64_t argc,
     return ((int64_t(*)(int64_t, int64_t, int64_t, int64_t))c->addr)(x[0], x[1], x[2], x[3]);
 }
 
+int64_t piton_closure_call_frame(int64_t callee, int64_t argc,
+                                 const int64_t *args) {
+    if (callee && ((int64_t *)callee)[0] == PITON_BOUND_METHOD_MAGIC) {
+        PitonBoundMethod *m = (PitonBoundMethod *)callee;
+        if (argc != m->n_args || argc > 3) {
+            fprintf(stderr, "TypeError: bound method called with wrong number of arguments\n"); exit(2);
+        }
+        int64_t a[4] = {m->self, 0, 0, 0};
+        for (int64_t i = 0; i < argc; ++i) a[i + 1] = args[i];
+        return ((int64_t(*)(int64_t,int64_t,int64_t,int64_t))m->addr)(a[0],a[1],a[2],a[3]);
+    }
+    if (!callee || ((int64_t *)callee)[0] != PITON_CLOSURE_MAGIC) {
+        if (argc > 4) {
+            fprintf(stderr, "TypeError: native call exceeds four direct arguments\n");
+            exit(2);
+        }
+        int64_t a[4] = {0, 0, 0, 0};
+        for (int64_t i = 0; i < argc; ++i) a[i] = args[i];
+        return ((int64_t(*)(int64_t, int64_t, int64_t, int64_t))callee)(a[0], a[1], a[2], a[3]);
+    }
+    PitonClosure *c = (PitonClosure *)callee;
+    if (argc != c->n_args && !(c->has_vararg && argc > c->n_args)) {
+        fprintf(stderr, "TypeError: closure called with wrong number of arguments\n");
+        exit(2);
+    }
+    /* VARIADIC_CLOSURE_V1: extras pack into a tuple at frame[n_cells+n_args].
+     * Elements are raw int bits (runtime cannot recover tags) -> int subset. */
+    int64_t extra = (c->has_vararg && argc > c->n_args) ? argc - c->n_args : 0;
+    int64_t total = c->n_cells + c->n_args + (c->has_vararg ? 1 : 0);
+    int64_t *frame = calloc((size_t)total, sizeof(*frame));
+    if (c->n_cells > 0) memcpy(frame, c->cells, (size_t)c->n_cells * sizeof(*frame));
+    int64_t fixed = argc < c->n_args ? argc : c->n_args;
+    if (fixed > 0) memcpy(frame + c->n_cells, args, (size_t)fixed * sizeof(*frame));
+    if (c->has_vararg) {
+        void *tuple = piton_collection_new(2 /*tuple*/, extra);
+        /* VARIADIC_CLOSURE_V1 runtime-internal buffer: its lifetime is
+         * managed by the call dispatcher (arena until process exit, M13 owns
+         * real GC); it is excluded from the user-space live-count tripwire. */
+        --live_collections;
+        piton_gc_unregister(tuple);
+        for (int64_t i = 0; i < extra; ++i) piton_collection_put(tuple, i, 0, args[c->n_args + i]);
+        frame[c->n_cells + c->n_args] = (int64_t)tuple;
+    }
+    int64_t result = ((int64_t(*)(int64_t *))c->addr)(frame);
+    free(frame);
+    return result;
+}
+
+int64_t piton_callback_invoke(int64_t callback, int64_t value) {
+    return piton_closure_call_frame(callback, 1, &value);
+}
+
+int64_t piton_frame_call(int64_t addr, int64_t argc, const int64_t *args) {
+    int64_t *frame = calloc((size_t)argc, sizeof(*frame));
+    if (argc > 0) memcpy(frame, args, (size_t)argc * sizeof(*frame));
+    int64_t result = ((int64_t(*)(int64_t *))addr)(frame);
+    free(frame);
+    return result;
+}
+
 /* ── Object API ────────────────────────────────────────────────────────── */
 
 void *piton_object_new(const char *class_name) {
     PitonObject *o = calloc(1, sizeof(*o));
-    o->header.sub_tag = 0;
+    o->header.sub_tag = SUB_TAG_OBJECT;
     o->header.refcount = 1;
     o->class_name = class_name;
     o->parent_class_name = NULL;
+    piton_gc_register(o);
     ++live_objects;
     return o;
 }
 
 void *piton_object_new_with_parent(const char *class_name, const char *parent_class_name) {
     PitonObject *o = calloc(1, sizeof(*o));
-    o->header.sub_tag = 0;
+    o->header.sub_tag = SUB_TAG_OBJECT;
     o->header.refcount = 1;
     o->class_name = class_name;
     o->parent_class_name = parent_class_name;
+    piton_gc_register(o);
     ++live_objects;
     return o;
+}
+
+void *piton_object_new_with_finalizer(const char *class_name, const char *parent_class_name, int64_t finalizer) {
+    PitonObject *o = piton_object_new_with_parent(class_name, parent_class_name);
+    o->finalizer = finalizer;
+    o->finalizer_called = 0;
+    return o;
+}
+
+static void piton_object_run_finalizer(PitonObject *o) {
+    if (!o || !o->finalizer || o->finalizer_called) return;
+    o->finalizer_called = 1;
+    (void)((int64_t (*)(int64_t))o->finalizer)((int64_t)o);
 }
 
 const char *piton_object_class_name(void *raw) {
@@ -730,6 +1825,26 @@ void piton_object_set(void *raw, const char *name, int64_t value) {
     ++o->length;
 }
 
+/* Store a native object pointer as an owned tagged value.  The old setter
+ * remains the integer-only ABI used by existing generated code. */
+void piton_object_set_tagged(void *raw, const char *name, int64_t raw_ptr) {
+    PitonObject *o = raw;
+    if (!o || !name || !raw_ptr) return;
+    int64_t ev = pv_encode(PITON_TAG_OBJECT, raw_ptr);
+    for (int64_t i = 0; i < o->length; ++i)
+        if (strcmp(o->attributes[i].name, name) == 0) {
+            piton_value_deep_free(o->attributes[i].value);
+            o->attributes[i].value = ev;
+            piton_value_incref(ev);
+            return;
+        }
+    if (o->length >= 16) return;
+    o->attributes[o->length].name = name;
+    o->attributes[o->length].value = ev;
+    ++o->length;
+    piton_value_incref(ev);
+}
+
 int64_t piton_object_get(void *raw, const char *name) {
     PitonObject *o = raw;
     if (!o || !name) return pv_none();
@@ -743,14 +1858,133 @@ int64_t piton_object_get(void *raw, const char *name) {
     return pv_none();
 }
 
+/* ATTRIBUTE_LOOKUP_V2: read-through access that first consults the object's
+ * field map (normal lookup) and, on a miss, delegates to the class-defined
+ * __getattr__(self, name). The hook is a plain native function, so its own
+ * piton_object_get inside is never rerouted (no recursion). */
+int64_t piton_object_lookup(void *raw, const char *name, int64_t fallback) {
+    PitonObject *o = raw;
+    if (!o || !name) {
+        piton_raise_unhandled("AttributeError", "attribute lookup on invalid object");
+        return 0;
+    }
+    for (int64_t i = 0; i < o->length; ++i)
+        if (strcmp(o->attributes[i].name, name) == 0) {
+            int64_t v = o->attributes[i].value;
+            if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+            if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+            return v;
+        }
+    return ((int64_t (*)(int64_t, const char *))fallback)((int64_t)o, name);
+}
+
 void piton_object_free(void *raw) {
     if (!raw) return;
-    PitonObject *o = raw;
-    for (int64_t i = 0; i < o->length; ++i)
-        piton_value_deep_free(o->attributes[i].value);
-    free(o);
-    --live_objects;
+    piton_value_deep_free(pv_encode(PITON_TAG_OBJECT, (int64_t)raw));
 }
+
+/* ── M13 cycle collector (Windows runtime) ───────────────────────────── */
+
+static void piton_gc_detach_node(void *raw) {
+    if (!raw) return;
+    PitonHeader *h = raw;
+    int64_t none = pv_none();
+    switch (h->sub_tag) {
+    case SUB_TAG_LIST: case SUB_TAG_TUPLE: {
+        PitonCollection *c = raw;
+        for (int64_t i = 0; i < c->length; ++i) {
+            int64_t child = c->items[i];
+            c->items[i] = none;
+            piton_value_deep_free(child);
+        }
+        break;
+    }
+    case SUB_TAG_DICT: {
+        PitonDict *d = raw;
+        for (int64_t i = 0; i < d->length; ++i) {
+            int64_t key = d->entries[i].key;
+            int64_t value = d->entries[i].value;
+            d->entries[i].key = none;
+            d->entries[i].value = none;
+            piton_value_deep_free(key);
+            piton_value_deep_free(value);
+        }
+        break;
+    }
+    case SUB_TAG_SET: {
+        PitonSet *s = raw;
+        for (int64_t i = 0; i < s->length; ++i) {
+            int64_t child = s->items[i];
+            s->items[i] = none;
+            piton_value_deep_free(child);
+        }
+        break;
+    }
+    case SUB_TAG_OBJECT: {
+        PitonObject *o = raw;
+        piton_object_run_finalizer(o);
+        for (int64_t i = 0; i < o->length; ++i) {
+            int64_t child = o->attributes[i].value;
+            o->attributes[i].value = none;
+            piton_value_deep_free(child);
+        }
+        break;
+    }
+    default: break;
+    }
+}
+
+static void piton_gc_free_node(void *raw) {
+    if (!raw) return;
+    PitonHeader *h = raw;
+    piton_gc_unregister(raw);
+    switch (h->sub_tag) {
+    case SUB_TAG_LIST: case SUB_TAG_TUPLE: {
+        PitonCollection *c = raw;
+        free(c->items); free(c); --live_collections;
+        break;
+    }
+    case SUB_TAG_DICT: {
+        PitonDict *d = raw;
+        free(d->entries); free(d); --live_dicts;
+        break;
+    }
+    case SUB_TAG_SET: {
+        PitonSet *s = raw;
+        free(s->items); free(s); --live_sets;
+        break;
+    }
+    case SUB_TAG_OBJECT: {
+        PitonObject *o = raw;
+        free(o); --live_objects;
+        break;
+    }
+    default: break;
+    }
+}
+
+/* After module-owned roots are released, every registered node that remains is
+ * unreachable except through a cycle.  Protect the whole snapshot, cut its
+ * cyclic edges, then reclaim all shells.  This avoids recursive frees on a
+ * cyclic graph while preserving normal refcounting before collection. */
+void piton_gc_collect(void) {
+    size_t n = gc_count;
+    if (!n) return;
+    void **snapshot = malloc(n * sizeof(*snapshot));
+    if (!snapshot) {
+        fprintf(stderr, "MemoryError: GC snapshot allocation failed\n");
+        exit(1);
+    }
+    memcpy(snapshot, gc_nodes, n * sizeof(*snapshot));
+    for (size_t i = 0; i < n; ++i) {
+        PitonHeader *h = snapshot[i];
+        ++h->refcount;
+    }
+    for (size_t i = 0; i < n; ++i) piton_gc_detach_node(snapshot[i]);
+    for (size_t i = 0; i < n; ++i) piton_gc_free_node(snapshot[i]);
+    free(snapshot);
+}
+
 
 int64_t piton_object_live_count(void) { return live_objects; }
 
@@ -979,39 +2213,33 @@ void piton_raise(const char *type, const char *message) {
     piton_raise_unhandled(type, message);
 }
 
-/* Exception chaining globals (__cause__ and __context__). */
-static const char *piton_exc_cause_type = NULL;
-static const char *piton_exc_cause_message = NULL;
-static const char *piton_exc_context_type = NULL;
-static const char *piton_exc_context_message = NULL;
+/* Report an exception with no statically-matching handler and exit. */
+static const char *piton_exception_cause_type = NULL;
+static const char *piton_exception_cause_msg = NULL;
 
-/* Saved exception state for bare re-raise (piton identifies a handler statically). */
-static const char *piton_reraise_type = NULL;
-static const char *piton_reraise_message = NULL;
-static const char *piton_reraise_cause_type = NULL;
-static const char *piton_reraise_cause_message = NULL;
-
-/* Report an exception with no statically-matching handler and exit.
-   Prints exception chain (__cause__ or __context__) like CPython. */
 void piton_raise_unhandled(const char *type, const char *message) {
-    if (piton_exc_cause_type) {
-        fprintf(stderr, "%s", piton_exc_cause_type);
-        if (piton_exc_cause_message && *piton_exc_cause_message)
-            fprintf(stderr, ": %s", piton_exc_cause_message);
-        fputc('\n', stderr);
-        fprintf(stderr, "The above exception was the direct cause of the following exception:\n");
-    } else if (piton_exc_context_type) {
-        fprintf(stderr, "%s", piton_exc_context_type);
-        if (piton_exc_context_message && *piton_exc_context_message)
-            fprintf(stderr, ": %s", piton_exc_context_message);
-        fputc('\n', stderr);
-        fprintf(stderr, "During handling of the above exception, another exception occurred:\n");
+    /* EXCEPTION_CHAINING_V1: the cause prints first, like CPython's
+     * "__cause__" chain in the traceback (text-only model — no frames). */
+    if (piton_exception_cause_type) {
+        fprintf(stderr, "%s", piton_exception_cause_type);
+        if (piton_exception_cause_msg && *piton_exception_cause_msg)
+            fprintf(stderr, ": %s", piton_exception_cause_msg);
+        fprintf(stderr, " -> causada por\n");
     }
     fprintf(stderr, "%s", type ? type : "Exception");
     if (message && *message) fprintf(stderr, ": %s", message);
     fputc('\n', stderr);
     fflush(stderr);
     exit(1);
+}
+
+/* EXCEPTION_CHAINING_V1: raise with an explicit cause. The cause must outlive
+ * the handler probe, so it is recorded BEFORE the raise runs. */
+void piton_raise_chain(const char *type, const char *message,
+                       const char *cause_type, const char *cause_msg) {
+    piton_exception_cause_type = cause_type;
+    piton_exception_cause_msg = cause_msg;
+    piton_raise(type, message);
 }
 
 /* Check if an exception was caught (for the emitter to test after try_push). */
@@ -1029,7 +2257,7 @@ const char *piton_catch_message(void) {
     return piton_exception_message;
 }
 
-/* Get the caught exception message, returning empty string if NULL (for exception binding). */
+/* Get the caught exception message, never NULL (for exception binding). */
 const char *piton_catch_message_safe(void) {
     return piton_exception_message ? piton_exception_message : "";
 }
@@ -1039,10 +2267,8 @@ void piton_catch_clear(void) {
     piton_exception_active = 0;
     piton_exception_type = NULL;
     piton_exception_message = NULL;
-    piton_exc_cause_type = NULL;
-    piton_exc_cause_message = NULL;
-    piton_exc_context_type = NULL;
-    piton_exc_context_message = NULL;
+    piton_exception_cause_type = NULL;
+    piton_exception_cause_msg = NULL;
 }
 
 /* Snapshot the active exception before the handler clears catch state. */
@@ -1232,6 +2458,235 @@ int64_t piton_sum_set(void *raw) {
             total += pv_payload_signed(v);
     }
     return total;
+}
+
+/* ── M14 BUILTINS_CORE_V2 ─────────────────────────────────────────────────
+   Matriz declarada (paridad Win/Linux):
+     ord(str)        -> int   (UTF-8 completo; TypeError si len != 1 char)
+     chr(int)        -> str   (UTF-8 encode; ValueError fuera de 0..0x10FFFF)
+     bin(int)        -> str   ("0b...", negativos "-0b...")
+     pow(int,int>=0) -> int
+     pow(float,int)  -> float (exponente entero, negativos incluidos)
+     any/all(list|tuple) -> bool (truthiness por tag; str vacio = False)
+     round(int)      -> int   (identidad)
+     round(float)    -> int   (half-to-even, como CPython)
+   Fuera de la matriz = fail-closed con raise explícito.
+   ─────────────────────────────────────────────────────────────────────── */
+
+static inline int piton_value_truthy(int64_t v) {
+    switch (pv_tag(v)) {
+        case PITON_TAG_NONE: return 0;
+        case PITON_TAG_BOOL: return pv_payload(v) ? 1 : 0;
+        case PITON_TAG_INT:  return pv_payload_signed(v) != 0;
+        case PITON_TAG_FLOAT: {
+            double *fp = (double *)(uintptr_t)pv_payload(v);
+            return fp && *fp != 0.0;
+        }
+        case PITON_TAG_OBJECT: {
+            int64_t ptr = (int64_t)pv_payload(v);
+            if (!ptr) return 0;
+            PitonHeader *h = (PitonHeader *)(uintptr_t)ptr;
+            if (h->sub_tag == SUB_TAG_STR) {
+                const char *s = (const char *)(uintptr_t)(ptr + sizeof(PitonHeader));
+                return s[0] != '\0';
+            }
+            if (h->sub_tag == SUB_TAG_LIST || h->sub_tag == SUB_TAG_TUPLE)
+                return ((PitonCollection *)(uintptr_t)ptr)->length > 0;
+            return 1;
+        }
+        default: return 1;
+    }
+}
+
+int64_t piton_all_iterable(void *raw) {
+    PitonCollection *c = raw;
+    if (!c) return 1;
+    for (int64_t i = 0; i < c->length; ++i)
+        if (!piton_value_truthy(c->items[i])) return 0;
+    return 1;
+}
+
+int64_t piton_any_iterable(void *raw) {
+    PitonCollection *c = raw;
+    if (!c) return 0;
+    for (int64_t i = 0; i < c->length; ++i)
+        if (piton_value_truthy(c->items[i])) return 1;
+    return 0;
+}
+
+int64_t piton_pow_int(int64_t b, int64_t e) {
+    if (e < 0) {
+        piton_raise("TypeError", "pow() negative exponent unsupported (M14 v1)");
+        return 0;
+    }
+    int64_t acc = 1;
+    while (e > 0) {
+        if (e & 1) acc *= b;
+        b *= b;
+        e >>= 1;
+    }
+    return acc;
+}
+
+double piton_pow_float(double b, int64_t e) {
+    int neg = e < 0;
+    if (neg) e = -e;
+    double acc = 1.0;
+    while (e > 0) {
+        if (e & 1) acc *= b;
+        b *= b;
+        e >>= 1;
+    }
+    return neg ? 1.0 / acc : acc;
+}
+
+int64_t piton_ord(const char *s) {
+    if (!s || !s[0]) {
+        piton_raise("TypeError", "ord() expected a character, but string of length 0 found");
+        return 0;
+    }
+    const unsigned char *u = (const unsigned char *)s;
+    int64_t cp; int len;
+    if (u[0] < 0x80) { cp = u[0]; len = 1; }
+    else if ((u[0] & 0xE0) == 0xC0) { cp = u[0] & 0x1F; len = 2; }
+    else if ((u[0] & 0xF0) == 0xE0) { cp = u[0] & 0x0F; len = 3; }
+    else if ((u[0] & 0xF8) == 0xF0) { cp = u[0] & 0x07; len = 4; }
+    else {
+        piton_raise("TypeError", "ord() received invalid UTF-8");
+        return 0;
+    }
+    for (int i = 1; i < len; ++i) cp = (cp << 6) | (u[i] & 0x3F);
+    if (s[len] != '\0') {
+        piton_raise("TypeError", "ord() expected a character, but string of length >1 found");
+        return 0;
+    }
+    return cp;
+}
+
+int64_t piton_chr(int64_t cp) {
+    if (cp < 0 || cp > 0x10FFFF) {
+        piton_raise("ValueError", "chr() arg not in range(0x110000)");
+        return 0;
+    }
+    char *p = (char *)malloc(5);
+    if (cp < 0x80) {
+        p[0] = (char)cp; p[1] = 0;
+    } else if (cp < 0x800) {
+        p[0] = (char)(0xC0 | (cp >> 6)); p[1] = (char)(0x80 | (cp & 0x3F)); p[2] = 0;
+    } else if (cp < 0x10000) {
+        p[0] = (char)(0xE0 | (cp >> 12)); p[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        p[2] = (char)(0x80 | (cp & 0x3F)); p[3] = 0;
+    } else {
+        p[0] = (char)(0xF0 | (cp >> 18)); p[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
+        p[2] = (char)(0x80 | ((cp >> 6) & 0x3F)); p[3] = (char)(0x80 | (cp & 0x3F)); p[4] = 0;
+    }
+    return (int64_t)p;
+}
+
+int64_t piton_bin(int64_t v) {
+    char *p = (char *)malloc(70);
+    size_t o = 0;
+    uint64_t m;
+    if (v < 0) { p[o++] = '-'; m = (uint64_t)(-(v + 1)) + 1; }
+    else m = (uint64_t)v;
+    p[o++] = '0'; p[o++] = 'b';
+    char tmp[64]; int n = 0;
+    do { tmp[n++] = (char)('0' + (m & 1)); m >>= 1; } while (m);
+    while (n) p[o++] = tmp[--n];
+    p[o] = 0;
+    return (int64_t)p;
+}
+
+int64_t piton_round_float(double x) {
+    double ax = x < 0 ? -x : x;
+    if (ax >= 9.0e18) {
+        piton_raise("OverflowError", "round() float too large to convert to int");
+        return 0;
+    }
+    int64_t t = (int64_t)ax;
+    double frac = ax - (double)t;
+    int64_t r;
+    if (frac > 0.5) r = t + 1;
+    else if (frac < 0.5) r = t;
+    else r = (t & 1) ? t + 1 : t;     /* half-to-even */
+    return x < 0 ? -r : r;
+}
+
+/* ── M14 TYPE_CONVERSION_V1 + MATH_TIER1_V1 ──────────────────────────────
+   Matriz declarada (paridad Win/Linux):
+     entero/int:   int/bool → identidad; float → trunc hacia cero;
+                   str base 10 con espacios alrededor;
+                   str invalida → ValueError CAPTURABLE (no crash)
+     decimal/float: int/bool → double; float → identidad;
+                   str parse double; invalida → ValueError capturable
+     texto/str:    int/float/bool/None/str → cadena con el MISMO formato
+                   que imprimir() (coherencia interna declarada; float no es
+                   repr completo CPython → divergencia heredada del printer)
+     booleano/bool: truthiness por tipo (int!=0, float!=0.0, str!="",
+                   coleccion no vacia, None→False)
+     math: floor/ceil/trunc (float→int), fabs (float→float),
+           gcd(int,int) (valor absoluto, euclides), pi/e constantes.
+   ─────────────────────────────────────────────────────────────────────── */
+
+int64_t piton_int_from_str(const char *s) {
+    if (!s) { piton_raise("TypeError", "int() argument must be a string"); return 0; }
+    while (*s == ' ' || *s == '\t' || *s == '\n') ++s;
+    if (!*s) { piton_raise("ValueError", "invalid literal for int() with base 10"); return 0; }
+    char *end = NULL;
+    int64_t v = (int64_t)_strtoi64(s, &end, 10);
+    if (end == s) { piton_raise("ValueError", "invalid literal for int() with base 10"); return 0; }
+    while (*end == ' ' || *end == '\t' || *end == '\n') ++end;
+    if (*end) { piton_raise("ValueError", "invalid literal for int() with base 10"); return 0; }
+    return v;
+}
+
+double piton_float_from_str(const char *s) {
+    if (!s) { piton_raise("TypeError", "float() argument must be a string"); return 0.0; }
+    while (*s == ' ' || *s == '\t' || *s == '\n') ++s;
+    if (!*s) { piton_raise("ValueError", "could not convert string to float"); return 0.0; }
+    char *end = NULL;
+    double v = strtod(s, &end);
+    if (end == s) { piton_raise("ValueError", "could not convert string to float"); return 0.0; }
+    while (*end == ' ' || *end == '\t' || *end == '\n') ++end;
+    if (*end) { piton_raise("ValueError", "could not convert string to float"); return 0.0; }
+    return v;
+}
+
+int64_t piton_str_from_int(int64_t v) {
+    char *p = (char *)malloc(24);
+    sprintf(p, "%lld", (long long)v);
+    return (int64_t)p;
+}
+
+int64_t piton_str_from_bool(int64_t v) {
+    return (int64_t)(v ? "True" : "False");
+}
+
+int64_t piton_str_from_none(void) {
+    return (int64_t)"None";
+}
+
+int64_t piton_str_from_float(double x) {
+    char *p = (char *)malloc(40);
+    if (isfinite(x) && trunc(x) == x) sprintf(p, "%.1f", x);
+    else sprintf(p, "%.15g", x);
+    return (int64_t)p;
+}
+
+int64_t piton_str_truthy(const char *s) {
+    return (s && s[0]) ? 1 : 0;
+}
+
+int64_t piton_math_floor(double x) { return (int64_t)floor(x); }
+int64_t piton_math_ceil(double x)  { return (int64_t)ceil(x); }
+int64_t piton_math_trunc(double x) { return (int64_t)trunc(x); }
+double  piton_math_fabs(double x)  { return fabs(x); }
+
+int64_t piton_math_gcd(int64_t a, int64_t b) {
+    if (a < 0) a = -a;
+    if (b < 0) b = -b;
+    while (b) { int64_t t = a % b; a = b; b = t; }
+    return a;
 }
 
 const char *piton_type_name(int64_t value) {

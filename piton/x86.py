@@ -21,7 +21,7 @@ class NativeBuildError(RuntimeError):
     pass
 
 
-_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted"}
+_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "round", "redondear"}
 
 PITON_GEN_MAX_SLOTS = 64
 PITON_GEN_LOCAL_BASE = 48
@@ -133,16 +133,19 @@ class Win64NasmEmitter:
             "extern piton_collection_len", "extern piton_collection_get",
             "extern piton_list_append",
             "extern piton_genexpr_new", "extern piton_genexpr_iter", "extern piton_genexpr_next", "extern piton_genexpr_free",
-            "extern piton_gen_new", "extern piton_gen_next", "extern piton_gen_send", "extern piton_gen_throw", "extern piton_gen_close", "extern piton_gen_free", "extern piton_gen_collect",
+            "extern piton_gen_new", "extern piton_gen_next", "extern piton_gen_send", "extern piton_gen_throw", "extern piton_gen_close", "extern piton_gen_free", "extern piton_gen_collect", "extern piton_gen_return_set", "extern piton_gen_return_value",
             "extern piton_coro_run", "extern piton_agen_next",
             "extern piton_event_run", "extern piton_task_new", "extern piton_task_cancel", "extern piton_sleep0", "extern piton_gather_new", "extern piton_gather_add",
+            "extern piton_raise_chain",
             "extern piton_sorted_new",
             "extern piton_iterator_new_any", "extern piton_iterator_next_any",
+            "extern piton_calliter_new", "extern piton_calliter_next",
             "extern piton_enumerate_new", "extern piton_enumerate_next",
             "extern piton_reversed_new", "extern piton_reversed_next",
             "extern piton_zip_new", "extern piton_zip_next",
             "extern piton_callback_iterator_new", "extern piton_callback_iterator_next",
             "extern piton_collection_print", "extern piton_collection_free",
+            "extern piton_gc_collect",
             "extern piton_collection_live_count",
             "extern piton_dict_new", "extern piton_dict_put",
             "extern piton_dict_len", "extern piton_dict_get",
@@ -153,21 +156,24 @@ class Win64NasmEmitter:
             "extern piton_set_free", "extern piton_set_live_count",
             "extern piton_raise",
             "extern piton_raise_unhandled",
-            "extern piton_raise_from",
-            "extern piton_raise_from_var",
-            "extern piton_raise_from_none",
-            "extern piton_set_context_from_reraise",
             "extern piton_try_push", "extern piton_try_pop", "extern piton_try_set_accepted",
             "extern piton_catch_flag", "extern piton_catch_type", "extern piton_catch_message", "extern piton_catch_message_safe", "extern piton_catch_clear",
             "extern piton_reraise_save", "extern piton_reraise", "extern piton_reraise_unhandled",
             "extern piton_abs_int", "extern piton_abs_float",
             "extern piton_min_int", "extern piton_max_int", "extern piton_min_float", "extern piton_max_float",
             "extern piton_sum_collection", "extern piton_sum_dict", "extern piton_sum_set",
+            "extern piton_all_iterable", "extern piton_any_iterable",
+            "extern piton_pow_int", "extern piton_pow_float",
+            "extern piton_ord", "extern piton_chr", "extern piton_bin", "extern piton_round_float",
+            "extern piton_int_from_str", "extern piton_float_from_str",
+            "extern piton_str_from_int", "extern piton_str_from_bool",
+            "extern piton_str_from_none", "extern piton_str_from_float",
+            "extern piton_str_truthy",
+            "extern piton_math_floor", "extern piton_math_ceil", "extern piton_math_trunc",
+            "extern piton_math_fabs", "extern piton_math_gcd",
             "extern piton_type_name", "extern piton_type_from_raw",
-            "extern piton_float_floor", "extern piton_float_ceil",
-            "extern piton_float_sin", "extern piton_float_cos", "extern piton_float_log",
-            "extern piton_exit", "extern piton_argv_new",
-            "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_set", "extern piton_object_get",
+            "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_new_with_finalizer", "extern piton_object_set", "extern piton_object_set_tagged", "extern piton_object_get", "extern piton_object_lookup",
+
             "extern piton_object_free", "extern piton_object_live_count",
             "extern piton_print_float",
             "extern piton_print_value",
@@ -285,6 +291,7 @@ class Win64NasmEmitter:
         self._emit_cleanup()
         if function.name == "<module>":
             self.lines.extend([
+                "    call piton_gc_collect",
                 "    call piton_collection_live_count", f"    mov {self._address('@scratch0')}, rax",
                 "    call piton_object_live_count", f"    or rax, {self._address('@scratch0')}",
                 f"    mov {self._address('@scratch1')}, rax",
@@ -525,7 +532,14 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "builtin_iter_new":
             builtin, source, start = args
-            if builtin != "enumerate":
+            if builtin == "calliter":
+                # ITER_PROTOCOL_V2: iter(callable, sentinel); element type of
+                # the callable is the raw 0-arg call result (int subset).
+                callable_src, sentinel_src = source
+                self._load_operand(callable_src, "rcx")
+                self._load_operand(sentinel_src, "rdx")
+                self.lines.append("    call piton_calliter_new")
+            elif builtin != "enumerate":
                 if builtin == "reversed":
                     if self.types.get(source) not in {"list", "tuple"}:
                         raise NativeBuildError("native reversed currently requires a list or tuple")
@@ -590,6 +604,8 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_zip_next")
                 elif iterator_type in {"iterator:map", "iterator:filter"}:
                     self.lines.append("    call piton_callback_iterator_next")
+                elif iterator_type == "iterator:calliter":
+                    self.lines.append("    call piton_calliter_next")
                 else:
                     self.lines.append("    call piton_iterator_next_any")
             self.lines.append(f"    mov {self._address(result)}, rax")
@@ -755,6 +771,54 @@ class Win64NasmEmitter:
             operator, left, right = args
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
+            # SPECIAL_METHOD_LOOKUP_V1: `==` over native class instances
+            # dispatches to the class-defined __eq__ (MRO resolved), same as
+            # CPython. Fallback: object identity (cmp on *values*, documented).
+            if operator == "==" and (
+                left_type.startswith("object:") or right_type.startswith("object:")
+            ):
+                owner_side = left_type if left_type.startswith("object:") else right_type
+                cls_name = owner_side.split(":", 1)[1]
+                eq_cls = None
+                for candidate in self.mir_module_class_mro.get(cls_name, []):
+                    if "__eq__" in self.mir_module_classes.get(candidate, set()):
+                        eq_cls = candidate
+                        break
+                if eq_cls is None and "__eq__" in self.mir_module_classes.get(cls_name, set()):
+                    eq_cls = cls_name
+                if eq_cls is not None:
+                    target = f"{eq_cls}____eq__"
+                    frame_vals = [left, right]
+                    if self.function_frame_abi.get(target, False):
+                        frame_size = ((len(frame_vals) * 8 + 32 + 15) // 16) * 16
+                        self.lines.append(f"    sub rsp, {frame_size}")
+                        for index, value in enumerate(frame_vals):
+                            self._load_operand(value, "r10")
+                            self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
+                        self.lines.extend([
+                            f"    lea rcx, [{target}]",
+                            f"    mov edx, {len(frame_vals)}",
+                            "    lea r8, [rsp+32]",
+                            "    call piton_frame_call",
+                            f"    add rsp, {frame_size}",
+                        ])
+                    else:
+                        for register, value in zip(("rcx", "rdx", "r8", "r9"), frame_vals):
+                            self._load_operand(value, register)
+                        self.lines.append(f"    call {target}")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "bool"
+                    return
+            if operator == "es":
+                # Identidad / no-igualdad equivalente para el subset:
+                # compara punteros (objetos) o valores (escalares).
+                self._load_operand(left, "rax")
+                self._load_operand(right, "rcx")
+                self.lines.append("    cmp rax, rcx")
+                self.lines.extend(["    sete al", "    movzx rax, al"])
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+                return
             numeric_types = {"int", "bool"}
             if "bigint" in {left_type, right_type}:
                 self._emit_bigint_compare(operator, left, right, result)
@@ -938,6 +1002,12 @@ class Win64NasmEmitter:
             self.lines.append("    call piton_gen_next")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
+        elif op == "gen_retval":
+            gen_ref = args[0]
+            self._load_operand(gen_ref, "rcx")
+            self.lines.append("    call piton_gen_return_value")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
         elif op == "gen_send":
             gen_ref, send_value, handler_label = args
             self._load_operand(gen_ref, "rcx")
@@ -1031,20 +1101,33 @@ class Win64NasmEmitter:
             self.lines.append("    call piton_dict_put")
         elif op == "object_new":
             class_name, parent_name = args
+            finalizer_class = None
+            for candidate in self.mir_module_class_mro.get(class_name, []):
+                if "__del__" in self.mir_module_classes.get(candidate, set()):
+                    finalizer_class = candidate
+                    break
+            if finalizer_class is None and "__del__" in self.mir_module_classes.get(class_name, set()):
+                finalizer_class = class_name
+            finalizer_name = f"{finalizer_class}____del__" if finalizer_class else None
+            if finalizer_name:
+                finalizer_params = self.function_param_map.get(finalizer_name) or []
+                if len(finalizer_params) != 1:
+                    raise NativeBuildError("native __del__ must take exactly self (FINALIZERS_V1)")
+                if self.function_frame_abi.get(finalizer_name, False):
+                    raise NativeBuildError("native __del__ cannot use the frame ABI yet (FINALIZERS_V1)")
             self.lines.extend([
                 f"    mov rcx, {self._address(result)}", "    call piton_object_free",
             ])
+            self.lines.append(f"    lea rcx, [{self._string(class_name)}]")
             if parent_name:
-                self.lines.extend([
-                    f"    lea rcx, [{self._string(class_name)}]",
-                    f"    lea rdx, [{self._string(parent_name)}]",
-                    "    call piton_object_new_with_parent",
-                ])
+                self.lines.append(f"    lea rdx, [{self._string(parent_name)}]")
             else:
-                self.lines.extend([
-                    f"    lea rcx, [{self._string(class_name)}]",
-                    "    call piton_object_new",
-                ])
+                self.lines.append("    xor edx, edx")
+            if finalizer_name:
+                self.lines.append(f"    lea r8, [{finalizer_name}]")
+            else:
+                self.lines.append("    xor r8d, r8d")
+            self.lines.append("    call piton_object_new_with_finalizer")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = f"object:{class_name}"
         elif op == "set_attr":
@@ -1059,10 +1142,36 @@ class Win64NasmEmitter:
                 self._load_operand(value, "rdx")
                 self.lines.append(f"    call {setter}")
             else:
-                self._load_operand(owner, "rcx")
-                self.lines.append(f"    lea rdx, [{self._string(name)}]")
-                self._load_operand(value, "r8")
-                self.lines.append("    call piton_object_set")
+                # ATTRIBUTE_LOOKUP_V2: __setattr__ hook routes normal stores
+                # through the hook; the hook's own body bypasses itself
+                # (documented V1: inside __setattr__ body, self.x = stores hit
+                # the raw object directly, same as super().__setattr__).
+                hook = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.mir_module_class_mro.get(class_name, []):
+                        if "__setattr__" in self.mir_module_classes.get(candidate, set()):
+                            hook = candidate
+                            break
+                    if hook is None and "__setattr__" in self.mir_module_classes.get(class_name, set()):
+                        hook = class_name
+                # Bypass when we ARE inside the hook of that class (self-recurse guard)
+                current_is_hook = self.function.name.endswith("__setattr__") and hook is not None
+                if hook is not None and not current_is_hook:
+                    target = f"{hook}____setattr__"
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self._load_operand(value, "r8")
+                    self.lines.append(f"    call {target}")
+                else:
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self._load_operand(value, "r8")
+                    value_type = self.types.get(value, "int")
+                    if value_type.startswith("object:"):
+                        self.lines.append("    call piton_object_set_tagged")
+                    else:
+                        self.lines.append("    call piton_object_set")
         elif op == "get_attr":
             owner, name = args
             owner_type = self.types.get(owner, "")
@@ -1114,6 +1223,27 @@ class Win64NasmEmitter:
                         ])
                     self.types[result] = "closure"
                     return
+                # ATTRIBUTE_LOOKUP_V2: __getattr__ hook — only when the class
+                # defines it AND the name is NOT a known method (methods must
+                # always win, they are resolved above); fields lookup first at
+                # runtime, missing → hook.
+                getattr_class = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.mir_module_class_mro.get(class_name, []):
+                        if "__getattr__" in self.mir_module_classes.get(candidate, set()):
+                            getattr_class = candidate
+                            break
+                    if getattr_class is None and "__getattr__" in self.mir_module_classes.get(class_name, set()):
+                        getattr_class = class_name
+                if getattr_class is not None:
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self.lines.append(f"    lea r8, [{getattr_class}____getattr__]")
+                    self.lines.append("    call piton_object_lookup")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "int"
+                    return
                 self._load_operand(owner, "rcx")
                 self.lines.append(f"    lea rdx, [{self._string(name)}]")
                 self.lines.append("    call piton_object_get")
@@ -1122,20 +1252,64 @@ class Win64NasmEmitter:
                     self.types[result] = module_attr_types.get(name, "int")
                 else:
                     self.types[result] = "int"
-        elif op == "del_attr":
-            owner, name = args
-            owner_type = self.types.get(owner, "")
-            prop_class = self._resolve_property_class(owner_type, name)
-            if prop_class is not None:
-                deleter = self.mir_module_class_properties[prop_class][name].get("deleter")
-                if not deleter:
-                    raise NativeBuildError(f"property '{name}' of '{owner_type.split(':', 1)[1]}' object has no deleter")
+                    return
+                resolved_method = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.mir_module_class_mro.get(class_name, []):
+                        if name in self.mir_module_classes.get(candidate, set()):
+                            resolved_method = candidate
+                            break
+                    if resolved_method is None and name in self.mir_module_classes.get(class_name, set()):
+                        resolved_method = class_name
+                if resolved_method is not None:
+                    params = self.function_param_map.get(f"{resolved_method}__{name}") or []
+                    if not params:
+                        raise NativeBuildError(f"bound method '{name}' has no native signature")
+                    target = f"{resolved_method}__{name}"
+                    if self.function_frame_abi.get(target, False):
+                        frame_size = ((8 + 32 + 15) // 16) * 16
+                        self.lines.append(f"    sub rsp, {frame_size}")
+                        self._load_operand(owner, "r10")
+                        self.lines.append("    mov qword [rsp+32], r10")
+                        self.lines.extend([
+                            f"    lea rcx, [{target}]", f"    mov edx, {len(params)-1}",
+                            "    mov r8d, 1", "    lea r9, [rsp+32]",
+                            "    call piton_closure_new_frame", f"    add rsp, {frame_size}",
+                            f"    mov {self._address(result)}, rax",
+                        ])
+                    else:
+                        self._load_operand(owner, "r8")
+                        self.lines.extend([
+                            f"    lea rcx, [{target}]", f"    mov edx, {len(params) - 1}",
+                            "    call piton_bound_method_new", f"    mov {self._address(result)}, rax",
+                        ])
+                    self.types[result] = "closure"
+                    return
                 self._load_operand(owner, "rcx")
                 self.lines.append(f"    call {deleter}")
             else:
-                raise NativeBuildError(
-                    f"native del on '{name}' is not a property of a natively-typed object"
-                )
+                # ATTRIBUTE_LOOKUP_V2: __delattr__ hook, with the same
+                # inside-the-hook bypass as __setattr__.
+                hook = None
+                if owner_type.startswith("object:"):
+                    class_name = owner_type.split(":", 1)[1]
+                    for candidate in self.mir_module_class_mro.get(class_name, []):
+                        if "__delattr__" in self.mir_module_classes.get(candidate, set()):
+                            hook = candidate
+                            break
+                    if hook is None and "__delattr__" in self.mir_module_classes.get(class_name, set()):
+                        hook = class_name
+                current_is_hook = self.function.name.endswith("__delattr__") and hook is not None
+                if hook is not None and not current_is_hook:
+                    target = f"{hook}____delattr__"
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self.lines.append(f"    call {target}")
+                else:
+                    raise NativeBuildError(
+                        f"native del on '{name}' is not a property of a natively-typed object"
+                    )
         elif op == "method_call":
             explicit_class, method_name, owner, raw_values = args
             owner_type = self.types.get(owner, "")
@@ -1178,32 +1352,45 @@ class Win64NasmEmitter:
             self.types[result] = "int"
         elif op == "math_sqrt":
             self._load_float_operand(args[0], "xmm0")
-            self.lines.extend(["    sqrtsd xmm0, xmm0", "    movq rax, xmm0"])
-            self.lines.append(f"    mov {self._address(result)}, rax")
-            self.types[result] = "float"
-        elif op in ("math_floor", "math_ceil", "math_sin", "math_cos", "math_log"):
-            _math_fn_map = {
-                "math_floor": "piton_float_floor", "math_ceil": "piton_float_ceil",
-                "math_sin": "piton_float_sin", "math_cos": "piton_float_cos",
-                "math_log": "piton_float_log",
-            }
-            self._load_float_operand(args[0], "xmm0")
             # The Windows runtime helpers use the tagged float wire format:
             # pass the IEEE-754 bits in rcx and receive bits/int in rax.
             self.lines.extend(["    movq rax, xmm0", "    mov rcx, rax", f"    call {_math_fn_map[op]}"])
             self.lines.append(f"    mov {self._address(result)}, rax")
-            self.types[result] = "float" if op in ("math_sin", "math_cos", "math_log") else "int"
-        elif op == "sys_exit":
-            if args[0] is not None:
+            self.types[result] = "float"
+        elif op in {"math_floor", "math_ceil", "math_trunc", "math_fabs"}:
+            handler_label = args[1] if len(args) > 1 else None
+            helper = f"piton_{op}"
+            operand_type = self.types.get(args[0])
+            if operand_type == "float":
                 self._load_operand(args[0], "rcx")
+                self.lines.append("    movq xmm0, rcx")
             else:
-                self.lines.append("    xor ecx, ecx")
-            self.lines.append("    call piton_exit")
-            self.types[result] = "int"
-        elif op == "sys_argv":
-            self.lines.append("    call piton_argv_new")
+                self._load_operand(args[0], "rax")
+                self.lines.append("    cvtsi2sd xmm0, rax")
+            self.lines.append(f"    call {helper}")
+            if handler_label is not None:
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jne {labels.get(handler_label, handler_label)}")
+            if op == "math_fabs":
+                self.lines.append("    movq rax, xmm0")
+                self.types[result] = "float"
+            else:
+                self.types[result] = "int"
             self.lines.append(f"    mov {self._address(result)}, rax")
-            self.types[result] = "list"
+        elif op == "math_gcd":
+            handler_label = args[2] if len(args) > 2 else None
+            if self.types.get(args[0]) not in {"int", "bool"} or self.types.get(args[1]) not in {"int", "bool"}:
+                raise NativeBuildError("native math.gcd requires int arguments")
+            self._load_operand(args[0], "rcx")
+            self._load_operand(args[1], "rdx")
+            self.lines.append("    call piton_math_gcd")
+            if handler_label is not None:
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jne {labels.get(handler_label, handler_label)}")
+            self.types[result] = "int"
+            self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "cell_new":
             value_arg = args[0]
             self.lines.extend(["    mov rcx, 16", "    call malloc"])
@@ -1229,17 +1416,18 @@ class Win64NasmEmitter:
             self._load_operand(value_arg, "r11")
             self.lines.extend(["    mov [r10], r11", "    mov qword [r10+8], 0"])
         elif op == "closure_new":
-            lifted_name, n_args, capture_ops = args
-            frame_size = ((len(capture_ops) * 8 + 32 + 15) // 16) * 16
+            lifted_name, n_args, capture_ops, has_vararg = args
+            frame_size = ((len(capture_ops) * 8 + 48 + 15) // 16) * 16
             self.lines.append(f"    sub rsp, {frame_size}")
             for i, cell in enumerate(capture_ops):
                 self._load_operand(cell, "r10")
-                self.lines.append(f"    mov qword [rsp+32+{i * 8}], r10")
+                self.lines.append(f"    mov qword [rsp+40+{i * 8}], r10")
+            self.lines.append(f"    mov qword [rsp+32], {int(has_vararg)}")
             self.lines.extend([
                 f"    lea rcx, [{lifted_name}]",
                 f"    mov edx, {n_args}",
                 f"    mov r8d, {len(capture_ops)}",
-                "    lea r9, [rsp+32]",
+                "    lea r9, [rsp+40]",
                 "    call piton_closure_new_frame",
                 f"    add rsp, {frame_size}",
             ])
@@ -1278,6 +1466,36 @@ class Win64NasmEmitter:
             ])
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
+        elif op == "raise_chain":
+            # EXCEPTION_CHAINING_V1: raise with a recorded cause (both must be
+            # exception constructors). The cause persists until catch_clear
+            # consumes it; the raise then moves through the standard flag path
+            # ('with' body, direct handler, or the unhandled printer).
+            exception_type, payload, cause_type, cause_payload, handler_label = args
+            self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
+            if payload is None:
+                self.lines.append("    xor edx, edx")
+            elif self.types.get(payload) == "str":
+                self._load_operand(payload, "rdx")
+            else:
+                raise NativeBuildError("native raise-chain payload must be a string")
+            self.lines.append(f"    lea r8, [{self._string(cause_type)}]")
+            if cause_payload is None:
+                self.lines.append("    xor r9d, r9d")
+            elif self.types.get(cause_payload) == "str":
+                self._load_operand(cause_payload, "r9")
+            else:
+                raise NativeBuildError("native raise-chain cause payload must be a string")
+            if handler_label:
+                self.lines.append("    call piton_raise_chain")
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+            else:
+                # handler=None per MIR: the runtime stack is empty here, so
+                # piton_raise_chain falls through to the unhandled printer.
+                self.lines.append("    call piton_raise_chain")
         elif op == "raise_typed":
             exception_type, payload, handler_label = args
             self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
@@ -1302,78 +1520,6 @@ class Win64NasmEmitter:
                 else:
                     # No statically-matching handler: report and exit (no stack search)
                     self.lines.append("    call piton_raise_unhandled")
-        elif op == "raise_from":
-            exc_type, payload, cause_type, cause_payload, handler_label = args
-            self.lines.append(f"    lea rcx, [{self._string(exc_type)}]")
-            if payload is None:
-                self.lines.append("    xor edx, edx")
-            elif self.types.get(payload) in {"str", "bigint"}:
-                self._load_operand(payload, "rdx")
-            else:
-                raise NativeBuildError("native exception payload must be a string")
-            self.lines.append(f"    lea r8, [{self._string(cause_type)}]")
-            if cause_payload is None:
-                self.lines.append("    xor r9d, r9d")
-            elif self.types.get(cause_payload) in {"str", "bigint"}:
-                self._load_operand(cause_payload, "r9")
-            else:
-                raise NativeBuildError("native exception cause payload must be a string")
-            if handler_label:
-                self.lines.append("    call piton_raise_from")
-                self.lines.append("    call piton_catch_flag")
-                self.lines.append("    test rax, rax")
-                target = labels.get(handler_label, handler_label)
-                self.lines.append(f"    jne {target}")
-            else:
-                if exc_type == "StopIteration":
-                    self.lines.append("    call piton_raise_from")
-                    self.lines.append(f"    jmp {labels['__exit']}")
-                else:
-                    self.lines.append("    call piton_raise_from")
-        elif op == "set_context_from_reraise":
-            self.lines.append("    call piton_set_context_from_reraise")
-        elif op == "raise_from_var":
-            exc_type, payload, handler_label = args
-            self.lines.append(f"    lea rcx, [{self._string(exc_type)}]")
-            if payload is None:
-                self.lines.append("    xor edx, edx")
-            elif self.types.get(payload) in {"str", "bigint"}:
-                self._load_operand(payload, "rdx")
-            else:
-                raise NativeBuildError("native exception payload must be a string")
-            if handler_label:
-                self.lines.append("    call piton_raise_from_var")
-                self.lines.append("    call piton_catch_flag")
-                self.lines.append("    test rax, rax")
-                target = labels.get(handler_label, handler_label)
-                self.lines.append(f"    jne {target}")
-            else:
-                if exc_type == "StopIteration":
-                    self.lines.append("    call piton_raise_from_var")
-                    self.lines.append(f"    jmp {labels['__exit']}")
-                else:
-                    self.lines.append("    call piton_raise_from_var")
-        elif op == "raise_from_none":
-            exc_type, payload, handler_label = args
-            self.lines.append(f"    lea rcx, [{self._string(exc_type)}]")
-            if payload is None:
-                self.lines.append("    xor edx, edx")
-            elif self.types.get(payload) in {"str", "bigint"}:
-                self._load_operand(payload, "rdx")
-            else:
-                raise NativeBuildError("native exception payload must be a string")
-            if handler_label:
-                self.lines.append("    call piton_raise_from_none")
-                self.lines.append("    call piton_catch_flag")
-                self.lines.append("    test rax, rax")
-                target = labels.get(handler_label, handler_label)
-                self.lines.append(f"    jne {target}")
-            else:
-                if exc_type == "StopIteration":
-                    self.lines.append("    call piton_raise_from_none")
-                    self.lines.append(f"    jmp {labels['__exit']}")
-                else:
-                    self.lines.append("    call piton_raise_from_none")
         elif op == "try_push":
             self.lines.append("    call piton_try_push")
             if result:
@@ -1432,7 +1578,8 @@ class Win64NasmEmitter:
         elif op == "jump":
             self.lines.append(f"    jmp {labels[args[0]]}")
         elif op == "call":
-            function_operand, call_args = args
+            function_operand, call_args = args[0], args[1]
+            call_handler = args[2] if len(args) > 2 else None
             function_name = self.aliases.get(function_operand, function_operand)
             values = list(call_args)
             if function_name in {"imprimir", "print"}:
@@ -1442,6 +1589,27 @@ class Win64NasmEmitter:
                 else:
                     value = values[0]
                     value_type = self.types.get(value, "int")
+                    # SPECIAL_METHOD_LOOKUP_V1: print(obj) despacha a __str__
+                    # cuando existe (MRO); el método devuelve una str.
+                    if value_type.startswith("object:"):
+                        cls_name = value_type.split(":", 1)[1]
+                        str_cls = None
+                        for candidate in self.mir_module_class_mro.get(cls_name, []):
+                            if "__str__" in self.mir_module_classes.get(candidate, set()):
+                                str_cls = candidate
+                                break
+                        if str_cls is None and "__str__" in self.mir_module_classes.get(cls_name, set()):
+                            str_cls = cls_name
+                        if str_cls is not None:
+                            self._load_operand(value, "rcx")
+                            self.lines.append(f"    call {str_cls}____str__")
+                            self.lines.append(f"    mov {self._address(result)}, rax")
+                            self._load_operand(result, "rdx")
+                            self.lines.append("    lea rcx, [fmt_str]")
+                            self.lines.extend(["    call printf", "    xor eax, eax"])
+                            if result:
+                                self.lines.append(f"    mov qword {self._address(result)}, 0")
+                            return
                     if value_type in {"list", "tuple", "dict", "set"}:
                         self._load_operand(value, "rcx")
                         if value_type == "dict":
@@ -1496,6 +1664,24 @@ class Win64NasmEmitter:
                     self.lines.append(f"    lea rcx, [{fmt}]")
                 self.lines.extend(["    call printf", "    xor eax, eax"])
             elif function_name in {"longitud", "len"}:
+                if values:
+                    v0_type = self.types.get(values[0], "")
+                    if v0_type.startswith("object:"):
+                        cls_name = v0_type.split(":", 1)[1]
+                        len_cls = None
+                        for candidate in self.mir_module_class_mro.get(cls_name, []):
+                            if "__len__" in self.mir_module_classes.get(candidate, set()):
+                                len_cls = candidate
+                                break
+                        if len_cls is None and "__len__" in self.mir_module_classes.get(cls_name, set()):
+                            len_cls = cls_name
+                        if len_cls is not None:
+                            target = f"{len_cls}____len__"
+                            self._load_operand(values[0], "rcx")
+                            self.lines.append(f"    call {target}")
+                            self.lines.append(f"    mov {self._address(result)}, rax")
+                            self.types[result] = "int"
+                            return
                 if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set"}:
                     raise NativeBuildError("native len currently requires one collection")
                 self._load_operand(values[0], "rcx")
@@ -1521,6 +1707,173 @@ class Win64NasmEmitter:
                     self.lines.append("    mov rcx, rax")
                     self.lines.append("    call piton_abs_int")
                     self.types[result] = "int"
+            elif function_name in {"all", "any"}:
+                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple"}:
+                    raise NativeBuildError(f"native {function_name} requires one list or tuple (M14 v1)")
+                helper = "piton_all_iterable" if function_name == "all" else "piton_any_iterable"
+                self._load_operand(values[0], "rcx")
+                self.lines.append(f"    call {helper}")
+                if call_handler is not None:
+                    self.lines.append("    call piton_catch_flag")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                self.types[result] = "bool"
+            elif function_name == "pow":
+                if len(values) != 2:
+                    raise NativeBuildError("native pow requires exactly two arguments (M14 v1)")
+                base_type = self.types.get(values[0])
+                if base_type == "float":
+                    if self.types.get(values[1]) not in {"int", "bool"}:
+                        raise NativeBuildError("native pow(float, e) requires an int exponent (M14 v1)")
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    movq xmm0, rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.append("    call piton_pow_float")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                    self.lines.append("    movq rax, xmm0")
+                    self.types[result] = "float"
+                elif base_type in {"int", "bool"}:
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.append("    call piton_pow_int")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                    self.types[result] = "int"
+                else:
+                    raise NativeBuildError("native pow requires int or float base (M14 v1)")
+            elif function_name in {"ord", "chr", "bin"}:
+                if len(values) != 1:
+                    raise NativeBuildError(f"native {function_name} requires exactly one argument")
+                arg_type = self.types.get(values[0])
+                result_type = "int" if function_name == "ord" else "str"
+                if function_name in {"chr", "bin"} and arg_type not in {"int", "bool"}:
+                    raise NativeBuildError(f"native {function_name} requires an int argument")
+                if function_name == "ord" and arg_type != "str":
+                    raise NativeBuildError("native ord requires a str argument")
+                helper = f"piton_{function_name}"
+                self._load_operand(values[0], "rcx")
+                self.lines.append(f"    call {helper}")
+                if call_handler is not None:
+                    self.lines.append("    call piton_catch_flag")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                self.types[result] = result_type
+            elif function_name in {"round", "redondear"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native round requires exactly one argument (M14 v1; ndigits not supported)")
+                vtype = self.types.get(values[0])
+                if vtype == "float":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    movq xmm0, rcx")
+                    self.lines.append("    call piton_round_float")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                elif vtype in {"int", "bool"}:
+                    self._load_operand(values[0], "rax")
+                else:
+                    raise NativeBuildError("native round requires int or float")
+                self.types[result] = "int"
+            elif function_name in {"entero", "int"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native int requires exactly one argument")
+                vtype = self.types.get(values[0])
+                if vtype in {"int", "bool"}:
+                    self._load_operand(values[0], "rax")
+                elif vtype == "float":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    movq xmm0, rcx")
+                    self.lines.append("    cvttsd2si rax, xmm0")
+                elif vtype == "str":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_int_from_str")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                else:
+                    raise NativeBuildError("native int() requires int, float or str (M14 v1)")
+                self.types[result] = "int"
+            elif function_name in {"decimal", "float"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native float requires exactly one argument")
+                vtype = self.types.get(values[0])
+                if vtype in {"int", "bool"}:
+                    self._load_operand(values[0], "rax")
+                    self.lines.append("    cvtsi2sd xmm0, rax")
+                    self.lines.append("    movq rax, xmm0")
+                elif vtype == "float":
+                    self._load_operand(values[0], "rax")
+                elif vtype == "str":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_float_from_str")
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                    self.lines.append("    movq rax, xmm0")
+                else:
+                    raise NativeBuildError("native float() requires int, float or str (M14 v1)")
+                self.types[result] = "float"
+            elif function_name in {"texto", "str"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native str requires exactly one argument")
+                vtype = self.types.get(values[0])
+                if vtype in {"int", "bigint"}:
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_str_from_int")
+                elif vtype == "float":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    movq xmm0, rcx")
+                    self.lines.append("    call piton_str_from_float")
+                elif vtype == "bool":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_str_from_bool")
+                elif vtype == "none":
+                    self.lines.append("    call piton_str_from_none")
+                elif vtype == "str":
+                    self._load_operand(values[0], "rax")
+                else:
+                    raise NativeBuildError("native str() requires int/float/bool/None/str (M14 v1)")
+                self.types[result] = "str"
+            elif function_name in {"booleano", "bool"}:
+                if len(values) != 1:
+                    raise NativeBuildError("native bool requires exactly one argument")
+                vtype = self.types.get(values[0])
+                if vtype in {"int", "bool"}:
+                    self._load_operand(values[0], "rax")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append("    setnz al")
+                    self.lines.append("    movzx eax, al")
+                elif vtype == "float":
+                    # bits != 0 y != -0.0: mascara de signo (NaN es True, como CPython)
+                    self._load_operand(values[0], "rax")
+                    self.lines.append("    mov rcx, 0x7FFFFFFFFFFFFFFF")
+                    self.lines.append("    and rax, rcx")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append("    setnz al")
+                    self.lines.append("    movzx eax, al")
+                elif vtype == "str":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_str_truthy")
+                elif vtype in {"list", "tuple", "dict", "set"}:
+                    len_helper = {"dict": "piton_dict_len", "set": "piton_set_len"}.get(vtype, "piton_collection_len")
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append(f"    call {len_helper}")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append("    setnz al")
+                    self.lines.append("    movzx eax, al")
+                elif vtype == "none":
+                    self.lines.append("    xor eax, eax")
+                else:
+                    raise NativeBuildError("native bool() requires int/float/str/collection/None (M14 v1)")
+                self.types[result] = "bool"
             elif function_name in {"min", "max"}:
                 if len(values) != 2:
                     raise NativeBuildError("native min/max requires two arguments")
@@ -1587,18 +1940,55 @@ class Win64NasmEmitter:
                             self._load_operand(value, register)
                         self.lines.append(f"    call {function_name}")
                     else:
-                        frame_size = ((argc * 8 + 32 + 15) // 16) * 16
-                        self.lines.append(f"    sub rsp, {frame_size}")
-                        for index, value in enumerate(values):
-                            self._load_operand(value, "r10")
-                            self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
-                        self.lines.extend([
-                            f"    mov rcx, {self._address(function_operand)}",
-                            f"    mov edx, {argc}",
-                            "    lea r8, [rsp+32]",
-                            "    call piton_closure_call_frame",
-                            f"    add rsp, {frame_size}",
-                        ])
+                        # CALLABLE_PROTOCOL_V1: calling a class instance whose
+                        # class defines __call__ routes to Class.__call__. The
+                        # instance is statically typed, so this is a compile
+                        # time decision, not a runtime sniff.
+                        caller_type = self.types.get(function_operand, "")
+                        call_owner = None
+                        if caller_type.startswith("object:"):
+                            cls = caller_type.split(":", 1)[1]
+                            for candidate in self.mir_module_class_mro.get(cls, []):
+                                if "__call__" in self.mir_module_classes.get(candidate, set()):
+                                    call_owner = candidate
+                                    break
+                            if call_owner is None and "__call__" in self.mir_module_classes.get(cls, set()):
+                                call_owner = cls
+                        if call_owner is not None:
+                            target = f"{call_owner}__" + "__call__"
+                            call_values = [function_operand, *values]
+                            if len(call_values) > 4 and not self.function_frame_abi.get(target, False):
+                                raise NativeBuildError("native __call__ supports at most three explicit arguments")
+                            if self.function_frame_abi.get(target, False):
+                                frame_size = ((len(call_values) * 8 + 32 + 15) // 16) * 16
+                                self.lines.append(f"    sub rsp, {frame_size}")
+                                for index, value in enumerate(call_values):
+                                    self._load_operand(value, "r10")
+                                    self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
+                                self.lines.extend([
+                                    f"    lea rcx, [{target}]",
+                                    f"    mov edx, {len(call_values)}",
+                                    "    lea r8, [rsp+32]",
+                                    "    call piton_frame_call",
+                                    f"    add rsp, {frame_size}",
+                                ])
+                            else:
+                                for register, value in zip(("rcx", "rdx", "r8", "r9"), call_values):
+                                    self._load_operand(value, register)
+                                self.lines.append(f"    call {target}")
+                        else:
+                            frame_size = ((argc * 8 + 32 + 15) // 16) * 16
+                            self.lines.append(f"    sub rsp, {frame_size}")
+                            for index, value in enumerate(values):
+                                self._load_operand(value, "r10")
+                                self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
+                            self.lines.extend([
+                                f"    mov rcx, {self._address(function_operand)}",
+                                f"    mov edx, {argc}",
+                                "    lea r8, [rsp+32]",
+                                "    call piton_closure_call_frame",
+                                f"    add rsp, {frame_size}",
+                            ])
             if result:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 if not self.types.get(result):
@@ -1838,17 +2228,16 @@ class Win64NasmEmitter:
                 ])
                 return
             if getattr(self.function, "is_generator", False):
+                if args[0] is not None and args[0] != "None":
+                    # M5: generator return value (int subset) — stored on the
+                    # generator object, exposed via piton_gen_return_value when
+                    # the generator stops.
+                    self._load_operand(args[0], "rdx")
+                    self.lines.append(f"    mov rcx, {self._address('@gen_ptr')}")
+                    self.lines.append("    call piton_gen_return_set")
                 self._emit_cleanup()
                 self.lines.extend([
                     f"    mov rcx, {self._address('@gen_ptr')}",
-                ])
-                if args[0] is not None and args[0] != "None":
-                    # PEP 380: store return value in generator->return_value (offset 568)
-                    self._load_operand(args[0], "rax")
-                    self.lines.extend([
-                        f"    mov qword [rcx+568], rax",
-                    ])
-                self.lines.extend([
                     "    mov qword [rcx+16], 1",
                     "    xor eax, eax",
                     "    leave", "    ret",
@@ -2082,10 +2471,10 @@ def compile_native(source: str, output: str | Path) -> Path:
     for statement in hir.body:
         if getattr(statement, "kind", None) == HIRKind.IMPORT_FROM:
             mod_name = getattr(statement, "module", None)
-            if mod_name and mod_name not in {"asyncio", "math", "sys", "os"}:
+            if mod_name and mod_name not in {"asyncio", "math", "sys"}:
                 raise NativeBuildError(f"native from-import requires multi-file compilation: {mod_name}")
             for alias in getattr(statement, "names", []):
-                if mod_name in {"asyncio", "math", "sys", "os"}:
+                if mod_name in {"asyncio", "math", "sys"}:
                     from_imports[(mod_name, alias.asname or alias.name)] = True
     try:
         mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
@@ -2173,7 +2562,7 @@ def _scan_native_modules(
         parts = dotted.split(".")
         for length in range(1, len(parts) + 1):
             prefix = ".".join(parts[:length])
-            if prefix in modules or prefix in {"asyncio", "math", "sys", "os"}:
+            if prefix in modules or prefix in {"asyncio", "math", "sys"}:
                 continue
             path = resolve_native_module(root, prefix)
             register(prefix, path, path.name == "__init__.piton")
@@ -2189,7 +2578,7 @@ def _scan_native_modules(
         for statement in hir.body:
             if statement.kind.name == "IMPORT":
                 for alias in statement.names:
-                    if alias.name in {"asyncio", "math", "sys", "os"}:
+                    if alias.name in {"asyncio", "math", "sys"}:
                         continue
                     register_chain(alias.name)
             elif statement.kind.name == "IMPORT_FROM":
@@ -2202,23 +2591,29 @@ def _scan_native_modules(
                             "native relative import ('desde . importar ...') in the entry module "
                             "is not supported: like CPython scripts it has no parent package"
                         )
-                    if level > 1:
-                        raise NativeBuildError(
-                            "native relative imports beyond one level ('desde .. importar ...') "
-                            "are not supported yet"
-                        )
                     if is_star:
                         raise NativeBuildError(
                             "native star imports ('desde . importar *') are only supported "
                             "at the entry module, not inside imported modules"
                         )
+                    # M8 IMPORT_RELATIVE_V2: N levels — drop (level-1)
+                    # segments from the module's own package context.
+                    up = level - 1
+                    base = package
+                    if up > 0:
+                        head = base.split(".")
+                        if up > len(head) - 1:
+                            raise NativeBuildError(
+                                f"relative import level {level} escapes the package at '{base}'"
+                            )
+                        base = ".".join(head[:-up])
                     if not mod_name:
                         for alias in statement.names:
-                            register_chain(f"{package}.{alias.asname or alias.name}")
+                            register_chain(f"{base}.{alias.asname or alias.name}")
                     else:
-                        register_chain(f"{package}.{mod_name}")
+                        register_chain(f"{base}.{mod_name}")
                 else:
-                    if not mod_name or mod_name in {"asyncio", "math", "sys", "os"}:
+                    if not mod_name or mod_name in {"asyncio", "math", "sys"}:
                         continue
                     register_chain(mod_name)
                     if not is_entry(package):
@@ -2270,6 +2665,15 @@ def _scan_native_modules(
         if is_star:
             return
         if level:
+            # M8 IMPORT_RELATIVE_V2: level-1 correction against package_ctx
+            up = level - 1
+            if up > 0:
+                head = package_ctx.split(".")
+                if up > len(head) - 1:
+                    raise NativeBuildError(
+                        f"relative import level {level} escapes the package at '{package_ctx}'"
+                    )
+                package_ctx = ".".join(head[:-up])
             if not mod_name:
                 for alias in statement.names:
                     simulate_execute(f"{package_ctx}.{alias.asname or alias.name}")
@@ -2282,7 +2686,7 @@ def _scan_native_modules(
             return
         for length in range(1, len(target.split(".")) + 1):
             simulate_execute(".".join(target.split(".")[:length]))
-        if target in {"asyncio", "math", "sys", "os"}:
+        if target in {"asyncio", "math", "sys"}:
             for alias in statement.names:
                 names.add(alias.asname or alias.name)
             return
@@ -2306,7 +2710,7 @@ def _scan_native_modules(
             names.add(alias.asname or alias.name)
 
     def simulate_execute(dotted: str) -> None:
-        if dotted in states or dotted in {"asyncio", "math", "sys", "os"}:
+        if dotted in states or dotted in {"asyncio", "math", "sys"}:
             return
         states[dotted] = "IN_PROGRESS"
         hir = modules[dotted]
@@ -2319,7 +2723,7 @@ def _scan_native_modules(
                 names.add(statement.name)
             elif kind == "IMPORT":
                 for alias in statement.names:
-                    if alias.name in {"asyncio", "math", "sys", "os"}:
+                    if alias.name in {"asyncio", "math", "sys"}:
                         continue
                     for length in range(1, len(alias.name.split(".")) + 1):
                         simulate_execute(".".join(alias.name.split(".")[:length]))
@@ -2334,7 +2738,7 @@ def _scan_native_modules(
     for statement in entry_hir.body:
         if statement.kind.name == "IMPORT":
             for alias in statement.names:
-                if alias.name in {"asyncio", "math", "sys", "os"}:
+                if alias.name in {"asyncio", "math", "sys"}:
                     continue
                 for length in range(1, len(alias.name.split(".")) + 1):
                     simulate_execute(".".join(alias.name.split(".")[:length]))

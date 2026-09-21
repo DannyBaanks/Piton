@@ -190,9 +190,9 @@ class Parser:
                 return self._parse_for(is_async=True)
             elif val == "segun":
                 return self._parse_match()
-            elif val == "importar" or val == "import":
+            elif val == "importar":
                 return self._parse_import()
-            elif val == "desde" or val == "from":
+            elif val == "desde":
                 return self._parse_import_from()
             elif val == "global":
                 return self._parse_global()
@@ -291,22 +291,15 @@ class Parser:
         tok = self._advance()
         name = self._consume(TokenType.NAME, "nombre de clase").value
         bases = []
-        keywords = []
         if self._match(TokenType.LPAREN):
             while not self._check(TokenType.RPAREN):
-                if self._check(TokenType.NAME) and self._peek_n(1).type == TokenType.EQUAL:
-                    kw_name = self._advance().value
-                    self._advance()  # =
-                    kw_value = self._parse_expression(0)
-                    keywords.append(Keyword(arg=kw_name, value=kw_value).set_pos(self._peek()))
-                else:
-                    bases.append(self._parse_expression(0))
+                bases.append(self._parse_expression(0))
                 if not self._match(TokenType.COMMA):
                     break
             self._consume(TokenType.RPAREN)
         self._consume(TokenType.COLON)
         body = self._parse_block()
-        return ClassDef(name=name, bases=bases, keywords=keywords, body=body, decorators=decorators).set_pos(tok)
+        return ClassDef(name=name, bases=bases, body=body, decorators=decorators).set_pos(tok)
 
     def _parse_return(self) -> ReturnStmt:
         tok = self._advance()
@@ -457,11 +450,11 @@ class Parser:
         while self._match(TokenType.DOT):
             level += 1
         module = None
-        if self._check(TokenType.NAME) and self._peek().value not in ("importar", "import"):
+        if self._check(TokenType.NAME) and self._peek().value != "importar":
             module = self._consume(TokenType.NAME).value
             while self._match(TokenType.DOT) and self._check(TokenType.NAME):
                 module += "." + self._consume(TokenType.NAME).value
-        self._consume(TokenType.NAME)  # 'importar' or 'import'
+        self._consume(TokenType.NAME)  # 'importar'
         if self._match(TokenType.STAR):
             # `desde pkg importar *` — import star (entry-level binding).
             return ImportFromStmt(

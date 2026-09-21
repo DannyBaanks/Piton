@@ -18,6 +18,8 @@ dependencies = []
 
 [project.scripts]
 piton = "piton.cli:main"
+pitn = "piton.cli:main"
+pi = "piton.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["piton*"]

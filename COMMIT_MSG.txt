@@ -1,0 +1,15 @@
+M6 OBJECT_MODEL_V1 2026-09-17: especial methods complete; Win/Linux.
+
+SPECIAL_METHODS:   __eq__   (== over native instances dispatches class-defined
+        __eq__ via MRO; `es` identity handled the same way),
+        __str__  (print dispatches class-defined __str__ over imprimir(obj)),
+        __len__  (longitud dispatches class-defined __len__ over len(obj), int return),
+        __call__ (callable instances dispatch through class-defined __call__),
+        __getattr__/__setattr__/__delattr__ hooks with inside-hook bypass.
+
+RELATIVE_V2 side-effect: imported submodule bodies can now reference from-import
+aliases resolved against the module's own package context.
+
+Tests: 506/506 (Win 290 + Linux 210) + 4 new special-method tests; suite complete.
+Regression note: a stray edit pass needed cleanup — piton/x86.py was restored
+end-clean before applying the new blocks directly with tight diffs.

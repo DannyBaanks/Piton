@@ -317,11 +317,122 @@ class Phase10LinuxGates(unittest.TestCase):
                 compile_native_linux("funcion f():\n    lanzar\nf()\n", Path(directory) / "program")
 
     def test_linux_bare_reraise_from_catchall_rejected(self):
-        from piton.linux_x86 import NativeBuildError, compile_native_linux
+        # RERAISE_COMPLETE_V1: no longer rejected — re-raise propagates with
+        # the runtime type and dies unhandled with exit 1 (nothing enclosing).
+        from piton.linux_x86 import compile_native_linux
         with tempfile.TemporaryDirectory(prefix="piton-linux-diff-") as directory:
             source = 'intentar:\n    lanzar ValueError("x")\nexcepto Exception:\n    lanzar\nimprimir("done")\n'
-            with self.assertRaisesRegex(NativeBuildError, "catch-all"):
-                compile_native_linux(source, Path(directory) / "program")
+            executable = compile_native_linux(source, Path(directory) / "program")
+            linux_path = windows_to_wsl_path(executable)
+            run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                capture_output=True, check=False,
+            )
+            self.assertEqual(run.returncode, 1)
+            self.assertIn(b"ValueError", run.stderr)
+
+    def test_linux_with_multiple_items(self):
+        self._assert_linux_equiv(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n        devolver 1\n'
+            '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+            'con CM() como a, CM() como b:\n    imprimir(a + b)\n'
+        )
+
+    def test_linux_with_multiple_propagates(self):
+        self._assert_linux_equiv(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n        devolver 1\n'
+            '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+            'intentar:\n'
+            '    con CM() como a, CM() como b:\n        lanzar ValueError("x")\n'
+            'excepto ValueError:\n    imprimir("caught")\n'
+        )
+
+    def test_linux_class_getattr_hook_missing(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 7\n'
+            '    funcion __getattr__(self, nombre):\n'
+            '        devolver 99\n'
+            'c = C()\n'
+            'imprimir(c.noExiste)\n'
+        )
+
+    def test_linux_class_setattr_hook(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __setattr__(self, nombre, valor):\n'
+            '        imprimir(valor)\n'
+            'c = C()\n'
+            'c.x = 5\n'
+        )
+
+    def test_linux_class_delattr_hook(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __delattr__(self, nombre):\n'
+            '        imprimir("del")\n'
+            'c = C()\n'
+            'c.x = 1\n'
+            'borrar c.x\n'
+        )
+
+    def test_linux_class_call_routes_to_call(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self, base):\n'
+            '        self.base = base\n'
+            '    funcion __call__(self, x):\n'
+            '        devolver self.base + x\n'
+            'c = C(10)\n'
+            'imprimir(c(21))\n'
+        )
+
+    def test_linux_class_eq_custom_dispatch(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self, v):\n'
+            '        self.v = v\n'
+            '    funcion __eq__(self, otra):\n'
+            '        devolver self.v == otra.v\n'
+            'a = C(7)\n'
+            'b = C(7)\n'
+            'imprimir(a == b)\n'
+        )
+
+    def test_linux_class_is_identity(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 1\n'
+            'a = C()\n'
+            'b = a\n'
+            'c = C()\n'
+            'imprimir(a es b)\n'
+            'imprimir(a es c)\n'
+        )
+
+    def test_linux_class_str_dispatch(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self, v):\n'
+            '        self.v = v\n'
+            '    funcion __str__(self):\n'
+            '        devolver "caja"\n'
+            'imprimir(C(1))\n'
+        )
+
+    def test_linux_class_len_dispatch(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.n = 5\n'
+            '    funcion __len__(self):\n'
+            '        devolver self.n\n'
+            'imprimir(longitud(C()))\n'
+        )
 
     # ── BASE_EXCEPTION_V1 ───────────────────────────────────────────────
 
@@ -754,6 +865,109 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_sorted_builtin(self):
         self._assert_linux_equiv('imprimir(sorted([3, 1, 2]))\n')
 
+    def test_linux_builtins_core_v2(self):
+        # M14 BUILTINS_CORE_V2: paridad CPython en Linux para
+        # all/any/bin/chr/ord/pow/round.
+        self._assert_linux_equiv(
+            'imprimir(ord("A"))\n'
+            'imprimir(ord("ñ"))\n'
+            'imprimir(chr(97))\n'
+            'imprimir(bin(-7))\n'
+            'imprimir(bin(7))\n'
+            'imprimir(pow(2, 10))\n'
+            'imprimir(pow(2.5, 3))\n'
+            'imprimir(pow(2.0, -1))\n'
+            'imprimir(any([0, 0, 4]))\n'
+            'imprimir(all([1, 0]))\n'
+            'imprimir(any([]))\n'
+            'imprimir(all([]))\n'
+            'imprimir(round(2.5))\n'
+            'imprimir(round(3.5))\n'
+            'imprimir(round(-2.5))\n'
+            'imprimir(round(7))\n'
+        )
+
+    def test_linux_type_conversion_v1(self):
+        # M14 TYPE_CONVERSION_V1: paridad CPython en Linux.
+        self._assert_linux_equiv(
+            'imprimir(entero("42"))\n'
+            'imprimir(entero(" -17 "))\n'
+            'imprimir(entero(2.9))\n'
+            'imprimir(entero(-2.9))\n'
+            'imprimir(entero(Verdadero))\n'
+            'imprimir(texto(42))\n'
+            'imprimir(texto(2.5))\n'
+            'imprimir(texto(3.0))\n'
+            'imprimir(texto(15.625))\n'
+            'imprimir(texto(Verdadero))\n'
+            'imprimir(texto(Nada))\n'
+            'imprimir(texto("hola"))\n'
+            'imprimir(decimal(3))\n'
+            'imprimir(decimal("-0.5"))\n'
+            'imprimir(decimal(Verdadero))\n'
+            'imprimir(booleano(0))\n'
+            'imprimir(booleano(-1))\n'
+            'imprimir(booleano(0.0))\n'
+            'imprimir(booleano(-0.0))\n'
+            'imprimir(booleano("x"))\n'
+            'imprimir(booleano(""))\n'
+            'imprimir(booleano([]))\n'
+            'imprimir(booleano([0]))\n'
+            'imprimir(booleano(Nada))\n'
+        )
+
+    def test_linux_math_tier1_v1(self):
+        # M14 MATH_TIER1_V1: sqrt/floor/ceil/trunc/fabs/gcd + pi/e.
+        self._assert_linux_equiv(
+            'importar math\n'
+            'imprimir(math.sqrt(9))\n'
+            'imprimir(math.floor(2.7))\n'
+            'imprimir(math.floor(-2.3))\n'
+            'imprimir(math.ceil(2.1))\n'
+            'imprimir(math.ceil(-2.9))\n'
+            'imprimir(math.trunc(-2.9))\n'
+            'imprimir(math.fabs(-3.5))\n'
+            'imprimir(math.gcd(12, 18))\n'
+            'imprimir(math.gcd(0, 7))\n'
+            'imprimir(math.floor(math.pi * 1000))\n'
+            'imprimir(math.floor(math.e * 100))\n'
+        )
+
+    def test_linux_type_conversion_fail_closed_catchable(self):
+        self._assert_linux_equiv(
+            'intentar:\n'
+            '    n = entero("abc")\n'
+            '    imprimir(n)\n'
+            'excepto ValueError:\n'
+            '    imprimir("int-invalido ValueError atrapado")\n'
+            'intentar:\n'
+            '    m = decimal("xyz")\n'
+            '    imprimir(m)\n'
+            'excepto ValueError:\n'
+            '    imprimir("float-invalido ValueError atrapado")\n'
+        )
+
+    def test_linux_builtins_core_v2_fail_closed_catchable(self):
+        # Las violaciones fuera de la matriz M14 v1 son excepciones
+        # capturables por intentar/excepto (también bajo WSL).
+        self._assert_linux_equiv(
+            'intentar:\n'
+            '    a = ord("")\n'
+            '    imprimir(a)\n'
+            'excepto TypeError:\n'
+            '    imprimir("ord-vacio TypeError atrapado")\n'
+            'intentar:\n'
+            '    b = chr(2000000)\n'
+            '    imprimir(b)\n'
+            'excepto ValueError:\n'
+            '    imprimir("chr-rango ValueError atrapado")\n'
+            'intentar:\n'
+            '    c = ord("ab")\n'
+            '    imprimir(c)\n'
+            'excepto TypeError:\n'
+            '    imprimir("ord-multichar TypeError atrapado")\n'
+        )
+
     def test_linux_starargs_sum_and_subscript(self):
         self._assert_linux_equiv('funcion resumir(*args):\n    devolver sum(args) + args[0] * 10\nimprimir(resumir(2, 3, 4))\n')
 
@@ -908,6 +1122,41 @@ class Phase10LinuxGates(unittest.TestCase):
             '    devolver sumar\n'
             'f = fabricar()\n'
             'imprimir(f(6, 7, 8, 9, 10))\n'
+        )
+
+    def test_linux_variadic_closure_escape(self):
+        self._assert_linux_equiv(
+            "funcion fabrica():\n"
+            "    base = 10\n"
+            "    funcion escapada(x, *resto):\n"
+            "        devolver base + x + sum(resto)\n"
+            "    devolver escapada\n"
+            "f = fabrica()\n"
+            "imprimir(f(1, 2, 3))\n"
+        )
+
+    def test_linux_iter_callable_sentinel(self):
+        self._assert_linux_equiv(
+            "funcion contador():\n"
+            "    x = 3\n"
+            "    funcion fuente():\n"
+            "        no_local x\n"
+            "        x = x - 1\n"
+            "        devolver x\n"
+            "    devolver fuente\n"
+            "f = contador()\n"
+            "it = iter(f, 0)\n"
+            "imprimir(next(it))\n"
+            "imprimir(next(it))\n"
+        )
+
+    def test_linux_next_with_default(self):
+        self._assert_linux_equiv(
+            "xs = [7]\n"
+            "it = iter(xs)\n"
+            "imprimir(next(it))\n"
+            "imprimir(next(it, -1))\n"
+            "imprimir(next(it, -2))\n"
         )
 
     def test_linux_immutable_scalar_closure(self):
@@ -1194,8 +1443,38 @@ class Phase10LinuxGates(unittest.TestCase):
             )
             entry = root / "main.piton"
             entry.write_text("importar pkg\n", encoding="utf-8")
-            with self.assertRaisesRegex(Exception, "beyond one level"):
+            # M8: N levels now allowed — `..` from a 1-segment package fails
+            # because it escapes the top package, not because "level too deep".
+            with self.assertRaisesRegex(Exception, "escapes the package"):
                 compile_native_linux_files(entry, root / "program")
+
+    def test_linux_relative_two_levels_up_supported(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-rel2-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            sub_dir = pkg_dir / "sub"
+            pkg_dir.mkdir(); sub_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text("pasar\n", encoding="utf-8")
+            (sub_dir / "__init__.piton").write_text("pasar\n", encoding="utf-8")
+            (pkg_dir / "comun.piton").write_text(
+                "funcion comun_x():\n    devolver 100\n", encoding="utf-8"
+            )
+            (sub_dir / "deep.piton").write_text(
+                "desde .. importar comun\n"
+                "funcion doble(x):\n    devolver comun.comun_x() + x\n",
+                encoding="utf-8",
+            )
+            entry = root / "main.piton"
+            entry.write_text(
+                "desde pkg.sub.deep importar doble\n"
+                "imprimir(doble(3))\n", encoding="utf-8"
+            )
+            executable = compile_native_linux_files(entry, root / "program")
+            run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(executable)],
+                capture_output=True, check=False,
+            )
+            self.assertEqual((run.returncode, run.stdout), (0, b"103\n"))
 
     def test_linux_module_attribute_value_access_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-linux-module-attr-") as directory:
@@ -1648,7 +1927,7 @@ class ComprehensionsV2Linux(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                linux_run_cmd([linux_path]),
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -1749,7 +2028,7 @@ class GeneratorsLinux(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                linux_run_cmd([linux_path]),
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -1892,61 +2171,67 @@ class GeneratorsLinux(unittest.TestCase):
             "imprimir(7)\n"
         )
 
-    def test_linux_generator_return_with_value(self):
-        self.assert_linux_matches(
-            "funcion gen():\n"
-            "    producir 1\n"
-            "    producir 2\n"
-            "    devolver 42\n"
-            "x = gen()\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
-            "intentar:\n"
-            "    next(x)\n"
-            "excepto StopIteration:\n"
-            "    imprimir(99)\n"
-        )
-
-    def test_linux_generator_close_raises_generator_exit(self):
-        self.assert_linux_matches(
-            "funcion gen():\n"
-            "    producir 1\n"
-            "x = gen()\n"
-            "imprimir(next(x))\n"
-            "intentar:\n"
-            "    x.close()\n"
-            "excepto GeneratorExit:\n"
-            "    imprimir(99)\n"
-        )
-
-    def test_linux_generator_yield_from_basic(self):
-        self.assert_linux_matches(
-            "funcion generador():\n"
-            "    producir desde [1, 2, 3]\n"
-            "x = generador()\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
-        )
-
-    def test_linux_generator_yield_from_subgenerator(self):
+    def test_linux_yield_from_delegates_subgen_values(self):
         self.assert_linux_matches(
             "funcion sub():\n"
-            "    producir 10\n"
-            "    producir 20\n"
-            "    producir 30\n"
-            "funcion gen():\n"
+            "    producir 1\n    producir 2\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n    producir 9\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(next(g))\nimprimir(next(g))\n"
+        )
+
+    def test_linux_yield_from_sends_forward(self):
+        self.assert_linux_matches(
+            "funcion sub():\n"
+            "    producir 1\n    producir 2\n"
+            "funcion outer():\n"
             "    producir desde sub()\n"
-            "x = gen()\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(g.send(5))\n"
+        )
+
+    def test_linux_generator_return_value_completes(self):
+        self.assert_linux_matches(
+            "funcion sub():\n"
+            "    producir 1\n"
+            "    devolver 99\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n"
+            "    producir 7\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(next(g))\n"
         )
 
     def test_linux_exception_binding_as_name(self):
         self.assert_linux_matches(
             'intentar:\n'
             '    lanzar ValueError("boom")\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+
+        )
+
+    def test_linux_async_raise_with_cause_chain_caught(self):
+        self.assert_linux_matches(
+            'intentar:\n'
+            '    lanzar ValueError("externo") desde TypeError("causa")\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+
+    def test_linux_base_exception_catches_anything(self):
+        self.assert_linux_matches(
+            'intentar:\n    lanzar TypeError("c1")\nexcepto BaseException como e:\n    imprimir("caught")\n'
+        )
+
+    def test_linux_bare_reraise_from_catchall_handler(self):
+        self.assert_linux_matches(
+            'intentar:\n'
+            '    intentar:\n'
+            '        lanzar ValueError("boom2")\n'
+            '    excepto Exception:\n'
+            '        lanzar\n'
             'excepto ValueError como e:\n'
             '    imprimir(e)\n'
         )
@@ -1973,7 +2258,7 @@ class CoroutinesLinux(unittest.TestCase):
             (root / "main.py").write_text(traducir_fuente(source, "<main>"), encoding="utf-8")
             executable = compile_native_linux(source, root / "program")
             native_run = subprocess.run(
-                linux_run_cmd([windows_to_wsl_path(executable)]),
+                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(executable)],
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -2144,7 +2429,7 @@ class CoroutinesLinux(unittest.TestCase):
             root = Path(directory)
             executable = compile_native_linux(source, root / "program")
             native_run = subprocess.run(
-                linux_run_cmd([windows_to_wsl_path(executable)]),
+                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(executable)],
                 capture_output=True, check=False, timeout=10,
             )
             self.assertNotEqual(native_run.returncode, 0)
@@ -2176,15 +2461,15 @@ class CoroutinesLinux(unittest.TestCase):
             "CancelledError",
         )
 
-    def test_linux_task_sleep1_fails_closed(self):
-        self._run_linux_expected_fail(
+    def test_linux_task_sleep1_uses_real_timer(self):
+        returncode, stdout, oracle, stderr = self._run_linux_diff(
             "importar asyncio\n"
             "asincrono funcion p():\n"
             "    esperar asyncio.sleep(1)\n"
-            "    devolver 0\n"
-            "asyncio.run(p())\n",
-            "sleep(0) only",
+            "    devolver 1\n"
+            "imprimir(asyncio.run(p()))\n",
         )
+        self.assertEqual((returncode, stdout, oracle, stderr), (0, b"1\n", b"1\n", b""))
 
     def test_linux_task_gather_non_task_fails_closed(self):
         self._run_linux_expected_fail(
@@ -2215,7 +2500,7 @@ class WithProtocolLinuxV1(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                linux_run_cmd([linux_path]),
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -2238,6 +2523,21 @@ class WithProtocolLinuxV1(unittest.TestCase):
             'con CM() como x:\n'
             '    imprimir("body")\n'
             '    imprimir(x)\n'
+        )
+        self.assertEqual((rc, out), (0, oracle_out), err)
+        self.assertEqual(err, b"")
+
+    def test_linux_m13_self_cycle_is_safe(self):
+        """M13 cycle fixture: mutual object references must not corrupt teardown."""
+        rc, out, oracle_out, err = self._run_linux_diff(
+            'clase Nodo:\n'
+            '    funcion __init__(self):\n'
+            '        self.ref = self\n'
+            'a = Nodo()\n'
+            'b = Nodo()\n'
+            'a.ref = b\n'
+            'b.ref = a\n'
+            'imprimir("ok")\n'
         )
         self.assertEqual((rc, out), (0, oracle_out), err)
         self.assertEqual(err, b"")
@@ -2306,6 +2606,256 @@ class WithProtocolLinuxV1(unittest.TestCase):
                     'con CM() como y:\n    imprimir(y)\n',
                     Path(directory) / "program",
                 )
+
+
+class FinalizersLinuxV1(unittest.TestCase):
+    """M13 FINALIZERS_V1 on Linux: __del__ runs once before process exit."""
+
+    def _run_linux_diff(self, source):
+        translated = traducir_fuente(source, "<linux-finalizer>")
+        with tempfile.TemporaryDirectory(prefix="piton-linux-finalizer-") as directory:
+            executable = compile_native_linux(source, Path(directory) / "program")
+            linux_path = windows_to_wsl_path(executable)
+            native_run = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                capture_output=True, check=False, timeout=10,
+            )
+            oracle_run = subprocess.run(
+                [sys.executable, "-c", translated],
+                capture_output=True, check=False, timeout=10,
+            )
+            native_stdout = native_run.stdout.replace(b"\r\n", b"\n")
+            oracle_stdout = oracle_run.stdout.replace(b"\r\n", b"\n")
+            return native_run.returncode, native_stdout, oracle_stdout, native_run.stderr
+
+    def test_linux_finalizer_runs_at_exit(self):
+        rc, out, oracle_out, err = self._run_linux_diff(
+            'clase Recurso:\n'
+            '    funcion __del__(self):\n'
+            '        imprimir("cerrado")\n'
+            'r = Recurso()\n'
+            'imprimir("listo")\n'
+        )
+        self.assertEqual((rc, out), (0, oracle_out), err)
+        self.assertEqual(err, b"")
+
+    def test_linux_finalizer_runs_once_for_self_cycle(self):
+        rc, out, oracle_out, err = self._run_linux_diff(
+            'clase Nodo:\n'
+            '    funcion __init__(self):\n'
+            '        self.ref = self\n'
+            '    funcion __del__(self):\n'
+            '        imprimir("del")\n'
+            'Nodo()\n'
+            'imprimir("ok")\n'
+        )
+        self.assertEqual((rc, out), (0, oracle_out), err)
+        self.assertEqual(err, b"")
+
+
+class CycleGCLinuxV1(unittest.TestCase):
+    """M13 GC_CYCLES_V1 on Linux: self-contained C-harness cycle collection test."""
+
+    # Self-contained freestanding C program that embeds the heap allocator,
+    # GC registry, refcounting, and cycle collector.  Compiled with gcc as
+    # a normal userspace binary (not -nostdlib) so write()/exit() resolve
+    # via libc.
+    _HARNESS_C = r'''
+#include <stdint.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+typedef unsigned long usize;
+typedef struct{long bits;int kind;}PitonSlot;
+#define PK_NONE 0
+#define PK_INT  1
+#define PK_LIST 1
+#define PK_DICT 2
+#define PK_SET  3
+#define PK_OBJECT 4
+#define PK_TUPLE 5
+#define PK_STR 6
+
+static void piton_memzero(void*p,usize n){unsigned char*c=p;for(usize i=0;i<n;++i)c[i]=0;}
+static void piton_memcpy(void*d,const void*s,usize n){unsigned char*a=d;const unsigned char*b=s;for(usize i=0;i<n;++i)a[i]=b[i];}
+static int piton_strcmp(const char*a,const char*b){while(*a&&*b){if(*a!=*b)return(*a>*b)?1:-1;++a;++b;}return(*a==*b)?0:((*a>*b)?1:-1);}
+
+static unsigned char piton_heap_data[4*1024*1024];
+static long piton_heap_inited=0;
+typedef struct piton_heap_block{usize size;int free;struct piton_heap_block*next;}piton_heap_block;
+static piton_heap_block*piton_heap_freelist=0;
+static void piton_heap_init(void){
+    if(piton_heap_inited)return;piton_heap_inited=1;
+    piton_heap_freelist=(piton_heap_block*)piton_heap_data;
+    piton_heap_freelist->size=sizeof(piton_heap_data)-sizeof(piton_heap_block);
+    piton_heap_freelist->free=1;piton_heap_freelist->next=0;}
+static void*piton_heap_alloc(usize n){
+    if(!piton_heap_inited)piton_heap_init();
+    usize req=n+sizeof(piton_heap_block);if(req<16)req=16;
+    piton_heap_block**prev=&piton_heap_freelist;piton_heap_block*cur=piton_heap_freelist;
+    while(cur){
+        if(cur->free&&cur->size>=req){
+            if(cur->size>=req+sizeof(piton_heap_block)+16){
+                piton_heap_block*rest=(piton_heap_block*)((char*)cur+req);
+                rest->size=cur->size-req;rest->free=1;rest->next=cur->next;*prev=rest;
+            }else{*prev=cur->next;}
+            cur->free=0;cur->next=0;piton_memzero((char*)cur+sizeof(piton_heap_block),n);return(char*)cur+sizeof(piton_heap_block);}
+        prev=&cur->next;cur=cur->next;}
+    write(2,"MemoryError: GC heap exhausted\n",31);exit(1);return 0;}
+static void piton_heap_free(void*ptr){
+    if(!ptr)return;piton_heap_block*b=(piton_heap_block*)((char*)ptr-sizeof(piton_heap_block));
+    b->free=1;b->next=piton_heap_freelist;piton_heap_freelist=b;}
+
+typedef struct{long refcount;long kind;long length;long capacity;PitonSlot*items;}PitonSeq;
+typedef struct{PitonSlot key;PitonSlot value;}PitonDictEntry;
+typedef struct{long refcount;long kind;long length;long capacity;PitonDictEntry*items;}PitonDict;
+typedef struct{long refcount;long kind;long length;long capacity;PitonSlot*items;}PitonSet;
+typedef struct{const char*name;PitonSlot value;}PitonAttr;
+typedef struct PitonObject{long refcount;long kind;const char*class_name;const char*parent_name;long length;PitonAttr attrs[32];long finalizer;long finalizer_called;struct PitonObject*next_all;}PitonObject;
+
+static void**gc_nodes=0;static long gc_count=0;static long gc_capacity=0;
+static long live_collections=0;static long live_dicts=0;static long live_sets=0;static long live_objects=0;
+static void piton_gc_register(void*raw){
+    if(!raw)return;for(long i=0;i<gc_count;++i)if(gc_nodes[i]==raw)return;
+    if(gc_count>=gc_capacity){long nc=gc_capacity?gc_capacity*2:16;
+        void**g=(void**)piton_heap_alloc((usize)nc*sizeof(void*));
+        if(gc_count)piton_memcpy(g,gc_nodes,(usize)gc_count*sizeof(void*));gc_nodes=g;gc_capacity=nc;}
+    gc_nodes[gc_count++]=raw;}
+static void piton_gc_unregister(void*raw){
+    for(long i=0;i<gc_count;++i){if(gc_nodes[i]!=raw)continue;gc_nodes[i]=gc_nodes[--gc_count];return;}}
+
+static void piton_slot_incref(PitonSlot v){if(v.kind>=PK_LIST&&v.kind<=PK_OBJECT){long*rc=(long*)v.bits;++(*rc);}}
+static void piton_slot_decref(PitonSlot v);
+static void piton_slot_decref(PitonSlot v){
+    if(v.kind<PK_LIST||v.kind>PK_OBJECT)return;long*rc=(long*)v.bits;if(!rc)return;
+    if(--(*rc)>0)return;
+    switch(v.kind){
+    case PK_LIST:case PK_TUPLE:{PitonSeq*s=(PitonSeq*)v.bits;
+        for(long i=0;i<s->length;++i)piton_slot_decref(s->items[i]);
+        piton_gc_unregister(s);piton_heap_free(s);--live_collections;break;}
+    case PK_DICT:{PitonDict*d=(PitonDict*)v.bits;
+        for(long i=0;i<d->length;++i){piton_slot_decref(d->items[i].key);piton_slot_decref(d->items[i].value);}
+        piton_gc_unregister(d);piton_heap_free(d);--live_dicts;break;}
+    case PK_SET:{PitonSet*s=(PitonSet*)v.bits;
+        for(long i=0;i<s->length;++i)piton_slot_decref(s->items[i]);
+        piton_gc_unregister(s);piton_heap_free(s);--live_sets;break;}
+    case PK_OBJECT:{PitonObject*o=(PitonObject*)v.bits;
+        for(long i=0;i<o->length;++i)piton_slot_decref(o->attrs[i].value);
+        piton_gc_unregister(o);piton_heap_free(o);--live_objects;break;}
+    default:break;}}
+
+static void piton_gc_detach_node(void*raw){
+    if(!raw)return;long kind=((long*)raw)[1];PitonSlot none={0,PK_NONE};
+    switch(kind){
+    case PK_LIST:case PK_TUPLE:{PitonSeq*s=(PitonSeq*)raw;
+        for(long i=0;i<s->length;++i){PitonSlot old=s->items[i];s->items[i]=none;piton_slot_decref(old);}break;}
+    case PK_DICT:{PitonDict*d=(PitonDict*)raw;
+        for(long i=0;i<d->length;++i){PitonSlot ok=d->items[i].key,ov=d->items[i].value;
+            d->items[i].key=none;d->items[i].value=none;piton_slot_decref(ok);piton_slot_decref(ov);}break;}
+    case PK_SET:{PitonSet*s=(PitonSet*)raw;
+        for(long i=0;i<s->length;++i){PitonSlot old=s->items[i];s->items[i]=none;piton_slot_decref(old);}break;}
+    case PK_OBJECT:{PitonObject*o=(PitonObject*)raw;
+        for(long i=0;i<o->length;++i){PitonSlot old=o->attrs[i].value;o->attrs[i].value=none;piton_slot_decref(old);}break;}
+    default:break;}}
+static void piton_gc_free_node(void*raw){
+    if(!raw)return;long kind=((long*)raw)[1];piton_gc_unregister(raw);
+    switch(kind){
+    case PK_LIST:case PK_TUPLE:{piton_heap_free(raw);--live_collections;break;}
+    case PK_DICT:{piton_heap_free(raw);--live_dicts;break;}
+    case PK_SET:{piton_heap_free(raw);--live_sets;break;}
+    case PK_OBJECT:{piton_heap_free(raw);--live_objects;break;}
+    default:break;}}
+void piton_gc_collect(void){
+    long n=gc_count;if(!n)return;
+    void**snapshot=(void**)piton_heap_alloc((usize)n*sizeof(void*));
+    piton_memcpy(snapshot,gc_nodes,(usize)n*sizeof(void*));
+    for(long i=0;i<n;++i){long*k=(long*)snapshot[i];++(*k);}
+    for(long i=0;i<n;++i)piton_gc_detach_node(snapshot[i]);
+    for(long i=0;i<n;++i)piton_gc_free_node(snapshot[i]);
+    piton_heap_free(snapshot);}
+long piton_total_live_count(void){return live_collections+live_dicts+live_sets+live_objects;}
+
+void*piton_collection_new(long kind,long cap){
+    piton_heap_init();PitonSeq*s=(PitonSeq*)piton_heap_alloc(sizeof(PitonSeq));
+    s->refcount=1;s->kind=kind;s->length=0;s->capacity=cap;
+    s->items=cap>0?(PitonSlot*)piton_heap_alloc((usize)cap*sizeof(PitonSlot)):0;
+    piton_gc_register(s);++live_collections;return s;}
+void piton_list_append(void*raw,long val,long tag){
+    PitonSeq*s=(PitonSeq*)raw;if(!s)return;
+    if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;
+        PitonSlot*na=(PitonSlot*)piton_heap_alloc((usize)nc*sizeof(PitonSlot));
+        if(s->items){for(long i=0;i<s->length;++i)na[i]=s->items[i];}
+        s->items=na;s->capacity=nc;}
+    PitonSlot v={val,(int)tag};piton_slot_incref(v);s->items[s->length++]=v;}
+void piton_collection_free(void*raw){
+    if(!raw)return;PitonSlot v={0,PK_NONE};
+    long kind=((long*)raw)[1];v.bits=(long)raw;v.kind=kind;piton_slot_decref(v);}
+void*piton_object_new(const char*name){
+    piton_heap_init();PitonObject*o=(PitonObject*)piton_heap_alloc(sizeof(PitonObject));
+    o->refcount=1;o->kind=PK_OBJECT;o->class_name=name;o->parent_name=0;o->length=0;
+    o->finalizer=0;o->finalizer_called=0;o->next_all=0;
+    piton_gc_register(o);++live_objects;return o;}
+void piton_object_set_tagged(void*raw,const char*name,long val,long tag){
+    PitonObject*o=(PitonObject*)raw;if(!raw)return;
+    for(long i=0;i<o->length;++i){
+        if(piton_strcmp(o->attrs[i].name,name)==0){
+            piton_slot_decref(o->attrs[i].value);PitonSlot v={val,(int)tag};piton_slot_incref(v);o->attrs[i].value=v;return;}}
+    if(o->length>=32){write(2,"AttributeError\n",15);exit(1);}
+    o->attrs[o->length].name=name;PitonSlot v={val,(int)tag};piton_slot_incref(v);
+    o->attrs[o->length].value=v;o->length++;}
+void piton_object_free(void*raw){piton_collection_free(raw);}
+
+static long str_len(const char*s){long n=0;while(s[n])++n;return n;}
+static void expect_count(const char*name,long expected){
+    long actual=piton_total_live_count();
+    if(actual!=expected){
+        write(2,name,str_len(name));write(2,": FAIL\n",7);_exit(1);}}
+
+int main(void){
+    /* Test 1: list self-cycle */
+    void*self_list=piton_collection_new(1,0);
+    piton_list_append(self_list,(long)self_list,1);
+    piton_collection_free(self_list);
+    expect_count("list self-cycle before",1);
+    piton_gc_collect();
+    expect_count("list self-cycle after",0);
+
+    /* Test 2: object<->list mutual cycle */
+    void*owner=piton_object_new("Nodo");
+    void*items=piton_collection_new(1,0);
+    piton_object_set_tagged(owner,"items",(long)items,1);
+    piton_list_append(items,(long)owner,1);
+    piton_object_free(owner);
+    piton_collection_free(items);
+    expect_count("obj-list cycle before",2);
+    piton_gc_collect();
+    expect_count("obj-list cycle after",0);
+
+    /* Test 3: empty collect is idempotent */
+    piton_gc_collect();
+    expect_count("empty collect",0);
+
+    write(1,"GC_CYCLES_V1_LINUX: PASS\n",25);return 0;
+}
+'''
+
+    def test_gc_collects_cycles_linux(self):
+        with tempfile.TemporaryDirectory(prefix="piton-gc-linux-") as directory:
+            harness = Path(directory) / "gc_cycle_linux.c"
+            harness.write_text(self._HARNESS_C, encoding="utf-8")
+            exe = Path(directory) / "gc_cycle_linux"
+            built = subprocess.run(
+                ["wsl.exe", "gcc", "-std=c11", "-O2",
+                 windows_to_wsl_path(harness), "-o", windows_to_wsl_path(exe)],
+                capture_output=True, text=True, check=False, timeout=30,
+            )
+            self.assertEqual(built.returncode, 0, built.stderr)
+            completed = subprocess.run(
+                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(exe)],
+                capture_output=True, text=True, check=False, timeout=10,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("GC_CYCLES_V1_LINUX: PASS", completed.stdout)
 
 
 if __name__ == "__main__":
