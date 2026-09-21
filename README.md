@@ -46,7 +46,7 @@ Windows limpia, instala Git, PowerShell, CPython 3.12, NASM y GCC/MinGW en
 `PATH`, y ejecuta:
 
 ```powershell
-git clone https://github.com/DannyBaanks/PITON.git
+git clone https://github.com/DannyBaanks/Piton.git
 Set-Location PITON
 py -3.12 -m pip install -e . --no-build-isolation
 .\windowsvalidate.ps1 -FullSuite -Publish
