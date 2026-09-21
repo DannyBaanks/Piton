@@ -21,9 +21,9 @@ Estados y modos: `NATIVE` (runtime propio), `REIMPLEMENTED` (lógica propia),
 | Módulo | Tier | Nivel objetivo | Estado actual | Modo | Deps | Win | Linux |
 |---|---|---|---|---|---|---|---|
 | builtins (print/len/type/abs/min/max/sum/int/str/float/bool/list/tuple/dict/set/range) | 0 | completo | PARTIAL | NATIVE | — | PASS | PASS |
-| math | 1 | Tier1 | PASS (sqrt) | NATIVE | floats | PASS | PASS |
-| sys | 1 | Tier1 | NOT_DEMONSTRATED | REIMPLEMENTED | argv/env | ND | ND |
-| os | 3 | Tier3 | NOT_DEMONSTRATED | BRIDGED | fs | ND | ND |
+| math | 1 | Tier1 | PARTIAL (sqrt, floor, ceil, sin, cos, log) | NATIVE | floats | PARTIAL | PASS |
+| sys | 1 | Tier1 | PARTIAL (exit, argv) | REIMPLEMENTED | argv/env | PARTIAL | PASS |
+| os | 3 | Tier3 | PARTIAL (name) | BRIDGED | fs | PARTIAL | PASS |
 | time | 3 | Tier3 | NOT_DEMONSTRATED | REIMPLEMENTED | syscalls | ND | ND |
 | json | 2 | Tier2 | NOT_DEMONSTRATED | REIMPLEMENTED | strings/dict | ND | ND |
 | collections | 1 | Tier1 | NOT_DEMONSTRATED | REIMPLEMENTED | containers | ND | ND |
@@ -38,6 +38,13 @@ Estados y modos: `NATIVE` (runtime propio), `REIMPLEMENTED` (lógica propia),
 
 `ND` = NOT_DEMONSTRATED. Un `PASS` en una celda debe tener su corpus diferencial
 y su recibo.
+
+`STDLIB_TIER1_V1` evidencia actual: Linux tiene corpus diferencial permanente
+para `math.floor`/`ceil`/`sin`/`cos`/`log`, `sys.exit`, `len(sys.argv)` y
+`os.name`. Windows queda `PARTIAL` por falta de ejecución/verificación del
+backend en esta sesión. El runtime Linux limita `floor`/`ceil` a enteros
+`int64` y su impresor de floats usa 12 dígitos; `sys.argv[i]` y floats grandes
+requieren una ampliación posterior.
 
 ## Reglas
 

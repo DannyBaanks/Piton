@@ -64,10 +64,14 @@ class PythonBackend:
 
     def _gen_classdef(self, node: ClassDef):
         decorators = "".join(f"@{self._expr_to_str(d)}\n" for d in node.decorators)
-        bases = ", ".join(self._expr_to_str(b) for b in node.bases) if node.bases else ""
+        header_parts = [self._expr_to_str(b) for b in node.bases]
+        header_parts += (
+            f"{k.arg}={self._expr_to_str(k.value)}" if k.arg else f"**{self._expr_to_str(k.value)}"
+            for k in node.keywords
+        )
         class_line = f"class {node.name}"
-        if bases:
-            class_line += f"({bases})"
+        if header_parts:
+            class_line += f"({', '.join(header_parts)})"
         class_line += ":"
         self._emit(f"{decorators}{class_line}")
         self.indent += 1

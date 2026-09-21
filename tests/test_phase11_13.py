@@ -2,19 +2,39 @@ from __future__ import annotations
 
 import ast
 import ctypes.util
+import io
 import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 import unittest
 
 from piton import eval_piton, exec_piton, inspect_piton_source
 from piton.lower import lower_cst_to_hir
-from piton.mir import evaluate_mir, lower_hir_to_mir
+from piton.mir import MIREvaluator, evaluate_mir, lower_hir_to_mir
 from piton.optimizer import optimize_mir
 from piton.stdlib_runtime import run_subprocess, stdlib_modules
 from piton.translator import traducir_fuente
 
 
 class Phase11To13Bootstrap(unittest.TestCase):
+    def test_mir_generator_preserves_frame_between_yields(self):
+        source = (
+            "funcion contador():\n"
+            "    imprimir(10)\n"
+            "    producir 1\n"
+            "    imprimir(20)\n"
+            "    producir 2\n"
+            "x = contador()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+        hir = lower_cst_to_hir(parse_source(source))
+        evaluator = MIREvaluator(lower_hir_to_mir(hir))
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertIsNone(evaluator.run())
+        self.assertEqual(output.getvalue(), "10\n1\n20\n2\n")
+
     def test_explicit_dynamic_apis_and_source_contract(self):
         self.assertEqual(eval_piton("1 + 2"), 3)
         namespace = exec_piton("valor = 4\n")

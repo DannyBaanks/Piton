@@ -46,6 +46,66 @@ class Signature:
     kwarg: Optional[str] = None
 
 
+@dataclass(frozen=True, slots=True)
+class PitonArgVector:
+    """Ordered positional values passed through the generic call ABI."""
+
+    values: tuple[Any, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PitonKwVector:
+    """Ordered keyword values passed through the generic call ABI."""
+
+    items: tuple[tuple[str, Any], ...] = ()
+
+
+def bind_call_vectors(
+    name: str,
+    signature: Signature,
+    positional: PitonArgVector,
+    keywords: PitonKwVector,
+) -> dict[str, Any]:
+    """Bind generic call vectors before entering a native or bootstrap frame."""
+    kwargs: dict[str, Any] = {}
+    for key, value in keywords.items:
+        if key in kwargs:
+            raise CallBindingError(f"{name}() got multiple values for keyword argument: {key}")
+        kwargs[key] = value
+    args = positional.values
+    if len(args) > len(signature.positional) and signature.vararg is None:
+        raise CallBindingError(
+            f"{name}() takes {len(signature.positional)} positional arguments but {len(args)} were given"
+        )
+    values: dict[str, Any] = {}
+    for index, parameter in enumerate(signature.positional):
+        if index < len(args):
+            if parameter in kwargs:
+                raise CallBindingError(f"{name}() got multiple values for argument: {parameter}")
+            values[parameter] = args[index]
+        elif parameter in kwargs:
+            values[parameter] = kwargs.pop(parameter)
+        elif parameter in signature.defaults:
+            values[parameter] = signature.defaults[parameter]
+        else:
+            raise CallBindingError(f"{name}() missing required argument: {parameter}")
+    if signature.vararg:
+        values[signature.vararg] = tuple(args[len(signature.positional):])
+    for parameter in signature.keyword_only:
+        if parameter in kwargs:
+            values[parameter] = kwargs.pop(parameter)
+        elif parameter in signature.keyword_defaults:
+            values[parameter] = signature.keyword_defaults[parameter]
+        else:
+            raise CallBindingError(f"{name}() missing keyword-only argument: {parameter}")
+    if kwargs and signature.kwarg is None:
+        unexpected = next(iter(kwargs))
+        raise CallBindingError(f"{name}() got an unexpected keyword argument: {unexpected}")
+    if signature.kwarg:
+        values[signature.kwarg] = dict(kwargs)
+    return values
+
+
 class PitonFunction:
     def __init__(self, name: str, signature: Signature, body: Callable[[Frame], Any], closure: dict[str, Cell] | None = None):
         self.name = name
@@ -54,35 +114,12 @@ class PitonFunction:
         self.closure = dict(closure or {})
 
     def bind(self, args: tuple[Any, ...], kwargs: dict[str, Any], globals_: dict[str, Any] | None = None) -> Frame:
-        signature = self.signature
-        if len(args) > len(signature.positional) and signature.vararg is None:
-            raise CallBindingError(f"{self.name}() takes {len(signature.positional)} positional arguments but {len(args)} were given")
-        values: dict[str, Any] = {}
-        for index, name in enumerate(signature.positional):
-            if index < len(args):
-                values[name] = args[index]
-            elif name in kwargs:
-                values[name] = kwargs.pop(name)
-            elif name in signature.defaults:
-                values[name] = signature.defaults[name]
-            else:
-                raise CallBindingError(f"{self.name}() missing required argument: {name}")
-        if signature.vararg:
-            values[signature.vararg] = tuple(args[len(signature.positional):])
-        elif len(args) > len(signature.positional):
-            raise CallBindingError(f"too many positional arguments for {self.name}()")
-        for name in signature.keyword_only:
-            if name in kwargs:
-                values[name] = kwargs.pop(name)
-            elif name in signature.keyword_defaults:
-                values[name] = signature.keyword_defaults[name]
-            else:
-                raise CallBindingError(f"{self.name}() missing keyword-only argument: {name}")
-        if kwargs and signature.kwarg is None:
-            unexpected = next(iter(kwargs))
-            raise CallBindingError(f"{self.name}() got an unexpected keyword argument: {unexpected}")
-        if signature.kwarg:
-            values[signature.kwarg] = dict(kwargs)
+        values = bind_call_vectors(
+            self.name,
+            self.signature,
+            PitonArgVector(tuple(args)),
+            PitonKwVector(tuple(kwargs.items())),
+        )
         return Frame(self.name, globals=globals_ or {}, locals=values, closure=dict(self.closure))
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:

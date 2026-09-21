@@ -39,6 +39,36 @@ Salida real:
 Hola, mundo
 ```
 
+## Validacion Windows desde otra maquina
+
+La validacion PE de Windows se comunica por este repositorio. En la maquina
+Windows limpia, instala Git, PowerShell, CPython 3.12, NASM y GCC/MinGW en
+`PATH`, y ejecuta:
+
+```powershell
+git clone https://github.com/DannyBaanks/PITON.git
+Set-Location PITON
+py -3.12 -m pip install -e . --no-build-isolation
+.\windowsvalidate.ps1 -FullSuite -Publish
+```
+
+`windowsvalidate.ps1` ejecuta el corpus focalizado de T2/T5, `test_phase14` y,
+con `-FullSuite`, la regresion PE completa. Escribe el receipt, el resumen y el
+log crudo en `validation/windows/`. Con `-Publish` solo hace stage de esa
+carpeta, crea un commit y lo publica en el branch actual de `origin`; nunca
+sube cambios de implementacion que ya estuvieran en el checkout.
+
+Resultados publicados:
+
+- `validation/windows/latest.json`: receipt con commit, host, herramientas,
+  comandos, exit codes y estado del worktree.
+- `validation/windows/latest.md`: resumen legible.
+- `validation/windows/latest.log`: salida cruda.
+- `validation/windows/windowsvalidate-<UTC timestamp>.*`: historial inmutable.
+
+Un `PASS` de Windows no cierra por si solo un gate cross-platform: debe
+combinarse con el receipt Linux correspondiente.
+
 ## El lenguaje
 
 | Pitón | Python | Pitón | Python |
@@ -193,6 +223,16 @@ El contrato exacto vive en `NATIVE_SUBSET_1_0.md`.
 [ ] Stdlib amplia (solo math.sqrt demostrado)
 [ ] FFI nativo / ctypes
 ```
+
+> **Actualización posterior al contrato NATIVE_SUBSET_1_0** (no reescrito: es un
+> snapshot histórico de ese recibo). Desde entonces el proyecto pasó a Fase 14:
+> celdas mutables/`no_local`, frames de generator suspendidos, herencia C3/MRO,
+> paquetes/imports relativos/star/cíclicos, coroutines con await real,
+> TASK_SCHEDULER_V1 (create_task/gather/sleep(0)/cancelación) y stdlib más amplia
+> ya compilan nativamente en ambos backends — véase
+> `piton/final_dashboard.py` (31 gates) y `docs/FEATURE_STATUS_MATRIX.md` para
+> el estado CURRENT. Siguen pendientes: metaclasses, `async with`, timers reales
+> (`asyncio.sleep(n>0)`), dynamic call-site unpacking, `yield from`.
 
 ### Regla de oro
 
@@ -421,7 +461,10 @@ PITON/
 |   |-- test_phase8_10.py        # Bloques 1-10 (clases, imports, async)
 |   |-- test_phase11_13.py       # Fases 11-13 (eval, stdlib, MIR)
 |   |-- test_phase14.py          # Dashboard assertions
+|   |-- test_windows_validate.py  # Corpus focalizado PE T2/T5
 |   `-- test_cli_and_corpus.py
+|-- windowsvalidate.ps1          # Validador y publicador Windows
+|-- validation/windows/          # Receipts publicados por la Xeon
 |-- GUIA.md                  # Guia operativa comandos reales
 |-- NATIVE_COMPATIBILITY.md  # Matriz de compatibilidad nativa
 |-- NATIVE_SUBSET_1_0.md     # Contrato del milestone x86 acotado

@@ -190,9 +190,9 @@ class Parser:
                 return self._parse_for(is_async=True)
             elif val == "segun":
                 return self._parse_match()
-            elif val == "importar":
+            elif val == "importar" or val == "import":
                 return self._parse_import()
-            elif val == "desde":
+            elif val == "desde" or val == "from":
                 return self._parse_import_from()
             elif val == "global":
                 return self._parse_global()
@@ -291,15 +291,22 @@ class Parser:
         tok = self._advance()
         name = self._consume(TokenType.NAME, "nombre de clase").value
         bases = []
+        keywords = []
         if self._match(TokenType.LPAREN):
             while not self._check(TokenType.RPAREN):
-                bases.append(self._parse_expression(0))
+                if self._check(TokenType.NAME) and self._peek_n(1).type == TokenType.EQUAL:
+                    kw_name = self._advance().value
+                    self._advance()  # =
+                    kw_value = self._parse_expression(0)
+                    keywords.append(Keyword(arg=kw_name, value=kw_value).set_pos(self._peek()))
+                else:
+                    bases.append(self._parse_expression(0))
                 if not self._match(TokenType.COMMA):
                     break
             self._consume(TokenType.RPAREN)
         self._consume(TokenType.COLON)
         body = self._parse_block()
-        return ClassDef(name=name, bases=bases, body=body, decorators=decorators).set_pos(tok)
+        return ClassDef(name=name, bases=bases, keywords=keywords, body=body, decorators=decorators).set_pos(tok)
 
     def _parse_return(self) -> ReturnStmt:
         tok = self._advance()
@@ -450,11 +457,11 @@ class Parser:
         while self._match(TokenType.DOT):
             level += 1
         module = None
-        if self._check(TokenType.NAME) and self._peek().value != "importar":
+        if self._check(TokenType.NAME) and self._peek().value not in ("importar", "import"):
             module = self._consume(TokenType.NAME).value
             while self._match(TokenType.DOT) and self._check(TokenType.NAME):
                 module += "." + self._consume(TokenType.NAME).value
-        self._consume(TokenType.NAME)  # 'importar'
+        self._consume(TokenType.NAME)  # 'importar' or 'import'
         if self._match(TokenType.STAR):
             # `desde pkg importar *` — import star (entry-level binding).
             return ImportFromStmt(
@@ -718,6 +725,18 @@ class Parser:
             val = tok.value
             self._advance()
 
+            # Lambda keyword
+            if val == "lambda":
+                args = Arguments()
+                while not self._check(TokenType.COLON):
+                    name = self._consume(TokenType.NAME).value
+                    args.args.append(Arg(arg=name).set_pos(self._peek()))
+                    if not self._match(TokenType.COMMA):
+                        break
+                self._consume(TokenType.COLON)
+                body = self._parse_expression(0)
+                return Lambda(args=args, body=body).set_pos(tok)
+
             if val == "esperar":
                 return Await(value=self._parse_unary()).set_pos(tok)
             if val == "no":
@@ -745,6 +764,10 @@ class Parser:
                 self._advance()
                 return self._parse_postfix(Tuple(elts=[], ctx="Load").set_pos(tok))
             expr = self._parse_expression(0)
+            if self._check(TokenType.NAME) and self._peek().value == "para":
+                generators = self._parse_comp_generators()
+                self._consume(TokenType.RPAREN)
+                return GenExpr(elt=expr, generators=generators).set_pos(tok)
             if self._match(TokenType.COMMA):
                 elts = [expr]
                 while not self._check(TokenType.RPAREN):
@@ -761,11 +784,12 @@ class Parser:
             if self._check(TokenType.RBRACKET):
                 self._advance()
                 return self._parse_postfix(List(elts=[], ctx="Load").set_pos(tok))
-            elts = [self._parse_expression(0)]
+            first = self._parse_expression(0)
             if self._check(TokenType.NAME) and self._peek().value == "para":
-                comp = self._parse_comprehension()
+                generators = self._parse_comp_generators()
                 self._consume(TokenType.RBRACKET)
-                return ListComp(elt=elts[0], generators=[comp]).set_pos(tok)
+                return ListComp(elt=first, generators=generators).set_pos(tok)
+            elts = [first]
             while not self._check(TokenType.RBRACKET):
                 if not self._match(TokenType.COMMA):
                     break
@@ -782,9 +806,14 @@ class Parser:
                 return self._parse_postfix(Dict(keys=[], values=[]).set_pos(tok))
             first = self._parse_expression(0)
             if self._match(TokenType.COLON):
-                # Dict
+                # Dict or dict comp
+                value = self._parse_expression(0)
+                if self._check(TokenType.NAME) and self._peek().value == "para":
+                    generators = self._parse_comp_generators()
+                    self._consume(TokenType.RBRACE)
+                    return DictComp(key=first, value=value, generators=generators).set_pos(tok)
                 keys = [first]
-                values = [self._parse_expression(0)]
+                values = [value]
                 while self._match(TokenType.COMMA):
                     if self._check(TokenType.RBRACE):
                         break
@@ -795,7 +824,11 @@ class Parser:
                 self._consume(TokenType.RBRACE)
                 return self._parse_postfix(Dict(keys=keys, values=values).set_pos(tok))
             else:
-                # Set
+                # Set or set comp
+                if self._check(TokenType.NAME) and self._peek().value == "para":
+                    generators = self._parse_comp_generators()
+                    self._consume(TokenType.RBRACE)
+                    return SetComp(elt=first, generators=generators).set_pos(tok)
                 elts = [first]
                 while self._match(TokenType.COMMA):
                     if self._check(TokenType.RBRACE):
@@ -803,19 +836,6 @@ class Parser:
                     elts.append(self._parse_expression(0))
                 self._consume(TokenType.RBRACE)
                 return self._parse_postfix(Set(elts=elts).set_pos(tok))
-
-        # Lambda
-        if self._check(TokenType.NAME) and self._peek().value == "lambda":
-            self._advance()
-            args = Arguments()
-            while not self._check(TokenType.COLON):
-                name = self._consume(TokenType.NAME).value
-                args.args.append(Arg(arg=name).set_pos(self._peek()))
-                if not self._match(TokenType.COMMA):
-                    break
-            self._consume(TokenType.COLON)
-            body = self._parse_expression(0)
-            return Lambda(args=args, body=body).set_pos(tok)
 
         # Await
         if self._check(TokenType.NAME) and self._peek().value == "esperar":
@@ -913,6 +933,12 @@ class Parser:
             self._advance()
             ifs.append(self._parse_expression(0))
         return CompFor(target=target, iter=iter_, ifs=ifs, is_async=is_async).set_pos(tok)
+
+    def _parse_comp_generators(self) -> list:
+        generators = [self._parse_comprehension()]
+        while self._check(TokenType.NAME) and self._peek().value == "para":
+            generators.append(self._parse_comprehension())
+        return generators
 
     def _parse_fstring(self, value: str, tok: Token) -> FString:
         body = value[2:-1]

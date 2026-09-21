@@ -98,13 +98,13 @@ class Phase5Gates(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "ordering not supported"):
                 compile_native('imprimir("a" < 1)\n', Path(directory) / "program.exe")
 
-    def test_x86_rejects_more_than_four_arguments(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "more than four"):
-                compile_native(
-                    "funcion f(a, b, c, d, e):\n    devolver a\nimprimir(f(1, 2, 3, 4, 5))\n",
-                    Path(directory) / "program.exe",
-                )
+    def test_x86_supports_more_than_four_arguments_via_frame_abi(self):
+        result = compare_native_to_cpython(
+            "funcion f(a, b, c, d, e):\n"
+            "    devolver a\n"
+            "imprimir(f(1, 2, 3, 4, 5))\n"
+        )
+        self.assertTrue(result.equivalent, result)
 
     def test_x86_integer_collections(self):
         corpus = (
@@ -356,6 +356,23 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_closure_frame_abi_more_than_four_captures_and_args(self):
+        source = (
+            "funcion fabricar():\n"
+            "    uno = 1\n"
+            "    dos = 2\n"
+            "    tres = 3\n"
+            "    cuatro = 4\n"
+            "    cinco = 5\n"
+            "    funcion sumar(a, b, c, d, e):\n"
+            "        devolver uno + dos + tres + cuatro + cinco + a + b + c + d + e\n"
+            "    devolver sumar\n"
+            "f = fabricar()\n"
+            "imprimir(f(6, 7, 8, 9, 10))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
     def test_x86_typed_raise_caught_by_except(self):
         source = (
             'intentar:\n'
@@ -364,6 +381,124 @@ class Phase5Gates(unittest.TestCase):
             '    imprimir("caught")\n'
         )
         result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_stop_iteration_is_caught(self):
+        source = (
+            'it = iter([7])\n'
+            'intentar:\n'
+            '    imprimir(next(it))\n'
+            '    next(it)\n'
+            'excepto StopIteration:\n'
+            '    imprimir("exhausted")\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_user_defined_iter_and_next(self):
+        source = (
+            'clase Uno:\n'
+            '    funcion __iter__(self):\n'
+            '        devolver self\n'
+            '    funcion __next__(self):\n'
+            '        devolver 7\n'
+            'u = Uno()\n'
+            'imprimir(next(iter(u)))\n'
+            'imprimir(next(u))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_user_defined_stop_iteration_propagates(self):
+        source = (
+            'clase Uno:\n'
+            '    funcion __init__(self):\n'
+            '        self.usado = 0\n'
+            '    funcion __iter__(self):\n'
+            '        devolver self\n'
+            '    funcion __next__(self):\n'
+            '        si self.usado:\n'
+            '            lanzar StopIteration()\n'
+            '        self.usado = 1\n'
+            '        devolver 7\n'
+            'it = iter(Uno())\n'
+            'intentar:\n'
+            '    imprimir(next(it))\n'
+            '    next(it)\n'
+            'excepto StopIteration:\n'
+            '    imprimir("exhausted")\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_enumerate_iterator(self):
+        source = (
+            'it = enumerar([10, 20], 3)\n'
+            'imprimir(next(it))\n'
+            'imprimir(next(it))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_reversed_and_zip_iterators(self):
+        source = (
+            'r = reversed([1, 2, 3])\n'
+            'imprimir(next(r))\n'
+            'z = zip([1, 2], [10, 20, 30])\n'
+            'imprimir(next(z))\n'
+            'imprimir(next(z))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_map_and_filter_iterators(self):
+        source = (
+            'funcion doble(x):\n'
+            '    devolver x * 2\n'
+            'funcion es_par(x):\n'
+            '    devolver x % 2 == 0\n'
+            'imprimir(next(map(doble, [1, 2])))\n'
+            'imprimir(next(filter(es_par, [1, 2, 3, 4])))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_map_accepts_closure_callback(self):
+        source = (
+            'funcion ejecutar():\n'
+            '    m = 3\n'
+            '    funcion multiplicar(x):\n'
+            '        devolver x * m\n'
+            '    imprimir(next(map(multiplicar, [2])))\n'
+            'ejecutar()\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_map_accepts_lambda_callback(self):
+        source = (
+            'imprimir(next(map(lambda x: x * 3, [2])))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_filter_accepts_lambda_callback(self):
+        source = (
+            'imprimir(next(filter(lambda x: x > 2, [1, 2, 3, 4])))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_map_lambda_with_capture(self):
+        source = (
+            'm = 5\n'
+            'imprimir(next(map(lambda x: x + m, [1, 2])))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_sorted_builtin(self):
+        result = compare_native_to_cpython('imprimir(sorted([3, 1, 2]))\n')
         self.assertTrue(result.equivalent, result)
 
     def test_x86_finally_runs_after_try(self):
@@ -620,13 +755,288 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
-    def test_x86_rejects_generator_escape(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "cannot escape"):
-                compile_native(
-                    "funcion valores():\n    producir 1\nx = valores()\n",
-                    Path(directory) / "program.exe",
-                )
+    def test_x86_list_and_tuple_for_loop(self):
+        source = (
+            "total = 0\n"
+            "para valor en [1, 2, 3]:\n"
+            "    total = total + valor\n"
+            "para valor en (4, 5):\n"
+            "    total = total + valor\n"
+            "imprimir(total)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_iter_and_next_list_tuple(self):
+        source = (
+            "a = iter([4, 5])\n"
+            "b = iter((8, 9))\n"
+            "imprimir(next(a))\n"
+            "imprimir(next(a))\n"
+            "imprimir(next(b))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_iter_and_next_dict_set(self):
+        source = (
+            'it = iter({"uno": 1, "dos": 2})\n'
+            'imprimir(next(it))\n'
+            'imprimir(next(it))\n'
+            'set_it = iter({1, 2})\n'
+            'imprimir(next(set_it) + next(set_it))\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_can_be_assigned(self):
+        source = (
+            "funcion valores():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "x = valores()\n"
+            "imprimir(next(x))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_suspends_between_next_calls(self):
+        source = (
+            "funcion gen():\n"
+            "    imprimir(10)\n"
+            "    producir 1\n"
+            "    imprimir(20)\n"
+            "    producir 2\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_with_params(self):
+        source = (
+            "funcion gen(n):\n"
+            "    producir n\n"
+            "    producir n + 1\n"
+            "x = gen(5)\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_preserves_locals_between_yields(self):
+        source = (
+            "funcion gen():\n"
+            "    valor = 1\n"
+            "    producir valor\n"
+            "    valor = valor + 1\n"
+            "    producir valor\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_exhaustion_raises_stop_iteration(self):
+        source = (
+            "funcion gen():\n"
+            "    producir 1\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_instances_keep_independent_state(self):
+        source = (
+            "funcion gen(n):\n"
+            "    producir n\n"
+            "    producir n + 10\n"
+            "x = gen(1)\n"
+            "z = gen(2)\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(z))\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(z))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_send_after_next(self):
+        source = (
+            "funcion echo():\n"
+            "    total = 0\n"
+            "    producir 0\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "x = echo()\n"
+            "imprimir(next(x))\n"
+            "imprimir(x.send(5))\n"
+            "imprimir(x.send(7))\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_send_first_call_fails(self):
+        source = (
+            "funcion gen():\n"
+            "    producir 1\n"
+            "x = gen()\n"
+            "intentar:\n"
+            "    x.send(7)\n"
+            "excepto TypeError:\n"
+            "    imprimir(99)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_throw_at_caller(self):
+        source = (
+            "funcion gen():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "intentar:\n"
+            "    x.throw(ValueError)\n"
+            "excepto ValueError:\n"
+            "    imprimir(88)\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_close_stops_iteration(self):
+        source = (
+            "funcion gen():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "x.close()\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_close_is_idempotent(self):
+        source = (
+            "funcion gen():\n"
+            "    producir 1\n"
+            "x = gen()\n"
+            "x.close()\n"
+            "x.close()\n"
+            "imprimir(7)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_return_with_value(self):
+        source = (
+            "funcion gen():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "    devolver 42\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_close_raises_generator_exit(self):
+        source = (
+            "funcion gen():\n"
+            "    producir 1\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "intentar:\n"
+            "    x.close()\n"
+            "excepto GeneratorExit:\n"
+            "    imprimir(99)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_exception_binding_as_name(self):
+        source = (
+            'intentar:\n'
+            '    lanzar ValueError("boom")\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_exception_binding_as_name_no_message(self):
+        source = (
+            'intentar:\n'
+            '    lanzar ValueError()\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_exception_binding_scoped_to_handler(self):
+        source = (
+            'intentar:\n'
+            '    lanzar TypeError("nosuh")\n'
+            'excepto TypeError como e:\n'
+            '    imprimir(e)\n'
+            'imprimir(5)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_yield_from_basic(self):
+        source = (
+            "funcion generador():\n"
+            "    producir desde [1, 2, 3]\n"
+            "x = generador()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_yield_from_subgenerator(self):
+        source = (
+            "funcion sub():\n"
+            "    producir 10\n"
+            "    producir 20\n"
+            "    producir 30\n"
+            "funcion gen():\n"
+            "    producir desde sub()\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
 
     def test_x86_simple_class_fields_and_method(self):
         source = (
@@ -1489,6 +1899,25 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_async_deep_chain_with_params(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion base(n):\n"
+            "    devolver n + 1\n"
+            "asincrono funcion medio(n):\n"
+            "    a = esperar base(n)\n"
+            "    devolver a * 2\n"
+            "asincrono funcion cima(n):\n"
+            "    b = esperar medio(n)\n"
+            "    c = esperar base(b)\n"
+            "    devolver c + 100\n"
+            "asincrono funcion principal():\n"
+            "    imprimir(esperar cima(5))\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
     def test_x86_async_rejects_await_outside_async(self):
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             with self.assertRaisesRegex(Exception, "await is only valid"):
@@ -1496,6 +1925,321 @@ class Phase5Gates(unittest.TestCase):
                     "devolver esperar 1\n",
                     Path(directory) / "program.exe",
                 )
+
+    def test_x86_async_generator_async_for(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion contar():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "    producir 3\n"
+            "asincrono funcion principal():\n"
+            "    asincrono para x en contar():\n"
+            "        imprimir(x)\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_async_generator_params_and_await_inside(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion base(n):\n"
+            "    devolver n + 1\n"
+            "asincrono funcion contar(hasta):\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "    v = esperar base(10)\n"
+            "    producir v\n"
+            "    producir 3\n"
+            "asincrono funcion principal():\n"
+            "    asincrono para x en contar(4):\n"
+            "        imprimir(x)\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_async_generator_bare_call_is_not_a_coroutine(self):
+        # Unlike an async function, an async generator call must NOT be awaited:
+        # creating the object is enough (no "must be awaited" error).
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion contar():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "asincrono funcion principal():\n"
+            "    g = contar()\n"
+            "    imprimir(1)\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_async_for_else(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion contar():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "asincrono funcion principal():\n"
+            "    asincrono para x en contar():\n"
+            "        imprimir(x)\n"
+            "    sino:\n"
+            "        imprimir(99)\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_async_for_else_skipped_on_break(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion contar():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "    producir 3\n"
+            "asincrono funcion principal():\n"
+            "    asincrono para x en contar():\n"
+            "        si x == 2:\n"
+            "            romper\n"
+            "        imprimir(x)\n"
+            "    sino:\n"
+            "        imprimir(99)\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_async_for_requires_async_generator(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "requires an async generator call"):
+                compile_native(
+                    "importar asyncio\n"
+                    "asincrono funcion principal():\n"
+                    "    asincrono para x en [1, 2]:\n"
+                    "        imprimir(x)\n"
+                    "asyncio.run(principal())\n",
+                    Path(directory) / "program.exe",
+                )
+
+    def test_x86_rejects_await_async_generator(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "cannot await an async generator"):
+                compile_native(
+                    "importar asyncio\n"
+                    "asincrono funcion contar():\n"
+                    "    producir 1\n"
+                    "asincrono funcion principal():\n"
+                    "    v = esperar contar()\n"
+                    "asyncio.run(principal())\n",
+                    Path(directory) / "program.exe",
+                )
+
+    def test_x86_async_for_outside_async_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "only valid inside a native async function"):
+                compile_native(
+                    "asincrono funcion contar():\n"
+                    "    producir 1\n"
+                    "asincrono para x en contar():\n"
+                    "    imprimir(x)\n",
+                    Path(directory) / "program.exe",
+                )
+
+    # ── TASK_SCHEDULER_V1 (M9): create_task / await task / gather / sleep(0) / cancel ──
+
+    def test_x86_task_create_await_and_result(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion saluda(n):\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver n * 10\n"
+            "asincrono funcion principal():\n"
+            "    t1 = asyncio.create_task(saluda(1))\n"
+            "    imprimir(esperar t1)\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_task_gather_direct_calls(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion saluda(n):\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver n * 10\n"
+            "asincrono funcion principal():\n"
+            "    r = esperar asyncio.gather(saluda(2), saluda(3))\n"
+            "    imprimir(r)\n"
+            "    devolver 7\n"
+            "x = asyncio.run(principal())\n"
+            "imprimir(x)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_task_gather_sleep0_interleave_order(self):
+        # CPython's asyncio is FIFO: with three tasks each sleeping twice,
+        # the gather result is deterministic [1, 2, 3].
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion t(n):\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver n\n"
+            "asincrono funcion principal():\n"
+            "    a = asyncio.create_task(t(1))\n"
+            "    b = asyncio.create_task(t(2))\n"
+            "    c = asyncio.create_task(t(3))\n"
+            "    imprimir(esperar asyncio.gather(a, b, c))\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_task_gather_already_finished_tasks(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion s(n):\n"
+            "    devolver n * 10\n"
+            "asincrono funcion principal():\n"
+            "    t1 = asyncio.create_task(s(1))\n"
+            "    imprimir(esperar t1)\n"
+            "    t2 = asyncio.create_task(s(2))\n"
+            "    imprimir(esperar t2)\n"
+            "    imprimir(esperar asyncio.gather(t1, t2))\n"
+            "    devolver 7\n"
+            "x = asyncio.run(principal())\n"
+            "imprimir(x)\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_task_await_chain_with_sleep0(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion hoja(n):\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver n + 1\n"
+            "asincrono funcion medio():\n"
+            "    x = esperar hoja(10)\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver x * 2\n"
+            "asincrono funcion principal():\n"
+            "    imprimir(esperar medio())\n"
+            "asyncio.run(principal())\n"
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_task_cancel_await_propagates(self):
+        # CPython: await on a cancelled task raises CancelledError in the awaiter
+        # (the root here), which escapes asyncio.run as an unhandled exception.
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion s(n):\n"
+            "    devolver n\n"
+            "asincrono funcion principal():\n"
+            "    t1 = asyncio.create_task(s(1))\n"
+            "    t1.cancel()\n"
+            "    imprimir(esperar t1)\n"
+            "asyncio.run(principal())\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
+            self.assertIn("CancelledError", completed.stderr.decode(errors="replace"))
+
+    def test_x86_task_cancel_gather_member_propagates(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion s(n):\n"
+            "    devolver n\n"
+            "asincrono funcion principal():\n"
+            "    t1 = asyncio.create_task(s(1))\n"
+            "    t1.cancel()\n"
+            "    imprimir(esperar asyncio.gather(t1))\n"
+            "asyncio.run(principal())\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
+            self.assertIn("CancelledError", completed.stderr.decode(errors="replace"))
+
+    def test_x86_task_sleep1_uses_real_timer(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion p():\n"
+            "    esperar asyncio.sleep(1)\n"
+            "    devolver 1\n"
+            "imprimir(asyncio.run(p()))\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
+            self.assertEqual(completed.stdout, b"1\r\n")
+
+    def test_x86_task_gather_non_task_fails_closed(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion p():\n"
+            "    imprimir(esperar asyncio.gather(5))\n"
+            "asyncio.run(p())\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("gather requires tasks", completed.stderr.decode(errors="replace"))
+
+    def test_x86_task_await_non_awaitable_fails_closed(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion p():\n"
+            "    esperar 42\n"
+            "asyncio.run(p())\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
+            self.assertIn("object is not awaitable", completed.stderr.decode(errors="replace"))
+
+    def test_x86_task_cancel_attribute_on_int_fails_closed(self):
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion p():\n"
+            "    x = 5\n"
+            "    x.cancel()\n"
+            "    devolver 0\n"
+            "asyncio.run(p())\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
+            self.assertIn("object has no attribute 'cancel'", completed.stderr.decode(errors="replace"))
+
+    def test_x86_task_teardown_is_leak_clean(self):
+        # The gather result list must be owned by the awaiting coroutine and
+        # freed at its exit: the teardown live-count tripwire returns 0.
+        source = (
+            "importar asyncio\n"
+            "asincrono funcion s(n):\n"
+            "    devolver n\n"
+            "asincrono funcion p():\n"
+            "    imprimir(esperar asyncio.gather(s(1), s(2)))\n"
+            "asyncio.run(p())\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
+            self.assertEqual(completed.stdout.decode(errors="replace"), "[1, 2]\r\n")
 
     def test_x86_bigint_arithmetic(self):
         source = "imprimir(1180591620717411303424 + 1)\n"
@@ -1666,21 +2410,81 @@ class Phase5Gates(unittest.TestCase):
         )
         self.assertTrue(result.equivalent, result)
 
-    def test_x86_kwargs_unpacking_rejected(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "unpacking"):
-                compile_native(
-                    'funcion f(**kw):\n    devolver longitud(kw)\nimprimir(f(**{"x": 1}))\n',
-                    Path(directory) / "program.exe",
-                )
+    def test_x86_kwargs_unpacking_literal(self):
+        result = compare_native_to_cpython(
+            'funcion f(base, extra=0):\n'
+            '    devolver base + extra\n'
+            'imprimir(f(**{"base": 2, "extra": 3}))\n'
+        )
+        self.assertTrue(result.equivalent, result)
 
-    def test_x86_starargs_unpacking_rejected(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "positional unpacking"):
-                compile_native(
-                    'funcion f(*args):\n    devolver longitud(args)\nimprimir(f(*[1, 2]))\n',
-                    Path(directory) / "program.exe",
-                )
+    def test_x86_starargs_unpacking_literal(self):
+        result = compare_native_to_cpython(
+            'funcion f(base, extra):\n'
+            '    devolver base * 10 + extra\n'
+            'imprimir(f(*[1, 2]))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_call_unpacking_dynamic(self):
+        result = compare_native_to_cpython(
+            'funcion f(x):\n    devolver x\n'
+            'xs = [1]\nimprimir(f(*xs))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_bound_method_retrieval_and_later_call(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self, base):\n'
+            '        self.base = base\n'
+            '    funcion suma(self, extra):\n'
+            '        devolver self.base + extra\n'
+            'c = C(7)\n'
+            'm = c.suma\n'
+            'imprimir(m(5))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_bound_method_frame_abi(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion suma(self, a, b, c, d):\n'
+            '        devolver a + b + c + d\n'
+            'c = C()\n'
+            'm = c.suma\n'
+            'imprimir(m(1, 2, 3, 4))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_decorators_apply_bottom_up_and_rebind(self):
+        result = compare_native_to_cpython(
+            'funcion doble(fn):\n'
+            '    funcion envuelta(x):\n'
+            '        devolver fn(x) * 2\n'
+            '    devolver envuelta\n'
+            '@doble\n'
+            'funcion inc(x):\n'
+            '    devolver x + 1\n'
+            'imprimir(inc(3))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_frame_abi_supports_more_than_four_parameters(self):
+        result = compare_native_to_cpython(
+            'funcion suma(a, b, c, d, e):\n'
+            '    devolver a + b + c + d + e\n'
+            'imprimir(suma(1, 2, 3, 4, 5))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_function_annotations_preserve_call_semantics(self):
+        result = compare_native_to_cpython(
+            'funcion suma(a: int, b: int) -> int:\n'
+            '    devolver a + b\n'
+            'imprimir(suma(2, 3))\n'
+        )
+        self.assertTrue(result.equivalent, result)
 
     # ── FUNCTION_SIGNATURE_MARKERS_V1 ───────────────────────────────────
 
@@ -2047,6 +2851,371 @@ class Phase5Gates(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="piton-prop-del-nonprop-") as directory:
             with self.assertRaisesRegex(NativeBuildError, "is not a property"):
                 compile_native(source, Path(directory) / "program.exe")
+
+    def test_x86_for_break(self):
+        source = (
+            'suma = 0\n'
+            'para i en [1, 2, 3, 4, 5]:\n'
+            '    si i == 3:\n'
+            '        romper\n'
+            '    suma = suma + i\n'
+            'imprimir(suma)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_for_continue(self):
+        source = (
+            'suma = 0\n'
+            'para i en [1, 2, 3, 4, 5]:\n'
+            '    si i == 3:\n'
+            '        continuar\n'
+            '    suma = suma + i\n'
+            'imprimir(suma)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_for_else_no_break(self):
+        source = (
+            'para i en [1, 2, 3]:\n'
+            '    imprimir(i)\n'
+            'sino:\n'
+            '    imprimir("else")\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_for_else_with_break(self):
+        source = (
+            'para i en [1, 2, 3]:\n'
+            '    si i == 2:\n'
+            '        romper\n'
+            '    imprimir(i)\n'
+            'sino:\n'
+            '    imprimir("else")\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_while_break(self):
+        source = (
+            'i = 0\n'
+            'mientras i < 5:\n'
+            '    si i == 3:\n'
+            '        romper\n'
+            '    i = i + 1\n'
+            'imprimir(i)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_while_continue(self):
+        source = (
+            'suma = 0\n'
+            'i = 0\n'
+            'mientras i < 5:\n'
+            '    i = i + 1\n'
+            '    si i == 3:\n'
+            '        continuar\n'
+            '    suma = suma + i\n'
+            'imprimir(suma)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_while_else_no_break(self):
+        source = (
+            'i = 0\n'
+            'mientras i < 3:\n'
+            '    i = i + 1\n'
+            'sino:\n'
+            '    imprimir("else")\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_while_else_with_break(self):
+        source = (
+            'i = 0\n'
+            'mientras i < 5:\n'
+            '    si i == 2:\n'
+            '        romper\n'
+            '    i = i + 1\n'
+            'sino:\n'
+            '    imprimir("else")\n'
+            'imprimir(i)\n'
+        )
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+
+class ComprehensionsV2Native(unittest.TestCase):
+    def assert_native_matches(self, source: str):
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_list_comp_basic(self):
+        self.assert_native_matches(
+            'cuadrados = [x * x para x en [1, 2, 3, 4, 5]]\nimprimir(cuadrados)\n'
+        )
+
+    def test_list_comp_with_if(self):
+        self.assert_native_matches(
+            'pares = [x para x en [1, 2, 3, 4, 5, 6] si x % 2 == 0]\nimprimir(pares)\n'
+        )
+
+    def test_list_comp_chained_for(self):
+        self.assert_native_matches(
+            'pairs = [(a, b) para a en [1, 2] para b en [3, 4]]\nimprimir(pairs)\n'
+        )
+
+    def test_list_comp_chained_for_triple(self):
+        self.assert_native_matches(
+            't = [(a, b, c) para a en [1, 2] para b en [3, 4] para c en [5, 6]]\nimprimir(t)\n'
+        )
+
+    def test_list_comp_with_tuple_element(self):
+        self.assert_native_matches(
+            't = [(x, x * 2) para x en [1, 2, 3]]\nimprimir(t)\n'
+        )
+
+    def test_list_comp_tuple_element_with_if(self):
+        self.assert_native_matches(
+            't = [(x, x * 2) para x en [1, 2, 3, 4] si x % 2 == 0]\nimprimir(t)\n'
+        )
+
+    def test_list_comp_multiple_if(self):
+        self.assert_native_matches(
+            't = [x para x en [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] si x > 3 si x < 7]\nimprimir(t)\n'
+        )
+
+    def test_list_comp_nested(self):
+        self.assert_native_matches(
+            't = [[x * z para z en [1, 2, 3]] para x en [1, 2]]\nimprimir(t)\n'
+        )
+
+    def test_list_of_tuples_literal(self):
+        self.assert_native_matches(
+            't = [(1, 2), (3, 4)]\nimprimir(t)\n'
+        )
+
+    def test_nested_list_literal(self):
+        self.assert_native_matches(
+            't = [[1, 2], [3, 4]]\nimprimir(t)\n'
+        )
+
+    def test_tuple_of_lists_literal(self):
+        self.assert_native_matches(
+            't = ([1, 2], [3, 4])\nimprimir(t)\n'
+        )
+
+    def test_tuple_of_tuples_literal(self):
+        self.assert_native_matches(
+            't = ((1, 2), (3, 4))\nimprimir(t)\n'
+        )
+
+    def test_tuple_of_mixed_literal(self):
+        self.assert_native_matches(
+            't = (1, [2, 3], (4, 5))\nimprimir(t)\n'
+        )
+
+    def test_3deep_nested_literal(self):
+        self.assert_native_matches(
+            't = [[[1]]]\nimprimir(t)\n'
+        )
+
+    def test_list_comp_filter_neq(self):
+        self.assert_native_matches(
+            't = [x para x en [1, 2, 3, 4, 5] si x != 3]\nimprimir(t)\n'
+        )
+
+    def test_genexpr_is_iterable_and_stateful(self):
+        self.assert_native_matches(
+            'g = (x * 2 para x en [1, 2, 3])\n'
+            'imprimir(next(g))\n'
+            'imprimir(next(iter(g)))\n'
+        )
+
+    def test_genexpr_stop_iteration(self):
+        self.assert_native_matches(
+            'g = (x para x en [7])\n'
+            'intentar:\n'
+            '    imprimir(next(g))\n'
+            '    next(g)\n'
+            'excepto StopIteration:\n'
+            '    imprimir("exhausted")\n'
+        )
+
+    def test_set_comp_basic_and_deduplicates(self):
+        self.assert_native_matches(
+            's = {x para x en [1, 2, 2, 3]}\nimprimir(s)\n'
+        )
+
+    def test_set_comp_with_if(self):
+        self.assert_native_matches(
+            's = {x para x en [1, 2, 3, 4] si x % 2 == 0}\nimprimir(s)\n'
+        )
+
+    def test_dict_comp_basic(self):
+        self.assert_native_matches(
+            'd = {x: x * x para x en [1, 2, 3]}\nimprimir(d)\n'
+        )
+
+    def test_dict_comp_with_if(self):
+        self.assert_native_matches(
+            'd = {x: x * 2 para x en [1, 2, 3, 4] si x > 2}\nimprimir(d)\n'
+        )
+
+
+class WithProtocolNativeV1(unittest.TestCase):
+    """M10 — WITH_PROTOCOL_V1: `con CM() como x:` with exception unwind and
+    suppression, differential vs CPython 3.12."""
+
+    def assert_native_matches(self, source):
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_with_normal_path(self):
+        self.assert_native_matches(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n'
+            '        imprimir("enter")\n'
+            '        devolver 42\n'
+            '    funcion __exit__(self, tipo, mensaje, tb):\n'
+            '        imprimir("exit")\n'
+            '        devolver Falso\n'
+            'con CM() como x:\n'
+            '    imprimir("body")\n'
+            '    imprimir(x)\n'
+        )
+
+    def test_with_exception_propagates_to_handler(self):
+        self.assert_native_matches(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n'
+            '        imprimir("enter")\n'
+            '        devolver 1\n'
+            '    funcion __exit__(self, tipo, mensaje, tb):\n'
+            '        imprimir("exit")\n'
+            '        imprimir(mensaje)\n'
+            '        devolver Falso\n'
+            'intentar:\n'
+            '    con CM() como w:\n'
+            '        lanzar ValueError("boom")\n'
+            'excepto ValueError:\n'
+            '    imprimir("handler")\n'
+        )
+
+    def test_with_suppression(self):
+        self.assert_native_matches(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n'
+            '        devolver 1\n'
+            '    funcion __exit__(self, tipo, mensaje, tb):\n'
+            '        imprimir("suprimo")\n'
+            '        devolver Verdadero\n'
+            'intentar:\n'
+            '    con CM() como z:\n'
+            '        lanzar ValueError("boom")\n'
+            'excepto ValueError:\n'
+            '    imprimir("handler")\n'
+            'imprimir("fin")\n'
+        )
+
+    def test_with_unhandled_exception(self):
+        source = (
+            'clase CM:\n'
+            '    funcion __enter__(self):\n'
+            '        devolver 1\n'
+            '    funcion __exit__(self, tipo, mensaje, tb):\n'
+            '        imprimir("exit")\n'
+            '        imprimir(tipo)\n'
+            '        imprimir(mensaje)\n'
+            '        devolver Falso\n'
+            'con CM() como x:\n'
+            '    lanzar ValueError("boom")\n'
+        )
+        with tempfile.TemporaryDirectory(prefix="piton-with-unhandled-") as directory:
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
+            self.assertEqual(
+                completed.stdout.decode(errors="replace"),
+                "exit\r\nValueError\r\nboom\r\n",
+            )
+            self.assertIn("ValueError: boom", completed.stderr.decode(errors="replace"))
+
+    def test_with_requires_dunder_methods(self):
+        with tempfile.TemporaryDirectory(prefix="piton-with-dunder-") as directory:
+            with self.assertRaisesRegex(Exception, "must define __enter__ and __exit__"):
+                compile_native(
+                    'clase CM:\n    funcion __init__(self):\n        self.x = 1\n'
+                    'con CM() como y:\n    imprimir(y)\n',
+                    Path(directory) / "program.exe",
+                )
+
+    def test_with_requires_direct_constructor(self):
+        with tempfile.TemporaryDirectory(prefix="piton-with-ctor-") as directory:
+            with self.assertRaisesRegex(Exception, "direct call"):
+                compile_native(
+                    'clase CM:\n'
+                    '    funcion __enter__(self):\n        devolver 1\n'
+                    '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+                    'xobj = CM()\n'
+                    'con xobj como y:\n    imprimir(y)\n',
+                    Path(directory) / "program.exe",
+                )
+
+    def test_with_multiple_items_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-with-multi-") as directory:
+            with self.assertRaisesRegex(Exception, "single context manager"):
+                compile_native(
+                    'clase CM:\n'
+                    '    funcion __enter__(self):\n        devolver 1\n'
+                    '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+                    'con CM() como a, CM() como b:\n    imprimir(a)\n',
+                    Path(directory) / "program.exe",
+                )
+
+    def test_with_async_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-with-async-") as directory:
+            with self.assertRaisesRegex(Exception, "__aenter__"):
+                compile_native(
+                    'clase CM:\n'
+                    '    funcion __enter__(self):\n        devolver 1\n'
+                    '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+                    'asincrono funcion p():\n'
+                    '    asincrono con CM() como y:\n        imprimir(y)\n',
+                    Path(directory) / "program.exe",
+                )
+
+    def test_async_with_awaits_enter_and_exit(self):
+        result = compare_native_to_cpython(
+            'importar asyncio\n'
+            'clase CM:\n'
+            '    asincrono funcion __aenter__(self):\n'
+            '        devolver 7\n'
+            '    asincrono funcion __aexit__(self, t, m, tb):\n'
+            '        devolver Falso\n'
+            'asincrono funcion run_async():\n'
+            '    asincrono con CM() como x:\n'
+            '        devolver x\n'
+            'imprimir(asyncio.run(run_async()))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_async_exception_is_caught_inside_coroutine(self):
+        result = compare_native_to_cpython(
+            'importar asyncio\n'
+            'asincrono funcion run_async():\n'
+            '    intentar:\n'
+            '        lanzar ValueError("async boom")\n'
+            '    excepto ValueError como error:\n'
+            '        devolver 1\n'
+            'imprimir(asyncio.run(run_async()))\n'
+        )
+        self.assertTrue(result.equivalent, result)
 
 
 if __name__ == "__main__":

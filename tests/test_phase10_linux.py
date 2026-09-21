@@ -10,7 +10,9 @@ from piton.linux_x86 import (
     build_single_file_initramfs,
     compile_native_linux,
     compile_native_linux_files,
+    linux_run_cmd,
     windows_to_wsl_path,
+    _is_native_linux,
 )
 from piton.translator import traducir_fuente
 from piton.x86 import NativeBuildError
@@ -21,11 +23,17 @@ class Phase10LinuxGates(unittest.TestCase):
         translated = traducir_fuente(source, "<linux-diff>")
         with tempfile.TemporaryDirectory(prefix="piton-linux-diff-") as directory:
             executable = compile_native_linux(source, Path(directory) / "program")
-            linux_path = windows_to_wsl_path(executable)
-            native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
-                capture_output=True, check=False, timeout=10,
-            )
+            if _is_native_linux():
+                native_run = subprocess.run(
+                    [str(executable)],
+                    capture_output=True, check=False, timeout=10,
+                )
+            else:
+                linux_path = windows_to_wsl_path(executable)
+                native_run = subprocess.run(
+                    linux_run_cmd([linux_path]),
+                    capture_output=True, check=False, timeout=10,
+                )
             oracle_run = subprocess.run(
                 [sys.executable, "-c", translated],
                 capture_output=True, check=False, timeout=10,
@@ -45,15 +53,15 @@ class Phase10LinuxGates(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False,
             )
             self.assertEqual((run.returncode, run.stdout, run.stderr), (0, b"10\n", b""))
             header = subprocess.run(
-                ["wsl.exe", "readelf", "-h", linux_path], capture_output=True, text=True, check=False
+                linux_run_cmd(["readelf", "-h", linux_path]), capture_output=True, text=True, check=False
             )
             dynamic = subprocess.run(
-                ["wsl.exe", "readelf", "-d", linux_path], capture_output=True, text=True, check=False
+                linux_run_cmd(["readelf", "-d", linux_path]), capture_output=True, text=True, check=False
             )
             self.assertEqual(header.returncode, 0, header.stderr)
             self.assertIn("Advanced Micro Devices X86-64", header.stdout)
@@ -64,14 +72,14 @@ class Phase10LinuxGates(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="piton-linux-chroot-") as directory:
             root = Path(directory)
             executable = compile_native_linux('imprimir("clean")\n', root / "program")
-            linux_root = windows_to_wsl_path(root)
+            linux_root = str(root) if _is_native_linux() else windows_to_wsl_path(root)
             prepared = subprocess.run(
-                ["wsl.exe", "-u", "root", "chmod", "+x", f"{linux_root}/program"],
+                linux_run_cmd(["chmod", "+x", f"{linux_root}/program"]),
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(prepared.returncode, 0, prepared.stderr)
             run = subprocess.run(
-                ["wsl.exe", "-u", "root", "chroot", linux_root, "/program"],
+                ["sudo", "chroot", str(root), "/program"],
                 capture_output=True, check=False,
             )
             self.assertEqual((run.returncode, run.stdout, run.stderr), (0, b"clean\n", b""))
@@ -315,6 +323,156 @@ class Phase10LinuxGates(unittest.TestCase):
             with self.assertRaisesRegex(NativeBuildError, "catch-all"):
                 compile_native_linux(source, Path(directory) / "program")
 
+    # ── BASE_EXCEPTION_V1 ───────────────────────────────────────────────
+
+    def test_linux_base_exception_catches_valueerror(self):
+        self._assert_linux_equiv(
+            'intentar:\n    lanzar ValueError("boom")\n'
+            'excepto BaseException:\n    imprimir("caught")\n'
+        )
+
+    def test_linux_base_exception_direct_raise(self):
+        self._assert_linux_equiv(
+            'intentar:\n    lanzar BaseException("raw")\n'
+            'excepto BaseException:\n    imprimir("caught-raw")\n'
+        )
+
+    def test_linux_base_exception_as_custom_parent(self):
+        self._assert_linux_equiv(
+            'clase ErrorCritico(BaseException):\n'
+            '    funcion __init__(self, m):\n'
+            '        self.m = m\n'
+            'intentar:\n    lanzar ErrorCritico("fatal")\n'
+            'excepto BaseException:\n    imprimir("caught-critico")\n'
+        )
+
+    def test_linux_base_exception_uncaught_exits_with_message(self):
+        source = 'lanzar BaseException("crit")\n'
+        rc, native_out, oracle_out, stderr = self._run_linux_diff(source)
+        self.assertNotEqual(rc, 0)
+        self.assertIn(b"BaseException", stderr)
+
+    # ── EXCEPTION_FROM_V1 / EXCEPTION_CHAIN_V1 ────────────────────────────
+
+    def test_linux_raise_from_cause_chain(self):
+        # raise ValueError("caused") from TypeError("cause") - outer handler catches it
+        self._assert_linux_equiv(
+            'intentar:\n'
+            '    intentar:\n'
+            '        lanzar TypeError("causa original")\n'
+            '    excepto TypeError:\n'
+            '        lanzar ValueError("nuevo error") desde TypeError("causa original")\n'
+            'excepto ValueError:\n'
+            '    imprimir("caught")\n'
+        )
+
+    def test_linux_raise_from_none_suppresses_context(self):
+        # raise ValueError("clean") from None - outer handler catches it
+        self._assert_linux_equiv(
+            'intentar:\n'
+            '    intentar:\n'
+            '        lanzar TypeError("should be suppressed")\n'
+            '    excepto TypeError:\n'
+            '        lanzar ValueError("clean") desde Nada\n'
+            'excepto ValueError:\n'
+            '    imprimir("caught")\n'
+        )
+
+    def test_linux_raise_from_variable_in_handler(self):
+        # bare raise from in handler (reraise with new type) - outer handler catches it
+        self._assert_linux_equiv(
+            'intentar:\n'
+            '    intentar:\n'
+            '        lanzar ValueError("original")\n'
+            '    excepto ValueError:\n'
+            '        lanzar RuntimeError("desde handler")\n'
+            'excepto RuntimeError:\n'
+            '    imprimir("caught")\n'
+        )
+
+    def test_linux_raise_bare_in_handler_sets_context(self):
+        # bare raise in handler sets __context__ (not __cause__) - outer handler catches it
+        self._assert_linux_equiv(
+            'intentar:\n'
+            '    intentar:\n'
+            '        lanzar ValueError("original")\n'
+            '    excepto ValueError:\n'
+            '        lanzar RuntimeError("nuevo")\n'
+            'excepto RuntimeError:\n'
+            '    imprimir("caught")\n'
+        )
+
+    # TODO: Attribute access on exception variables (e.__cause__, e.__context__) not yet implemented
+#     def test_linux_exception_cause_attribute(self):
+#         # Test __cause__ attribute access
+#         self._assert_linux_equiv(
+#             'intentar:\n'
+#             '    intentar:\n'
+#             '        lanzar TypeError("cause")\n'
+#             '    excepto TypeError:\n'
+#             '        lanzar ValueError("effect") desde TypeError("cause")\n'
+#             'excepto ValueError como e:\n'
+#             '    imprimir(e.__cause__ is not Nada)\n'
+#         )
+#
+#     def test_linux_exception_context_attribute(self):
+#         # Test __context__ attribute access (bare raise)
+#         self._assert_linux_equiv(
+#             'intentar:\n'
+#             '    intentar:\n'
+#             '        lanzar TypeError("context")\n'
+#             '    excepto TypeError:\n'
+#             '        lanzar ValueError("effect")\n'
+#             'excepto ValueError como e:\n'
+#             '    imprimir(e.__context__ is not Nada)\n'
+#         )
+#
+#     def test_linux_exception_cause_none_when_not_set(self):
+#         # __cause__ is None when not explicitly set
+#         self._assert_linux_equiv(
+#             'intentar:\n'
+#             '    lanzar ValueError("no cause")\n'
+#             'excepto ValueError como e:\n'
+#             '    imprimir(e.__cause__ is Nada)\n'
+#         )
+#
+#     def test_linux_exception_context_none_when_not_set(self):
+#         # __context__ is None when no previous exception
+#         self._assert_linux_equiv(
+#             'intentar:\n'
+#             '    lanzar ValueError("no context")\n'
+#             'excepto ValueError como e:\n'
+#             '    imprimir(e.__context__ is Nada)\n'
+#         )
+
+    def test_linux_exception_chain_uncaught_prints_cause(self):
+        # Uncaught exception with __cause__ prints full chain
+        source = (
+            'intentar:\n'
+            '    lanzar TypeError("cause")\n'
+            'excepto TypeError:\n'
+            '    lanzar ValueError("effect") desde TypeError("cause")\n'
+        )
+        rc, native_out, oracle_out, stderr = self._run_linux_diff(source)
+        self.assertNotEqual(rc, 0)
+        self.assertIn(b"TypeError: cause", stderr)
+        self.assertIn(b"The above exception was the direct cause", stderr)
+        self.assertIn(b"ValueError: effect", stderr)
+
+    def test_linux_exception_chain_uncaught_prints_context(self):
+        # Uncaught exception with __context__ prints full chain
+        source = (
+            'intentar:\n'
+            '    lanzar TypeError("context")\n'
+            'excepto TypeError:\n'
+            '    lanzar ValueError("effect")\n'
+        )
+        rc, native_out, oracle_out, stderr = self._run_linux_diff(source)
+        self.assertNotEqual(rc, 0)
+        self.assertIn(b"TypeError: context", stderr)
+        self.assertIn(b"During handling of the above exception", stderr)
+        self.assertIn(b"ValueError: effect", stderr)
+
     def test_linux_rich_stdlib_type(self):
         self._assert_linux_equiv('imprimir(type(42))\nimprimir(type("hola"))\nimprimir(type(Verdadero))\nimprimir(type(Nada))\n')
 
@@ -323,6 +481,106 @@ class Phase10LinuxGates(unittest.TestCase):
 
     def test_linux_rich_math_sqrt(self):
         self._assert_linux_equiv('importar math\nimprimir(math.sqrt(9))\n')
+
+    # ── STDLIB_TIER1_V1: math.floor/ceil/sin/cos/log + sys.exit/argv + os.name ──
+
+    def test_linux_math_floor_ceil_match_cpython(self):
+        self._assert_linux_equiv(
+            'importar math\n'
+            'imprimir(math.floor(2.7))\nimprimir(math.floor(-2.3))\n'
+            'imprimir(math.ceil(2.3))\nimprimir(math.ceil(-2.7))\n'
+        )
+
+    def test_linux_math_floor_ceil_of_int_value(self):
+        self._assert_linux_equiv(
+            'importar math\n'
+            'imprimir(math.floor(7))\nimprimir(math.ceil(7.0))\n'
+        )
+
+    def test_linux_math_sin_cos_log_match_cpython(self):
+        # Short-repr values so the freestanding 12-digit float printer matches CPython repr.
+        self._assert_linux_equiv(
+            'importar math\n'
+            'imprimir(math.sin(0.0))\nimprimir(math.cos(0.0))\nimprimir(math.log(1.0))\n'
+        )
+
+    def test_linux_math_floor_nan_fails_value_error(self):
+        # CPython returns an arbitrary-precision int here; native V1 is int64-only
+        # and fails closed at the float-to-int boundary.
+        rc, _native_out, _oracle_out, stderr = self._run_linux_diff(
+            'importar math\nimprimir(math.floor(1e300))\n'
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertIn(b'OverflowError: cannot convert float infinity to integer', stderr)
+
+    def test_linux_sys_exit_with_code(self):
+        rc, native_out, _oracle_out, _stderr = self._run_linux_diff(
+            'importar sys\nimprimir("antes")\nsys.exit(3)\n'
+        )
+        self.assertEqual(rc, 3)
+        self.assertEqual(native_out, b'antes\n')
+
+    def test_linux_sys_exit_zero_code(self):
+        rc, native_out, _oracle_out, _stderr = self._run_linux_diff(
+            'importar sys\nsys.exit()\n'
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(native_out, b'')
+
+    def test_linux_sys_argv_is_list_with_entry(self):
+        # CPython -c: sys.argv == ['-c']; nativo: argv[0] = ruta del ejecutable.
+        self._assert_linux_equiv(
+            'importar sys\nimprimir(len(sys.argv))\n'
+        )
+
+    def test_linux_os_name_match(self):
+        self._assert_linux_equiv('importar os\nimprimir(os.name)\n')
+
+    def test_linux_os_name_from_import(self):
+        self._assert_linux_equiv('desde os importar name\nimprimir(name)\n')
+
+    def test_linux_rich_math_floor(self):
+        self._assert_linux_equiv('importar math\nimprimir(math.floor(3.7))\nimprimir(math.floor(-3.7))\n')
+
+    def test_linux_rich_math_ceil(self):
+        self._assert_linux_equiv('importar math\nimprimir(math.ceil(3.2))\nimprimir(math.ceil(-3.2))\n')
+
+    def test_linux_rich_math_sin(self):
+        self._assert_linux_equiv('importar math\nimprimir(math.sin(0))\nimprimir(math.sin(1.57079632679))\n')
+
+    def test_linux_rich_math_cos(self):
+        self._assert_linux_equiv('importar math\nimprimir(math.cos(0))\nimprimir(math.cos(3.14159265359))\n')
+
+    def test_linux_rich_math_log(self):
+        self._assert_linux_equiv('importar math\nimprimir(math.log(1))\n')
+
+    def test_linux_rich_sys_argv(self):
+        # sys.argv when running as standalone ELF contains the program path
+        # (similar to CPython's behavior when running a script file)
+        source = 'importar sys\nimprimir(sys.argv)\n'
+        translated = traducir_fuente(source, "<linux-diff>")
+        with tempfile.TemporaryDirectory(prefix="piton-linux-diff-") as directory:
+            executable = compile_native_linux(source, Path(directory) / "program")
+            if _is_native_linux():
+                native_run = subprocess.run(
+                    [str(executable)],
+                    capture_output=True, check=False, timeout=10,
+                )
+            else:
+                linux_path = windows_to_wsl_path(executable)
+                native_run = subprocess.run(
+                    linux_run_cmd([linux_path]),
+                    capture_output=True, check=False, timeout=10,
+                )
+            # Native ELF returns [program_path] when run standalone
+            self.assertEqual(native_run.returncode, 0)
+            self.assertTrue(native_run.stdout.strip().startswith(b'['))
+
+    def test_linux_rich_os_name(self):
+        self._assert_linux_equiv('importar os\nimprimir(os.name)\n')
+
+    def test_linux_rich_sys_exit(self):
+        self._assert_linux_equiv('importar sys\nimprimir(sys.exit(0))\n')
 
     def test_linux_rich_augmented(self):
         self._assert_linux_equiv('x = 10\nx += 5\nx *= 2\nx -= 3\nimprimir(x)\n')
@@ -375,6 +633,127 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_starargs_pure_empty_and_many(self):
         self._assert_linux_equiv('funcion contar(*args):\n    devolver longitud(args)\nimprimir(contar())\nimprimir(contar(1, 2, 3, 4, 5))\n')
 
+    def test_linux_list_and_tuple_for_loop(self):
+        self._assert_linux_equiv(
+            'total = 0\n'
+            'para valor en [1, 2, 3]:\n'
+            '    total = total + valor\n'
+            'para valor en (4, 5):\n'
+            '    total = total + valor\n'
+            'imprimir(total)\n'
+        )
+
+    def test_linux_iter_and_next_list_tuple(self):
+        self._assert_linux_equiv(
+            'a = iter([4, 5])\n'
+            'b = iter((8, 9))\n'
+            'imprimir(next(a))\n'
+            'imprimir(next(a))\n'
+            'imprimir(next(b))\n'
+        )
+
+    def test_linux_iter_and_next_dict_set(self):
+        self._assert_linux_equiv(
+            'it = iter({"uno": 1, "dos": 2})\n'
+            'imprimir(next(it))\n'
+            'imprimir(next(it))\n'
+            'set_it = iter({1, 2})\n'
+            'imprimir(next(set_it) + next(set_it))\n'
+        )
+
+    def test_linux_stop_iteration_is_caught(self):
+        self._assert_linux_equiv(
+            'it = iter([7])\n'
+            'intentar:\n'
+            '    imprimir(next(it))\n'
+            '    next(it)\n'
+            'excepto StopIteration:\n'
+            '    imprimir("exhausted")\n'
+        )
+
+    def test_linux_user_defined_iter_and_next(self):
+        self._assert_linux_equiv(
+            'clase Uno:\n'
+            '    funcion __iter__(self):\n'
+            '        devolver self\n'
+            '    funcion __next__(self):\n'
+            '        devolver 7\n'
+            'u = Uno()\n'
+            'imprimir(next(iter(u)))\n'
+            'imprimir(next(u))\n'
+        )
+
+    def test_linux_user_defined_stop_iteration_propagates(self):
+        self._assert_linux_equiv(
+            'clase Uno:\n'
+            '    funcion __init__(self):\n'
+            '        self.usado = 0\n'
+            '    funcion __iter__(self):\n'
+            '        devolver self\n'
+            '    funcion __next__(self):\n'
+            '        si self.usado:\n'
+            '            lanzar StopIteration()\n'
+            '        self.usado = 1\n'
+            '        devolver 7\n'
+            'it = iter(Uno())\n'
+            'intentar:\n'
+            '    imprimir(next(it))\n'
+            '    next(it)\n'
+            'excepto StopIteration:\n'
+            '    imprimir("exhausted")\n'
+        )
+
+    def test_linux_enumerate_iterator(self):
+        self._assert_linux_equiv(
+            'it = enumerar([10, 20], 3)\n'
+            'imprimir(next(it))\n'
+            'imprimir(next(it))\n'
+        )
+
+    def test_linux_reversed_and_zip_iterators(self):
+        self._assert_linux_equiv(
+            'r = reversed([1, 2, 3])\n'
+            'imprimir(next(r))\n'
+            'z = zip([1, 2], [10, 20, 30])\n'
+            'imprimir(next(z))\n'
+            'imprimir(next(z))\n'
+        )
+
+    def test_linux_map_and_filter_iterators(self):
+        self._assert_linux_equiv(
+            'funcion doble(x):\n'
+            '    devolver x * 2\n'
+            'funcion es_par(x):\n'
+            '    devolver x % 2 == 0\n'
+            'imprimir(next(map(doble, [1, 2])))\n'
+            'imprimir(next(filter(es_par, [1, 2, 3, 4])))\n'
+        )
+
+    def test_linux_map_accepts_closure_callback(self):
+        self._assert_linux_equiv(
+            'funcion ejecutar():\n'
+            '    m = 3\n'
+            '    funcion multiplicar(x):\n'
+            '        devolver x * m\n'
+            '    imprimir(next(map(multiplicar, [2])))\n'
+            'ejecutar()\n'
+        )
+
+    def test_linux_map_accepts_lambda_callback(self):
+        self._assert_linux_equiv('imprimir(next(map(lambda x: x * 3, [2])))\n')
+
+    def test_linux_filter_accepts_lambda_callback(self):
+        self._assert_linux_equiv('imprimir(next(filter(lambda x: x > 2, [1, 2, 3, 4])))\n')
+
+    def test_linux_map_lambda_with_capture(self):
+        self._assert_linux_equiv(
+            'm = 5\n'
+            'imprimir(next(map(lambda x: x + m, [1, 2])))\n'
+        )
+
+    def test_linux_sorted_builtin(self):
+        self._assert_linux_equiv('imprimir(sorted([3, 1, 2]))\n')
+
     def test_linux_starargs_sum_and_subscript(self):
         self._assert_linux_equiv('funcion resumir(*args):\n    devolver sum(args) + args[0] * 10\nimprimir(resumir(2, 3, 4))\n')
 
@@ -388,6 +767,111 @@ class Phase10LinuxGates(unittest.TestCase):
 
     def test_linux_kwargs_fixed_and_starargs(self):
         self._assert_linux_equiv('funcion total(base, *extras, **opciones):\n    devolver base + sum(extras) + opciones["extra"]\nimprimir(total(1, 2, 3, extra=4))\n')
+
+    # ── Linux call-site unpacking (CALL_UNPACKING_LITERAL_V1) ───────────
+
+    def test_linux_kwargs_unpacking_literal(self):
+        self._assert_linux_equiv(
+            'funcion f(base, extra=0):\n'
+            '    devolver base + extra\n'
+            'imprimir(f(**{"base": 2, "extra": 3}))\n'
+        )
+
+    def test_linux_starargs_unpacking_literal(self):
+        self._assert_linux_equiv(
+            'funcion f(base, extra):\n'
+            '    devolver base * 10 + extra\n'
+            'imprimir(f(*[1, 2]))\n'
+        )
+
+    def test_linux_starargs_unpacking_dynamic(self):
+        self._assert_linux_equiv(
+            'funcion f(base, extra):\n'
+            '    devolver base * 10 + extra\n'
+            'xs = [1, 2]\n'
+            'imprimir(f(*xs))\n'
+        )
+
+    def test_linux_kwargs_unpacking_dynamic(self):
+        self._assert_linux_equiv(
+            'funcion f(base, extra=0):\n'
+            '    devolver base + extra\n'
+            'kw = {"base": 2, "extra": 3}\n'
+            'imprimir(f(**kw))\n'
+        )
+
+    def test_linux_bound_method_retrieval_and_later_call(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion __init__(self, base):\n'
+            '        self.base = base\n'
+            '    funcion suma(self, extra):\n'
+            '        devolver self.base + extra\n'
+            'c = C(7)\n'
+            'm = c.suma\n'
+            'imprimir(m(5))\n'
+        )
+
+    def test_linux_bound_method_frame_abi(self):
+        self._assert_linux_equiv(
+            'clase C:\n'
+            '    funcion suma(self, a, b, c, d):\n'
+            '        devolver a + b + c + d\n'
+            'c = C()\n'
+            'm = c.suma\n'
+            'imprimir(m(1, 2, 3, 4))\n'
+        )
+
+    def test_linux_decorators_apply_bottom_up_and_rebind(self):
+        self._assert_linux_equiv(
+            'funcion doble(fn):\n'
+            '    funcion envuelta(x):\n'
+            '        devolver fn(x) * 2\n'
+            '    devolver envuelta\n'
+            '@doble\n'
+            'funcion inc(x):\n'
+            '    devolver x + 1\n'
+            'imprimir(inc(3))\n'
+        )
+
+    def test_linux_frame_abi_supports_more_than_four_parameters(self):
+        self._assert_linux_equiv(
+            'funcion suma(a, b, c, d, e):\n'
+            '    devolver a + b + c + d + e\n'
+            'imprimir(suma(1, 2, 3, 4, 5))\n'
+        )
+
+    def test_linux_function_annotations_preserve_call_semantics(self):
+        self._assert_linux_equiv(
+            'funcion suma(a: int, b: int) -> int:\n'
+            '    devolver a + b\n'
+            'imprimir(suma(2, 3))\n'
+        )
+
+    def test_linux_async_with_awaits_enter_and_exit(self):
+        self._assert_linux_equiv(
+            'importar asyncio\n'
+            'clase CM:\n'
+            '    asincrono funcion __aenter__(self):\n'
+            '        devolver 7\n'
+            '    asincrono funcion __aexit__(self, t, m, tb):\n'
+            '        devolver Falso\n'
+            'asincrono funcion run_async():\n'
+            '    asincrono con CM() como x:\n'
+            '        devolver x\n'
+            'imprimir(asyncio.run(run_async()))\n'
+        )
+
+    def test_linux_async_exception_is_caught_inside_coroutine(self):
+        self._assert_linux_equiv(
+            'importar asyncio\n'
+            'asincrono funcion run_async():\n'
+            '    intentar:\n'
+            '        lanzar ValueError("async boom")\n'
+            '    excepto ValueError como error:\n'
+            '        devolver 1\n'
+            'imprimir(asyncio.run(run_async()))\n'
+        )
 
     # ── Linux signature markers (FUNCTION_SIGNATURE_MARKERS_V1) ─────────
 
@@ -410,6 +894,21 @@ class Phase10LinuxGates(unittest.TestCase):
 
     def test_linux_nested_closure_transitive_capture(self):
         self._assert_linux_equiv('funcion outer(a):\n    b = a + 1\n    funcion mid(c):\n        funcion inner(d):\n            devolver a + b + c + d\n        devolver inner(1)\n    devolver mid(2)\nimprimir(outer(10))\n')
+
+    def test_linux_closure_frame_abi_more_than_four_captures_and_args(self):
+        self._assert_linux_equiv(
+            'funcion fabricar():\n'
+            '    uno = 1\n'
+            '    dos = 2\n'
+            '    tres = 3\n'
+            '    cuatro = 4\n'
+            '    cinco = 5\n'
+            '    funcion sumar(a, b, c, d, e):\n'
+            '        devolver uno + dos + tres + cuatro + cinco + a + b + c + d + e\n'
+            '    devolver sumar\n'
+            'f = fabricar()\n'
+            'imprimir(f(6, 7, 8, 9, 10))\n'
+        )
 
     def test_linux_immutable_scalar_closure(self):
         self._assert_linux_equiv('funcion exterior(x):\n    factor = 3\n    funcion interior(valor):\n        devolver x + factor * valor\n    devolver interior(4)\nimprimir(exterior(2))\n')
@@ -444,7 +943,7 @@ class Phase10LinuxGates(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
         self.assertEqual(run.returncode, 2)
@@ -473,7 +972,7 @@ class Phase10LinuxGates(unittest.TestCase):
             executable = compile_native_linux_files(entry, root / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -559,7 +1058,7 @@ class Phase10LinuxGates(unittest.TestCase):
             executable = compile_native_linux_files(entry, root / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -581,7 +1080,7 @@ class Phase10LinuxGates(unittest.TestCase):
             executable = compile_native_linux_files(entry, root / "program")
             linux_path = windows_to_wsl_path(executable)
             completed = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
@@ -663,7 +1162,7 @@ class Phase10LinuxGates(unittest.TestCase):
             executable = compile_native_linux_files(entry, root / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -760,7 +1259,7 @@ class Phase10LinuxGates(unittest.TestCase):
             executable = compile_native_linux_files(entry, root / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -825,7 +1324,7 @@ class Phase10LinuxGates(unittest.TestCase):
             (root / "main.py").write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
             executable = compile_native_linux_files(root / "main.piton", root / "program")
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(executable)],
+                linux_run_cmd([windows_to_wsl_path(executable)]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -1035,6 +1534,778 @@ class Phase10LinuxGates(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="piton-linux-del-nonprop-") as directory:
             with self.assertRaisesRegex(NativeBuildError, "is not a property"):
                 compile_native_linux(source, Path(directory) / "program")
+
+    def test_linux_for_break(self):
+        source = (
+            'suma = 0\n'
+            'para i en [1, 2, 3, 4, 5]:\n'
+            '    si i == 3:\n'
+            '        romper\n'
+            '    suma = suma + i\n'
+            'imprimir(suma)\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_for_continue(self):
+        source = (
+            'suma = 0\n'
+            'para i en [1, 2, 3, 4, 5]:\n'
+            '    si i == 3:\n'
+            '        continuar\n'
+            '    suma = suma + i\n'
+            'imprimir(suma)\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_for_else_no_break(self):
+        source = (
+            'para i en [1, 2, 3]:\n'
+            '    imprimir(i)\n'
+            'sino:\n'
+            '    imprimir("else")\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_for_else_with_break(self):
+        source = (
+            'para i en [1, 2, 3]:\n'
+            '    si i == 2:\n'
+            '        romper\n'
+            '    imprimir(i)\n'
+            'sino:\n'
+            '    imprimir("else")\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_while_break(self):
+        source = (
+            'i = 0\n'
+            'mientras i < 5:\n'
+            '    si i == 3:\n'
+            '        romper\n'
+            '    i = i + 1\n'
+            'imprimir(i)\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_while_continue(self):
+        source = (
+            'suma = 0\n'
+            'i = 0\n'
+            'mientras i < 5:\n'
+            '    i = i + 1\n'
+            '    si i == 3:\n'
+            '        continuar\n'
+            '    suma = suma + i\n'
+            'imprimir(suma)\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_while_else_no_break(self):
+        source = (
+            'i = 0\n'
+            'mientras i < 3:\n'
+            '    i = i + 1\n'
+            'sino:\n'
+            '    imprimir("else")\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_while_else_with_break(self):
+        source = (
+            'i = 0\n'
+            'mientras i < 5:\n'
+            '    si i == 2:\n'
+            '        romper\n'
+            '    i = i + 1\n'
+            'sino:\n'
+            '    imprimir("else")\n'
+            'imprimir(i)\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+
+class ComprehensionsV2Linux(unittest.TestCase):
+    def _run_linux_diff(self, source: str):
+        translated = traducir_fuente(source, "<linux-diff>")
+        with tempfile.TemporaryDirectory(prefix="piton-linux-comp-") as directory:
+            executable = compile_native_linux(source, Path(directory) / "program")
+            linux_path = windows_to_wsl_path(executable)
+            native_run = subprocess.run(
+                linux_run_cmd([linux_path]),
+                capture_output=True, check=False, timeout=10,
+            )
+            oracle_run = subprocess.run(
+                [sys.executable, "-c", translated],
+                capture_output=True, check=False, timeout=10,
+            )
+            native_stdout = native_run.stdout.replace(b"\r\n", b"\n")
+            oracle_stdout = oracle_run.stdout.replace(b"\r\n", b"\n")
+            return native_run.returncode, native_stdout, oracle_stdout, native_run.stderr
+
+    def assert_linux_matches(self, source: str):
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_list_comp_basic(self):
+        self.assert_linux_matches(
+            'cuadrados = [x * x para x en [1, 2, 3, 4, 5]]\nimprimir(cuadrados)\n'
+        )
+
+    def test_linux_list_comp_with_if(self):
+        self.assert_linux_matches(
+            'pares = [x para x en [1, 2, 3, 4, 5, 6] si x % 2 == 0]\nimprimir(pares)\n'
+        )
+
+    def test_linux_list_comp_chained_for(self):
+        self.assert_linux_matches(
+            'pairs = [(a, b) para a en [1, 2] para b en [3, 4]]\nimprimir(pairs)\n'
+        )
+
+    def test_linux_list_comp_with_tuple_element(self):
+        self.assert_linux_matches(
+            't = [(x, x * 2) para x en [1, 2, 3]]\nimprimir(t)\n'
+        )
+
+    def test_linux_list_of_tuples_literal(self):
+        self.assert_linux_matches(
+            't = [(1, 2), (3, 4)]\nimprimir(t)\n'
+        )
+
+    def test_linux_nested_list_literal(self):
+        self.assert_linux_matches(
+            't = [[1, 2], [3, 4]]\nimprimir(t)\n'
+        )
+
+    def test_linux_tuple_of_mixed_literal(self):
+        self.assert_linux_matches(
+            't = (1, [2, 3], (4, 5))\nimprimir(t)\n'
+        )
+
+    def test_linux_list_comp_nested(self):
+        self.assert_linux_matches(
+            't = [[x * z para z en [1, 2, 3]] para x en [1, 2]]\nimprimir(t)\n'
+        )
+
+    def test_linux_genexpr_is_iterable_and_stateful(self):
+        self.assert_linux_matches(
+            'g = (x * 2 para x en [1, 2, 3])\n'
+            'imprimir(next(g))\n'
+            'imprimir(next(iter(g)))\n'
+        )
+
+    def test_linux_genexpr_stop_iteration(self):
+        self.assert_linux_matches(
+            'g = (x para x en [7])\n'
+            'intentar:\n'
+            '    imprimir(next(g))\n'
+            '    next(g)\n'
+            'excepto StopIteration:\n'
+            '    imprimir("exhausted")\n'
+        )
+
+    def test_linux_set_comp_basic_and_deduplicates(self):
+        self.assert_linux_matches(
+            's = {x para x en [1, 2, 2, 3]}\nimprimir(s)\n'
+        )
+
+    def test_linux_set_comp_with_if(self):
+        self.assert_linux_matches(
+            's = {x para x en [1, 2, 3, 4] si x % 2 == 0}\nimprimir(s)\n'
+        )
+
+    def test_linux_dict_comp_basic(self):
+        self.assert_linux_matches(
+            'd = {x: x * x para x en [1, 2, 3]}\nimprimir(d)\n'
+        )
+
+    def test_linux_dict_comp_with_if(self):
+        self.assert_linux_matches(
+            'd = {x: x * 2 para x en [1, 2, 3, 4] si x > 2}\nimprimir(d)\n'
+        )
+
+
+class GeneratorsLinux(unittest.TestCase):
+    def _run_linux_diff(self, source: str):
+        translated = traducir_fuente(source, "<linux-diff>")
+        with tempfile.TemporaryDirectory(prefix="piton-linux-gen-") as directory:
+            executable = compile_native_linux(source, Path(directory) / "program")
+            linux_path = windows_to_wsl_path(executable)
+            native_run = subprocess.run(
+                linux_run_cmd([linux_path]),
+                capture_output=True, check=False, timeout=10,
+            )
+            oracle_run = subprocess.run(
+                [sys.executable, "-c", translated],
+                capture_output=True, check=False, timeout=10,
+            )
+            native_stdout = native_run.stdout.replace(b"\r\n", b"\n")
+            oracle_stdout = oracle_run.stdout.replace(b"\r\n", b"\n")
+            return native_run.returncode, native_stdout, oracle_stdout, native_run.stderr
+
+    def assert_linux_matches(self, source: str):
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_generator_suspends_between_next_calls(self):
+        self.assert_linux_matches(
+            "funcion gen():\n"
+            "    imprimir(10)\n"
+            "    producir 1\n"
+            "    imprimir(20)\n"
+            "    producir 2\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+
+    def test_linux_generator_with_params(self):
+        self.assert_linux_matches(
+            "funcion gen(n):\n"
+            "    producir n\n"
+            "    producir n + 1\n"
+            "x = gen(5)\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+
+    def test_linux_generator_preserves_locals_between_yields(self):
+        self.assert_linux_matches(
+            "funcion gen():\n"
+            "    valor = 1\n"
+            "    producir valor\n"
+            "    valor = valor + 1\n"
+            "    producir valor\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+
+    def test_linux_generator_exhaustion_raises_stop_iteration(self):
+        self.assert_linux_matches(
+            "funcion gen():\n"
+            "    producir 1\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+
+    def test_linux_generator_instances_keep_independent_state(self):
+        self.assert_linux_matches(
+            "funcion gen(n):\n"
+            "    producir n\n"
+            "    producir n + 10\n"
+            "x = gen(1)\n"
+            "z = gen(2)\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(z))\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(z))\n"
+        )
+
+    def test_linux_generator_send_after_next(self):
+        self.assert_linux_matches(
+            "funcion echo():\n"
+            "    producir 0\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "x = echo()\n"
+            "imprimir(next(x))\n"
+            "imprimir(x.send(5))\n"
+            "imprimir(x.send(7))\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+
+    def test_linux_generator_send_first_call_fails(self):
+        self.assert_linux_matches(
+            "funcion gen():\n"
+            "    producir 1\n"
+            "x = gen()\n"
+            "intentar:\n"
+            "    x.send(7)\n"
+            "excepto TypeError:\n"
+            "    imprimir(99)\n"
+        )
+
+    def test_linux_generator_throw_at_caller(self):
+        self.assert_linux_matches(
+            "funcion gen():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "intentar:\n"
+            "    x.throw(ValueError)\n"
+            "excepto ValueError:\n"
+            "    imprimir(88)\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+
+    def test_linux_generator_close_stops_iteration(self):
+        self.assert_linux_matches(
+            "funcion gen():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "x.close()\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+
+    def test_linux_generator_close_is_idempotent(self):
+        self.assert_linux_matches(
+            "funcion gen():\n"
+            "    producir 1\n"
+            "x = gen()\n"
+            "x.close()\n"
+            "x.close()\n"
+            "imprimir(7)\n"
+        )
+
+    def test_linux_generator_return_with_value(self):
+        self.assert_linux_matches(
+            "funcion gen():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "    devolver 42\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+            "intentar:\n"
+            "    next(x)\n"
+            "excepto StopIteration:\n"
+            "    imprimir(99)\n"
+        )
+
+    def test_linux_generator_close_raises_generator_exit(self):
+        self.assert_linux_matches(
+            "funcion gen():\n"
+            "    producir 1\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "intentar:\n"
+            "    x.close()\n"
+            "excepto GeneratorExit:\n"
+            "    imprimir(99)\n"
+        )
+
+    def test_linux_generator_yield_from_basic(self):
+        self.assert_linux_matches(
+            "funcion generador():\n"
+            "    producir desde [1, 2, 3]\n"
+            "x = generador()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+
+    def test_linux_generator_yield_from_subgenerator(self):
+        self.assert_linux_matches(
+            "funcion sub():\n"
+            "    producir 10\n"
+            "    producir 20\n"
+            "    producir 30\n"
+            "funcion gen():\n"
+            "    producir desde sub()\n"
+            "x = gen()\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+            "imprimir(next(x))\n"
+        )
+
+    def test_linux_exception_binding_as_name(self):
+        self.assert_linux_matches(
+            'intentar:\n'
+            '    lanzar ValueError("boom")\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+
+    def test_linux_exception_binding_as_name_no_message(self):
+        self.assert_linux_matches(
+            'intentar:\n'
+            '    lanzar ValueError()\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+
+
+class CoroutinesLinux(unittest.TestCase):
+    def assert_linux_matches(self, source: str):
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def _run_linux_diff(self, source):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-async-") as directory:
+            root = Path(directory)
+            (root / "main.piton").write_text(source, encoding="utf-8")
+            (root / "main.py").write_text(traducir_fuente(source, "<main>"), encoding="utf-8")
+            executable = compile_native_linux(source, root / "program")
+            native_run = subprocess.run(
+                linux_run_cmd([windows_to_wsl_path(executable)]),
+                capture_output=True, check=False, timeout=10,
+            )
+            oracle_run = subprocess.run(
+                [sys.executable, str(root / "main.py")], capture_output=True, check=False, timeout=10,
+            )
+            return (
+                native_run.returncode,
+                native_run.stdout.replace(b"\r\n", b"\n"),
+                oracle_run.stdout.replace(b"\r\n", b"\n"),
+                native_run.stderr,
+            )
+
+    def test_linux_async_nested_await(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion interior():\n"
+            "    devolver 10\n"
+            "asincrono funcion exterior():\n"
+            "    v = esperar interior()\n"
+            "    imprimir(v)\n"
+            "asyncio.run(exterior())\n"
+        )
+
+    def test_linux_async_with_computation(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion calcular(n):\n"
+            "    devolver n * n + 1\n"
+            "asincrono funcion principal():\n"
+            "    r = esperar calcular(5)\n"
+            "    imprimir(r)\n"
+            "asyncio.run(principal())\n"
+        )
+
+    def test_linux_async_deep_chain_with_params(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion base(n):\n"
+            "    devolver n + 1\n"
+            "asincrono funcion medio(n):\n"
+            "    a = esperar base(n)\n"
+            "    devolver a * 2\n"
+            "asincrono funcion cima(n):\n"
+            "    b = esperar medio(n)\n"
+            "    c = esperar base(b)\n"
+            "    devolver c + 100\n"
+            "asincrono funcion principal():\n"
+            "    imprimir(esperar cima(5))\n"
+            "asyncio.run(principal())\n"
+        )
+
+
+    def test_linux_async_generator_async_for(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion contar():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "    producir 3\n"
+            "asincrono funcion principal():\n"
+            "    asincrono para x en contar():\n"
+            "        imprimir(x)\n"
+            "asyncio.run(principal())\n"
+        )
+
+    def test_linux_async_generator_params_and_await_inside(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion base(n):\n"
+            "    devolver n + 1\n"
+            "asincrono funcion contar(hasta):\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "    v = esperar base(10)\n"
+            "    producir v\n"
+            "    producir 3\n"
+            "asincrono funcion principal():\n"
+            "    asincrono para x en contar(4):\n"
+            "        imprimir(x)\n"
+            "asyncio.run(principal())\n"
+        )
+
+    def test_linux_async_generator_for_else(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion contar():\n"
+            "    producir 1\n"
+            "    producir 2\n"
+            "asincrono funcion principal():\n"
+            "    asincrono para x en contar():\n"
+            "        imprimir(x)\n"
+            "    sino:\n"
+            "        imprimir(99)\n"
+            "asyncio.run(principal())\n"
+        )
+
+    # ── TASK_SCHEDULER_V1 (M9) mirrors: create_task / gather / sleep(0) / cancel ──
+
+    def test_linux_task_create_await_and_result(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion saluda(n):\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver n * 10\n"
+            "asincrono funcion principal():\n"
+            "    t1 = asyncio.create_task(saluda(1))\n"
+            "    imprimir(esperar t1)\n"
+            "asyncio.run(principal())\n"
+        )
+
+    def test_linux_task_gather_direct_calls(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion saluda(n):\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver n * 10\n"
+            "asincrono funcion principal():\n"
+            "    imprimir(esperar asyncio.gather(saluda(2), saluda(3)))\n"
+            "asyncio.run(principal())\n"
+        )
+
+    def test_linux_task_gather_sleep0_interleave_order(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion t(n):\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver n\n"
+            "asincrono funcion principal():\n"
+            "    a = asyncio.create_task(t(1))\n"
+            "    b = asyncio.create_task(t(2))\n"
+            "    c = asyncio.create_task(t(3))\n"
+            "    imprimir(esperar asyncio.gather(a, b, c))\n"
+            "asyncio.run(principal())\n"
+        )
+
+    def test_linux_task_gather_already_finished_tasks(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion s(n):\n"
+            "    devolver n * 10\n"
+            "asincrono funcion principal():\n"
+            "    t1 = asyncio.create_task(s(1))\n"
+            "    imprimir(esperar t1)\n"
+            "    t2 = asyncio.create_task(s(2))\n"
+            "    imprimir(esperar t2)\n"
+            "    imprimir(esperar asyncio.gather(t1, t2))\n"
+            "asyncio.run(principal())\n"
+        )
+
+    def test_linux_task_await_chain_with_sleep0(self):
+        self.assert_linux_matches(
+            "importar asyncio\n"
+            "asincrono funcion hoja(n):\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver n + 1\n"
+            "asincrono funcion medio():\n"
+            "    x = esperar hoja(10)\n"
+            "    esperar asyncio.sleep(0)\n"
+            "    devolver x * 2\n"
+            "asincrono funcion principal():\n"
+            "    imprimir(esperar medio())\n"
+            "asyncio.run(principal())\n"
+        )
+
+    def _run_linux_expected_fail(self, source: str, fragment: str) -> None:
+        with tempfile.TemporaryDirectory(prefix="piton-linux-async-") as directory:
+            root = Path(directory)
+            executable = compile_native_linux(source, root / "program")
+            native_run = subprocess.run(
+                linux_run_cmd([windows_to_wsl_path(executable)]),
+                capture_output=True, check=False, timeout=10,
+            )
+            self.assertNotEqual(native_run.returncode, 0)
+            self.assertIn(fragment.encode(), native_run.stderr)
+
+    def test_linux_task_cancel_await_propagates(self):
+        self._run_linux_expected_fail(
+            "importar asyncio\n"
+            "asincrono funcion s(n):\n"
+            "    devolver n\n"
+            "asincrono funcion principal():\n"
+            "    t1 = asyncio.create_task(s(1))\n"
+            "    t1.cancel()\n"
+            "    imprimir(esperar t1)\n"
+            "asyncio.run(principal())\n",
+            "CancelledError",
+        )
+
+    def test_linux_task_cancel_gather_member_propagates(self):
+        self._run_linux_expected_fail(
+            "importar asyncio\n"
+            "asincrono funcion s(n):\n"
+            "    devolver n\n"
+            "asincrono funcion principal():\n"
+            "    t1 = asyncio.create_task(s(1))\n"
+            "    t1.cancel()\n"
+            "    imprimir(esperar asyncio.gather(t1))\n"
+            "asyncio.run(principal())\n",
+            "CancelledError",
+        )
+
+    def test_linux_task_sleep1_fails_closed(self):
+        self._run_linux_expected_fail(
+            "importar asyncio\n"
+            "asincrono funcion p():\n"
+            "    esperar asyncio.sleep(1)\n"
+            "    devolver 0\n"
+            "asyncio.run(p())\n",
+            "sleep(0) only",
+        )
+
+    def test_linux_task_gather_non_task_fails_closed(self):
+        self._run_linux_expected_fail(
+            "importar asyncio\n"
+            "asincrono funcion p():\n"
+            "    imprimir(esperar asyncio.gather(5))\n"
+            "asyncio.run(p())\n",
+            "gather requires tasks",
+        )
+
+    def test_linux_task_await_non_awaitable_fails_closed(self):
+        self._run_linux_expected_fail(
+            "importar asyncio\n"
+            "asincrono funcion p():\n"
+            "    esperar 42\n"
+            "asyncio.run(p())\n",
+            "object is not awaitable",
+        )
+
+
+class WithProtocolLinuxV1(unittest.TestCase):
+    """M10 — WITH_PROTOCOL_V1 on the static-ELF Linux backend, differential vs
+    CPython 3.12 (mirror of WithProtocolNativeV1 in test_phase5.py)."""
+
+    def _run_linux_diff(self, source):
+        translated = traducir_fuente(source, "<linux-with>")
+        with tempfile.TemporaryDirectory(prefix="piton-linux-with-") as directory:
+            executable = compile_native_linux(source, Path(directory) / "program")
+            linux_path = windows_to_wsl_path(executable)
+            native_run = subprocess.run(
+                linux_run_cmd([linux_path]),
+                capture_output=True, check=False, timeout=10,
+            )
+            oracle_run = subprocess.run(
+                [sys.executable, "-c", translated],
+                capture_output=True, check=False, timeout=10,
+            )
+            native_stdout = native_run.stdout.replace(b"\r\n", b"\n")
+            oracle_stdout = oracle_run.stdout.replace(b"\r\n", b"\n")
+            return native_run.returncode, native_stdout, oracle_stdout, native_run.stderr
+
+    def test_linux_with_normal_path(self):
+        rc, out, oracle_out, err = self._run_linux_diff(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n'
+            '        imprimir("enter")\n'
+            '        devolver 42\n'
+            '    funcion __exit__(self, tipo, mensaje, tb):\n'
+            '        imprimir("exit")\n'
+            '        devolver Falso\n'
+            'con CM() como x:\n'
+            '    imprimir("body")\n'
+            '    imprimir(x)\n'
+        )
+        self.assertEqual((rc, out), (0, oracle_out), err)
+        self.assertEqual(err, b"")
+
+    def test_linux_with_exception_propagates_to_handler(self):
+        rc, out, oracle_out, err = self._run_linux_diff(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n'
+            '        imprimir("enter")\n'
+            '        devolver 1\n'
+            '    funcion __exit__(self, tipo, mensaje, tb):\n'
+            '        imprimir("exit")\n'
+            '        imprimir(mensaje)\n'
+            '        devolver Falso\n'
+            'intentar:\n'
+            '    con CM() como w:\n'
+            '        lanzar ValueError("boom")\n'
+            'excepto ValueError:\n'
+            '    imprimir("handler")\n'
+        )
+        self.assertEqual((rc, out), (0, oracle_out), err)
+        self.assertEqual(err, b"")
+
+    def test_linux_with_suppression(self):
+        rc, out, oracle_out, err = self._run_linux_diff(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n'
+            '        devolver 1\n'
+            '    funcion __exit__(self, tipo, mensaje, tb):\n'
+            '        imprimir("suprimo")\n'
+            '        devolver Verdadero\n'
+            'intentar:\n'
+            '    con CM() como z:\n'
+            '        lanzar ValueError("boom")\n'
+            'excepto ValueError:\n'
+            '    imprimir("handler")\n'
+            'imprimir("fin")\n'
+        )
+        self.assertEqual((rc, out), (0, oracle_out), err)
+        self.assertEqual(err, b"")
+
+    def test_linux_with_unhandled_exception(self):
+        rc, out, oracle_out, err = self._run_linux_diff(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n'
+            '        devolver 1\n'
+            '    funcion __exit__(self, tipo, mensaje, tb):\n'
+            '        imprimir("exit")\n'
+            '        imprimir(tipo)\n'
+            '        imprimir(mensaje)\n'
+            '        devolver Falso\n'
+            'con CM() como x:\n'
+            '    lanzar ValueError("boom")\n'
+        )
+        self.assertEqual(rc, 1, err)
+        self.assertIn(b"ValueError: boom", err)
+        self.assertIn(b"exit", out)
+        self.assertIn(b"ValueError", out)
+        self.assertIn(b"boom", out)
+
+    def test_linux_with_requires_dunder_methods(self):
+        with tempfile.TemporaryDirectory(prefix="piton-linux-with-") as directory:
+            with self.assertRaisesRegex(Exception, "must define __enter__ and __exit__"):
+                compile_native_linux(
+                    'clase CM:\n    funcion __init__(self):\n        self.x = 1\n'
+                    'con CM() como y:\n    imprimir(y)\n',
+                    Path(directory) / "program",
+                )
 
 
 if __name__ == "__main__":

@@ -7,8 +7,11 @@ from piton.call_runtime import (
     Cell,
     Frame,
     PitonFunction,
+    PitonArgVector,
+    PitonKwVector,
     PitonGenerator,
     Signature,
+    bind_call_vectors,
     with_runtime,
 )
 
@@ -28,6 +31,33 @@ class Phase7Bootstrap(unittest.TestCase):
         self.assertEqual(result, {"a": 1, "b": 3, "rest": (4,), "scale": 2, "options": {"mode": "fast"}})
         with self.assertRaises(CallBindingError):
             function()
+
+    def test_generic_call_vectors_preserve_binding(self):
+        signature = Signature(
+            positional=("base", "extra"),
+            defaults={"extra": 2},
+            keyword_only=("scale",),
+            keyword_defaults={"scale": 1},
+            vararg="rest",
+            kwarg="options",
+        )
+        values = bind_call_vectors(
+            "f",
+            signature,
+            PitonArgVector((3, 4, 5)),
+            PitonKwVector((("scale", 10), ("mode", "fast"))),
+        )
+        self.assertEqual(
+            values,
+            {"base": 3, "extra": 4, "rest": (5,), "scale": 10, "options": {"mode": "fast"}},
+        )
+
+    def test_generic_call_vectors_reject_duplicate_and_unexpected(self):
+        signature = Signature(positional=("base",))
+        with self.assertRaisesRegex(CallBindingError, "multiple values"):
+            bind_call_vectors("f", signature, PitonArgVector((1,)), PitonKwVector((("base", 2),)))
+        with self.assertRaisesRegex(CallBindingError, "unexpected keyword"):
+            bind_call_vectors("f", signature, PitonArgVector((1,)), PitonKwVector((("other", 2),)))
 
     def test_frames_cells_and_recursion_shape(self):
         frame = Frame("outer", closure={"count": Cell(1)})

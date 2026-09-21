@@ -6,20 +6,21 @@ from typing import List, Optional, Any
 from piton.cst import CSTNode, CSTNodeType
 from piton.hir import (
     HIRNode, Module, FuncDef, ClassDef, Arguments,
-    If, While, For, Return, Yield, YieldFrom, Raise,
+    If, While, For, Break, Continue, Return, Yield, YieldFrom, Raise,
     Try, ExceptHandler, With, WithItem, Match, CaseBlock,
     Load, Store, Delete, Global, Nonlocal,
     Assign as HIRAssign, AnnAssign as HIRAnnAssign, AugAssign as HIRAugAssign,
     Const, BinOp, UnOp, Compare, BoolOp, Call, Keyword,
     Attr, Subscr, List, Tuple, Set, Dict,
-    ListComp, CompFor, IfExpr, Await,
+    ListComp, SetComp, DictComp, GenExpr, CompFor, IfExpr, Await,
     Import, ImportFrom, Alias,
     HIRKind,
 )
 from piton.cst import (
     Module as CSTModule, FuncDef as CSTFuncDef, ClassDef as CSTClassDef,
     Lambda as CSTLambda, IfStmt as CSTIfStmt, WhileStmt as CSTWhileStmt,
-    ForStmt as CSTForStmt, ReturnStmt as CSTReturnStmt,
+    ForStmt as CSTForStmt, BreakStmt as CSTBreakStmt, ContinueStmt as CSTContinueStmt,
+    ReturnStmt as CSTReturnStmt,
     YieldStmt as CSTYieldStmt, YieldFromStmt as CSTYieldFromStmt,
     RaiseStmt as CSTRaiseStmt, TryStmt as CSTTryStmt,
     ExceptHandler as CSTExceptHandler, WithStmt as CSTWithStmt,
@@ -32,7 +33,8 @@ from piton.cst import (
     Call as CSTCall, Keyword as CSTKeyword, Attribute as CSTAttribute,
     Subscript as CSTSubscript, Slice as CSTSlice,
     List as CSTList, Tuple as CSTTuple, Set as CSTSet, Dict as CSTDict,
-    ListComp as CSTListComp, CompFor as CSTCompFor, IfExpr as CSTIfExpr,
+    ListComp as CSTListComp, SetComp as CSTSetComp, DictComp as CSTDictComp,
+    GenExpr as CSTGenExpr, CompFor as CSTCompFor, IfExpr as CSTIfExpr,
     Await as CWAwait,
     ExprStmt, Assign, AnnAssign, AugAssign,
     Arguments as CSTArguments, Arg as CSTArg,
@@ -46,6 +48,7 @@ class LoweringError(Exception):
 class Lowerer:
     def __init__(self):
         self.errors: List[str] = []
+        self._lambda_counter = 0
 
     def lower(self, cst: CSTNode) -> HIRNode:
         method_name = f"_lower_{cst.type.name.lower()}"
@@ -100,11 +103,13 @@ class Lowerer:
     def _lower_lambda(self, cst: CSTLambda):
         args = self._lower_arguments(cst.args)
         body = self.lower(cst.body)
+        lambda_name = f"<lambda_{self._lambda_counter}>"
+        self._lambda_counter += 1
         return FuncDef(
             kind=HIRKind.LAMBDA,
-            name="<lambda>",
+            name=lambda_name,
             args=args,
-            body=[body],
+            body=[Return(value=body)],
             is_async=False,
         )
 
@@ -137,7 +142,13 @@ class Lowerer:
         iter_ = self.lower(cst.iter)
         body = [self.lower(s) for s in cst.body]
         orelse = [self.lower(s) for s in cst.orelse]
-        return For(kind=HIRKind.FOR, target=target, iter=iter_, body=body, orelse=orelse)
+        return For(kind=HIRKind.FOR, target=target, iter=iter_, body=body, orelse=orelse, is_async=cst.is_async)
+
+    def _lower_breakstmt(self, cst: CSTBreakStmt):
+        return Break(kind=HIRKind.BREAK)
+
+    def _lower_continuestmt(self, cst: CSTContinueStmt):
+        return Continue(kind=HIRKind.CONTINUE)
 
     def _lower_returnstmt(self, cst: CSTReturnStmt):
         value = self.lower(cst.value) if cst.value else None
@@ -323,6 +334,22 @@ class Lowerer:
         elt = self.lower(cst.elt)
         generators = [self.lower(g) for g in cst.generators]
         return ListComp(kind=HIRKind.LIST_COMP, elt=elt, generators=generators)
+
+    def _lower_setcomp(self, cst: CSTSetComp):
+        elt = self.lower(cst.elt)
+        generators = [self.lower(g) for g in cst.generators]
+        return SetComp(kind=HIRKind.SET_COMP, elt=elt, generators=generators)
+
+    def _lower_dictcomp(self, cst: CSTDictComp):
+        key = self.lower(cst.key)
+        value = self.lower(cst.value)
+        generators = [self.lower(g) for g in cst.generators]
+        return DictComp(kind=HIRKind.DICT_COMP, key=key, value=value, generators=generators)
+
+    def _lower_genexpr(self, cst: CSTGenExpr):
+        elt = self.lower(cst.elt)
+        generators = [self.lower(g) for g in cst.generators]
+        return GenExpr(kind=HIRKind.GEN_EXPR, elt=elt, generators=generators)
 
     def _lower_compfor(self, cst: CSTCompFor):
         target = self.lower(cst.target)

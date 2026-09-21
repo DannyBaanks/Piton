@@ -979,8 +979,34 @@ void piton_raise(const char *type, const char *message) {
     piton_raise_unhandled(type, message);
 }
 
-/* Report an exception with no statically-matching handler and exit. */
+/* Exception chaining globals (__cause__ and __context__). */
+static const char *piton_exc_cause_type = NULL;
+static const char *piton_exc_cause_message = NULL;
+static const char *piton_exc_context_type = NULL;
+static const char *piton_exc_context_message = NULL;
+
+/* Saved exception state for bare re-raise (piton identifies a handler statically). */
+static const char *piton_reraise_type = NULL;
+static const char *piton_reraise_message = NULL;
+static const char *piton_reraise_cause_type = NULL;
+static const char *piton_reraise_cause_message = NULL;
+
+/* Report an exception with no statically-matching handler and exit.
+   Prints exception chain (__cause__ or __context__) like CPython. */
 void piton_raise_unhandled(const char *type, const char *message) {
+    if (piton_exc_cause_type) {
+        fprintf(stderr, "%s", piton_exc_cause_type);
+        if (piton_exc_cause_message && *piton_exc_cause_message)
+            fprintf(stderr, ": %s", piton_exc_cause_message);
+        fputc('\n', stderr);
+        fprintf(stderr, "The above exception was the direct cause of the following exception:\n");
+    } else if (piton_exc_context_type) {
+        fprintf(stderr, "%s", piton_exc_context_type);
+        if (piton_exc_context_message && *piton_exc_context_message)
+            fprintf(stderr, ": %s", piton_exc_context_message);
+        fputc('\n', stderr);
+        fprintf(stderr, "During handling of the above exception, another exception occurred:\n");
+    }
     fprintf(stderr, "%s", type ? type : "Exception");
     if (message && *message) fprintf(stderr, ": %s", message);
     fputc('\n', stderr);
@@ -1003,21 +1029,101 @@ const char *piton_catch_message(void) {
     return piton_exception_message;
 }
 
+/* Get the caught exception message, returning empty string if NULL (for exception binding). */
+const char *piton_catch_message_safe(void) {
+    return piton_exception_message ? piton_exception_message : "";
+}
+
 /* Clear the catch state after handling. */
 void piton_catch_clear(void) {
     piton_exception_active = 0;
     piton_exception_type = NULL;
     piton_exception_message = NULL;
+    piton_exc_cause_type = NULL;
+    piton_exc_cause_message = NULL;
+    piton_exc_context_type = NULL;
+    piton_exc_context_message = NULL;
 }
-
-/* Saved exception state for bare re-raise (piton identifies a handler statically). */
-static const char *piton_reraise_type = NULL;
-static const char *piton_reraise_message = NULL;
 
 /* Snapshot the active exception before the handler clears catch state. */
 void piton_reraise_save(void) {
     piton_reraise_type = piton_exception_type;
     piton_reraise_message = piton_exception_message;
+    piton_reraise_cause_type = piton_exc_cause_type;
+    piton_reraise_cause_message = piton_exc_cause_message;
+}
+
+/* Raise an exception with an explicit cause (raise ... from ...). */
+void piton_raise_from(const char *type, const char *message,
+                      const char *cause_type, const char *cause_message) {
+    /* Search handler stack in reverse (most recent first) */
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            piton_exc_cause_type = cause_type;
+            piton_exc_cause_message = cause_message;
+            piton_exc_context_type = NULL;
+            piton_exc_context_message = NULL;
+            return;
+        }
+    }
+    /* No handler found — print chain and exit */
+    piton_raise_unhandled(type, message);
+}
+
+/* Raise an exception with cause from a saved reraise (bare raise from in handler). */
+void piton_raise_from_var(const char *type, const char *message) {
+    /* Search handler stack in reverse (most recent first) */
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            piton_exc_cause_type = piton_reraise_type;
+            piton_exc_cause_message = piton_reraise_message;
+            piton_exc_context_type = NULL;
+            piton_exc_context_message = NULL;
+            return;
+        }
+    }
+    /* No handler found — print chain and exit */
+    piton_raise_unhandled(type, message);
+}
+
+/* Raise an exception with no cause (raise ... from None). */
+void piton_raise_from_none(const char *type, const char *message) {
+    /* Search handler stack in reverse (most recent first) */
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            piton_exc_cause_type = NULL;
+            piton_exc_cause_message = NULL;
+            piton_exc_context_type = NULL;
+            piton_exc_context_message = NULL;
+            return;
+        }
+    }
+    /* No handler found — print and exit */
+    piton_raise_unhandled(type, message);
+}
+
+/* Set __context__ from the saved reraise (for bare raise in handler without from). */
+void piton_set_context_from_reraise(void) {
+    piton_exc_context_type = piton_reraise_type;
+    piton_exc_context_message = piton_reraise_message;
 }
 
 /* Re-raise the handler's caught exception; falls through to print+exit when unhandled. */
@@ -1032,6 +1138,8 @@ void piton_reraise(void) {
             piton_exception_active = 1;
             piton_exception_type = type;
             piton_exception_message = message;
+            piton_exc_cause_type = piton_reraise_cause_type;
+            piton_exc_cause_message = piton_reraise_cause_message;
             return;
         }
     }
@@ -1166,6 +1274,80 @@ const char *piton_type_from_raw(int64_t raw_ptr, int64_t type_tag) {
         case 10: return "<class 'int'>";
         default: return "<class 'object'>";
     }
+}
+
+/* ── Math functions (STDLIB_TIER1_V1) ─────────────────────────────────── */
+
+static inline double piton_bits_double(int64_t bits) {
+    union { double d; int64_t u; } v;
+    v.u = bits;
+    return v.d;
+}
+
+static inline int64_t piton_double_bits(double d) {
+    union { double d; int64_t u; } v;
+    v.d = d;
+    return v.u;
+}
+
+int64_t piton_float_sqrt(int64_t bits) {
+    double x = piton_bits_double(bits);
+    double r = sqrt(x);
+    return piton_double_bits(r);
+}
+
+int64_t piton_float_floor(int64_t bits) {
+    double x = piton_bits_double(bits);
+    int64_t r = (int64_t)x;
+    if (x < 0 && r != x) --r;
+    return r;
+}
+
+int64_t piton_float_ceil(int64_t bits) {
+    double x = piton_bits_double(bits);
+    int64_t r = (int64_t)x;
+    if (x > 0 && r != x) ++r;
+    return r;
+}
+
+int64_t piton_float_sin(int64_t bits) {
+    double x = piton_bits_double(bits);
+    double r = sin(x);
+    return piton_double_bits(r);
+}
+
+int64_t piton_float_cos(int64_t bits) {
+    double x = piton_bits_double(bits);
+    double r = cos(x);
+    return piton_double_bits(r);
+}
+
+int64_t piton_float_log(int64_t bits) {
+    double x = piton_bits_double(bits);
+    double r = log(x);
+    return piton_double_bits(r);
+}
+
+/* ── Sys functions (STDLIB_TIER1_V1) ──────────────────────────────────── */
+
+#include <stdlib.h>
+
+/* MinGW's CRT exposes the process argument vector through these globals. */
+extern int __argc;
+extern char **__argv;
+
+void piton_exit(int64_t code) {
+    exit((int)code);
+}
+
+int64_t piton_argv_new(void) {
+    PitonCollection *c = piton_collection_new(1, __argc);
+    for (int i = 0; i < __argc; ++i) {
+        PitonStr *s = piton_str_new(__argv[i], (int64_t)strlen(__argv[i]));
+        c->items[i] = pv_encode(PITON_TAG_OBJECT, (int64_t)s);
+    }
+    c->length = __argc;
+    return (int64_t)c;
 }
 
 /* ── Live count totals ────────────────────────────────────────────────── */
