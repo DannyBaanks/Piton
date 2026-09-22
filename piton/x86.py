@@ -144,6 +144,7 @@ class Win64NasmEmitter:
             "extern piton_callback_iterator_new", "extern piton_callback_iterator_next",
             "extern piton_collection_print", "extern piton_collection_free",
             "extern piton_collection_live_count",
+            "extern piton_object_delattr",
             "extern piton_dict_new", "extern piton_dict_put",
             "extern piton_dict_len", "extern piton_dict_get",
             "extern piton_dict_print", "extern piton_dict_free",
@@ -762,6 +763,15 @@ class Win64NasmEmitter:
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
             numeric_types = {"int", "bool"}
+            if operator == "es":
+                self._load_operand(left, "rax")
+                self._load_operand(right, "rcx")
+                self.lines.append("    cmp rax, rcx")
+                self.lines.append("    sete al")
+                self.lines.append("    movzx rax, al")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+                return
             if "bigint" in {left_type, right_type}:
                 self._emit_bigint_compare(operator, left, right, result)
                 return
@@ -1138,10 +1148,28 @@ class Win64NasmEmitter:
                     raise NativeBuildError(f"property '{name}' of '{owner_type.split(':', 1)[1]}' object has no deleter")
                 self._load_operand(owner, "rcx")
                 self.lines.append(f"    call {deleter}")
+            elif owner_type.startswith("object:"):
+                class_name = owner_type.split(":", 1)[1]
+                resolved_class = None
+                for candidate in self.mir_module_class_mro.get(class_name, []):
+                    if "__delattr__" in self.mir_module_classes.get(candidate, set()):
+                        resolved_class = candidate
+                        break
+                if resolved_class is None and "__delattr__" in self.mir_module_classes.get(class_name, set()):
+                    resolved_class = class_name
+                if resolved_class:
+                    target = f"{resolved_class}____delattr__"
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self.lines.append(f"    call {target}")
+                else:
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self.lines.append("    call piton_object_delattr")
             else:
-                raise NativeBuildError(
-                    f"native del on '{name}' is not a property of a natively-typed object"
-                )
+                self._load_operand(owner, "rcx")
+                self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                self.lines.append("    call piton_object_delattr")
         elif op == "method_call":
             explicit_class, method_name, owner, raw_values = args
             owner_type = self.types.get(owner, "")
@@ -1502,17 +1530,36 @@ class Win64NasmEmitter:
                     self.lines.append(f"    lea rcx, [{fmt}]")
                 self.lines.extend(["    call printf", "    xor eax, eax"])
             elif function_name in {"longitud", "len"}:
-                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set"}:
-                    raise NativeBuildError("native len currently requires one collection")
-                self._load_operand(values[0], "rcx")
-                ctype = self.types.get(values[0])
-                if ctype == "dict":
-                    self.lines.append("    call piton_dict_len")
-                elif ctype == "set":
-                    self.lines.append("    call piton_set_len")
+                if len(values) != 1:
+                    raise NativeBuildError("native len requires one argument")
+                vtype = self.types.get(values[0])
+                if vtype in {"list", "tuple", "dict", "set"}:
+                    self._load_operand(values[0], "rcx")
+                    if vtype == "dict":
+                        self.lines.append("    call piton_dict_len")
+                    elif vtype == "set":
+                        self.lines.append("    call piton_set_len")
+                    else:
+                        self.lines.append("    call piton_collection_len")
+                    self.types[result] = "int"
+                elif vtype and vtype.startswith("object:"):
+                    class_name = vtype.split(":", 1)[1]
+                    resolved_class = None
+                    for candidate in self.mir_module_class_mro.get(class_name, []):
+                        if "__len__" in self.mir_module_classes.get(candidate, set()):
+                            resolved_class = candidate
+                            break
+                    if resolved_class is None and "__len__" in self.mir_module_classes.get(class_name, set()):
+                        resolved_class = class_name
+                    if not resolved_class:
+                        raise NativeBuildError(f"native len: '{class_name}' has no __len__ method")
+                    target = f"{resolved_class}____len__"
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append(f"    call {target}")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "int"
                 else:
-                    self.lines.append("    call piton_collection_len")
-                self.types[result] = "int"
+                    raise NativeBuildError("native len currently requires one collection")
             elif function_name == "abs":
                 if len(values) != 1:
                     raise NativeBuildError("native abs requires one argument")
@@ -2256,11 +2303,13 @@ def _scan_native_modules(
                             "native relative import ('desde . importar ...') in the entry module "
                             "is not supported: like CPython scripts it has no parent package"
                         )
-                    if level > 1:
+                    # Resolve parent package by walking back (level-1) segments
+                    pkg_parts = package.split(".")
+                    if level > len(pkg_parts):
                         raise NativeBuildError(
-                            "native relative imports beyond one level ('desde .. importar ...') "
-                            "are not supported yet"
+                            "native relative import escapes the package hierarchy"
                         )
+                    parent = ".".join(pkg_parts[:-(level - 1)]) if level > 1 else package
                     if is_star:
                         raise NativeBuildError(
                             "native star imports ('desde . importar *') are only supported "
@@ -2268,9 +2317,9 @@ def _scan_native_modules(
                         )
                     if not mod_name:
                         for alias in statement.names:
-                            register_chain(f"{package}.{alias.asname or alias.name}")
+                            register_chain(f"{parent}.{alias.asname or alias.name}")
                     else:
-                        register_chain(f"{package}.{mod_name}")
+                        register_chain(f"{parent}.{mod_name}")
                 else:
                     if not mod_name or mod_name in {"asyncio", "math", "sys", "os"}:
                         continue
@@ -2324,12 +2373,17 @@ def _scan_native_modules(
         if is_star:
             return
         if level:
+            # Resolve parent package by walking back (level-1) segments
+            pkg_parts = package_ctx.split(".")
+            if level > len(pkg_parts):
+                return  # would escape package hierarchy
+            parent = ".".join(pkg_parts[:-(level - 1)]) if level > 1 else package_ctx
             if not mod_name:
                 for alias in statement.names:
-                    simulate_execute(f"{package_ctx}.{alias.asname or alias.name}")
+                    simulate_execute(f"{parent}.{alias.asname or alias.name}")
                     names.add(alias.asname or alias.name)
                 return
-            target = f"{package_ctx}.{mod_name}"
+            target = f"{parent}.{mod_name}"
         else:
             target = mod_name
         if not target:

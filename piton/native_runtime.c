@@ -1858,6 +1858,22 @@ int64_t piton_object_get(void *raw, const char *name) {
     return pv_none();
 }
 
+void piton_object_delattr(void *raw, const char *name) {
+    PitonObject *o = raw;
+    if (!o || !name) return;
+    for (int64_t i = 0; i < o->length; ++i) {
+        if (strcmp(o->attributes[i].name, name) == 0) {
+            piton_value_deep_free(o->attributes[i].value);
+            /* Shift remaining attributes down */
+            for (int64_t j = i; j < o->length - 1; ++j) {
+                o->attributes[j] = o->attributes[j + 1];
+            }
+            --o->length;
+            return;
+        }
+    }
+}
+
 /* ATTRIBUTE_LOOKUP_V2: read-through access that first consults the object's
  * field map (normal lookup) and, on a miss, delegates to the class-defined
  * __getattr__(self, name). The hook is a plain native function, so its own
