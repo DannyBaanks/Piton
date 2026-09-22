@@ -142,6 +142,7 @@ class Win64NasmEmitter:
             "extern piton_reversed_new", "extern piton_reversed_next",
             "extern piton_zip_new", "extern piton_zip_next",
             "extern piton_callback_iterator_new", "extern piton_callback_iterator_next",
+            "extern piton_calliter_new", "extern piton_calliter_next",
             "extern piton_collection_print", "extern piton_collection_free",
             "extern piton_collection_live_count",
             "extern piton_object_delattr",
@@ -532,7 +533,12 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "builtin_iter_new":
             builtin, source, start = args
-            if builtin != "enumerate":
+            if builtin == "calliter":
+                callable_src, sentinel_src = source
+                self._load_operand(callable_src, "rcx")
+                self._load_operand(sentinel_src, "rdx")
+                self.lines.append("    call piton_calliter_new")
+            elif builtin != "enumerate":
                 if builtin == "reversed":
                     if self.types.get(source) not in {"list", "tuple"}:
                         raise NativeBuildError("native reversed currently requires a list or tuple")
@@ -597,6 +603,8 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_zip_next")
                 elif iterator_type in {"iterator:map", "iterator:filter"}:
                     self.lines.append("    call piton_callback_iterator_next")
+                elif iterator_type == "iterator:calliter":
+                    self.lines.append("    call piton_calliter_next")
                 else:
                     self.lines.append("    call piton_iterator_next_any")
             self.lines.append(f"    mov {self._address(result)}, rax")
@@ -1263,17 +1271,19 @@ class Win64NasmEmitter:
             self._load_operand(value_arg, "r11")
             self.lines.extend(["    mov [r10], r11", "    mov qword [r10+8], 0"])
         elif op == "closure_new":
-            lifted_name, n_args, capture_ops = args
-            frame_size = ((len(capture_ops) * 8 + 32 + 15) // 16) * 16
+            lifted_name, n_args, capture_ops = args[0], args[1], args[2]
+            has_vararg = args[3] if len(args) > 3 else 0
+            frame_size = ((len(capture_ops) * 8 + 48 + 15) // 16) * 16
             self.lines.append(f"    sub rsp, {frame_size}")
             for i, cell in enumerate(capture_ops):
                 self._load_operand(cell, "r10")
-                self.lines.append(f"    mov qword [rsp+32+{i * 8}], r10")
+                self.lines.append(f"    mov qword [rsp+40+{i * 8}], r10")
+            self.lines.append(f"    mov qword [rsp+32], {int(has_vararg)}")
             self.lines.extend([
                 f"    lea rcx, [{lifted_name}]",
                 f"    mov edx, {n_args}",
                 f"    mov r8d, {len(capture_ops)}",
-                "    lea r9, [rsp+32]",
+                "    lea r9, [rsp+40]",
                 "    call piton_closure_new_frame",
                 f"    add rsp, {frame_size}",
             ])
@@ -1466,7 +1476,8 @@ class Win64NasmEmitter:
         elif op == "jump":
             self.lines.append(f"    jmp {labels[args[0]]}")
         elif op == "call":
-            function_operand, call_args = args
+            function_operand, call_args = args[0], args[1]
+            call_handler = args[2] if len(args) > 2 else None
             function_name = self.aliases.get(function_operand, function_operand)
             values = list(call_args)
             if function_name in {"imprimir", "print"}:
