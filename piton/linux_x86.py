@@ -227,6 +227,9 @@ static void piton_set_add(PitonSet*s,PitonSlot v){for(long i=0;i<s->length;++i)i
 typedef struct{long magic;long kind;void*raw;long index;}PitonAnyIterator;
 static long piton_iterator_new_any(void*raw,long kind){if(!raw||(kind!=PK_LIST&&kind!=PK_TUPLE&&kind!=PK_DICT&&kind!=PK_SET)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonAnyIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->raw=raw;i->index=0;i->kind=kind;return(long)i;}
 static long piton_iterator_next_any(long raw){PitonAnyIterator*i=(PitonAnyIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_SET)n=((PitonSet*)i->raw)->length;else{piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
+typedef struct{long magic;const char*str;long index;long length;}PitonStrIterator;
+static long piton_str_iterator_new(const char*str){if(!str){piton_write(2,"TypeError: 'NoneType' object is not iterable\n",42);piton_exit(1);}PitonStrIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E53545249LL;i->str=str;i->index=0;i->length=piton_strlen(str);return(long)i;}
+static long piton_str_iterator_next(long raw){PitonStrIterator*i=(PitonStrIterator*)raw;if(!i||i->magic!=0x5049544E53545249LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->length){piton_raise_set("StopIteration","");return 0;}unsigned char c=i->str[i->index++];char*p=piton_alloc(2);p[0]=(char)c;p[1]=0;return(long)p;}
 typedef struct{long magic;long index;long start;PitonSeq*seq;}PitonEnumerateIterator;
 static long piton_enumerate_new(void*raw,long start){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: enumerate() argument is not iterable\n",48);piton_exit(1);}PitonEnumerateIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->start=start;return(long)i;}
 static long piton_enumerate_next(long raw){PitonEnumerateIterator*i=(PitonEnumerateIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}long n=i->index++;PitonSeq*p=piton_seq_new(PK_TUPLE,2);piton_seq_put(p,0,(PitonSlot){i->start+n,PK_INT});piton_seq_put(p,1,i->seq->items[n]);return(long)p;}
@@ -455,7 +458,7 @@ class LinuxCEmitter:
             return self._emit_generator_function(function)
         is_main = function.name == "<module>"
         params = "long *frame" if function.frame_abi else ", ".join(f"long {_name(param)}" for param in function.params) or "void"
-        signature = "static long piton_main(void)" if is_main else f"static long {_name(function.name)}({params})"
+        signature = "long piton_main(void)" if is_main else f"static long {_name(function.name)}({params})"
         slots = set(function.params)
         for block in function.blocks:
             for instruction in block.instructions:
@@ -716,6 +719,9 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}={self._value(source)};")
                 types[result] = "generator"
                 return out
+            elif source_type == "str":
+                out.append(f"    {_name(result)}=piton_str_iterator_new((char*){self._value(source)});")
+                types[result] = "iterator:str"
             else:
                 iterator_kind = {"list": "PK_LIST", "tuple": "PK_TUPLE", "dict": "PK_DICT", "set": "PK_SET"}.get(source_type)
                 if iterator_kind is None:
@@ -760,6 +766,8 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_genexpr_next((PitonGenExpr*){self._value(iterator)});")
             elif iterator_type == "generator":
                 out.append(f"    {_name(result)}=piton_gen_next({self._value(iterator)});")
+            elif iterator_type == "iterator:str":
+                out.append(f"    {_name(result)}=piton_str_iterator_next({self._value(iterator)});")
             elif iterator_type.startswith("iterator:object:") or iterator_type.startswith("object:"):
                 class_name = iterator_type.split(":", 2)[2] if iterator_type.startswith("iterator:") else iterator_type.split(":", 1)[1]
                 method_class = self._resolve_method(class_name, "__next__")
@@ -767,7 +775,7 @@ class LinuxCEmitter:
             else:
                 next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
                 out.append(f"    {_name(result)}={next_helper}({self._value(iterator)});")
-            types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:dict" else "int"
+            types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type in {"iterator:dict", "iterator:str"} else "int"
             out.append("    if(piton_exc_flag){")
             if handler_label:
                 out.append(f"        goto {_name(function.name + '_' + handler_label)};")
@@ -1773,16 +1781,7 @@ def compile_native_linux(source: str, output: str | Path) -> Path:
     with tempfile.TemporaryDirectory(prefix="piton-linux-") as directory:
         c_path = Path(directory) / "program.c"
         c_path.write_text(LinuxCEmitter().emit(mir), encoding="utf-8")
-        completed = subprocess.run(
-            [
-                "wsl.exe", "gcc", "-std=c11", "-O2", "-ffreestanding",
-                "-fno-stack-protector", "-fno-pie", "-no-pie", "-nostdlib", "-static",
-                windows_to_wsl_path(c_path), "-o", windows_to_wsl_path(output_path),
-            ],
-            capture_output=True, text=True, check=False,
-        )
-        if completed.returncode:
-            raise NativeBuildError(completed.stderr or completed.stdout or f"Linux compiler exited {completed.returncode}")
+        _gcc_compile(c_path, output_path)
     return output_path
 
 

@@ -23,6 +23,8 @@ class NativeBuildError(RuntimeError):
 
 _BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "round", "redondear"}
 
+_math_fn_map = {"math_sqrt": "piton_float_sqrt"}
+
 PITON_GEN_MAX_SLOTS = 64
 PITON_GEN_LOCAL_BASE = 48
 # ASYNC_GENERATOR_V1: the LAST persisted slot of every PitonGenerator object is
@@ -1252,40 +1254,14 @@ class Win64NasmEmitter:
                     self.types[result] = module_attr_types.get(name, "int")
                 else:
                     self.types[result] = "int"
-                    return
-                resolved_method = None
-                if owner_type.startswith("object:"):
-                    class_name = owner_type.split(":", 1)[1]
-                    for candidate in self.mir_module_class_mro.get(class_name, []):
-                        if name in self.mir_module_classes.get(candidate, set()):
-                            resolved_method = candidate
-                            break
-                    if resolved_method is None and name in self.mir_module_classes.get(class_name, set()):
-                        resolved_method = class_name
-                if resolved_method is not None:
-                    params = self.function_param_map.get(f"{resolved_method}__{name}") or []
-                    if not params:
-                        raise NativeBuildError(f"bound method '{name}' has no native signature")
-                    target = f"{resolved_method}__{name}"
-                    if self.function_frame_abi.get(target, False):
-                        frame_size = ((8 + 32 + 15) // 16) * 16
-                        self.lines.append(f"    sub rsp, {frame_size}")
-                        self._load_operand(owner, "r10")
-                        self.lines.append("    mov qword [rsp+32], r10")
-                        self.lines.extend([
-                            f"    lea rcx, [{target}]", f"    mov edx, {len(params)-1}",
-                            "    mov r8d, 1", "    lea r9, [rsp+32]",
-                            "    call piton_closure_new_frame", f"    add rsp, {frame_size}",
-                            f"    mov {self._address(result)}, rax",
-                        ])
-                    else:
-                        self._load_operand(owner, "r8")
-                        self.lines.extend([
-                            f"    lea rcx, [{target}]", f"    mov edx, {len(params) - 1}",
-                            "    call piton_bound_method_new", f"    mov {self._address(result)}, rax",
-                        ])
-                    self.types[result] = "closure"
-                    return
+        elif op == "del_attr":
+            owner, name = args
+            owner_type = self.types.get(owner, "")
+            prop_class = self._resolve_property_class(owner_type, name)
+            if prop_class is not None:
+                deleter = self.mir_module_class_properties[prop_class][name].get("deleter")
+                if not deleter:
+                    raise NativeBuildError(f"property '{name}' of '{owner_type.split(':', 1)[1]}' object has no deleter")
                 self._load_operand(owner, "rcx")
                 self.lines.append(f"    call {deleter}")
             else:
@@ -2609,7 +2585,7 @@ def _scan_native_modules(
                         base = ".".join(head[:-up])
                     if not mod_name:
                         for alias in statement.names:
-                            register_chain(f"{base}.{alias.asname or alias.name}")
+                            register_chain(f"{base}.{alias.name}")
                     else:
                         register_chain(f"{base}.{mod_name}")
                 else:
@@ -2676,7 +2652,7 @@ def _scan_native_modules(
                 package_ctx = ".".join(head[:-up])
             if not mod_name:
                 for alias in statement.names:
-                    simulate_execute(f"{package_ctx}.{alias.asname or alias.name}")
+                    simulate_execute(f"{package_ctx}.{alias.name}")
                     names.add(alias.asname or alias.name)
                 return
             target = f"{package_ctx}.{mod_name}"

@@ -335,6 +335,56 @@ class MIRLowerer:
         self.module_aliases: dict[str, str] = {}
         self.decorated_symbols: dict[int, str] = {}
 
+    def _store(self, builder: _Builder, target: HIRNode, value: str) -> None:
+        if target.kind == HIRKind.STORE:
+            if target.name in builder.cell_params:
+                builder.emit("cell_store", target.name, value)
+            else:
+                builder.emit("store", target.name, value)
+        elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
+            owner = self._lower_expr(builder, target.value)
+            builder.emit("set_attr", owner, target.attr, value)
+        else:
+            builder.emit("runtime_call", "set_target", target.kind.name, value)
+
+    def _class_method_symbol(self, class_name: str, method: HIRNode, property_methods: dict[str, dict[str, str | None]]) -> tuple[str, str | None, str]:
+        """Classifies one class-body method and returns ``(symbol, role, prop)``.
+
+        ``role`` is ``"getter"``/``"setter"``/``"deleter"`` for the supported
+        ``@property`` / ``@<name>.setter`` / ``@<name>.deleter`` decorators,
+        ``None`` for an ordinary method (the only other accepted form). For
+        ordinary methods ``prop`` is the method name (unused). Anything else
+        fails closed.
+        """
+        decorators = list(getattr(method, "decorators", None) or [])
+        if len(decorators) > 1:
+            raise MIRLoweringError("native class methods support at most one @property decorator")
+        if not decorators:
+            return f"{class_name}__{method.name}", None, method.name
+        decorator = decorators[0]
+        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) == "property":
+            if method.name in property_methods:
+                raise MIRLoweringError(f"native duplicate @property '{method.name}' on '{class_name}'")
+            property_methods[method.name] = {"getter": None, "setter": None, "deleter": None}
+            return f"{class_name}__{method.name}", "getter", method.name
+        if decorator.kind == HIRKind.ATTR:
+            prop = getattr(decorator, "attr", "")
+            if getattr(getattr(decorator, "value", None), "kind", None) != HIRKind.LOAD:
+                raise MIRLoweringError(f"native property decorator '@{method.name}.{prop}' must reference the property name")
+            if getattr(decorator.value, "name", None) != method.name:
+                raise MIRLoweringError(f"native property decorator '@{decorator.value.name}.{prop}' must match the method name '{method.name}'")
+            if prop not in {"setter", "deleter"}:
+                raise MIRLoweringError("native class methods support only @property, @<name>.setter, @<name>.deleter")
+            existing = property_methods.get(method.name)
+            if existing is None:
+                raise MIRLoweringError(
+                    f"native @{method.name}.{prop} requires the property getter '@property def {method.name}' first in class '{class_name}'"
+                )
+            if existing[prop] is not None:
+                raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
+            return f"{class_name}__{method.name}__{prop}", prop, method.name
+        raise MIRLoweringError(f"native class methods support only @property, @<name>.setter, @<name>.deleter")
+
     def lower(
         self, hir: HIRNode, modules: dict[str, HIRNode] | None = None,
         from_imports: dict | None = None,
@@ -669,7 +719,7 @@ class MIRLowerer:
                             names[alias.asname or alias.name] = f"{target.replace('.', '__')}__{alias.name}"
                     else:
                         for alias in item.names:
-                            target = f"{base}.{alias.asname or alias.name}"
+                            target = f"{base}.{alias.name}"
                             if target not in self.imported_modules:
                                 raise MIRLoweringError(f"native module not supplied: {target}")
                             modules[alias.asname or alias.name] = target
@@ -1133,9 +1183,11 @@ class MIRLowerer:
                 raise MIRLoweringError("'asincrono para' is only valid inside a native async function")
             self._lower_async_for(builder, node)
             return
-        if node.iter.kind in {HIRKind.LIST,HIRKind.TUPLE}:
+        if node.iter.kind in {HIRKind.LIST, HIRKind.TUPLE}:
             generator = self._lower_expr(builder, node.iter)
-        elif (
+            self._lower_for_index_based(builder, node, generator)
+            return
+        if (
             node.iter.kind == HIRKind.CALL
             and node.iter.func.kind == HIRKind.LOAD
             and node.iter.func.name in self.generators
@@ -1145,10 +1197,20 @@ class MIRLowerer:
                 values = tuple(self._lower_expr(builder, value) for value in gen_val)
                 generator = builder.temp()
                 builder.emit("build_collection", "tuple", values, result=generator)
+                self._lower_for_index_based(builder, node, generator)
+                return
             else:
                 raise MIRLoweringError("native generators with parameters in for-loops require next() or iter()")
-        else:
-            raise MIRLoweringError("native for currently supports list/tuple or a generator call")
+        if (
+            node.iter.kind == HIRKind.CALL
+            and node.iter.func.kind == HIRKind.LOAD
+            and node.iter.func.name in {"range", "rango"}
+        ):
+            self._lower_for_range(builder, node)
+            return
+        self._lower_for_iterator_protocol(builder, node)
+
+    def _lower_for_index_based(self, builder: _Builder, node: HIRNode, generator) -> None:
         index_name = f"@for_index_{builder.loop_counter}"
         builder.loop_counter += 1
         zero = builder.temp()
@@ -1189,6 +1251,122 @@ class MIRLowerer:
         builder.emit("const", 1, result=one)
         following = self._binary(builder, "+", current, one)
         builder.emit("store", index_name, following)
+        builder.emit("jump", condition_block.label)
+        builder.current = end_block
+        builder._loop_stack.pop()
+        if has_else:
+            flag_val = builder.temp()
+            builder.emit("load", flag_name, result=flag_val)
+            zero_f2 = builder.temp()
+            builder.emit("const", 0, result=zero_f2)
+            else_flag = self._compare(builder, "==", flag_val, zero_f2)
+            else_block = builder.new_block()
+            after_else = builder.new_block()
+            builder.emit("branch", else_flag, else_block.label, after_else.label)
+            builder.current = else_block
+            self._lower_statements(builder, node.orelse)
+            builder.emit("jump", after_else.label)
+            builder.current = after_else
+
+    def _lower_for_range(self, builder: _Builder, node: HIRNode) -> None:
+        args = node.iter.args
+        if len(args) == 1:
+            start = builder.temp()
+            builder.emit("const", 0, result=start)
+            stop = self._lower_expr(builder, args[0])
+            step = builder.temp()
+            builder.emit("const", 1, result=step)
+        elif len(args) == 2:
+            start = self._lower_expr(builder, args[0])
+            stop = self._lower_expr(builder, args[1])
+            step = builder.temp()
+            builder.emit("const", 1, result=step)
+        elif len(args) == 3:
+            start = self._lower_expr(builder, args[0])
+            stop = self._lower_expr(builder, args[1])
+            step = self._lower_expr(builder, args[2])
+        else:
+            raise MIRLoweringError("range() takes 1-3 arguments")
+        index_name = f"@for_index_{builder.loop_counter}"
+        builder.loop_counter += 1
+        builder.emit("store", index_name, start)
+        condition_block = builder.new_block()
+        body_block = builder.new_block()
+        increment_block = builder.new_block()
+        end_block = builder.new_block()
+        has_else = bool(node.orelse)
+        flag_name = f"@for_else_{builder.loop_counter}" if has_else else None
+        builder.loop_counter += 1
+        if has_else:
+            zero_f = builder.temp()
+            builder.emit("const", 0, result=zero_f)
+            builder.emit("store", flag_name, zero_f)
+        builder._loop_stack.append((end_block.label, increment_block.label, flag_name))
+        builder.emit("jump", condition_block.label)
+        builder.current = condition_block
+        index = builder.temp()
+        builder.emit("load", index_name, result=index)
+        cond = self._compare(builder, "<", index, stop) if self._is_positive_step(builder, step) else self._compare(builder, ">", index, stop)
+        builder.emit("branch", cond, body_block.label, end_block.label)
+        builder.current = body_block
+        if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
+            raise MIRLoweringError("native generator loop target must be a name")
+        builder.emit("store", node.target.name, index)
+        self._lower_statements(builder, node.body)
+        builder.emit("jump", increment_block.label)
+        builder.current = increment_block
+        current = builder.temp()
+        builder.emit("load", index_name, result=current)
+        following = self._binary(builder, "+", current, step)
+        builder.emit("store", index_name, following)
+        builder.emit("jump", condition_block.label)
+        builder.current = end_block
+        builder._loop_stack.pop()
+        if has_else:
+            flag_val = builder.temp()
+            builder.emit("load", flag_name, result=flag_val)
+            zero_f2 = builder.temp()
+            builder.emit("const", 0, result=zero_f2)
+            else_flag = self._compare(builder, "==", flag_val, zero_f2)
+            else_block = builder.new_block()
+            after_else = builder.new_block()
+            builder.emit("branch", else_flag, else_block.label, after_else.label)
+            builder.current = else_block
+            self._lower_statements(builder, node.orelse)
+            builder.emit("jump", after_else.label)
+            builder.current = after_else
+
+    def _is_positive_step(self, builder: _Builder, step) -> bool:
+        if isinstance(step, str) and step.startswith("%"):
+            return True
+        return True
+
+    def _lower_for_iterator_protocol(self, builder: _Builder, node: HIRNode) -> None:
+        iterable = self._lower_expr(builder, node.iter)
+        iterator = builder.temp()
+        builder.emit("iter_new", iterable, result=iterator)
+        condition_block = builder.new_block()
+        body_block = builder.new_block()
+        increment_block = builder.new_block()
+        end_block = builder.new_block()
+        has_else = bool(node.orelse)
+        flag_name = f"@for_else_{builder.loop_counter}" if has_else else None
+        builder.loop_counter += 1
+        if has_else:
+            zero_f = builder.temp()
+            builder.emit("const", 0, result=zero_f)
+            builder.emit("store", flag_name, zero_f)
+        builder._loop_stack.append((end_block.label, increment_block.label, flag_name))
+        builder.emit("jump", condition_block.label)
+        builder.current = condition_block
+        item = builder.temp()
+        builder.emit("iter_next", iterator, end_block.label, result=item)
+        if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
+            raise MIRLoweringError("native generator loop target must be a name")
+        builder.emit("store", node.target.name, item)
+        self._lower_statements(builder, node.body)
+        builder.emit("jump", increment_block.label)
+        builder.current = increment_block
         builder.emit("jump", condition_block.label)
         builder.current = end_block
         builder._loop_stack.pop()
@@ -1814,15 +1992,31 @@ class MIRLowerer:
                 qualified = builder.from_import_aliases[node.func.name]
                 _MATH_FUNCS = {
                     "math.sqrt": "math_sqrt", "math.floor": "math_floor",
-                    "math.ceil": "math_ceil", "math.sin": "math_sin",
-                    "math.cos": "math_cos", "math.log": "math_log",
+                    "math.ceil": "math_ceil", "math.trunc": "math_trunc",
+                    "math.fabs": "math_fabs", "math.gcd": "math_gcd",
+                    "math.sin": "math_sin", "math.cos": "math_cos",
+                    "math.log": "math_log",
                 }
                 if qualified in _MATH_FUNCS:
-                    if len(node.args) != 1 or node.keywords:
-                        raise MIRLoweringError(f"native {qualified} requires one positional argument")
-                    value = self._lower_expr(builder, node.args[0])
+                    op = _MATH_FUNCS[qualified]
+                    arity = 2 if op == "math_gcd" else 1
+                    if len(node.args) != arity or node.keywords:
+                        raise MIRLoweringError(
+                            f"native {qualified} requires {arity} positional argument"
+                            f"{'s' if arity != 1 else ''}"
+                        )
                     result = builder.temp()
-                    builder.emit(_MATH_FUNCS[qualified], value, result=result)
+                    if op == "math_gcd":
+                        left = self._lower_expr(builder, node.args[0])
+                        right = self._lower_expr(builder, node.args[1])
+                        builder.emit(op, left, right, _active_handler(builder), result=result)
+                    else:
+                        value = self._lower_expr(builder, node.args[0])
+                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        if handler is None:
+                            builder.emit(op, value, result=result)
+                        else:
+                            builder.emit(op, value, handler, result=result)
                     return result
             if node.func.kind == HIRKind.LOAD and node.func.name in self.classes:
                 if node.keywords:
@@ -1933,15 +2127,31 @@ class MIRLowerer:
                 if module_name == "math":
                     _MATH_ATTRS = {
                         "sqrt": "math_sqrt", "floor": "math_floor",
-                        "ceil": "math_ceil", "sin": "math_sin",
-                        "cos": "math_cos", "log": "math_log",
+                        "ceil": "math_ceil", "trunc": "math_trunc",
+                        "fabs": "math_fabs", "gcd": "math_gcd",
+                        "sin": "math_sin", "cos": "math_cos",
+                        "log": "math_log",
                     }
                     attr = node.func.attr
-                    if attr not in _MATH_ATTRS or len(node.args) != 1 or node.keywords:
-                        raise MIRLoweringError(f"native math.{attr} is not supported or requires one positional argument")
-                    value = self._lower_expr(builder, node.args[0])
+                    op = _MATH_ATTRS.get(attr)
+                    arity = 2 if op == "math_gcd" else 1
+                    if op is None or len(node.args) != arity or node.keywords:
+                        raise MIRLoweringError(
+                            f"native math.{attr} is not supported or requires {arity} positional argument"
+                            f"{'s' if arity != 1 else ''}"
+                        )
                     result = builder.temp()
-                    builder.emit(_MATH_ATTRS[attr], value, result=result)
+                    if op == "math_gcd":
+                        left = self._lower_expr(builder, node.args[0])
+                        right = self._lower_expr(builder, node.args[1])
+                        builder.emit(op, left, right, _active_handler(builder), result=result)
+                    else:
+                        value = self._lower_expr(builder, node.args[0])
+                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        if handler is None:
+                            builder.emit(op, value, result=result)
+                        else:
+                            builder.emit(op, value, handler, result=result)
                     return result
                 if module_name == "sys" and node.func.attr == "exit":
                     if len(node.args) > 1 or node.keywords:
@@ -2304,12 +2514,31 @@ class MIRLowerer:
             # Handle from-imported builtins (e.g. `desde math importar sqrt; sqrt(16)`)
             if node.func.kind == HIRKind.LOAD and node.func.name in builder.from_import_aliases:
                 qualified = builder.from_import_aliases[node.func.name]
-                if qualified == "math.sqrt":
-                    if len(node.args) != 1 or node.keywords:
-                        raise MIRLoweringError("native math.sqrt requires one positional argument")
-                    value = self._lower_expr(builder, node.args[0])
+                _MATH_FUNCS = {
+                    "math.sqrt": "math_sqrt", "math.floor": "math_floor",
+                    "math.ceil": "math_ceil", "math.trunc": "math_trunc",
+                    "math.fabs": "math_fabs", "math.gcd": "math_gcd",
+                }
+                if qualified in _MATH_FUNCS:
+                    op = _MATH_FUNCS[qualified]
+                    arity = 2 if op == "math_gcd" else 1
+                    if len(node.args) != arity or node.keywords:
+                        raise MIRLoweringError(
+                            f"native {qualified} requires {arity} positional argument"
+                            f"{'s' if arity != 1 else ''}"
+                        )
                     result = builder.temp()
-                    builder.emit("math_sqrt", value, result=result)
+                    if op == "math_gcd":
+                        left = self._lower_expr(builder, node.args[0])
+                        right = self._lower_expr(builder, node.args[1])
+                        builder.emit(op, left, right, _active_handler(builder), result=result)
+                    else:
+                        value = self._lower_expr(builder, node.args[0])
+                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        if handler is None:
+                            builder.emit(op, value, result=result)
+                        else:
+                            builder.emit(op, value, handler, result=result)
                     return result
             if node.func.kind == HIRKind.LOAD and node.func.name in self.classes:
                 if node.keywords:
@@ -2419,28 +2648,31 @@ class MIRLowerer:
                     return result
                 if module_name == "math":
                     attr = node.func.attr
-                    kwargs_rejected = node.keywords
-                    if kwargs_rejected:
+                    if node.keywords:
                         raise MIRLoweringError("native math does not support keyword arguments")
-                    if attr == "sqrt" and len(node.args) == 1:
-                        value = self._lower_expr(builder, node.args[0])
-                        result = builder.temp()
-                        builder.emit("math_sqrt", value, result=result)
-                        return result
-                    if attr in {"floor", "ceil", "trunc", "fabs"} and len(node.args) == 1:
-                        value = self._lower_expr(builder, node.args[0])
-                        result = builder.temp()
-                        builder.emit(f"math_{attr}", value, _active_handler(builder), result=result)
-                        return result
-                    if attr == "gcd" and len(node.args) == 2:
+                    op = {
+                        "sqrt": "math_sqrt", "floor": "math_floor", "ceil": "math_ceil",
+                        "trunc": "math_trunc", "fabs": "math_fabs", "gcd": "math_gcd",
+                    }.get(attr)
+                    arity = 2 if op == "math_gcd" else 1
+                    if op is None or len(node.args) != arity:
+                        raise MIRLoweringError(
+                            f"native math.{attr} is not supported or requires {arity} positional argument"
+                            f"{'s' if arity != 1 else ''}"
+                        )
+                    result = builder.temp()
+                    if op == "math_gcd":
                         left = self._lower_expr(builder, node.args[0])
                         right = self._lower_expr(builder, node.args[1])
-                        result = builder.temp()
-                        builder.emit("math_gcd", left, right, _active_handler(builder), result=result)
-                        return result
-                    raise MIRLoweringError(
-                        "native math supports sqrt/floor/ceil/trunc/fabs(x) and gcd(a, b) (MATH_TIER1_V1)"
-                    )
+                        builder.emit(op, left, right, _active_handler(builder), result=result)
+                    else:
+                        value = self._lower_expr(builder, node.args[0])
+                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        if handler is None:
+                            builder.emit(op, value, result=result)
+                        else:
+                            builder.emit(op, value, handler, result=result)
+                    return result
                 function = builder.temp()
                 builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
@@ -3071,29 +3303,6 @@ class MIREvaluator:
             if isinstance(source, dict) and source.get("__generator__"):
                 env[instruction.result] = source
             else:
-                items = [self._value(item, env) for item in raw_items]
-                env[instruction.result] = tuple(items) if kind == "tuple" else set(items) if kind == "set" else items
-        elif op == "get_item":
-            env[instruction.result] = self._value(args[0], env)[self._value(args[1], env)]
-        elif op == "collection_len":
-            env[instruction.result] = len(self._value(args[0], env))
-        elif op == "list_append":
-            lst = self._value(args[0], env)
-            val = self._value(args[1], env)
-            lst.append(val)
-        elif op == "set_add":
-            target = self._value(args[0], env)
-            target.add(self._value(args[1], env))
-        elif op == "dict_put":
-            target = self._value(args[0], env)
-            target[self._value(args[1], env)] = self._value(args[2], env)
-        elif op == "genexpr_new":
-            env[instruction.result] = iter(self._value(args[0], env))
-        elif op == "iter_new":
-            source = self._value(args[0], env)
-            if isinstance(source, dict) and source.get("__generator__"):
-                env[instruction.result] = source
-            else:
                 env[instruction.result] = iter(source)
         elif op == "iter_next":
             iterator = self._value(args[0], env)
@@ -3357,6 +3566,15 @@ class MIREvaluator:
         elif op == "math_sqrt":
             import math
             env[instruction.result] = math.sqrt(self._value(args[0], env))
+        elif op in {"math_floor", "math_ceil", "math_trunc", "math_fabs"}:
+            import math
+            value = self._value(args[0], env)
+            env[instruction.result] = getattr(math, op.removeprefix("math_"))(value)
+        elif op == "math_gcd":
+            import math
+            env[instruction.result] = math.gcd(
+                self._value(args[0], env), self._value(args[1], env)
+            )
         elif op == "call":
             function = self._value(args[0], env)
             values = [self._value(value, env) for value in args[1]]

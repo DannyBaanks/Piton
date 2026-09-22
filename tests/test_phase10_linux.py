@@ -325,7 +325,7 @@ class Phase10LinuxGates(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False,
             )
             self.assertEqual(run.returncode, 1)
@@ -1864,6 +1864,72 @@ class Phase10LinuxGates(unittest.TestCase):
         self.assertEqual(rc, 0, stderr)
         self.assertEqual(native, oracle)
 
+    def test_linux_for_str(self):
+        source = (
+            'total = ""\n'
+            'para c en "hola":\n'
+            '    total = total + c\n'
+            'imprimir(total)\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_for_str_else(self):
+        source = (
+            'para c en "ab":\n'
+            '    imprimir(c)\n'
+            'sino:\n'
+            '    imprimir("done")\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_for_str_break(self):
+        source = (
+            'para c en "abcde":\n'
+            '    si c == "c":\n'
+            '        romper\n'
+            '    imprimir(c)\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_for_range(self):
+        source = (
+            'suma = 0\n'
+            'para i en rango(5):\n'
+            '    suma = suma + i\n'
+            'imprimir(suma)\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_for_range_else(self):
+        source = (
+            'para i en rango(3):\n'
+            '    imprimir(i)\n'
+            'sino:\n'
+            '    imprimir("else")\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
+    def test_linux_for_range_break(self):
+        source = (
+            'para i en rango(10):\n'
+            '    si i == 3:\n'
+            '        romper\n'
+            '    imprimir(i)\n'
+        )
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
+
     def test_linux_while_break(self):
         source = (
             'i = 0\n'
@@ -1927,7 +1993,7 @@ class ComprehensionsV2Linux(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -2028,7 +2094,7 @@ class GeneratorsLinux(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(

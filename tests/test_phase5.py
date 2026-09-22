@@ -5877,17 +5877,6 @@ class WithProtocolNativeV1(unittest.TestCase):
                     Path(directory) / "program.exe",
                 )
 
-    def test_with_multiple_items_fails_closed(self):
-        with tempfile.TemporaryDirectory(prefix="piton-with-multi-") as directory:
-            with self.assertRaisesRegex(Exception, "single context manager"):
-                compile_native(
-                    'clase CM:\n'
-                    '    funcion __enter__(self):\n        devolver 1\n'
-                    '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
-                    'con CM() como a, CM() como b:\n    imprimir(a)\n',
-                    Path(directory) / "program.exe",
-                )
-
     def test_with_async_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-with-async-") as directory:
             with self.assertRaisesRegex(Exception, "__aenter__"):
@@ -6419,17 +6408,13 @@ class WithProtocolNativeV1(unittest.TestCase):
 
     def test_with_multiple_items_fails_closed(self):
         # WITH_MULTIPLE_V1 closed the old fail: nested lowers are real
-        with tempfile.TemporaryDirectory(prefix="piton-with-multi-") as directory:
-            executable = compile_native(
-                'clase CM:\n'
-                '    funcion __enter__(self):\n        devolver 1\n'
-                '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
-                'con CM() como a, CM() como b:\n    imprimir(a + b)\n',
-                Path(directory) / "program.exe",
-            )
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
-            self.assertEqual(completed.returncode, 0)
-            self.assertEqual(completed.stdout, b"2\r\n")
+        result = compare_native_to_cpython(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n        devolver 1\n'
+            '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+            'con CM() como a, CM() como b:\n    imprimir(a + b)\n'
+        )
+        self.assertTrue(result.equivalent, result)
 
     def test_with_multiple_suppress_and_propagate(self):
         result = compare_native_to_cpython(
