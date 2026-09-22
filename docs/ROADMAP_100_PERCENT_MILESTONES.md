@@ -369,8 +369,19 @@ vez** antes de que el programa termine), `WEAKREFS_V1`, `LIFETIME_CONTRACT_V1`
 PyPy, y es defendible porque el propio CPython documenta el refcounting como
 detalle de implementación y recomienda `with` para limpieza determinista.
 
-**La declaración es hoy; la implementación es aquí.** El gate retirado no se
-puede reintroducir sin cerrar MD.
+**La declaración es hoy; la implementación es aquí.** Windows registra
+objetos/listas/dicts/sets capaces de formar ciclos y, al cierre, protege un
+snapshot, corta aristas y reclama los shells. Hay evidencia directa C de una
+lista autorreferenciada y de un ciclo objeto→lista→objeto bajando el contador
+total a 0; el pipeline PITÓN cubre ciclos mutuos de objetos sin corrupción.
+Linux ahora tiene freelist heap + refcounting + GC idéntico; el C-harness
+`CycleGCLinuxV1` demuestra recolección de ciclos en ambos backends.
+`GC_CYCLES_V1` es `PASS` cross-platform. `FINALIZERS_V1` ya
+está `PASS`: `__del__(self)` se liga por MRO y corre exactamente una vez antes
+de salir en Win (refcount o colector de ciclos) y en Linux (registro de
+objetos al final de `main`); excepciones/resurrección dentro de `__del__` no
+están aún especificadas. El gate retirado no se puede reintroducir sin cerrar
+MD.
 
 **Dependencias:** M1, M3, M6 y M12.
 

@@ -198,10 +198,12 @@ entrada → misma salida, aunque el orden interno de ejecución cambie),
 
 - **M13 — el conflicto crítico.** `LIFETIME_OBSERVABILITY_V1` como está escrito
   *es* B1, y clausura MD de forma permanente. Se reemplaza por
-  `LIFETIME_CONTRACT_V1` (`__del__` corre exactamente una vez antes de terminar;
-  `con` es el mecanismo determinista) marcado `INTENTIONALLY_DIVERGENT`.
-  `GC_CYCLES_V1` y `WEAKREFS_V1` siguen igual.
-  **La declaración es hoy; la implementación sigue en M13.**
+  `LIFETIME_CONTRACT_V1` (`con` es el mecanismo determinista; el momento de
+  `__del__` no es contrato), marcado `INTENTIONALLY_DIVERGENT`. Los slices de
+  `con` y de finalizador único al finalizar están demostrados en Win+Linux;
+  `GC_CYCLES_V1` es `PASS` cross-platform (freelist heap + refcounting + GC en
+  Linux; C-harness Win CycleGCNativeV1 + Linux CycleGCLinuxV1). `WEAKREFS_V1`
+  sigue `NOT_DEMONSTRATED` y queda para M13.
 - **M12.** `GLOBALS_LOCALS_V1` adopta B3-bis (snapshot). `sys._getframe` queda
   `GUARDED`, dependiente de MG.
 - **M16.** `CONCURRENCY_DETERMINISM_V1` no puede prometer atomicidad estilo GIL

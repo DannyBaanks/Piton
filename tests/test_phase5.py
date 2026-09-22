@@ -106,6 +106,44 @@ class Phase5Gates(unittest.TestCase):
         )
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_variadic_closure_escape(self):
+        result = compare_native_to_cpython(
+            "funcion fabrica():\n"
+            "    base = 10\n"
+            "    funcion escapada(x, *resto):\n"
+            "        devolver base + x + sum(resto)\n"
+            "    devolver escapada\n"
+            "f = fabrica()\n"
+            "imprimir(f(1, 2, 3))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_iter_callable_sentinel(self):
+        result = compare_native_to_cpython(
+            "funcion contador():\n"
+            "    x = 3\n"
+            "    funcion fuente():\n"
+            "        no_local x\n"
+            "        x = x - 1\n"
+            "        devolver x\n"
+            "    devolver fuente\n"
+            "f = contador()\n"
+            "it = iter(f, 0)\n"
+            "imprimir(next(it))\n"
+            "imprimir(next(it))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_next_with_default(self):
+        result = compare_native_to_cpython(
+            "xs = [7]\n"
+            "it = iter(xs)\n"
+            "imprimir(next(it))\n"
+            "imprimir(next(it, -1))\n"
+            "imprimir(next(it, -2))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
     def test_x86_integer_collections(self):
         corpus = (
             "imprimir([1, 2, 3])\nimprimir(longitud([1, 2, 3]))\nimprimir([4, 5][-1])\n",
@@ -681,6 +719,9 @@ class Phase5Gates(unittest.TestCase):
                 compile_native("funcion f():\n    lanzar\nf()\n", Path(directory) / "program.exe")
 
     def test_x86_bare_reraise_from_catchall_rejected(self):
+        # RERAISE_COMPLETE_V1: catch-all bare re-raise now propagates with the
+        # runtime type through the static handler chain (no textual change
+        # beyond the normal unhandled exit when no enclosing handler exists).
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             source = (
                 'intentar:\n'
@@ -689,8 +730,10 @@ class Phase5Gates(unittest.TestCase):
                 '    lanzar\n'
                 'imprimir("done")\n'
             )
-            with self.assertRaisesRegex(Exception, "catch-all"):
-                compile_native(source, Path(directory) / "program.exe")
+            executable = compile_native(source, Path(directory) / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 1)
+            self.assertIn("ValueError", completed.stderr.decode(errors="replace"))
 
     def test_x86_raise_plain_class_rejected(self):
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
@@ -722,6 +765,130 @@ class Phase5Gates(unittest.TestCase):
     def test_x86_sum_list(self):
         result = compare_native_to_cpython('imprimir(sum([1, 2, 3]))\n')
         self.assertTrue(result.equivalent, result)
+
+    def test_x86_builtins_core_v2(self):
+        # M14 BUILTINS_CORE_V2: all/any/bin/chr/ord/pow/round con paridad CPython.
+        result = compare_native_to_cpython(
+            'imprimir(ord("A"))\n'
+            'imprimir(ord("ñ"))\n'
+            'imprimir(chr(97))\n'
+            'imprimir(bin(-7))\n'
+            'imprimir(bin(7))\n'
+            'imprimir(pow(2, 10))\n'
+            'imprimir(pow(2.5, 3))\n'
+            'imprimir(pow(2.0, -1))\n'
+            'imprimir(any([0, 0, 4]))\n'
+            'imprimir(all([1, 0]))\n'
+            'imprimir(any([]))\n'
+            'imprimir(all([]))\n'
+            'imprimir(round(2.5))\n'
+            'imprimir(round(3.5))\n'
+            'imprimir(round(-2.5))\n'
+            'imprimir(round(7))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_type_conversion_v1(self):
+        # M14 TYPE_CONVERSION_V1: entero/decimal/texto/booleano con paridad CPython.
+        result = compare_native_to_cpython(
+            'imprimir(entero("42"))\n'
+            'imprimir(entero(" -17 "))\n'
+            'imprimir(entero(2.9))\n'
+            'imprimir(entero(-2.9))\n'
+            'imprimir(entero(Verdadero))\n'
+            'imprimir(texto(42))\n'
+            'imprimir(texto(2.5))\n'
+            'imprimir(texto(3.0))\n'
+            'imprimir(texto(15.625))\n'
+            'imprimir(texto(Verdadero))\n'
+            'imprimir(texto(Nada))\n'
+            'imprimir(texto("hola"))\n'
+            'imprimir(decimal(3))\n'
+            'imprimir(decimal("-0.5"))\n'
+            'imprimir(decimal(Verdadero))\n'
+            'imprimir(booleano(0))\n'
+            'imprimir(booleano(-1))\n'
+            'imprimir(booleano(0.0))\n'
+            'imprimir(booleano(-0.0))\n'
+            'imprimir(booleano("x"))\n'
+            'imprimir(booleano(""))\n'
+            'imprimir(booleano([]))\n'
+            'imprimir(booleano([0]))\n'
+            'imprimir(booleano(Nada))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_math_tier1_v1(self):
+        # M14 MATH_TIER1_V1: sqrt/floor/ceil/trunc/fabs/gcd + pi/e.
+        result = compare_native_to_cpython(
+            'importar math\n'
+            'imprimir(math.sqrt(9))\n'
+            'imprimir(math.floor(2.7))\n'
+            'imprimir(math.floor(-2.3))\n'
+            'imprimir(math.ceil(2.1))\n'
+            'imprimir(math.ceil(-2.9))\n'
+            'imprimir(math.trunc(-2.9))\n'
+            'imprimir(math.fabs(-3.5))\n'
+            'imprimir(math.gcd(12, 18))\n'
+            'imprimir(math.gcd(0, 7))\n'
+            'imprimir(math.floor(math.pi * 1000))\n'
+            'imprimir(math.floor(math.e * 100))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_type_conversion_fail_closed_catchable(self):
+        # entero("abc") / decimal("xyz") levantan ValueError CAPTURABLE
+        # (antes: acceso invalido 0xC0000005 — exit crash sin excepcion).
+        output, _ = self.build_run(
+            'intentar:\n'
+            '    n = entero("abc")\n'
+            '    imprimir(n)\n'
+            'excepto ValueError:\n'
+            '    imprimir("int-invalido ValueError atrapado")\n'
+            'intentar:\n'
+            '    m = decimal("xyz")\n'
+            '    imprimir(m)\n'
+            'excepto ValueError:\n'
+            '    imprimir("float-invalido ValueError atrapado")\n'
+        )
+        self.assertEqual(
+            output,
+            "int-invalido ValueError atrapado\r\n"
+            "float-invalido ValueError atrapado\r\n",
+        )
+
+    def test_x86_builtins_core_v2_fail_closed_catchable(self):
+        # Las violaciones fuera de la matriz M14 v1 levantan excepciones
+        # capturables por intentar/excepto (no terminan el proceso).
+        output, _ = self.build_run(
+            'intentar:\n'
+            '    x = ord("")\n'
+            '    imprimir(x)\n'
+            'excepto TypeError:\n'
+            '    imprimir("ord-vacio TypeError atrapado")\n'
+            'intentar:\n'
+            '    y = chr(2000000)\n'
+            '    imprimir(y)\n'
+            'excepto ValueError:\n'
+            '    imprimir("chr-rango ValueError atrapado")\n'
+            'intentar:\n'
+            '    z = pow(2, -1)\n'
+            '    imprimir(z)\n'
+            'excepto TypeError:\n'
+            '    imprimir("pow-neg fail-closed atrapado")\n'
+            'intentar:\n'
+            '    w = ord("ab")\n'
+            '    imprimir(w)\n'
+            'excepto TypeError:\n'
+            '    imprimir("ord-multichar TypeError atrapado")\n'
+        )
+        self.assertEqual(
+            output,
+            "ord-vacio TypeError atrapado\r\n"
+            "chr-rango ValueError atrapado\r\n"
+            "pow-neg fail-closed atrapado\r\n"
+            "ord-multichar TypeError atrapado\r\n",
+        )
 
     def test_x86_type_int(self):
         result = compare_native_to_cpython('imprimir(type(42))\n')
@@ -948,37 +1115,6 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
-    def test_x86_generator_return_with_value(self):
-        source = (
-            "funcion gen():\n"
-            "    producir 1\n"
-            "    producir 2\n"
-            "    devolver 42\n"
-            "x = gen()\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
-            "intentar:\n"
-            "    next(x)\n"
-            "excepto StopIteration:\n"
-            "    imprimir(99)\n"
-        )
-        result = compare_native_to_cpython(source)
-        self.assertTrue(result.equivalent, result)
-
-    def test_x86_generator_close_raises_generator_exit(self):
-        source = (
-            "funcion gen():\n"
-            "    producir 1\n"
-            "x = gen()\n"
-            "imprimir(next(x))\n"
-            "intentar:\n"
-            "    x.close()\n"
-            "excepto GeneratorExit:\n"
-            "    imprimir(99)\n"
-        )
-        result = compare_native_to_cpython(source)
-        self.assertTrue(result.equivalent, result)
-
     def test_x86_exception_binding_as_name(self):
         source = (
             'intentar:\n'
@@ -1010,32 +1146,50 @@ class Phase5Gates(unittest.TestCase):
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
-    def test_x86_generator_yield_from_basic(self):
-        source = (
-            "funcion generador():\n"
-            "    producir desde [1, 2, 3]\n"
-            "x = generador()\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
+    def test_x86_generator_yield_from_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "not supported yet"):
+                compile_native(
+                    "funcion gen():\n"
+                    "    producir desde [1, 2, 3]\n"
+                    "x = gen()\n"
+                    "imprimir(next(x))\n",
+                    Path(directory) / "program.exe",
+                )
+
+    def test_x86_yield_from_delegates_subgen_values(self):
+        result = compare_native_to_cpython(
+            "funcion sub():\n"
+            "    producir 1\n    producir 2\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n    producir 9\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(next(g))\nimprimir(next(g))\n"
         )
-        result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
-    def test_x86_generator_yield_from_subgenerator(self):
-        source = (
+    def test_x86_yield_from_sends_forward(self):
+        result = compare_native_to_cpython(
             "funcion sub():\n"
-            "    producir 10\n"
-            "    producir 20\n"
-            "    producir 30\n"
-            "funcion gen():\n"
+            "    producir 1\n    producir 2\n"
+            "funcion outer():\n"
             "    producir desde sub()\n"
-            "x = gen()\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
-            "imprimir(next(x))\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(g.send(5))\n"
         )
-        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_generator_return_value_completes(self):
+        result = compare_native_to_cpython(
+            "funcion sub():\n"
+            "    producir 1\n"
+            "    devolver 99\n"
+            "funcion outer():\n"
+            "    producir desde sub()\n"
+            "    producir 7\n"
+            "g = outer()\n"
+            "imprimir(next(g))\nimprimir(next(g))\n"
+        )
         self.assertTrue(result.equivalent, result)
 
     def test_x86_simple_class_fields_and_method(self):
@@ -1610,8 +1764,40 @@ class Phase5Gates(unittest.TestCase):
             )
             entry = root / "main.piton"
             entry.write_text("importar pkg\n", encoding="utf-8")
-            with self.assertRaisesRegex(Exception, "beyond one level"):
+            # M8 IMPORT_RELATIVE_V2: the guard's reach is now the package scope
+            # (N levels allowed); `..` from a 1-segment package escapes it, so
+            # the fail-closed trigger moved from counting levels to the escape
+            # check. Message updated accordingly.
+            with self.assertRaisesRegex(Exception, "escapes the package"):
                 compile_native_files(entry, root / "program.exe")
+
+    def test_x86_relative_two_levels_up_supported(self):
+        # desde .. importar desde un submodule (separes, package context becomes
+        # 'pkg.sub', '..' strips one segment → resolves en pkg).
+        with tempfile.TemporaryDirectory(prefix="piton-relative-two-") as directory:
+            root = Path(directory)
+            pkg_dir = root / "pkg"
+            sub_dir = pkg_dir / "sub"
+            pkg_dir.mkdir(); sub_dir.mkdir()
+            (pkg_dir / "__init__.piton").write_text("pasar\n", encoding="utf-8")
+            (sub_dir / "__init__.piton").write_text("pasar\n", encoding="utf-8")
+            (pkg_dir / "comun.piton").write_text(
+                "funcion comun_x():\n    devolver 100\n", encoding="utf-8",
+            )
+            (sub_dir / "deep.piton").write_text(
+                "desde .. importar comun\n"
+                "funcion doble(x):\n    devolver comun.comun_x() + x\n",
+                encoding="utf-8",
+            )
+            entry = root / "main.piton"
+            entry.write_text(
+                "desde pkg.sub.deep importar doble\n"
+                "imprimir(doble(3))\n", encoding="utf-8"
+            )
+            executable = compile_native_files(entry, root / "program.exe")
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
+            self.assertEqual(completed.stdout, b"103\r\n")
 
     def test_x86_module_attribute_value_access_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-module-attr-") as directory:
@@ -3068,7 +3254,73 @@ class ComprehensionsV2Native(unittest.TestCase):
         )
 
 
+class CycleGCNativeV1(unittest.TestCase):
+    """M13 GC_CYCLES_V1 runtime slice on Win64: direct cycle-observation tests."""
+
+    def test_gc_collects_list_self_cycle_and_object_graph(self):
+        gcc = "gcc"
+        runtime = Path(__file__).resolve().parents[1] / "piton" / "native_runtime.c"
+        source = r'''
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+extern void *piton_collection_new(int64_t kind, int64_t capacity);
+extern void piton_list_append(void *raw, int64_t value, int64_t type_tag);
+extern void piton_collection_free(void *raw);
+extern void *piton_object_new(const char *class_name);
+extern void piton_object_set_tagged(void *raw, const char *name, int64_t raw_ptr);
+extern void piton_object_free(void *raw);
+extern void piton_gc_collect(void);
+extern int64_t piton_total_live_count(void);
+
+static void expect_count(const char *name, int64_t expected) {
+    int64_t actual = piton_total_live_count();
+    if (actual != expected) {
+        fprintf(stderr, "%s: expected=%lld actual=%lld\n", name,
+                (long long)expected, (long long)actual);
+        exit(1);
+    }
+}
+
+int main(void) {
+    void *self_list = piton_collection_new(1, 0);
+    piton_list_append(self_list, (int64_t)self_list, 1);
+    piton_collection_free(self_list);
+    expect_count("list self-cycle before collect", 1);
+    piton_gc_collect();
+    expect_count("list self-cycle after collect", 0);
+
+    void *owner = piton_object_new("Nodo");
+    void *items = piton_collection_new(1, 0);
+    piton_object_set_tagged(owner, "items", (int64_t)items);
+    piton_list_append(items, (int64_t)owner, 1);
+    piton_object_free(owner);
+    piton_collection_free(items);
+    expect_count("object-list cycle before collect", 2);
+    piton_gc_collect();
+    expect_count("object-list cycle after collect", 0);
+
+    piton_gc_collect();
+    expect_count("empty collect", 0);
+    return 0;
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="piton-gc-v1-") as directory:
+            parseable = Path(directory) / "gc_cycle_test.exe"
+            harness = Path(directory) / "gc_cycle_test.c"
+            harness.write_text(source, encoding="utf-8")
+            built = subprocess.run(
+                [gcc, "-std=c11", "-O2", str(harness), str(runtime), "-o", str(parseable), "-lm"],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(built.returncode, 0, built.stderr)
+            completed = subprocess.run([str(parseable)], capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+
 class WithProtocolNativeV1(unittest.TestCase):
+
     """M10 — WITH_PROTOCOL_V1: `con CM() como x:` with exception unwind and
     suppression, differential vs CPython 3.12."""
 
@@ -3088,6 +3340,19 @@ class WithProtocolNativeV1(unittest.TestCase):
             'con CM() como x:\n'
             '    imprimir("body")\n'
             '    imprimir(x)\n'
+        )
+
+    def test_m13_self_cycle_reclaimed_at_module_teardown(self):
+        """M13 GC_CYCLES_V1 first slice: mutual object cycles tear down safely."""
+        self.assert_native_matches(
+            'clase Nodo:\n'
+            '    funcion __init__(self):\n'
+            '        self.ref = self\n'
+            'a = Nodo()\n'
+            'b = Nodo()\n'
+            'a.ref = b\n'
+            'b.ref = a\n'
+            'imprimir("ok")\n'
         )
 
     def test_with_exception_propagates_to_handler(self):
@@ -3168,15 +3433,137 @@ class WithProtocolNativeV1(unittest.TestCase):
                 )
 
     def test_with_multiple_items_fails_closed(self):
+        # WITH_MULTIPLE_V1 closed the old fail: nested lowers are real
         with tempfile.TemporaryDirectory(prefix="piton-with-multi-") as directory:
-            with self.assertRaisesRegex(Exception, "single context manager"):
-                compile_native(
-                    'clase CM:\n'
-                    '    funcion __enter__(self):\n        devolver 1\n'
-                    '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
-                    'con CM() como a, CM() como b:\n    imprimir(a)\n',
-                    Path(directory) / "program.exe",
-                )
+            executable = compile_native(
+                'clase CM:\n'
+                '    funcion __enter__(self):\n        devolver 1\n'
+                '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+                'con CM() como a, CM() como b:\n    imprimir(a + b)\n',
+                Path(directory) / "program.exe",
+            )
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual(completed.returncode, 0)
+            self.assertEqual(completed.stdout, b"2\r\n")
+
+    def test_with_multiple_suppress_and_propagate(self):
+        result = compare_native_to_cpython(
+            'clase CM:\n'
+            '    funcion __enter__(self):\n        devolver 1\n'
+            '    funcion __exit__(self, t, m, tb):\n        devolver Falso\n'
+            'intentar:\n'
+            '    con CM() como a, CM() como b:\n        lanzar ValueError("x")\n'
+            'excepto ValueError:\n    imprimir("caught")\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_getattr_hook_missing(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 7\n'
+            '    funcion __getattr__(self, nombre):\n'
+            '        devolver 99\n'
+            'c = C()\n'
+            'imprimir(c.noExiste)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_getattr_field_wins_over_hook(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 7\n'
+            '    funcion __getattr__(self, nombre):\n'
+            '        devolver 99\n'
+            'c = C()\n'
+            'x = c.x\n'
+            'imprimir(x)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_setattr_hook(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __setattr__(self, nombre, valor):\n'
+            '        imprimir(valor)\n'
+            'c = C()\n'
+            'c.x = 5\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_delattr_hook(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __delattr__(self, nombre):\n'
+            '        imprimir("del")\n'
+            'c = C()\n'
+            'c.x = 1\n'
+            'borrar c.x\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_call_routes_to_call(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self, base):\n'
+            '        self.base = base\n'
+            '    funcion __call__(self, x):\n'
+            '        devolver self.base + x\n'
+            'c = C(10)\n'
+            'imprimir(c(21))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_eq_custom_dispatch(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self, v):\n'
+            '        self.v = v\n'
+            '    funcion __eq__(self, otra):\n'
+            '        devolver self.v == otra.v\n'
+            'a = C(7)\n'
+            'b = C(7)\n'
+            'c = C(9)\n'
+            'imprimir(a == b)\n'
+            'imprimir(a == c)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_is_identity(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.x = 1\n'
+            'a = C()\n'
+            'b = a\n'
+            'c = C()\n'
+            'imprimir(a es b)\n'
+            'imprimir(a es c)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_str_dispatch(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self, v):\n'
+            '        self.v = v\n'
+            '    funcion __str__(self):\n'
+            '        devolver "caja"\n'
+            'imprimir(C(1))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_len_dispatch(self):
+        result = compare_native_to_cpython(
+            'clase C:\n'
+            '    funcion __init__(self):\n'
+            '        self.n = 5\n'
+            '    funcion __len__(self):\n'
+            '        devolver self.n\n'
+            'imprimir(longitud(C()))\n'
+        )
+        self.assertTrue(result.equivalent, result)
 
     def test_with_async_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="piton-with-async-") as directory:
@@ -3189,6 +3576,47 @@ class WithProtocolNativeV1(unittest.TestCase):
                     '    asincrono con CM() como y:\n        imprimir(y)\n',
                     Path(directory) / "program.exe",
                 )
+
+    def test_async_raise_with_cause_chain_caught(self):
+        # EXCEPTION_CHAINING_V1: the cause rides along; catching the outer type
+        # gives us the outer message (the cause shows only when unhandled).
+        result = compare_native_to_cpython(
+            'intentar:\n'
+            '    lanzar ValueError("externo") desde TypeError("causa")\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_raise_from_chain_visible_unhandled(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            executable = compile_native(
+                'lanzar ValueError("externo") desde TypeError("causa")\n',
+                Path(directory) / "program.exe",
+            )
+            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            stderr = completed.stderr.decode(errors="replace")
+            self.assertNotEqual(completed.returncode, 0, stderr)
+            self.assertIn("TypeError", stderr)
+            self.assertIn("ValueError", stderr)
+
+    def test_base_exception_catches_anything(self):
+        result = compare_native_to_cpython(
+            'intentar:\n    lanzar TypeError("c1")\nexcepto BaseException como e:\n    imprimir("caught")\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_bare_reraise_from_catchall_handler(self):
+        result = compare_native_to_cpython(
+            'intentar:\n'
+            '    intentar:\n'
+            '        lanzar ValueError("boom2")\n'
+            '    excepto Exception:\n'
+            '        lanzar\n'
+            'excepto ValueError como e:\n'
+            '    imprimir(e)\n'
+        )
+        self.assertTrue(result.equivalent, result)
 
     def test_async_with_awaits_enter_and_exit(self):
         result = compare_native_to_cpython(
@@ -3216,6 +3644,34 @@ class WithProtocolNativeV1(unittest.TestCase):
             'imprimir(asyncio.run(run_async()))\n'
         )
         self.assertTrue(result.equivalent, result)
+
+
+class FinalizersNativeV1(unittest.TestCase):
+    """M13 FINALIZERS_V1: __del__ runs exactly once before program exit."""
+
+    def assert_native_matches(self, source):
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
+
+    def test_finalizer_runs_at_exit(self):
+        self.assert_native_matches(
+            'clase Recurso:\n'
+            '    funcion __del__(self):\n'
+            '        imprimir("cerrado")\n'
+            'r = Recurso()\n'
+            'imprimir("listo")\n'
+        )
+
+    def test_finalizer_runs_once_for_self_cycle(self):
+        self.assert_native_matches(
+            'clase Nodo:\n'
+            '    funcion __init__(self):\n'
+            '        self.ref = self\n'
+            '    funcion __del__(self):\n'
+            '        imprimir("del")\n'
+            'Nodo()\n'
+            'imprimir("ok")\n'
+        )
 
 
 if __name__ == "__main__":

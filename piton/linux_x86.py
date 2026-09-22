@@ -23,6 +23,174 @@ static usize piton_arena_used=0;
 static void piton_memzero(void*p,usize n){unsigned char*b=p;for(usize i=0;i<n;++i)b[i]=0;}
 static void piton_memcpy(void*d,const void*s,usize n){unsigned char*dd=d;const unsigned char*ss=s;for(usize i=0;i<n;++i)dd[i]=ss[i];}
 static void*piton_alloc(usize n){usize p=(piton_arena_used+15)&~15UL;if(n>sizeof(piton_arena)-p){piton_write(2,"MemoryError\n",12);piton_exit(1);}void*r=piton_arena+p;piton_arena_used=p+n;piton_memzero(r,n);return r;}
+/* ── Freelist heap for refcounted objects (GC_CYCLES_V1) ────────────── */
+static unsigned char piton_heap[4*1024*1024];
+static long piton_heap_initialized=0;
+typedef struct piton_heap_block{usize size;int free;struct piton_heap_block*next;}piton_heap_block;
+static piton_heap_block*piton_heap_freelist=0;
+static void piton_heap_init(void){
+    if(piton_heap_initialized)return;piton_heap_initialized=1;
+    piton_heap_freelist=(piton_heap_block*)piton_heap;
+    piton_heap_freelist->size=sizeof(piton_heap)-sizeof(piton_heap_block);
+    piton_heap_freelist->free=1;piton_heap_freelist->next=0;
+}
+static void*piton_heap_alloc(usize n){
+    if(!piton_heap_initialized)piton_heap_init();
+    usize req=n+sizeof(piton_heap_block);
+    if(req<16)req=16;
+    piton_heap_block**prev=&piton_heap_freelist;piton_heap_block*cur=piton_heap_freelist;
+    while(cur){
+        if(cur->free&&cur->size>=req){
+            if(cur->size>=req+sizeof(piton_heap_block)+16){
+                piton_heap_block*rest=(piton_heap_block*)((char*)cur+req);
+                rest->size=cur->size-req;rest->free=1;rest->next=cur->next;*prev=rest;
+            }else{*prev=cur->next;}
+            cur->free=0;cur->next=0;
+            piton_memzero((char*)cur+sizeof(piton_heap_block),n);
+            return(char*)cur+sizeof(piton_heap_block);
+        }
+        prev=&cur->next;cur=cur->next;
+    }
+    piton_write(2,"MemoryError: GC heap exhausted\n",31);piton_exit(1);return 0;
+}
+static void piton_heap_free(void*ptr){
+    if(!ptr)return;
+    piton_heap_block*b=(piton_heap_block*)((char*)ptr-sizeof(piton_heap_block));
+    b->free=1;b->next=piton_heap_freelist;piton_heap_freelist=b;
+}
+/* GC node registry */
+static void**gc_nodes=0;static long gc_count=0;static long gc_capacity=0;
+static long live_collections=0;static long live_dicts=0;static long live_sets=0;static long live_objects=0;
+static void piton_gc_register(void*raw){
+    if(!raw)return;
+    for(long i=0;i<gc_count;++i)if(gc_nodes[i]==raw)return;
+    if(gc_count>=gc_capacity){long nc=gc_capacity?gc_capacity*2:16;
+        void**g=(void**)piton_heap_alloc((usize)nc*sizeof(void*));
+        if(gc_count)piton_memcpy(g,gc_nodes,(usize)gc_count*sizeof(void*));
+        gc_nodes=g;gc_capacity=nc;}
+    gc_nodes[gc_count++]=raw;
+}
+static void piton_gc_unregister(void*raw){
+    for(long i=0;i<gc_count;++i){if(gc_nodes[i]!=raw)continue;
+        gc_nodes[i]=gc_nodes[--gc_count];return;}
+}
+/* ── Container struct definitions (needed by GC functions below) ─────── */
+static void piton_raise_set(const char*,const char*);
+typedef struct{long refcount;long kind;long length;long capacity;PitonSlot*items;}PitonSeq;
+typedef struct{long magic;PitonSeq*seq;long index;}PitonIterator;
+typedef struct{PitonSeq*source;long index;}PitonGenExpr;
+typedef struct{PitonSlot key;PitonSlot value;}PitonDictEntry;
+typedef struct{long refcount;long kind;long length;long capacity;PitonDictEntry*items;}PitonDict;
+typedef struct{long refcount;long kind;long length;long capacity;PitonSlot*items;}PitonSet;
+typedef struct{const char*name;PitonSlot value;}PitonAttr;
+typedef struct PitonObject{long refcount;long kind;const char*class_name;const char*parent_name;long length;PitonAttr attrs[32];long finalizer;long finalizer_called;struct PitonObject*next_all;}PitonObject;
+/* Refcount helpers */
+static long piton_slot_rc(PitonSlot v){
+    if(v.kind>=PK_LIST&&v.kind<=PK_OBJECT){long*rc=(long*)v.bits;return*rc;}
+    return-1;
+}
+static void piton_slot_incref(PitonSlot v){if(v.kind>=PK_LIST&&v.kind<=PK_OBJECT){long*rc=(long*)v.bits;++(*rc);}}
+static void piton_slot_decref(PitonSlot v);
+/* Deep free: decrements refcount; if zero, detach children and free struct */
+static void piton_slot_decref(PitonSlot v){
+    if(v.kind<PK_LIST||v.kind>PK_OBJECT)return;
+    long*rc=(long*)v.bits;if(!rc)return;
+    if(--(*rc)>0)return;
+    switch(v.kind){
+    case PK_LIST:case PK_TUPLE:{PitonSeq*s=(PitonSeq*)v.bits;
+        for(long i=0;i<s->length;++i)piton_slot_decref(s->items[i]);
+        piton_gc_unregister(s);piton_heap_free(s);
+        if(s->kind==PK_LIST)--live_collections;else--live_collections;break;}
+    case PK_DICT:{PitonDict*d=(PitonDict*)v.bits;
+        for(long i=0;i<d->length;++i){piton_slot_decref(d->items[i].key);piton_slot_decref(d->items[i].value);}
+        piton_gc_unregister(d);piton_heap_free(d);--live_dicts;break;}
+    case PK_SET:{PitonSet*s=(PitonSet*)v.bits;
+        for(long i=0;i<s->length;++i)piton_slot_decref(s->items[i]);
+        piton_gc_unregister(s);piton_heap_free(s);--live_sets;break;}
+    case PK_OBJECT:{PitonObject*o=(PitonObject*)v.bits;
+        if(o->finalizer&&!o->finalizer_called){o->finalizer_called=1;((long(*)(long))o->finalizer)((long)o);}
+        for(long i=0;i<o->length;++i)piton_slot_decref(o->attrs[i].value);
+        piton_gc_unregister(o);piton_heap_free(o);--live_objects;break;}
+    default:break;
+    }
+}
+/* GC cycle collector: snapshot / protect / detach / free */
+static void piton_gc_detach_node(void*raw){
+    if(!raw)return;long kind=((long*)raw)[1];
+    PitonSlot none={0,PK_NONE};
+    switch(kind){
+    case PK_LIST:case PK_TUPLE:{PitonSeq*s=(PitonSeq*)raw;
+        for(long i=0;i<s->length;++i){PitonSlot old=s->items[i];s->items[i]=none;piton_slot_decref(old);}break;}
+    case PK_DICT:{PitonDict*d=(PitonDict*)raw;
+        for(long i=0;i<d->length;++i){PitonSlot ok=d->items[i].key,ov=d->items[i].value;
+            d->items[i].key=none;d->items[i].value=none;piton_slot_decref(ok);piton_slot_decref(ov);}break;}
+    case PK_SET:{PitonSet*s=(PitonSet*)raw;
+        for(long i=0;i<s->length;++i){PitonSlot old=s->items[i];s->items[i]=none;piton_slot_decref(old);}break;}
+    case PK_OBJECT:{PitonObject*o=(PitonObject*)raw;
+        for(long i=0;i<o->length;++i){PitonSlot old=o->attrs[i].value;o->attrs[i].value=none;piton_slot_decref(old);}break;}
+    default:break;
+    }
+}
+static void piton_gc_free_node(void*raw){
+    if(!raw)return;long kind=((long*)raw)[1];
+    piton_gc_unregister(raw);
+    switch(kind){
+    case PK_LIST:case PK_TUPLE:{PitonSeq*s=(PitonSeq*)raw;piton_heap_free(s);--live_collections;break;}
+    case PK_DICT:{PitonDict*d=(PitonDict*)raw;piton_heap_free(d);--live_dicts;break;}
+    case PK_SET:{PitonSet*s=(PitonSet*)raw;piton_heap_free(s);--live_sets;break;}
+    case PK_OBJECT:{PitonObject*o=(PitonObject*)raw;piton_heap_free(o);--live_objects;break;}
+    default:break;
+    }
+}
+static void piton_gc_collect(void){
+    long n=gc_count;if(!n)return;
+    void**snapshot=(void**)piton_heap_alloc((usize)n*sizeof(void*));
+    piton_memcpy(snapshot,gc_nodes,(usize)n*sizeof(void*));
+    for(long i=0;i<n;++i){long*k=(long*)snapshot[i];++(*k);}
+    for(long i=0;i<n;++i)piton_gc_detach_node(snapshot[i]);
+    for(long i=0;i<n;++i)piton_gc_free_node(snapshot[i]);
+    piton_heap_free(snapshot);
+}
+static long piton_total_live_count(void){return live_collections+live_dicts+live_sets+live_objects;}
+/* C-harness API wrappers for GC tests */
+static void*piton_collection_new(long kind,long cap){
+    piton_heap_init();
+    PitonSeq*s=(PitonSeq*)piton_heap_alloc(sizeof(PitonSeq));
+    s->refcount=1;s->kind=kind;s->length=0;s->capacity=cap;
+    s->items=cap>0?(PitonSlot*)piton_heap_alloc((usize)cap*sizeof(PitonSlot)):0;
+    piton_gc_register(s);++live_collections;return s;
+}
+static void piton_list_append(void*raw,long val,long tag){
+    PitonSeq*s=(PitonSeq*)raw;if(!s)return;
+    if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;
+        PitonSlot*na=(PitonSlot*)piton_heap_alloc((usize)nc*sizeof(PitonSlot));
+        if(s->items){for(long i=0;i<s->length;++i)na[i]=s->items[i];}
+        s->items=na;s->capacity=nc;}
+    PitonSlot v={val,(int)tag};piton_slot_incref(v);s->items[s->length++]=v;
+}
+static void piton_collection_free(void*raw){
+    if(!raw)return;PitonSlot v={0,PK_NONE};
+    long kind=((long*)raw)[1];v.bits=(long)raw;v.kind=kind;piton_slot_decref(v);
+}
+static void*piton_gc_object_new(const char*name){
+    piton_heap_init();
+    PitonObject*o=(PitonObject*)piton_heap_alloc(sizeof(PitonObject));
+    o->refcount=1;o->kind=PK_OBJECT;o->class_name=name;o->parent_name=0;o->length=0;
+    o->finalizer=0;o->finalizer_called=0;o->next_all=0;
+    piton_gc_register(o);++live_objects;return o;
+}
+static void piton_object_set_tagged(void*raw,const char*name,long val,long tag){
+    PitonObject*o=(PitonObject*)raw;if(!raw)return;
+    for(long i=0;i<o->length;++i){
+        if(piton_strcmp(o->attrs[i].name,name)==0){
+            piton_slot_decref(o->attrs[i].value);
+            PitonSlot v={val,(int)tag};piton_slot_incref(v);o->attrs[i].value=v;return;}
+    }
+    if(o->length>=32){piton_write(2,"AttributeError\n",15);piton_exit(1);}
+    o->attrs[o->length].name=name;
+    PitonSlot v={val,(int)tag};piton_slot_incref(v);o->attrs[o->length].value=v;o->length++;
+}
+static void piton_object_free(void*raw){piton_collection_free(raw);}
 static PitonSlot piton_slot(long bits,int kind){PitonSlot v={bits,kind};return v;}
 static long piton_double_bits(double d){union{double d;unsigned long u;}v={d};return(long)v.u;}
 static double piton_bits_double(long bits){union{double d;unsigned long u;}v;v.u=(unsigned long)bits;return v.d;}
@@ -38,17 +206,8 @@ static long piton_float_cos(long a){double x=piton_bits_double(a),r=__builtin_co
 static long piton_float_log(long a){double x=piton_bits_double(a),r=__builtin_log(x);return piton_double_bits(r);}
 static void piton_write_uint(unsigned long v){char b[32];usize i=sizeof(b);do{b[--i]=(char)('0'+v%10);v/=10;}while(v);piton_write(1,b+i,sizeof(b)-i);}
 static void piton_print_float_bits(long bits){double d=piton_bits_double(bits);if(d<0){piton_write(1,"-",1);d=-d;}unsigned long whole=(unsigned long)d;double frac=d-(double)whole;unsigned long scaled=(unsigned long)(frac*1000000000000.0+0.5);if(scaled>=1000000000000UL){++whole;scaled=0;}piton_write_uint(whole);piton_write(1,".",1);if(!scaled){piton_write(1,"0\n",2);return;}char digits[12];for(int i=11;i>=0;--i){digits[i]=(char)('0'+scaled%10);scaled/=10;}int end=12;while(end>1&&digits[end-1]=='0')--end;piton_write(1,digits,(usize)end);piton_write(1,"\n",1);}
-typedef struct{int kind;long length;long capacity;PitonSlot*items;}PitonSeq;
-typedef struct{long magic;PitonSeq*seq;long index;}PitonIterator;
-typedef struct{PitonSeq*source;long index;}PitonGenExpr;
-static void piton_raise_set(const char*,const char*);
-typedef struct{PitonSlot key;PitonSlot value;}PitonDictEntry;
-typedef struct{long length;long capacity;PitonDictEntry*items;}PitonDict;
-typedef struct{long length;long capacity;PitonSlot*items;}PitonSet;
-typedef struct{const char*name;PitonSlot value;}PitonAttr;
-typedef struct{const char*class_name;const char*parent_name;long length;PitonAttr attrs[32];}PitonObject;
 static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;return a.bits==b.bits;}
-static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->kind=kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
+static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
 static void piton_seq_put(PitonSeq*s,long i,PitonSlot v){if(i>=0&&i<s->length)s->items[i]=v;}
 static void piton_seq_append(PitonSeq*s,PitonSlot v){if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}s->items[s->length++]=v;}
 static PitonSlot piton_seq_get(PitonSeq*s,long i){if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError\n",11);piton_exit(1);}return s->items[i];}
@@ -57,13 +216,13 @@ static long piton_iterator_next(long raw){PitonIterator*i=(PitonIterator*)raw;if
 static long piton_genexpr_new(PitonSeq*s){if(!s){piton_write(2,"TypeError: invalid generator expression\n",41);piton_exit(1);}PitonGenExpr*g=piton_alloc(sizeof(*g));g->source=s;g->index=0;return(long)g;}
 static long piton_genexpr_iter(PitonGenExpr*g){return(long)g;}
 static long piton_genexpr_next(PitonGenExpr*g){if(!g||!g->source){piton_write(2,"TypeError: invalid generator expression\n",41);piton_exit(1);}if(g->index>=g->source->length){piton_raise_set("StopIteration","");return 0;}return g->source->items[g->index++].bits;}
-static PitonDict*piton_dict_new(long n){PitonDict*d=piton_alloc(sizeof(*d));d->length=n;d->capacity=n;d->items=n>0?piton_alloc((usize)n*sizeof(PitonDictEntry)):0;return d;}
+static PitonDict*piton_dict_new(long n){PitonDict*d=piton_alloc(sizeof(*d));d->refcount=1;d->kind=PK_DICT;d->length=n;d->capacity=n;d->items=n>0?piton_alloc((usize)n*sizeof(PitonDictEntry)):0;return d;}
 static void piton_dict_put(PitonDict*d,long i,PitonSlot k,PitonSlot v){if(i>=0&&i<d->length){d->items[i].key=k;d->items[i].value=v;}}
 static void piton_dict_append(PitonDict*d,PitonSlot k,PitonSlot v){if(d->length>=d->capacity){long nc=d->capacity?d->capacity*2:4;PitonDictEntry*ni=piton_alloc((usize)nc*sizeof(PitonDictEntry));if(d->items)piton_memcpy(ni,d->items,(usize)d->capacity*sizeof(PitonDictEntry));d->items=ni;d->capacity=nc;}d->items[d->length].key=k;d->items[d->length].value=v;++d->length;}
 static PitonSlot piton_dict_get(PitonDict*d,PitonSlot key){for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,key))return d->items[i].value;piton_write(2,"KeyError\n",9);piton_exit(1);}
 static int piton_unpack_seq4(PitonSlot obj,long capacity,long*out4){if(obj.kind!=PK_LIST&&obj.kind!=PK_TUPLE){piton_raise_set("TypeError","argument after * must be a list or tuple");return -1;}PitonSeq*s=(PitonSeq*)obj.bits;if(s->length>capacity){piton_raise_set("TypeError","too many positional arguments for call");return -1;}for(long i=0;i<s->length;++i)out4[i]=s->items[i].bits;return s->length;}
 static int piton_dict_unpack4(PitonSlot obj,const char**names,long count,long*out4,long*mask){if(obj.kind!=PK_DICT){piton_raise_set("TypeError","argument after ** must be a dict");return -1;}PitonDict*d=(PitonDict*)obj.bits;for(long i=0;i<d->length;++i){PitonSlot k=d->items[i].key;if(k.kind!=PK_STR){piton_raise_set("TypeError","keywords must be strings");return -1;}const char*key=(const char*)k.bits;long matched=-1;for(long j=0;j<count;++j)if(piton_strcmp(key,names[j])==0){matched=j;break;}if(matched<0){piton_raise_set("TypeError","unexpected keyword argument in ** expansion");return -1;}if(*mask&(1LL<<matched)){piton_raise_set("TypeError","multiple values for argument");return -1;}*mask|=1LL<<matched;out4[matched]=d->items[i].value.bits;}return 0;}
-static PitonSet*piton_set_new(long cap){PitonSet*s=piton_alloc(sizeof(*s));s->capacity=cap;s->items=cap>0?piton_alloc((usize)cap*sizeof(PitonSlot)):0;return s;}
+static PitonSet*piton_set_new(long cap){PitonSet*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=PK_SET;s->capacity=cap;s->items=cap>0?piton_alloc((usize)cap*sizeof(PitonSlot)):0;return s;}
 static void piton_set_add(PitonSet*s,PitonSlot v){for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return;if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*ni=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(ni,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=ni;s->capacity=nc;}s->items[s->length++]=v;}
 typedef struct{long magic;long kind;void*raw;long index;}PitonAnyIterator;
 static long piton_iterator_new_any(void*raw,long kind){if(!raw||(kind!=PK_LIST&&kind!=PK_TUPLE&&kind!=PK_DICT&&kind!=PK_SET)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonAnyIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->raw=raw;i->index=0;i->kind=kind;return(long)i;}
@@ -115,7 +274,10 @@ static void piton_notify_done(PitonTask*t){if(t->gather_owner){PitonGather*g=t->
 static long piton_step_task(PitonTask*task){while(1){if(task->chain_depth==0){task->state=3;task->result=0;return 1;}PitonGenerator*coro=task->chain[task->chain_depth-1];coro->started=1;long y=coro->func(coro);if(coro->finished){long result=y;task->chain_depth--;if(task->chain_depth==0){task->state=3;task->result=result;return 1;}task->chain[task->chain_depth-1]->sent_value=result;continue;}if(y==PITON_SLEEP0_MAGIC){piton_ready_push(task);return 0;}if(y<0x100000||y>=0x800000000000){piton_write(2,"TypeError: object is not awaitable\n",35);piton_exit(2);}if(((long*)y)[0]==PITON_GEN_MAGIC){if(task->chain_depth>=64){piton_write(2,"RuntimeError: await chain too deep\n",34);piton_exit(2);}task->chain[task->chain_depth++]=(PitonGenerator*)y;continue;}if(((long*)y)[0]==PITON_TASK_MAGIC){PitonTask*other=(PitonTask*)y;if(other->cancel_requested||other->state==4){task->cancel_requested=1;piton_ready_push(task);return 0;}PitonWaiter*w=(PitonWaiter*)piton_alloc(sizeof(PitonWaiter));w->task=task;w->next=other->waiters;other->waiters=w;if(other->state==0)piton_ready_push(other);return 0;}if(((long*)y)[0]==PITON_GATHER_MAGIC){PitonGather*g=(PitonGather*)y;if(g->aborted){task->cancel_requested=1;piton_ready_push(task);return 0;}if(g->remaining==0){coro->sent_value=piton_build_result_list(g->results,g->n);continue;}PitonWaiter*w=(PitonWaiter*)piton_alloc(sizeof(PitonWaiter));w->task=task;w->next=g->waiters;g->waiters=w;for(long i=0;i<g->n;++i)if(g->tasks[i]&&g->tasks[i]->state==0)piton_ready_push(g->tasks[i]);return 0;}piton_write(2,"TypeError: object is not awaitable\n",35);piton_exit(2);}}
 static long piton_event_run(long raw){PitonGenerator*root=(PitonGenerator*)raw;if(!root||root->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a coroutine\n",35);piton_exit(2);}piton_ready_head=0;piton_ready_tail=0;PitonTask*root_task=(PitonTask*)piton_task_new(raw);piton_ready_push(root_task);while(1){PitonTask*task=piton_ready_pop();if(!task)break;if(task->cancel_requested&&task->state!=3){task->state=4;if(task->gather_owner){PitonGather*g=task->gather_owner;if(!g->aborted){g->aborted=1;PitonWaiter*gw=g->waiters;g->waiters=0;while(gw){PitonWaiter*gnext=gw->next;((PitonTask*)gw->task)->cancel_requested=1;piton_ready_push((PitonTask*)gw->task);gw=gnext;}}}PitonWaiter*w=task->waiters;task->waiters=0;while(w){PitonWaiter*nx=w->next;((PitonTask*)w->task)->cancel_requested=1;piton_ready_push((PitonTask*)w->task);w=nx;}continue;}if(piton_step_task(task))piton_notify_done(task);}if(root_task->cancel_requested||root_task->state==4){piton_raise_set("CancelledError","");piton_report_unhandled();piton_exit(2);}return root_task->result;}
 static long piton_gen_collect(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}PitonSeq*s=piton_seq_new(PK_LIST,0);while(!g->finished){long v=g->func(g);if(g->finished)break;piton_seq_append(s,(PitonSlot){v,PK_INT});}return(long)s;}
-static PitonObject*piton_object_new(const char*name,const char*parent){PitonObject*o=piton_alloc(sizeof(*o));o->class_name=name;o->parent_name=parent;return o;}
+static PitonObject*piton_all_objects=0;
+static PitonObject*piton_object_new_finalized(const char*name,const char*parent,long finalizer){PitonObject*o=piton_alloc(sizeof(*o));o->refcount=1;o->kind=PK_OBJECT;o->class_name=name;o->parent_name=parent;o->finalizer=finalizer;o->finalizer_called=0;o->next_all=piton_all_objects;piton_all_objects=o;return o;}
+static PitonObject*piton_object_new(const char*name,const char*parent){return piton_object_new_finalized(name,parent,0);}
+static void piton_finalize_objects(void){PitonObject*o=piton_all_objects;while(o){if(o->finalizer&&!o->finalizer_called){o->finalizer_called=1;((long(*)(long))o->finalizer)((long)o);}o=o->next_all;}}
 static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].value=v;return;}if(o->length>=32){piton_write(2,"AttributeError\n",15);piton_exit(1);}o->attrs[o->length].name=name;o->attrs[o->length++].value=v;}
 static PitonSlot piton_object_get(PitonObject*o,const char*name){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;piton_write(2,"AttributeError\n",15);piton_exit(1);}
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
@@ -314,6 +476,9 @@ class LinuxCEmitter:
             lines.append(f"    piton_bigint_free((void*){_name(slot)});")
             lines.append(f"    {_name(slot)}=0;")
         lines.append(f"{_name(function.name + '___exit')}:")
+        if is_main:
+            lines.append("    piton_gc_collect();")
+            lines.append("    piton_finalize_objects();")
         lines.append("    return 0;")
         lines.append("}")
         return lines
@@ -788,7 +953,21 @@ class LinuxCEmitter:
             cls_name = args[0]
             parent = args[1] if len(args) > 1 else None
             parent_str = f'"{parent}"' if parent else "0"
-            out.append(f'    {_name(result)}=(long)piton_object_new("{cls_name}",{parent_str});')
+            finalizer_class = None
+            try:
+                finalizer_class = self._resolve_method(cls_name, "__del__")
+            except NativeBuildError:
+                finalizer_class = None
+            if finalizer_class:
+                finalizer_name = f"{finalizer_class}____del__"
+                params = self.function_params.get(finalizer_name) or []
+                if len(params) != 1:
+                    raise NativeBuildError("Linux __del__ must take exactly self (FINALIZERS_V1)")
+                if self.function_frame_abi.get(finalizer_name, False):
+                    raise NativeBuildError("Linux __del__ cannot use the frame ABI yet (FINALIZERS_V1)")
+                out.append(f'    {_name(result)}=(long)piton_object_new_finalized("{cls_name}",{parent_str},(long)&{_name(finalizer_name)});')
+            else:
+                out.append(f'    {_name(result)}=(long)piton_object_new("{cls_name}",{parent_str});')
             types[result] = f"object:{cls_name}"
         elif op == "cell_new":
             value_arg = args[0]

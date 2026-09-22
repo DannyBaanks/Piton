@@ -180,6 +180,8 @@ class Win64NasmEmitter:
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
             "extern piton_frame_call",
             "extern piton_unpack_seq4", "extern piton_dict_unpack4",
+            "extern piton_gen_return_value", "extern piton_math_fabs", "extern piton_math_gcd",
+            "extern piton_raise_chain",
         ]
         for function in module.functions:
             self._emit_function(function)
@@ -1881,6 +1883,54 @@ class Win64NasmEmitter:
                 self.lines.extend([f"    mov rax, {self._address('@scratch0')}", "    leave", "    ret"])
         elif op == "runtime_call":
             raise NativeBuildError(f"runtime operation not supported in native subset: {args[0]}")
+        elif op == "gen_retval":
+            gen_ref = args[0]
+            self._load_operand(gen_ref, "rcx")
+            self.lines.append("    call piton_gen_return_value")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+        elif op == "math_fabs":
+            self._load_float_operand(args[0], "xmm0")
+            self.lines.extend(["    movq rax, xmm0", "    mov rcx, rax", "    call piton_math_fabs"])
+            self.lines.append(f"    movq {self._address(result)}, xmm0")
+            self.types[result] = "float"
+        elif op == "math_gcd":
+            handler_label = args[2] if len(args) > 2 else None
+            if self.types.get(args[0]) not in {"int", "bool"} or self.types.get(args[1]) not in {"int", "bool"}:
+                raise NativeBuildError("native math.gcd requires int arguments")
+            self._load_operand(args[0], "rcx")
+            self._load_operand(args[1], "rdx")
+            self.lines.append("    call piton_math_gcd")
+            if handler_label is not None:
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jne {labels.get(handler_label, handler_label)}")
+            self.types[result] = "int"
+            self.lines.append(f"    mov {self._address(result)}, rax")
+        elif op == "raise_chain":
+            exception_type, payload, cause_type, cause_payload, handler_label = args
+            self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
+            if payload is None:
+                self.lines.append("    xor edx, edx")
+            elif self.types.get(payload) == "str":
+                self._load_operand(payload, "rdx")
+            else:
+                raise NativeBuildError("native raise-chain payload must be a string")
+            self.lines.append(f"    lea r8, [{self._string(cause_type)}]")
+            if cause_payload is None:
+                self.lines.append("    xor r9d, r9d")
+            elif self.types.get(cause_payload) == "str":
+                self._load_operand(cause_payload, "r9")
+            else:
+                raise NativeBuildError("native raise-chain cause payload must be a string")
+            if handler_label:
+                self.lines.append("    call piton_raise_chain")
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+            else:
+                self.lines.append("    call piton_raise_chain")
 
     def _immediate(self, value: Any) -> str:
         if value is None:
