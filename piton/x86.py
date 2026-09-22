@@ -233,6 +233,8 @@ class Win64NasmEmitter:
                     self.owned_slots.append((instruction.result, "piton_gen_free"))
                 if instruction.op == "object_new" and instruction.result:
                     self.owned_slots.append((instruction.result, "piton_object_free"))
+                if instruction.op == "sys_argv" and instruction.result:
+                    self.owned_slots.append((instruction.result, "piton_collection_free"))
                 if instruction.op == "store":
                     self._reserve(instruction.args[0])
                 if instruction.op == "call_unpack":
@@ -332,6 +334,8 @@ class Win64NasmEmitter:
                     self.owned_slots.append((instruction.result, "piton_gen_free"))
                 if instruction.op == "object_new" and instruction.result:
                     self.owned_slots.append((instruction.result, "piton_object_free"))
+                if instruction.op == "sys_argv" and instruction.result:
+                    self.owned_slots.append((instruction.result, "piton_collection_free"))
                 if instruction.op == "store":
                     self._reserve(instruction.args[0])
         self._reserve("@gen_ptr")
