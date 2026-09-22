@@ -21,17 +21,17 @@
 ?? validation/windows/windowsvalidate-20260922T045738Z.json
 ?? validation/windows/windowsvalidate-20260922T045738Z.log
 ?? validation/windows/windowsvalidate-20260922T045738Z.md
-?? validation/windows/windowsvalidate-20260922T103158Z.log.Length -gt 0)
+?? validation/windows/windowsvalidate-20260922T132805Z.log.Length -gt 0)
 
 ## Steps
 
 | Step | Status | Exit | Seconds |
 |---|---|---:|---:|
-| python-version | PASS | 0 | 0.083 |
-| windows-focused-corpus | PASS | 0 | 25.836 |
-| windows-regression-suite | FAIL | 1 | 883.868 |
+| python-version | PASS | 0 | 0.067 |
+| windows-focused-corpus | PASS | 0 | 27.035 |
+| windows-regression-suite | FAIL | 1 | 935.248 |
 
 Failed: windows-regression-suite
 
-Raw output: [$ArchiveStem.log](./windowsvalidate-20260922T103158Z.log)
-Machine-readable receipt: [$ArchiveStem.json](./windowsvalidate-20260922T103158Z.json)
+Raw output: [$ArchiveStem.log](./windowsvalidate-20260922T132805Z.log)
+Machine-readable receipt: [$ArchiveStem.json](./windowsvalidate-20260922T132805Z.json)
