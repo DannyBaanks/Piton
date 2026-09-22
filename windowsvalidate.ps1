@@ -101,7 +101,7 @@ foreach ($toolName in @("git", "nasm", "gcc")) {
         [void](Add-ManualStep "tool-$toolName" $toolName "FAIL" "Required tool not found on PATH")
         continue
     }
-    $versionArgs = if ($toolName -eq "nasm") { @("-v") } else { @("--version") }
+    $versionArgs = [string[]]@(if ($toolName -eq "nasm") { "-v" } else { "--version" })
     $versionOutput = @(& $tool.Source @versionArgs 2>&1 | Select-Object -First 1)
     $toolVersions[$toolName] = ($versionOutput -join " ").Trim()
 }
