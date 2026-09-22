@@ -61,12 +61,22 @@ function Invoke-ValidationStep {
     $command = "$Executable $($ArgumentList -join ' ')"
     $outputLines = @()
     $exitCode = 1
+    # PS 5.1: under $ErrorActionPreference "Stop", a native child that writes
+    # to stderr (py.exe does this) makes the 2>&1 pipeline throw and the step
+    # is mis-recorded as FAIL with truncated output. Run the child with
+    # Continue and restore the preference afterwards.
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     try {
-        $outputLines = @(& $Executable @ArgumentList 2>&1 | ForEach-Object { $_.ToString() })
+        $outputLines = @(& $Executable @ArgumentList 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { $_.ToString() }
+        })
         $exitCode = [int]$LASTEXITCODE
     } catch {
         $outputLines += $_.Exception.Message
         $exitCode = 1
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
     }
     $duration = [math]::Round(([DateTime]::UtcNow - $started).TotalSeconds, 3)
     $status = if ($exitCode -eq 0) { "PASS" } else { "FAIL" }
