@@ -112,6 +112,7 @@ class Win64NasmEmitter:
         self.mir_module = module
         self.mir_module_classes = getattr(module, 'classes', {})
         self.mir_module_class_mro = getattr(module, 'class_mro', {})
+        self.mir_module_class_metaclasses = getattr(module, 'class_metaclasses', {})
         self.mir_module_class_properties = getattr(module, 'class_properties', {})
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
@@ -183,6 +184,9 @@ class Win64NasmEmitter:
             "extern piton_box", "extern piton_unbox", "extern piton_collection_put_boxed", "extern piton_list_append_boxed",
             "extern piton_collection_get_boxed", "extern piton_dict_put_boxed", "extern piton_dict_get_boxed",
             "extern piton_set_add_boxed", "extern piton_iterator_next_any_boxed",
+            "extern piton_collection_set_boxed",
+            "extern piton_class_object", "extern piton_class_new", "extern piton_class_register", "extern piton_class_call",
+            "extern piton_type_of", "extern piton_print_class",
             "extern piton_div_true_int", "extern piton_div_true_float", "extern piton_div_floor_int", "extern piton_div_mod_int",
             "extern piton_type_name", "extern piton_type_from_raw",
             "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_new_with_finalizer", "extern piton_object_set", "extern piton_object_set_tagged", "extern piton_object_get", "extern piton_object_lookup",
@@ -290,6 +294,11 @@ class Win64NasmEmitter:
                 self._store_slot(name, register)
         if function.self_class and function.params:
             self.types[function.params[0]] = f"object:{function.self_class}"
+        for param, param_type in getattr(function, "param_types", {}).items():
+            self.types[param] = param_type
+            if param_type == "dict":
+                self.types[param + "#key"] = "str"
+                self.types[param + "#val"] = "empty"
         # WITH_PROTOCOL_V1: __exit__(self, tipo, mensaje, tb) receives the
         # exception type-name and message as strings (V1: type NAME, not the
         # exception object; traceback is passed as None).
@@ -544,6 +553,10 @@ class Win64NasmEmitter:
             # _load_operand emits every non-temp string operand as a literal.
             return "str"
         return self.types.get(operand, "int")
+
+    def _is_metaclass_name(self, name: str) -> bool:
+        """True for "type" and classes deriving from it (their instances are classes)."""
+        return name == "type" or "type" in self.mir_module_class_mro.get(name, [])
 
     @staticmethod
     def _box_kind(type_name: str) -> int:
@@ -1427,6 +1440,64 @@ class Win64NasmEmitter:
                         self.lines.append(f"    jne {labels.get(del_handler, del_handler)}")
             else:
                 raise NativeBuildError(f"native del on '{name}' requires a natively-typed object")
+        elif op == "class_object":
+            name, meta = args
+            self.lines.extend([f"    lea rcx, [{self._string(name)}]", f"    lea rdx, [{self._string(meta)}]", "    call piton_class_object",
+                               f"    mov {self._address(result)}, rax"])
+            self.types[result] = f"object:{meta}"
+        elif op == "class_new":
+            mcs, name, namespace, meta = args
+            self._load_operand(mcs, "rcx")
+            self._load_operand(name, "rdx")
+            self._load_operand(namespace, "r8")
+            self.lines.extend(["    call piton_class_new", f"    mov {self._address(result)}, rax"])
+            self.types[result] = f"object:{meta}"
+        elif op == "class_register":
+            name, obj = args
+            self._load_operand(obj, "rdx")
+            self.lines.extend([f"    lea rcx, [{self._string(name)}]", "    call piton_class_register"])
+        elif op == "class_call":
+            self._load_operand(args[0], "rcx")
+            self.lines.extend(["    call piton_class_call", f"    mov {self._address(result)}, rax"])
+            self.types[result] = "object:__dynamic__"
+        elif op == "call" and self.types.get(args[0], "").startswith("object:") and self._is_metaclass_name(self.types.get(args[0], "").split(":", 1)[1]):
+            # METACLASSES_V1: calling a class object (e.g. A = type(...); A()).
+            if args[1]:
+                raise NativeBuildError("native call of a dynamic class with arguments is not supported yet")
+            self._load_operand(args[0], "rcx")
+            self.lines.extend(["    call piton_class_call", f"    mov {self._address(result)}, rax"])
+            self.types[result] = "object:__dynamic__"
+        elif op == "set_item":
+            container, key, value = args[0], args[1], args[2]
+            handler = args[3] if len(args) > 3 else None
+            container_type = self.types.get(container)
+            if container_type == "tuple":
+                raise NativeBuildError("'tuple' object does not support item assignment")
+            if container_type not in {"list", "dict"}:
+                raise NativeBuildError(f"native item assignment not supported for {container_type}")
+            self._emit_box(value)
+            self.lines.append(f"    mov {self._address('@scratch1')}, rax")
+            if container_type == "dict":
+                self._emit_box(key)
+                self.lines.extend(["    mov rdx, rax", f"    mov r8, {self._address('@scratch1')}"])
+                self._load_operand(container, "rcx")
+                self.lines.append("    call piton_dict_put_boxed")
+                parts = ("#val",)
+                for owner in {container, self.aliases.get(container, container)}:
+                    if isinstance(owner, str) and owner + "#key" in self.types:
+                        self.types[owner + "#key"] = self._join_types([self.types[owner + "#key"], self._operand_type(key)])
+            else:
+                self._load_operand(key, "rdx")
+                self.lines.append(f"    mov r8, {self._address('@scratch1')}")
+                self._load_operand(container, "rcx")
+                self.lines.append("    call piton_collection_set_boxed")
+                if handler is not None:
+                    self.lines.extend(["    call piton_catch_flag", "    test rax, rax", f"    jne {labels.get(handler, handler)}"])
+                parts = ("#elem",)
+            for owner in {container, self.aliases.get(container, container)}:
+                for part in parts:
+                    if isinstance(owner, str) and owner + part in self.types:
+                        self.types[owner + part] = self._join_types([self.types[owner + part], self._operand_type(value)])
         elif op == "method_call" and args[0] is None and self.types.get(args[2]) == "list" and args[1] == "append" and len(args[3]) == 1:
             # list.append(x): same lowering as the comprehension append.
             self._emit_instruction(replace(instruction, op="list_append", args=(args[2], args[3][0]), result=None), labels)
@@ -1765,6 +1836,12 @@ class Win64NasmEmitter:
                 else:
                     value = values[0]
                     value_type = self.types.get(value, "int")
+                    if value_type.startswith("object:") and self._is_metaclass_name(value_type.split(":", 1)[1]):
+                        self._load_operand(value, "rcx")
+                        self.lines.append("    call piton_print_class")
+                        if result:
+                            self.lines.append(f"    mov qword {self._address(result)}, 0")
+                        return
                     # SPECIAL_METHOD_LOOKUP_V1: print(obj) despacha a __str__
                     # cuando existe (MRO); el método devuelve una str.
                     if value_type.startswith("object:"):
@@ -2081,6 +2158,14 @@ class Win64NasmEmitter:
                     self._load_operand(values[0], "rcx")
                     self.lines.append("    call piton_sum_collection")
                 self.types[result] = "int"
+            elif function_name == "type" and self.types.get(values[0] if values else None, "").startswith("object:"):
+                # METACLASSES_V1: type(obj) is the object's class object.
+                if len(values) != 1:
+                    raise NativeBuildError("native type requires one argument")
+                self._load_operand(values[0], "rcx")
+                self.lines.extend(["    call piton_type_of", f"    mov {self._address(result)}, rax"])
+                class_name = self.types[values[0]].split(":", 1)[1]
+                self.types[result] = f"object:{self.mir_module_class_metaclasses.get(class_name, 'type')}"
             elif function_name == "type":
                 if len(values) != 1:
                     raise NativeBuildError("native type requires one argument")

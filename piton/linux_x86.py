@@ -231,6 +231,8 @@ static long piton_genexpr_next(PitonGenExpr*g){if(!g||!g->source){piton_write(2,
 static PitonDict*piton_dict_new(long n){PitonDict*d=piton_alloc(sizeof(*d));d->refcount=1;d->kind=PK_DICT;d->length=n;d->capacity=n;d->items=n>0?piton_alloc((usize)n*sizeof(PitonDictEntry)):0;return d;}
 static void piton_dict_put(PitonDict*d,long i,PitonSlot k,PitonSlot v){if(i>=0&&i<d->length){d->items[i].key=k;d->items[i].value=v;}}
 static void piton_dict_append(PitonDict*d,PitonSlot k,PitonSlot v){if(d->length>=d->capacity){long nc=d->capacity?d->capacity*2:4;PitonDictEntry*ni=piton_alloc((usize)nc*sizeof(PitonDictEntry));if(d->items)piton_memcpy(ni,d->items,(usize)d->capacity*sizeof(PitonDictEntry));d->items=ni;d->capacity=nc;}d->items[d->length].key=k;d->items[d->length].value=v;++d->length;}
+static void piton_dict_set(PitonDict*d,PitonSlot k,PitonSlot v){for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){d->items[i].value=v;return;}piton_dict_append(d,k,v);}
+static void piton_seq_set(PitonSeq*s,long i,PitonSlot v){if(i<0)i+=s->length;if(i<0||i>=s->length){piton_raise_set("IndexError","list assignment index out of range");return;}s->items[i]=v;}
 static PitonSlot piton_dict_get(PitonDict*d,PitonSlot key){for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,key))return d->items[i].value;piton_write(2,"KeyError\n",9);piton_exit(1);}
 static int piton_unpack_seq4(PitonSlot obj,long capacity,long*out4){if(obj.kind!=PK_LIST&&obj.kind!=PK_TUPLE){piton_raise_set("TypeError","argument after * must be a list or tuple");return -1;}PitonSeq*s=(PitonSeq*)obj.bits;if(s->length>capacity){piton_raise_set("TypeError","too many positional arguments for call");return -1;}for(long i=0;i<s->length;++i)out4[i]=s->items[i].bits;return s->length;}
 static int piton_dict_unpack4(PitonSlot obj,const char**names,long count,long*out4,long*mask){if(obj.kind!=PK_DICT){piton_raise_set("TypeError","argument after ** must be a dict");return -1;}PitonDict*d=(PitonDict*)obj.bits;for(long i=0;i<d->length;++i){PitonSlot k=d->items[i].key;if(k.kind!=PK_STR){piton_raise_set("TypeError","keywords must be strings");return -1;}const char*key=(const char*)k.bits;long matched=-1;for(long j=0;j<count;++j)if(piton_strcmp(key,names[j])==0){matched=j;break;}if(matched<0){piton_raise_set("TypeError","unexpected keyword argument in ** expansion");return -1;}if(*mask&(1LL<<matched)){piton_raise_set("TypeError","multiple values for argument");return -1;}*mask|=1LL<<matched;out4[matched]=d->items[i].value.bits;}return 0;}
@@ -300,7 +302,18 @@ static PitonObject*piton_object_new(const char*name,const char*parent){return pi
 static void piton_finalize_objects(void){PitonObject*o=piton_all_objects;while(o){if(o->finalizer&&!o->finalizer_called){o->finalizer_called=1;((long(*)(long))o->finalizer)((long)o);}o=o->next_all;}}
 static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].value=v;return;}if(o->length>=32){piton_write(2,"AttributeError\n",15);piton_exit(1);}o->attrs[o->length].name=name;o->attrs[o->length++].value=v;}
 static void piton_object_del(PitonObject*o,const char*name,const char*missing){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){for(long j=i;j+1<o->length;++j)o->attrs[j]=o->attrs[j+1];--o->length;return;}piton_raise_set("AttributeError",missing);}
-static PitonSlot piton_object_get(PitonObject*o,const char*name){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;piton_write(2,"AttributeError\n",15);piton_exit(1);}
+/* METACLASSES_V1: runtime class objects, one per class name, created on first use. */
+typedef struct{const char*name;PitonObject*obj;}PitonClassEntry;
+static PitonClassEntry piton_class_table[256];static long piton_class_count=0;
+static PitonObject*piton_class_find(const char*name){for(long i=0;i<piton_class_count;++i)if(piton_strcmp(piton_class_table[i].name,name)==0)return piton_class_table[i].obj;return 0;}
+static PitonSlot piton_object_get(PitonObject*o,const char*name){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;PitonObject*c=piton_class_find(o->class_name);if(c&&c!=o)for(long i=0;i<c->length;++i)if(piton_strcmp(c->attrs[i].name,name)==0)return c->attrs[i].value;piton_write(2,"AttributeError\n",15);piton_exit(1);}
+static void piton_class_register(const char*name,long obj){for(long i=0;i<piton_class_count;++i)if(piton_strcmp(piton_class_table[i].name,name)==0){piton_class_table[i].obj=(PitonObject*)obj;return;}if(piton_class_count<256){piton_class_table[piton_class_count].name=name;piton_class_table[piton_class_count++].obj=(PitonObject*)obj;}}
+static long piton_class_object(const char*name,const char*meta){PitonObject*o=piton_class_find(name);if(o)return(long)o;o=piton_object_new(meta,0);piton_object_set(o,"__name__",piton_slot((long)name,PK_STR));piton_class_register(name,(long)o);return(long)o;}
+static const char*piton_class_name_of(long cls){PitonObject*o=(PitonObject*)cls;for(long i=0;o&&i<o->length;++i)if(piton_strcmp(o->attrs[i].name,"__name__")==0)return(const char*)o->attrs[i].value.bits;return "object";}
+static long piton_class_new(long mcs,long name,long ns){PitonObject*o=piton_object_new(piton_class_name_of(mcs),0);piton_object_set(o,"__name__",piton_slot(name,PK_STR));PitonDict*d=(PitonDict*)ns;for(long i=0;d&&i<d->length;++i)if(d->items[i].key.kind==PK_STR)piton_object_set(o,(const char*)d->items[i].key.bits,d->items[i].value);piton_class_register((const char*)name,(long)o);return(long)o;}
+static long piton_class_call(long cls){return(long)piton_object_new(piton_class_name_of(cls),0);}
+static long piton_type_of(long obj){return piton_class_object(((PitonObject*)obj)->class_name,"type");}
+static void piton_print_class(long cls){piton_write(1,"<class '__main__.",17);const char*n=piton_class_name_of(cls);piton_write(1,n,piton_strlen(n));piton_write(1,"'>\n",3);}
 static long piton_object_lookup(PitonObject*o,const char*name,long fallback){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;return ((long(*)(long,long))fallback)((long)o,(long)name);}
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
 #define PITON_BOUND_METHOD_MAGIC 0x5049544E424D4554LL
@@ -434,6 +447,7 @@ class LinuxCEmitter:
         self.classes = getattr(module, "classes", {})
         self.class_parents = getattr(module, "class_parents", {})
         self.class_mro = getattr(module, "class_mro", {})
+        self.class_metaclasses = getattr(module, "class_metaclasses", {})
         self.class_properties = getattr(module, "class_properties", {})
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
@@ -453,7 +467,7 @@ class LinuxCEmitter:
         # Rich runtime (with __argc/__argv/_start and object/dict/set structs) needed for
         # bigint or sys.argv/os.name or any object/dict/set operations
         self._has_rich_runtime = self._has_bigint or any(
-            instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv"}
+            instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv", "class_object", "class_new", "class_register", "class_call"}
             for function in module.functions
             for block in function.blocks
             for instruction in block.instructions
@@ -521,6 +535,11 @@ class LinuxCEmitter:
             types[function.kwarg] = "dict"
         if function.self_class and function.params:
             types[function.params[0]] = f"object:{function.self_class}"
+        for param, param_type in getattr(function, "param_types", {}).items():
+            types[param] = param_type
+            if param_type == "dict":
+                types[param + "#key"] = "str"
+                types[param + "#val"] = "empty"
         # WITH_PROTOCOL_V1: __exit__(self, tipo, mensaje, tb) receives the
         # exception type-name and message as strings (V1: type NAME, not the
         # exception object; traceback is passed as None).
@@ -631,6 +650,13 @@ class LinuxCEmitter:
                 f"native {what} of a heterogeneous collection is not supported yet (element type is not static)"
             )
         return kind if kind and kind != "empty" else "int"
+
+    def _is_metaclass_name(self, name: str) -> bool:
+        """True for "type" and classes deriving from it (their instances are classes)."""
+        return name == "type" or "type" in self.class_mro.get(name, [])
+
+    def _metaclass_of(self, class_name: str) -> str:
+        return self.class_metaclasses.get(class_name, "type")
 
     def _truth(self, value: Any, types: dict[str, str]) -> str:
         """C expression for CPython truthiness of ``value`` by its static type."""
@@ -1029,6 +1055,12 @@ class LinuxCEmitter:
             out.append(f"    if({self._truth(args[0], types)}) goto {_name(function.name + '_' + args[1])}; else goto {_name(function.name + '_' + args[2])};")
         elif op == "jump":
             out.append(f"    goto {_name(function.name + '_' + args[0])};")
+        elif op == "call" and types.get(args[0], "").startswith("object:") and self._is_metaclass_name(types.get(args[0], "").split(":", 1)[1]):
+            # METACLASSES_V1: calling a class object (e.g. A = type(...); A()).
+            if args[1]:
+                raise NativeBuildError("native call of a dynamic class with arguments is not supported yet")
+            out.append(f"    {_name(result)}=piton_class_call({self._value(args[0])});")
+            types[result] = "object:__dynamic__"
         elif op == "call":
             function_name = aliases.get(args[0], args[0])
             values = list(args[1])
@@ -1038,6 +1070,10 @@ class LinuxCEmitter:
                     out.append('    piton_write(1,"\\n",1);')
                 else:
                     v0_type = types.get(values[0], "int")
+                    if v0_type.startswith("object:") and self._is_metaclass_name(v0_type.split(":", 1)[1]):
+                        out.append(f"    piton_print_class({self._value(values[0])});")
+                        out.append(f"    {_name(result)}=0;")
+                        return out
                     if v0_type.startswith("object:"):
                         cls_name = v0_type.split(":", 1)[1]
                         str_cls = None
@@ -1263,8 +1299,14 @@ class LinuxCEmitter:
             elif function_name in {"type", "tipo"}:
                 if len(values) != 1:
                     raise NativeBuildError("Linux type requires one argument")
-                out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(types.get(values[0], 'int'))});")
-                types[result] = "str"
+                arg_type = types.get(values[0], "int")
+                if arg_type.startswith("object:"):
+                    # METACLASSES_V1: type(obj) is the object's class object.
+                    out.append(f"    {_name(result)}=piton_type_of({self._value(values[0])});")
+                    types[result] = f"object:{self._metaclass_of(arg_type.split(':', 1)[1])}"
+                else:
+                    out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(arg_type)});")
+                    types[result] = "str"
             elif function_name in {"sorted", "ordenar"}:
                 if len(values) != 1 or types.get(values[0]) not in {"list", "tuple"}:
                     raise NativeBuildError("native sorted currently requires one list or tuple")
@@ -1885,6 +1927,46 @@ class LinuxCEmitter:
             if types.get(coll) != "dict":
                 raise NativeBuildError("Linux dict_put requires a dict")
             out.append(f'    piton_dict_append((PitonDict*){self._value(coll)},piton_slot({self._value(key)},{self._kind(types.get(key, "int"))}),{self._slot(value, types)});')
+        elif op == "set_item":
+            coll, key, value = args[0], args[1], args[2]
+            handler = args[3] if len(args) > 3 else None
+            collection_type = types.get(coll)
+            value_type = types.get(value, "int")
+            if collection_type == "list":
+                out.append(f"    piton_seq_set((PitonSeq*){self._value(coll)},{self._value(key)},{self._slot(value, types)});")
+                if handler is not None:
+                    out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + handler)};}}")
+                else:
+                    out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
+                parts = ("#elem",)
+            elif collection_type == "dict":
+                out.append(f"    piton_dict_set((PitonDict*){self._value(coll)},{self._slot(key, types)},{self._slot(value, types)});")
+                parts = ("#val",)
+                for owner in {coll, aliases.get(coll, coll)}:
+                    if owner + "#key" in types:
+                        types[owner + "#key"] = self._join_types([types[owner + "#key"], types.get(key, "int")])
+            elif collection_type == "tuple":
+                raise NativeBuildError("'tuple' object does not support item assignment")
+            else:
+                raise NativeBuildError(f"Linux item assignment not supported for {collection_type}")
+            for owner in {coll, aliases.get(coll, coll)}:
+                for part in parts:
+                    if owner + part in types:
+                        types[owner + part] = self._join_types([types[owner + part], value_type])
+        elif op == "class_object":
+            name, meta = args
+            out.append(f"    {_name(result)}=piton_class_object({json.dumps(name)},{json.dumps(meta)});")
+            types[result] = f"object:{meta}"
+        elif op == "class_new":
+            mcs, name, namespace, meta = args
+            out.append(f"    {_name(result)}=piton_class_new({self._value(mcs)},{self._value(name)},{self._value(namespace)});")
+            types[result] = f"object:{meta}"
+        elif op == "class_register":
+            name, obj = args
+            out.append(f"    piton_class_register({json.dumps(name)},{self._value(obj)});")
+        elif op == "class_call":
+            out.append(f"    {_name(result)}=piton_class_call({self._value(args[0])});")
+            types[result] = "object:__dynamic__"
         elif op == "runtime_call":
             raise NativeBuildError(f"runtime operation not supported in Linux native subset: {args[0]}")
         else:

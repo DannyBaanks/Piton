@@ -106,6 +106,9 @@ class MIRFunction:
     is_generator: bool = False
     is_coroutine: bool = False
     is_async_generator: bool = False
+    # METACLASSES_V1: static types of parameters the backends cannot infer
+    # (a metaclass __new__/__init__ receives name/bases/namespace).
+    param_types: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -130,6 +133,7 @@ class MIRModule:
     class_parents: dict = field(default_factory=dict)
     class_mro: dict = field(default_factory=dict)
     class_properties: dict = field(default_factory=dict)
+    class_metaclasses: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {"functions": [function.to_dict() for function in self.functions]}
@@ -179,11 +183,11 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "cell_load": "READ", "get_item": "READ", "collection_len": "READ",
     "catch_type": "READ", "catch_message": "READ", "catch_flag": "READ",
     # WRITE
-    "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
+    "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE", "set_item": "WRITE",
     "set_add": "WRITE",
     "try_push": "WRITE", "try_pop": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
-    "catch_matches": "READ", "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE", "set_context_from_reraise": "WRITE",
+    "catch_matches": "READ", "class_object": "READ", "class_new": "WRITE", "class_register": "WRITE", "class_call": "WRITE", "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE", "set_context_from_reraise": "WRITE",
     "task_new": "WRITE", "task_cancel": "WRITE", "gather_add": "WRITE",
     # IO
     "sleep0": "IO", "sys_exit": "IO", "sys_argv": "IO", "os_name": "PURE",
@@ -356,6 +360,11 @@ class MIRLowerer:
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
+        elif target.kind == HIRKind.SUBSCR:
+            # `obj[key] = value` (value is already evaluated, like CPython).
+            container = self._lower_expr(builder, target.value)
+            key = self._lower_expr(builder, target.slice)
+            builder.emit("set_item", container, key, value, _active_handler(builder))
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -411,6 +420,7 @@ class MIRLowerer:
         self.class_mro = {}
         self._mro_memo = {}
         self.class_properties = {}
+        self.class_metaclass: dict[str, str] = {}
         self.async_functions = set()
         self.async_generators = set()
         self.module_aliases = {}
@@ -492,18 +502,23 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
-                if node.keywords or node.decorators or any(
+                keywords = list(node.keywords or [])
+                if node.decorators or any(getattr(k, "arg", None) != "metaclass" for k in keywords) or any(
                     item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS}
                     for item in node.body
                 ):
-                    raise MIRLoweringError("native classes currently require methods only, no keywords or class-level decorators")
+                    raise MIRLoweringError(
+                        "native classes currently require methods only, no class-level decorators "
+                        "and no class keywords other than metaclass="
+                    )
                 bases = [base.name for base in node.bases if getattr(base, "name", None)]
                 for base in bases:
-                    if base not in self.classes and base not in _BUILTIN_EXCEPTIONS:
+                    if base not in self.classes and base not in _BUILTIN_EXCEPTIONS and base != "type":
                         raise MIRLoweringError(f"native base class '{base}' must be defined before '{node.name}'")
                 self.classes[node.name] = set()
                 self.class_base_list[node.name] = bases
                 self.class_parents[node.name] = bases[0] if bases else None
+                self.class_metaclass[node.name] = self._resolve_metaclass(node.name, bases, keywords)
                 property_methods: dict[str, dict[str, str | None]] = {}
                 used_symbols: set[str] = set()
                 for method in node.body:
@@ -522,6 +537,15 @@ class MIRLowerer:
                         method, symbol,
                         super_context=(node.name, super_self) if super_self else None,
                     )
+                    if self._is_metaclass(node.name) and method.name in {"__new__", "__init__"}:
+                        lowered = next(f for f in reversed(self.functions) if f.name == symbol)
+                        if len(lowered.params) != 4:
+                            raise MIRLoweringError(
+                                f"native metaclass {method.name} must take (cls, nombre, bases, ns)"
+                            )
+                        lowered.param_types = {
+                            lowered.params[1]: "str", lowered.params[2]: "tuple", lowered.params[3]: "dict",
+                        }
                     if role is None:
                         self.classes[node.name].add(method.name)
                     else:
@@ -605,6 +629,7 @@ class MIRLowerer:
         self._finalize_mro()
         module.class_mro = dict(self.class_mro)
         module.class_properties = dict(self.class_properties)
+        module.class_metaclasses = dict(self.class_metaclass)
         # ME — effect lattice: every emitted op is classified and chained at
         # lowering time, so a new op born without classification fails closed.
         annotate_module_effects(module)
@@ -662,6 +687,100 @@ class MIRLowerer:
             return None
         self._mro_memo[name] = [name, *merged]
         return self._mro_memo[name]
+
+    def _class_object(self, builder: _Builder, name: str) -> str:
+        """Runtime class object for a statically known class (created on first use)."""
+        result = builder.temp()
+        builder.emit("class_object", name, self.class_metaclass.get(name, "type"), result=result)
+        return result
+
+    def _lower_class_statement(self, builder: _Builder, node: HIRNode) -> None:
+        """METACLASSES_V1: a class governed by a custom metaclass is created at
+        its statement, running Meta.__new__ then Meta.__init__ like CPython.
+        Plain classes need no runtime work (their class object is lazy)."""
+        meta = self.class_metaclass.get(node.name, "type")
+        if meta == "type":
+            return
+        mcs = self._class_object(builder, meta)
+        name = builder.temp()
+        builder.emit("const", node.name, result=name)
+        base_objects = tuple(self._class_object(builder, base) for base in self.class_base_list.get(node.name, []))
+        bases = builder.temp()
+        builder.emit("build_collection", "tuple", base_objects, result=bases)
+        namespace = builder.temp()
+        builder.emit("build_collection", "dict", (), result=namespace)
+        new_owner = self._metaclass_hook(meta, "__new__")
+        created = builder.temp()
+        if new_owner:
+            builder.emit("method_call", new_owner, "__new__", mcs, (name, bases, namespace), result=created)
+        else:
+            builder.emit("class_new", mcs, name, namespace, meta, result=created)
+        init_owner = self._metaclass_hook(meta, "__init__")
+        if init_owner:
+            ignored = builder.temp()
+            builder.emit("method_call", init_owner, "__init__", created, (name, bases, namespace), result=ignored)
+        builder.emit("class_register", node.name, created)
+
+    def _lower_type_super_call(self, builder: _Builder, attr: str, user_args: tuple) -> str:
+        """super().__new__/__init__/__call__ reaching the builtin type."""
+        args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+        result = builder.temp()
+        if attr == "__new__":
+            if len(args) != 4:
+                raise MIRLoweringError("native type.__new__ takes (mcs, nombre, bases, ns)")
+            builder.emit("class_new", args[0], args[1], args[3], builder.super_class, result=result)
+        elif attr == "__init__":
+            builder.emit("const", None, result=result)
+        else:
+            if args:
+                raise MIRLoweringError("native type.__call__ with constructor arguments is not supported yet")
+            receiver = builder.temp()
+            builder.emit("load", builder.super_self, result=receiver)
+            builder.emit("class_call", receiver, result=result)
+        return result
+
+    def _is_metaclass(self, name: str) -> bool:
+        """A class deriving (transitively) from type."""
+        mro = self._mro_memo.get(name) or self._compute_mro(name) or []
+        return "type" in mro
+
+    def _resolve_metaclass(self, name: str, bases: list[str], keywords: list) -> str:
+        """METACLASSES_V1: explicit metaclass= or the most derived metaclass of
+        the bases; incompatible ones fail closed like CPython's TypeError."""
+        candidates: list[str] = []
+        for keyword in keywords:
+            value = getattr(keyword, "value", None)
+            meta = getattr(value, "name", None)
+            if meta != "type" and (meta not in self.classes or not self._is_metaclass(meta)):
+                raise MIRLoweringError(f"native metaclass= must name a class deriving from type, got {meta!r}")
+            candidates.append(meta)
+        for base in bases:
+            if base in self.class_metaclass:
+                candidates.append(self.class_metaclass[base])
+        winner = "type"
+        for meta in candidates:
+            if meta == winner:
+                continue
+            winner_mro = self._mro_memo.get(winner) or self._compute_mro(winner) or [winner]
+            meta_mro = self._mro_memo.get(meta) or self._compute_mro(meta) or [meta]
+            if winner in meta_mro:
+                winner = meta
+            elif meta not in winner_mro:
+                raise MIRLoweringError(
+                    "metaclass conflict: the metaclass of a derived class must be a (non-strict) "
+                    "subclass of the metaclasses of all its bases"
+                )
+        return winner
+
+    def _metaclass_hook(self, meta: str, method: str) -> str | None:
+        """First user class in the metaclass MRO defining ``method`` (type's own
+        implementation is built in and returns None)."""
+        for cls in self._mro_memo.get(meta) or self._compute_mro(meta) or []:
+            if cls == "type":
+                return None
+            if method in self.classes.get(cls, set()):
+                return cls
+        return None
 
     def _finalize_mro(self) -> None:
         for name in list(self.class_base_list) + [n for n in self.classes if n not in self.class_base_list]:
@@ -1143,6 +1262,8 @@ class MIRLowerer:
                     raise MIRLoweringError("native del currently supports only attribute deletion (del obj.attr)")
                 owner = self._lower_expr(builder, target.value)
                 builder.emit("del_attr", owner, target.attr, _active_handler(builder))
+        elif kind == HIRKind.CLASS_DEF:
+            self._lower_class_statement(builder, node)
         else:
             if kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
                 self._lower_expr(builder, node)
@@ -2344,6 +2465,11 @@ class MIRLowerer:
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
+        elif target.kind == HIRKind.SUBSCR:
+            # `obj[key] = value` (value is already evaluated, like CPython).
+            container = self._lower_expr(builder, target.value)
+            key = self._lower_expr(builder, target.slice)
+            builder.emit("set_item", container, key, value, _active_handler(builder))
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -2379,6 +2505,8 @@ class MIRLowerer:
                 continue
             if cls == current_class:
                 found_current = True
+        if next_class is None and "type" in mro[mro.index(current_class) + 1:] and attr in {"__new__", "__init__", "__call__"}:
+            return self._lower_type_super_call(builder, attr, user_args)
         if next_class is None:
             raise MIRLoweringError(
                 f"native super().{attr}: no base class in MRO of '{current_class}' defines '{attr}'"
@@ -2422,6 +2550,9 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("cell_load", node.name, result=result)
                 return result
+            if node.name in self.classes:
+                # METACLASSES_V1: a class name used as a value is its class object.
+                return self._class_object(builder, node.name)
             # M8: aliases de módulo creados por `desde .. importar X` dentro
             # de un paquete son marcadores estáticos. Si el nombre del alias
             # resuelve a un módulo importado, emitimos un placeholder (None) en
@@ -2665,6 +2796,29 @@ class MIRLowerer:
                             builder.emit(op, value, result=result)
                         else:
                             builder.emit(op, value, handler, result=result)
+                    return result
+            if node.func.kind == HIRKind.LOAD and node.func.name in {"type", "tipo"} and len(node.args) == 3:
+                # METACLASSES_V1: type(nombre, bases, ns) creates a class at run time.
+                bases_node = node.args[1]
+                if bases_node.kind != HIRKind.TUPLE or getattr(bases_node, "elts", None):
+                    raise MIRLoweringError("native type(nombre, bases, ns) supports only empty bases () yet")
+                name = self._lower_expr(builder, node.args[0])
+                namespace = self._lower_expr(builder, node.args[2])
+                result = builder.temp()
+                builder.emit("class_new", self._class_object(builder, "type"), name, namespace, "type", result=result)
+                return result
+            if node.func.kind == HIRKind.LOAD and node.func.name in self.classes:
+                call_owner = self._metaclass_hook(self.class_metaclass.get(node.func.name, "type"), "__call__")
+                if call_owner:
+                    mro = self._mro_memo.get(node.func.name) or self._compute_mro(node.func.name) or []
+                    if any("__init__" in self.classes.get(cls, set()) for cls in mro):
+                        raise MIRLoweringError("native metaclass __call__ on a class with __init__ is not supported yet")
+                    if node.keywords:
+                        raise MIRLoweringError("native class constructors do not support keyword arguments yet")
+                    cls_object = self._class_object(builder, node.func.name)
+                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                    result = builder.temp()
+                    builder.emit("method_call", call_owner, "__call__", cls_object, args, result=result)
                     return result
             if node.func.kind == HIRKind.LOAD and node.func.name in self.classes:
                 if node.keywords:
@@ -3441,6 +3595,8 @@ class MIREvaluator:
             env[instruction.result] = self._value(args[0], env)[self._value(args[1], env)]
         elif op == "collection_len":
             env[instruction.result] = len(self._value(args[0], env))
+        elif op == "set_item":
+            self._value(args[0], env)[self._value(args[1], env)] = self._value(args[2], env)
         elif op == "list_append":
             lst = self._value(args[0], env)
             val = self._value(args[1], env)

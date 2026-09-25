@@ -124,6 +124,28 @@ class Phase5Gates(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "heterogeneous collection"):
                 compile_native('xs = [1, "a"]\nimprimir(xs[0])\n', Path(directory) / "program.exe")
 
+    def test_x86_item_assignment(self):
+        # `obj[key] = value` on lists and dicts; out-of-range list index raises IndexError.
+        result = compare_native_to_cpython(
+            'd = {"a": 1}\nd["b"] = 2\nd["a"] = 5\nimprimir(d)\n'
+            'e = {}\ne["k"] = "v"\nimprimir(e["k"])\n'
+            'xs = [1, 2, 3]\nxs[0] = 9\nxs[-1] = 7\nimprimir(xs)\n'
+            'intentar:\n    xs[5] = 0\nexcepto IndexError:\n    imprimir("fuera")\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_class_objects_and_type(self):
+        # METACLASSES_V1: class objects, type(obj), class attributes seen from instances.
+        result = compare_native_to_cpython(
+            'clase P:\n    funcion __init__(self):\n        self.v = 1\n'
+            'p = P()\nimprimir(type(p))\nimprimir(P)\nimprimir(type(p) es P)\n'
+            'X = type("X", (), {"n": 3})\nx = X()\nimprimir(x.n * 2)\n'
+            'clase Meta(type):\n    funcion __new__(mcs, nombre, bases, ns):\n        imprimir("crear " + nombre)\n'
+            '        ns["a"] = 1\n        devolver super().__new__(mcs, nombre, bases, ns)\n'
+            'imprimir("antes")\nclase A(metaclass=Meta):\n    pass\nimprimir("despues")\nimprimir(A.a)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
     def test_x86_float_repr_matches_python(self):
         # FLOAT_REPR_V1: shortest round-trip repr, CPython's exponent layout.
         result = compare_native_to_cpython(

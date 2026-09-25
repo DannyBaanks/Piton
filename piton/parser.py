@@ -202,7 +202,7 @@ class Parser:
                 return self._parse_assert()
             elif val == "borrar":
                 return self._parse_del()
-            elif val == "pasar":
+            elif val == "pasar" or val == "pass":
                 self._advance()
                 return PassStmt().set_pos(tok)
             elif val == "romper":

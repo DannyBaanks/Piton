@@ -983,6 +983,19 @@ void piton_list_append_boxed(void *raw, int64_t boxed) {
     c->items[c->length++] = boxed;
 }
 
+void piton_collection_set_boxed(void *raw, int64_t index, int64_t boxed) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    if (index < 0) index += c->length;
+    if (index < 0 || index >= c->length) {
+        piton_value_deep_free(boxed);
+        piton_raise("IndexError", "list assignment index out of range");
+        return;
+    }
+    piton_value_deep_free(c->items[index]);
+    c->items[index] = boxed;
+}
+
 int64_t piton_collection_get_boxed(void *raw, int64_t index) {
     PitonCollection *c = raw;
     if (!c) return pv_none();
@@ -2054,17 +2067,85 @@ void piton_object_set_tagged(void *raw, const char *name, int64_t raw_ptr) {
     piton_value_incref(ev);
 }
 
+/* METACLASSES_V1: runtime class objects, one per class name, created on
+ * first use. A class object is an instance of its metaclass ("type" or a user
+ * metaclass) carrying __name__ and its class attributes. */
+typedef struct { const char *name; void *obj; } PitonClassEntry;
+static PitonClassEntry piton_class_table[256];
+static int64_t piton_class_count = 0;
+
+static void *piton_class_find(const char *name) {
+    for (int64_t i = 0; name && i < piton_class_count; ++i)
+        if (strcmp(piton_class_table[i].name, name) == 0) return piton_class_table[i].obj;
+    return NULL;
+}
+
+static int64_t piton_attr_decode(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    return v;
+}
+
 int64_t piton_object_get(void *raw, const char *name) {
     PitonObject *o = raw;
     if (!o || !name) return pv_none();
     for (int64_t i = 0; i < o->length; ++i)
-        if (strcmp(o->attributes[i].name, name) == 0) {
-            int64_t v = o->attributes[i].value;
-            if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
-            if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
-            return v;
-        }
+        if (strcmp(o->attributes[i].name, name) == 0) return piton_attr_decode(o->attributes[i].value);
+    /* Instance miss: fall back to the class object's attributes, like CPython. */
+    PitonObject *c = piton_class_find(o->class_name);
+    if (c && c != o)
+        for (int64_t i = 0; i < c->length; ++i)
+            if (strcmp(c->attributes[i].name, name) == 0) return piton_attr_decode(c->attributes[i].value);
     return pv_none();
+}
+
+void piton_class_register(const char *name, int64_t obj) {
+    for (int64_t i = 0; i < piton_class_count; ++i)
+        if (strcmp(piton_class_table[i].name, name) == 0) { piton_class_table[i].obj = (void *)obj; return; }
+    if (piton_class_count < 256) {
+        piton_class_table[piton_class_count].name = name;
+        piton_class_table[piton_class_count++].obj = (void *)obj;
+    }
+}
+
+static const char *piton_class_name_of(int64_t cls) {
+    int64_t name = piton_object_get((void *)cls, "__name__");
+    return name ? (const char *)name : "object";
+}
+
+int64_t piton_class_object(const char *name, const char *meta) {
+    void *o = piton_class_find(name);
+    if (o) return (int64_t)o;
+    o = piton_object_new(meta);
+    piton_object_set(o, "__name__", (int64_t)name);
+    piton_class_register(name, (int64_t)o);
+    return (int64_t)o;
+}
+
+int64_t piton_class_new(int64_t mcs, int64_t name, int64_t ns) {
+    char *own_name = strdup((const char *)name);
+    void *o = piton_object_new(strdup(piton_class_name_of(mcs)));
+    piton_object_set(o, "__name__", (int64_t)own_name);
+    PitonDict *d = (PitonDict *)ns;
+    for (int64_t i = 0; d && i < d->length; ++i) {
+        const char *key = (const char *)piton_unbox(d->entries[i].key, 4);
+        if (key) piton_object_set(o, strdup(key), piton_unbox(d->entries[i].value, 4));
+    }
+    piton_class_register(own_name, (int64_t)o);
+    return (int64_t)o;
+}
+
+int64_t piton_class_call(int64_t cls) {
+    return (int64_t)piton_object_new(piton_class_name_of(cls));
+}
+
+int64_t piton_type_of(int64_t obj) {
+    PitonObject *o = (PitonObject *)obj;
+    return piton_class_object(o ? o->class_name : "NoneType", "type");
+}
+
+void piton_print_class(int64_t cls) {
+    printf("<class '__main__.%s'>\n", piton_class_name_of(cls));
 }
 
 void piton_object_delattr(void *raw, const char *name, const char *missing) {
