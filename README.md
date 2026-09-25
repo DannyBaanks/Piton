@@ -10,6 +10,27 @@ Es un proyecto personal/esolang de Danny, medio de broma pero ejecutable de
 verdad. No es una traducción oficial de Python ni tiene afiliación con la
 Python Software Foundation.
 
+## Lenguaje oficial de ISyCo
+
+Pitón es el **lenguaje propio de ISyCo**, el monorepo de investigación de
+Danny. No es un adorno: el motor `workspace/assembly/piton/` de ISyCo cumple el
+contrato `bridge.protocol/1` con su lógica escrita en Pitón (`Engine.piton`:
+parseo del request, búsqueda de la raíz `.iesyroot`, contrato `.iesy`,
+Sentinel) y usa este repositorio como toolchain.
+
+Pitón corre de dos maneras:
+
+| Camino | Qué hace | Depende de CPython |
+|---|---|---|
+| `piton ejecutar` | traduce Pitón → Python y lo corre en CPython | sí |
+| `piton compilar` | compila a x86-64 nativo: PE (Windows) o ELF estático (Linux) | **no** |
+
+Estado de la paridad nativa con CPython 3.12 (2026-09-25): **toda la suite en
+verde en los dos backends**: Linux 716 tests OK y Windows 354 tests OK
+(ejecutados con wine; la validación en un Windows real sigue siendo el paso
+final, ver más abajo). Detalle en
+[Estado nativo verificado (2026-09-25)](#estado-nativo-verificado-2026-09-25).
+
 ```text
 código .piton
     -> CST Pitón
@@ -28,12 +49,20 @@ Requiere CPython 3.12 o posterior. Fue probado con CPython 3.12.4 en Windows.
 > `docs/CPYTHON_PARITY_DEPENDENCY_DAG.md`, `docs/FEATURE_STATUS_MATRIX.md` y
 > `docs/STDLIB_PARITY_MATRIX.md`.
 
+Windows:
+
 ```powershell
 py -m pip install -e . --no-build-isolation
 piton ejecutar examples\01_hola.piton
 ```
 
-Salida real:
+Linux (desde la raíz del repo, sin instalar nada):
+
+```bash
+python3 -m piton ejecutar examples/01_hola.piton
+```
+
+Salida real (las dos):
 
 ```text
 Hola, mundo
@@ -46,8 +75,9 @@ Windows limpia, instala Git, PowerShell, CPython 3.12, NASM y GCC/MinGW en
 `PATH`, y ejecuta:
 
 ```powershell
-git clone https://github.com/DannyBaanks/Piton.git
+git clone https://github.com/DannyBaanks/PITON.git
 Set-Location PITON
+git checkout parity-merge   # mientras la paridad no esté fusionada en main
 py -3.12 -m pip install -e . --no-build-isolation
 .\windowsvalidate.ps1 -FullSuite -Publish
 ```
@@ -200,6 +230,19 @@ dependen de CPython**. Hay dos backends:
 [x] With múltiple: con A() como a, B() como b (nested lowering)
 [x] math.sqrt nativo: SSE sqrtsd
 [x] División entera/piso: coincide con Python
+[x] División verdadera `/`: int/int correctamente redondeado (también más allá de 2**53)
+[x] ZeroDivisionError (/, //, %) con los mensajes de CPython, capturable
+[x] Floats impresos como el repr de CPython (round-trip más corto; 908 244 valores, 0 diferencias)
+[x] math.sin/cos/log/sqrt con errores de dominio capturables (ELF: kernels fdlibm, ≤1 ulp vs glibc)
+[x] Expresión condicional: a si c sino b (perezosa, asociativa a la derecha)
+[x] Asignación por índice: d[k] = v, xs[i] = v (IndexError capturable)
+[x] list.append, y los elementos de listas/tuplas/dicts/sets conservan su tipo al leerlos
+[x] repr de strings dentro de colecciones: [1, 'a', 2.5, True, None]
+[x] del obj.attr (atributo normal, __delattr__, deleter de property)
+[x] producir desde <iterable> (listas, tuplas, rango...), no solo generadores
+[x] Metaclasses: metaclass=, __new__/__init__/__call__, type(nombre, (), ns), type(obj)
+[x] Excepciones de runtime despachadas al except correcto (jerarquía de builtins)
+[x] os.name, sys.argv, sys.exit
 ```
 
 ### Compilar desde la CLI
@@ -210,6 +253,25 @@ py -m piton compilar examples\01_hola.piton --backend=x86 --output hola.exe
 
 # ELF Linux x86-64 mediante WSL
 py -m piton compilar examples\01_hola.piton --backend=linux --output hola-linux
+```
+
+En Linux nativo no hace falta WSL, y el backend de Windows también compila
+(con `x86_64-w64-mingw32-gcc` y `nasm` en el `PATH`):
+
+```bash
+python3 -m piton compilar examples/01_hola.piton --backend=linux --output hola-linux
+./hola-linux
+python3 -m piton compilar examples/01_hola.piton --backend=x86 --output hola.exe
+wine hola.exe
+```
+
+Salida real:
+
+```text
+PITON_NATIVE_BUILD = PASS (.../hola-linux)
+Hola, mundo
+PITON_NATIVE_BUILD = PASS (.../hola.exe)
+Hola, mundo
 ```
 
 Para producir un recibo con hashes, imports PE, ejecución con entorno vacío y
@@ -224,12 +286,20 @@ El contrato exacto vive en `NATIVE_SUBSET_1_0.md`.
 ### Qué NO compila nativamente (rechazado o pendiente)
 
 ```text
-[ ] Metaclasses
-[ ] yield from (producir desde) — fail-closed en MIR
+[ ] Leer un elemento suelto de una colección heterogénea ([1, "a"][0]) — fail-closed al compilar
+[ ] // y % entre floats — fail-closed al compilar
+[ ] Metaclase con __call__ sobre una clase que define __init__ — fail-closed
+[ ] type(nombre, bases, ns) con bases no vacías — fail-closed
 [ ] Decoradores sobre métodos/clases/generadores
-[ ] Stdlib amplia (solo math.sqrt demostrado)
+[ ] Stdlib amplia (math, sys, os.name y asyncio demostrados)
 [ ] FFI nativo / ctypes
 ```
+
+Divergencias declaradas (a propósito, con error explícito en vez de un
+resultado incorrecto): `math.sin/cos` con |x| > 1e6 en el ELF Linux
+(`NotImplementedError`); `INT64_MIN // -1` en Linux (`OverflowError`, CPython
+daría un entero grande); `sys.exit` termina de inmediato sin propagar
+`SystemExit`.
 
 > **Actualización posterior al contrato NATIVE_SUBSET_1_0** (no reescrito: es un
 > snapshot histórico de ese recibo). Desde entonces el proyecto pasó a Fase 14 y
@@ -310,7 +380,40 @@ Gates activos:
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-09-19)
+### Estado nativo verificado (2026-09-25)
+
+Rama `parity-merge`: une la línea Linux (`main`) con la línea de Windows
+(`windows-lineage-b53`) y cierra la paridad de la suite.
+
+```text
+Linux (Ubuntu 24.04, CPython 3.12.3):   716 tests OK, 52 saltados*
+Win64 (mingw + wine 9.0 en Linux):      354 tests OK, 1 saltado**
+test_metaclasses (METACLASSES_V1):      11/11 en los dos backends
+```
+
+\* Saltados por requisitos del host, no por fallas: tests que necesitan un
+Windows real, `sudo` sin contraseña (chroot) o un kernel legible (QEMU).
+\** El recibo de evidencia exige el oráculo fijado en CPython 3.12.4.
+
+Win64 bajo wine **no reemplaza** la validación en Windows real
+(`windowsvalidate.ps1`, arriba): wine no es Windows, y los recibos lo
+registran así.
+
+Para reproducir en Linux:
+
+```bash
+# suite completa, backend Linux
+python3 -m unittest tests.test_cli_and_corpus tests.test_effect_lattice tests.test_metaclasses \
+  tests.test_native_evidence tests.test_parser_new tests.test_phase10_linux tests.test_phase11_13 \
+  tests.test_phase14 tests.test_phase2 tests.test_phase4 tests.test_phase5 tests.test_phase6 \
+  tests.test_phase7 tests.test_phase8_10 tests.test_translator tests.test_windows_validate
+
+# backend Win64 construido con mingw y ejecutado con wine
+PITON_NATIVE_TARGET=win64 python3 -m unittest tests.test_phase5 tests.test_native_evidence \
+  tests.test_cli_and_corpus tests.test_metaclasses
+```
+
+### Estado nativo verificado (2026-09-19) — histórico
 
 ```text
 300/300 tests pass (test_phase5.py, Windows PE)
