@@ -1,20 +1,11 @@
 ﻿# Windows validation
 
-- Status: **PASS**
+- Status: **FAIL**
 - Run: $RunId
 - Commit: $gitCommit
 - Computer: $(DANNY)
 - Python: $pythonExecutable
-- Worktree dirty before run: $(M  validation/windows/latest.json
-M  validation/windows/latest.log
-M  validation/windows/latest.md
-A  validation/windows/windowsvalidate-20260925T123622Z.json
-A  validation/windows/windowsvalidate-20260925T123622Z.log
-A  validation/windows/windowsvalidate-20260925T123622Z.md
-A  validation/windows/windowsvalidate-20260925T123707Z.json
-A  validation/windows/windowsvalidate-20260925T123707Z.log
-A  validation/windows/windowsvalidate-20260925T123707Z.md
-?? piton/native_runtime.o
+- Worktree dirty before run: $(?? piton/native_runtime.o
 ?? validation/windows/windowsvalidate-20260922T012102Z.json
 ?? validation/windows/windowsvalidate-20260922T012102Z.log
 ?? validation/windows/windowsvalidate-20260922T012102Z.md
@@ -33,17 +24,19 @@ A  validation/windows/windowsvalidate-20260925T123707Z.md
 ?? validation/windows/windowsvalidate-20260922T132805Z.json
 ?? validation/windows/windowsvalidate-20260922T132805Z.log
 ?? validation/windows/windowsvalidate-20260922T132805Z.md
-?? validation/windows/windowsvalidate-20260925T130214Z.log.Length -gt 0)
+?? validation/windows/windowsvalidate-20260925T123622Z.log.Length -gt 0)
 
 ## Steps
 
 | Step | Status | Exit | Seconds |
 |---|---|---:|---:|
-| python-version | PASS | 0 | 0.057 |
-| windows-focused-corpus | PASS | 0 | 35.063 |
-| windows-regression-suite | PASS | 0 | 1420.588 |
+| tool-nasm | FAIL | 1 | 0 |
+| tool-gcc | FAIL | 1 | 0 |
+| python-version | PASS | 0 | 0.075 |
+| windows-focused-corpus | FAIL | 1 | 1.087 |
+| windows-regression-suite | FAIL | 1 | 7.249 |
 
-No failed steps.
+Failed: tool-nasm, tool-gcc, windows-focused-corpus, windows-regression-suite
 
-Raw output: [$ArchiveStem.log](./windowsvalidate-20260925T130214Z.log)
-Machine-readable receipt: [$ArchiveStem.json](./windowsvalidate-20260925T130214Z.json)
+Raw output: [$ArchiveStem.log](./windowsvalidate-20260925T123622Z.log)
+Machine-readable receipt: [$ArchiveStem.json](./windowsvalidate-20260925T123622Z.json)

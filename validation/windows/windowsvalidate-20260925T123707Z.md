@@ -1,6 +1,6 @@
 ﻿# Windows validation
 
-- Status: **PASS**
+- Status: **FAIL**
 - Run: $RunId
 - Commit: $gitCommit
 - Computer: $(DANNY)
@@ -11,9 +11,6 @@ M  validation/windows/latest.md
 A  validation/windows/windowsvalidate-20260925T123622Z.json
 A  validation/windows/windowsvalidate-20260925T123622Z.log
 A  validation/windows/windowsvalidate-20260925T123622Z.md
-A  validation/windows/windowsvalidate-20260925T123707Z.json
-A  validation/windows/windowsvalidate-20260925T123707Z.log
-A  validation/windows/windowsvalidate-20260925T123707Z.md
 ?? piton/native_runtime.o
 ?? validation/windows/windowsvalidate-20260922T012102Z.json
 ?? validation/windows/windowsvalidate-20260922T012102Z.log
@@ -33,17 +30,17 @@ A  validation/windows/windowsvalidate-20260925T123707Z.md
 ?? validation/windows/windowsvalidate-20260922T132805Z.json
 ?? validation/windows/windowsvalidate-20260922T132805Z.log
 ?? validation/windows/windowsvalidate-20260922T132805Z.md
-?? validation/windows/windowsvalidate-20260925T130214Z.log.Length -gt 0)
+?? validation/windows/windowsvalidate-20260925T123707Z.log.Length -gt 0)
 
 ## Steps
 
 | Step | Status | Exit | Seconds |
 |---|---|---:|---:|
-| python-version | PASS | 0 | 0.057 |
-| windows-focused-corpus | PASS | 0 | 35.063 |
-| windows-regression-suite | PASS | 0 | 1420.588 |
+| python-version | PASS | 0 | 0.053 |
+| windows-focused-corpus | PASS | 0 | 41.786 |
+| windows-regression-suite | FAIL | 1 | 1428.602 |
 
-No failed steps.
+Failed: windows-regression-suite
 
-Raw output: [$ArchiveStem.log](./windowsvalidate-20260925T130214Z.log)
-Machine-readable receipt: [$ArchiveStem.json](./windowsvalidate-20260925T130214Z.json)
+Raw output: [$ArchiveStem.log](./windowsvalidate-20260925T123707Z.log)
+Machine-readable receipt: [$ArchiveStem.json](./windowsvalidate-20260925T123707Z.json)
