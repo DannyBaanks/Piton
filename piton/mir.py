@@ -1186,6 +1186,10 @@ class MIRLowerer:
         self._lower_statements(builder, node.body)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -1277,6 +1281,10 @@ class MIRLowerer:
         builder.emit("store", index_name, following)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -1345,6 +1353,10 @@ class MIRLowerer:
         builder.emit("store", index_name, following)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -1393,6 +1405,10 @@ class MIRLowerer:
         builder.current = increment_block
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -1451,6 +1467,10 @@ class MIRLowerer:
         self._lower_statements(builder, node.body)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()

@@ -92,6 +92,38 @@ class Phase5Gates(unittest.TestCase):
                 numbers = [t.value for t in tokenize(literal + "\n") if t.type.name == "NUMBER"]
                 self.assertEqual(numbers, [literal])
 
+    def test_x86_collection_elements_keep_their_type(self):
+        # ELEMENT_TYPES_V1: str/float/bool elements read back typed; repr inside collections.
+        result = compare_native_to_cpython(
+            'xs = ["a", "b"]\nimprimir(xs[0])\nimprimir(xs[-1] + "!")\n'
+            'fs = [1.5, 2.5]\nimprimir(fs[1] + 1.0)\n'
+            'para s en ["x", "y"]:\n    imprimir(s)\n'
+            'd = {"k": "v", "n": "m"}\nimprimir(d["k"])\n'
+            'e = {1: "uno", 2: "dos"}\npara k en e:\n    imprimir(k + 1)\n'
+            'bs = [Verdadero, Falso]\nimprimir(bs[1])\n'
+            'imprimir([1, "a", 2.5, Verdadero, Nada])\nimprimir({"k": "it\'s"})\nimprimir(("t",))\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_list_append_method(self):
+        result = compare_native_to_cpython(
+            'xs = []\nxs.append("p")\nxs.append("q")\nimprimir(xs[1])\nimprimir(xs)\n'
+            'ns = [1]\nns.append(2)\nimprimir(ns)\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_consecutive_loops_over_same_list(self):
+        # The exhausted iterator's StopIteration must not leak into the next loop.
+        result = compare_native_to_cpython(
+            'xs = [1, 2]\npara v en xs:\n    imprimir(v)\npara w en xs:\n    imprimir(w * 10)\nimprimir("fin")\n'
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_heterogeneous_element_read_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
+            with self.assertRaisesRegex(Exception, "heterogeneous collection"):
+                compile_native('xs = [1, "a"]\nimprimir(xs[0])\n', Path(directory) / "program.exe")
+
     def test_x86_float_repr_matches_python(self):
         # FLOAT_REPR_V1: shortest round-trip repr, CPython's exponent layout.
         result = compare_native_to_cpython(

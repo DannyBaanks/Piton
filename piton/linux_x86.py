@@ -6,6 +6,7 @@ import gzip
 import re
 import subprocess
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -314,9 +315,11 @@ static long piton_closure_call_frame(long callee,long argc,long*args){if(callee&
 static long piton_callback_invoke(long callback,long value){long args[1]={value};return piton_closure_call_frame(callback,1,args);}
 static long piton_frame_call(long addr,long argc,long*args){long*frame=piton_alloc((usize)argc*sizeof(long));for(long i=0;i<argc;++i)frame[i]=args[i];return((long(*)(long*))addr)(frame);}
 static void piton_print_slot(PitonSlot v);
-static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}if(s->kind==PK_TUPLE&&s->length==1)piton_write(1,",",1);piton_write(1,s->kind==PK_TUPLE?")":"]",1);}
-static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(d->items[i].key);piton_write(1,": ",2);piton_print_slot(d->items[i].value);}piton_write(1,"}",1);}
-static void piton_print_set(PitonSet*s){piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}piton_write(1,"}",1);}
+static void piton_write_str_repr(const char*s){int sq=0,dq=0;for(const char*p=s;*p;++p){if(*p=='\'')sq=1;else if(*p=='"')dq=1;}char q=(sq&&!dq)?'"':'\'';piton_write(1,&q,1);char e[4];for(const unsigned char*p=(const unsigned char*)s;*p;++p){unsigned char c=*p;if(c==(unsigned char)q||c=='\\'){e[0]='\\';e[1]=(char)c;piton_write(1,e,2);}else if(c=='\n')piton_write(1,"\\n",2);else if(c=='\r')piton_write(1,"\\r",2);else if(c=='\t')piton_write(1,"\\t",2);else if(c<0x20||c==0x7f){const char*h="0123456789abcdef";char x[4]={'\\','x',h[c>>4],h[c&15]};piton_write(1,x,4);}else piton_write(1,(const char*)p,1);}piton_write(1,&q,1);}
+static void piton_print_item(PitonSlot v){if(v.kind==PK_STR)piton_write_str_repr((const char*)v.bits);else piton_print_slot(v);}
+static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_item(s->items[i]);}if(s->kind==PK_TUPLE&&s->length==1)piton_write(1,",",1);piton_write(1,s->kind==PK_TUPLE?")":"]",1);}
+static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_item(d->items[i].key);piton_write(1,": ",2);piton_print_item(d->items[i].value);}piton_write(1,"}",1);}
+static void piton_print_set(PitonSet*s){piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_item(s->items[i]);}piton_write(1,"}",1);}
 static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char fb[40];int fn=pfr_repr(piton_bits_double(v.bits),fb);piton_write(1,fb,(usize)fn);break;}case PK_STR:piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;default:piton_write(1,"<object>",8);}}
 static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i)r+=d->items[i].key.bits;return r;}
@@ -598,6 +601,37 @@ class LinuxCEmitter:
         lines.append("}")
         return lines
 
+    # ELEMENT_TYPES_V1: static element types of collections, kept in `types`
+    # under "<name>#elem" (list/tuple/set/iterators) and "<name>#key"/"#val"
+    # (dict). "empty" = no element seen yet, "mixed" = heterogeneous.
+    _PARTS = ("#elem", "#key", "#val")
+
+    @staticmethod
+    def _join_types(kinds) -> str:
+        kinds = [k for k in kinds if k != "empty"]
+        if not kinds:
+            return "empty"
+        numeric = {"int", "bool"}
+        first = kinds[0]
+        if all(k == first for k in kinds):
+            return first
+        return "mixed"
+
+    def _copy_parts(self, types: dict[str, str], source: str, target: str) -> None:
+        for part in self._PARTS:
+            if isinstance(source, str) and source + part in types:
+                types[target + part] = types[source + part]
+            else:
+                types.pop(target + part, None)
+
+    def _element_type(self, types: dict[str, str], name: Any, part: str, what: str) -> str:
+        kind = types.get(name + part) if isinstance(name, str) else None
+        if kind == "mixed":
+            raise NativeBuildError(
+                f"native {what} of a heterogeneous collection is not supported yet (element type is not static)"
+            )
+        return kind if kind and kind != "empty" else "int"
+
     def _truth(self, value: Any, types: dict[str, str]) -> str:
         """C expression for CPython truthiness of ``value`` by its static type."""
         v = self._value(value)
@@ -733,6 +767,9 @@ class LinuxCEmitter:
                     raise NativeBuildError("Linux iter requires a native collection or user __iter__")
                 out.append(f"    {_name(result)}=piton_iterator_new_any((void*){self._value(source)},{iterator_kind});")
             types[result] = f"iterator:{source_type or 'unknown'}"
+            part = "#key" if source_type == "dict" else "#elem"
+            if isinstance(source, str) and source + part in types:
+                types[result + "#elem"] = types[source + part]
         elif op == "builtin_iter_new":
             builtin, source, start = args
             if builtin == "calliter":
@@ -780,7 +817,14 @@ class LinuxCEmitter:
             else:
                 next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
                 out.append(f"    {_name(result)}={next_helper}({self._value(iterator)});")
-            types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type in {"iterator:dict", "iterator:str"} else "int"
+            if iterator_type in {"iterator:enumerate", "iterator:zip"}:
+                types[result] = "tuple"
+            elif iterator_type == "iterator:str":
+                types[result] = "str"
+            elif iterator_type in {"iterator:list", "iterator:tuple", "iterator:set", "iterator:dict"} and iterator + "#elem" in types:
+                types[result] = self._element_type(types, iterator, "#elem", "iteration")
+            else:
+                types[result] = "str" if iterator_type == "iterator:dict" else "int"
             out.append("    if(piton_exc_flag){")
             if handler_label:
                 out.append(f"        goto {_name(function.name + '_' + handler_label)};")
@@ -809,6 +853,7 @@ class LinuxCEmitter:
             source = args[0]
             aliases[result] = source
             types[result] = types.get(source, "int")
+            self._copy_parts(types, source, result)
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
@@ -829,6 +874,7 @@ class LinuxCEmitter:
         elif op == "store":
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
+            self._copy_parts(types, args[1], args[0])
         elif op == "unary":
             operator = {"no": "!", "not": "!"}.get(args[0], args[0])
             if operator not in {"+", "-", "~", "!"}:
@@ -1461,6 +1507,16 @@ class LinuxCEmitter:
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
             call_args = args[3] if len(args) > 3 else ()
+            if cls_name is None and types.get(obj) == "list" and method == "append" and len(call_args) == 1:
+                # list.append(x): same lowering as the comprehension append.
+                out.extend(self._emit_instruction(
+                    replace(instruction, op="list_append", args=(obj, call_args[0]), result=None),
+                    function, aliases, types, bigint_slots,
+                ))
+                if result:
+                    out.append(f"    {_name(result)}=0;")
+                    types[result] = "none"
+                return out
             if cls_name is None:
                 owner_type = types.get(obj, "")
                 if not owner_type.startswith("object:"):
@@ -1618,6 +1674,12 @@ class LinuxCEmitter:
             else:
                 raise NativeBuildError(f"Linux collection kind not supported: {kind}")
             types[result] = kind
+            if kind == "dict":
+                types[result + "#key"] = self._join_types(
+                    ["str" if isinstance(k, str) and not k.startswith("%") else types.get(k, "int") for k, _ in items])
+                types[result + "#val"] = self._join_types([types.get(v, "int") for _, v in items])
+            else:
+                types[result + "#elem"] = self._join_types([types.get(v, "int") for v in items])
         elif op == "get_item":
             coll, idx = args
             collection_type = types.get(coll)
@@ -1627,7 +1689,12 @@ class LinuxCEmitter:
                 out.append(f'    {_name(result)}=piton_dict_get((PitonDict*){self._value(coll)},{self._slot(idx, types)}).bits;')
             else:
                 raise NativeBuildError(f"Linux subscription not supported for {collection_type}")
-            types[result] = "object:module" if collection_type == "dict:module" else "int"
+            if collection_type == "dict:module":
+                types[result] = "object:module"
+            elif collection_type == "dict":
+                types[result] = self._element_type(types, coll, "#val", "subscript")
+            else:
+                types[result] = self._element_type(types, coll, "#elem", "subscript")
         elif op == "collection_len":
             coll = args[0]
             collection_type = types.get(coll)
@@ -1642,6 +1709,9 @@ class LinuxCEmitter:
             if collection_type != "list":
                 raise NativeBuildError("Linux list_append requires a list")
             out.append(f'    {{PitonSeq*_c=(PitonSeq*){self._value(coll)};PitonSlot _s;_s.bits={self._value(value)};_s.kind={self._kind(types.get(value, "int"))};piton_seq_append(_c,_s);}}')
+            for owner in {coll, aliases.get(coll, coll)}:
+                if owner + "#elem" in types:
+                    types[owner + "#elem"] = self._join_types([types[owner + "#elem"], types.get(value, "int")])
         elif op == "gen_init":
             func_name = args[0]
             gen_args = tuple(args[1]) if len(args) > 1 and args[1] else ()

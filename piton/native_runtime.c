@@ -251,6 +251,32 @@ int64_t piton_iterator_next_any(void *raw) {
     return value;
 }
 
+int64_t piton_iterator_next_any_boxed(void *raw) {
+    PitonAnyIterator *iterator = raw;
+    if (!iterator || iterator->magic != PITON_ITERATOR_MAGIC) {
+        fprintf(stderr, "TypeError: object is not an iterator\n"); exit(1);
+    }
+    int64_t length = 0;
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        length = ((PitonCollection *)iterator->raw)->length;
+    else if (iterator->kind == SUB_TAG_DICT)
+        length = ((PitonDict *)iterator->raw)->length;
+    else
+        length = ((PitonSet *)iterator->raw)->length;
+    if (iterator->index >= length) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    int64_t value;
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        value = ((PitonCollection *)iterator->raw)->items[iterator->index++];
+    else if (iterator->kind == SUB_TAG_DICT)
+        value = ((PitonDict *)iterator->raw)->entries[iterator->index++].key;
+    else
+        value = ((PitonSet *)iterator->raw)->items[iterator->index++];
+    return value;
+}
+
 void *piton_sorted_new(void *raw) {
     PitonCollection *source = raw;
     if (!source || (source->header.sub_tag != SUB_TAG_LIST && source->header.sub_tag != SUB_TAG_TUPLE))
@@ -755,7 +781,22 @@ static void piton_value_print_inner(int64_t v, int recursing) {
         switch (h->sub_tag) {
         case SUB_TAG_STR: {
             PitonStr *s = ptr;
-            fwrite(s->data, 1, (size_t)s->len, stdout);
+            if (!recursing) { fwrite(s->data, 1, (size_t)s->len, stdout); break; }
+            /* repr(str) inside a collection: CPython's quote choice and escapes. */
+            int sq = 0, dq = 0;
+            for (int64_t i = 0; i < s->len; ++i) { if (s->data[i] == '\'') sq = 1; else if (s->data[i] == '"') dq = 1; }
+            char q = (sq && !dq) ? '"' : '\'';
+            putchar(q);
+            for (int64_t i = 0; i < s->len; ++i) {
+                unsigned char ch = (unsigned char)s->data[i];
+                if (ch == (unsigned char)q || ch == '\\') { putchar('\\'); putchar(ch); }
+                else if (ch == '\n') fputs("\\n", stdout);
+                else if (ch == '\r') fputs("\\r", stdout);
+                else if (ch == '\t') fputs("\\t", stdout);
+                else if (ch < 0x20 || ch == 0x7f) printf("\\x%02x", ch);
+                else putchar(ch);
+            }
+            putchar(q);
             break;
         }
         case SUB_TAG_LIST: case SUB_TAG_TUPLE: {
@@ -883,6 +924,128 @@ void piton_list_append(void *raw, int64_t value, int64_t type_tag) {
         if (h) h->refcount++;
         c->items[c->length++] = pv_encode(PITON_TAG_OBJECT, value);
     }
+}
+
+/* ELEMENT_TYPES_V1: collections store tagged PitonValues. The emitter knows
+ * each value's static type and boxes on write / unboxes on read, so str,
+ * float, bool and None survive a round trip through a list, tuple, set or
+ * dict. kind: 0 int, 1 bool, 2 None, 3 float (IEEE bits), 4 str (char*),
+ * 5 heap object (collection, instance, bigint). Boxed floats are not freed
+ * (a copied PitonValue could otherwise be freed twice). */
+int64_t piton_box(int64_t raw, int64_t kind) {
+    switch (kind) {
+    case 1: return pv_bool(raw != 0);
+    case 2: return pv_none();
+    case 3: {
+        double *cell = malloc(sizeof(double));
+        memcpy(cell, &raw, sizeof(double));
+        return pv_encode(PITON_TAG_FLOAT, (int64_t)cell);
+    }
+    case 4: {
+        const char *text = (const char *)raw;
+        return pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_new(text, text ? (int64_t)strlen(text) : 0));
+    }
+    case 5: {
+        PitonHeader *h = (PitonHeader *)raw;
+        if (h) h->refcount++;
+        return pv_encode(PITON_TAG_OBJECT, raw);
+    }
+    default: return pv_int(raw);
+    }
+}
+
+int64_t piton_unbox(int64_t v, int64_t kind) {
+    int tag = pv_tag(v);
+    if (tag == PITON_TAG_INT) return pv_payload_signed(v);
+    if (tag == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    if (tag == PITON_TAG_NONE) return 0;
+    if (tag == PITON_TAG_FLOAT) { int64_t bits; memcpy(&bits, (void *)pv_payload(v), sizeof(bits)); return bits; }
+    void *ptr = (void *)pv_payload(v);
+    if (kind == 4 && ptr && ((PitonHeader *)ptr)->sub_tag == SUB_TAG_STR) return (int64_t)((PitonStr *)ptr)->data;
+    return (int64_t)ptr;
+}
+
+void piton_collection_put_boxed(void *raw, int64_t index, int64_t boxed) {
+    PitonCollection *c = raw;
+    if (!c || index < 0 || index >= c->capacity) return;
+    c->items[index] = boxed;
+    if (index >= c->length) c->length = index + 1;
+}
+
+void piton_list_append_boxed(void *raw, int64_t boxed) {
+    PitonCollection *c = raw;
+    if (!c || c->header.sub_tag != SUB_TAG_LIST) return;
+    if (c->length >= c->capacity) {
+        int64_t new_cap = c->capacity ? c->capacity * 2 : 4;
+        c->items = realloc(c->items, (size_t)new_cap * sizeof(int64_t));
+        c->capacity = new_cap;
+    }
+    c->items[c->length++] = boxed;
+}
+
+int64_t piton_collection_get_boxed(void *raw, int64_t index) {
+    PitonCollection *c = raw;
+    if (!c) return pv_none();
+    if (index < 0) index += c->length;
+    if (index < 0 || index >= c->length) { piton_raise("IndexError", "list index out of range"); return pv_none(); }
+    return c->items[index];
+}
+
+void piton_dict_put_boxed(void *raw, int64_t key, int64_t value) {
+    PitonDict *d = raw;
+    if (!d) return;
+    for (int64_t i = 0; i < d->length; ++i)
+        if (piton_value_eq_raw(d->entries[i].key, key)) {
+            piton_value_deep_free(d->entries[i].value);
+            piton_value_deep_free(key);
+            d->entries[i].value = value;
+            return;
+        }
+    if (d->length >= d->capacity) {
+        int64_t new_cap = d->capacity ? d->capacity * 2 : 4;
+        d->entries = realloc(d->entries, (size_t)new_cap * sizeof(PitonDictEntry));
+        memset(d->entries + d->capacity, 0, (size_t)(new_cap - d->capacity) * sizeof(PitonDictEntry));
+        d->capacity = new_cap;
+    }
+    d->entries[d->length].key = key;
+    d->entries[d->length].value = value;
+    ++d->length;
+}
+
+int64_t piton_dict_get_boxed(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    for (int64_t i = 0; d && i < d->length; ++i)
+        if (piton_value_eq_raw(d->entries[i].key, key)) {
+            piton_value_deep_free(key);
+            return d->entries[i].value;
+        }
+    /* KeyError carries repr(key), like CPython. */
+    static char message[256];
+    if (pv_tag(key) == PITON_TAG_INT) {
+        snprintf(message, sizeof message, "%lld", (long long)pv_payload_signed(key));
+    } else if (pv_tag(key) == PITON_TAG_OBJECT && pv_payload(key) &&
+               ((PitonHeader *)pv_payload(key))->sub_tag == SUB_TAG_STR) {
+        snprintf(message, sizeof message, "'%s'", ((PitonStr *)pv_payload(key))->data);
+    } else {
+        message[0] = '\0';
+    }
+    piton_value_deep_free(key);
+    piton_raise("KeyError", message);
+    return pv_none();
+}
+
+void piton_set_add_boxed(void *raw, int64_t value) {
+    PitonSet *s = raw;
+    if (!s) return;
+    for (int64_t i = 0; i < s->length; ++i)
+        if (piton_value_eq_raw(s->items[i], value)) { piton_value_deep_free(value); return; }
+    if (s->length >= s->capacity) {
+        int64_t new_cap = s->capacity ? s->capacity * 2 : 4;
+        s->items = realloc(s->items, (size_t)new_cap * sizeof(int64_t));
+        memset(s->items + s->capacity, 0, (size_t)(new_cap - s->capacity) * sizeof(int64_t));
+        s->capacity = new_cap;
+    }
+    s->items[s->length++] = value;
 }
 
 int64_t piton_collection_len(void *raw) {
@@ -1603,7 +1766,8 @@ int64_t piton_dict_unpack4(void *raw, const char **names, int64_t count,
         return -1;
     }
     for (int64_t i = 0; i < d->length; ++i) {
-        const char *key = (const char *)pv_payload(d->entries[i].key);
+        /* Keys may be boxed PitonStr (ELEMENT_TYPES_V1) or legacy raw char*. */
+        const char *key = (const char *)piton_unbox(d->entries[i].key, 4);
         if (!key) {
             piton_raise("TypeError", "keywords must be strings");
             return -1;
@@ -1620,10 +1784,7 @@ int64_t piton_dict_unpack4(void *raw, const char **names, int64_t count,
             return -1;
         }
         *mask |= (1LL << matched);
-        int64_t v = d->entries[i].value;
-        if (pv_tag(v) == PITON_TAG_INT) { out4[matched] = pv_payload_signed(v); continue; }
-        if (pv_tag(v) == PITON_TAG_BOOL) { out4[matched] = pv_payload(v) ? 1 : 0; continue; }
-        out4[matched] = v;
+        out4[matched] = piton_unbox(d->entries[i].value, 4);
     }
     return 0;
 }
