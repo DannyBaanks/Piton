@@ -7,7 +7,54 @@
 #include <windows.h>
 #else
 #include <unistd.h>
+
 #endif
+
+/* FLOAT_REPR_V1: CPython float repr, shared with the Linux runtime (see linux_x86.py). */
+/* CPython float repr without libc: shortest round-trip digits (Burger & Dybvig
+   free-format, round-half-even reading) with exact multi-precision integers,
+   then CPython's 'r' layout. Writes into buf (>= 32 bytes), returns length. */
+#define PFR_LIMBS 48
+typedef struct{unsigned int d[PFR_LIMBS];int n;}pfr_big;
+static void pfr_set(pfr_big*a,uint64_t v){a->n=0;while(v){a->d[a->n++]=(unsigned int)v;v>>=32;}}
+static void pfr_mul_small(pfr_big*a,unsigned int m){uint64_t c=0;for(int i=0;i<a->n;++i){uint64_t t=(uint64_t)a->d[i]*m+c;a->d[i]=(unsigned int)t;c=t>>32;}if(c)a->d[a->n++]=(unsigned int)c;}
+static void pfr_shl(pfr_big*a,int bits){if(!a->n)return;int w=bits/32,b=bits%32;if(b){unsigned int c=0;for(int i=0;i<a->n;++i){unsigned int t=a->d[i];a->d[i]=(t<<b)|c;c=t>>(32-b);}if(c)a->d[a->n++]=c;}if(w){for(int i=a->n-1;i>=0;--i)a->d[i+w]=a->d[i];for(int i=0;i<w;++i)a->d[i]=0;a->n+=w;}}
+static int pfr_cmp(const pfr_big*a,const pfr_big*b){if(a->n!=b->n)return a->n<b->n?-1:1;for(int i=a->n-1;i>=0;--i)if(a->d[i]!=b->d[i])return a->d[i]<b->d[i]?-1:1;return 0;}
+static void pfr_add(pfr_big*r,const pfr_big*a,const pfr_big*b){int n=a->n>b->n?a->n:b->n;uint64_t c=0;for(int i=0;i<n;++i){uint64_t t=c+(i<a->n?a->d[i]:0)+(i<b->n?b->d[i]:0);r->d[i]=(unsigned int)t;c=t>>32;}r->n=n;if(c)r->d[r->n++]=(unsigned int)c;}
+static void pfr_sub(pfr_big*a,const pfr_big*b){int64_t br=0;for(int i=0;i<a->n;++i){int64_t t=(int64_t)a->d[i]-(i<b->n?(int64_t)b->d[i]:0)-br;br=t<0;a->d[i]=(unsigned int)(t+(br?0x100000000L:0));}while(a->n&&!a->d[a->n-1])--a->n;}
+static int pfr_digits(uint64_t bits,char*out,int*decpt){
+  uint64_t frac=bits&0xFFFFFFFFFFFFFUL;int bexp=(int)((bits>>52)&0x7FF);
+  uint64_t f;int e;if(bexp){f=frac|0x10000000000000UL;e=bexp-1075;}else{f=frac;e=-1074;}
+  int even=(f&1)==0;pfr_big r,s,mp,mm;
+  if(e>=0){if(f!=0x10000000000000UL){pfr_set(&r,f);pfr_shl(&r,e+1);pfr_set(&s,2);pfr_set(&mp,1);pfr_shl(&mp,e);mm=mp;}
+    else{pfr_set(&r,f);pfr_shl(&r,e+2);pfr_set(&s,4);pfr_set(&mp,1);pfr_shl(&mp,e+1);pfr_set(&mm,1);pfr_shl(&mm,e);}}
+  else{if(bexp<=1||f!=0x10000000000000UL){pfr_set(&r,f);pfr_shl(&r,1);pfr_set(&s,1);pfr_shl(&s,1-e);pfr_set(&mp,1);pfr_set(&mm,1);}
+    else{pfr_set(&r,f);pfr_shl(&r,2);pfr_set(&s,1);pfr_shl(&s,2-e);pfr_set(&mp,2);pfr_set(&mm,1);}}
+  int k=0;pfr_big t;
+  for(;;){pfr_add(&t,&r,&mp);int c=pfr_cmp(&t,&s);if(c>0||(c==0&&even)){pfr_mul_small(&s,10);++k;}else break;}
+  for(;;){pfr_add(&t,&r,&mp);pfr_mul_small(&t,10);int c=pfr_cmp(&t,&s);if(c<0||(c==0&&!even)){pfr_mul_small(&r,10);pfr_mul_small(&mp,10);pfr_mul_small(&mm,10);--k;}else break;}
+  int n=0;
+  for(;;){pfr_mul_small(&r,10);pfr_mul_small(&mp,10);pfr_mul_small(&mm,10);int d=0;while(pfr_cmp(&r,&s)>=0){pfr_sub(&r,&s);++d;}
+    int c1=pfr_cmp(&r,&mm);int low=c1<0||(c1==0&&even);pfr_add(&t,&r,&mp);int c2=pfr_cmp(&t,&s);int high=c2>0||(c2==0&&even);
+    if(!low&&!high){out[n++]=(char)('0'+d);continue;}
+    if(low&&!high)out[n++]=(char)('0'+d);else if(high&&!low)out[n++]=(char)('0'+d+1);
+    else{pfr_big r2=r;pfr_shl(&r2,1);int c3=pfr_cmp(&r2,&s);out[n++]=(char)('0'+((c3<0||(c3==0&&!(d&1)))?d:d+1));}
+    break;}
+  *decpt=k;return n;}
+static int pfr_repr(double x,char*buf){
+  union{double d;uint64_t u;}v;v.d=x;int o=0;
+  if(x!=x){buf[0]='n';buf[1]='a';buf[2]='n';buf[3]=0;return 3;}
+  if(v.u>>63){buf[o++]='-';v.u&=0x7FFFFFFFFFFFFFFFUL;}
+  if(v.u==0x7FF0000000000000UL){buf[o++]='i';buf[o++]='n';buf[o++]='f';buf[o]=0;return o;}
+  if(v.u==0){buf[o++]='0';buf[o++]='.';buf[o++]='0';buf[o]=0;return o;}
+  char dg[20];int decpt;int n=pfr_digits(v.u,dg,&decpt);
+  if(decpt>-4&&decpt<=16){
+    if(decpt<=0){buf[o++]='0';buf[o++]='.';for(int i=0;i<-decpt;++i)buf[o++]='0';for(int i=0;i<n;++i)buf[o++]=dg[i];}
+    else{for(int i=0;i<decpt;++i)buf[o++]=i<n?dg[i]:'0';buf[o++]='.';if(n>decpt)for(int i=decpt;i<n;++i)buf[o++]=dg[i];else buf[o++]='0';}
+  }else{
+    buf[o++]=dg[0];if(n>1){buf[o++]='.';for(int i=1;i<n;++i)buf[o++]=dg[i];}
+    int ex=decpt-1;buf[o++]='e';buf[o++]=ex<0?'-':'+';if(ex<0)ex=-ex;char eb[4];int en=0;do{eb[en++]=(char)('0'+ex%10);ex/=10;}while(ex);if(en<2)eb[en++]='0';while(en)buf[o++]=eb[--en];}
+  buf[o]=0;return o;}
 
 void piton_raise_unhandled(const char *type, const char *message);
 
@@ -201,6 +248,32 @@ int64_t piton_iterator_next_any(void *raw) {
         value = ((PitonSet *)iterator->raw)->items[iterator->index++];
     if (pv_tag(value) == PITON_TAG_INT) return pv_payload_signed(value);
     if (pv_tag(value) == PITON_TAG_BOOL) return pv_payload(value) ? 1 : 0;
+    return value;
+}
+
+int64_t piton_iterator_next_any_boxed(void *raw) {
+    PitonAnyIterator *iterator = raw;
+    if (!iterator || iterator->magic != PITON_ITERATOR_MAGIC) {
+        fprintf(stderr, "TypeError: object is not an iterator\n"); exit(1);
+    }
+    int64_t length = 0;
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        length = ((PitonCollection *)iterator->raw)->length;
+    else if (iterator->kind == SUB_TAG_DICT)
+        length = ((PitonDict *)iterator->raw)->length;
+    else
+        length = ((PitonSet *)iterator->raw)->length;
+    if (iterator->index >= length) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    int64_t value;
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        value = ((PitonCollection *)iterator->raw)->items[iterator->index++];
+    else if (iterator->kind == SUB_TAG_DICT)
+        value = ((PitonDict *)iterator->raw)->entries[iterator->index++].key;
+    else
+        value = ((PitonSet *)iterator->raw)->items[iterator->index++];
     return value;
 }
 
@@ -696,8 +769,9 @@ static void piton_value_print_inner(int64_t v, int recursing) {
         break;
     case PITON_TAG_FLOAT: {
         double d = *(double *)pv_payload(v);
-        if (isfinite(d) && trunc(d) == d) printf("%.1f", d);
-        else printf("%.15g", d);
+        char fb[40];
+        pfr_repr(d, fb);
+        fputs(fb, stdout);
         break;
     }
     case PITON_TAG_OBJECT: {
@@ -707,7 +781,22 @@ static void piton_value_print_inner(int64_t v, int recursing) {
         switch (h->sub_tag) {
         case SUB_TAG_STR: {
             PitonStr *s = ptr;
-            fwrite(s->data, 1, (size_t)s->len, stdout);
+            if (!recursing) { fwrite(s->data, 1, (size_t)s->len, stdout); break; }
+            /* repr(str) inside a collection: CPython's quote choice and escapes. */
+            int sq = 0, dq = 0;
+            for (int64_t i = 0; i < s->len; ++i) { if (s->data[i] == '\'') sq = 1; else if (s->data[i] == '"') dq = 1; }
+            char q = (sq && !dq) ? '"' : '\'';
+            putchar(q);
+            for (int64_t i = 0; i < s->len; ++i) {
+                unsigned char ch = (unsigned char)s->data[i];
+                if (ch == (unsigned char)q || ch == '\\') { putchar('\\'); putchar(ch); }
+                else if (ch == '\n') fputs("\\n", stdout);
+                else if (ch == '\r') fputs("\\r", stdout);
+                else if (ch == '\t') fputs("\\t", stdout);
+                else if (ch < 0x20 || ch == 0x7f) printf("\\x%02x", ch);
+                else putchar(ch);
+            }
+            putchar(q);
             break;
         }
         case SUB_TAG_LIST: case SUB_TAG_TUPLE: {
@@ -835,6 +924,141 @@ void piton_list_append(void *raw, int64_t value, int64_t type_tag) {
         if (h) h->refcount++;
         c->items[c->length++] = pv_encode(PITON_TAG_OBJECT, value);
     }
+}
+
+/* ELEMENT_TYPES_V1: collections store tagged PitonValues. The emitter knows
+ * each value's static type and boxes on write / unboxes on read, so str,
+ * float, bool and None survive a round trip through a list, tuple, set or
+ * dict. kind: 0 int, 1 bool, 2 None, 3 float (IEEE bits), 4 str (char*),
+ * 5 heap object (collection, instance, bigint). Boxed floats are not freed
+ * (a copied PitonValue could otherwise be freed twice). */
+int64_t piton_box(int64_t raw, int64_t kind) {
+    switch (kind) {
+    case 1: return pv_bool(raw != 0);
+    case 2: return pv_none();
+    case 3: {
+        double *cell = malloc(sizeof(double));
+        memcpy(cell, &raw, sizeof(double));
+        return pv_encode(PITON_TAG_FLOAT, (int64_t)cell);
+    }
+    case 4: {
+        const char *text = (const char *)raw;
+        return pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_new(text, text ? (int64_t)strlen(text) : 0));
+    }
+    case 5: {
+        PitonHeader *h = (PitonHeader *)raw;
+        if (h) h->refcount++;
+        return pv_encode(PITON_TAG_OBJECT, raw);
+    }
+    default: return pv_int(raw);
+    }
+}
+
+int64_t piton_unbox(int64_t v, int64_t kind) {
+    int tag = pv_tag(v);
+    if (tag == PITON_TAG_INT) return pv_payload_signed(v);
+    if (tag == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    if (tag == PITON_TAG_NONE) return 0;
+    if (tag == PITON_TAG_FLOAT) { int64_t bits; memcpy(&bits, (void *)pv_payload(v), sizeof(bits)); return bits; }
+    void *ptr = (void *)pv_payload(v);
+    if (kind == 4 && ptr && ((PitonHeader *)ptr)->sub_tag == SUB_TAG_STR) return (int64_t)((PitonStr *)ptr)->data;
+    return (int64_t)ptr;
+}
+
+void piton_collection_put_boxed(void *raw, int64_t index, int64_t boxed) {
+    PitonCollection *c = raw;
+    if (!c || index < 0 || index >= c->capacity) return;
+    c->items[index] = boxed;
+    if (index >= c->length) c->length = index + 1;
+}
+
+void piton_list_append_boxed(void *raw, int64_t boxed) {
+    PitonCollection *c = raw;
+    if (!c || c->header.sub_tag != SUB_TAG_LIST) return;
+    if (c->length >= c->capacity) {
+        int64_t new_cap = c->capacity ? c->capacity * 2 : 4;
+        c->items = realloc(c->items, (size_t)new_cap * sizeof(int64_t));
+        c->capacity = new_cap;
+    }
+    c->items[c->length++] = boxed;
+}
+
+void piton_collection_set_boxed(void *raw, int64_t index, int64_t boxed) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    if (index < 0) index += c->length;
+    if (index < 0 || index >= c->length) {
+        piton_value_deep_free(boxed);
+        piton_raise("IndexError", "list assignment index out of range");
+        return;
+    }
+    piton_value_deep_free(c->items[index]);
+    c->items[index] = boxed;
+}
+
+int64_t piton_collection_get_boxed(void *raw, int64_t index) {
+    PitonCollection *c = raw;
+    if (!c) return pv_none();
+    if (index < 0) index += c->length;
+    if (index < 0 || index >= c->length) { piton_raise("IndexError", "list index out of range"); return pv_none(); }
+    return c->items[index];
+}
+
+void piton_dict_put_boxed(void *raw, int64_t key, int64_t value) {
+    PitonDict *d = raw;
+    if (!d) return;
+    for (int64_t i = 0; i < d->length; ++i)
+        if (piton_value_eq_raw(d->entries[i].key, key)) {
+            piton_value_deep_free(d->entries[i].value);
+            piton_value_deep_free(key);
+            d->entries[i].value = value;
+            return;
+        }
+    if (d->length >= d->capacity) {
+        int64_t new_cap = d->capacity ? d->capacity * 2 : 4;
+        d->entries = realloc(d->entries, (size_t)new_cap * sizeof(PitonDictEntry));
+        memset(d->entries + d->capacity, 0, (size_t)(new_cap - d->capacity) * sizeof(PitonDictEntry));
+        d->capacity = new_cap;
+    }
+    d->entries[d->length].key = key;
+    d->entries[d->length].value = value;
+    ++d->length;
+}
+
+int64_t piton_dict_get_boxed(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    for (int64_t i = 0; d && i < d->length; ++i)
+        if (piton_value_eq_raw(d->entries[i].key, key)) {
+            piton_value_deep_free(key);
+            return d->entries[i].value;
+        }
+    /* KeyError carries repr(key), like CPython. */
+    static char message[256];
+    if (pv_tag(key) == PITON_TAG_INT) {
+        snprintf(message, sizeof message, "%lld", (long long)pv_payload_signed(key));
+    } else if (pv_tag(key) == PITON_TAG_OBJECT && pv_payload(key) &&
+               ((PitonHeader *)pv_payload(key))->sub_tag == SUB_TAG_STR) {
+        snprintf(message, sizeof message, "'%s'", ((PitonStr *)pv_payload(key))->data);
+    } else {
+        message[0] = '\0';
+    }
+    piton_value_deep_free(key);
+    piton_raise("KeyError", message);
+    return pv_none();
+}
+
+void piton_set_add_boxed(void *raw, int64_t value) {
+    PitonSet *s = raw;
+    if (!s) return;
+    for (int64_t i = 0; i < s->length; ++i)
+        if (piton_value_eq_raw(s->items[i], value)) { piton_value_deep_free(value); return; }
+    if (s->length >= s->capacity) {
+        int64_t new_cap = s->capacity ? s->capacity * 2 : 4;
+        s->items = realloc(s->items, (size_t)new_cap * sizeof(int64_t));
+        memset(s->items + s->capacity, 0, (size_t)(new_cap - s->capacity) * sizeof(int64_t));
+        s->capacity = new_cap;
+    }
+    s->items[s->length++] = value;
 }
 
 int64_t piton_collection_len(void *raw) {
@@ -1555,7 +1779,8 @@ int64_t piton_dict_unpack4(void *raw, const char **names, int64_t count,
         return -1;
     }
     for (int64_t i = 0; i < d->length; ++i) {
-        const char *key = (const char *)pv_payload(d->entries[i].key);
+        /* Keys may be boxed PitonStr (ELEMENT_TYPES_V1) or legacy raw char*. */
+        const char *key = (const char *)piton_unbox(d->entries[i].key, 4);
         if (!key) {
             piton_raise("TypeError", "keywords must be strings");
             return -1;
@@ -1572,10 +1797,7 @@ int64_t piton_dict_unpack4(void *raw, const char **names, int64_t count,
             return -1;
         }
         *mask |= (1LL << matched);
-        int64_t v = d->entries[i].value;
-        if (pv_tag(v) == PITON_TAG_INT) { out4[matched] = pv_payload_signed(v); continue; }
-        if (pv_tag(v) == PITON_TAG_BOOL) { out4[matched] = pv_payload(v) ? 1 : 0; continue; }
-        out4[matched] = v;
+        out4[matched] = piton_unbox(d->entries[i].value, 4);
     }
     return 0;
 }
@@ -1845,17 +2067,102 @@ void piton_object_set_tagged(void *raw, const char *name, int64_t raw_ptr) {
     piton_value_incref(ev);
 }
 
+/* METACLASSES_V1: runtime class objects, one per class name, created on
+ * first use. A class object is an instance of its metaclass ("type" or a user
+ * metaclass) carrying __name__ and its class attributes. */
+typedef struct { const char *name; void *obj; } PitonClassEntry;
+static PitonClassEntry piton_class_table[256];
+static int64_t piton_class_count = 0;
+
+static void *piton_class_find(const char *name) {
+    for (int64_t i = 0; name && i < piton_class_count; ++i)
+        if (strcmp(piton_class_table[i].name, name) == 0) return piton_class_table[i].obj;
+    return NULL;
+}
+
+static int64_t piton_attr_decode(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    return v;
+}
+
 int64_t piton_object_get(void *raw, const char *name) {
     PitonObject *o = raw;
     if (!o || !name) return pv_none();
     for (int64_t i = 0; i < o->length; ++i)
-        if (strcmp(o->attributes[i].name, name) == 0) {
-            int64_t v = o->attributes[i].value;
-            if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
-            if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
-            return v;
-        }
+        if (strcmp(o->attributes[i].name, name) == 0) return piton_attr_decode(o->attributes[i].value);
+    /* Instance miss: fall back to the class object's attributes, like CPython. */
+    PitonObject *c = piton_class_find(o->class_name);
+    if (c && c != o)
+        for (int64_t i = 0; i < c->length; ++i)
+            if (strcmp(c->attributes[i].name, name) == 0) return piton_attr_decode(c->attributes[i].value);
     return pv_none();
+}
+
+void piton_class_register(const char *name, int64_t obj) {
+    for (int64_t i = 0; i < piton_class_count; ++i)
+        if (strcmp(piton_class_table[i].name, name) == 0) { piton_class_table[i].obj = (void *)obj; return; }
+    if (piton_class_count < 256) {
+        piton_class_table[piton_class_count].name = name;
+        piton_class_table[piton_class_count++].obj = (void *)obj;
+    }
+}
+
+static const char *piton_class_name_of(int64_t cls) {
+    int64_t name = piton_object_get((void *)cls, "__name__");
+    return name ? (const char *)name : "object";
+}
+
+int64_t piton_class_object(const char *name, const char *meta) {
+    void *o = piton_class_find(name);
+    if (o) return (int64_t)o;
+    o = piton_object_new(meta);
+    piton_object_set(o, "__name__", (int64_t)name);
+    piton_class_register(name, (int64_t)o);
+    return (int64_t)o;
+}
+
+int64_t piton_class_new(int64_t mcs, int64_t name, int64_t ns) {
+    char *own_name = strdup((const char *)name);
+    void *o = piton_object_new(strdup(piton_class_name_of(mcs)));
+    piton_object_set(o, "__name__", (int64_t)own_name);
+    PitonDict *d = (PitonDict *)ns;
+    for (int64_t i = 0; d && i < d->length; ++i) {
+        const char *key = (const char *)piton_unbox(d->entries[i].key, 4);
+        if (key) piton_object_set(o, strdup(key), piton_unbox(d->entries[i].value, 4));
+    }
+    piton_class_register(own_name, (int64_t)o);
+    return (int64_t)o;
+}
+
+int64_t piton_class_call(int64_t cls) {
+    return (int64_t)piton_object_new(piton_class_name_of(cls));
+}
+
+int64_t piton_type_of(int64_t obj) {
+    PitonObject *o = (PitonObject *)obj;
+    return piton_class_object(o ? o->class_name : "NoneType", "type");
+}
+
+void piton_print_class(int64_t cls) {
+    printf("<class '__main__.%s'>\n", piton_class_name_of(cls));
+}
+
+void piton_object_delattr(void *raw, const char *name, const char *missing) {
+    PitonObject *o = raw;
+    if (!o || !name) return;
+    for (int64_t i = 0; i < o->length; ++i) {
+        if (strcmp(o->attributes[i].name, name) == 0) {
+            piton_value_deep_free(o->attributes[i].value);
+            /* Shift remaining attributes down */
+            for (int64_t j = i; j < o->length - 1; ++j) {
+                o->attributes[j] = o->attributes[j + 1];
+            }
+            --o->length;
+            return;
+        }
+    }
+    piton_raise("AttributeError", missing);
 }
 
 /* ATTRIBUTE_LOOKUP_V2: read-through access that first consults the object's
@@ -2216,19 +2523,30 @@ void piton_raise(const char *type, const char *message) {
 /* Report an exception with no statically-matching handler and exit. */
 static const char *piton_exception_cause_type = NULL;
 static const char *piton_exception_cause_msg = NULL;
+static const char *piton_exc_cause_type = NULL;
+static const char *piton_exc_cause_message = NULL;
+static const char *piton_exc_context_type = NULL;
+static const char *piton_exc_context_message = NULL;
 
-void piton_raise_unhandled(const char *type, const char *message) {
-    /* EXCEPTION_CHAINING_V1: the cause prints first, like CPython's
-     * "__cause__" chain in the traceback (text-only model — no frames). */
-    if (piton_exception_cause_type) {
-        fprintf(stderr, "%s", piton_exception_cause_type);
-        if (piton_exception_cause_msg && *piton_exception_cause_msg)
-            fprintf(stderr, ": %s", piton_exception_cause_msg);
-        fprintf(stderr, " -> causada por\n");
-    }
+static void piton_print_exc_line(const char *type, const char *message) {
     fprintf(stderr, "%s", type ? type : "Exception");
     if (message && *message) fprintf(stderr, ": %s", message);
     fputc('\n', stderr);
+}
+
+void piton_raise_unhandled(const char *type, const char *message) {
+    /* EXCEPTION_CHAINING_V1: CPython's chained-traceback separators in a
+     * text-only model (no frames). __cause__ wins over __context__. */
+    const char *cause_type = piton_exception_cause_type ? piton_exception_cause_type : piton_exc_cause_type;
+    const char *cause_msg = piton_exception_cause_type ? piton_exception_cause_msg : piton_exc_cause_message;
+    if (cause_type) {
+        piton_print_exc_line(cause_type, cause_msg);
+        fprintf(stderr, "\nThe above exception was the direct cause of the following exception:\n\n");
+    } else if (piton_exc_context_type) {
+        piton_print_exc_line(piton_exc_context_type, piton_exc_context_message);
+        fprintf(stderr, "\nDuring handling of the above exception, another exception occurred:\n\n");
+    }
+    piton_print_exc_line(type, message);
     fflush(stderr);
     exit(1);
 }
@@ -2239,6 +2557,8 @@ void piton_raise_chain(const char *type, const char *message,
                        const char *cause_type, const char *cause_msg) {
     piton_exception_cause_type = cause_type;
     piton_exception_cause_msg = cause_msg;
+    piton_exc_context_type = NULL;
+    piton_exc_context_message = NULL;
     piton_raise(type, message);
 }
 
@@ -2269,87 +2589,27 @@ void piton_catch_clear(void) {
     piton_exception_message = NULL;
     piton_exception_cause_type = NULL;
     piton_exception_cause_msg = NULL;
+    piton_exc_cause_type = NULL;
+    piton_exc_cause_message = NULL;
+    piton_exc_context_type = NULL;
+    piton_exc_context_message = NULL;
+}
+
+/* Saved exception state for bare re-raise (piton identifies a handler statically). */
+static const char *piton_reraise_type = NULL;
+static const char *piton_reraise_message = NULL;
+static const char *piton_reraise_cause_type = NULL;
+static const char *piton_reraise_cause_message = NULL;
+
+/* catch_matches: is the saved (handled) exception of exactly this type? */
+int64_t piton_reraise_type_is(const char *name) {
+    return piton_reraise_type && name && strcmp(piton_reraise_type, name) == 0;
 }
 
 /* Snapshot the active exception before the handler clears catch state. */
 void piton_reraise_save(void) {
     piton_reraise_type = piton_exception_type;
     piton_reraise_message = piton_exception_message;
-    piton_reraise_cause_type = piton_exc_cause_type;
-    piton_reraise_cause_message = piton_exc_cause_message;
-}
-
-/* Raise an exception with an explicit cause (raise ... from ...). */
-void piton_raise_from(const char *type, const char *message,
-                      const char *cause_type, const char *cause_message) {
-    /* Search handler stack in reverse (most recent first) */
-    for (int i = handler_sp - 1; i >= 0; --i) {
-        PitonHandler *h = &handler_stack[i];
-        if (h->accepted == NULL ||
-            strcmp(h->accepted, type) == 0 ||
-            strcmp(h->accepted, "Exception") == 0) {
-            piton_exception_active = 1;
-            piton_exception_type = type;
-            piton_exception_message = message;
-            piton_exc_cause_type = cause_type;
-            piton_exc_cause_message = cause_message;
-            piton_exc_context_type = NULL;
-            piton_exc_context_message = NULL;
-            return;
-        }
-    }
-    /* No handler found — print chain and exit */
-    piton_raise_unhandled(type, message);
-}
-
-/* Raise an exception with cause from a saved reraise (bare raise from in handler). */
-void piton_raise_from_var(const char *type, const char *message) {
-    /* Search handler stack in reverse (most recent first) */
-    for (int i = handler_sp - 1; i >= 0; --i) {
-        PitonHandler *h = &handler_stack[i];
-        if (h->accepted == NULL ||
-            strcmp(h->accepted, type) == 0 ||
-            strcmp(h->accepted, "Exception") == 0) {
-            piton_exception_active = 1;
-            piton_exception_type = type;
-            piton_exception_message = message;
-            piton_exc_cause_type = piton_reraise_type;
-            piton_exc_cause_message = piton_reraise_message;
-            piton_exc_context_type = NULL;
-            piton_exc_context_message = NULL;
-            return;
-        }
-    }
-    /* No handler found — print chain and exit */
-    piton_raise_unhandled(type, message);
-}
-
-/* Raise an exception with no cause (raise ... from None). */
-void piton_raise_from_none(const char *type, const char *message) {
-    /* Search handler stack in reverse (most recent first) */
-    for (int i = handler_sp - 1; i >= 0; --i) {
-        PitonHandler *h = &handler_stack[i];
-        if (h->accepted == NULL ||
-            strcmp(h->accepted, type) == 0 ||
-            strcmp(h->accepted, "Exception") == 0) {
-            piton_exception_active = 1;
-            piton_exception_type = type;
-            piton_exception_message = message;
-            piton_exc_cause_type = NULL;
-            piton_exc_cause_message = NULL;
-            piton_exc_context_type = NULL;
-            piton_exc_context_message = NULL;
-            return;
-        }
-    }
-    /* No handler found — print and exit */
-    piton_raise_unhandled(type, message);
-}
-
-/* Set __context__ from the saved reraise (for bare raise in handler without from). */
-void piton_set_context_from_reraise(void) {
-    piton_exc_context_type = piton_reraise_type;
-    piton_exc_context_message = piton_reraise_message;
 }
 
 /* Re-raise the handler's caught exception; falls through to print+exit when unhandled. */
@@ -2364,8 +2624,6 @@ void piton_reraise(void) {
             piton_exception_active = 1;
             piton_exception_type = type;
             piton_exception_message = message;
-            piton_exc_cause_type = piton_reraise_cause_type;
-            piton_exc_cause_message = piton_reraise_cause_message;
             return;
         }
     }
@@ -2378,10 +2636,9 @@ void piton_reraise_unhandled(void) {
 }
 
 void piton_print_float(double value) {
-    if (isfinite(value) && trunc(value) == value)
-        printf("%.1f\n", value);
-    else
-        printf("%.15g\n", value);
+    char fb[40];
+    pfr_repr(value, fb);
+    puts(fb);
 }
 
 /* MODULE_METADATA_V1: dynamic print for module __package__ (None or text).
@@ -2668,8 +2925,7 @@ int64_t piton_str_from_none(void) {
 
 int64_t piton_str_from_float(double x) {
     char *p = (char *)malloc(40);
-    if (isfinite(x) && trunc(x) == x) sprintf(p, "%.1f", x);
-    else sprintf(p, "%.15g", x);
+    pfr_repr(x, p);
     return (int64_t)p;
 }
 
@@ -2677,9 +2933,17 @@ int64_t piton_str_truthy(const char *s) {
     return (s && s[0]) ? 1 : 0;
 }
 
-int64_t piton_math_floor(double x) { return (int64_t)floor(x); }
-int64_t piton_math_ceil(double x)  { return (int64_t)ceil(x); }
-int64_t piton_math_trunc(double x) { return (int64_t)trunc(x); }
+/* V1 ints are int64: NaN/inf/out-of-range fail closed (catchable), as on Linux. */
+static int piton_float_int_ok(double x) {
+    if (isnan(x)) { piton_raise("ValueError", "cannot convert float NaN to integer"); return 0; }
+    if (x >= 9.2233720368547758e18 || x < -9.2233720368547758e18) {
+        piton_raise("OverflowError", "cannot convert float infinity to integer"); return 0;
+    }
+    return 1;
+}
+int64_t piton_math_floor(double x) { return piton_float_int_ok(x) ? (int64_t)floor(x) : 0; }
+int64_t piton_math_ceil(double x)  { return piton_float_int_ok(x) ? (int64_t)ceil(x) : 0; }
+int64_t piton_math_trunc(double x) { return piton_float_int_ok(x) ? (int64_t)trunc(x) : 0; }
 double  piton_math_fabs(double x)  { return fabs(x); }
 
 int64_t piton_math_gcd(int64_t a, int64_t b) {
@@ -2731,7 +2995,82 @@ const char *piton_type_from_raw(int64_t raw_ptr, int64_t type_tag) {
     }
 }
 
-/* ── Math functions (STDLIB_TIER1_V1) ─────────────────────────────────── */
+/* ── Live count totals ────────────────────────────────────────────────── */
+
+int64_t piton_total_live_count(void) {
+    return live_collections + live_objects + live_dicts + live_sets;
+}
+
+void piton_raise_from(const char *type, const char *message,
+                      const char *cause_type, const char *cause_message) {
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            piton_exc_cause_type = cause_type;
+            piton_exc_cause_message = cause_message;
+            piton_exc_context_type = NULL;
+            piton_exc_context_message = NULL;
+            return;
+        }
+    }
+    piton_raise_unhandled(type, message);
+}
+
+void piton_raise_from_var(const char *type, const char *message) {
+    /* Search handler stack in reverse (most recent first) */
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            piton_exc_cause_type = piton_reraise_type;
+            piton_exc_cause_message = piton_reraise_message;
+            piton_exc_context_type = NULL;
+            piton_exc_context_message = NULL;
+            return;
+        }
+    }
+    /* No handler found — print chain and exit */
+    piton_raise_unhandled(type, message);
+}
+
+void piton_raise_from_none(const char *type, const char *message) {
+    /* Search handler stack in reverse (most recent first) */
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            piton_exc_cause_type = NULL;
+            piton_exc_cause_message = NULL;
+            piton_exc_context_type = NULL;
+            piton_exc_context_message = NULL;
+            return;
+        }
+    }
+    /* No handler found — print and exit */
+    piton_raise_unhandled(type, message);
+}
+
+void piton_set_context_from_reraise(void) {
+    piton_exception_cause_type = NULL;
+    piton_exception_cause_msg = NULL;
+    piton_exc_cause_type = NULL;
+    piton_exc_cause_message = NULL;
+    piton_exc_context_type = piton_reraise_type;
+    piton_exc_context_message = piton_reraise_message;
+}
 
 static inline double piton_bits_double(int64_t bits) {
     union { double d; int64_t u; } v;
@@ -2743,12 +3082,6 @@ static inline int64_t piton_double_bits(double d) {
     union { double d; int64_t u; } v;
     v.d = d;
     return v.u;
-}
-
-int64_t piton_float_sqrt(int64_t bits) {
-    double x = piton_bits_double(bits);
-    double r = sqrt(x);
-    return piton_double_bits(r);
 }
 
 int64_t piton_float_floor(int64_t bits) {
@@ -2765,35 +3098,78 @@ int64_t piton_float_ceil(int64_t bits) {
     return r;
 }
 
+/* DIVISION_V1 (shared with the Linux runtime): CPython true/floor division and
+ * modulo; a zero divisor raises ZeroDivisionError with CPython's message. */
+/* int / int -> correctly rounded double (CPython true division), b != 0.
+   Normalizes both magnitudes to 64 bits, long-divides 56 quotient bits plus
+   a sticky bit, rounds half-even, then scales by an exact power of two. */
+static double ptd_pow2(int k){union{uint64_t u;double d;}v;v.u=(uint64_t)(k+1023)<<52;return v.d;}
+static double piton_int_truediv(int64_t a,int64_t b){
+  int neg=(a<0)!=(b<0);uint64_t ua=a<0?0ULL-(uint64_t)a:(uint64_t)a,ub=b<0?0ULL-(uint64_t)b:(uint64_t)b;
+  if(!ua)return neg?-0.0:0.0;
+  if(ua<=9007199254740992ULL&&ub<=9007199254740992ULL){double q=(double)ua/(double)ub;return neg?-q:q;}
+  int la=0,lb=0;while(!(ua>>63)){ua<<=1;++la;}while(!(ub>>63)){ub<<=1;++lb;}
+  uint64_t r=ua,q=0;int c=0;
+  for(int i=0;i<56;++i){int bit=c||r>=ub;if(bit)r-=ub;q=(q<<1)|(uint64_t)bit;c=(int)(r>>63);r<<=1;}
+  int sticky=(r!=0)||c;int nb=(q>>55)?56:55;int drop=nb-53;uint64_t low=q&((1ULL<<drop)-1),half=1ULL<<(drop-1);q>>=drop;
+  if(low>half||(low==half&&(sticky||(q&1))))++q;
+  int e=lb-la-55+drop;if(q>>53){q>>=1;++e;}
+  double v=(double)q;if(e>0){while(e>60){v*=ptd_pow2(60);e-=60;}v*=ptd_pow2(e);}else{while(e<-60){v*=ptd_pow2(-60);e+=60;}v*=ptd_pow2(e);}
+  return neg?-v:v;}
+
+int64_t piton_div_true_int(int64_t a, int64_t b) {
+    if (!b) { piton_raise("ZeroDivisionError", "division by zero"); return 0; }
+    return piton_double_bits(piton_int_truediv(a, b));
+}
+int64_t piton_div_true_float(int64_t a, int64_t b) {
+    double y = piton_bits_double(b);
+    if (y == 0.0) { piton_raise("ZeroDivisionError", "float division by zero"); return 0; }
+    return piton_double_bits(piton_bits_double(a) / y);
+}
+int64_t piton_div_floor_int(int64_t a, int64_t b) {
+    if (!b) { piton_raise("ZeroDivisionError", "integer division or modulo by zero"); return 0; }
+    if (b == -1 && a == INT64_MIN) {
+        piton_raise("OverflowError", "integer floor division result does not fit the native int64");
+        return 0;
+    }
+    int64_t q = a / b, r = a % b;
+    if (r && ((r < 0) != (b < 0))) --q;
+    return q;
+}
+int64_t piton_div_mod_int(int64_t a, int64_t b) {
+    if (!b) { piton_raise("ZeroDivisionError", "integer modulo by zero"); return 0; }
+    if (b == -1) return 0;
+    int64_t r = a % b;
+    if (r && ((r < 0) != (b < 0))) r += b;
+    return r;
+}
+
+/* CPython: sin/cos(+-inf) and log(x <= 0) raise ValueError("math domain error"). */
 int64_t piton_float_sin(int64_t bits) {
     double x = piton_bits_double(bits);
-    double r = sin(x);
-    return piton_double_bits(r);
+    if (isinf(x)) { piton_raise("ValueError", "math domain error"); return 0; }
+    return piton_double_bits(sin(x));
 }
 
 int64_t piton_float_cos(int64_t bits) {
     double x = piton_bits_double(bits);
-    double r = cos(x);
-    return piton_double_bits(r);
+    if (isinf(x)) { piton_raise("ValueError", "math domain error"); return 0; }
+    return piton_double_bits(cos(x));
+}
+
+int64_t piton_float_sqrt(int64_t bits) {
+    double x = piton_bits_double(bits);
+    if (x < 0.0) { piton_raise("ValueError", "math domain error"); return 0; }
+    return piton_double_bits(sqrt(x));
 }
 
 int64_t piton_float_log(int64_t bits) {
     double x = piton_bits_double(bits);
-    double r = log(x);
-    return piton_double_bits(r);
+    if (x <= 0.0) { piton_raise("ValueError", "math domain error"); return 0; }
+    return piton_double_bits(log(x));
 }
 
-/* ── Sys functions (STDLIB_TIER1_V1) ──────────────────────────────────── */
-
-#include <stdlib.h>
-
-/* MinGW's CRT exposes the process argument vector through these globals. */
-extern int __argc;
-extern char **__argv;
-
-void piton_exit(int64_t code) {
-    exit((int)code);
-}
+void piton_exit(int64_t code) { exit((int)code); }
 
 int64_t piton_argv_new(void) {
     PitonCollection *c = piton_collection_new(1, __argc);
@@ -2803,10 +3179,4 @@ int64_t piton_argv_new(void) {
     }
     c->length = __argc;
     return (int64_t)c;
-}
-
-/* ── Live count totals ────────────────────────────────────────────────── */
-
-int64_t piton_total_live_count(void) {
-    return live_collections + live_objects + live_dicts + live_sets;
 }

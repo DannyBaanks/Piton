@@ -190,9 +190,9 @@ class Parser:
                 return self._parse_for(is_async=True)
             elif val == "segun":
                 return self._parse_match()
-            elif val == "importar":
+            elif val == "importar" or val == "import":
                 return self._parse_import()
-            elif val == "desde":
+            elif val == "desde" or val == "from":
                 return self._parse_import_from()
             elif val == "global":
                 return self._parse_global()
@@ -202,7 +202,7 @@ class Parser:
                 return self._parse_assert()
             elif val == "borrar":
                 return self._parse_del()
-            elif val == "pasar":
+            elif val == "pasar" or val == "pass":
                 self._advance()
                 return PassStmt().set_pos(tok)
             elif val == "romper":
@@ -291,15 +291,22 @@ class Parser:
         tok = self._advance()
         name = self._consume(TokenType.NAME, "nombre de clase").value
         bases = []
+        keywords = []
         if self._match(TokenType.LPAREN):
             while not self._check(TokenType.RPAREN):
-                bases.append(self._parse_expression(0))
+                if self._check(TokenType.NAME) and self._peek_n(1).type == TokenType.EQUAL:
+                    kw_name = self._advance().value
+                    self._advance()  # =
+                    kw_value = self._parse_expression(0)
+                    keywords.append(Keyword(arg=kw_name, value=kw_value).set_pos(self._peek()))
+                else:
+                    bases.append(self._parse_expression(0))
                 if not self._match(TokenType.COMMA):
                     break
             self._consume(TokenType.RPAREN)
         self._consume(TokenType.COLON)
         body = self._parse_block()
-        return ClassDef(name=name, bases=bases, body=body, decorators=decorators).set_pos(tok)
+        return ClassDef(name=name, bases=bases, keywords=keywords, body=body, decorators=decorators).set_pos(tok)
 
     def _parse_return(self) -> ReturnStmt:
         tok = self._advance()
@@ -450,11 +457,11 @@ class Parser:
         while self._match(TokenType.DOT):
             level += 1
         module = None
-        if self._check(TokenType.NAME) and self._peek().value != "importar":
+        if self._check(TokenType.NAME) and self._peek().value not in ("importar", "import"):
             module = self._consume(TokenType.NAME).value
             while self._match(TokenType.DOT) and self._check(TokenType.NAME):
                 module += "." + self._consume(TokenType.NAME).value
-        self._consume(TokenType.NAME)  # 'importar'
+        self._consume(TokenType.NAME)  # 'importar' or 'import'
         if self._match(TokenType.STAR):
             # `desde pkg importar *` — import star (entry-level binding).
             return ImportFromStmt(
@@ -683,7 +690,42 @@ class Parser:
                 rhs = self._parse_expression(next_min_prec)
                 lhs = BinOp(left=lhs, op=op, right=rhs).set_pos(tok)
 
+        # Conditional expression `a si c sino b` (Python: a if c else b): the
+        # lowest-precedence expression, right-associative. A bare `si` with no
+        # `sino` at this nesting level is a comprehension filter, not this.
+        if (
+            min_prec <= PRECEDENCE["if_expr"]
+            and self._check(TokenType.NAME)
+            and self._peek().value in ("si", "if")
+            and self._conditional_else_ahead()
+        ):
+            tok = self._advance()
+            test = self._parse_expression(PRECEDENCE["or"])
+            else_tok = self._peek()
+            if else_tok.type != TokenType.NAME or else_tok.value not in ("sino", "else"):
+                raise ParseError("Se esperaba 'sino' en la expresión condicional", else_tok)
+            self._advance()
+            orelse = self._parse_expression(PRECEDENCE["if_expr"])
+            lhs = IfExpr(test=test, body=lhs, orelse=orelse).set_pos(tok)
         return lhs
+
+    def _conditional_else_ahead(self) -> bool:
+        """True when a `sino`/`else` follows at the current bracket depth on this line."""
+        depth = 0
+        for token in self.tokens[self.pos + 1:]:
+            if token.type in (TokenType.LPAREN, TokenType.LBRACKET, TokenType.LBRACE):
+                depth += 1
+            elif token.type in (TokenType.RPAREN, TokenType.RBRACKET, TokenType.RBRACE):
+                if depth == 0:
+                    return False
+                depth -= 1
+            elif token.type in (TokenType.NEWLINE, TokenType.ENDMARKER) or (
+                depth == 0 and token.type in (TokenType.COLON, TokenType.COMMA)
+            ):
+                return False
+            elif depth == 0 and token.type == TokenType.NAME and token.value in ("sino", "else"):
+                return True
+        return False
 
     def _parse_primary(self) -> CSTNode:
         tok = self._peek()

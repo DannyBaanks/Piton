@@ -9,7 +9,18 @@ from typing import Any, Dict, List, Optional, Sequence
 from piton.hir import HIRKind, HIRNode, Keyword, With
 
 
+# Modules the native backends provide themselves (never scanned from disk).
+NATIVE_BUILTIN_MODULES = frozenset({"asyncio", "math", "sys", "os"})
 _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
+# CPython's builtin exception tree for every type the native runtimes raise.
+_BUILTIN_EXCEPTION_PARENTS = {
+    "Exception": "BaseException", "GeneratorExit": "BaseException", "CancelledError": "BaseException",
+    "ArithmeticError": "Exception", "ZeroDivisionError": "ArithmeticError", "OverflowError": "ArithmeticError",
+    "LookupError": "Exception", "IndexError": "LookupError", "KeyError": "LookupError",
+    "ValueError": "Exception", "TypeError": "Exception", "AttributeError": "Exception",
+    "RuntimeError": "Exception", "NotImplementedError": "RuntimeError", "StopIteration": "Exception",
+    "MemoryError": "Exception", "NameError": "Exception", "AssertionError": "Exception",
+}
 
 # TASK_SCHEDULER_V1 magic values, mirrored with native_runtime.c / linux_x86.py.
 PITON_TASK_MAGIC = 0x5049544E54414B4B
@@ -95,6 +106,9 @@ class MIRFunction:
     is_generator: bool = False
     is_coroutine: bool = False
     is_async_generator: bool = False
+    # METACLASSES_V1: static types of parameters the backends cannot infer
+    # (a metaclass __new__/__init__ receives name/bases/namespace).
+    param_types: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -119,6 +133,7 @@ class MIRModule:
     class_parents: dict = field(default_factory=dict)
     class_mro: dict = field(default_factory=dict)
     class_properties: dict = field(default_factory=dict)
+    class_metaclasses: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {"functions": [function.to_dict() for function in self.functions]}
@@ -160,6 +175,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "math_sqrt": "PURE",
     "math_floor": "PURE", "math_ceil": "PURE", "math_trunc": "PURE",
     "math_fabs": "PURE", "math_gcd": "PURE",
+    "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE",
     "object_new": "PURE", "closure_new": "PURE", "cell_new": "PURE",
     "build_collection": "PURE", "genexpr_new": "PURE", "gen_init": "PURE",
     "gather_new": "PURE",
@@ -167,14 +183,14 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "cell_load": "READ", "get_item": "READ", "collection_len": "READ",
     "catch_type": "READ", "catch_message": "READ", "catch_flag": "READ",
     # WRITE
-    "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
+    "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE", "set_item": "WRITE",
     "set_add": "WRITE",
     "try_push": "WRITE", "try_pop": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
-    "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE",
+    "catch_matches": "READ", "class_object": "READ", "class_new": "WRITE", "class_register": "WRITE", "class_call": "WRITE", "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE", "set_context_from_reraise": "WRITE",
     "task_new": "WRITE", "task_cancel": "WRITE", "gather_add": "WRITE",
     # IO
-    "sleep0": "IO",
+    "sleep0": "IO", "sys_exit": "IO", "sys_argv": "IO", "os_name": "PURE",
     # OPAQUE
     "call": "OPAQUE", "call_unpack": "OPAQUE", "method_call": "OPAQUE", "frame_call": "OPAQUE",
     "closure_call": "OPAQUE", "runtime_call": "OPAQUE",
@@ -344,6 +360,11 @@ class MIRLowerer:
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
+        elif target.kind == HIRKind.SUBSCR:
+            # `obj[key] = value` (value is already evaluated, like CPython).
+            container = self._lower_expr(builder, target.value)
+            key = self._lower_expr(builder, target.slice)
+            builder.emit("set_item", container, key, value, _active_handler(builder))
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -399,6 +420,7 @@ class MIRLowerer:
         self.class_mro = {}
         self._mro_memo = {}
         self.class_properties = {}
+        self.class_metaclass: dict[str, str] = {}
         self.async_functions = set()
         self.async_generators = set()
         self.module_aliases = {}
@@ -425,7 +447,7 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind == HIRKind.IMPORT:
                     for alias in node.names:
-                        if alias.name in {"asyncio", "math", "sys"}:
+                        if alias.name in NATIVE_BUILTIN_MODULES:
                             self.module_aliases[alias.asname or alias.name] = alias.name
                             continue
                         if "." in alias.name:
@@ -444,7 +466,7 @@ class MIRLowerer:
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
                     if getattr(node, "is_star", False):
-                        if mod_name in {"asyncio", "math", "sys"}:
+                        if mod_name in NATIVE_BUILTIN_MODULES:
                             raise MIRLoweringError("native star imports from builtin modules are not supported")
                         if not mod_name or getattr(node, "level", 0) or 0 > 0:
                             raise MIRLoweringError("native relative star imports are not supported")
@@ -456,11 +478,11 @@ class MIRLowerer:
                                 self.from_import_aliases[item.name] = f"{prefix}{item.name}"
                         continue
                     if mod_name:
-                        if mod_name not in imported_modules and mod_name not in {"asyncio", "math", "sys"}:
+                        if mod_name not in imported_modules and mod_name not in NATIVE_BUILTIN_MODULES:
                             raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                         for alias in node.names:
                             local = alias.asname or alias.name
-                            if mod_name in {"asyncio", "math"}:
+                            if mod_name in {"asyncio", "math", "os"}:
                                 self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
                             else:
                                 self.from_import_aliases[local] = f"{mod_name.replace('.', '__')}__{alias.name}"
@@ -480,18 +502,23 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
-                if node.keywords or node.decorators or any(
+                keywords = list(node.keywords or [])
+                if node.decorators or any(getattr(k, "arg", None) != "metaclass" for k in keywords) or any(
                     item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS}
                     for item in node.body
                 ):
-                    raise MIRLoweringError("native classes currently require methods only, no keywords or class-level decorators")
+                    raise MIRLoweringError(
+                        "native classes currently require methods only, no class-level decorators "
+                        "and no class keywords other than metaclass="
+                    )
                 bases = [base.name for base in node.bases if getattr(base, "name", None)]
                 for base in bases:
-                    if base not in self.classes and base not in _BUILTIN_EXCEPTIONS:
+                    if base not in self.classes and base not in _BUILTIN_EXCEPTIONS and base != "type":
                         raise MIRLoweringError(f"native base class '{base}' must be defined before '{node.name}'")
                 self.classes[node.name] = set()
                 self.class_base_list[node.name] = bases
                 self.class_parents[node.name] = bases[0] if bases else None
+                self.class_metaclass[node.name] = self._resolve_metaclass(node.name, bases, keywords)
                 property_methods: dict[str, dict[str, str | None]] = {}
                 used_symbols: set[str] = set()
                 for method in node.body:
@@ -510,6 +537,15 @@ class MIRLowerer:
                         method, symbol,
                         super_context=(node.name, super_self) if super_self else None,
                     )
+                    if self._is_metaclass(node.name) and method.name in {"__new__", "__init__"}:
+                        lowered = next(f for f in reversed(self.functions) if f.name == symbol)
+                        if len(lowered.params) != 4:
+                            raise MIRLoweringError(
+                                f"native metaclass {method.name} must take (cls, nombre, bases, ns)"
+                            )
+                        lowered.param_types = {
+                            lowered.params[1]: "str", lowered.params[2]: "tuple", lowered.params[3]: "dict",
+                        }
                     if role is None:
                         self.classes[node.name].add(method.name)
                     else:
@@ -593,6 +629,7 @@ class MIRLowerer:
         self._finalize_mro()
         module.class_mro = dict(self.class_mro)
         module.class_properties = dict(self.class_properties)
+        module.class_metaclasses = dict(self.class_metaclass)
         # ME — effect lattice: every emitted op is classified and chained at
         # lowering time, so a new op born without classification fails closed.
         annotate_module_effects(module)
@@ -651,6 +688,100 @@ class MIRLowerer:
         self._mro_memo[name] = [name, *merged]
         return self._mro_memo[name]
 
+    def _class_object(self, builder: _Builder, name: str) -> str:
+        """Runtime class object for a statically known class (created on first use)."""
+        result = builder.temp()
+        builder.emit("class_object", name, self.class_metaclass.get(name, "type"), result=result)
+        return result
+
+    def _lower_class_statement(self, builder: _Builder, node: HIRNode) -> None:
+        """METACLASSES_V1: a class governed by a custom metaclass is created at
+        its statement, running Meta.__new__ then Meta.__init__ like CPython.
+        Plain classes need no runtime work (their class object is lazy)."""
+        meta = self.class_metaclass.get(node.name, "type")
+        if meta == "type":
+            return
+        mcs = self._class_object(builder, meta)
+        name = builder.temp()
+        builder.emit("const", node.name, result=name)
+        base_objects = tuple(self._class_object(builder, base) for base in self.class_base_list.get(node.name, []))
+        bases = builder.temp()
+        builder.emit("build_collection", "tuple", base_objects, result=bases)
+        namespace = builder.temp()
+        builder.emit("build_collection", "dict", (), result=namespace)
+        new_owner = self._metaclass_hook(meta, "__new__")
+        created = builder.temp()
+        if new_owner:
+            builder.emit("method_call", new_owner, "__new__", mcs, (name, bases, namespace), result=created)
+        else:
+            builder.emit("class_new", mcs, name, namespace, meta, result=created)
+        init_owner = self._metaclass_hook(meta, "__init__")
+        if init_owner:
+            ignored = builder.temp()
+            builder.emit("method_call", init_owner, "__init__", created, (name, bases, namespace), result=ignored)
+        builder.emit("class_register", node.name, created)
+
+    def _lower_type_super_call(self, builder: _Builder, attr: str, user_args: tuple) -> str:
+        """super().__new__/__init__/__call__ reaching the builtin type."""
+        args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+        result = builder.temp()
+        if attr == "__new__":
+            if len(args) != 4:
+                raise MIRLoweringError("native type.__new__ takes (mcs, nombre, bases, ns)")
+            builder.emit("class_new", args[0], args[1], args[3], builder.super_class, result=result)
+        elif attr == "__init__":
+            builder.emit("const", None, result=result)
+        else:
+            if args:
+                raise MIRLoweringError("native type.__call__ with constructor arguments is not supported yet")
+            receiver = builder.temp()
+            builder.emit("load", builder.super_self, result=receiver)
+            builder.emit("class_call", receiver, result=result)
+        return result
+
+    def _is_metaclass(self, name: str) -> bool:
+        """A class deriving (transitively) from type."""
+        mro = self._mro_memo.get(name) or self._compute_mro(name) or []
+        return "type" in mro
+
+    def _resolve_metaclass(self, name: str, bases: list[str], keywords: list) -> str:
+        """METACLASSES_V1: explicit metaclass= or the most derived metaclass of
+        the bases; incompatible ones fail closed like CPython's TypeError."""
+        candidates: list[str] = []
+        for keyword in keywords:
+            value = getattr(keyword, "value", None)
+            meta = getattr(value, "name", None)
+            if meta != "type" and (meta not in self.classes or not self._is_metaclass(meta)):
+                raise MIRLoweringError(f"native metaclass= must name a class deriving from type, got {meta!r}")
+            candidates.append(meta)
+        for base in bases:
+            if base in self.class_metaclass:
+                candidates.append(self.class_metaclass[base])
+        winner = "type"
+        for meta in candidates:
+            if meta == winner:
+                continue
+            winner_mro = self._mro_memo.get(winner) or self._compute_mro(winner) or [winner]
+            meta_mro = self._mro_memo.get(meta) or self._compute_mro(meta) or [meta]
+            if winner in meta_mro:
+                winner = meta
+            elif meta not in winner_mro:
+                raise MIRLoweringError(
+                    "metaclass conflict: the metaclass of a derived class must be a (non-strict) "
+                    "subclass of the metaclasses of all its bases"
+                )
+        return winner
+
+    def _metaclass_hook(self, meta: str, method: str) -> str | None:
+        """First user class in the metaclass MRO defining ``method`` (type's own
+        implementation is built in and returns None)."""
+        for cls in self._mro_memo.get(meta) or self._compute_mro(meta) or []:
+            if cls == "type":
+                return None
+            if method in self.classes.get(cls, set()):
+                return cls
+        return None
+
     def _finalize_mro(self) -> None:
         for name in list(self.class_base_list) + [n for n in self.classes if n not in self.class_base_list]:
             mro = self._compute_mro(name)
@@ -678,7 +809,7 @@ class MIRLowerer:
                 names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
             elif item.kind == HIRKind.IMPORT:
                 for alias in item.names:
-                    if alias.name in {"asyncio", "math", "sys"}:
+                    if alias.name in NATIVE_BUILTIN_MODULES:
                         modules[alias.asname or alias.name] = alias.name
                         continue
                     if "." in alias.name:
@@ -724,7 +855,7 @@ class MIRLowerer:
                                 raise MIRLoweringError(f"native module not supplied: {target}")
                             modules[alias.asname or alias.name] = target
                     continue
-                if mod_name in {"asyncio", "math", "sys"}:
+                if mod_name in NATIVE_BUILTIN_MODULES:
                     for alias in item.names:
                         names[alias.asname or alias.name] = f"{mod_name}.{alias.name}"
                     continue
@@ -1070,9 +1201,21 @@ class MIRLowerer:
                 and source_node.func.name in self.generators
             )
             if not is_gen_call:
-                raise MIRLoweringError(
-                    "native yield from over non-generator values (lists, dicts) is not supported yet; use producir desde gen(...) with a generator"
-                )
+                # YIELD_FROM_ITERABLE_V1: over a plain iterable (list, tuple,
+                # dict, set, str, range, ...) `yield from xs` is exactly
+                # `for x in xs: yield x` -- reuse the for-loop lowering.
+                # Declared V1 divergence: values sent into the outer generator
+                # are dropped instead of raising AttributeError on the iterator.
+                if builder.is_async:
+                    raise MIRLoweringError("'producir desde' is not valid inside an async function")
+                item = f"@yield_from_item_{builder.loop_counter}"
+                builder.loop_counter += 1
+                from piton.hir import For, Load, Store, Yield
+                self._lower_for(builder, For(
+                    target=Store(name=item), iter=source_node,
+                    body=[Yield(value=Load(name=item))], orelse=[],
+                ))
+                return
             sub = self._lower_expr(builder, node.value)
             done = builder.new_block()
             loop = builder.new_block()
@@ -1118,7 +1261,9 @@ class MIRLowerer:
                 if target.kind != HIRKind.ATTR:
                     raise MIRLoweringError("native del currently supports only attribute deletion (del obj.attr)")
                 owner = self._lower_expr(builder, target.value)
-                builder.emit("del_attr", owner, target.attr)
+                builder.emit("del_attr", owner, target.attr, _active_handler(builder))
+        elif kind == HIRKind.CLASS_DEF:
+            self._lower_class_statement(builder, node)
         else:
             if kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
                 self._lower_expr(builder, node)
@@ -1162,6 +1307,10 @@ class MIRLowerer:
         self._lower_statements(builder, node.body)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -1253,6 +1402,10 @@ class MIRLowerer:
         builder.emit("store", index_name, following)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -1321,6 +1474,10 @@ class MIRLowerer:
         builder.emit("store", index_name, following)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -1369,6 +1526,10 @@ class MIRLowerer:
         builder.current = increment_block
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -1427,6 +1588,10 @@ class MIRLowerer:
         self._lower_statements(builder, node.body)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # The exhausted iterator raised StopIteration to reach this block:
+        # clear it, or the next check of the flag would see it (a second
+        # loop over the same list was silently skipped).
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -1496,6 +1661,22 @@ class MIRLowerer:
                 builder.emit("catch_bind", bind_name, result=bound)
                 builder.emit("store", bind_name, bound)
             builder.emit("catch_clear")
+            # Exceptions raised at run time (builtins, division, attribute
+            # deletion...) land on the innermost handler whatever their
+            # type: check it here and forward a mismatch one frame out.
+            catch_filter = self._catch_filter(accepted)
+            if catch_filter is not None:
+                names, negate = catch_filter
+                matched = builder.temp()
+                builder.emit("catch_matches", names, negate, result=matched)
+                matched_block = builder.new_block()
+                forward_block = builder.new_block()
+                builder.emit("branch", matched, matched_block.label, forward_block.label)
+                builder.current = forward_block
+                builder.emit("try_pop")
+                outer = builder.exception_handlers[-1][0] if builder.exception_handlers else None
+                builder.emit("raise_active_dynamic", outer)
+                builder.current = matched_block
             previous_reraise_type = builder.reraise_type
             previous_in_handler = builder.in_except_handler
             builder.reraise_type = accepted
@@ -1516,6 +1697,44 @@ class MIRLowerer:
             builder.emit("jump", end_block.label)
 
         builder.current = end_block
+
+    def _catch_filter(self, accepted: str | None) -> tuple[tuple[str, ...], bool] | None:
+        """Runtime type test for ``excepto accepted``: (names, negate) or None
+        for a true catch-all. ``negate`` means "anything except names"."""
+        if accepted in (None, "BaseException"):
+            return None
+
+        def builtin_ancestors(name: str) -> list[str]:
+            chain = [name]
+            while chain[-1] in _BUILTIN_EXCEPTION_PARENTS:
+                chain.append(_BUILTIN_EXCEPTION_PARENTS[chain[-1]])
+            return chain
+
+        user_classes = [
+            name for name in self.classes
+            if any(base in _BUILTIN_EXCEPTIONS or base in _BUILTIN_EXCEPTION_PARENTS
+                   for base in (self._mro_memo.get(name) or self._compute_mro(name)))
+        ]
+
+        def ancestors(name: str) -> list[str]:
+            chain: list[str] = []
+            for step in self._exception_chain(name) if name in self.classes else [name]:
+                for up in builtin_ancestors(step):
+                    if up not in chain:
+                        chain.append(up)
+            return chain
+
+        if accepted == "Exception":
+            # Everything but the BaseException-only branch (unknown runtime
+            # names are ordinary Exceptions).
+            outside = {"GeneratorExit", "CancelledError"}
+            outside |= {name for name in user_classes if "Exception" not in ancestors(name)}
+            return tuple(sorted(outside)), True
+        names = {accepted}
+        for name in list(_BUILTIN_EXCEPTION_PARENTS) + user_classes:
+            if accepted in ancestors(name):
+                names.add(name)
+        return tuple(sorted(names)), False
 
     def _with_mro_method(
         self, class_name: str, method: str
@@ -1680,9 +1899,11 @@ class MIRLowerer:
         if exception_type in _BUILTIN_EXCEPTIONS:
             pass
         elif exception_type in self.classes:
-            if "Exception" not in self._exception_chain(exception_type):
+            # _exception_chain always ends at BaseException, so test the real MRO.
+            mro = self._mro_memo.get(exception_type) or self._compute_mro(exception_type)
+            if not any(base in _BUILTIN_EXCEPTIONS for base in mro):
                 raise MIRLoweringError(
-                    f"native custom exception '{exception_type}' must subclass Exception"
+                    f"native custom exception '{exception_type}' must subclass Exception or BaseException"
                 )
         else:
             raise MIRLoweringError(f"unsupported native exception type '{exception_type}'")
@@ -1711,6 +1932,11 @@ class MIRLowerer:
         if node.cause is not None and cause_type is not None:
             builder.emit("raise_chain", exception_type, payload, cause_type, cause_payload, handler_label)
         else:
+            if node.cause is None and builder.in_except_handler:
+                # Implicit __context__: raising while handling another exception
+                # chains to it ("During handling of the above exception ...").
+                # `desde Nada` suppresses it, so that path never records it.
+                builder.emit("set_context_from_reraise")
             builder.emit("raise_typed", exception_type, payload, handler_label)
 
     def _lower_reraise(self, builder: _Builder) -> None:
@@ -1821,9 +2047,9 @@ class MIRLowerer:
                 return result
             alias_target = builder.from_import_aliases.get(node.name)
             if alias_target == "os.name":
-                import sys as _sys
                 result = builder.temp()
-                builder.emit("const", "nt" if _sys.platform == "win32" else "posix", result=result)
+                # Resolved by each backend for its target (Win64 "nt", Linux "posix").
+                builder.emit("os_name", result=result)
                 return result
             result = builder.temp()
             builder.emit("load", alias_target if alias_target is not None else node.name, result=result)
@@ -2012,7 +2238,7 @@ class MIRLowerer:
                         builder.emit(op, left, right, _active_handler(builder), result=result)
                     else:
                         value = self._lower_expr(builder, node.args[0])
-                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        handler = _active_handler(builder)
                         if handler is None:
                             builder.emit(op, value, result=result)
                         else:
@@ -2147,7 +2373,7 @@ class MIRLowerer:
                         builder.emit(op, left, right, _active_handler(builder), result=result)
                     else:
                         value = self._lower_expr(builder, node.args[0])
-                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        handler = _active_handler(builder)
                         if handler is None:
                             builder.emit(op, value, result=result)
                         else:
@@ -2239,6 +2465,11 @@ class MIRLowerer:
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
+        elif target.kind == HIRKind.SUBSCR:
+            # `obj[key] = value` (value is already evaluated, like CPython).
+            container = self._lower_expr(builder, target.value)
+            key = self._lower_expr(builder, target.slice)
+            builder.emit("set_item", container, key, value, _active_handler(builder))
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -2251,7 +2482,7 @@ class MIRLowerer:
             attrs.append(current.attr)
             current = current.value
         if getattr(current, "kind", None) == HIRKind.LOAD and current.name in builder.module_aliases:
-            if current.name not in {"asyncio", "math", "sys"}:
+            if current.name not in NATIVE_BUILTIN_MODULES:
                 return current.name, list(reversed(attrs))
         return None
 
@@ -2274,6 +2505,8 @@ class MIRLowerer:
                 continue
             if cls == current_class:
                 found_current = True
+        if next_class is None and "type" in mro[mro.index(current_class) + 1:] and attr in {"__new__", "__init__", "__call__"}:
+            return self._lower_type_super_call(builder, attr, user_args)
         if next_class is None:
             raise MIRLoweringError(
                 f"native super().{attr}: no base class in MRO of '{current_class}' defines '{attr}'"
@@ -2317,6 +2550,9 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("cell_load", node.name, result=result)
                 return result
+            if node.name in self.classes:
+                # METACLASSES_V1: a class name used as a value is its class object.
+                return self._class_object(builder, node.name)
             # M8: aliases de módulo creados por `desde .. importar X` dentro
             # de un paquete son marcadores estáticos. Si el nombre del alias
             # resuelve a un módulo importado, emitimos un placeholder (None) en
@@ -2326,8 +2562,29 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("const", None, result=result)
                 return result
+            resolved = builder.from_import_aliases.get(node.name, node.name)
+            if resolved == "os.name":
+                result = builder.temp()
+                # Resolved by each backend for its target (Win64 "nt", Linux "posix").
+                builder.emit("os_name", result=result)
+                return result
             result = builder.temp()
-            builder.emit("load", builder.from_import_aliases.get(node.name, node.name), result=result)
+            builder.emit("load", resolved, result=result)
+            return result
+        if kind == HIRKind.IF_EXPR:
+            # `a si c sino b`: evaluate only the chosen branch, join via a slot.
+            slot = f"@if_expr_{builder.loop_counter}"
+            builder.loop_counter += 1
+            condition = self._lower_expr(builder, node.test)
+            then_block, else_block, end_block = builder.new_block(), builder.new_block(), builder.new_block()
+            builder.emit("branch", condition, then_block.label, else_block.label)
+            for block, branch in ((then_block, node.body), (else_block, node.orelse)):
+                builder.current = block
+                builder.emit("store", slot, self._lower_expr(builder, branch))
+                builder.emit("jump", end_block.label)
+            builder.current = end_block
+            result = builder.temp()
+            builder.emit("load", slot, result=result)
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()
@@ -2534,11 +2791,34 @@ class MIRLowerer:
                         builder.emit(op, left, right, _active_handler(builder), result=result)
                     else:
                         value = self._lower_expr(builder, node.args[0])
-                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        handler = _active_handler(builder)
                         if handler is None:
                             builder.emit(op, value, result=result)
                         else:
                             builder.emit(op, value, handler, result=result)
+                    return result
+            if node.func.kind == HIRKind.LOAD and node.func.name in {"type", "tipo"} and len(node.args) == 3:
+                # METACLASSES_V1: type(nombre, bases, ns) creates a class at run time.
+                bases_node = node.args[1]
+                if bases_node.kind != HIRKind.TUPLE or getattr(bases_node, "elts", None):
+                    raise MIRLoweringError("native type(nombre, bases, ns) supports only empty bases () yet")
+                name = self._lower_expr(builder, node.args[0])
+                namespace = self._lower_expr(builder, node.args[2])
+                result = builder.temp()
+                builder.emit("class_new", self._class_object(builder, "type"), name, namespace, "type", result=result)
+                return result
+            if node.func.kind == HIRKind.LOAD and node.func.name in self.classes:
+                call_owner = self._metaclass_hook(self.class_metaclass.get(node.func.name, "type"), "__call__")
+                if call_owner:
+                    mro = self._mro_memo.get(node.func.name) or self._compute_mro(node.func.name) or []
+                    if any("__init__" in self.classes.get(cls, set()) for cls in mro):
+                        raise MIRLoweringError("native metaclass __call__ on a class with __init__ is not supported yet")
+                    if node.keywords:
+                        raise MIRLoweringError("native class constructors do not support keyword arguments yet")
+                    cls_object = self._class_object(builder, node.func.name)
+                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                    result = builder.temp()
+                    builder.emit("method_call", call_owner, "__call__", cls_object, args, result=result)
                     return result
             if node.func.kind == HIRKind.LOAD and node.func.name in self.classes:
                 if node.keywords:
@@ -2653,6 +2933,7 @@ class MIRLowerer:
                     op = {
                         "sqrt": "math_sqrt", "floor": "math_floor", "ceil": "math_ceil",
                         "trunc": "math_trunc", "fabs": "math_fabs", "gcd": "math_gcd",
+                        "sin": "math_sin", "cos": "math_cos", "log": "math_log",
                     }.get(attr)
                     arity = 2 if op == "math_gcd" else 1
                     if op is None or len(node.args) != arity:
@@ -2667,11 +2948,18 @@ class MIRLowerer:
                         builder.emit(op, left, right, _active_handler(builder), result=result)
                     else:
                         value = self._lower_expr(builder, node.args[0])
-                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        handler = _active_handler(builder)
                         if handler is None:
                             builder.emit(op, value, result=result)
                         else:
                             builder.emit(op, value, handler, result=result)
+                    return result
+                if module_name == "sys" and node.func.attr == "exit":
+                    if len(node.args) > 1 or node.keywords:
+                        raise MIRLoweringError("native sys.exit takes zero or one argument")
+                    code = self._lower_expr(builder, node.args[0]) if node.args else None
+                    result = builder.temp()
+                    builder.emit("sys_exit", code, result=result)
                     return result
                 function = builder.temp()
                 builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
@@ -2803,6 +3091,19 @@ class MIRLowerer:
                 raise MIRLoweringError(
                     "native super().attr is only supported as super().attr(...) (a call)"
                 )
+            owner_module = (
+                builder.module_aliases.get(node.value.name)
+                if node.value.kind == HIRKind.LOAD else None
+            )
+            if owner_module == "sys" and node.attr == "argv":
+                result = builder.temp()
+                builder.emit("sys_argv", result=result)
+                return result
+            if owner_module == "os" and node.attr == "name":
+                result = builder.temp()
+                # Resolved by each backend for its target (Win64 "nt", Linux "posix").
+                builder.emit("os_name", result=result)
+                return result
             result = builder.temp()
             builder.emit("get_attr", self._lower_expr(builder, node.value), node.attr, result=result)
             return result
@@ -2942,7 +3243,12 @@ class MIRLowerer:
 
     def _binary(self, builder: _Builder, op: str, left: Any, right: Any) -> str:
         result = builder.temp()
-        builder.emit("binary", op, left, right, result=result)
+        if op in {"/", "//", "%"}:
+            # ZeroDivisionError (and the int64 floor-division overflow) are
+            # raised at run time and must reach the innermost handler.
+            builder.emit("binary", op, left, right, _active_handler(builder), result=result)
+        else:
+            builder.emit("binary", op, left, right, result=result)
         return result
 
     def _expand_literal_call(self, node: HIRNode) -> tuple[list[HIRNode], list[Keyword]]:
@@ -3260,6 +3566,9 @@ class MIREvaluator:
         args = instruction.args
         if op == "const":
             env[instruction.result] = args[0]
+        elif op == "os_name":
+            import os as _os
+            env[instruction.result] = _os.name
         elif op == "load":
             env[instruction.result] = env.get(args[0], args[0] if args[0] in self.functions or args[0] in {"print", "imprimir", "range", "rango"} else None)
         elif op == "store":
@@ -3286,6 +3595,8 @@ class MIREvaluator:
             env[instruction.result] = self._value(args[0], env)[self._value(args[1], env)]
         elif op == "collection_len":
             env[instruction.result] = len(self._value(args[0], env))
+        elif op == "set_item":
+            self._value(args[0], env)[self._value(args[1], env)] = self._value(args[2], env)
         elif op == "list_append":
             lst = self._value(args[0], env)
             val = self._value(args[1], env)

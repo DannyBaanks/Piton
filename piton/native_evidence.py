@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from .translator import traducir_fuente
-from .x86 import NativeBuildError
+from .native_differential import native_command, runs_under_wine, strip_wine_noise
+from .x86 import NativeBuildError, win64_c_compiler
 
 
 ORACLE_FLAGS = ("-X", "utf8", "-B", "-I", "-S")
@@ -104,12 +105,30 @@ def inspect_windows_pe(executable: str | Path) -> dict[str, Any]:
     }
 
 
+def _native_environment() -> tuple[dict[str, str], str]:
+    """Environment for the PE run and the label recorded in the receipt.
+
+    On Windows the PE runs with an EMPTY environment. Off Windows it runs
+    through wine, which itself needs HOME/PATH; the receipt says so, and
+    windows_clean_machine_execution stays NOT_DEMONSTRATED either way.
+    """
+    if runs_under_wine():
+        keep = {key: os.environ[key] for key in ("HOME", "PATH", "WINEPREFIX") if key in os.environ}
+        return {**keep, "WINEDEBUG": "-all"}, "wine (HOME, PATH, WINEDEBUG only)"
+    return {}, "empty"
+
+
 def _observe(source_path: Path, executable_path: Path) -> tuple[subprocess.CompletedProcess[bytes], subprocess.CompletedProcess[bytes]]:
     source_text = source_path.read_text(encoding="utf-8-sig")
+    native_env_vars, _label = _native_environment()
     native = subprocess.run(
-        [str(executable_path)], cwd=executable_path.parent, env={},
+        native_command(executable_path), cwd=executable_path.parent, env=native_env_vars,
         capture_output=True, check=False,
     )
+    if runs_under_wine():
+        # Oracle is this host's CPython (LF); the PE writes CRT text mode (CRLF).
+        native.stdout = native.stdout.replace(b"\r\n", b"\n")
+        native.stderr = strip_wine_noise(native.stderr).replace(b"\r\n", b"\n")
     oracle = subprocess.run(
         [sys.executable, *ORACLE_FLAGS, "-c", traducir_fuente(source_text, str(source_path))],
         cwd=source_path.parent, env=ORACLE_ENV, capture_output=True, check=False,
@@ -193,7 +212,7 @@ def build_windows_evidence(
             "exit_code": native.returncode,
             "stdout_hex": native.stdout.hex(),
             "stderr_hex": native.stderr.hex(),
-            "environment": "empty",
+            "environment": _native_environment()[1],
         },
         "oracle_observation": {
             "implementation": platform.python_implementation(),
@@ -213,7 +232,7 @@ def build_windows_evidence(
         },
         "toolchain": {
             "nasm": _tool_version("nasm", "-v"),
-            "gcc": _tool_version("gcc", "--version"),
+            "gcc": _tool_version(Path(win64_c_compiler() or "gcc").name, "--version"),
             "objdump": _tool_version("objdump", "--version"),
         },
         "gates": gates,
@@ -271,7 +290,7 @@ def load_windows_evidence(report: str | Path) -> VerifiedWindowsEvidence:
         "exit_code": native.returncode,
         "stdout_hex": native.stdout.hex(),
         "stderr_hex": native.stderr.hex(),
-        "environment": "empty",
+        "environment": _native_environment()[1],
     }
     if receipt.get("native_observation") != expected_native:
         raise NativeBuildError("native evidence observation mismatch")
