@@ -5,6 +5,7 @@ branch/jump, funciones simples y ``imprimir`` mediante el CRT de Windows.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -175,8 +176,10 @@ class Win64NasmEmitter:
             "extern piton_str_truthy",
             "extern piton_math_floor", "extern piton_math_ceil", "extern piton_math_trunc",
             "extern piton_math_fabs", "extern piton_math_gcd",
-            "extern piton_float_sin", "extern piton_float_cos", "extern piton_float_log",
+            "extern piton_float_sin", "extern piton_float_cos", "extern piton_float_log", "extern piton_float_sqrt",
             "extern piton_exit", "extern piton_argv_new", "extern piton_set_context_from_reraise",
+            "extern piton_reraise_type_is",
+            "extern piton_div_true_int", "extern piton_div_true_float", "extern piton_div_floor_int", "extern piton_div_mod_int",
             "extern piton_type_name", "extern piton_type_from_raw",
             "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_new_with_finalizer", "extern piton_object_set", "extern piton_object_set_tagged", "extern piton_object_get", "extern piton_object_lookup",
 
@@ -673,9 +676,30 @@ class Win64NasmEmitter:
                 if args[1] in self.strkey_dict_temps:
                     self.strkey_dict_temps.add(args[0])
         elif op == "binary":
-            operator, left, right = args
+            operator, left, right = args[0], args[1], args[2]
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
+            if operator in {"/", "//", "%"} and left_type in {"int", "bool", "float"} and right_type in {"int", "bool", "float"}:
+                # DIVISION_V1: runtime helpers raise ZeroDivisionError (catchable).
+                division_handler = args[3] if len(args) > 3 else None
+                is_float = "float" in {left_type, right_type}
+                if is_float and operator != "/":
+                    raise NativeBuildError(f"native float operator not supported yet: {operator}")
+                if is_float:
+                    self._load_float_operand(left, "xmm0")
+                    self._load_float_operand(right, "xmm1")
+                    self.lines.extend(["    movq rcx, xmm0", "    movq rdx, xmm1", "    call piton_div_true_float"])
+                else:
+                    self._load_operand(left, "rcx")
+                    self._load_operand(right, "rdx")
+                    helper = {"/": "piton_div_true_int", "//": "piton_div_floor_int", "%": "piton_div_mod_int"}[operator]
+                    self.lines.append(f"    call {helper}")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "float" if operator == "/" else "int"
+                if division_handler is not None:
+                    self.lines.extend(["    call piton_catch_flag", "    test rax, rax",
+                                       f"    jne {labels.get(division_handler, division_handler)}"])
+                return
             if "str" in {left_type, right_type}:
                 if operator == "+" and left_type == right_type == "str":
                     self._emit_string_concat(left, right, result)
@@ -1274,7 +1298,8 @@ class Win64NasmEmitter:
                 else:
                     self.types[result] = "int"
         elif op == "del_attr":
-            owner, name = args
+            owner, name = args[0], args[1]
+            del_handler = args[2] if len(args) > 2 else None
             owner_type = self.types.get(owner, "")
             prop_class = self._resolve_property_class(owner_type, name)
             if prop_class is not None:
@@ -1284,45 +1309,32 @@ class Win64NasmEmitter:
                 self._load_operand(owner, "rcx")
                 self.lines.append(f"    call {deleter}")
             elif owner_type.startswith("object:"):
+                # ATTRIBUTE_LOOKUP_V2: a __delattr__ hook wins, except inside
+                # the hook itself (same bypass as __setattr__); otherwise the
+                # plain instance attribute is deleted, or AttributeError.
                 class_name = owner_type.split(":", 1)[1]
-                resolved_class = None
+                hook = None
                 for candidate in self.mir_module_class_mro.get(class_name, []):
                     if "__delattr__" in self.mir_module_classes.get(candidate, set()):
-                        resolved_class = candidate
+                        hook = candidate
                         break
-                if resolved_class is None and "__delattr__" in self.mir_module_classes.get(class_name, set()):
-                    resolved_class = class_name
-                if resolved_class:
-                    target = f"{resolved_class}____delattr__"
-                    self._load_operand(owner, "rcx")
-                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
-                    self.lines.append(f"    call {target}")
-                else:
-                    self._load_operand(owner, "rcx")
-                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
-                    self.lines.append("    call piton_object_delattr")
-            else:
-                # ATTRIBUTE_LOOKUP_V2: __delattr__ hook, with the same
-                # inside-the-hook bypass as __setattr__.
-                hook = None
-                if owner_type.startswith("object:"):
-                    class_name = owner_type.split(":", 1)[1]
-                    for candidate in self.mir_module_class_mro.get(class_name, []):
-                        if "__delattr__" in self.mir_module_classes.get(candidate, set()):
-                            hook = candidate
-                            break
-                    if hook is None and "__delattr__" in self.mir_module_classes.get(class_name, set()):
-                        hook = class_name
+                if hook is None and "__delattr__" in self.mir_module_classes.get(class_name, set()):
+                    hook = class_name
                 current_is_hook = self.function.name.endswith("__delattr__") and hook is not None
+                self._load_operand(owner, "rcx")
+                self.lines.append(f"    lea rdx, [{self._string(name)}]")
                 if hook is not None and not current_is_hook:
-                    target = f"{hook}____delattr__"
-                    self._load_operand(owner, "rcx")
-                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
-                    self.lines.append(f"    call {target}")
+                    self.lines.append(f"    call {hook}____delattr__")
                 else:
-                    raise NativeBuildError(
-                        f"native del on '{name}' is not a property of a natively-typed object"
-                    )
+                    missing = f"'{class_name}' object has no attribute '{name}'"
+                    self.lines.append(f"    lea r8, [{self._string(missing)}]")
+                    self.lines.append("    call piton_object_delattr")
+                    if del_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(del_handler, del_handler)}")
+            else:
+                raise NativeBuildError(f"native del on '{name}' requires a natively-typed object")
         elif op == "method_call":
             explicit_class, method_name, owner, raw_values = args
             owner_type = self.types.get(owner, "")
@@ -1370,6 +1382,11 @@ class Win64NasmEmitter:
             self.lines.extend(["    movq rax, xmm0", "    mov rcx, rax", f"    call {_math_fn_map[op]}"])
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "float"
+            sqrt_handler = args[1] if len(args) > 1 else None
+            if sqrt_handler is not None:
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jne {labels.get(sqrt_handler, sqrt_handler)}")
         elif op in {"math_floor", "math_ceil", "math_trunc", "math_fabs"}:
             handler_label = args[1] if len(args) > 1 else None
             helper = f"piton_{op}"
@@ -1423,6 +1440,10 @@ class Win64NasmEmitter:
             self.lines.append("    call piton_argv_new")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "list"
+        elif op == "os_name":
+            self.lines.append(f"    lea rax, [{self._string('nt')}]")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "str"
         elif op == "set_context_from_reraise":
             self.lines.append("    call piton_set_context_from_reraise")
         elif op == "math_gcd":
@@ -1607,6 +1628,15 @@ class Win64NasmEmitter:
                 self.lines.append(f"    jne {target}")
             else:
                 self.lines.append("    call piton_reraise_unhandled")
+        elif op == "catch_matches":
+            names, negate = args
+            hit = self._internal_label("catch_hit")
+            done = self._internal_label("catch_done")
+            for name in names:
+                self.lines.extend([f"    lea rcx, [{self._string(name)}]", "    call piton_reraise_type_is", "    test rax, rax", f"    jne {hit}"])
+            self.lines.extend([f"    mov qword {self._address(result)}, {1 if negate else 0}", f"    jmp {done}", f"{hit}:",
+                               f"    mov qword {self._address(result)}, {0 if negate else 1}", f"{done}:"])
+            self.types[result] = "bool"
         elif op == "raise_active_dynamic":
             # Dynamic re-raise: type comes from the saved reraise globals
             # (piton_reraise), label is the statically-chosen handler.
@@ -2857,11 +2887,22 @@ def compile_native_files(entry: str | Path, output: str | Path) -> Path:
     return _compile_native_mir(mir, output)
 
 
+def win64_c_compiler() -> str | None:
+    """C compiler that targets Win64 PE: the host gcc on Windows, the mingw-w64
+    cross compiler elsewhere (the host gcc there would emit ELF objects)."""
+    if os.name == "nt":
+        return shutil.which("gcc")
+    return shutil.which("x86_64-w64-mingw32-gcc")
+
+
 def _compile_native_mir(mir: MIRModule, output: str | Path) -> Path:
     nasm = shutil.which("nasm")
-    gcc = shutil.which("gcc")
+    gcc = win64_c_compiler()
     if not nasm or not gcc:
-        raise NativeBuildError("Fase 5 requiere nasm y gcc en PATH")
+        raise NativeBuildError(
+            "Fase 5 requiere nasm y gcc en PATH"
+            + ("" if os.name == "nt" else " (fuera de Windows: x86_64-w64-mingw32-gcc)")
+        )
     output_path = Path(output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="piton-native-") as directory:

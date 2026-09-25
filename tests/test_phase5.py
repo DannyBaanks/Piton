@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 from piton.x86 import NativeBuildError, compile_native, compile_native_files, _scan_native_modules
-from tests.win64_toolchain import install as _install_win64_gate, requires_windows
+from tests.win64_toolchain import install as _install_win64_gate, requires_windows, run_native, run_oracle
 
 _install_win64_gate()
 from piton.native_differential import compare_native_to_cpython
@@ -22,7 +22,7 @@ class Phase5Gates(unittest.TestCase):
     def build_run(self, source: str) -> tuple[str, bytes]:
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
             return completed.stdout.decode(), executable.read_bytes()
 
@@ -66,10 +66,47 @@ class Phase5Gates(unittest.TestCase):
         )
         self.assertEqual(output, "-3\r\n2\r\n-3\r\n-2\r\n")
 
-    def test_x86_rejects_true_division_instead_of_miscompiling(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "true division"):
-                compile_native("imprimir(7 / 2)\n", Path(directory) / "program.exe")
+    def test_x86_true_division_matches_python(self):
+        # DIVISION_V1: int/int is correctly rounded like CPython (also past 2**53).
+        result = compare_native_to_cpython(
+            "imprimir(7 / 2)\nimprimir(-7 / 2)\nimprimir(1 / 3)\nimprimir(0 / -5)\n"
+            "imprimir(9007199254740993 / 1)\nimprimir(7.0 / 2.0)\nimprimir(10 / 4.0)\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_float_repr_matches_python(self):
+        # FLOAT_REPR_V1: shortest round-trip repr, CPython's exponent layout.
+        result = compare_native_to_cpython(
+            "imprimir(0.1 + 0.2)\nimprimir(1e16)\nimprimir(-0.0)\nimprimir(1e-5)\nimprimir(0.0001)\n"
+            "imprimir(123456789.125)\nimprimir(5e-324)\nimprimir(1.7976931348623157e308)\n"
+            "imprimir(2.5 * 4.0)\nimprimir(texto(1.0 / 3.0))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_math_sqrt_domain_error_is_catchable(self):
+        result = compare_native_to_cpython(
+            "importar math\nintentar:\n    imprimir(math.sqrt(-1))\nexcepto ValueError:\n    imprimir(\"dominio\")\n"
+            "imprimir(math.sqrt(2))\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_runtime_exception_skips_mismatched_handler(self):
+        # A runtime-raised exception must not land in an inner handler of another type.
+        result = compare_native_to_cpython(
+            "intentar:\n    intentar:\n        imprimir(chr(-1))\n    excepto TypeError:\n        imprimir(\"mal\")\n"
+            "excepto ValueError:\n    imprimir(\"bien\")\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_x86_division_by_zero_is_catchable(self):
+        result = compare_native_to_cpython(
+            "intentar:\n    imprimir(5 // 0)\nexcepto ZeroDivisionError:\n    imprimir(1)\n"
+            "intentar:\n    imprimir(5 % 0)\nexcepto ArithmeticError:\n    imprimir(2)\n"
+            "intentar:\n    imprimir(5 / 0)\nexcepto Exception:\n    imprimir(3)\n"
+            "intentar:\n    intentar:\n        imprimir(5.0 / 0)\n    excepto ValueError:\n        imprimir(0)\n"
+            "excepto ZeroDivisionError:\n    imprimir(4)\n"
+        )
+        self.assertTrue(result.equivalent, result)
 
     def test_native_differential_corpus(self):
         corpus = (
@@ -406,7 +443,7 @@ class Phase5Gates(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
         self.assertEqual(completed.returncode, 2)
         self.assertIn(b"TypeError: closure called with wrong number of arguments", completed.stderr)
 
@@ -797,7 +834,7 @@ class Phase5Gates(unittest.TestCase):
                 'imprimir("done")\n'
             )
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 1)
             self.assertIn("ValueError", completed.stderr.decode(errors="replace"))
 
@@ -1512,7 +1549,7 @@ class Phase5Gates(unittest.TestCase):
                 "importar util\nimprimir(util.doble(6))\n", encoding="utf-8"
             )
             executable = compile_native_files(entry, root / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual((completed.returncode, completed.stdout, completed.stderr), (0, b"12\r\n", b""))
 
     def test_x86_multifile_missing_module_fails_closed(self):
@@ -1534,7 +1571,7 @@ class Phase5Gates(unittest.TestCase):
                 "desde mathlib importar cuadrado\nimprimir(cuadrado(7))\n", encoding="utf-8"
             )
             executable = compile_native_files(entry, root / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual((completed.returncode, completed.stdout), (0, b"49\r\n"))
 
     def test_x86_from_import_multiple_functions(self):
@@ -1551,7 +1588,7 @@ class Phase5Gates(unittest.TestCase):
                 encoding="utf-8",
             )
             executable = compile_native_files(entry, root / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual((completed.returncode, completed.stdout), (0, b"13\r\n7\r\n"))
 
     def test_x86_from_import_missing_module_fails_closed(self):
@@ -1585,7 +1622,7 @@ class Phase5Gates(unittest.TestCase):
                 encoding="utf-8",
             )
             executable = compile_native_files(entry, root / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual((completed.returncode, completed.stdout), (0, b"10\r\n15\r\n"))
 
     def _assert_package_equiv(self, package_init, submodules, main):
@@ -1607,8 +1644,8 @@ class Phase5Gates(unittest.TestCase):
             main_py = root / "main.py"
             main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
             executable = compile_native_files(entry, root / "program.exe")
-            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
-            oracle_run = subprocess.run([sys.executable, str(main_py)], capture_output=True, check=False)
+            native_run = run_native([str(executable)], capture_output=True, check=False)
+            oracle_run = run_oracle([sys.executable, str(main_py)], capture_output=True, check=False)
             self.assertEqual(
                 (native_run.returncode, native_run.stdout),
                 (oracle_run.returncode, oracle_run.stdout),
@@ -1624,8 +1661,8 @@ class Phase5Gates(unittest.TestCase):
             (root / "main.piton").write_text(main, encoding="utf-8")
             (root / "main.py").write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
             executable = compile_native_files(root / "main.piton", root / "program.exe")
-            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
-            oracle_run = subprocess.run([sys.executable, str(root / "main.py")], capture_output=True, check=False)
+            native_run = run_native([str(executable)], capture_output=True, check=False)
+            oracle_run = run_oracle([sys.executable, str(root / "main.py")], capture_output=True, check=False)
             self.assertEqual(
                 (native_run.returncode, native_run.stdout),
                 (oracle_run.returncode, oracle_run.stdout),
@@ -1718,8 +1755,8 @@ class Phase5Gates(unittest.TestCase):
             main_py = root / "main.py"
             main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
             executable = compile_native_files(entry, root / "program.exe")
-            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
-            oracle_run = subprocess.run([sys.executable, str(main_py)], capture_output=True, check=False)
+            native_run = run_native([str(executable)], capture_output=True, check=False)
+            oracle_run = run_oracle([sys.executable, str(main_py)], capture_output=True, check=False)
             self.assertEqual(
                 (native_run.returncode, native_run.stdout),
                 (oracle_run.returncode, oracle_run.stdout),
@@ -1732,7 +1769,7 @@ class Phase5Gates(unittest.TestCase):
             entry = root / "main.piton"
             entry.write_text("importar sys\nimprimir(__file__)\n", encoding="utf-8")
             executable = compile_native_files(entry, root / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
             self.assertTrue(
                 completed.stdout.decode(errors="replace").strip().endswith("main.piton"),
@@ -1811,8 +1848,8 @@ class Phase5Gates(unittest.TestCase):
             main_py = root / "main.py"
             main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
             executable = compile_native_files(entry, root / "program.exe")
-            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
-            oracle_run = subprocess.run([sys.executable, str(main_py)], capture_output=True, check=False)
+            native_run = run_native([str(executable)], capture_output=True, check=False)
+            oracle_run = run_oracle([sys.executable, str(main_py)], capture_output=True, check=False)
             self.assertEqual(
                 (native_run.returncode, native_run.stdout),
                 (oracle_run.returncode, oracle_run.stdout),
@@ -1845,8 +1882,8 @@ class Phase5Gates(unittest.TestCase):
             main_py = root / "main.py"
             main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
             executable = compile_native_files(entry, root / "program.exe")
-            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
-            oracle_run = subprocess.run([sys.executable, str(main_py)], capture_output=True, check=False)
+            native_run = run_native([str(executable)], capture_output=True, check=False)
+            oracle_run = run_oracle([sys.executable, str(main_py)], capture_output=True, check=False)
             self.assertEqual(
                 (native_run.returncode, native_run.stdout),
                 (oracle_run.returncode, oracle_run.stdout),
@@ -1902,7 +1939,7 @@ class Phase5Gates(unittest.TestCase):
                 "imprimir(doble(3))\n", encoding="utf-8"
             )
             executable = compile_native_files(entry, root / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
             self.assertEqual(completed.stdout, b"103\r\n")
 
@@ -2014,8 +2051,8 @@ class Phase5Gates(unittest.TestCase):
             main_py = root / "main.py"
             main_py.write_text(traducir_fuente(main, "<main>"), encoding="utf-8")
             executable = compile_native_files(entry, root / "program.exe")
-            native_run = subprocess.run([str(executable)], capture_output=True, check=False)
-            oracle_run = subprocess.run([sys.executable, str(main_py)], capture_output=True, check=False)
+            native_run = run_native([str(executable)], capture_output=True, check=False)
+            oracle_run = run_oracle([sys.executable, str(main_py)], capture_output=True, check=False)
             self.assertEqual(
                 (native_run.returncode, native_run.stdout),
                 (oracle_run.returncode, oracle_run.stdout),
@@ -2441,7 +2478,7 @@ class Phase5Gates(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
             self.assertIn("CancelledError", completed.stderr.decode(errors="replace"))
 
@@ -2458,7 +2495,7 @@ class Phase5Gates(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
             self.assertIn("CancelledError", completed.stderr.decode(errors="replace"))
 
@@ -2472,7 +2509,7 @@ class Phase5Gates(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
             self.assertEqual(completed.stdout, b"1\r\n")
 
@@ -2485,7 +2522,7 @@ class Phase5Gates(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("gather requires tasks", completed.stderr.decode(errors="replace"))
 
@@ -2498,7 +2535,7 @@ class Phase5Gates(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
             self.assertIn("object is not awaitable", completed.stderr.decode(errors="replace"))
 
@@ -2513,7 +2550,7 @@ class Phase5Gates(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
             self.assertIn("object has no attribute 'cancel'", completed.stderr.decode(errors="replace"))
 
@@ -2530,7 +2567,7 @@ class Phase5Gates(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
             self.assertEqual(completed.stdout.decode(errors="replace"), "[1, 2]\r\n")
 
@@ -3122,7 +3159,7 @@ class Phase5Gates(unittest.TestCase):
             with self.assertRaisesRegex(NativeBuildError, "duplicate"):
                 compile_native(source, Path(directory) / "program.exe")
 
-    def test_descriptors_del_non_property_fails_closed(self):
+    def test_descriptors_del_plain_attribute_next_to_property(self):
         source = (
             'clase P:\n'
             '    funcion __init__(self):\n'
@@ -3138,10 +3175,16 @@ class Phase5Gates(unittest.TestCase):
             '        self.campos = -1\n'
             'p = P()\n'
             'borrar p.campos\n'
+            'p.campos = 5\n'
+            'imprimir(p.x)\n'
+            'intentar:\n'
+            '    borrar p.otro\n'
+            'excepto AttributeError:\n'
+            '    imprimir("sin otro")\n'
         )
-        with tempfile.TemporaryDirectory(prefix="piton-prop-del-nonprop-") as directory:
-            with self.assertRaisesRegex(NativeBuildError, "is not a property"):
-                compile_native(source, Path(directory) / "program.exe")
+        # A plain instance attribute next to a property is deleted like CPython.
+        result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, result)
 
     def test_x86_for_break(self):
         source = (
@@ -3364,7 +3407,8 @@ class CycleGCNativeV1(unittest.TestCase):
 
     @requires_windows
     def test_gc_collects_list_self_cycle_and_object_graph(self):
-        gcc = "gcc"
+        from piton.x86 import win64_c_compiler
+        gcc = win64_c_compiler() or "gcc"
         runtime = Path(__file__).resolve().parents[1] / "piton" / "native_runtime.c"
         source = r'''
 #include <stdint.h>
@@ -3421,7 +3465,7 @@ int main(void) {
                 capture_output=True, text=True,
             )
             self.assertEqual(built.returncode, 0, built.stderr)
-            completed = subprocess.run([str(parseable)], capture_output=True, text=True)
+            completed = run_native([str(parseable)], capture_output=True, text=True)
             self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
@@ -3509,7 +3553,7 @@ class WithProtocolNativeV1(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory(prefix="piton-with-unhandled-") as directory:
             executable = compile_native(source, Path(directory) / "program.exe")
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             self.assertEqual(completed.returncode, 1, completed.stderr.decode(errors="replace"))
             self.assertEqual(
                 completed.stdout.decode(errors="replace"),
@@ -3696,7 +3740,7 @@ class WithProtocolNativeV1(unittest.TestCase):
                 'lanzar ValueError("externo") desde TypeError("causa")\n',
                 Path(directory) / "program.exe",
             )
-            completed = subprocess.run([str(executable)], capture_output=True, check=False)
+            completed = run_native([str(executable)], capture_output=True, check=False)
             stderr = completed.stderr.decode(errors="replace")
             self.assertNotEqual(completed.returncode, 0, stderr)
             self.assertIn("TypeError", stderr)

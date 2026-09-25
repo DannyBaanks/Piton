@@ -1809,7 +1809,7 @@ class Phase10LinuxGates(unittest.TestCase):
             with self.assertRaisesRegex(NativeBuildError, "duplicate"):
                 compile_native_linux(source, Path(directory) / "program")
 
-    def test_linux_descriptors_del_non_property_fails_closed(self):
+    def test_linux_descriptors_del_plain_attribute_next_to_property(self):
         source = (
             'clase P:\n'
             '    funcion __init__(self):\n'
@@ -1825,10 +1825,15 @@ class Phase10LinuxGates(unittest.TestCase):
             '        self.campos = -1\n'
             'p = P()\n'
             'borrar p.campos\n'
+            'p.campos = 5\n'
+            'imprimir(p.x)\n'
+            'intentar:\n'
+            '    borrar p.otro\n'
+            'excepto AttributeError:\n'
+            '    imprimir("sin otro")\n'
         )
-        with tempfile.TemporaryDirectory(prefix="piton-linux-del-nonprop-") as directory:
-            with self.assertRaisesRegex(NativeBuildError, "is not a property"):
-                compile_native_linux(source, Path(directory) / "program")
+        # A plain instance attribute next to a property is deleted like CPython.
+        self._assert_linux_equiv(source)
 
     def test_linux_for_break(self):
         source = (

@@ -205,7 +205,18 @@ static long piton_float_sin(long a){double x=piton_bits_double(a),r=__builtin_si
 static long piton_float_cos(long a){double x=piton_bits_double(a),r=__builtin_cos(x);return piton_double_bits(r);}
 static long piton_float_log(long a){double x=piton_bits_double(a),r=__builtin_log(x);return piton_double_bits(r);}
 static void piton_write_uint(unsigned long v){char b[32];usize i=sizeof(b);do{b[--i]=(char)('0'+v%10);v/=10;}while(v);piton_write(1,b+i,sizeof(b)-i);}
-static void piton_print_float_bits(long bits){double d=piton_bits_double(bits);if(d<0){piton_write(1,"-",1);d=-d;}unsigned long whole=(unsigned long)d;double frac=d-(double)whole;unsigned long scaled=(unsigned long)(frac*1000000000000.0+0.5);if(scaled>=1000000000000UL){++whole;scaled=0;}piton_write_uint(whole);piton_write(1,".",1);if(!scaled){piton_write(1,"0\n",2);return;}char digits[12];for(int i=11;i>=0;--i){digits[i]=(char)('0'+scaled%10);scaled/=10;}int end=12;while(end>1&&digits[end-1]=='0')--end;piton_write(1,digits,(usize)end);piton_write(1,"\n",1);}
+/* FLOAT_REPR_V1: CPython repr (shortest round-trip, Burger-Dybvig, exact ints); 908k-value match vs CPython. */
+#define PFR_LIMBS 48
+typedef struct{unsigned int d[PFR_LIMBS];int n;}pfr_big;
+static void pfr_set(pfr_big*a,unsigned long v){a->n=0;while(v){a->d[a->n++]=(unsigned int)v;v>>=32;}}
+static void pfr_mul_small(pfr_big*a,unsigned int m){unsigned long c=0;for(int i=0;i<a->n;++i){unsigned long t=(unsigned long)a->d[i]*m+c;a->d[i]=(unsigned int)t;c=t>>32;}if(c)a->d[a->n++]=(unsigned int)c;}
+static void pfr_shl(pfr_big*a,int bits){if(!a->n)return;int w=bits/32,b=bits%32;if(b){unsigned int c=0;for(int i=0;i<a->n;++i){unsigned int t=a->d[i];a->d[i]=(t<<b)|c;c=t>>(32-b);}if(c)a->d[a->n++]=c;}if(w){for(int i=a->n-1;i>=0;--i)a->d[i+w]=a->d[i];for(int i=0;i<w;++i)a->d[i]=0;a->n+=w;}}
+static int pfr_cmp(const pfr_big*a,const pfr_big*b){if(a->n!=b->n)return a->n<b->n?-1:1;for(int i=a->n-1;i>=0;--i)if(a->d[i]!=b->d[i])return a->d[i]<b->d[i]?-1:1;return 0;}
+static void pfr_add(pfr_big*r,const pfr_big*a,const pfr_big*b){int n=a->n>b->n?a->n:b->n;unsigned long c=0;for(int i=0;i<n;++i){unsigned long t=c+(i<a->n?a->d[i]:0)+(i<b->n?b->d[i]:0);r->d[i]=(unsigned int)t;c=t>>32;}r->n=n;if(c)r->d[r->n++]=(unsigned int)c;}
+static void pfr_sub(pfr_big*a,const pfr_big*b){long br=0;for(int i=0;i<a->n;++i){long t=(long)a->d[i]-(i<b->n?(long)b->d[i]:0)-br;br=t<0;a->d[i]=(unsigned int)(t+(br?0x100000000L:0));}while(a->n&&!a->d[a->n-1])--a->n;}
+static int pfr_digits(unsigned long bits,char*out,int*decpt){unsigned long frac=bits&0xFFFFFFFFFFFFFUL;int bexp=(int)((bits>>52)&0x7FF);unsigned long f;int e;if(bexp){f=frac|0x10000000000000UL;e=bexp-1075;}else{f=frac;e=-1074;}int even=(f&1)==0;pfr_big r,s,mp,mm;if(e>=0){if(f!=0x10000000000000UL){pfr_set(&r,f);pfr_shl(&r,e+1);pfr_set(&s,2);pfr_set(&mp,1);pfr_shl(&mp,e);mm=mp;}else{pfr_set(&r,f);pfr_shl(&r,e+2);pfr_set(&s,4);pfr_set(&mp,1);pfr_shl(&mp,e+1);pfr_set(&mm,1);pfr_shl(&mm,e);}}else{if(bexp<=1||f!=0x10000000000000UL){pfr_set(&r,f);pfr_shl(&r,1);pfr_set(&s,1);pfr_shl(&s,1-e);pfr_set(&mp,1);pfr_set(&mm,1);}else{pfr_set(&r,f);pfr_shl(&r,2);pfr_set(&s,1);pfr_shl(&s,2-e);pfr_set(&mp,2);pfr_set(&mm,1);}}int k=0;pfr_big t;for(;;){pfr_add(&t,&r,&mp);int c=pfr_cmp(&t,&s);if(c>0||(c==0&&even)){pfr_mul_small(&s,10);++k;}else break;}for(;;){pfr_add(&t,&r,&mp);pfr_mul_small(&t,10);int c=pfr_cmp(&t,&s);if(c<0||(c==0&&!even)){pfr_mul_small(&r,10);pfr_mul_small(&mp,10);pfr_mul_small(&mm,10);--k;}else break;}int n=0;for(;;){pfr_mul_small(&r,10);pfr_mul_small(&mp,10);pfr_mul_small(&mm,10);int d=0;while(pfr_cmp(&r,&s)>=0){pfr_sub(&r,&s);++d;}int c1=pfr_cmp(&r,&mm);int low=c1<0||(c1==0&&even);pfr_add(&t,&r,&mp);int c2=pfr_cmp(&t,&s);int high=c2>0||(c2==0&&even);if(!low&&!high){out[n++]=(char)('0'+d);continue;}if(low&&!high)out[n++]=(char)('0'+d);else if(high&&!low)out[n++]=(char)('0'+d+1);else{pfr_big r2=r;pfr_shl(&r2,1);int c3=pfr_cmp(&r2,&s);out[n++]=(char)('0'+((c3<0||(c3==0&&!(d&1)))?d:d+1));}break;}*decpt=k;return n;}
+static int pfr_repr(double x,char*buf){union{double d;unsigned long u;}v;v.d=x;int o=0;if(x!=x){buf[0]='n';buf[1]='a';buf[2]='n';buf[3]=0;return 3;}if(v.u>>63){buf[o++]='-';v.u&=0x7FFFFFFFFFFFFFFFUL;}if(v.u==0x7FF0000000000000UL){buf[o++]='i';buf[o++]='n';buf[o++]='f';buf[o]=0;return o;}if(v.u==0){buf[o++]='0';buf[o++]='.';buf[o++]='0';buf[o]=0;return o;}char dg[20];int decpt;int n=pfr_digits(v.u,dg,&decpt);if(decpt>-4&&decpt<=16){if(decpt<=0){buf[o++]='0';buf[o++]='.';for(int i=0;i<-decpt;++i)buf[o++]='0';for(int i=0;i<n;++i)buf[o++]=dg[i];}else{for(int i=0;i<decpt;++i)buf[o++]=i<n?dg[i]:'0';buf[o++]='.';if(n>decpt)for(int i=decpt;i<n;++i)buf[o++]=dg[i];else buf[o++]='0';}}else{buf[o++]=dg[0];if(n>1){buf[o++]='.';for(int i=1;i<n;++i)buf[o++]=dg[i];}int ex=decpt-1;buf[o++]='e';buf[o++]=ex<0?'-':'+';if(ex<0)ex=-ex;char eb[4];int en=0;do{eb[en++]=(char)('0'+ex%10);ex/=10;}while(ex);if(en<2)eb[en++]='0';while(en)buf[o++]=eb[--en];}buf[o]=0;return o;}
+static void piton_print_float_bits(long bits){char b[40];int n=pfr_repr(piton_bits_double(bits),b);b[n++]=10;piton_write(1,b,(usize)n);}
 static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;return a.bits==b.bits;}
 static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
 static void piton_seq_put(PitonSeq*s,long i,PitonSlot v){if(i>=0&&i<s->length)s->items[i]=v;}
@@ -287,6 +298,7 @@ static PitonObject*piton_object_new_finalized(const char*name,const char*parent,
 static PitonObject*piton_object_new(const char*name,const char*parent){return piton_object_new_finalized(name,parent,0);}
 static void piton_finalize_objects(void){PitonObject*o=piton_all_objects;while(o){if(o->finalizer&&!o->finalizer_called){o->finalizer_called=1;((long(*)(long))o->finalizer)((long)o);}o=o->next_all;}}
 static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].value=v;return;}if(o->length>=32){piton_write(2,"AttributeError\n",15);piton_exit(1);}o->attrs[o->length].name=name;o->attrs[o->length++].value=v;}
+static void piton_object_del(PitonObject*o,const char*name,const char*missing){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){for(long j=i;j+1<o->length;++j)o->attrs[j]=o->attrs[j+1];--o->length;return;}piton_raise_set("AttributeError",missing);}
 static PitonSlot piton_object_get(PitonObject*o,const char*name){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;piton_write(2,"AttributeError\n",15);piton_exit(1);}
 static long piton_object_lookup(PitonObject*o,const char*name,long fallback){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;return ((long(*)(long,long))fallback)((long)o,(long)name);}
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
@@ -305,7 +317,7 @@ static void piton_print_slot(PitonSlot v);
 static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}if(s->kind==PK_TUPLE&&s->length==1)piton_write(1,",",1);piton_write(1,s->kind==PK_TUPLE?")":"]",1);}
 static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(d->items[i].key);piton_write(1,": ",2);piton_print_slot(d->items[i].value);}piton_write(1,"}",1);}
 static void piton_print_set(PitonSet*s){piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}piton_write(1,"}",1);}
-static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{double d=piton_bits_double(v.bits);if(d<0){piton_write(1,"-",1);d=-d;}unsigned long whole=(unsigned long)d;double frac=d-(double)whole;unsigned long scaled=(unsigned long)(frac*1000000000000.0+0.5);if(scaled>=1000000000000UL){++whole;scaled=0;}piton_write_uint(whole);piton_write(1,".",1);if(!scaled){piton_write(1,"0",1);break;}char digits[12];for(int i=11;i>=0;--i){digits[i]=(char)('0'+scaled%10);scaled/=10;}int end=12;while(end>1&&digits[end-1]=='0')--end;piton_write(1,digits,(usize)end);break;}case PK_STR:piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;default:piton_write(1,"<object>",8);}}
+static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char fb[40];int fn=pfr_repr(piton_bits_double(v.bits),fb);piton_write(1,fb,(usize)fn);break;}case PK_STR:piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;default:piton_write(1,"<object>",8);}}
 static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i)r+=d->items[i].key.bits;return r;}
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
@@ -324,7 +336,7 @@ static long piton_round_float(long bits){double x=piton_bits_double(bits);double
 static long piton_int_from_str(const char*s){if(!s){piton_raise_set("TypeError","int() argument must be a string");return 0;}while(*s==' '||*s=='\t'||*s=='\n')++s;int neg=0;if(*s=='-'||*s=='+'){neg=*s=='-';++s;}if(!*s||*s<'0'||*s>'9'){piton_raise_set("ValueError","invalid literal for int() with base 10");return 0;}long v=0;while(*s>='0'&&*s<='9'){v=v*10+(*s-'0');++s;}while(*s==' '||*s=='\t'||*s=='\n')++s;if(*s){piton_raise_set("ValueError","invalid literal for int() with base 10");return 0;}return neg?-v:v;}
 static long piton_float_from_str(const char*s){if(!s){piton_raise_set("TypeError","float() argument must be a string");return 0;}while(*s==' '||*s=='\t'||*s=='\n')++s;int neg=0;if(*s=='-'||*s=='+'){neg=*s=='-';++s;}const char*q=s;long ip=0;int has=0;while(*q>='0'&&*q<='9'){ip=ip*10+(*q-'0');++q;has=1;}double frac=0.0;double div=1.0;if(*q=='.'){++q;while(*q>='0'&&*q<='9'){frac=frac*10+(*q-'0');div*=10;++q;has=1;}}if(!has){piton_raise_set("ValueError","could not convert string to float");return 0;}while(*q==' '||*q=='\t'||*q=='\n')++q;if(*q){piton_raise_set("ValueError","could not convert string to float");return 0;}double v=(double)ip+frac/div;if(neg)v=-v;return piton_double_bits(v);}
 static long piton_str_from_int(long v){char*p=piton_alloc(24);usize o=0;unsigned long u;if(v<0){p[o++]='-';u=(unsigned long)(-(v+1))+1;}else u=(unsigned long)v;char tmp[24];long n=0;do{tmp[n++]=(char)('0'+u%10);u/=10;}while(u);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
-static long piton_str_from_float(long bits){double d=piton_bits_double(bits);char*p=piton_alloc(64);usize o=0;if(d<0){p[o++]='-';d=-d;}unsigned long whole=(unsigned long)d;double frac=d-(double)whole;unsigned long scaled=(unsigned long)(frac*1000000000000.0+0.5);if(scaled>=1000000000000UL){++whole;scaled=0;}char wt[24];long wn=0;do{wt[wn++]=(char)('0'+whole%10);whole/=10;}while(whole);while(wn)p[o++]=wt[--wn];p[o++]='.';if(!scaled){p[o++]='0';p[o]=0;return(long)p;}char digits[12];for(int i=11;i>=0;--i){digits[i]=(char)('0'+scaled%10);scaled/=10;}int end=12;while(end>1&&digits[end-1]=='0')--end;for(int i=0;i<end;++i)p[o++]=digits[i];p[o]=0;return(long)p;}
+static long piton_str_from_float(long bits){char*p=piton_alloc(40);pfr_repr(piton_bits_double(bits),p);return(long)p;}
 static long piton_str_truthy(const char*s){return(s&&s[0])?1:0;}
 static int piton_float_int_ok(double d){if(d!=d){piton_raise_set("ValueError","cannot convert float NaN to integer");return 0;}if(d>=9.2233720368547758e18||d<-9.2233720368547758e18){piton_raise_set("OverflowError","cannot convert float infinity to integer");return 0;}return 1;}
 static long piton_math_floor_bits(long bits){double d=piton_bits_double(bits);if(!piton_float_int_ok(d))return 0;long t=(long)d;if((double)t>d)--t;return t;}
@@ -332,6 +344,13 @@ static long piton_math_ceil_bits(long bits){double d=piton_bits_double(bits);if(
 static long piton_math_trunc_bits(long bits){double d=piton_bits_double(bits);if(!piton_float_int_ok(d))return 0;return (long)d;}
 static long piton_math_fabs_bits(long bits){return bits&0x7FFFFFFFFFFFFFFFL;}
 static long piton_math_gcd(long a,long b){if(a<0)a=-a;if(b<0)b=-b;while(b){long t=a%b;a=b;b=t;}return a;}
+/* DIVISION_V1: CPython true/floor division and modulo; zero divisors raise ZeroDivisionError (catchable). */
+static double ptd_pow2(int k){union{unsigned long long u;double d;}v;v.u=(unsigned long long)(k+1023)<<52;return v.d;}
+static double piton_int_truediv(long long a,long long b){int neg=(a<0)!=(b<0);unsigned long long ua=a<0?0ULL-(unsigned long long)a:(unsigned long long)a,ub=b<0?0ULL-(unsigned long long)b:(unsigned long long)b;if(!ua)return neg?-0.0:0.0;if(ua<=9007199254740992ULL&&ub<=9007199254740992ULL){double q=(double)ua/(double)ub;return neg?-q:q;}int la=0,lb=0;while(!(ua>>63)){ua<<=1;++la;}while(!(ub>>63)){ub<<=1;++lb;}unsigned long long r=ua,q=0;int c=0;for(int i=0;i<56;++i){int bit=c||r>=ub;if(bit)r-=ub;q=(q<<1)|(unsigned long long)bit;c=(int)(r>>63);r<<=1;}int sticky=(r!=0)||c;int nb=(q>>55)?56:55;int drop=nb-53;unsigned long long low=q&((1ULL<<drop)-1),half=1ULL<<(drop-1);q>>=drop;if(low>half||(low==half&&(sticky||(q&1))))++q;int e=lb-la-55+drop;if(q>>53){q>>=1;++e;}double v=(double)q;if(e>0){while(e>60){v*=ptd_pow2(60);e-=60;}v*=ptd_pow2(e);}else{while(e<-60){v*=ptd_pow2(-60);e+=60;}v*=ptd_pow2(e);}return neg?-v:v;}
+static long piton_div_true_int(long a,long b){if(!b){piton_raise_set("ZeroDivisionError","division by zero");return 0;}return piton_double_bits(piton_int_truediv(a,b));}
+static long piton_div_true_float(long a,long b){double y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float division by zero");return 0;}return piton_double_bits(piton_bits_double(a)/y);}
+static long piton_div_floor_int(long a,long b){if(!b){piton_raise_set("ZeroDivisionError","integer division or modulo by zero");return 0;}if(b==-1&&a==(-9223372036854775807L-1)){piton_raise_set("OverflowError","integer floor division result does not fit the native int64");return 0;}long q=a/b,r=a%b;if(r&&((r<0)!=(b<0)))--q;return q;}
+static long piton_div_mod_int(long a,long b){if(!b){piton_raise_set("ZeroDivisionError","integer modulo by zero");return 0;}if(b==-1)return 0;long r=a%b;if(r&&((r<0)!=(b<0)))r+=b;return r;}
 /* MATH sin/cos/log: freestanding fdlibm kernels (<=1 ulp vs glibc over 4M samples); |x|>1e6 fails closed. */
 static double pm_bits_d(unsigned long b){union{unsigned long u;double d;}v;v.u=b;return v.d;}
 static unsigned long pm_d_bits(double d){union{unsigned long u;double d;}v;v.d=d;return v.u;}
@@ -346,6 +365,7 @@ static double pm_log(double x,int*dom){if(x!=x)return x;if(x<=0.0){*dom=1;return
 static long piton_math_trig_big(const char*name){piton_write(2,"NotImplementedError: native math.",33);piton_write(2,name,piton_strlen(name));piton_write(2," argument beyond 1e6 is outside the V1 scope\n",46);piton_exit(1);return 0;}
 static long piton_math_sin_bits(long bits){int dom=0,big=0;double r=pm_sin(piton_bits_double(bits),&dom,&big);if(big)return piton_math_trig_big("sin");if(dom){piton_raise_set("ValueError","math domain error");return 0;}return piton_double_bits(r);}
 static long piton_math_cos_bits(long bits){int dom=0,big=0;double r=pm_cos(piton_bits_double(bits),&dom,&big);if(big)return piton_math_trig_big("cos");if(dom){piton_raise_set("ValueError","math domain error");return 0;}return piton_double_bits(r);}
+static long piton_math_sqrt_bits(long bits){double x=piton_bits_double(bits);if(x<0.0){piton_raise_set("ValueError","math domain error");return 0;}return piton_float_sqrt(bits);}
 static long piton_math_log_bits(long bits){int dom=0;double r=pm_log(piton_bits_double(bits),&dom);if(dom){piton_raise_set("ValueError","math domain error");return 0;}return piton_double_bits(r);}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
@@ -835,9 +855,30 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}={operator}{self._value(args[1])};")
             types[result] = "bool" if operator == "!" else "int"
         elif op == "binary":
-            operator, left, right = args
+            operator, left, right = args[0], args[1], args[2]
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
+            if operator in {"/", "//", "%"} and left_type in {"int", "bool", "float"} and right_type in {"int", "bool", "float"}:
+                division_handler = args[3] if len(args) > 3 else None
+                is_float = "float" in {left_type, right_type}
+                if is_float and operator != "/":
+                    raise NativeBuildError(f"Linux float operator not supported yet: {operator}")
+                left_value, right_value = self._value(left), self._value(right)
+                if is_float:
+                    if left_type != "float":
+                        left_value = f"piton_double_bits((double){left_value})"
+                    if right_type != "float":
+                        right_value = f"piton_double_bits((double){right_value})"
+                    helper = "piton_div_true_float"
+                else:
+                    helper = {"/": "piton_div_true_int", "//": "piton_div_floor_int", "%": "piton_div_mod_int"}[operator]
+                out.append(f"    {_name(result)}={helper}({left_value},{right_value});")
+                types[result] = "float" if operator == "/" else "int"
+                if division_handler is not None:
+                    out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + division_handler)};}}")
+                else:
+                    out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
+                return out
             if "str" in {left_type, right_type}:
                 if operator == "+" and left_type == right_type == "str":
                     out.append(f"    {_name(result)}=(long)piton_str_concat((const char*){_name(left)},(const char*){_name(right)});")
@@ -1382,7 +1423,8 @@ class LinuxCEmitter:
                 else:
                     types[result] = "int"
         elif op == "del_attr":
-            obj, attr = args
+            obj, attr = args[0], args[1]
+            del_handler = args[2] if len(args) > 2 else None
             owner_type = types.get(obj, "")
             prop_class = self._resolve_property_class(owner_type, attr)
             if prop_class is not None:
@@ -1403,9 +1445,18 @@ class LinuxCEmitter:
                 current_is_hook = function.name.endswith("__delattr__") and hook is not None
                 if hook is not None and not current_is_hook:
                     out.append(f'    ((long(*)(long,long))(long)&{_name(hook+"__"+"__delattr__")})({self._value(obj)},(long){json.dumps(attr)});')
+                elif owner_type.startswith("object:"):
+                    # Plain instance attribute: CPython deletes it, or raises
+                    # AttributeError when it is not set.
+                    missing = f"'{owner_type.split(':', 1)[1]}' object has no attribute '{attr}'"
+                    out.append(f'    piton_object_del((PitonObject*){self._value(obj)},{json.dumps(attr)},{json.dumps(missing)});')
+                    if del_handler is not None:
+                        out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + del_handler)};}}")
+                    else:
+                        out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
                 else:
                     raise NativeBuildError(
-                        f"native del on '{attr}' is not a property of a natively-typed object"
+                        f"native del on '{attr}' requires a natively-typed object"
                     )
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
@@ -1478,6 +1529,11 @@ class LinuxCEmitter:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:
                 out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
+        elif op == "catch_matches":
+            names, negate = args
+            test = " || ".join(f"piton_strcmp(piton_reraise_type,{json.dumps(name)})==0" for name in names) or "0"
+            out.append(f"    {_name(result)}={'!' if negate else ''}(piton_reraise_type && ({test}));")
+            types[result] = "bool"
         elif op == "raise_active_dynamic":
             # Dynamic re-raise: read the reraise slots (the handler may have
             # already cleared the live exception state via catch_clear).
@@ -1491,8 +1547,13 @@ class LinuxCEmitter:
             operand = self._value(args[0])
             if types.get(args[0]) != "float":
                 operand = f"piton_double_bits((double){operand})"
-            out.append(f'    {_name(result)}=piton_float_sqrt({operand});')
+            out.append(f'    {_name(result)}=piton_math_sqrt_bits({operand});')
             types[result] = "float"
+            sqrt_handler = args[1] if len(args) > 1 else None
+            if sqrt_handler is not None:
+                out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + sqrt_handler)};}}")
+            else:
+                out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
         elif op in {"math_floor", "math_ceil", "math_trunc", "math_fabs"}:
             operand = self._value(args[0])
             if types.get(args[0]) != "float":
@@ -1527,6 +1588,9 @@ class LinuxCEmitter:
             if result:
                 out.append(f"    {_name(result)}=0;")
                 types[result] = "none"
+        elif op == "os_name":
+            out.append(f'    {_name(result)}=(long)"posix";')
+            types[result] = "str"
         elif op == "sys_argv":
             out.append(f"    {_name(result)}=piton_argv_new();")
             types[result] = "list"

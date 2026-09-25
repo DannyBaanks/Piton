@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from tests.win64_toolchain import requires_windows
+from tests.win64_toolchain import requires_windows, run_native
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -147,7 +147,7 @@ class CliAndCorpusTests(unittest.TestCase):
             self.assertEqual(resultado.returncode, 0, resultado.stderr)
             self.assertIn("PITON_NATIVE_BUILD = PASS", resultado.stdout)
             self.assertTrue(salida.is_file())
-            ejecucion = subprocess.run([str(salida)], capture_output=True, check=False)
+            ejecucion = run_native([str(salida)], capture_output=True, check=False)
             self.assertEqual((ejecucion.returncode, ejecucion.stdout, ejecucion.stderr), (0, b"Hola, mundo\r\n", b""))
 
     def test_compilar_linux_genera_elf(self) -> None:
@@ -164,11 +164,12 @@ class CliAndCorpusTests(unittest.TestCase):
     def test_compilar_reporta_error_nativo(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             fuente = Path(temporal) / "fuera_de_alcance.piton"
-            fuente.write_text("imprimir(7 / 2)\n", encoding="utf-8")
+            # Float floor division is still outside the native subset.
+            fuente.write_text("imprimir(7.0 // 2)\n", encoding="utf-8")
             resultado = correr("compilar", str(fuente), "--backend=x86")
             self.assertEqual(resultado.returncode, 1)
             self.assertIn("PITON_NATIVE_BUILD_ERROR", resultado.stderr)
-            self.assertIn("true division", resultado.stderr)
+            self.assertIn("not supported", resultado.stderr)
 
     def test_compilar_no_sobrescribe_fuente(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:

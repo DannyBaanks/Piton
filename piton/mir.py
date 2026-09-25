@@ -12,6 +12,15 @@ from piton.hir import HIRKind, HIRNode, Keyword, With
 # Modules the native backends provide themselves (never scanned from disk).
 NATIVE_BUILTIN_MODULES = frozenset({"asyncio", "math", "sys", "os"})
 _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
+# CPython's builtin exception tree for every type the native runtimes raise.
+_BUILTIN_EXCEPTION_PARENTS = {
+    "Exception": "BaseException", "GeneratorExit": "BaseException", "CancelledError": "BaseException",
+    "ArithmeticError": "Exception", "ZeroDivisionError": "ArithmeticError", "OverflowError": "ArithmeticError",
+    "LookupError": "Exception", "IndexError": "LookupError", "KeyError": "LookupError",
+    "ValueError": "Exception", "TypeError": "Exception", "AttributeError": "Exception",
+    "RuntimeError": "Exception", "NotImplementedError": "RuntimeError", "StopIteration": "Exception",
+    "MemoryError": "Exception", "NameError": "Exception", "AssertionError": "Exception",
+}
 
 # TASK_SCHEDULER_V1 magic values, mirrored with native_runtime.c / linux_x86.py.
 PITON_TASK_MAGIC = 0x5049544E54414B4B
@@ -174,10 +183,10 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "set_add": "WRITE",
     "try_push": "WRITE", "try_pop": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
-    "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE", "set_context_from_reraise": "WRITE",
+    "catch_matches": "READ", "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE", "set_context_from_reraise": "WRITE",
     "task_new": "WRITE", "task_cancel": "WRITE", "gather_add": "WRITE",
     # IO
-    "sleep0": "IO", "sys_exit": "IO", "sys_argv": "IO",
+    "sleep0": "IO", "sys_exit": "IO", "sys_argv": "IO", "os_name": "PURE",
     # OPAQUE
     "call": "OPAQUE", "call_unpack": "OPAQUE", "method_call": "OPAQUE", "frame_call": "OPAQUE",
     "closure_call": "OPAQUE", "runtime_call": "OPAQUE",
@@ -1133,7 +1142,7 @@ class MIRLowerer:
                 if target.kind != HIRKind.ATTR:
                     raise MIRLoweringError("native del currently supports only attribute deletion (del obj.attr)")
                 owner = self._lower_expr(builder, target.value)
-                builder.emit("del_attr", owner, target.attr)
+                builder.emit("del_attr", owner, target.attr, _active_handler(builder))
         else:
             if kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
                 self._lower_expr(builder, node)
@@ -1511,6 +1520,22 @@ class MIRLowerer:
                 builder.emit("catch_bind", bind_name, result=bound)
                 builder.emit("store", bind_name, bound)
             builder.emit("catch_clear")
+            # Exceptions raised at run time (builtins, division, attribute
+            # deletion...) land on the innermost handler whatever their
+            # type: check it here and forward a mismatch one frame out.
+            catch_filter = self._catch_filter(accepted)
+            if catch_filter is not None:
+                names, negate = catch_filter
+                matched = builder.temp()
+                builder.emit("catch_matches", names, negate, result=matched)
+                matched_block = builder.new_block()
+                forward_block = builder.new_block()
+                builder.emit("branch", matched, matched_block.label, forward_block.label)
+                builder.current = forward_block
+                builder.emit("try_pop")
+                outer = builder.exception_handlers[-1][0] if builder.exception_handlers else None
+                builder.emit("raise_active_dynamic", outer)
+                builder.current = matched_block
             previous_reraise_type = builder.reraise_type
             previous_in_handler = builder.in_except_handler
             builder.reraise_type = accepted
@@ -1531,6 +1556,44 @@ class MIRLowerer:
             builder.emit("jump", end_block.label)
 
         builder.current = end_block
+
+    def _catch_filter(self, accepted: str | None) -> tuple[tuple[str, ...], bool] | None:
+        """Runtime type test for ``excepto accepted``: (names, negate) or None
+        for a true catch-all. ``negate`` means "anything except names"."""
+        if accepted in (None, "BaseException"):
+            return None
+
+        def builtin_ancestors(name: str) -> list[str]:
+            chain = [name]
+            while chain[-1] in _BUILTIN_EXCEPTION_PARENTS:
+                chain.append(_BUILTIN_EXCEPTION_PARENTS[chain[-1]])
+            return chain
+
+        user_classes = [
+            name for name in self.classes
+            if any(base in _BUILTIN_EXCEPTIONS or base in _BUILTIN_EXCEPTION_PARENTS
+                   for base in (self._mro_memo.get(name) or self._compute_mro(name)))
+        ]
+
+        def ancestors(name: str) -> list[str]:
+            chain: list[str] = []
+            for step in self._exception_chain(name) if name in self.classes else [name]:
+                for up in builtin_ancestors(step):
+                    if up not in chain:
+                        chain.append(up)
+            return chain
+
+        if accepted == "Exception":
+            # Everything but the BaseException-only branch (unknown runtime
+            # names are ordinary Exceptions).
+            outside = {"GeneratorExit", "CancelledError"}
+            outside |= {name for name in user_classes if "Exception" not in ancestors(name)}
+            return tuple(sorted(outside)), True
+        names = {accepted}
+        for name in list(_BUILTIN_EXCEPTION_PARENTS) + user_classes:
+            if accepted in ancestors(name):
+                names.add(name)
+        return tuple(sorted(names)), False
 
     def _with_mro_method(
         self, class_name: str, method: str
@@ -1843,9 +1906,9 @@ class MIRLowerer:
                 return result
             alias_target = builder.from_import_aliases.get(node.name)
             if alias_target == "os.name":
-                import sys as _sys
                 result = builder.temp()
-                builder.emit("const", "nt" if _sys.platform == "win32" else "posix", result=result)
+                # Resolved by each backend for its target (Win64 "nt", Linux "posix").
+                builder.emit("os_name", result=result)
                 return result
             result = builder.temp()
             builder.emit("load", alias_target if alias_target is not None else node.name, result=result)
@@ -2034,7 +2097,7 @@ class MIRLowerer:
                         builder.emit(op, left, right, _active_handler(builder), result=result)
                     else:
                         value = self._lower_expr(builder, node.args[0])
-                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        handler = _active_handler(builder)
                         if handler is None:
                             builder.emit(op, value, result=result)
                         else:
@@ -2169,7 +2232,7 @@ class MIRLowerer:
                         builder.emit(op, left, right, _active_handler(builder), result=result)
                     else:
                         value = self._lower_expr(builder, node.args[0])
-                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        handler = _active_handler(builder)
                         if handler is None:
                             builder.emit(op, value, result=result)
                         else:
@@ -2350,9 +2413,9 @@ class MIRLowerer:
                 return result
             resolved = builder.from_import_aliases.get(node.name, node.name)
             if resolved == "os.name":
-                import sys as _sys
                 result = builder.temp()
-                builder.emit("const", "nt" if _sys.platform == "win32" else "posix", result=result)
+                # Resolved by each backend for its target (Win64 "nt", Linux "posix").
+                builder.emit("os_name", result=result)
                 return result
             result = builder.temp()
             builder.emit("load", resolved, result=result)
@@ -2562,7 +2625,7 @@ class MIRLowerer:
                         builder.emit(op, left, right, _active_handler(builder), result=result)
                     else:
                         value = self._lower_expr(builder, node.args[0])
-                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        handler = _active_handler(builder)
                         if handler is None:
                             builder.emit(op, value, result=result)
                         else:
@@ -2696,7 +2759,7 @@ class MIRLowerer:
                         builder.emit(op, left, right, _active_handler(builder), result=result)
                     else:
                         value = self._lower_expr(builder, node.args[0])
-                        handler = None if op == "math_sqrt" else _active_handler(builder)
+                        handler = _active_handler(builder)
                         if handler is None:
                             builder.emit(op, value, result=result)
                         else:
@@ -2848,10 +2911,9 @@ class MIRLowerer:
                 builder.emit("sys_argv", result=result)
                 return result
             if owner_module == "os" and node.attr == "name":
-                # Resolved for the build host, which is also the target platform.
-                import sys as _sys
                 result = builder.temp()
-                builder.emit("const", "nt" if _sys.platform == "win32" else "posix", result=result)
+                # Resolved by each backend for its target (Win64 "nt", Linux "posix").
+                builder.emit("os_name", result=result)
                 return result
             result = builder.temp()
             builder.emit("get_attr", self._lower_expr(builder, node.value), node.attr, result=result)
@@ -2992,7 +3054,12 @@ class MIRLowerer:
 
     def _binary(self, builder: _Builder, op: str, left: Any, right: Any) -> str:
         result = builder.temp()
-        builder.emit("binary", op, left, right, result=result)
+        if op in {"/", "//", "%"}:
+            # ZeroDivisionError (and the int64 floor-division overflow) are
+            # raised at run time and must reach the innermost handler.
+            builder.emit("binary", op, left, right, _active_handler(builder), result=result)
+        else:
+            builder.emit("binary", op, left, right, result=result)
         return result
 
     def _expand_literal_call(self, node: HIRNode) -> tuple[list[HIRNode], list[Keyword]]:
@@ -3310,6 +3377,9 @@ class MIREvaluator:
         args = instruction.args
         if op == "const":
             env[instruction.result] = args[0]
+        elif op == "os_name":
+            import os as _os
+            env[instruction.result] = _os.name
         elif op == "load":
             env[instruction.result] = env.get(args[0], args[0] if args[0] in self.functions or args[0] in {"print", "imprimir", "range", "rango"} else None)
         elif op == "store":

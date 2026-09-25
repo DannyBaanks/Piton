@@ -7,7 +7,54 @@
 #include <windows.h>
 #else
 #include <unistd.h>
+
 #endif
+
+/* FLOAT_REPR_V1: CPython float repr, shared with the Linux runtime (see linux_x86.py). */
+/* CPython float repr without libc: shortest round-trip digits (Burger & Dybvig
+   free-format, round-half-even reading) with exact multi-precision integers,
+   then CPython's 'r' layout. Writes into buf (>= 32 bytes), returns length. */
+#define PFR_LIMBS 48
+typedef struct{unsigned int d[PFR_LIMBS];int n;}pfr_big;
+static void pfr_set(pfr_big*a,uint64_t v){a->n=0;while(v){a->d[a->n++]=(unsigned int)v;v>>=32;}}
+static void pfr_mul_small(pfr_big*a,unsigned int m){uint64_t c=0;for(int i=0;i<a->n;++i){uint64_t t=(uint64_t)a->d[i]*m+c;a->d[i]=(unsigned int)t;c=t>>32;}if(c)a->d[a->n++]=(unsigned int)c;}
+static void pfr_shl(pfr_big*a,int bits){if(!a->n)return;int w=bits/32,b=bits%32;if(b){unsigned int c=0;for(int i=0;i<a->n;++i){unsigned int t=a->d[i];a->d[i]=(t<<b)|c;c=t>>(32-b);}if(c)a->d[a->n++]=c;}if(w){for(int i=a->n-1;i>=0;--i)a->d[i+w]=a->d[i];for(int i=0;i<w;++i)a->d[i]=0;a->n+=w;}}
+static int pfr_cmp(const pfr_big*a,const pfr_big*b){if(a->n!=b->n)return a->n<b->n?-1:1;for(int i=a->n-1;i>=0;--i)if(a->d[i]!=b->d[i])return a->d[i]<b->d[i]?-1:1;return 0;}
+static void pfr_add(pfr_big*r,const pfr_big*a,const pfr_big*b){int n=a->n>b->n?a->n:b->n;uint64_t c=0;for(int i=0;i<n;++i){uint64_t t=c+(i<a->n?a->d[i]:0)+(i<b->n?b->d[i]:0);r->d[i]=(unsigned int)t;c=t>>32;}r->n=n;if(c)r->d[r->n++]=(unsigned int)c;}
+static void pfr_sub(pfr_big*a,const pfr_big*b){int64_t br=0;for(int i=0;i<a->n;++i){int64_t t=(int64_t)a->d[i]-(i<b->n?(int64_t)b->d[i]:0)-br;br=t<0;a->d[i]=(unsigned int)(t+(br?0x100000000L:0));}while(a->n&&!a->d[a->n-1])--a->n;}
+static int pfr_digits(uint64_t bits,char*out,int*decpt){
+  uint64_t frac=bits&0xFFFFFFFFFFFFFUL;int bexp=(int)((bits>>52)&0x7FF);
+  uint64_t f;int e;if(bexp){f=frac|0x10000000000000UL;e=bexp-1075;}else{f=frac;e=-1074;}
+  int even=(f&1)==0;pfr_big r,s,mp,mm;
+  if(e>=0){if(f!=0x10000000000000UL){pfr_set(&r,f);pfr_shl(&r,e+1);pfr_set(&s,2);pfr_set(&mp,1);pfr_shl(&mp,e);mm=mp;}
+    else{pfr_set(&r,f);pfr_shl(&r,e+2);pfr_set(&s,4);pfr_set(&mp,1);pfr_shl(&mp,e+1);pfr_set(&mm,1);pfr_shl(&mm,e);}}
+  else{if(bexp<=1||f!=0x10000000000000UL){pfr_set(&r,f);pfr_shl(&r,1);pfr_set(&s,1);pfr_shl(&s,1-e);pfr_set(&mp,1);pfr_set(&mm,1);}
+    else{pfr_set(&r,f);pfr_shl(&r,2);pfr_set(&s,1);pfr_shl(&s,2-e);pfr_set(&mp,2);pfr_set(&mm,1);}}
+  int k=0;pfr_big t;
+  for(;;){pfr_add(&t,&r,&mp);int c=pfr_cmp(&t,&s);if(c>0||(c==0&&even)){pfr_mul_small(&s,10);++k;}else break;}
+  for(;;){pfr_add(&t,&r,&mp);pfr_mul_small(&t,10);int c=pfr_cmp(&t,&s);if(c<0||(c==0&&!even)){pfr_mul_small(&r,10);pfr_mul_small(&mp,10);pfr_mul_small(&mm,10);--k;}else break;}
+  int n=0;
+  for(;;){pfr_mul_small(&r,10);pfr_mul_small(&mp,10);pfr_mul_small(&mm,10);int d=0;while(pfr_cmp(&r,&s)>=0){pfr_sub(&r,&s);++d;}
+    int c1=pfr_cmp(&r,&mm);int low=c1<0||(c1==0&&even);pfr_add(&t,&r,&mp);int c2=pfr_cmp(&t,&s);int high=c2>0||(c2==0&&even);
+    if(!low&&!high){out[n++]=(char)('0'+d);continue;}
+    if(low&&!high)out[n++]=(char)('0'+d);else if(high&&!low)out[n++]=(char)('0'+d+1);
+    else{pfr_big r2=r;pfr_shl(&r2,1);int c3=pfr_cmp(&r2,&s);out[n++]=(char)('0'+((c3<0||(c3==0&&!(d&1)))?d:d+1));}
+    break;}
+  *decpt=k;return n;}
+static int pfr_repr(double x,char*buf){
+  union{double d;uint64_t u;}v;v.d=x;int o=0;
+  if(x!=x){buf[0]='n';buf[1]='a';buf[2]='n';buf[3]=0;return 3;}
+  if(v.u>>63){buf[o++]='-';v.u&=0x7FFFFFFFFFFFFFFFUL;}
+  if(v.u==0x7FF0000000000000UL){buf[o++]='i';buf[o++]='n';buf[o++]='f';buf[o]=0;return o;}
+  if(v.u==0){buf[o++]='0';buf[o++]='.';buf[o++]='0';buf[o]=0;return o;}
+  char dg[20];int decpt;int n=pfr_digits(v.u,dg,&decpt);
+  if(decpt>-4&&decpt<=16){
+    if(decpt<=0){buf[o++]='0';buf[o++]='.';for(int i=0;i<-decpt;++i)buf[o++]='0';for(int i=0;i<n;++i)buf[o++]=dg[i];}
+    else{for(int i=0;i<decpt;++i)buf[o++]=i<n?dg[i]:'0';buf[o++]='.';if(n>decpt)for(int i=decpt;i<n;++i)buf[o++]=dg[i];else buf[o++]='0';}
+  }else{
+    buf[o++]=dg[0];if(n>1){buf[o++]='.';for(int i=1;i<n;++i)buf[o++]=dg[i];}
+    int ex=decpt-1;buf[o++]='e';buf[o++]=ex<0?'-':'+';if(ex<0)ex=-ex;char eb[4];int en=0;do{eb[en++]=(char)('0'+ex%10);ex/=10;}while(ex);if(en<2)eb[en++]='0';while(en)buf[o++]=eb[--en];}
+  buf[o]=0;return o;}
 
 void piton_raise_unhandled(const char *type, const char *message);
 
@@ -696,8 +743,9 @@ static void piton_value_print_inner(int64_t v, int recursing) {
         break;
     case PITON_TAG_FLOAT: {
         double d = *(double *)pv_payload(v);
-        if (isfinite(d) && trunc(d) == d) printf("%.1f", d);
-        else printf("%.15g", d);
+        char fb[40];
+        pfr_repr(d, fb);
+        fputs(fb, stdout);
         break;
     }
     case PITON_TAG_OBJECT: {
@@ -1858,7 +1906,7 @@ int64_t piton_object_get(void *raw, const char *name) {
     return pv_none();
 }
 
-void piton_object_delattr(void *raw, const char *name) {
+void piton_object_delattr(void *raw, const char *name, const char *missing) {
     PitonObject *o = raw;
     if (!o || !name) return;
     for (int64_t i = 0; i < o->length; ++i) {
@@ -1872,6 +1920,7 @@ void piton_object_delattr(void *raw, const char *name) {
             return;
         }
     }
+    piton_raise("AttributeError", missing);
 }
 
 /* ATTRIBUTE_LOOKUP_V2: read-through access that first consults the object's
@@ -2310,6 +2359,11 @@ static const char *piton_reraise_message = NULL;
 static const char *piton_reraise_cause_type = NULL;
 static const char *piton_reraise_cause_message = NULL;
 
+/* catch_matches: is the saved (handled) exception of exactly this type? */
+int64_t piton_reraise_type_is(const char *name) {
+    return piton_reraise_type && name && strcmp(piton_reraise_type, name) == 0;
+}
+
 /* Snapshot the active exception before the handler clears catch state. */
 void piton_reraise_save(void) {
     piton_reraise_type = piton_exception_type;
@@ -2340,10 +2394,9 @@ void piton_reraise_unhandled(void) {
 }
 
 void piton_print_float(double value) {
-    if (isfinite(value) && trunc(value) == value)
-        printf("%.1f\n", value);
-    else
-        printf("%.15g\n", value);
+    char fb[40];
+    pfr_repr(value, fb);
+    puts(fb);
 }
 
 /* MODULE_METADATA_V1: dynamic print for module __package__ (None or text).
@@ -2630,8 +2683,7 @@ int64_t piton_str_from_none(void) {
 
 int64_t piton_str_from_float(double x) {
     char *p = (char *)malloc(40);
-    if (isfinite(x) && trunc(x) == x) sprintf(p, "%.1f", x);
-    else sprintf(p, "%.15g", x);
+    pfr_repr(x, p);
     return (int64_t)p;
 }
 
@@ -2804,6 +2856,52 @@ int64_t piton_float_ceil(int64_t bits) {
     return r;
 }
 
+/* DIVISION_V1 (shared with the Linux runtime): CPython true/floor division and
+ * modulo; a zero divisor raises ZeroDivisionError with CPython's message. */
+/* int / int -> correctly rounded double (CPython true division), b != 0.
+   Normalizes both magnitudes to 64 bits, long-divides 56 quotient bits plus
+   a sticky bit, rounds half-even, then scales by an exact power of two. */
+static double ptd_pow2(int k){union{uint64_t u;double d;}v;v.u=(uint64_t)(k+1023)<<52;return v.d;}
+static double piton_int_truediv(int64_t a,int64_t b){
+  int neg=(a<0)!=(b<0);uint64_t ua=a<0?0ULL-(uint64_t)a:(uint64_t)a,ub=b<0?0ULL-(uint64_t)b:(uint64_t)b;
+  if(!ua)return neg?-0.0:0.0;
+  if(ua<=9007199254740992ULL&&ub<=9007199254740992ULL){double q=(double)ua/(double)ub;return neg?-q:q;}
+  int la=0,lb=0;while(!(ua>>63)){ua<<=1;++la;}while(!(ub>>63)){ub<<=1;++lb;}
+  uint64_t r=ua,q=0;int c=0;
+  for(int i=0;i<56;++i){int bit=c||r>=ub;if(bit)r-=ub;q=(q<<1)|(uint64_t)bit;c=(int)(r>>63);r<<=1;}
+  int sticky=(r!=0)||c;int nb=(q>>55)?56:55;int drop=nb-53;uint64_t low=q&((1ULL<<drop)-1),half=1ULL<<(drop-1);q>>=drop;
+  if(low>half||(low==half&&(sticky||(q&1))))++q;
+  int e=lb-la-55+drop;if(q>>53){q>>=1;++e;}
+  double v=(double)q;if(e>0){while(e>60){v*=ptd_pow2(60);e-=60;}v*=ptd_pow2(e);}else{while(e<-60){v*=ptd_pow2(-60);e+=60;}v*=ptd_pow2(e);}
+  return neg?-v:v;}
+
+int64_t piton_div_true_int(int64_t a, int64_t b) {
+    if (!b) { piton_raise("ZeroDivisionError", "division by zero"); return 0; }
+    return piton_double_bits(piton_int_truediv(a, b));
+}
+int64_t piton_div_true_float(int64_t a, int64_t b) {
+    double y = piton_bits_double(b);
+    if (y == 0.0) { piton_raise("ZeroDivisionError", "float division by zero"); return 0; }
+    return piton_double_bits(piton_bits_double(a) / y);
+}
+int64_t piton_div_floor_int(int64_t a, int64_t b) {
+    if (!b) { piton_raise("ZeroDivisionError", "integer division or modulo by zero"); return 0; }
+    if (b == -1 && a == INT64_MIN) {
+        piton_raise("OverflowError", "integer floor division result does not fit the native int64");
+        return 0;
+    }
+    int64_t q = a / b, r = a % b;
+    if (r && ((r < 0) != (b < 0))) --q;
+    return q;
+}
+int64_t piton_div_mod_int(int64_t a, int64_t b) {
+    if (!b) { piton_raise("ZeroDivisionError", "integer modulo by zero"); return 0; }
+    if (b == -1) return 0;
+    int64_t r = a % b;
+    if (r && ((r < 0) != (b < 0))) r += b;
+    return r;
+}
+
 /* CPython: sin/cos(+-inf) and log(x <= 0) raise ValueError("math domain error"). */
 int64_t piton_float_sin(int64_t bits) {
     double x = piton_bits_double(bits);
@@ -2815,6 +2913,12 @@ int64_t piton_float_cos(int64_t bits) {
     double x = piton_bits_double(bits);
     if (isinf(x)) { piton_raise("ValueError", "math domain error"); return 0; }
     return piton_double_bits(cos(x));
+}
+
+int64_t piton_float_sqrt(int64_t bits) {
+    double x = piton_bits_double(bits);
+    if (x < 0.0) { piton_raise("ValueError", "math domain error"); return 0; }
+    return piton_double_bits(sqrt(x));
 }
 
 int64_t piton_float_log(int64_t bits) {

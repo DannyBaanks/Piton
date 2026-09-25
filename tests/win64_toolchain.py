@@ -10,6 +10,11 @@ non-Windows gate goes further: it assembles the program, cross-compiles
 ``native_runtime.c`` with ``zig cc -target x86_64-windows-gnu`` and links the
 PE, so a missing runtime symbol or a C error fails the test. Only running the
 executable is left to a Windows host.
+
+With ``PITON_NATIVE_TARGET=win64`` off Windows (needs ``nasm``,
+``x86_64-w64-mingw32-gcc`` and ``wine``) nothing is skipped: PEs are really
+built and executed through wine, and differential tests exercise the Win64
+backend instead of the Linux one.
 """
 from __future__ import annotations
 
@@ -22,7 +27,14 @@ from pathlib import Path
 
 import piton.x86 as x86
 
+from piton.native_differential import native_command, native_env, native_target
+
 WINDOWS = os.name == "nt"
+WINE_MODE = (
+    not WINDOWS
+    and native_target() == "win64"
+    and bool(shutil.which("wine") and shutil.which("nasm") and x86.win64_c_compiler())
+)
 SKIP_REASON = "Win64 PE build+run needs Windows (nasm -f win64 + MSVCRT runtime)"
 LINKED_REASON = "Win64 PE assembled and linked with zig; running it needs Windows"
 
@@ -70,9 +82,27 @@ def _emit_then_skip(mir, output):
 
 
 def install() -> None:
-    """Route PE builds through emit-then-skip on non-Windows hosts."""
-    if not WINDOWS:
+    """Route PE builds through emit-then-skip on non-Windows hosts (unless wine mode)."""
+    if not WINDOWS and not WINE_MODE:
         x86._compile_native_mir = _emit_then_skip
 
 
-requires_windows = unittest.skipUnless(WINDOWS, SKIP_REASON)
+def run_native(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """subprocess.run for a built PE: direct on Windows, through wine elsewhere."""
+    if WINE_MODE:
+        kwargs.setdefault("env", native_env())
+        argv = native_command(argv[0]) + list(argv[1:])
+    return subprocess.run(argv, **kwargs)
+
+
+def run_oracle(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """Run the CPython oracle. Under wine it is this host's CPython, so its
+    output is converted to the Windows CRT text mode (LF -> CRLF) that the
+    PE and a Windows CPython both produce."""
+    completed = subprocess.run(argv, **kwargs)
+    if WINE_MODE and isinstance(completed.stdout, bytes):
+        completed.stdout = completed.stdout.replace(b"\n", b"\r\n")
+    return completed
+
+
+requires_windows = unittest.skipUnless(WINDOWS or WINE_MODE, SKIP_REASON)

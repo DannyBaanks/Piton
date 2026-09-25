@@ -294,8 +294,8 @@ class Lexer:
             if ch in "\"'":
                 return self._read_string()
 
-            # NÚMERO
-            if ch in NUMBER_START:
+            # NÚMERO (también ".5")
+            if ch in NUMBER_START or (ch == "." and self._peek(2).isdigit()):
                 return self._read_number()
 
             # IDENTIFICADOR / KEYWORD
@@ -371,27 +371,41 @@ class Lexer:
                 self._advance()
             return self._make_token(TokenType.NUMBER, self.source[start:self.pos])
 
-        # Decimal / float
+        # Decimal / float: digits [. digits] [e|E [+|-] digits], plus "1." and ".5"
         has_dot = False
         while True:
             ch = self._peek()
             if ch.isdigit() or ch == "_":
                 self._advance()
-            elif ch == "." and not has_dot and self._peek(2).isdigit():
+            elif ch == "." and not has_dot:
+                after = self._peek(2)
+                # "1." is a float; "1.x" / "1.." are not part of the number.
+                if not (after.isdigit() or after in "eE" or not (after.isalpha() or after in "_.")):
+                    break
+                if after in "eE" and not self._exponent_follows(1):
+                    break
                 has_dot = True
                 self._advance()
-            elif ch in "eE" and not has_dot:
+            elif ch in "eE" and self._exponent_follows(0):
                 self._advance()
                 if self._peek() in "+-":
                     self._advance()
-                if not self._peek().isdigit():
-                    break
                 while self._peek().isdigit() or self._peek() == "_":
                     self._advance()
                 break
             else:
                 break
         return self._make_token(TokenType.NUMBER, self.source[start:self.pos])
+
+    def _exponent_follows(self, offset: int) -> bool:
+        """True when an exponent (e/E, optional sign, a digit) starts ``offset`` chars ahead."""
+        index = self.pos + offset
+        if index >= len(self.source) or self.source[index] not in "eE":
+            return False
+        index += 1
+        if index < len(self.source) and self.source[index] in "+-":
+            index += 1
+        return index < len(self.source) and self.source[index].isdigit()
 
     def _read_identifier(self) -> Token:
         start = self.pos
