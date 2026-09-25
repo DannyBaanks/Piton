@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from tests.win64_toolchain import requires_windows
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -135,6 +136,7 @@ class CliAndCorpusTests(unittest.TestCase):
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
         self.assertIn("Module", resultado.stdout)
 
+    @requires_windows
     def test_compilar_x86_genera_y_ejecuta_pe(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             salida = Path(temporal) / "hola.exe"

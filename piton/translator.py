@@ -209,8 +209,21 @@ def _es_carga_builtin(
         return False
     if anterior is not None and anterior.type == token.NAME and anterior.string in {"def", "funcion", "class", "clase"}:
         return False
-    if anterior is not None and anterior.type == token.NAME and anterior.string in {"importar", "import", "desde", "from"}:
+    if anterior is not None and anterior.type == token.NAME and anterior.string in {"importar", "import"}:
         return False
+    if anterior is not None and anterior.type == token.NAME and anterior.string in {"desde", "from"}:
+        # `desde X importar ...` names a module, but in `producir desde X` and
+        # `lanzar A desde X` the operand is an ordinary expression.
+        idx_desde = tokens.index(anterior)
+        previo = _anterior_significativo(tokens, idx_desde)
+        if previo is None or previo.type != token.NAME or previo.string not in {"producir", "yield"}:
+            starts_statement = (
+                previo is None
+                or previo.end[0] < anterior.start[0]
+                or (previo.type == token.OP and previo.string == ";")
+            )
+            if starts_statement:
+                return False
     if nombre in asignados:
         return False
     return True

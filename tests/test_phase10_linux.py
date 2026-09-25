@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -78,10 +80,15 @@ class Phase10LinuxGates(unittest.TestCase):
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(prepared.returncode, 0, prepared.stderr)
-            run = subprocess.run(
-                ["sudo", "chroot", str(root), "/program"],
-                capture_output=True, check=False,
-            )
+            if _is_native_linux():
+                # chroot needs root: non-interactive sudo or skip (never prompt).
+                probe = subprocess.run(["sudo", "-n", "true"], capture_output=True, check=False)
+                if probe.returncode != 0:
+                    self.skipTest("chroot needs passwordless sudo on this host")
+                chroot_cmd = ["sudo", "-n", "chroot", str(root), "/program"]
+            else:
+                chroot_cmd = ["sudo", "chroot", str(root), "/program"]
+            run = subprocess.run(chroot_cmd, capture_output=True, check=False)
             self.assertEqual((run.returncode, run.stdout, run.stderr), (0, b"clean\n", b""))
 
     def test_static_elf_boots_as_only_userspace_in_qemu(self):
@@ -89,8 +96,17 @@ class Phase10LinuxGates(unittest.TestCase):
             root = Path(directory)
             executable = compile_native_linux('imprimir("PITON_VM_CLEAN_PASS")\n', root / "program")
             initramfs = build_single_file_initramfs(executable, root / "initramfs.cpio.gz")
-            qemu = Path.home() / "scoop" / "apps" / "qemu" / "current" / "qemu-system-x86_64.exe"
-            kernel = Path(r"C:\Program Files\WSL\tools\kernel")
+            if _is_native_linux():
+                found = shutil.which("qemu-system-x86_64")
+                if not found:
+                    self.skipTest("qemu-system-x86_64 not installed")
+                qemu = Path(found)
+                kernel = Path(os.environ.get("PITON_QEMU_KERNEL", f"/boot/vmlinuz-{os.uname().release}"))
+                if not os.access(kernel, os.R_OK):
+                    self.skipTest(f"kernel image not readable: {kernel} (set PITON_QEMU_KERNEL)")
+            else:
+                qemu = Path.home() / "scoop" / "apps" / "qemu" / "current" / "qemu-system-x86_64.exe"
+                kernel = Path(r"C:\Program Files\WSL\tools\kernel")
             self.assertTrue(qemu.is_file())
             self.assertTrue(kernel.is_file())
             run = subprocess.run(
@@ -1471,7 +1487,7 @@ class Phase10LinuxGates(unittest.TestCase):
             )
             executable = compile_native_linux_files(entry, root / "program")
             run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(executable)],
+                linux_run_cmd([windows_to_wsl_path(executable)]),
                 capture_output=True, check=False,
             )
             self.assertEqual((run.returncode, run.stdout), (0, b"103\n"))
@@ -2324,7 +2340,7 @@ class CoroutinesLinux(unittest.TestCase):
             (root / "main.py").write_text(traducir_fuente(source, "<main>"), encoding="utf-8")
             executable = compile_native_linux(source, root / "program")
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(executable)],
+                linux_run_cmd([windows_to_wsl_path(executable)]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -2495,7 +2511,7 @@ class CoroutinesLinux(unittest.TestCase):
             root = Path(directory)
             executable = compile_native_linux(source, root / "program")
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(executable)],
+                linux_run_cmd([windows_to_wsl_path(executable)]),
                 capture_output=True, check=False, timeout=10,
             )
             self.assertNotEqual(native_run.returncode, 0)
@@ -2566,7 +2582,7 @@ class WithProtocolLinuxV1(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -2683,7 +2699,7 @@ class FinalizersLinuxV1(unittest.TestCase):
             executable = compile_native_linux(source, Path(directory) / "program")
             linux_path = windows_to_wsl_path(executable)
             native_run = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", linux_path],
+                linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
             oracle_run = subprocess.run(
@@ -2911,13 +2927,13 @@ int main(void){
             harness.write_text(self._HARNESS_C, encoding="utf-8")
             exe = Path(directory) / "gc_cycle_linux"
             built = subprocess.run(
-                ["wsl.exe", "gcc", "-std=c11", "-O2",
-                 windows_to_wsl_path(harness), "-o", windows_to_wsl_path(exe)],
+                linux_run_cmd(["gcc", "-std=c11", "-O2",
+                 windows_to_wsl_path(harness), "-o", windows_to_wsl_path(exe)]),
                 capture_output=True, text=True, check=False, timeout=30,
             )
             self.assertEqual(built.returncode, 0, built.stderr)
             completed = subprocess.run(
-                ["wsl.exe", "/usr/bin/env", "-i", windows_to_wsl_path(exe)],
+                linux_run_cmd([windows_to_wsl_path(exe)]),
                 capture_output=True, text=True, check=False, timeout=10,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)

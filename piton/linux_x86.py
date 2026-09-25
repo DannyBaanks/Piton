@@ -326,20 +326,40 @@ static long piton_float_from_str(const char*s){if(!s){piton_raise_set("TypeError
 static long piton_str_from_int(long v){char*p=piton_alloc(24);usize o=0;unsigned long u;if(v<0){p[o++]='-';u=(unsigned long)(-(v+1))+1;}else u=(unsigned long)v;char tmp[24];long n=0;do{tmp[n++]=(char)('0'+u%10);u/=10;}while(u);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static long piton_str_from_float(long bits){double d=piton_bits_double(bits);char*p=piton_alloc(64);usize o=0;if(d<0){p[o++]='-';d=-d;}unsigned long whole=(unsigned long)d;double frac=d-(double)whole;unsigned long scaled=(unsigned long)(frac*1000000000000.0+0.5);if(scaled>=1000000000000UL){++whole;scaled=0;}char wt[24];long wn=0;do{wt[wn++]=(char)('0'+whole%10);whole/=10;}while(whole);while(wn)p[o++]=wt[--wn];p[o++]='.';if(!scaled){p[o++]='0';p[o]=0;return(long)p;}char digits[12];for(int i=11;i>=0;--i){digits[i]=(char)('0'+scaled%10);scaled/=10;}int end=12;while(end>1&&digits[end-1]=='0')--end;for(int i=0;i<end;++i)p[o++]=digits[i];p[o]=0;return(long)p;}
 static long piton_str_truthy(const char*s){return(s&&s[0])?1:0;}
-static long piton_math_floor_bits(long bits){double d=piton_bits_double(bits);long t=(long)d;if((double)t>d)--t;return t;}
-static long piton_math_ceil_bits(long bits){double d=piton_bits_double(bits);long t=(long)d;if((double)t<d)++t;return t;}
-static long piton_math_trunc_bits(long bits){double d=piton_bits_double(bits);return (long)d;}
+static int piton_float_int_ok(double d){if(d!=d){piton_raise_set("ValueError","cannot convert float NaN to integer");return 0;}if(d>=9.2233720368547758e18||d<-9.2233720368547758e18){piton_raise_set("OverflowError","cannot convert float infinity to integer");return 0;}return 1;}
+static long piton_math_floor_bits(long bits){double d=piton_bits_double(bits);if(!piton_float_int_ok(d))return 0;long t=(long)d;if((double)t>d)--t;return t;}
+static long piton_math_ceil_bits(long bits){double d=piton_bits_double(bits);if(!piton_float_int_ok(d))return 0;long t=(long)d;if((double)t<d)++t;return t;}
+static long piton_math_trunc_bits(long bits){double d=piton_bits_double(bits);if(!piton_float_int_ok(d))return 0;return (long)d;}
 static long piton_math_fabs_bits(long bits){return bits&0x7FFFFFFFFFFFFFFFL;}
 static long piton_math_gcd(long a,long b){if(a<0)a=-a;if(b<0)b=-b;while(b){long t=a%b;a=b;b=t;}return a;}
+/* MATH sin/cos/log: freestanding fdlibm kernels (<=1 ulp vs glibc over 4M samples); |x|>1e6 fails closed. */
+static double pm_bits_d(unsigned long b){union{unsigned long u;double d;}v;v.u=b;return v.d;}
+static unsigned long pm_d_bits(double d){union{unsigned long u;double d;}v;v.d=d;return v.u;}
+static long pm_exp(double d){return(long)((pm_d_bits(d)>>52)&0x7FF);}
+static double pm_ksin(double x,double y){double z=x*x,v=z*x,r=8.33333333332248946124e-03+z*(-1.98412698298579493134e-04+z*(2.75573137070700676789e-06+z*(-2.50507602534068634195e-08+z*1.58969099521155010221e-10)));return x-((z*(0.5*y-v*r)-y)-v*-1.66666666666666324348e-01);}
+static double pm_kcos(double x,double y){double z=x*x,w=z*z,r=z*(4.16666666666666019037e-02+z*(-1.38888888888741095749e-03+z*2.48015872894767294178e-05))+w*w*(-2.75573143513906633035e-07+z*(2.08757232129817482790e-09+z*-1.13596475577881948265e-11));double hz=0.5*z;w=1.0-hz;return w+(((1.0-w)-hz)+(z*r-x*y));}
+static long pm_rem_pio2(double x,double*y0,double*y1){double t=x<0?-x:x;long n=(long)(t*6.36619772367581382433e-01+0.5);double fn=(double)n;double r=t-fn*1.57079632673412561417e+00,w=fn*6.07710050650619224932e-11;long j=pm_exp(t);*y0=r-w;if(j-pm_exp(*y0)>16){t=r;w=fn*6.07710050630396597660e-11;r=t-w;w=fn*2.02226624879595063154e-21-((t-r)-w);*y0=r-w;if(j-pm_exp(*y0)>49){t=r;w=fn*2.02226624871116645580e-21;r=t-w;w=fn*8.47842766036889956997e-32-((t-r)-w);*y0=r-w;}}*y1=(r-*y0)-w;if(x<0){*y0=-*y0;*y1=-*y1;return -n;}return n;}
+static int pm_trig_arg(double x,int*dom,int*big){if(x!=x)return 1;if(x-x!=0.0){*dom=1;return 1;}if((x<0?-x:x)>1.0e6){*big=1;return 1;}return 0;}
+static double pm_sin(double x,int*dom,int*big){if(pm_trig_arg(x,dom,big))return x-x;if((x<0?-x:x)<7.450580596923828125e-9)return x;double a,b;switch(pm_rem_pio2(x,&a,&b)&3){case 0:return pm_ksin(a,b);case 1:return pm_kcos(a,b);case 2:return -pm_ksin(a,b);default:return -pm_kcos(a,b);}}
+static double pm_cos(double x,int*dom,int*big){if(pm_trig_arg(x,dom,big))return x-x;if((x<0?-x:x)<7.450580596923828125e-9)return 1.0;double a,b;switch(pm_rem_pio2(x,&a,&b)&3){case 0:return pm_kcos(a,b);case 1:return -pm_ksin(a,b);case 2:return -pm_kcos(a,b);default:return pm_ksin(a,b);}}
+static double pm_log(double x,int*dom){if(x!=x)return x;if(x<=0.0){*dom=1;return 0.0;}if(x-x!=0.0)return x;unsigned long b=pm_d_bits(x);long k=0;if((b>>52)==0){x*=18014398509481984.0;b=pm_d_bits(x);k=-54;}k+=(long)(b>>52)-1023;b&=0x000FFFFFFFFFFFFFUL;unsigned long i=(b+0x95F6400000000UL)&0x10000000000000UL;x=pm_bits_d(b|(i^0x3FF0000000000000UL));k+=(long)(i>>52);double f=x-1.0,s=f/(2.0+f),z=s*s,w=z*z;double t1=w*(3.999999999940941908e-01+w*(2.222219843214978396e-01+w*1.531383769920937332e-01));double t2=z*(6.666666666666735130e-01+w*(2.857142874366239149e-01+w*(1.818357216161805012e-01+w*1.479819860511658591e-01)));double R=t2+t1,hfsq=0.5*f*f,dk=(double)k;return dk*6.93147180369123816490e-01-((hfsq-(s*(hfsq+R)+dk*1.90821492927058770002e-10))-f);}
+static long piton_math_trig_big(const char*name){piton_write(2,"NotImplementedError: native math.",33);piton_write(2,name,piton_strlen(name));piton_write(2," argument beyond 1e6 is outside the V1 scope\n",46);piton_exit(1);return 0;}
+static long piton_math_sin_bits(long bits){int dom=0,big=0;double r=pm_sin(piton_bits_double(bits),&dom,&big);if(big)return piton_math_trig_big("sin");if(dom){piton_raise_set("ValueError","math domain error");return 0;}return piton_double_bits(r);}
+static long piton_math_cos_bits(long bits){int dom=0,big=0;double r=pm_cos(piton_bits_double(bits),&dom,&big);if(big)return piton_math_trig_big("cos");if(dom){piton_raise_set("ValueError","math domain error");return 0;}return piton_double_bits(r);}
+static long piton_math_log_bits(long bits){int dom=0;double r=pm_log(piton_bits_double(bits),&dom);if(dom){piton_raise_set("ValueError","math domain error");return 0;}return piton_double_bits(r);}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
+static const char*piton_exc_context_type=0;static const char*piton_exc_context_msg=0;
 static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;}
-static void piton_raise_chain_set(const char*type,const char*message,const char*cause_type,const char*cause_msg){piton_exc_cause_type=cause_type;piton_exc_cause_msg=cause_msg;piton_raise_set(type,message);}
+static void piton_raise_chain_set(const char*type,const char*message,const char*cause_type,const char*cause_msg){piton_exc_cause_type=cause_type;piton_exc_cause_msg=cause_msg;piton_exc_context_type=0;piton_exc_context_msg=0;piton_raise_set(type,message);}
 static const char*piton_reraise_type=0;static const char*piton_reraise_message=0;
 static void piton_reraise_save(void){piton_reraise_type=piton_exc_type;piton_reraise_message=piton_exc_message;}
 static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=piton_reraise_message;}
-static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;}
-static void piton_report_unhandled(void){if(piton_exc_cause_type){piton_write(2,piton_exc_cause_type,piton_strlen(piton_exc_cause_type));if(piton_exc_cause_msg&&piton_exc_cause_msg[0]){piton_write(2,": ",2);piton_write(2,piton_exc_cause_msg,piton_strlen(piton_exc_cause_msg));}piton_write(2," -> causada por\n",16);}piton_write(2,piton_exc_type,piton_strlen(piton_exc_type));piton_write(2,": ",2);if(piton_exc_message)piton_write(2,piton_exc_message,piton_strlen(piton_exc_message));piton_write(2,"\n",1);}
+static void piton_set_context_from_reraise(void){piton_exc_cause_type=0;piton_exc_cause_msg=0;piton_exc_context_type=piton_reraise_type;piton_exc_context_msg=piton_reraise_message;}
+static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;piton_exc_context_type=0;piton_exc_context_msg=0;}
+static void piton_write_exc_line(const char*type,const char*msg){piton_write(2,type,piton_strlen(type));if(msg&&msg[0]){piton_write(2,": ",2);piton_write(2,msg,piton_strlen(msg));}piton_write(2,"\n",1);}
+/* CPython's chained-traceback separators (text-only model: no frames). __cause__ wins over __context__. */
+static void piton_report_unhandled(void){if(piton_exc_cause_type){piton_write_exc_line(piton_exc_cause_type,piton_exc_cause_msg);const char*sep="\nThe above exception was the direct cause of the following exception:\n\n";piton_write(2,sep,piton_strlen(sep));}else if(piton_exc_context_type){piton_write_exc_line(piton_exc_context_type,piton_exc_context_msg);const char*sep="\nDuring handling of the above exception, another exception occurred:\n\n";piton_write(2,sep,piton_strlen(sep));}piton_write_exc_line(piton_exc_type,piton_exc_message);}
 """
 
 _BIGINT_FREESTANDING_C = r"""
@@ -410,7 +430,7 @@ class LinuxCEmitter:
         # Rich runtime (with __argc/__argv/_start and object/dict/set structs) needed for
         # bigint or sys.argv/os.name or any object/dict/set operations
         self._has_rich_runtime = self._has_bigint or any(
-            instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put"}
+            instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv"}
             for function in module.functions
             for block in function.blocks
             for instruction in block.instructions
@@ -558,58 +578,23 @@ class LinuxCEmitter:
         lines.append("}")
         return lines
 
-    def _emit_generator_function(self, function: MIRFunction) -> list[str]:
-        """Emit a suspendible generator body: ``state`` dispatch over heap slots.
-
-        Same logical ABI as the Win64 backend: ``PitonGenerator*`` in,
-        yielded value out, ``state`` selects the resume point, ``finished``
-        marks completion. All mutable slots are mirrored into ``piton_gen->slots``.
-        """
-        layout = self.generator_layouts.get(function.name)
-        if layout is None:
-            raise NativeBuildError(f"native generator '{function.name}' has no persisted-slot layout")
-        ordered = sorted(layout.items(), key=lambda item: item[1])
-        lines = [f"static long {_name(function.name)}(PitonGenerator *piton_gen) {{"]
-        if ordered:
-            lines.append("    long " + ", ".join(f"{_name(slot)}=0" for slot, _ in ordered) + ";")
-        lines.append("    long __sent = 0;")
-        aliases: dict[str, str] = {}
-        types: dict[str, str] = {}
-        bigint_slots: list[str] = []
-        for slot, index in ordered:
-            lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
-        yield_count = sum(
-            1 for block in function.blocks for instruction in block.instructions if instruction.op in {"gen_yield", "agen_emit"}
-        )
-        resumes = [_name(f"{function.name}_genresume_{i}") for i in range(1, yield_count + 1)]
-        if yield_count:
-            for resume_id, resume in enumerate(resumes, start=1):
-                lines.append(f"    if(piton_gen->state=={resume_id}) goto {resume};")
-            lines.append(f"    if(piton_gen->state!=0) goto {_name(function.name + '___exit')};")
-        self._gen_layout = layout
-        self._gen_resumes = resumes
-        self._gen_function_name = function.name
-        self._gen_counter = 0
-        try:
-            for block in function.blocks:
-                lines.append(f"{_name(function.name + '_' + block.label)}:")
-                for instruction in block.instructions:
-                    lines.extend(self._emit_instruction(instruction, function, aliases, types, bigint_slots))
-                if not block.instructions or block.instructions[-1].op not in {"jump", "branch", "return"}:
-                    lines.append(f"    goto {_name(function.name + '___exit')};")
-        finally:
-            self._gen_layout = {}
-            self._gen_resumes = []
-            self._gen_function_name = None
-            self._gen_counter = 0
-        for slot in bigint_slots:
-            lines.append(f"    piton_bigint_free((void*){_name(slot)});")
-            lines.append(f"    {_name(slot)}=0;")
-        lines.append(f"{_name(function.name + '___exit')}:")
-        lines.append("    piton_gen->finished=1;")
-        lines.append("    return 0;")
-        lines.append("}")
-        return lines
+    def _truth(self, value: Any, types: dict[str, str]) -> str:
+        """C expression for CPython truthiness of ``value`` by its static type."""
+        v = self._value(value)
+        kind = types.get(value) if isinstance(value, str) else None
+        if kind == "str":
+            return f"piton_str_truthy((const char*){v})"
+        if kind == "float":
+            return f"(piton_bits_double({v})!=0.0)"
+        if kind in {"list", "tuple"}:
+            return f"(((PitonSeq*){v})->length!=0)"
+        if kind == "dict":
+            return f"(((PitonDict*){v})->length!=0)"
+        if kind == "set":
+            return f"(((PitonSet*){v})->length!=0)"
+        if kind == "none":
+            return "0"
+        return f"({v}!=0)"
 
     def _value(self, value: Any) -> str:
         if isinstance(value, str) and value.startswith("%"):
@@ -833,6 +818,10 @@ class LinuxCEmitter:
                 types[result] = "bigint"
                 bigint_slots.append(result)
                 return out
+            if operator == "!":
+                out.append(f"    {_name(result)}=!{self._truth(args[1], types)};")
+                types[result] = "bool"
+                return out
             if types.get(args[1]) == "float":
                 if operator == "-":
                     out.append(f"    {_name(result)}=piton_float_neg({self._value(args[1])});")
@@ -919,6 +908,20 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}={target}({frame_args});")
                     types[result] = "bool"
                     return out
+            if operator in {"==", "!="}:
+                # Values of disjoint builtin categories are never equal in
+                # CPython (None != 0, "a" != 1), whatever their raw bits are.
+                def category(kind: str) -> str | None:
+                    if kind in {"int", "bool", "float", "bigint"}:
+                        return "number"
+                    if kind in {"none", "str", "list", "tuple", "dict", "set"}:
+                        return kind
+                    return None
+                left_cat, right_cat = category(left_type), category(right_type)
+                if left_cat and right_cat and left_cat != right_cat:
+                    out.append(f"    {_name(result)}={0 if operator == '==' else 1};")
+                    types[result] = "bool"
+                    return out
             if left_type == "bigint" or right_type == "bigint":
                 out.append(f"    {_name(result)}=(piton_bigint_cmp((void*){_name(left)},(void*){_name(right)}) {operator} 0);")
                 types[result] = "bool"
@@ -936,7 +939,7 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}={expression};")
             types[result] = "bool"
         elif op == "branch":
-            out.append(f"    if({self._value(args[0])}) goto {_name(function.name + '_' + args[1])}; else goto {_name(function.name + '_' + args[2])};")
+            out.append(f"    if({self._truth(args[0], types)}) goto {_name(function.name + '_' + args[1])}; else goto {_name(function.name + '_' + args[2])};")
         elif op == "jump":
             out.append(f"    goto {_name(function.name + '_' + args[0])};")
         elif op == "call":
@@ -1464,6 +1467,8 @@ class LinuxCEmitter:
         elif op == "catch_message":
             out.append(f"    {_name(result)}=(long)(piton_exc_message?piton_exc_message:\"\");")
             types[result] = "str"
+        elif op == "set_context_from_reraise":
+            out.append("    piton_set_context_from_reraise();")
         elif op == "reraise_save":
             out.append('    piton_reraise_save();')
         elif op == "raise_active":
@@ -1495,6 +1500,36 @@ class LinuxCEmitter:
             helper = f"piton_{op}_bits"
             out.append(f"    {_name(result)}={helper}({operand});")
             types[result] = "float" if op == "math_fabs" else "int"
+            if op != "math_fabs":
+                # V1 ints are int64: NaN/inf/out-of-range fail closed (capturable).
+                math_handler = args[1] if len(args) > 1 else None
+                if math_handler is not None:
+                    out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + math_handler)};}}")
+                else:
+                    out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
+        elif op in {"math_sin", "math_cos", "math_log"}:
+            operand = self._value(args[0])
+            if types.get(args[0]) != "float":
+                operand = f"piton_double_bits((double){operand})"
+            out.append(f"    {_name(result)}=piton_{op}_bits({operand});")
+            types[result] = "float"
+            math_handler = args[1] if len(args) > 1 else None
+            if math_handler is not None:
+                out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + math_handler)};}}")
+            else:
+                out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
+        elif op == "sys_exit":
+            # V1: sys.exit terminates immediately (no SystemExit unwinding), same as Win64.
+            code = args[0] if args else None
+            if code is not None and types.get(code) not in {"int", "bool", "none"}:
+                raise NativeBuildError("Linux sys.exit requires an int code (V1)")
+            out.append(f"    piton_exit({self._value(code) if code is not None else '0'});")
+            if result:
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
+        elif op == "sys_argv":
+            out.append(f"    {_name(result)}=piton_argv_new();")
+            types[result] = "list"
         elif op == "math_gcd":
             if types.get(args[0]) not in {"int", "bool"} or types.get(args[1]) not in {"int", "bool"}:
                 raise NativeBuildError("Linux math.gcd requires int arguments")

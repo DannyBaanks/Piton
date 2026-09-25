@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import ctypes.util
 import io
 import tempfile
@@ -47,7 +48,8 @@ class Phase11To13Bootstrap(unittest.TestCase):
     def test_stdlib_and_safe_subprocess(self):
         modules = stdlib_modules()
         self.assertEqual(modules["math"].sqrt(9), 3)
-        result = run_subprocess(["cmd", "/c", "echo", "piton"])
+        echo = ["cmd", "/c", "echo", "piton"] if os.name == "nt" else ["echo", "piton"]
+        result = run_subprocess(echo)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "piton")
 

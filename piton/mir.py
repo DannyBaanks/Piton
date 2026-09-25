@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional, Sequence
 from piton.hir import HIRKind, HIRNode, Keyword, With
 
 
+# Modules the native backends provide themselves (never scanned from disk).
+NATIVE_BUILTIN_MODULES = frozenset({"asyncio", "math", "sys", "os"})
 _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
 
 # TASK_SCHEDULER_V1 magic values, mirrored with native_runtime.c / linux_x86.py.
@@ -160,6 +162,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "math_sqrt": "PURE",
     "math_floor": "PURE", "math_ceil": "PURE", "math_trunc": "PURE",
     "math_fabs": "PURE", "math_gcd": "PURE",
+    "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE",
     "object_new": "PURE", "closure_new": "PURE", "cell_new": "PURE",
     "build_collection": "PURE", "genexpr_new": "PURE", "gen_init": "PURE",
     "gather_new": "PURE",
@@ -171,10 +174,10 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "set_add": "WRITE",
     "try_push": "WRITE", "try_pop": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
-    "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE",
+    "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE", "set_context_from_reraise": "WRITE",
     "task_new": "WRITE", "task_cancel": "WRITE", "gather_add": "WRITE",
     # IO
-    "sleep0": "IO",
+    "sleep0": "IO", "sys_exit": "IO", "sys_argv": "IO",
     # OPAQUE
     "call": "OPAQUE", "call_unpack": "OPAQUE", "method_call": "OPAQUE", "frame_call": "OPAQUE",
     "closure_call": "OPAQUE", "runtime_call": "OPAQUE",
@@ -425,7 +428,7 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind == HIRKind.IMPORT:
                     for alias in node.names:
-                        if alias.name in {"asyncio", "math", "sys"}:
+                        if alias.name in NATIVE_BUILTIN_MODULES:
                             self.module_aliases[alias.asname or alias.name] = alias.name
                             continue
                         if "." in alias.name:
@@ -444,7 +447,7 @@ class MIRLowerer:
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
                     if getattr(node, "is_star", False):
-                        if mod_name in {"asyncio", "math", "sys"}:
+                        if mod_name in NATIVE_BUILTIN_MODULES:
                             raise MIRLoweringError("native star imports from builtin modules are not supported")
                         if not mod_name or getattr(node, "level", 0) or 0 > 0:
                             raise MIRLoweringError("native relative star imports are not supported")
@@ -456,11 +459,11 @@ class MIRLowerer:
                                 self.from_import_aliases[item.name] = f"{prefix}{item.name}"
                         continue
                     if mod_name:
-                        if mod_name not in imported_modules and mod_name not in {"asyncio", "math", "sys"}:
+                        if mod_name not in imported_modules and mod_name not in NATIVE_BUILTIN_MODULES:
                             raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                         for alias in node.names:
                             local = alias.asname or alias.name
-                            if mod_name in {"asyncio", "math"}:
+                            if mod_name in {"asyncio", "math", "os"}:
                                 self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
                             else:
                                 self.from_import_aliases[local] = f"{mod_name.replace('.', '__')}__{alias.name}"
@@ -678,7 +681,7 @@ class MIRLowerer:
                 names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
             elif item.kind == HIRKind.IMPORT:
                 for alias in item.names:
-                    if alias.name in {"asyncio", "math", "sys"}:
+                    if alias.name in NATIVE_BUILTIN_MODULES:
                         modules[alias.asname or alias.name] = alias.name
                         continue
                     if "." in alias.name:
@@ -724,7 +727,7 @@ class MIRLowerer:
                                 raise MIRLoweringError(f"native module not supplied: {target}")
                             modules[alias.asname or alias.name] = target
                     continue
-                if mod_name in {"asyncio", "math", "sys"}:
+                if mod_name in NATIVE_BUILTIN_MODULES:
                     for alias in item.names:
                         names[alias.asname or alias.name] = f"{mod_name}.{alias.name}"
                     continue
@@ -1070,9 +1073,21 @@ class MIRLowerer:
                 and source_node.func.name in self.generators
             )
             if not is_gen_call:
-                raise MIRLoweringError(
-                    "native yield from over non-generator values (lists, dicts) is not supported yet; use producir desde gen(...) with a generator"
-                )
+                # YIELD_FROM_ITERABLE_V1: over a plain iterable (list, tuple,
+                # dict, set, str, range, ...) `yield from xs` is exactly
+                # `for x in xs: yield x` -- reuse the for-loop lowering.
+                # Declared V1 divergence: values sent into the outer generator
+                # are dropped instead of raising AttributeError on the iterator.
+                if builder.is_async:
+                    raise MIRLoweringError("'producir desde' is not valid inside an async function")
+                item = f"@yield_from_item_{builder.loop_counter}"
+                builder.loop_counter += 1
+                from piton.hir import For, Load, Store, Yield
+                self._lower_for(builder, For(
+                    target=Store(name=item), iter=source_node,
+                    body=[Yield(value=Load(name=item))], orelse=[],
+                ))
+                return
             sub = self._lower_expr(builder, node.value)
             done = builder.new_block()
             loop = builder.new_block()
@@ -1680,9 +1695,11 @@ class MIRLowerer:
         if exception_type in _BUILTIN_EXCEPTIONS:
             pass
         elif exception_type in self.classes:
-            if "Exception" not in self._exception_chain(exception_type):
+            # _exception_chain always ends at BaseException, so test the real MRO.
+            mro = self._mro_memo.get(exception_type) or self._compute_mro(exception_type)
+            if not any(base in _BUILTIN_EXCEPTIONS for base in mro):
                 raise MIRLoweringError(
-                    f"native custom exception '{exception_type}' must subclass Exception"
+                    f"native custom exception '{exception_type}' must subclass Exception or BaseException"
                 )
         else:
             raise MIRLoweringError(f"unsupported native exception type '{exception_type}'")
@@ -1711,6 +1728,11 @@ class MIRLowerer:
         if node.cause is not None and cause_type is not None:
             builder.emit("raise_chain", exception_type, payload, cause_type, cause_payload, handler_label)
         else:
+            if node.cause is None and builder.in_except_handler:
+                # Implicit __context__: raising while handling another exception
+                # chains to it ("During handling of the above exception ...").
+                # `desde Nada` suppresses it, so that path never records it.
+                builder.emit("set_context_from_reraise")
             builder.emit("raise_typed", exception_type, payload, handler_label)
 
     def _lower_reraise(self, builder: _Builder) -> None:
@@ -2251,7 +2273,7 @@ class MIRLowerer:
             attrs.append(current.attr)
             current = current.value
         if getattr(current, "kind", None) == HIRKind.LOAD and current.name in builder.module_aliases:
-            if current.name not in {"asyncio", "math", "sys"}:
+            if current.name not in NATIVE_BUILTIN_MODULES:
                 return current.name, list(reversed(attrs))
         return None
 
@@ -2326,8 +2348,14 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("const", None, result=result)
                 return result
+            resolved = builder.from_import_aliases.get(node.name, node.name)
+            if resolved == "os.name":
+                import sys as _sys
+                result = builder.temp()
+                builder.emit("const", "nt" if _sys.platform == "win32" else "posix", result=result)
+                return result
             result = builder.temp()
-            builder.emit("load", builder.from_import_aliases.get(node.name, node.name), result=result)
+            builder.emit("load", resolved, result=result)
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()
@@ -2653,6 +2681,7 @@ class MIRLowerer:
                     op = {
                         "sqrt": "math_sqrt", "floor": "math_floor", "ceil": "math_ceil",
                         "trunc": "math_trunc", "fabs": "math_fabs", "gcd": "math_gcd",
+                        "sin": "math_sin", "cos": "math_cos", "log": "math_log",
                     }.get(attr)
                     arity = 2 if op == "math_gcd" else 1
                     if op is None or len(node.args) != arity:
@@ -2672,6 +2701,13 @@ class MIRLowerer:
                             builder.emit(op, value, result=result)
                         else:
                             builder.emit(op, value, handler, result=result)
+                    return result
+                if module_name == "sys" and node.func.attr == "exit":
+                    if len(node.args) > 1 or node.keywords:
+                        raise MIRLoweringError("native sys.exit takes zero or one argument")
+                    code = self._lower_expr(builder, node.args[0]) if node.args else None
+                    result = builder.temp()
+                    builder.emit("sys_exit", code, result=result)
                     return result
                 function = builder.temp()
                 builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
@@ -2803,6 +2839,20 @@ class MIRLowerer:
                 raise MIRLoweringError(
                     "native super().attr is only supported as super().attr(...) (a call)"
                 )
+            owner_module = (
+                builder.module_aliases.get(node.value.name)
+                if node.value.kind == HIRKind.LOAD else None
+            )
+            if owner_module == "sys" and node.attr == "argv":
+                result = builder.temp()
+                builder.emit("sys_argv", result=result)
+                return result
+            if owner_module == "os" and node.attr == "name":
+                # Resolved for the build host, which is also the target platform.
+                import sys as _sys
+                result = builder.temp()
+                builder.emit("const", "nt" if _sys.platform == "win32" else "posix", result=result)
+                return result
             result = builder.temp()
             builder.emit("get_attr", self._lower_expr(builder, node.value), node.attr, result=result)
             return result

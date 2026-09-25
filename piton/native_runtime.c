@@ -1858,6 +1858,22 @@ int64_t piton_object_get(void *raw, const char *name) {
     return pv_none();
 }
 
+void piton_object_delattr(void *raw, const char *name) {
+    PitonObject *o = raw;
+    if (!o || !name) return;
+    for (int64_t i = 0; i < o->length; ++i) {
+        if (strcmp(o->attributes[i].name, name) == 0) {
+            piton_value_deep_free(o->attributes[i].value);
+            /* Shift remaining attributes down */
+            for (int64_t j = i; j < o->length - 1; ++j) {
+                o->attributes[j] = o->attributes[j + 1];
+            }
+            --o->length;
+            return;
+        }
+    }
+}
+
 /* ATTRIBUTE_LOOKUP_V2: read-through access that first consults the object's
  * field map (normal lookup) and, on a miss, delegates to the class-defined
  * __getattr__(self, name). The hook is a plain native function, so its own
@@ -2216,19 +2232,30 @@ void piton_raise(const char *type, const char *message) {
 /* Report an exception with no statically-matching handler and exit. */
 static const char *piton_exception_cause_type = NULL;
 static const char *piton_exception_cause_msg = NULL;
+static const char *piton_exc_cause_type = NULL;
+static const char *piton_exc_cause_message = NULL;
+static const char *piton_exc_context_type = NULL;
+static const char *piton_exc_context_message = NULL;
 
-void piton_raise_unhandled(const char *type, const char *message) {
-    /* EXCEPTION_CHAINING_V1: the cause prints first, like CPython's
-     * "__cause__" chain in the traceback (text-only model — no frames). */
-    if (piton_exception_cause_type) {
-        fprintf(stderr, "%s", piton_exception_cause_type);
-        if (piton_exception_cause_msg && *piton_exception_cause_msg)
-            fprintf(stderr, ": %s", piton_exception_cause_msg);
-        fprintf(stderr, " -> causada por\n");
-    }
+static void piton_print_exc_line(const char *type, const char *message) {
     fprintf(stderr, "%s", type ? type : "Exception");
     if (message && *message) fprintf(stderr, ": %s", message);
     fputc('\n', stderr);
+}
+
+void piton_raise_unhandled(const char *type, const char *message) {
+    /* EXCEPTION_CHAINING_V1: CPython's chained-traceback separators in a
+     * text-only model (no frames). __cause__ wins over __context__. */
+    const char *cause_type = piton_exception_cause_type ? piton_exception_cause_type : piton_exc_cause_type;
+    const char *cause_msg = piton_exception_cause_type ? piton_exception_cause_msg : piton_exc_cause_message;
+    if (cause_type) {
+        piton_print_exc_line(cause_type, cause_msg);
+        fprintf(stderr, "\nThe above exception was the direct cause of the following exception:\n\n");
+    } else if (piton_exc_context_type) {
+        piton_print_exc_line(piton_exc_context_type, piton_exc_context_message);
+        fprintf(stderr, "\nDuring handling of the above exception, another exception occurred:\n\n");
+    }
+    piton_print_exc_line(type, message);
     fflush(stderr);
     exit(1);
 }
@@ -2239,6 +2266,8 @@ void piton_raise_chain(const char *type, const char *message,
                        const char *cause_type, const char *cause_msg) {
     piton_exception_cause_type = cause_type;
     piton_exception_cause_msg = cause_msg;
+    piton_exc_context_type = NULL;
+    piton_exc_context_message = NULL;
     piton_raise(type, message);
 }
 
@@ -2269,87 +2298,22 @@ void piton_catch_clear(void) {
     piton_exception_message = NULL;
     piton_exception_cause_type = NULL;
     piton_exception_cause_msg = NULL;
+    piton_exc_cause_type = NULL;
+    piton_exc_cause_message = NULL;
+    piton_exc_context_type = NULL;
+    piton_exc_context_message = NULL;
 }
+
+/* Saved exception state for bare re-raise (piton identifies a handler statically). */
+static const char *piton_reraise_type = NULL;
+static const char *piton_reraise_message = NULL;
+static const char *piton_reraise_cause_type = NULL;
+static const char *piton_reraise_cause_message = NULL;
 
 /* Snapshot the active exception before the handler clears catch state. */
 void piton_reraise_save(void) {
     piton_reraise_type = piton_exception_type;
     piton_reraise_message = piton_exception_message;
-    piton_reraise_cause_type = piton_exc_cause_type;
-    piton_reraise_cause_message = piton_exc_cause_message;
-}
-
-/* Raise an exception with an explicit cause (raise ... from ...). */
-void piton_raise_from(const char *type, const char *message,
-                      const char *cause_type, const char *cause_message) {
-    /* Search handler stack in reverse (most recent first) */
-    for (int i = handler_sp - 1; i >= 0; --i) {
-        PitonHandler *h = &handler_stack[i];
-        if (h->accepted == NULL ||
-            strcmp(h->accepted, type) == 0 ||
-            strcmp(h->accepted, "Exception") == 0) {
-            piton_exception_active = 1;
-            piton_exception_type = type;
-            piton_exception_message = message;
-            piton_exc_cause_type = cause_type;
-            piton_exc_cause_message = cause_message;
-            piton_exc_context_type = NULL;
-            piton_exc_context_message = NULL;
-            return;
-        }
-    }
-    /* No handler found — print chain and exit */
-    piton_raise_unhandled(type, message);
-}
-
-/* Raise an exception with cause from a saved reraise (bare raise from in handler). */
-void piton_raise_from_var(const char *type, const char *message) {
-    /* Search handler stack in reverse (most recent first) */
-    for (int i = handler_sp - 1; i >= 0; --i) {
-        PitonHandler *h = &handler_stack[i];
-        if (h->accepted == NULL ||
-            strcmp(h->accepted, type) == 0 ||
-            strcmp(h->accepted, "Exception") == 0) {
-            piton_exception_active = 1;
-            piton_exception_type = type;
-            piton_exception_message = message;
-            piton_exc_cause_type = piton_reraise_type;
-            piton_exc_cause_message = piton_reraise_message;
-            piton_exc_context_type = NULL;
-            piton_exc_context_message = NULL;
-            return;
-        }
-    }
-    /* No handler found — print chain and exit */
-    piton_raise_unhandled(type, message);
-}
-
-/* Raise an exception with no cause (raise ... from None). */
-void piton_raise_from_none(const char *type, const char *message) {
-    /* Search handler stack in reverse (most recent first) */
-    for (int i = handler_sp - 1; i >= 0; --i) {
-        PitonHandler *h = &handler_stack[i];
-        if (h->accepted == NULL ||
-            strcmp(h->accepted, type) == 0 ||
-            strcmp(h->accepted, "Exception") == 0) {
-            piton_exception_active = 1;
-            piton_exception_type = type;
-            piton_exception_message = message;
-            piton_exc_cause_type = NULL;
-            piton_exc_cause_message = NULL;
-            piton_exc_context_type = NULL;
-            piton_exc_context_message = NULL;
-            return;
-        }
-    }
-    /* No handler found — print and exit */
-    piton_raise_unhandled(type, message);
-}
-
-/* Set __context__ from the saved reraise (for bare raise in handler without from). */
-void piton_set_context_from_reraise(void) {
-    piton_exc_context_type = piton_reraise_type;
-    piton_exc_context_message = piton_reraise_message;
 }
 
 /* Re-raise the handler's caught exception; falls through to print+exit when unhandled. */
@@ -2364,8 +2328,6 @@ void piton_reraise(void) {
             piton_exception_active = 1;
             piton_exception_type = type;
             piton_exception_message = message;
-            piton_exc_cause_type = piton_reraise_cause_type;
-            piton_exc_cause_message = piton_reraise_cause_message;
             return;
         }
     }
@@ -2677,9 +2639,17 @@ int64_t piton_str_truthy(const char *s) {
     return (s && s[0]) ? 1 : 0;
 }
 
-int64_t piton_math_floor(double x) { return (int64_t)floor(x); }
-int64_t piton_math_ceil(double x)  { return (int64_t)ceil(x); }
-int64_t piton_math_trunc(double x) { return (int64_t)trunc(x); }
+/* V1 ints are int64: NaN/inf/out-of-range fail closed (catchable), as on Linux. */
+static int piton_float_int_ok(double x) {
+    if (isnan(x)) { piton_raise("ValueError", "cannot convert float NaN to integer"); return 0; }
+    if (x >= 9.2233720368547758e18 || x < -9.2233720368547758e18) {
+        piton_raise("OverflowError", "cannot convert float infinity to integer"); return 0;
+    }
+    return 1;
+}
+int64_t piton_math_floor(double x) { return piton_float_int_ok(x) ? (int64_t)floor(x) : 0; }
+int64_t piton_math_ceil(double x)  { return piton_float_int_ok(x) ? (int64_t)ceil(x) : 0; }
+int64_t piton_math_trunc(double x) { return piton_float_int_ok(x) ? (int64_t)trunc(x) : 0; }
 double  piton_math_fabs(double x)  { return fabs(x); }
 
 int64_t piton_math_gcd(int64_t a, int64_t b) {
@@ -2731,7 +2701,82 @@ const char *piton_type_from_raw(int64_t raw_ptr, int64_t type_tag) {
     }
 }
 
-/* ── Math functions (STDLIB_TIER1_V1) ─────────────────────────────────── */
+/* ── Live count totals ────────────────────────────────────────────────── */
+
+int64_t piton_total_live_count(void) {
+    return live_collections + live_objects + live_dicts + live_sets;
+}
+
+void piton_raise_from(const char *type, const char *message,
+                      const char *cause_type, const char *cause_message) {
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            piton_exc_cause_type = cause_type;
+            piton_exc_cause_message = cause_message;
+            piton_exc_context_type = NULL;
+            piton_exc_context_message = NULL;
+            return;
+        }
+    }
+    piton_raise_unhandled(type, message);
+}
+
+void piton_raise_from_var(const char *type, const char *message) {
+    /* Search handler stack in reverse (most recent first) */
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            piton_exc_cause_type = piton_reraise_type;
+            piton_exc_cause_message = piton_reraise_message;
+            piton_exc_context_type = NULL;
+            piton_exc_context_message = NULL;
+            return;
+        }
+    }
+    /* No handler found — print chain and exit */
+    piton_raise_unhandled(type, message);
+}
+
+void piton_raise_from_none(const char *type, const char *message) {
+    /* Search handler stack in reverse (most recent first) */
+    for (int i = handler_sp - 1; i >= 0; --i) {
+        PitonHandler *h = &handler_stack[i];
+        if (h->accepted == NULL ||
+            strcmp(h->accepted, type) == 0 ||
+            strcmp(h->accepted, "Exception") == 0) {
+            piton_exception_active = 1;
+            piton_exception_type = type;
+            piton_exception_message = message;
+            piton_exc_cause_type = NULL;
+            piton_exc_cause_message = NULL;
+            piton_exc_context_type = NULL;
+            piton_exc_context_message = NULL;
+            return;
+        }
+    }
+    /* No handler found — print and exit */
+    piton_raise_unhandled(type, message);
+}
+
+void piton_set_context_from_reraise(void) {
+    piton_exception_cause_type = NULL;
+    piton_exception_cause_msg = NULL;
+    piton_exc_cause_type = NULL;
+    piton_exc_cause_message = NULL;
+    piton_exc_context_type = piton_reraise_type;
+    piton_exc_context_message = piton_reraise_message;
+}
 
 static inline double piton_bits_double(int64_t bits) {
     union { double d; int64_t u; } v;
@@ -2743,12 +2788,6 @@ static inline int64_t piton_double_bits(double d) {
     union { double d; int64_t u; } v;
     v.d = d;
     return v.u;
-}
-
-int64_t piton_float_sqrt(int64_t bits) {
-    double x = piton_bits_double(bits);
-    double r = sqrt(x);
-    return piton_double_bits(r);
 }
 
 int64_t piton_float_floor(int64_t bits) {
@@ -2765,35 +2804,26 @@ int64_t piton_float_ceil(int64_t bits) {
     return r;
 }
 
+/* CPython: sin/cos(+-inf) and log(x <= 0) raise ValueError("math domain error"). */
 int64_t piton_float_sin(int64_t bits) {
     double x = piton_bits_double(bits);
-    double r = sin(x);
-    return piton_double_bits(r);
+    if (isinf(x)) { piton_raise("ValueError", "math domain error"); return 0; }
+    return piton_double_bits(sin(x));
 }
 
 int64_t piton_float_cos(int64_t bits) {
     double x = piton_bits_double(bits);
-    double r = cos(x);
-    return piton_double_bits(r);
+    if (isinf(x)) { piton_raise("ValueError", "math domain error"); return 0; }
+    return piton_double_bits(cos(x));
 }
 
 int64_t piton_float_log(int64_t bits) {
     double x = piton_bits_double(bits);
-    double r = log(x);
-    return piton_double_bits(r);
+    if (x <= 0.0) { piton_raise("ValueError", "math domain error"); return 0; }
+    return piton_double_bits(log(x));
 }
 
-/* ── Sys functions (STDLIB_TIER1_V1) ──────────────────────────────────── */
-
-#include <stdlib.h>
-
-/* MinGW's CRT exposes the process argument vector through these globals. */
-extern int __argc;
-extern char **__argv;
-
-void piton_exit(int64_t code) {
-    exit((int)code);
-}
+void piton_exit(int64_t code) { exit((int)code); }
 
 int64_t piton_argv_new(void) {
     PitonCollection *c = piton_collection_new(1, __argc);
@@ -2803,10 +2833,4 @@ int64_t piton_argv_new(void) {
     }
     c->length = __argc;
     return (int64_t)c;
-}
-
-/* ── Live count totals ────────────────────────────────────────────────── */
-
-int64_t piton_total_live_count(void) {
-    return live_collections + live_objects + live_dicts + live_sets;
 }

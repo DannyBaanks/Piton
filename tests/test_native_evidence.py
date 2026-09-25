@@ -10,6 +10,9 @@ import unittest
 from piton.final_dashboard import build_dashboard
 from piton.native_evidence import inspect_windows_pe, load_windows_evidence
 from piton.x86 import NativeBuildError, compile_native
+from tests.win64_toolchain import install as _install_win64_gate, requires_windows
+
+_install_win64_gate()
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +29,7 @@ class NativeSubsetEvidenceTests(unittest.TestCase):
             self.assertFalse(inspection["python_marker_in_image"])
             self.assertTrue(inspection["imports"])
 
+    @requires_windows
     def test_cli_writes_passing_native_subset_receipt(self) -> None:
         with tempfile.TemporaryDirectory(prefix="piton-evidence-") as directory:
             root = Path(directory)
