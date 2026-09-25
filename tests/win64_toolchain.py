@@ -27,7 +27,7 @@ from pathlib import Path
 
 import piton.x86 as x86
 
-from piton.native_differential import native_command, native_env, native_target
+from piton.native_differential import native_command, native_env, native_target, strip_wine_noise
 
 WINDOWS = os.name == "nt"
 WINE_MODE = (
@@ -92,7 +92,10 @@ def run_native(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
     if WINE_MODE:
         kwargs.setdefault("env", native_env())
         argv = native_command(argv[0]) + list(argv[1:])
-    return subprocess.run(argv, **kwargs)
+    completed = subprocess.run(argv, **kwargs)
+    if WINE_MODE and isinstance(completed.stderr, bytes):
+        completed.stderr = strip_wine_noise(completed.stderr)
+    return completed
 
 
 def run_oracle(argv: list[str], **kwargs) -> subprocess.CompletedProcess:

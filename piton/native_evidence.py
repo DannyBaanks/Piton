@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .translator import traducir_fuente
-from .native_differential import native_command, runs_under_wine
+from .native_differential import native_command, runs_under_wine, strip_wine_noise
 from .x86 import NativeBuildError, win64_c_compiler
 
 
@@ -128,7 +128,7 @@ def _observe(source_path: Path, executable_path: Path) -> tuple[subprocess.Compl
     if runs_under_wine():
         # Oracle is this host's CPython (LF); the PE writes CRT text mode (CRLF).
         native.stdout = native.stdout.replace(b"\r\n", b"\n")
-        native.stderr = native.stderr.replace(b"\r\n", b"\n")
+        native.stderr = strip_wine_noise(native.stderr).replace(b"\r\n", b"\n")
     oracle = subprocess.run(
         [sys.executable, *ORACLE_FLAGS, "-c", traducir_fuente(source_text, str(source_path))],
         cwd=source_path.parent, env=ORACLE_ENV, capture_output=True, check=False,

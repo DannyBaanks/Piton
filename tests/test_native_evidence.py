@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import platform
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,10 @@ class NativeSubsetEvidenceTests(unittest.TestCase):
             self.assertTrue(inspection["imports"])
 
     @requires_windows
+    @unittest.skipUnless(
+        platform.python_version() == "3.12.4",
+        "the receipt's ORACLE_PINNED gate needs CPython 3.12.4 as the oracle",
+    )
     def test_cli_writes_passing_native_subset_receipt(self) -> None:
         with tempfile.TemporaryDirectory(prefix="piton-evidence-") as directory:
             root = Path(directory)

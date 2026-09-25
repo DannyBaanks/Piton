@@ -55,6 +55,15 @@ def native_command(executable: str | Path) -> list[str]:
     return [str(executable)]
 
 
+def strip_wine_noise(stderr: bytes) -> bytes:
+    """Drop wine's own sporadic ``wine client error:`` lines (host noise, never
+    program output). Only applied when the PE runs under wine."""
+    if not runs_under_wine() or b"wine client error:" not in stderr:
+        return stderr
+    kept = [line for line in stderr.splitlines(keepends=True) if not line.startswith(b"wine client error:")]
+    return b"".join(kept)
+
+
 def native_env() -> dict[str, str] | None:
     if runs_under_wine():
         return {**os.environ, "WINEDEBUG": "-all"}
@@ -79,7 +88,7 @@ def compare_native_to_cpython(source: str) -> DifferentialResult:
         oracle_run = subprocess.run(
             [sys.executable, "-c", translated], capture_output=True, check=False
         )
-    native_out, native_err = native_run.stdout, native_run.stderr
+    native_out, native_err = native_run.stdout, strip_wine_noise(native_run.stderr)
     if runs_under_wine():
         # The oracle is this host's CPython (LF); the PE writes through the
         # Windows CRT in text mode (CRLF). Compare line content, not newlines.

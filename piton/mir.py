@@ -2420,6 +2420,21 @@ class MIRLowerer:
             result = builder.temp()
             builder.emit("load", resolved, result=result)
             return result
+        if kind == HIRKind.IF_EXPR:
+            # `a si c sino b`: evaluate only the chosen branch, join via a slot.
+            slot = f"@if_expr_{builder.loop_counter}"
+            builder.loop_counter += 1
+            condition = self._lower_expr(builder, node.test)
+            then_block, else_block, end_block = builder.new_block(), builder.new_block(), builder.new_block()
+            builder.emit("branch", condition, then_block.label, else_block.label)
+            for block, branch in ((then_block, node.body), (else_block, node.orelse)):
+                builder.current = block
+                builder.emit("store", slot, self._lower_expr(builder, branch))
+                builder.emit("jump", end_block.label)
+            builder.current = end_block
+            result = builder.temp()
+            builder.emit("load", slot, result=result)
+            return result
         if kind == HIRKind.STORE:
             result = builder.temp()
             builder.emit("load", node.name, result=result)

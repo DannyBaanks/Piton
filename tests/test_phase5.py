@@ -74,6 +74,24 @@ class Phase5Gates(unittest.TestCase):
         )
         self.assertTrue(result.equivalent, result)
 
+    def test_x86_conditional_expression(self):
+        # `a si c sino b`: lazy, right-associative, not confused with a comprehension filter.
+        result = compare_native_to_cpython(
+            "funcion f():\n    imprimir(\"llamada\")\n    devolver 7\n"
+            "x = 5\nimprimir(1 si x < 3 sino 2 si x < 6 sino 3)\n"
+            "imprimir(f() si x > 9 sino 0)\n"
+            "imprimir(\"par\" si x % 2 == 0 sino \"impar\")\n"
+            "xs = [1, 2, 3, 4]\nimprimir([v para v en xs si v > 2])\nimprimir([v si v > 2 sino 0 para v en xs])\n"
+        )
+        self.assertTrue(result.equivalent, result)
+
+    def test_float_literal_forms_parse_like_python(self):
+        from piton.lexer import tokenize
+        for literal in ("1.5e10", "2.5e-3", "1.", ".5", "1.e5", "1.7976931348623157e308"):
+            with self.subTest(literal=literal):
+                numbers = [t.value for t in tokenize(literal + "\n") if t.type.name == "NUMBER"]
+                self.assertEqual(numbers, [literal])
+
     def test_x86_float_repr_matches_python(self):
         # FLOAT_REPR_V1: shortest round-trip repr, CPython's exponent layout.
         result = compare_native_to_cpython(
