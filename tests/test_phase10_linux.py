@@ -18,6 +18,7 @@ from piton.translator import traducir_fuente
 from piton.x86 import NativeBuildError
 
 
+    @unittest.skipIf(not sys.platform.startswith("win32"), "Linux ELF tests require Linux")
 class Phase10LinuxGates(unittest.TestCase):
     def _run_linux_diff(self, source: str):
         translated = traducir_fuente(source, "<linux-diff>")
@@ -2004,6 +2005,7 @@ class Phase10LinuxGates(unittest.TestCase):
         self.assertEqual(native, oracle)
 
 
+    @unittest.skipIf(not sys.platform.startswith("win32"), "Linux ELF tests require Linux")
 class ComprehensionsV2Linux(unittest.TestCase):
     def _run_linux_diff(self, source: str):
         translated = traducir_fuente(source, "<linux-diff>")
@@ -2105,6 +2107,7 @@ class ComprehensionsV2Linux(unittest.TestCase):
         )
 
 
+    @unittest.skipIf(not sys.platform.startswith("win32"), "Linux ELF tests require Linux")
 class GeneratorsLinux(unittest.TestCase):
     def _run_linux_diff(self, source: str):
         translated = traducir_fuente(source, "<linux-diff>")
@@ -2330,6 +2333,7 @@ class GeneratorsLinux(unittest.TestCase):
         )
 
 
+    @unittest.skipIf(not sys.platform.startswith("win32"), "Linux ELF tests require Linux")
 class CoroutinesLinux(unittest.TestCase):
     def assert_linux_matches(self, source: str):
         rc, native, oracle, stderr = self._run_linux_diff(source)
@@ -2589,6 +2593,7 @@ class CoroutinesLinux(unittest.TestCase):
         )
 
 
+    @unittest.skipIf(not sys.platform.startswith("win32"), "Linux ELF tests require Linux")
 class WithProtocolLinuxV1(unittest.TestCase):
     """M10 — WITH_PROTOCOL_V1 on the static-ELF Linux backend, differential vs
     CPython 3.12 (mirror of WithProtocolNativeV1 in test_phase5.py)."""
@@ -2714,6 +2719,7 @@ class WithProtocolLinuxV1(unittest.TestCase):
                 )
 
 
+    @unittest.skipIf(not sys.platform.startswith("win32"), "Linux ELF tests require Linux")
 class FinalizersLinuxV1(unittest.TestCase):
     """M13 FINALIZERS_V1 on Linux: __del__ runs once before process exit."""
 
@@ -2765,6 +2771,7 @@ class FinalizersLinuxV1(unittest.TestCase):
         self.assertEqual(err, b"")
 
 
+    @unittest.skipIf(not sys.platform.startswith("win32"), "Linux ELF tests require Linux")
 class CycleGCLinuxV1(unittest.TestCase):
     """M13 GC_CYCLES_V1 on Linux: self-contained C-harness cycle collection test."""
 
