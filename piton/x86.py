@@ -158,6 +158,7 @@ class Win64NasmEmitter:
             "extern piton_set_free", "extern piton_set_live_count",
             "extern piton_raise",
             "extern piton_raise_unhandled",
+            "extern piton_exit",
             "extern piton_try_push", "extern piton_try_pop", "extern piton_try_set_accepted",
             "extern piton_catch_flag", "extern piton_catch_type", "extern piton_catch_message", "extern piton_catch_message_safe", "extern piton_catch_clear",
             "extern piton_reraise_save", "extern piton_reraise", "extern piton_reraise_unhandled",
@@ -1504,6 +1505,21 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
         elif op == "try_pop":
             self.lines.append("    call piton_try_pop")
+        elif op == "sys_exit":
+            # STDLIB_TIER1_V1: sys.exit([code]) terminates the process.
+            # None -> 0, int/bool -> that code. sys.exit(str) is CPython's
+            # "print to stderr and exit 1"; fail closed until implemented.
+            (code,) = args
+            if code is None:
+                self.lines.append("    xor ecx, ecx")
+            elif self.types.get(code) == "str":
+                raise NativeBuildError("native sys.exit(str) is not supported yet")
+            else:
+                self._load_operand(code, "rcx")
+            if result:
+                self.lines.append(f"    mov {self._address(result)}, 0")
+                self.types[result] = "int"
+            self.lines.append("    call piton_exit")
         elif op == "catch_flag":
             self.lines.append("    call piton_catch_flag")
             if result:

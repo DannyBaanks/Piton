@@ -640,7 +640,6 @@ class Phase10LinuxGates(unittest.TestCase):
         self.assertNotEqual(rc, 0)
         self.assertIn(b'OverflowError: cannot convert float infinity to integer', stderr)
 
-    @unittest.skip("native backend does not support sys.exit yet")
     def test_linux_sys_exit_with_code(self):
         rc, native_out, _oracle_out, _stderr = self._run_linux_diff(
             'importar sys\nimprimir("antes")\nsys.exit(3)\n'
@@ -648,7 +647,6 @@ class Phase10LinuxGates(unittest.TestCase):
         self.assertEqual(rc, 3)
         self.assertEqual(native_out, b'antes\n')
 
-    @unittest.skip("native backend does not support sys.exit yet")
     def test_linux_sys_exit_zero_code(self):
         rc, native_out, _oracle_out, _stderr = self._run_linux_diff(
             'importar sys\nsys.exit()\n'
@@ -716,7 +714,6 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_rich_os_name(self):
         self._assert_linux_equiv('importar os\nimprimir(os.name)\n')
 
-    @unittest.skip("native backend does not support sys.exit yet")
     def test_linux_rich_sys_exit(self):
         self._assert_linux_equiv('importar sys\nimprimir(sys.exit(0))\n')
 
