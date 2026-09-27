@@ -380,7 +380,8 @@ class Lexer:
             elif ch == "." and not has_dot and self._peek(2).isdigit():
                 has_dot = True
                 self._advance()
-            elif ch in "eE" and not has_dot:
+            elif ch in "eE":
+                # El exponente es legal con y sin parte fraccionaria: 1e20 y 1.5e20.
                 self._advance()
                 if self._peek() in "+-":
                     self._advance()
