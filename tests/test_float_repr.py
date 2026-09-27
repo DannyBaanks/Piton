@@ -219,12 +219,21 @@ class FloatReprHeaderDifferential(unittest.TestCase):
             idx = values.index(value)
             self.assertEqual(got[idx], expected, f"repr({value!r})")
 
+    # libc memory primitives. Some gcc builds lower a ~400-byte struct copy to
+    # a call, others inline it (Ubuntu gcc 13 inlines, the Windows runner's gcc
+    # emitted `U memcpy`). They are NOT libgcc helpers and a freestanding
+    # runtime is expected to supply its own (the Linux runtime defines
+    # piton_memcpy). Everything else must come from the header alone.
+    _LIBC_MEMORY = frozenset({"memcpy", "memset", "memmove", "memcmp"})
+
     @needs_gcc_and_nm
     def test_header_links_freestanding_without_libgcc(self):
         """-nostdlib must not pull in __udivdi3/__moddi3 helpers.
 
         The Linux backend compiles with -nostdlib -ffreestanding, so any
         64-bit division the renderer needs has to lower to a native `div`.
+        That is the invariant this pins; memory primitives are allowlisted
+        above, libgcc division helpers never are.
         """
         source = r"""
 #include "float_repr.h"
@@ -245,7 +254,13 @@ int piton_repr_probe(char *out, unsigned long long b) { return piton_repr_double
             undefined = subprocess.run(
                 [NM, "-u", str(obj)], capture_output=True, text=True, check=False
             ).stdout.strip()
-        self.assertEqual(undefined, "", f"undefined symbols: {undefined}")
+        # `nm -u` lines look like "U memcpy" (Windows/COFF) or "memcpy" (ELF).
+        symbols = [ln.split()[-1] for ln in undefined.splitlines() if ln.split()]
+        unexpected = sorted(set(symbols) - self._LIBC_MEMORY)
+        self.assertEqual(unexpected, [], f"unexpected undefined symbols: {unexpected}")
+        helpers = [s for s in symbols
+                   if s.startswith(("__udiv", "__umod", "__div", "__mod"))]
+        self.assertEqual(helpers, [], f"libgcc division helpers leaked in: {helpers}")
 
     def test_header_exists_and_declares_the_contract(self):
         text = FLOAT_REPR_H.read_text(encoding="utf-8")
