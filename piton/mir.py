@@ -2674,6 +2674,13 @@ class MIRLowerer:
                         else:
                             builder.emit(op, value, handler, result=result)
                     return result
+                if module_name == "sys" and node.func.attr == "exit":
+                    if len(node.args) > 1 or node.keywords:
+                        raise MIRLoweringError("native sys.exit takes zero or one argument")
+                    code = self._lower_expr(builder, node.args[0]) if node.args else None
+                    result = builder.temp()
+                    builder.emit("sys_exit", code, result=result)
+                    return result
                 function = builder.temp()
                 builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)

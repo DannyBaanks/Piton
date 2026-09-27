@@ -1482,6 +1482,21 @@ class LinuxCEmitter:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:
                 out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
+        elif op == "sys_exit":
+            # STDLIB_TIER1_V1: sys.exit([code]) terminates the process.
+            # None -> 0, int/bool -> that code. A string argument is CPython's
+            # "print to stderr and exit 1"; that is not implemented natively, so
+            # it fails closed instead of silently exiting with a pointer.
+            (code,) = args
+            if code is None:
+                value = "0"
+            elif types.get(code) == "str":
+                raise NativeBuildError("native sys.exit(str) is not supported yet")
+            else:
+                value = self._value(code)
+            if result:
+                out.append(f"    {_name(result)}=0;")
+            out.append(f"    piton_exit((long)({value}));")
         elif op == "math_sqrt":
             operand = self._value(args[0])
             if types.get(args[0]) != "float":
