@@ -106,6 +106,52 @@ class Phase2Gates(unittest.TestCase):
         ast.parse(generated)
         self.assertEqual(generated.splitlines(), ["x = 1", "if x:", "    print(x)"])
 
+    def test_float_literals_with_fractional_exponent(self):
+        # Regression: the lexer refused an exponent once a decimal point had been
+        # consumed, so 1.5e20 lexed as 1.5 followed by the identifier e20.
+        cases = [
+            "imprimir(1.5e20 == 150000000000000000000.0)\n",
+            "imprimir(1.5e+20 == 150000000000000000000.0)\n",
+            "imprimir(1.5E20 == 150000000000000000000.0)\n",
+            "imprimir(1.5E-3 == 0.0015)\n",
+            "imprimir(0.5e-3 == 0.0005)\n",
+            "imprimir(2.5e10 == 25000000000.0)\n",
+            "imprimir(1e20 == 100000000000000000000.0)\n",
+        ]
+        for source in cases:
+            with self.subTest(source=source.strip()):
+                generated = generate_python_from_cst(parse(source))
+                self.assertEqual(run_python(generated), (0, "True\n", ""))
+
+    def test_malformed_float_literals_are_rejected(self):
+        # A dangling exponent must not be swallowed silently into a valid token.
+        for source in ("imprimir(1.5e)\n", "imprimir(1.5e+)\n"):
+            with self.subTest(source=source.strip()):
+                with self.assertRaises(Exception):
+                    generate_python_from_cst(parse(source))
+
+    def test_float_literals_with_leading_or_trailing_dot(self):
+        # Python accepts 1. and .5; PITON treated the dot as punctuation and
+        # failed with "Se esperaba RPAREN" / "Expresión inesperada: DOT".
+        cases = {
+            "imprimir(1. == 1.0)\n": "True",
+            "imprimir(.5 == 0.5)\n": "True",
+            "imprimir(.0 == 0.0)\n": "True",
+            "imprimir(1.e5 == 100000.0)\n": "True",
+            "imprimir(.5e-3 == 0.0005)\n": "True",
+        }
+        for source, expected in cases.items():
+            with self.subTest(source=source.strip()):
+                generated = generate_python_from_cst(parse(source))
+                self.assertEqual(run_python(generated), (0, expected + "\n", ""))
+
+    def test_bare_dot_is_still_punctuation(self):
+        # A '.' not followed by a digit must remain DOT, not become a number.
+        for source in ("imprimir(.)\n", "imprimir(1..5)\n", "imprimir(x.5)\n"):
+            with self.subTest(source=source.strip()):
+                with self.assertRaises(Exception):
+                    generate_python_from_cst(parse(source))
+
     def test_hir_lowering_and_backend(self):
         source = "x = 1\nfuncion identidad(valor):\n    devolver valor\n"
         hir = lower_cst_to_hir(parse(source))

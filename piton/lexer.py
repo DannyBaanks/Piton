@@ -294,8 +294,8 @@ class Lexer:
             if ch in "\"'":
                 return self._read_string()
 
-            # NÚMERO
-            if ch in NUMBER_START:
+            # NÚMERO  (un '.' seguido de cifra es 0.5, no un punto)
+            if ch in NUMBER_START or (ch == "." and self._peek(2).isdigit()):
                 return self._read_number()
 
             # IDENTIFICADOR / KEYWORD
@@ -377,10 +377,12 @@ class Lexer:
             ch = self._peek()
             if ch.isdigit() or ch == "_":
                 self._advance()
-            elif ch == "." and not has_dot and self._peek(2).isdigit():
+            elif ch == "." and not has_dot:
+                # 1. y 1.5 y 1.e5 son todos literales válidos en Python.
                 has_dot = True
                 self._advance()
-            elif ch in "eE" and not has_dot:
+            elif ch in "eE":
+                # El exponente es legal con y sin parte fraccionaria: 1e20 y 1.5e20.
                 self._advance()
                 if self._peek() in "+-":
                     self._advance()
