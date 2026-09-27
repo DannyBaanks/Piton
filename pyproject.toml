@@ -25,4 +25,4 @@ pi = "piton.cli:main"
 include = ["piton*"]
 
 [tool.setuptools.package-data]
-piton = ["native_runtime.c"]
+piton = ["native_runtime.c", "float_repr.h"]

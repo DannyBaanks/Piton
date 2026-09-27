@@ -9,7 +9,14 @@
 #include <unistd.h>
 #endif
 
+/* FLOAT_REPR_V1: shared shortest-round-trip float -> text. Also spliced into
+ * the Linux freestanding C by piton/linux_x86.py so both backends render
+ * identically. */
+#include "float_repr.h"
+
 void piton_raise_unhandled(const char *type, const char *message);
+/* Defined further down; declared here because the float printers need it. */
+static inline int64_t piton_double_bits(double d);
 
 /* ── PitonValue: tagged 64-bit value (wire format) ────────────────────── */
 
@@ -696,8 +703,9 @@ static void piton_value_print_inner(int64_t v, int recursing) {
         break;
     case PITON_TAG_FLOAT: {
         double d = *(double *)pv_payload(v);
-        if (isfinite(d) && trunc(d) == d) printf("%.1f", d);
-        else printf("%.15g", d);
+        char repr[PITON_REPR_MAX];
+        int n = piton_repr_double(repr, (unsigned long long)piton_double_bits(d));
+        fwrite(repr, 1, (size_t)n, stdout);
         break;
     }
     case PITON_TAG_OBJECT: {
@@ -2388,10 +2396,10 @@ void piton_reraise_unhandled(void) {
 }
 
 void piton_print_float(double value) {
-    if (isfinite(value) && trunc(value) == value)
-        printf("%.1f\n", value);
-    else
-        printf("%.15g\n", value);
+    char repr[PITON_REPR_MAX];
+    int n = piton_repr_double(repr, (unsigned long long)piton_double_bits(value));
+    fwrite(repr, 1, (size_t)n, stdout);
+    fputc('\n', stdout);
 }
 
 /* MODULE_METADATA_V1: dynamic print for module __package__ (None or text).
@@ -2685,9 +2693,9 @@ int64_t piton_str_from_none(void) {
 }
 
 int64_t piton_str_from_float(double x) {
-    char *p = (char *)malloc(40);
-    if (isfinite(x) && trunc(x) == x) sprintf(p, "%.1f", x);
-    else sprintf(p, "%.15g", x);
+    char *p = (char *)malloc(PITON_REPR_MAX + 1);
+    int n = piton_repr_double(p, (unsigned long long)piton_double_bits(x));
+    p[n] = '\0';
     return (int64_t)p;
 }
 
