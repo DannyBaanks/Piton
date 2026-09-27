@@ -17,6 +17,16 @@ from piton.linux_x86 import (
 from piton.translator import traducir_fuente
 from piton.x86 import NativeBuildError
 
+# This module compiles and runs Linux ELF binaries. On a non-Linux host
+# (e.g. a Windows CI runner without WSL) the whole module is skipped.
+import pytest
+
+if not sys.platform.startswith("linux"):
+    pytest.skip(
+        "tests/test_phase10_linux.py requires a Linux host (ELF execution)",
+        allow_module_level=True,
+    )
+
 
 class Phase10LinuxGates(unittest.TestCase):
     def _run_linux_diff(self, source: str):

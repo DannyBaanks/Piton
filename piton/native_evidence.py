@@ -19,6 +19,20 @@ from .translator import traducir_fuente
 from .x86 import NativeBuildError
 
 
+def _relative_or_absolute(target: Path, start: Path) -> str:
+    """Return a POSIX-style path relative to ``start``, or the absolute path.
+
+    ``os.path.relpath`` raises ``ValueError`` on Windows when the two paths
+    live on different drives (e.g. source on ``D:`` and the receipt on
+    ``C:``). Absence of a relative route is not an error: fall back to the
+    absolute path.
+    """
+    try:
+        return os.path.relpath(target, start).replace("\\", "/")
+    except ValueError:
+        return os.path.abspath(target).replace("\\", "/")
+
+
 ORACLE_FLAGS = ("-X", "utf8", "-B", "-I", "-S")
 ORACLE_ENV = {
     "PYTHONIOENCODING": "utf-8",
@@ -181,12 +195,12 @@ def build_windows_evidence(
         "schema": "piton-native-subset-evidence-v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": {
-            "path": os.path.relpath(source_path, report_path.parent).replace("\\", "/"),
+            "path": _relative_or_absolute(source_path, report_path.parent),
             "name": source_path.name,
             "sha256": _sha256(source_path),
         },
         "artifact": {
-            "path": os.path.relpath(executable_path, report_path.parent).replace("\\", "/"),
+            "path": _relative_or_absolute(executable_path, report_path.parent),
             **inspection,
         },
         "native_observation": {
@@ -204,7 +218,7 @@ def build_windows_evidence(
             "stderr_hex": oracle.stderr.hex(),
         },
         "native_corpus": {
-            "path": os.path.relpath(corpus["path"], report_path.parent).replace("\\", "/"),
+            "path": _relative_or_absolute(Path(corpus["path"]), report_path.parent),
             "sha256": corpus["sha256"],
             "exit_code": corpus["exit_code"],
             "test_count": corpus["test_count"],

@@ -149,6 +149,7 @@ class CliAndCorpusTests(unittest.TestCase):
             ejecucion = subprocess.run([str(salida)], capture_output=True, check=False)
             self.assertEqual((ejecucion.returncode, ejecucion.stdout, ejecucion.stderr), (0, b"Hola, mundo\r\n", b""))
 
+    @unittest.skipIf(not sys.platform.startswith("linux"), "Linux ELF build requires a Linux host")
     def test_compilar_linux_genera_elf(self) -> None:
         with tempfile.TemporaryDirectory() as temporal:
             salida = Path(temporal) / "hola"
