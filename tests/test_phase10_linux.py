@@ -622,7 +622,6 @@ class Phase10LinuxGates(unittest.TestCase):
             'imprimir(math.floor(7))\nimprimir(math.ceil(7.0))\n'
         )
 
-    @unittest.skip("native backend does not support math.sin/cos/log yet")
     def test_linux_math_sin_cos_log_match_cpython(self):
         # Short-repr values so the freestanding 12-digit float printer matches CPython repr.
         self._assert_linux_equiv(
@@ -672,15 +671,12 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_rich_math_ceil(self):
         self._assert_linux_equiv('importar math\nimprimir(math.ceil(3.2))\nimprimir(math.ceil(-3.2))\n')
 
-    @unittest.skip("native backend does not support math.sin yet")
     def test_linux_rich_math_sin(self):
         self._assert_linux_equiv('importar math\nimprimir(math.sin(0))\nimprimir(math.sin(1.57079632679))\n')
 
-    @unittest.skip("native backend does not support math.cos yet")
     def test_linux_rich_math_cos(self):
         self._assert_linux_equiv('importar math\nimprimir(math.cos(0))\nimprimir(math.cos(3.14159265359))\n')
 
-    @unittest.skip("native backend does not support math.log yet")
     def test_linux_rich_math_log(self):
         self._assert_linux_equiv('importar math\nimprimir(math.log(1))\n')
 

@@ -23,7 +23,12 @@ class NativeBuildError(RuntimeError):
 
 _BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "round", "redondear"}
 
-_math_fn_map = {"math_sqrt": "piton_float_sqrt"}
+_math_fn_map = {
+    "math_sqrt": "piton_float_sqrt",
+    "math_sin": "piton_float_sin",
+    "math_cos": "piton_float_cos",
+    "math_log": "piton_float_log",
+}
 
 PITON_GEN_MAX_SLOTS = 64
 PITON_GEN_LOCAL_BASE = 48
@@ -176,6 +181,7 @@ class Win64NasmEmitter:
             "extern piton_math_floor", "extern piton_math_ceil", "extern piton_math_trunc",
             "extern piton_math_fabs", "extern piton_math_gcd",
             "extern piton_float_sqrt",
+            "extern piton_float_sin", "extern piton_float_cos", "extern piton_float_log",
             "extern piton_type_name", "extern piton_type_from_raw",
             "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_new_with_finalizer", "extern piton_object_set", "extern piton_object_set_tagged", "extern piton_object_get", "extern piton_object_lookup",
 
@@ -1329,7 +1335,7 @@ class Win64NasmEmitter:
                 self.lines.append(f"    call {target}")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = "int"
-        elif op == "math_sqrt":
+        elif op in {"math_sqrt", "math_sin", "math_cos", "math_log"}:
             self._load_float_operand(args[0], "xmm0")
             # The Windows runtime helpers use the tagged float wire format:
             # pass the IEEE-754 bits in rcx and receive bits/int in rax.

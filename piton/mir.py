@@ -171,6 +171,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "jump": "PURE", "branch": "PURE", "return": "PURE",
     "binary": "PURE", "unary": "PURE", "compare": "PURE",
     "math_sqrt": "PURE",
+    "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE",
     "math_floor": "PURE", "math_ceil": "PURE", "math_trunc": "PURE",
     "math_fabs": "PURE", "math_gcd": "PURE",
     "object_new": "PURE", "closure_new": "PURE", "cell_new": "PURE",
@@ -2562,6 +2563,8 @@ class MIRLowerer:
                     "math.sqrt": "math_sqrt", "math.floor": "math_floor",
                     "math.ceil": "math_ceil", "math.trunc": "math_trunc",
                     "math.fabs": "math_fabs", "math.gcd": "math_gcd",
+                    "math.sin": "math_sin", "math.cos": "math_cos",
+                    "math.log": "math_log",
                 }
                 if qualified in _MATH_FUNCS:
                     op = _MATH_FUNCS[qualified]
@@ -2697,6 +2700,8 @@ class MIRLowerer:
                     op = {
                         "sqrt": "math_sqrt", "floor": "math_floor", "ceil": "math_ceil",
                         "trunc": "math_trunc", "fabs": "math_fabs", "gcd": "math_gcd",
+                        "sin": "math_sin", "cos": "math_cos",
+                        "log": "math_log",
                     }.get(attr)
                     arity = 2 if op == "math_gcd" else 1
                     if op is None or len(node.args) != arity:
