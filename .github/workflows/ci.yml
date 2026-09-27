@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, 'fix/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12']
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -e . --no-build-isolation
+        python -m pip install pytest
+
+    - name: Run tests (Linux)
+      run: |
+        python -m pytest tests/ -v --tb=short
+
+    - name: Verify CPython oracle
+      run: |
+        python -c "import sys; print(f'CPython {sys.version}')"
+        python -c "from piton.native_differential import compare_native_to_cpython; print('Oracle OK')"
+
+  test-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ['3.12']
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install NASM
+      run: |
+        choco install nasm -y
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -e . --no-build-isolation
+        python -m pip install pytest
+
+    - name: Run tests (Windows)
+      run: |
+        python -m pytest tests/ -v --tb=short
+
+    - name: Verify CPython oracle
+      run: |
+        python -c "import sys; print(f'CPython {sys.version}')"
+        python -c "from piton.native_differential import compare_native_to_cpython; print('Oracle OK')"
+
+  verify-oracle:
+    runs-on: ubuntu-latest
+    needs: [test-linux, test-windows]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -e . --no-build-isolation
+        python -m pip install pytest
+
+    - name: Verify differential oracle
+      run: |
+        python -c "
+        from piton.native_differential import compare_native_to_cpython
+        result = compare_native_to_cpython('imprimir(\"Hola, mundo\")')
+        assert result.equivalent, f'Oracle failed: {result}'
+        print('Differential oracle: PASS')
+        "
+
+    - name: Verify dashboard
+      run: |
+        python -c "
+        from piton.final_dashboard import build_dashboard, render_summary
+        dashboard = build_dashboard()
+        print(render_summary(dashboard))
+        assert dashboard['release_ready'], 'Dashboard not ready'
+        print('Dashboard: PASS')
+        "
