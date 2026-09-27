@@ -9,7 +9,7 @@ import unittest
 
 from piton.final_dashboard import build_dashboard
 from piton.native_evidence import inspect_windows_pe, load_windows_evidence
-from piton.x86 import NativeBuildError, compile_native
+from piton.x86 import NativeBuildError, Win64NasmEmitter, compile_native
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +62,38 @@ class NativeSubsetEvidenceTests(unittest.TestCase):
             path.write_bytes(b"not a PE")
             with self.assertRaisesRegex(NativeBuildError, "not a PE"):
                 inspect_windows_pe(path)
+
+
+class NasmEmitterFloatEmissionTests(unittest.TestCase):
+    """Runs on every host: this is assembler text, not a linked binary.
+
+    NASM has no literal for inf/nan, so emitting __float64__(inf) aborts the
+    whole build with `error: expecting floating-point number` before anything
+    can be linked -- a fail-closed, but a fail that blocks legitimate programs
+    such as `imprimir(1e309)`.
+    """
+
+    def test_finite_float_keeps_the_roundtrip_literal(self) -> None:
+        # repr() is shortest round-trip and NASM parses it back bit-identical
+        # (verified 19/19, subnormals included), so finite floats stay as-is.
+        emitter = Win64NasmEmitter()
+        emitter._load_operand(1e308, "rax")
+        self.assertEqual(emitter.lines, ["    mov rax, __float64__(1e+308)"])
+
+    def test_non_finite_float_is_emitted_as_ieee754_bits(self) -> None:
+        for value, bits in (
+            (float("inf"), 0x7FF0000000000000),
+            (float("-inf"), 0xFFF0000000000000),
+        ):
+            with self.subTest(value=value):
+                emitter = Win64NasmEmitter()
+                emitter._load_operand(value, "rax")
+                self.assertEqual(emitter.lines, [f"    mov rax, 0x{bits:016X}"])
+
+        emitter = Win64NasmEmitter()
+        emitter._load_operand(float("nan"), "rax")
+        self.assertNotIn("__float64__", emitter.lines[0])
+        self.assertRegex(emitter.lines[0], r"^    mov rax, 0x[0-9A-F]{16}$")
 
 
 if __name__ == "__main__":
