@@ -364,6 +364,9 @@ static long piton_math_gcd(long a,long b){if(a<0)a=-a;if(b<0)b=-b;while(b){long 
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
 static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;}
+static long piton_int_add(long a,long b){i64 r;if(__builtin_add_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
+static long piton_int_sub(long a,long b){i64 r;if(__builtin_sub_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
+static long piton_int_mul(long a,long b){i64 r;if(__builtin_mul_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static void piton_raise_chain_set(const char*type,const char*message,const char*cause_type,const char*cause_msg){piton_exc_cause_type=cause_type;piton_exc_cause_msg=cause_msg;piton_raise_set(type,message);}
 static const char*piton_reraise_type=0;static const char*piton_reraise_message=0;
 static void piton_reraise_save(void){piton_reraise_type=piton_exc_type;piton_reraise_message=piton_exc_message;}
@@ -429,6 +432,7 @@ class LinuxCEmitter:
         self.generator_layouts: dict[str, dict[str, int]] = {}
         self.function_params: dict[str, list[str]] = {}
         self.function_return_types: dict[str, str] = {}
+        self._fn_consts: dict[str, Any] = {}
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
         self._gen_counter = 0
@@ -454,7 +458,7 @@ class LinuxCEmitter:
             for function in module.functions
             for block in function.blocks
             for instruction in block.instructions
-        )
+        ) or self._const_fold_overflows(module)
         # Rich runtime (with __argc/__argv/_start and object/dict/set structs) needed for
         # bigint or sys.argv/os.name or any object/dict/set operations
         self._has_rich_runtime = self._has_bigint or any(
@@ -523,6 +527,7 @@ class LinuxCEmitter:
             lines.append("    long " + ", ".join(f"{_name(slot)}=0" for slot in locals_) + ";")
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
+        self._fn_consts = {}
         if function.vararg:
             types[function.vararg] = "tuple"
         if function.kwarg:
@@ -573,6 +578,7 @@ class LinuxCEmitter:
         lines.append("    long __sent = 0;")
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
+        self._fn_consts = {}
         bigint_slots: list[str] = []
         for slot, index in ordered:
             lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
@@ -626,6 +632,7 @@ class LinuxCEmitter:
         lines.append("    long __sent = 0;")
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
+        self._fn_consts = {}
         bigint_slots: list[str] = []
         for slot, index in ordered:
             lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
@@ -758,6 +765,44 @@ class LinuxCEmitter:
             types[result] = awaited_type
 
     _UNKNOWN = "\x00?"
+
+    def _const_fold_overflows(self, module: MIRModule) -> bool:
+        """INTOVF_GUARD_V1: does any constant int ``+ - *`` fold exceed i64?
+
+        Must mirror the binary lowering's fold conditions exactly: a promoted
+        fold result emits ``piton_bigint_from_str``, and the bigint runtime
+        prelude is only included when this (or a huge literal) demands it —
+        the prelude choice is made before function emission, so it needs this
+        pre-scan instead of a lazy flag.
+        """
+        for function in module.functions:
+            consts: dict[str, Any] = {}
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if instruction.op == "const" and instruction.result and instruction.args:
+                        consts[instruction.result] = instruction.args[0]
+                    elif instruction.op == "binary" and len(instruction.args) >= 3:
+                        operator = instruction.args[0]
+                        if operator not in {"+", "-", "*"}:
+                            continue
+                        left_const = consts.get(instruction.args[1]) if isinstance(instruction.args[1], str) else None
+                        right_const = consts.get(instruction.args[2]) if isinstance(instruction.args[2], str) else None
+                        if (
+                            isinstance(left_const, int) and not isinstance(left_const, bool)
+                            and isinstance(right_const, int) and not isinstance(right_const, bool)
+                        ):
+                            folded = {
+                                "+": left_const + right_const,
+                                "-": left_const - right_const,
+                                "*": left_const * right_const,
+                            }[operator]
+                            # mirror the lowering: folded results are recorded
+                            # so chained folds keep propagating
+                            if instruction.result:
+                                consts[instruction.result] = folded
+                            if not (-(2 ** 63) <= folded < 2 ** 63):
+                                return True
+        return False
 
     def _infer_return_types(self, module: MIRModule) -> dict[str, str]:
         """RETURNTYPE_V1: narrow, sound return-type inference over MIR.
@@ -1014,6 +1059,11 @@ class LinuxCEmitter:
             out.append("    }")
         elif op == "const":
             value = args[0]
+            # INTOVF_GUARD_V1: record constant values so the binary lowering
+            # can fold int + - * exactly (Python bignum arithmetic IS the
+            # oracle) instead of emitting wrapping i64 C arithmetic.
+            if result:
+                self._fn_consts[result] = value
             if isinstance(value, str):
                 out.append(f"    {_name(result)}=(long){json.dumps(value)};")
                 types[result] = "str"
@@ -1154,7 +1204,41 @@ class LinuxCEmitter:
                 out.append("    }")
                 types[result] = "int"
                 return out
-            if operator in {"+", "-", "*", "&", "|", "^", "<<", ">>"}:
+            if operator in {"+", "-", "*"}:
+                # INTOVF_GUARD_V1: CPython promotes to arbitrary precision on
+                # overflow; the untagged i64 subset used to wrap silently.
+                # Constant operands fold exactly (Python bignum IS the oracle)
+                # and promote to bigint literals when the result exceeds i64;
+                # runtime operands use checked helpers that raise a catchable
+                # OverflowError instead of corrupting the value.
+                left_const = self._fn_consts.get(left) if isinstance(left, str) else None
+                right_const = self._fn_consts.get(right) if isinstance(right, str) else None
+                if (
+                    isinstance(left_const, int) and not isinstance(left_const, bool)
+                    and isinstance(right_const, int) and not isinstance(right_const, bool)
+                ):
+                    folded = {"+": left_const + right_const, "-": left_const - right_const, "*": left_const * right_const}[operator]
+                    # record the folded value so chained folds keep propagating
+                    self._fn_consts[result] = folded
+                    if -(2 ** 63) <= folded < 2 ** 63:
+                        out.append(f"    {_name(result)}=(long)({folded});")
+                        types[result] = "int"
+                    else:
+                        out.append(f"    {_name(result)}=(long)piton_bigint_from_str({json.dumps(str(folded))});")
+                        types[result] = "bigint"
+                        bigint_slots.append(result)
+                    return out
+                helper = {"+": "piton_int_add", "-": "piton_int_sub", "*": "piton_int_mul"}[operator]
+                out.append(f"    {_name(result)}={helper}({self._value(left)},{self._value(right)});")
+                out.append("    if(piton_exc_flag){")
+                if handler_label:
+                    out.append(f"        goto {_name(function.name + '_' + handler_label)};")
+                else:
+                    out.append("        piton_report_unhandled();piton_exit(1);")
+                out.append("    }")
+                types[result] = "int"
+                return out
+            if operator in {"&", "|", "^", "<<", ">>"}:
                 expression = f"({self._value(left)} {operator} {self._value(right)})"
             else:
                 raise NativeBuildError(f"Linux binary operator not supported: {operator}")

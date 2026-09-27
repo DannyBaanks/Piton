@@ -746,14 +746,44 @@ class Win64NasmEmitter:
                 self.lines.extend(["    movq rax, xmm0", f"    mov {self._address(result)}, rax"])
                 self.types[result] = "float"
                 return
+            if operator in {"+", "-", "*"} and {left_type, right_type} <= {"int", "bool"}:
+                # INTOVF_GUARD_V1: constant int operands fold exactly (Python
+                # bignum arithmetic IS the oracle); results beyond i64 promote
+                # to a bigint literal. Runtime operands keep the historical
+                # code path plus a jo-checked OverflowError below.
+                left_const = self.constants.get(left) if isinstance(left, str) else None
+                right_const = self.constants.get(right) if isinstance(right, str) else None
+                if (
+                    isinstance(left_const, int) and not isinstance(left_const, bool)
+                    and isinstance(right_const, int) and not isinstance(right_const, bool)
+                ):
+                    folded = {"+": left_const + right_const, "-": left_const - right_const, "*": left_const * right_const}[operator]
+                    # record the folded value so chained folds keep propagating
+                    self.constants[result] = folded
+                    if -(1 << 63) <= folded < (1 << 63):
+                        self._load_operand(folded)
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "int"
+                    else:
+                        self.lines.extend([
+                            f"    lea rcx, [{self._string(str(folded))}]",
+                            "    call piton_bigint_from_str",
+                            f"    mov {self._address(result)}, rax",
+                        ])
+                        self.bigint_slots.append(result)
+                        self.types[result] = "bigint"
+                    return
             self._load_operand(left, "rax")
             self._load_operand(right, "rcx")
             if operator == "+":
                 self.lines.append("    add rax, rcx")
+                self._emit_int_overflow_guard(handler_label, labels)
             elif operator == "-":
                 self.lines.append("    sub rax, rcx")
+                self._emit_int_overflow_guard(handler_label, labels)
             elif operator == "*":
                 self.lines.append("    imul rax, rcx")
+                self._emit_int_overflow_guard(handler_label, labels)
             elif operator == "&":
                 self.lines.append("    and rax, rcx")
             elif operator == "|":
@@ -2435,6 +2465,29 @@ class Win64NasmEmitter:
         label = f"__piton_{prefix}_{self.next_internal_label}"
         self.next_internal_label += 1
         return label
+
+    def _emit_int_overflow_guard(self, handler_label, labels) -> None:
+        """INTOVF_GUARD_V1: CPython promotes to arbitrary precision on int
+        overflow; the untagged i64 subset used to wrap silently. The promotion
+        itself needs a tagged representation (follow-up); until then an
+        overflowing runtime operation raises a catchable OverflowError
+        instead of corrupting the value. Constant operands are folded exactly
+        by the caller, so this only guards the runtime path."""
+        ok = self._internal_label("intovf_ok")
+        self.lines.append(f"    jno {ok}")
+        otype = self._string("OverflowError")
+        omsg = self._string("integer arithmetic result too large for the native int subset")
+        self.lines.append(f"    lea rcx, [{otype}]")
+        self.lines.append(f"    lea rdx, [{omsg}]")
+        if handler_label:
+            self.lines.append("    call piton_raise")
+            self.lines.append("    call piton_catch_flag")
+            self.lines.append("    test rax, rax")
+            target = labels.get(handler_label, handler_label)
+            self.lines.append(f"    jne {target}")
+        else:
+            self.lines.append("    call piton_raise_unhandled")
+        self.lines.append(f"{ok}:")
 
     def _emit_truth_test(self, operand: Any) -> None:
         if self.types.get(operand, "int") == "str":
