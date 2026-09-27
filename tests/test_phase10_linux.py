@@ -177,6 +177,18 @@ class Phase10LinuxGates(unittest.TestCase):
     def test_linux_rich_floats(self):
         self._assert_linux_equiv('imprimir(1.5)\nimprimir(-1.5)\nimprimir(1.25 + 2.5)\nimprimir(3.0 * 0.5)\nimprimir(1.5 < 2)\nimprimir(abs(-2.5))\n')
 
+    def test_linux_rich_huge_float_value(self):
+        # FLOAT_PRINT_V1: the printer cast the integer part to unsigned long,
+        # which is undefined past 2**64 -- imprimir(1e20) printed 0.0 and
+        # imprimir(1e309) failed to build ('inf' undeclared). Assert the VALUE,
+        # not the spelling: short repr parity is tracked separately.
+        rc, native_out, _oracle_out, stderr = self._run_linux_diff(
+            "imprimir(1e20)\nimprimir(-1e20)\nimprimir(1e309)\nimprimir(-1e309)\n"
+        )
+        self.assertEqual(rc, 0, f"native stderr={stderr!r}")
+        values = [float(line) for line in native_out.decode().splitlines()]
+        self.assertEqual(values, [1e20, -1e20, float("inf"), float("-inf")])
+
     def test_linux_rich_lists(self):
         self._assert_linux_equiv('imprimir([1, 2, 3])\nimprimir(longitud([1, 2, 3]))\nimprimir([4, 5][-1])\nimprimir(sum([1, 2, 3, 4, 5]))\n')
 
