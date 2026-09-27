@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import ctypes.util
 import io
+import sys
 import tempfile
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -47,7 +48,10 @@ class Phase11To13Bootstrap(unittest.TestCase):
     def test_stdlib_and_safe_subprocess(self):
         modules = stdlib_modules()
         self.assertEqual(modules["math"].sqrt(9), 3)
-        result = run_subprocess(["cmd", "/c", "echo", "piton"])
+        if sys.platform.startswith("win32"):
+            result = run_subprocess(["cmd", "/c", "echo", "piton"])
+        else:
+            result = run_subprocess(["sh", "-c", "echo piton"])
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "piton")
 

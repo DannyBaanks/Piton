@@ -2217,6 +2217,16 @@ void piton_raise(const char *type, const char *message) {
 static const char *piton_exception_cause_type = NULL;
 static const char *piton_exception_cause_msg = NULL;
 
+/* Reraise state (snapshot before handler clears catch state) */
+static const char *piton_reraise_type = NULL;
+static const char *piton_reraise_message = NULL;
+static const char *piton_reraise_cause_type = NULL;
+static const char *piton_reraise_cause_message = NULL;
+
+/* Exception context (__context__) for implicit chaining */
+static const char *piton_exc_context_type = NULL;
+static const char *piton_exc_context_message = NULL;
+
 void piton_raise_unhandled(const char *type, const char *message) {
     /* EXCEPTION_CHAINING_V1: the cause prints first, like CPython's
      * "__cause__" chain in the traceback (text-only model — no frames). */
@@ -2275,8 +2285,8 @@ void piton_catch_clear(void) {
 void piton_reraise_save(void) {
     piton_reraise_type = piton_exception_type;
     piton_reraise_message = piton_exception_message;
-    piton_reraise_cause_type = piton_exc_cause_type;
-    piton_reraise_cause_message = piton_exc_cause_message;
+    piton_reraise_cause_type = piton_exception_cause_type;
+    piton_reraise_cause_message = piton_exception_cause_msg;
 }
 
 /* Raise an exception with an explicit cause (raise ... from ...). */
@@ -2291,8 +2301,8 @@ void piton_raise_from(const char *type, const char *message,
             piton_exception_active = 1;
             piton_exception_type = type;
             piton_exception_message = message;
-            piton_exc_cause_type = cause_type;
-            piton_exc_cause_message = cause_message;
+            piton_exception_cause_type = cause_type;
+            piton_exception_cause_msg = cause_message;
             piton_exc_context_type = NULL;
             piton_exc_context_message = NULL;
             return;
@@ -2313,8 +2323,8 @@ void piton_raise_from_var(const char *type, const char *message) {
             piton_exception_active = 1;
             piton_exception_type = type;
             piton_exception_message = message;
-            piton_exc_cause_type = piton_reraise_type;
-            piton_exc_cause_message = piton_reraise_message;
+            piton_exception_cause_type = piton_reraise_type;
+            piton_exception_cause_msg = piton_reraise_message;
             piton_exc_context_type = NULL;
             piton_exc_context_message = NULL;
             return;
@@ -2335,8 +2345,8 @@ void piton_raise_from_none(const char *type, const char *message) {
             piton_exception_active = 1;
             piton_exception_type = type;
             piton_exception_message = message;
-            piton_exc_cause_type = NULL;
-            piton_exc_cause_message = NULL;
+            piton_exception_cause_type = NULL;
+            piton_exception_cause_msg = NULL;
             piton_exc_context_type = NULL;
             piton_exc_context_message = NULL;
             return;
@@ -2364,8 +2374,8 @@ void piton_reraise(void) {
             piton_exception_active = 1;
             piton_exception_type = type;
             piton_exception_message = message;
-            piton_exc_cause_type = piton_reraise_cause_type;
-            piton_exc_cause_message = piton_reraise_cause_message;
+            piton_exception_cause_type = piton_reraise_cause_type;
+            piton_exception_cause_msg = piton_reraise_cause_message;
             return;
         }
     }
@@ -2633,7 +2643,15 @@ int64_t piton_int_from_str(const char *s) {
     while (*s == ' ' || *s == '\t' || *s == '\n') ++s;
     if (!*s) { piton_raise("ValueError", "invalid literal for int() with base 10"); return 0; }
     char *end = NULL;
+#ifdef _WIN32
+#ifdef _WIN32
     int64_t v = (int64_t)_strtoi64(s, &end, 10);
+#else
+    int64_t v = (int64_t)strtoll(s, &end, 10);
+#endif
+#else
+    int64_t v = (int64_t)strtoll(s, &end, 10);
+#endif
     if (end == s) { piton_raise("ValueError", "invalid literal for int() with base 10"); return 0; }
     while (*end == ' ' || *end == '\t' || *end == '\n') ++end;
     if (*end) { piton_raise("ValueError", "invalid literal for int() with base 10"); return 0; }
@@ -2787,15 +2805,18 @@ int64_t piton_float_log(int64_t bits) {
 
 #include <stdlib.h>
 
+#ifdef _WIN32
 /* MinGW's CRT exposes the process argument vector through these globals. */
 extern int __argc;
 extern char **__argv;
+#endif
 
 void piton_exit(int64_t code) {
     exit((int)code);
 }
 
 int64_t piton_argv_new(void) {
+#ifdef _WIN32
     PitonCollection *c = piton_collection_new(1, __argc);
     for (int i = 0; i < __argc; ++i) {
         PitonStr *s = piton_str_new(__argv[i], (int64_t)strlen(__argv[i]));
@@ -2803,6 +2824,23 @@ int64_t piton_argv_new(void) {
     }
     c->length = __argc;
     return (int64_t)c;
+#else
+    /* Linux: when compiled standalone (no generated _start defining __argc/__argv),
+       return an empty list. When linked with generated code, __argc/__argv are
+       provided by the generated _start. */
+    extern int __argc __attribute__((weak));
+    extern char **__argv __attribute__((weak));
+    if (!__argc || !__argv) {
+        return (int64_t)piton_collection_new(1, 0);
+    }
+    PitonCollection *c = piton_collection_new(1, __argc);
+    for (int i = 0; i < __argc; ++i) {
+        PitonStr *s = piton_str_new(__argv[i], (int64_t)strlen(__argv[i]));
+        c->items[i] = pv_encode(PITON_TAG_OBJECT, (int64_t)s);
+    }
+    c->length = __argc;
+    return (int64_t)c;
+#endif
 }
 
 /* ── Live count totals ────────────────────────────────────────────────── */

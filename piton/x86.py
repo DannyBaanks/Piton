@@ -2442,6 +2442,10 @@ def emit_nasm(module: MIRModule) -> str:
 
 
 def compile_native(source: str, output: str | Path) -> Path:
+    import sys
+    if not sys.platform.startswith("win32"):
+        from .linux_x86 import compile_native_linux
+        return compile_native_linux(source, output)
     hir = lower_cst_to_hir(parse(source))
     from_imports = {}
     for statement in hir.body:
@@ -2724,6 +2728,10 @@ def _scan_native_modules(
 
 
 def compile_native_files(entry: str | Path, output: str | Path) -> Path:
+    import sys
+    if not sys.platform.startswith("win32"):
+        from .linux_x86 import compile_native_linux_files
+        return compile_native_linux_files(entry, output)
     entry_path = Path(entry).resolve()
     hir = lower_cst_to_hir(parse(entry_path.read_text(encoding="utf-8-sig")))
     modules, from_imports, module_meta = _scan_native_modules(entry_path)
