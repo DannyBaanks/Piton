@@ -205,7 +205,8 @@ static long piton_float_sin(long a){double x=piton_bits_double(a),r=__builtin_si
 static long piton_float_cos(long a){double x=piton_bits_double(a),r=__builtin_cos(x);return piton_double_bits(r);}
 static long piton_float_log(long a){double x=piton_bits_double(a),r=__builtin_log(x);return piton_double_bits(r);}
 static void piton_write_uint(unsigned long v){char b[32];usize i=sizeof(b);do{b[--i]=(char)('0'+v%10);v/=10;}while(v);piton_write(1,b+i,sizeof(b)-i);}
-static void piton_print_float_bits(long bits){double d=piton_bits_double(bits);if(d<0){piton_write(1,"-",1);d=-d;}unsigned long whole=(unsigned long)d;double frac=d-(double)whole;unsigned long scaled=(unsigned long)(frac*1000000000000.0+0.5);if(scaled>=1000000000000UL){++whole;scaled=0;}piton_write_uint(whole);piton_write(1,".",1);if(!scaled){piton_write(1,"0\n",2);return;}char digits[12];for(int i=11;i>=0;--i){digits[i]=(char)('0'+scaled%10);scaled/=10;}int end=12;while(end>1&&digits[end-1]=='0')--end;piton_write(1,digits,(usize)end);piton_write(1,"\n",1);}
+static void piton_write_uint_big(double d){unsigned long u;double t=d;int i,n=0,be;unsigned long frac,m;int e;unsigned int w[32];unsigned int c;unsigned long cur,rem;int nz;char buf[400];__builtin_memcpy(&u,&t,8);frac=u&0xFFFFFFFFFFFFFULL;be=(int)((u>>52)&0x7FF);m=be?frac|0x10000000000000UL:frac;e=be?be-1075:-1074;for(i=0;i<32;++i)w[i]=0;w[0]=(unsigned int)m;w[1]=(unsigned int)(m>>32);while(e>0){c=0;for(i=0;i<32;++i){cur=((unsigned long)w[i]<<1)|c;w[i]=(unsigned int)cur;c=(unsigned int)(cur>>32);}--e;}for(;;){rem=0;nz=0;for(i=31;i>=0;--i){cur=(rem<<32)|w[i];w[i]=(unsigned int)(cur/10);rem=cur%10;if(w[i])nz=1;}buf[n++]=(char)('0'+(char)rem);if(!nz)break;}while(n>0){--n;piton_write(1,buf+n,1);}}
+static void piton_print_float_bits(long bits){double d=piton_bits_double(bits);if(d!=d){piton_write(1,"nan\n",4);return;}if(d<0){piton_write(1,"-",1);d=-d;}if(d>1.7976931348623157e308){piton_write(1,"inf\n",4);return;}if(d>=18446744073709551616.0){piton_write_uint_big(d);piton_write(1,".0\n",3);return;}unsigned long whole=(unsigned long)d;double frac=d-(double)whole;unsigned long scaled=(unsigned long)(frac*1000000000000.0+0.5);if(scaled>=1000000000000UL){++whole;scaled=0;}piton_write_uint(whole);piton_write(1,".",1);if(!scaled){piton_write(1,"0\n",2);return;}char digits[12];for(int i=11;i>=0;--i){digits[i]=(char)('0'+scaled%10);scaled/=10;}int end=12;while(end>1&&digits[end-1]=='0')--end;piton_write(1,digits,(usize)end);piton_write(1,"\n",1);}
 static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;return a.bits==b.bits;}
 static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
 static void piton_seq_put(PitonSeq*s,long i,PitonSlot v){if(i>=0&&i<s->length)s->items[i]=v;}
@@ -375,6 +376,21 @@ static void piton_bigint_free(void*a){(void)a;}
 def _name(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9_]", "_", value)
     return f"piton_{cleaned}" if cleaned and cleaned[0].isdigit() else cleaned
+
+
+def _float_c_literal(value: float) -> str:
+    """C expression for a float constant.
+
+    ``float.hex()`` is valid C for every finite double, but returns the bare
+    strings ``'inf'`` and ``'nan'`` for the non-finite ones -- which made
+    ``imprimir(1e309)`` fail to compile with "'inf' undeclared". Those are
+    emitted through compiler builtins instead.
+    """
+    if value != value:
+        return "(__builtin_inf()-__builtin_inf())"
+    if value in (float("inf"), float("-inf")):
+        return "__builtin_inf()" if value > 0 else "(-__builtin_inf())"
+    return value.hex()
 
 
 class LinuxCEmitter:
@@ -623,7 +639,7 @@ class LinuxCEmitter:
         if isinstance(value, int):
             return str(value)
         if isinstance(value, float):
-            return f"piton_double_bits({value.hex()})"
+            return f"piton_double_bits({_float_c_literal(value)})"
         raise NativeBuildError(f"Linux scalar backend cannot encode {value!r}")
 
     @staticmethod
@@ -796,7 +812,7 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(long)({self._value(value)});")
                     types[result] = "bool" if isinstance(value, bool) else "none" if value is None else "int"
             elif isinstance(value, float):
-                out.append(f"    {_name(result)}=piton_double_bits({value.hex()});")
+                out.append(f"    {_name(result)}=piton_double_bits({_float_c_literal(value)});")
                 types[result] = "float"
             else:
                 raise NativeBuildError(f"Linux backend cannot encode constant {value!r}")
