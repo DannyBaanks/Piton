@@ -715,7 +715,12 @@ static void piton_value_print_inner(int64_t v, int recursing) {
         switch (h->sub_tag) {
         case SUB_TAG_STR: {
             PitonStr *s = ptr;
+            /* SEQ_REPR_QUOTES_V1: CPython prints container elements with
+               repr(), so nested strings carry quotes; top-level str() does
+               not. `recursing` marks exactly the nested case. */
+            if (recursing) putchar('\'');
             fwrite(s->data, 1, (size_t)s->len, stdout);
+            if (recursing) putchar('\'');
             break;
         }
         case SUB_TAG_LIST: case SUB_TAG_TUPLE: {
@@ -1439,9 +1444,45 @@ void *piton_gen_collect(void *raw) {
     return list;
 }
 
-void piton_collection_print(void *raw) {
+/* ── Raw (no newline) print variants ─────────────────────────────────────
+   PRINT_ARGS_V1: multi-argument imprimir prints each operand via the _raw
+   variant and writes a single newline after the last one. The historical
+   wrappers keep their exact old behavior (raw + newline). */
+
+void piton_collection_print_raw(void *raw) {
     piton_value_print_inner(pv_encode(PITON_TAG_OBJECT, (int64_t)raw), 0);
+}
+
+void piton_collection_print(void *raw) {
+    piton_collection_print_raw(raw);
     putchar('\n');
+}
+
+void *piton_seq_concat(void *a_raw, void *b_raw) {
+    PitonCollection *a = a_raw, *b = b_raw;
+    if (!a || !b || a->kind != b->kind) {
+        piton_raise_unhandled("TypeError", "cannot concatenate");
+    }
+    int64_t n = a->length + b->length;
+    PitonCollection *c = piton_collection_new(a->kind, n);
+    for (int64_t i = 0; i < a->length; ++i) {
+        int64_t v = a->items[i];
+        if (pv_tag(v) == PITON_TAG_OBJECT) {
+            PitonHeader *h = (PitonHeader *)pv_payload(v);
+            if (h) h->refcount++;
+        }
+        c->items[i] = v;
+    }
+    for (int64_t i = 0; i < b->length; ++i) {
+        int64_t v = b->items[i];
+        if (pv_tag(v) == PITON_TAG_OBJECT) {
+            PitonHeader *h = (PitonHeader *)pv_payload(v);
+            if (h) h->refcount++;
+        }
+        c->items[a->length + i] = v;
+    }
+    c->length = n;
+    return c;
 }
 
 void piton_collection_free(void *raw) {
@@ -1505,8 +1546,12 @@ int64_t piton_dict_len(void *raw) {
     return d ? d->length : 0;
 }
 
-void piton_dict_print(void *raw) {
+void piton_dict_print_raw(void *raw) {
     piton_value_print_inner(pv_encode(PITON_TAG_OBJECT, (int64_t)raw), 0);
+}
+
+void piton_dict_print(void *raw) {
+    piton_dict_print_raw(raw);
     putchar('\n');
 }
 
@@ -1622,8 +1667,12 @@ int64_t piton_set_len(void *raw) {
     return s ? s->length : 0;
 }
 
-void piton_set_print(void *raw) {
+void piton_set_print_raw(void *raw) {
     piton_value_print_inner(pv_encode(PITON_TAG_OBJECT, (int64_t)raw), 0);
+}
+
+void piton_set_print(void *raw) {
+    piton_set_print_raw(raw);
     putchar('\n');
 }
 
@@ -2137,9 +2186,9 @@ void *piton_bigint_mod(void *a, void *b) {
     return r;
 }
 
-void piton_bigint_print(void *a) {
+void piton_bigint_print_raw(void *a) {
     PitonBigInt *bi = a;
-    if (!bi || bi->count == 0) { puts("0"); return; }
+    if (!bi || bi->count == 0) { fputs("0", stdout); return; }
     char buf[128]; int pos = 128; buf[--pos] = '\0';
     PitonBigInt *ten = piton_bigint_from_i64_impl(10);
     PitonBigInt *work = piton_bigint_from_i64_impl(0);
@@ -2162,7 +2211,12 @@ void piton_bigint_print(void *a) {
     free(work->limbs); free(work);
     free(ten->limbs); free(ten);
     if (bi->sign < 0) buf[--pos] = '-';
-    puts(buf + pos);
+    fputs(buf + pos, stdout);
+}
+
+void piton_bigint_print(void *a) {
+    piton_bigint_print_raw(a);
+    putchar('\n');
 }
 
 /* ── Exception handler stack (flag-based, no longjmp) ──────────────────── */
@@ -2395,21 +2449,30 @@ void piton_reraise_unhandled(void) {
     piton_raise_unhandled(piton_reraise_type, piton_reraise_message);
 }
 
-void piton_print_float(double value) {
+void piton_print_float_raw(double value) {
     char repr[PITON_REPR_MAX];
     int n = piton_repr_double(repr, (unsigned long long)piton_double_bits(value));
     fwrite(repr, 1, (size_t)n, stdout);
+}
+
+void piton_print_float(double value) {
+    piton_print_float_raw(value);
     fputc('\n', stdout);
+}
+
+void piton_print_value_raw(int64_t value) {
+    if (value == 0)
+        fputs("None", stdout);
+    else
+        printf("%s", (const char *)value);
 }
 
 /* MODULE_METADATA_V1: dynamic print for module __package__ (None or text).
    Native object attributes carry plain string pointers (NOT the tagged
    encoding), so a zero payload means None and anything else is a C string. */
 void piton_print_value(int64_t value) {
-    if (value == 0)
-        printf("None\n");
-    else
-        printf("%s\n", (const char *)value);
+    piton_print_value_raw(value);
+    printf("\n");
 }
 
 /* ── Stdlib: abs, min, max, sum, type ────────────────────────────────── */
