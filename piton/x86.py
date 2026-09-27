@@ -6,7 +6,9 @@ branch/jump, funciones simples y ``imprimir`` mediante el CRT de Windows.
 from __future__ import annotations
 
 from pathlib import Path
+import math
 import shutil
+import struct
 import subprocess
 import tempfile
 from typing import Any
@@ -504,7 +506,15 @@ class Win64NasmEmitter:
         elif isinstance(operand, int):
             self.lines.append(f"    mov {register}, {operand}")
         elif isinstance(operand, float):
-            self.lines.append(f"    mov {register}, __float64__({operand!r})")
+            if math.isfinite(operand):
+                # repr() is shortest round-trip, and NASM's __float64__ parses it
+                # back to the identical double (verified 19/19, subnormals included).
+                self.lines.append(f"    mov {register}, __float64__({operand!r})")
+            else:
+                # repr() yields 'inf'/'-inf'/'nan', which NASM rejects outright
+                # ("expecting floating-point number"), so emit the IEEE-754 bits.
+                bits, = struct.unpack("<Q", struct.pack("<d", operand))
+                self.lines.append(f"    mov {register}, 0x{bits:016X}")
         elif operand is None:
             self.lines.append(f"    xor {register}, {register}")
         else:
