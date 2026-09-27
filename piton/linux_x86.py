@@ -201,9 +201,30 @@ static long piton_float_neg(long a){return(long)((unsigned long)a^(1UL<<63));}
 static long piton_float_sqrt(long a){double x=piton_bits_double(a),r;__asm__ volatile("sqrtsd %1,%0":"=x"(r):"x"(x));return piton_double_bits(r);}
 static long piton_float_floor(long a){double x=piton_bits_double(a);if(x!=x){piton_write(2,"ValueError: cannot convert float NaN to integer\n",48);piton_exit(1);}double f=__builtin_floor(x);if(f>9.2233720368547758e18||f<-9.2233720368547758e18){piton_write(2,"OverflowError: cannot convert float infinity to integer\n",56);piton_exit(1);}return(long)f;}
 static long piton_float_ceil(long a){double x=piton_bits_double(a);if(x!=x){piton_write(2,"ValueError: cannot convert float NaN to integer\n",48);piton_exit(1);}double f=__builtin_ceil(x);if(f>9.2233720368547758e18||f<-9.2233720368547758e18){piton_write(2,"OverflowError: cannot convert float infinity to integer\n",56);piton_exit(1);}return(long)f;}
-static long piton_float_sin(long a){double x=piton_bits_double(a),r=__builtin_sin(x);return piton_double_bits(r);}
-static long piton_float_cos(long a){double x=piton_bits_double(a),r=__builtin_cos(x);return piton_double_bits(r);}
-static long piton_float_log(long a){double x=piton_bits_double(a),r=__builtin_log(x);return piton_double_bits(r);}
+/* ── freestanding math: PITON's own sin/cos/log (no libm, -nostdlib) ──────
+   __builtin_sin/cos/log have no definition to call under -nostdlib, so these
+   are provided here. Argument reduction carries every intermediate rounding
+   explicitly (Dekker two-sum / two-prod) over a 106-bit pi/2, which is exact
+   for |x| < 1.4e16 -- beyond that n = round(2x/pi) no longer fits a double and
+   a correct answer would need the Payne-Hanek algorithm; we return NaN rather
+   than a plausible-but-wrong number. */
+static void piton_dsplit(double a,double*hi,double*lo){double t=134217729.0*a;double h=t-(t-a);*lo=a-h;*hi=h;}
+static double piton_dsum(double a,double b,double*e){double s=a+b;double bb=s-a;*e=(a-(s-bb))+(b-bb);return s;}
+static double piton_dprod(double a,double b,double*e){double p=a*b;double ah,al,bh,bl;piton_dsplit(a,&ah,&al);piton_dsplit(b,&bh,&bl);*e=((ah*bh-p)+ah*bl+al*bh)+al*bl;return p;}
+/* y = x - n*(pi/2) */
+static double piton_pi2_delta(double n,double x){double ph,e1,pl,pe,t,te,s,se,d,de;ph=piton_dprod(n,0x1.921fb54442d18p+0,&e1);pl=piton_dprod(n,0x1.1a62633145c07p-54,&pe);t=piton_dsum(e1,pl,&te);s=piton_dsum(x,-ph,&se);d=piton_dsum(s,-t,&de);return d+(de+se-te-pe);}
+/* x = n*(pi/2) + y with |y| <= pi/4; returns n mod 4, or -1 with y = NaN */
+static int piton_pi2_reduce(double x,double*y){const double IPI=0x1.45f306dc9c883p-1;const double B=0.7853981633974483;double q,n;int i,c;if(!(x>-1.4e16&&x<1.4e16)){*y=__builtin_nan("");return -1;}q=x*IPI;n=(double)(long long)(q+(q<0?-0.5:0.5));for(i=0;i<4;i++){*y=piton_pi2_delta(n,x);if(*y<=B&&*y>=-B)break;c=(int)(*y*IPI+(*y<0?-0.5:0.5));if(!c)break;n+=(double)c;}if(!(*y<=B&&*y>=-B)){*y=__builtin_nan("");return -1;}{long nn=(long)n;int r=(int)(nn%4);if(r<0)r+=4;return r;}}
+static const double PITON_SIN_C[11]={0x1.0000000000000p+0,-0x1.5555555555555p-3,0x1.1111111111111p-7,-0x1.a01a01a01a01ap-13,0x1.71de3a556c734p-19,-0x1.ae64567f544e4p-26,0x1.6124613a86d09p-33,-0x1.ae7f3e733b81fp-41,0x1.952c77030ad4ap-49,-0x1.2f49b46814157p-57,0x1.71b8ef6dcf572p-66};
+static const double PITON_COS_C[11]={0x1.0000000000000p+0,-0x1.0000000000000p-1,0x1.5555555555555p-5,-0x1.6c16c16c16c17p-10,0x1.a01a01a01a01ap-16,-0x1.27e4fb7789f5cp-22,0x1.1eed8eff8d898p-29,-0x1.93974a8c07c9dp-37,0x1.ae7f3e733b81fp-45,-0x1.6827863b97d97p-53,0x1.e542ba4020225p-62};
+static double piton_sin_y(double y){double t=y*y,p=PITON_SIN_C[10];int k;for(k=9;k>=0;--k)p=PITON_SIN_C[k]+t*p;return y*p;}
+static double piton_cos_y(double y){double t=y*y,p=PITON_COS_C[10];int k;for(k=9;k>=0;--k)p=PITON_COS_C[k]+t*p;return p;}
+static double piton_sin(double x){double y;int q=piton_pi2_reduce(x,&y);if(q<0)return y;return q==0?piton_sin_y(y):q==1?piton_cos_y(y):q==2?-piton_sin_y(y):-piton_cos_y(y);}
+static double piton_cos(double x){double y;int q=piton_pi2_reduce(x,&y);if(q<0)return y;return q==0?piton_cos_y(y):q==1?-piton_sin_y(y):q==2?-piton_cos_y(y):piton_sin_y(y);}
+static double piton_log(double x){double m,u,u2,p,lm;long b;int be,k,n;if(x!=x)return x;if(x==0.0)return -__builtin_inf();if(x<0.0)return __builtin_nan("");if(x==__builtin_inf())return x;__builtin_memcpy(&b,&x,8);be=(int)((b>>52)&0x7FF);if(be==0){x=x*18446744073709551616.0;__builtin_memcpy(&b,&x,8);be=(int)((b>>52)&0x7FF);k=be-1023-64;}else k=be-1023;b=(b&0x800FFFFFFFFFFFFFL)|((long)1023<<52);__builtin_memcpy(&m,&b,8);u=(m-1.0)/(m+1.0);u2=u*u;p=1.0/41.0;for(n=19;n>=0;--n)p=1.0/(double)(2*n+1)+u2*p;lm=2.0*u*p;return (lm+(double)k*0x1.62e42fefa39efp-1)+(double)k*0x1.abc9e3b39803fp-56;}
+static long piton_float_sin(long a){return piton_double_bits(piton_sin(piton_bits_double(a)));}
+static long piton_float_cos(long a){return piton_double_bits(piton_cos(piton_bits_double(a)));}
+static long piton_float_log(long a){return piton_double_bits(piton_log(piton_bits_double(a)));}
 static void piton_write_uint(unsigned long v){char b[32];usize i=sizeof(b);do{b[--i]=(char)('0'+v%10);v/=10;}while(v);piton_write(1,b+i,sizeof(b)-i);}
 static void piton_write_uint_big(double d){unsigned long u;double t=d;int i,n=0,be;unsigned long frac,m;int e;unsigned int w[32];unsigned int c;unsigned long cur,rem;int nz;char buf[400];__builtin_memcpy(&u,&t,8);frac=u&0xFFFFFFFFFFFFFULL;be=(int)((u>>52)&0x7FF);m=be?frac|0x10000000000000UL:frac;e=be?be-1075:-1074;for(i=0;i<32;++i)w[i]=0;w[0]=(unsigned int)m;w[1]=(unsigned int)(m>>32);while(e>0){c=0;for(i=0;i<32;++i){cur=((unsigned long)w[i]<<1)|c;w[i]=(unsigned int)cur;c=(unsigned int)(cur>>32);}--e;}for(;;){rem=0;nz=0;for(i=31;i>=0;--i){cur=(rem<<32)|w[i];w[i]=(unsigned int)(cur/10);rem=cur%10;if(w[i])nz=1;}buf[n++]=(char)('0'+(char)rem);if(!nz)break;}while(n>0){--n;piton_write(1,buf+n,1);}}
 static void piton_print_float_bits(long bits){double d=piton_bits_double(bits);if(d!=d){piton_write(1,"nan\n",4);return;}if(d<0){piton_write(1,"-",1);d=-d;}if(d>1.7976931348623157e308){piton_write(1,"inf\n",4);return;}if(d>=18446744073709551616.0){piton_write_uint_big(d);piton_write(1,".0\n",3);return;}unsigned long whole=(unsigned long)d;double frac=d-(double)whole;unsigned long scaled=(unsigned long)(frac*1000000000000.0+0.5);if(scaled>=1000000000000UL){++whole;scaled=0;}piton_write_uint(whole);piton_write(1,".",1);if(!scaled){piton_write(1,"0\n",2);return;}char digits[12];for(int i=11;i>=0;--i){digits[i]=(char)('0'+scaled%10);scaled/=10;}int end=12;while(end>1&&digits[end-1]=='0')--end;piton_write(1,digits,(usize)end);piton_write(1,"\n",1);}
@@ -1522,6 +1543,13 @@ class LinuxCEmitter:
             if types.get(args[0]) != "float":
                 operand = f"piton_double_bits((double){operand})"
             out.append(f'    {_name(result)}=piton_float_sqrt({operand});')
+            types[result] = "float"
+        elif op in {"math_sin", "math_cos", "math_log"}:
+            operand = self._value(args[0])
+            if types.get(args[0]) != "float":
+                operand = f"piton_double_bits((double){operand})"
+            helper = f"piton_float_{op[5:]}"
+            out.append(f'    {_name(result)}={helper}({operand});')
             types[result] = "float"
         elif op in {"math_floor", "math_ceil", "math_trunc", "math_fabs"}:
             operand = self._value(args[0])
