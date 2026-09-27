@@ -336,8 +336,9 @@ class IntOvfGuardV1(unittest.TestCase):
         )
         # NOT equivalent: CPython promotes (prints 'no-ovf'); the native
         # subset raises. The gate is the catchable, explicit failure.
+        # (stdout is normalized to LF: the Windows PE emits CRLF.)
         self.assertEqual(result.native.returncode, 0)
-        self.assertEqual(result.native.stdout, b"mul\n")
+        self.assertEqual(result.native.stdout.replace(b"\r\n", b"\n"), b"mul\n")
 
     def test_runtime_mul_overflow_uncaught_exits_cleanly(self):
         result = compare_native_to_cpython("x = 3037000500\nz = x * x\nimprimir('no')\n")
