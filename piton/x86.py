@@ -173,6 +173,7 @@ class Win64NasmEmitter:
             "extern piton_str_truthy",
             "extern piton_math_floor", "extern piton_math_ceil", "extern piton_math_trunc",
             "extern piton_math_fabs", "extern piton_math_gcd",
+            "extern piton_float_sqrt",
             "extern piton_type_name", "extern piton_type_from_raw",
             "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_new_with_finalizer", "extern piton_object_set", "extern piton_object_set_tagged", "extern piton_object_get", "extern piton_object_lookup",
 

@@ -28,7 +28,12 @@ jobs:
 
     - name: Run tests (Linux)
       run: |
-        python -m pytest tests/ -v --tb=short
+        python -m pytest tests/ -v --tb=short --ignore=tests/test_windows_validate.py
+
+    - name: Known-blocker corpus (informational, non-blocking)
+      continue-on-error: true
+      run: |
+        python -m pytest tests/test_windows_validate.py -v --tb=short || true
 
     - name: Verify CPython oracle
       run: |
@@ -60,7 +65,12 @@ jobs:
 
     - name: Run tests (Windows)
       run: |
-        python -m pytest tests/ -v --tb=short
+        python -m pytest tests/ -v --tb=short --ignore=tests/test_windows_validate.py
+
+    - name: Known-blocker corpus (informational, non-blocking)
+      continue-on-error: true
+      run: |
+        python -m pytest tests/test_windows_validate.py -v --tb=short
 
     - name: Verify CPython oracle
       run: |

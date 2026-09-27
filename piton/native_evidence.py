@@ -218,7 +218,7 @@ def build_windows_evidence(
             "stderr_hex": oracle.stderr.hex(),
         },
         "native_corpus": {
-            "path": os.path.relpath(corpus["path"], report_path.parent).replace("\\", "/"),
+            "path": _relative_or_absolute(Path(corpus["path"]), report_path.parent),
             "sha256": corpus["sha256"],
             "exit_code": corpus["exit_code"],
             "test_count": corpus["test_count"],
