@@ -153,15 +153,15 @@ class Win64NasmEmitter:
             "extern piton_reversed_new", "extern piton_reversed_next",
             "extern piton_zip_new", "extern piton_zip_next",
             "extern piton_callback_iterator_new", "extern piton_callback_iterator_next",
-            "extern piton_collection_print", "extern piton_collection_free",
+            "extern piton_collection_print", "extern piton_collection_print_raw", "extern piton_collection_free",
             "extern piton_gc_collect",
             "extern piton_collection_live_count",
             "extern piton_dict_new", "extern piton_dict_put",
             "extern piton_dict_len", "extern piton_dict_get",
-            "extern piton_dict_print", "extern piton_dict_free",
+            "extern piton_dict_print", "extern piton_dict_print_raw", "extern piton_dict_free",
             "extern piton_dict_live_count",
             "extern piton_set_new", "extern piton_set_add",
-            "extern piton_set_len", "extern piton_set_print",
+            "extern piton_set_len", "extern piton_set_print", "extern piton_set_print_raw",
             "extern piton_set_free", "extern piton_set_live_count",
             "extern piton_raise",
             "extern piton_raise_unhandled",
@@ -188,13 +188,14 @@ class Win64NasmEmitter:
             "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_new_with_finalizer", "extern piton_object_set", "extern piton_object_set_tagged", "extern piton_object_get", "extern piton_object_lookup",
 
             "extern piton_object_free", "extern piton_object_live_count",
-            "extern piton_print_float",
-            "extern piton_print_value",
+            "extern piton_print_float", "extern piton_print_float_raw",
+            "extern piton_print_value", "extern piton_print_value_raw",
             "extern piton_bigint_from_str", "extern piton_bigint_from_i64", "extern piton_bigint_free",
             "extern piton_bigint_add", "extern piton_bigint_sub", "extern piton_bigint_mul",
             "extern piton_bigint_neg", "extern piton_bigint_cmp",
             "extern piton_bigint_floor_div", "extern piton_bigint_mod",
-            "extern piton_bigint_print",
+            "extern piton_bigint_print", "extern piton_bigint_print_raw",
+            "extern piton_seq_concat",
             "extern piton_closure_new8", "extern piton_closure_call6",
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
             "extern piton_frame_call",
@@ -217,6 +218,10 @@ class Win64NasmEmitter:
             'fmt_int: db "%lld", 10, 0',
             'fmt_float: db "%.17g", 10, 0',
             'fmt_str: db "%s", 10, 0',
+            'fmt_int_raw: db "%lld", 0',
+            'fmt_str_raw: db "%s", 0',
+            'fmt_nl: db 10, 0',
+            'lit_space: db " ", 0',
             'lit_true: db "True", 0',
             'lit_false: db "False", 0',
             'lit_none: db "None", 0',
@@ -669,6 +674,11 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 return
             if name in _BUILTINS and name not in self.slots:
+                # BUILTIN_MARKER_V1: no code is emitted — the builtin is only
+                # resolved by the call dispatch. Mark the operand so any other
+                # consumer fails closed instead of reading an uninitialized
+                # slot (previously: garbage / SIGSEGV).
+                self.types[result] = "builtin"
                 return
             self.lines.append(f"    mov rax, {self._address(name)}")
             self.lines.append(f"    mov {self._address(result)}, rax")
@@ -682,7 +692,11 @@ class Win64NasmEmitter:
                 if args[1] in self.strkey_dict_temps:
                     self.strkey_dict_temps.add(args[0])
         elif op == "binary":
-            operator, left, right = args
+            operator, left, right = args[0], args[1], args[2]
+            # ZDIV_GUARD_V1: mir attaches the innermost try handler as an
+            # optional 4th argument on '//' and '%' so the raise below routes
+            # to intentar/excepto instead of trapping the process.
+            handler_label = args[3] if len(args) > 3 else None
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
             if "str" in {left_type, right_type}:
@@ -690,6 +704,20 @@ class Win64NasmEmitter:
                     self._emit_string_concat(left, right, result)
                     return
                 raise NativeBuildError(f"native string operator not supported yet: {operator}")
+            if {left_type, right_type} & {"list", "tuple", "dict", "set"}:
+                # SEQ_CONCAT_V1: list+list / tuple+tuple concatenate; any other
+                # collection arithmetic is a CPython TypeError — fail closed at
+                # build time instead of doing raw pointer arithmetic.
+                if operator == "+" and left_type == right_type and left_type in {"list", "tuple"}:
+                    self._load_operand(left, "rcx")
+                    self._load_operand(right, "rdx")
+                    self.lines.append("    call piton_seq_concat")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = left_type
+                    return
+                raise NativeBuildError(
+                    f"native collection binary operator not supported: {operator} on {left_type}/{right_type}"
+                )
             if "bigint" in {left_type, right_type}:
                 self._emit_bigint_binary(operator, left, right, result)
                 return
@@ -724,6 +752,25 @@ class Win64NasmEmitter:
             elif operator == "/":
                 raise NativeBuildError("native true division requires float support")
             elif operator in {"//", "%"}:
+                # ZDIV_GUARD_V1: CPython raises ZeroDivisionError; a bare idiv
+                # traps the process. Raise through the native exception
+                # machinery and route to the enclosing try handler.
+                zero_ok = self._internal_label("zdiv_ok")
+                ztype = self._string("ZeroDivisionError")
+                zmsg = self._string("integer division or modulo by zero")
+                self.lines.append("    test rcx, rcx")
+                self.lines.append(f"    jnz {zero_ok}")
+                self.lines.append(f"    lea rcx, [{ztype}]")
+                self.lines.append(f"    lea rdx, [{zmsg}]")
+                if handler_label:
+                    self.lines.append("    call piton_raise")
+                    self.lines.append("    call piton_catch_flag")
+                    self.lines.append("    test rax, rax")
+                    target = labels.get(handler_label, handler_label)
+                    self.lines.append(f"    jne {target}")
+                else:
+                    self.lines.append("    call piton_raise_unhandled")
+                self.lines.append(f"{zero_ok}:")
                 correction = self._internal_label("floor_done")
                 self.lines.extend([
                     "    mov r8, rcx",
@@ -1599,15 +1646,30 @@ class Win64NasmEmitter:
             function_name = self.aliases.get(function_operand, function_operand)
             values = list(call_args)
             if function_name in {"imprimir", "print"}:
-                if not values:
-                    self.lines.append("    lea rcx, [fmt_str]")
-                    self.lines.append("    xor edx, edx")
-                else:
-                    value = values[0]
+                # PRINT_ARGS_V1: CPython print(a, b, ...) str()s every
+                # positional argument and joins them with single spaces. Every
+                # operand is printed via the *_raw (no newline) variant and one
+                # newline is written after the last argument.
+                for index, value in enumerate(values):
                     value_type = self.types.get(value, "int")
+                    if index:
+                        self.lines.append("    lea rcx, [lit_space]")
+                        self.lines.append("    call printf")
+                    # PRINT_UNPRINTABLE_V1: iterators, generators, closures,
+                    # module markers and builtin markers can never match
+                    # CPython (addresses / uninitialized slots) — fail closed
+                    # instead of printing garbage.
+                    if (
+                        str(value_type).startswith("iterator:")
+                        or value_type in {"generator", "genexpr", "builtin", "closure", "module", "cell"}
+                    ):
+                        raise NativeBuildError(
+                            f"native print of a {value_type} value is not supported "
+                            "(can never match CPython output)"
+                        )
                     # SPECIAL_METHOD_LOOKUP_V1: print(obj) despacha a __str__
                     # cuando existe (MRO); el método devuelve una str.
-                    if value_type.startswith("object:"):
+                    if str(value_type).startswith("object:"):
                         cls_name = value_type.split(":", 1)[1]
                         str_cls = None
                         for candidate in self.mir_module_class_mro.get(cls_name, []):
@@ -1621,30 +1683,28 @@ class Win64NasmEmitter:
                             self.lines.append(f"    call {str_cls}____str__")
                             self.lines.append(f"    mov {self._address(result)}, rax")
                             self._load_operand(result, "rdx")
-                            self.lines.append("    lea rcx, [fmt_str]")
-                            self.lines.extend(["    call printf", "    xor eax, eax"])
-                            if result:
-                                self.lines.append(f"    mov qword {self._address(result)}, 0")
-                            return
+                            self.lines.append("    lea rcx, [fmt_str_raw]")
+                            self.lines.append("    call printf")
+                            continue
+                        raise NativeBuildError(
+                            f"native print of a '{cls_name}' instance without __str__ is not supported "
+                            "(can never match CPython object repr)"
+                        )
                     if value_type in {"list", "tuple", "dict", "set"}:
                         self._load_operand(value, "rcx")
                         if value_type == "dict":
-                            self.lines.append("    call piton_dict_print")
+                            self.lines.append("    call piton_dict_print_raw")
                         elif value_type == "set":
-                            self.lines.append("    call piton_set_print")
+                            self.lines.append("    call piton_set_print_raw")
                         else:
-                            self.lines.append("    call piton_collection_print")
-                        if result:
-                            self.lines.append(f"    mov qword {self._address(result)}, 0")
-                        return
+                            self.lines.append("    call piton_collection_print_raw")
+                        continue
                     if value_type == "bigint":
                         self.lines.extend([
                             f"    mov rcx, {self._address(value)}",
-                            "    call piton_bigint_print",
+                            "    call piton_bigint_print_raw",
                         ])
-                        if result:
-                            self.lines.append(f"    mov qword {self._address(result)}, 0")
-                        return
+                        continue
                     if value_type == "bool":
                         false_label = self._internal_label("bool_false")
                         ready_label = self._internal_label("bool_ready")
@@ -1658,27 +1718,27 @@ class Win64NasmEmitter:
                             "    lea rdx, [lit_false]",
                             f"{ready_label}:",
                         ])
-                        fmt = "fmt_str"
+                        fmt = "fmt_str_raw"
                     elif value_type == "none":
                         self.lines.append("    lea rdx, [lit_none]")
-                        fmt = "fmt_str"
+                        fmt = "fmt_str_raw"
                     elif value_type == "float":
                         self._load_float_operand(value, "xmm0")
-                        self.lines.append("    call piton_print_float")
-                        if result:
-                            self.lines.append(f"    mov qword {self._address(result)}, 0")
-                        return
+                        self.lines.append("    call piton_print_float_raw")
+                        continue
                     elif value_type == "module-pkg":
                         self._load_operand(value, "rcx")
                         self.lines.append("    call piton_print_value")
-                        if result:
-                            self.lines.append(f"    mov qword {self._address(result)}, 0")
-                        return
+                        continue
                     else:
                         self._load_operand(value, "rdx")
-                        fmt = "fmt_str" if value_type == "str" else "fmt_int"
+                        fmt = "fmt_str_raw" if value_type == "str" else "fmt_int_raw"
                     self.lines.append(f"    lea rcx, [{fmt}]")
+                    self.lines.append("    call printf")
+                self.lines.append("    lea rcx, [fmt_nl]")
                 self.lines.extend(["    call printf", "    xor eax, eax"])
+                if result:
+                    self.lines.append(f"    mov qword {self._address(result)}, 0")
             elif function_name in {"longitud", "len"}:
                 if values:
                     v0_type = self.types.get(values[0], "")
@@ -1949,6 +2009,19 @@ class Win64NasmEmitter:
                     call_args_list = list(call_args)
                     self._emit_method_call(class_name, method_name, call_args_list, result)
                 else:
+                    # BUILTIN_MARKER_V1: a builtin name that reached the generic
+                    # call path has no slot value (its load is a marker).
+                    # Calling it here used to jump through an uninitialized
+                    # slot — garbage / crash. Fail closed instead.
+                    if self.types.get(function_operand) == "builtin":
+                        raise NativeBuildError(
+                            f"native call to builtin '{function_name}' is not supported in this position"
+                        )
+                    for value in call_args:
+                        if self.types.get(value) == "builtin":
+                            raise NativeBuildError(
+                                f"native call passes builtin '{self.aliases.get(value, value)}' as an argument (unsupported)"
+                            )
                     values = self._complete_call_args(function_name, list(call_args))
                     argc = len(values)
                     if function_name in self.function_names:

@@ -44,7 +44,7 @@ def optimize_mir(module: MIRModule, level: int = 0) -> MIRModule:
                 if instruction.op == "const" and instruction.result:
                     constants[instruction.result] = instruction.args[0]
                 elif instruction.op == "binary" and instruction.result:
-                    op, left, right = instruction.args
+                    op, left, right = instruction.args[:3]
                     if left in constants and right in constants:
                         operation = {"+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.truediv}.get(op)
                         if operation:

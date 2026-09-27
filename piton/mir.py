@@ -3014,7 +3014,13 @@ class MIRLowerer:
 
     def _binary(self, builder: _Builder, op: str, left: Any, right: Any) -> str:
         result = builder.temp()
-        builder.emit("binary", op, left, right, result=result)
+        if op in {"//", "%"}:
+            # ZDIV_GUARD_V1: mirror the call op — embed the innermost active
+            # try handler so both backends can raise a catchable
+            # ZeroDivisionError instead of trapping the process.
+            builder.emit("binary", op, left, right, _active_handler(builder), result=result)
+        else:
+            builder.emit("binary", op, left, right, result=result)
         return result
 
     def _expand_literal_call(self, node: HIRNode) -> tuple[list[HIRNode], list[Keyword]]:

@@ -233,10 +233,12 @@ static long piton_float_cos(long a){return piton_double_bits(piton_cos(piton_bit
 static long piton_float_log(long a){return piton_double_bits(piton_log(piton_bits_double(a)));}
 static void piton_write_uint(unsigned long v){char b[32];usize i=sizeof(b);do{b[--i]=(char)('0'+v%10);v/=10;}while(v);piton_write(1,b+i,sizeof(b)-i);}
 static void piton_write_uint_big(double d){unsigned long u;double t=d;int i,n=0,be;unsigned long frac,m;int e;unsigned int w[32];unsigned int c;unsigned long cur,rem;int nz;char buf[400];__builtin_memcpy(&u,&t,8);frac=u&0xFFFFFFFFFFFFFULL;be=(int)((u>>52)&0x7FF);m=be?frac|0x10000000000000UL:frac;e=be?be-1075:-1074;for(i=0;i<32;++i)w[i]=0;w[0]=(unsigned int)m;w[1]=(unsigned int)(m>>32);while(e>0){c=0;for(i=0;i<32;++i){cur=((unsigned long)w[i]<<1)|c;w[i]=(unsigned int)cur;c=(unsigned int)(cur>>32);}--e;}for(;;){rem=0;nz=0;for(i=31;i>=0;--i){cur=(rem<<32)|w[i];w[i]=(unsigned int)(cur/10);rem=cur%10;if(w[i])nz=1;}buf[n++]=(char)('0'+(char)rem);if(!nz)break;}while(n>0){--n;piton_write(1,buf+n,1);}}
-static void piton_print_float_bits(long bits){char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)bits);piton_write(1,r,(usize)n);piton_write(1,"\n",1);}
+static void piton_print_float_bits_raw(long bits){char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)bits);piton_write(1,r,(usize)n);}
+static void piton_print_float_bits(long bits){piton_print_float_bits_raw(bits);piton_write(1,"\n",1);}
 static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;return a.bits==b.bits;}
 static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
 static void piton_seq_put(PitonSeq*s,long i,PitonSlot v){if(i>=0&&i<s->length)s->items[i]=v;}
+static long piton_seq_concat(PitonSeq*a,PitonSeq*b){if(!a||!b||a->kind!=b->kind||((a->kind!=PK_LIST)&&(a->kind!=PK_TUPLE))){piton_write(2,"TypeError: cannot concatenate\n",30);piton_exit(1);}PitonSeq*s=piton_seq_new((int)a->kind,a->length+b->length);for(long i=0;i<a->length;++i)s->items[i]=a->items[i];for(long i=0;i<b->length;++i)s->items[a->length+i]=b->items[i];return(long)s;}
 static void piton_seq_append(PitonSeq*s,PitonSlot v){if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}s->items[s->length++]=v;}
 static PitonSlot piton_seq_get(PitonSeq*s,long i){if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError\n",11);piton_exit(1);}return s->items[i];}
 static long piton_iterator_new(PitonSeq*s){if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->index=0;return(long)i;}
@@ -333,7 +335,7 @@ static void piton_print_slot(PitonSlot v);
 static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}if(s->kind==PK_TUPLE&&s->length==1)piton_write(1,",",1);piton_write(1,s->kind==PK_TUPLE?")":"]",1);}
 static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(d->items[i].key);piton_write(1,": ",2);piton_print_slot(d->items[i].value);}piton_write(1,"}",1);}
 static void piton_print_set(PitonSet*s){piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}piton_write(1,"}",1);}
-static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;default:piton_write(1,"<object>",8);}}
+static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,"'",1);piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(1,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;default:piton_write(1,"<object>",8);}}
 static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i)r+=d->items[i].key.bits;return r;}
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
@@ -385,7 +387,8 @@ static void bi_sub_mag(PitonBigInt*r,PitonBigInt*a,PitonBigInt*b){long max_c=a->
 static void*bi_from_u64(unsigned long v){PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=0;r->count=0;r->capacity=0;r->limbs=0;if(v){bi_ensure(r,1);r->limbs[0]=v;r->count=1;}return r;}
 static void*piton_bigint_from_i64(long v){if(v==0)return bi_from_u64(0);int neg=v<0?-1:1;unsigned long av=(unsigned long)(v<0?-v:v);void*r=bi_from_u64(av);((PitonBigInt*)r)->sign=neg;return r;}
 static void*piton_bigint_from_str(const char*s){PitonBigInt*a=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));a->sign=1;a->count=0;a->capacity=0;a->limbs=0;while(*s==' '||*s=='\t')++s;if(*s=='-'){a->sign=-1;++s;}else if(*s=='+'){++s;}while(*s>='0'&&*s<='9'){int digit=*s++-'0';u128 carry=0;for(long i=0;i<a->count;++i){carry+=(u128)a->limbs[i]*10;a->limbs[i]=(unsigned long)carry;carry>>=64;}if(carry){bi_ensure(a,a->count+1);a->limbs[a->count++]=(unsigned long)carry;}carry=digit;for(long i=0;i<a->count&&carry;++i){carry+=a->limbs[i];a->limbs[i]=(unsigned long)carry;carry>>=64;}if(carry){bi_ensure(a,a->count+1);a->limbs[a->count++]=(unsigned long)carry;}}bi_trim(a);return a;}
-static void piton_bigint_print(void*a){PitonBigInt*x=(PitonBigInt*)a;if(!x||(!x->sign&&x->count==1&&!x->limbs[0])){piton_write(1,"0\n",2);return;}char buf[64];int pos=sizeof(buf);buf[--pos]=0;buf[--pos]='\n';unsigned long tmp[64];int tc=0;for(long i=0;i<x->count;++i)tmp[i]=x->limbs[i];tc=(int)x->count;while(tc>0){unsigned long carry=0;for(int i=tc-1;i>=0;--i){unsigned long cur=(carry<<32)|(tmp[i]>>32);unsigned long q1=cur/10;unsigned long r1=cur-q1*10;unsigned long mid=(r1<<32)|(tmp[i]&0xFFFFFFFF);unsigned long q2=mid/10;unsigned long r2=mid-q2*10;tmp[i]=(q1<<32)|q2;carry=r2;}buf[--pos]=(char)('0'+carry);while(tc>0&&tmp[tc-1]==0)--tc;}if(x->sign<0)buf[--pos]='-';piton_write(1,buf+pos,piton_strlen(buf+pos));}
+static void piton_bigint_print_raw(void*a){PitonBigInt*x=(PitonBigInt*)a;if(!x||(!x->sign&&x->count==1&&!x->limbs[0])){piton_write(1,"0",1);return;}char buf[64];int pos=sizeof(buf);buf[--pos]=0;unsigned long tmp[64];int tc=0;for(long i=0;i<x->count;++i)tmp[i]=x->limbs[i];tc=(int)x->count;while(tc>0){unsigned long carry=0;for(int i=tc-1;i>=0;--i){unsigned long cur=(carry<<32)|(tmp[i]>>32);unsigned long q1=cur/10;unsigned long r1=cur-q1*10;unsigned long mid=(r1<<32)|(tmp[i]&0xFFFFFFFF);unsigned long q2=mid/10;unsigned long r2=mid-q2*10;tmp[i]=(q1<<32)|q2;carry=r2;}buf[--pos]=(char)('0'+carry);while(tc>0&&tmp[tc-1]==0)--tc;}if(x->sign<0)buf[--pos]='-';piton_write(1,buf+pos,piton_strlen(buf+pos));}
+static void piton_bigint_print(void*a){piton_bigint_print_raw(a);piton_write(1,"\n",1);}
 static void*piton_bigint_add(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=0;r->count=0;r->capacity=0;r->limbs=0;if(x->sign==y->sign){r->sign=x->sign;bi_add_mag(r,x,y);}else{int c=bi_cmp_mag(x,y);if(c==0)return r;if(c>0){r->sign=x->sign;bi_sub_mag(r,x,y);}else{r->sign=y->sign;bi_sub_mag(r,y,x);}}bi_trim(r);return r;}
 static void*piton_bigint_negate(void*a){PitonBigInt*x=(PitonBigInt*)a;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=-x->sign;r->count=x->count;r->capacity=x->capacity;r->limbs=x->limbs;return r;}
 static void*piton_bigint_sub(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*negy=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));negy->sign=-y->sign;negy->count=y->count;negy->capacity=y->capacity;negy->limbs=y->limbs;return piton_bigint_add(x,negy);}
@@ -425,6 +428,7 @@ class LinuxCEmitter:
         self.function_names: set[str] = set()
         self.generator_layouts: dict[str, dict[str, int]] = {}
         self.function_params: dict[str, list[str]] = {}
+        self.function_return_types: dict[str, str] = {}
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
         self._gen_counter = 0
@@ -439,6 +443,7 @@ class LinuxCEmitter:
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self.function_params = {function.name: list(function.params) for function in module.functions}
         self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
+        self.function_return_types = self._infer_return_types(module)
         self.generator_layouts = {}
         for function in module.functions:
             if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
@@ -464,10 +469,12 @@ class LinuxCEmitter:
             "__attribute__((noreturn)) static void piton_exit(long code){__asm__ volatile(\"syscall\"::\"a\"(60L),\"D\"(code):\"rcx\",\"r11\",\"memory\");__builtin_unreachable();}",
             "static usize piton_strlen(const char*s){usize n=0;while(s[n])++n;return n;}",
             "static int piton_strcmp(const char*a,const char*b){while(*a&&*a==*b){++a;++b;}return (unsigned char)*a-(unsigned char)*b;}",
-            "static void piton_print_str(const char*s){piton_write(1,s,piton_strlen(s));piton_write(1,\"\\n\",1);}",
+            "static void piton_print_str_raw(const char*s){piton_write(1,s,piton_strlen(s));}",
+            "static void piton_print_str(const char*s){piton_print_str_raw(s);piton_write(1,\"\\n\",1);}",
             "static void piton_print_dynamic(long bits){if(!bits){piton_write(1,\"None\",4);}else{piton_write(1,(const char*)bits,piton_strlen((const char*)bits));}}",
             "static void piton_write_int(i64 number){char b[32];usize i=sizeof(b);unsigned long value;if(number<0){piton_write(1,\"-\",1);value=0-(unsigned long)number;}else value=(unsigned long)number;do{b[--i]=(char)(\'0\'+value%10);value/=10;}while(value);piton_write(1,b+i,sizeof(b)-i);}",
-            "static void piton_print_int(i64 number){piton_write_int(number);piton_write(1,\"\\n\",1);}",
+            "static void piton_print_int_raw(i64 number){piton_write_int(number);}",
+            "static void piton_print_int(i64 number){piton_print_int_raw(number);piton_write(1,\"\\n\",1);}",
             "static i64 piton_floor_div(i64 a,i64 b){i64 q=a/b,r=a%b;if(r&&((r<0)!=(b<0)))--q;return q;}",
             "static i64 piton_mod(i64 a,i64 b){i64 r=a%b;if(r&&((r<0)!=(b<0)))r+=b;return r;}",
             "static char piton_concat_buf[65536];static char*piton_concat_ptr=0;",
@@ -740,7 +747,186 @@ class LinuxCEmitter:
             if awaited_type == "gather":
                 # TASK_SCHEDULER_V1: awaiting a gather yields a real list.
                 awaited_type = "list"
+            if str(awaited_type).startswith("iterator:") or awaited_type in {"generator", "genexpr"}:
+                # RETURNTYPE_V1 regression guard: the awaited operand is a
+                # coroutine/generator OBJECT; `esperar` yields its return
+                # value, whose static type is not tracked here. Fall back to
+                # the historical default instead of propagating the
+                # iterator marker into the print lowering (which now fails
+                # closed on such markers).
+                awaited_type = "int"
             types[result] = awaited_type
+
+    _UNKNOWN = "\x00?"
+
+    def _infer_return_types(self, module: MIRModule) -> dict[str, str]:
+        """RETURNTYPE_V1: narrow, sound return-type inference over MIR.
+
+        Only statically unambiguous origins count: constant literals,
+        build_collection kinds, object_new classes, and direct calls to known
+        functions (recursive, cycle-safe). Variables accumulate the union of
+        every store origin (fixpoint). A function is typed only when EVERY
+        return resolves to the SAME type; anything ambiguous stays ``"int"``,
+        the historical default. Functions that only return ``Nada`` (or never
+        return) infer ``"none"`` — that fixes ``imprimir(f())`` printing ``0``
+        instead of ``None``. Generators/coroutines are marked
+        ``"iterator:generator"``: their printed form can never match CPython,
+        so the print lowering fails closed on that marker instead of printing
+        a raw pointer as an int.
+        """
+        by_name = {function.name: function for function in module.functions}
+        memo: dict[str, str | None] = {}
+        resolving: set[str] = set()
+
+        def literal_type(value: Any) -> str:
+            if value is None:
+                return "none"
+            if isinstance(value, bool):
+                return "bool"
+            if isinstance(value, str):
+                return "str"
+            if isinstance(value, float):
+                return "float"
+            if isinstance(value, int):
+                return "bigint" if abs(value) > 9223372036854775807 else "int"
+            return self._UNKNOWN
+
+        def infer(name: str) -> str | None:
+            if name in memo:
+                return memo[name]
+            if name in resolving:
+                return None
+            function = by_name.get(name)
+            if function is None:
+                return None
+            if (
+                getattr(function, "is_generator", False)
+                or getattr(function, "is_coroutine", False)
+                or getattr(function, "is_async_generator", False)
+            ):
+                memo[name] = "iterator:generator"
+                return memo[name]
+            resolving.add(name)
+            try:
+                var_sets: dict[str, set[str]] = {}
+                origins: dict[str, tuple[str, Any]] = {}
+                load_src: dict[str, str] = {}
+                returns: list[Any] = []
+                seeded: set[str] = set()
+
+                def note_var(key: str, kind: str | None) -> bool:
+                    kinds = {kind} if kind else {self._UNKNOWN}
+                    if kinds <= var_sets.get(key, set()):
+                        return False
+                    var_sets.setdefault(key, set()).update(kinds)
+                    return True
+
+                def single(key: str) -> str | None:
+                    kinds = var_sets.get(key, set())
+                    if len(kinds) == 1 and self._UNKNOWN not in kinds:
+                        return next(iter(kinds))
+                    return None
+
+                changed = True
+                while changed:
+                    changed = False
+                    for block in function.blocks:
+                        for instruction in block.instructions:
+                            op, iargs = instruction.op, instruction.args
+                            result = instruction.result
+                            if op == "const" and result and iargs:
+                                origins[result] = ("literal", iargs[0])
+                            elif op == "build_collection" and result:
+                                origins[result] = ("kind", iargs[0])
+                            elif op == "object_new" and result:
+                                origins[result] = ("object", iargs[0])
+                            elif op == "load" and result and iargs:
+                                load_src[result] = iargs[0]
+                                origins[result] = ("var", iargs[0])
+                            elif op == "call" and result:
+                                callee = load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
+                                if isinstance(callee, str) and callee in by_name and callee not in function.params:
+                                    origins[result] = ("call", callee)
+                                else:
+                                    origins[result] = ("opaque", None)
+                            elif op == "store" and result is None and iargs:
+                                target, source = iargs[0], iargs[1]
+                                if isinstance(source, str) and source.startswith("%"):
+                                    origin = origins.get(source)
+                                    if origin is None:
+                                        changed = note_var(target, None) or changed
+                                    elif origin[0] == "literal":
+                                        changed = note_var(target, literal_type(origin[1])) or changed
+                                    elif origin[0] in {"kind", "object"}:
+                                        changed = note_var(target, origin[1]) or changed
+                                    elif origin[0] == "var":
+                                        kinds = var_sets.get(origin[1], set())
+                                        if not kinds:
+                                            changed = note_var(target, None) or changed
+                                        else:
+                                            for kind in kinds:
+                                                changed = note_var(target, None if kind == self._UNKNOWN else kind) or changed
+                                    elif origin[0] == "call":
+                                        changed = note_var(target, infer(origin[1])) or changed
+                                    else:
+                                        changed = note_var(target, None) or changed
+                                elif isinstance(source, str):
+                                    # plain name (variable reference, never a raw literal here)
+                                    changed = note_var(target, single(source)) or changed
+                                else:
+                                    changed = note_var(target, literal_type(source)) or changed
+                            elif op == "return":
+                                returns.append(iargs[0] if iargs else None)
+                    if function.self_class and function.params and function.params[0] not in seeded:
+                        seeded.add(function.params[0])
+                        changed = note_var(function.params[0], f"object:{function.self_class}") or changed
+                    if function.vararg and function.vararg not in seeded:
+                        seeded.add(function.vararg)
+                        changed = note_var(function.vararg, "tuple") or changed
+                    if function.kwarg and function.kwarg not in seeded:
+                        seeded.add(function.kwarg)
+                        changed = note_var(function.kwarg, "dict") or changed
+
+                def operand_type(operand: Any) -> str | None:
+                    if operand is None or operand == "None":
+                        return "none"
+                    if isinstance(operand, str) and not operand.startswith("%"):
+                        return single(operand)
+                    if isinstance(operand, str):
+                        origin = origins.get(operand)
+                        if origin is None:
+                            return None
+                        if origin[0] == "literal":
+                            return literal_type(origin[1])
+                        if origin[0] in {"kind", "object"}:
+                            return origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
+                        if origin[0] == "var":
+                            return single(origin[1])
+                        if origin[0] == "call":
+                            return infer(origin[1])
+                        return None
+                    return literal_type(operand)
+
+                if not returns:
+                    inferred: str | None = "none"
+                else:
+                    candidates = {operand_type(operand) for operand in returns}
+                    if len(candidates) == 1:
+                        inferred = next(iter(candidates))
+                    else:
+                        inferred = None
+                if inferred is None or inferred == self._UNKNOWN:
+                    inferred = None
+            finally:
+                resolving.discard(name)
+            memo[name] = inferred
+            return inferred
+
+        resolved: dict[str, str] = {}
+        for function in module.functions:
+            inferred = infer(function.name)
+            resolved[function.name] = inferred if inferred else "int"
+        return resolved
 
     def _emit_instruction(
         self, instruction: MIRInstruction, function: MIRFunction,
@@ -852,6 +1038,11 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
             if source in _BUILTINS and source not in function.params:
+                # BUILTIN_MARKER_V1: this load emits NO C code — the builtin is
+                # only resolved by the call dispatch. Mark the operand so any
+                # other consumer fails closed instead of reading an
+                # uninitialized C variable (previously: SIGSEGV / garbage).
+                types[result] = "builtin"
                 return out
             # Module owners are lowered before their specialized attribute
             # call is recognized. They are only a marker here, not C values.
@@ -866,6 +1057,12 @@ class LinuxCEmitter:
                 return out
             out.append(f"    {_name(result)}={_name(source)};")
         elif op == "store":
+            if types.get(args[1]) == "builtin":
+                # BUILTIN_MARKER_V1: storing a builtin marker would copy an
+                # uninitialized C variable — fail closed.
+                raise NativeBuildError(
+                    f"Linux native store of builtin '{aliases.get(args[1], args[1])}' as a value is not supported"
+                )
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
         elif op == "unary":
@@ -890,7 +1087,11 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}={operator}{self._value(args[1])};")
             types[result] = "bool" if operator == "!" else "int"
         elif op == "binary":
-            operator, left, right = args
+            operator, left, right = args[0], args[1], args[2]
+            # ZDIV_GUARD_V1: mir attaches the innermost try handler as an
+            # optional 4th argument on '//' and '%' so the raise below is
+            # catchable by intentar/excepto.
+            handler_label = args[3] if len(args) > 3 else None
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
             if "str" in {left_type, right_type}:
@@ -899,6 +1100,16 @@ class LinuxCEmitter:
                     types[result] = "str"
                     return out
                 raise NativeBuildError(f"Linux string binary operator not supported: {operator}")
+            if {left_type, right_type} & {"list", "tuple", "dict", "set"}:
+                # SEQ_CONCAT_V1: list+list / tuple+tuple concatenate; any other
+                # collection arithmetic is a CPython TypeError — fail closed at
+                # build time instead of doing C pointer arithmetic (previously
+                # printed a raw pointer as an int).
+                if operator == "+" and left_type == right_type and left_type in {"list", "tuple"}:
+                    out.append(f"    {_name(result)}=piton_seq_concat((PitonSeq*){self._value(left)},(PitonSeq*){self._value(right)});")
+                    types[result] = left_type
+                    return out
+                raise NativeBuildError(f"Linux collection binary operator not supported: {operator} on {left_type}/{right_type}")
             if "float" in {left_type, right_type}:
                 if operator not in {"+", "-", "*"}:
                     raise NativeBuildError(f"Linux float binary operator not supported: {operator}")
@@ -926,11 +1137,24 @@ class LinuxCEmitter:
                 types[result] = "bigint"
                 bigint_slots.append(result)
                 return out
-            if operator == "//":
-                expression = f"piton_floor_div({self._value(left)},{self._value(right)})"
-            elif operator == "%":
-                expression = f"piton_mod({self._value(left)},{self._value(right)})"
-            elif operator in {"+", "-", "*", "&", "|", "^", "<<", ">>"}:
+            if operator in {"//", "%"}:
+                # ZDIV_GUARD_V1: CPython raises ZeroDivisionError; the bare C
+                # division used to trap the process (SIGFPE/SIGILL). Raise the
+                # native exception and route to the enclosing try handler.
+                helper = "piton_floor_div" if operator == "//" else "piton_mod"
+                out.append(
+                    f'    if({self._value(right)}==0){{piton_raise_set("ZeroDivisionError","integer division or modulo by zero");}}'
+                )
+                out.append(f"    else{{{_name(result)}={helper}({self._value(left)},{self._value(right)});}}")
+                out.append("    if(piton_exc_flag){")
+                if handler_label:
+                    out.append(f"        goto {_name(function.name + '_' + handler_label)};")
+                else:
+                    out.append("        piton_report_unhandled();piton_exit(1);")
+                out.append("    }")
+                types[result] = "int"
+                return out
+            if operator in {"+", "-", "*", "&", "|", "^", "<<", ">>"}:
                 expression = f"({self._value(left)} {operator} {self._value(right)})"
             else:
                 raise NativeBuildError(f"Linux binary operator not supported: {operator}")
@@ -988,41 +1212,62 @@ class LinuxCEmitter:
             values = list(args[1])
             call_handler = args[2] if len(args) > 2 else None
             if function_name in {"imprimir", "print"}:
-                if not values:
+                if values:
+                    # PRINT_ARGS_V1: CPython print(a, b, ...) str()s every
+                    # positional argument and joins them with single spaces.
+                    # Each backend printer is the *_raw (no newline) variant;
+                    # one newline is written after the last argument.
+                    for index, value in enumerate(values):
+                        value_type = types.get(value, "int")
+                        if index:
+                            out.append('    piton_write(1," ",1);')
+                        # PRINT_UNPRINTABLE_V1: iterators, generators, closures,
+                        # module markers and builtin markers can never match
+                        # CPython (addresses / uninitialized C values) — fail
+                        # closed instead of printing garbage.
+                        if (
+                            str(value_type).startswith("iterator:")
+                            or value_type in {"generator", "genexpr", "builtin", "closure", "module", "cell"}
+                        ):
+                            raise NativeBuildError(
+                                f"Linux native print of a {value_type} value is not supported "
+                                "(can never match CPython output)"
+                            )
+                        if str(value_type).startswith("object:"):
+                            cls_name = value_type.split(":", 1)[1]
+                            str_cls = None
+                            for candidate in self.class_mro.get(cls_name, []):
+                                if "__str__" in self.classes.get(candidate, set()):
+                                    str_cls = candidate
+                                    break
+                            if str_cls is None and "__str__" in self.classes.get(cls_name, set()):
+                                str_cls = cls_name
+                            if str_cls is not None:
+                                out.append(f'    piton_print_str_raw((const char*){_name(str_cls+"__"+"__str__")}({self._value(value)}));')
+                                continue
+                            raise NativeBuildError(
+                                f"Linux native print of a '{cls_name}' instance without __str__ is not supported "
+                                "(can never match CPython object repr)"
+                            )
+                        if value_type == "str":
+                            out.append(f'    piton_print_str_raw((char*){self._value(value)});')
+                        elif value_type == "bool":
+                            out.append(f'    piton_print_str_raw({self._value(value)}?"True":"False");')
+                        elif value_type == "none":
+                            out.append('    piton_print_str_raw("None");')
+                        elif value_type == "bigint":
+                            out.append(f'    piton_bigint_print_raw((void*){_name(value)});')
+                        elif value_type == "float":
+                            out.append(f'    piton_print_float_bits_raw({self._value(value)});')
+                        elif value_type == "module-pkg":
+                            out.append(f'    piton_print_dynamic({self._value(value)});')
+                        elif value_type in {"list", "tuple", "dict", "set"}:
+                            out.append(f'    piton_print_slot({self._slot(value, types)});')
+                        else:
+                            out.append(f'    piton_print_int_raw((long){self._value(value)});')
                     out.append('    piton_write(1,"\\n",1);')
                 else:
-                    v0_type = types.get(values[0], "int")
-                    if v0_type.startswith("object:"):
-                        cls_name = v0_type.split(":", 1)[1]
-                        str_cls = None
-                        for candidate in self.class_mro.get(cls_name, []):
-                            if "__str__" in self.classes.get(candidate, set()):
-                                str_cls = candidate
-                                break
-                        if str_cls is None and "__str__" in self.classes.get(cls_name, set()):
-                            str_cls = cls_name
-                        if str_cls is not None:
-                            out.append(f'    piton_print_str((const char*){_name(str_cls+"__"+"__str__")}({self._value(values[0])}));')
-                            out.append(f"    {_name(result)}=0;")
-                            return out
-                    if types.get(values[0]) == "str":
-                        out.append(f'    piton_print_str((char*){self._value(values[0])});')
-                    elif types.get(values[0]) == "bool":
-                        out.append(f'    piton_print_str({self._value(values[0])}?"True":"False");')
-                    elif types.get(values[0]) == "none":
-                        out.append('    piton_print_str("None");')
-                    elif types.get(values[0]) == "bigint":
-                        out.append(f'    piton_bigint_print((void*){_name(values[0])});')
-                    elif types.get(values[0]) == "float":
-                        out.append(f'    piton_print_float_bits({self._value(values[0])});')
-                    elif types.get(values[0]) == "module-pkg":
-                        out.append(f'    piton_print_dynamic({self._value(values[0])});')
-                        out.append('    piton_write(1,"\\n",1);')
-                    elif types.get(values[0]) in {"list", "tuple", "dict", "set"}:
-                        out.append(f'    piton_print_slot({self._slot(values[0], types)});')
-                        out.append('    piton_write(1,"\\n",1);')
-                    else:
-                        out.append(f'    piton_print_int((long){self._value(values[0])});')
+                    out.append('    piton_write(1,"\\n",1);')
                 out.append(f"    {_name(result)}=0;")
             elif function_name in {"longitud", "len"}:
                 if values:
@@ -1225,10 +1470,27 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(values[0])});")
                 types[result] = "list"
             else:
+                # BUILTIN_MARKER_V1: a builtin name that reached the generic
+                # call path has no C value (its load is a marker). Calling it
+                # here used to jump through an uninitialized variable — SIGSEGV.
+                callee_name = aliases.get(args[0], args[0])
+                if types.get(args[0]) == "builtin":
+                    raise NativeBuildError(
+                        f"Linux native call to builtin '{callee_name}' is not supported in this position"
+                    )
+                for value in values:
+                    if types.get(value) == "builtin":
+                        raise NativeBuildError(
+                            f"Linux native call passes builtin '{aliases.get(value, value)}' as an argument (unsupported)"
+                        )
                 values = self._complete_call_args(function_name, list(values))
                 if function_name in self.function_names:
                     encoded_values = ",".join(self._value(value) for value in values)
                     out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
+                    # RETURNTYPE_V1: statically-known user functions propagate
+                    # their inferred return type so downstream consumers print
+                    # collections/str/float correctly instead of a raw pointer.
+                    types[result] = self.function_return_types.get(function_name, "int")
                 else:
                     # CALLABLE_PROTOCOL_V1: calling a statically-typed class
                     # instance routes to <Class>__call__ if defined.
@@ -1259,7 +1521,7 @@ class LinuxCEmitter:
                             f"    {_name(result)}=piton_closure_call_frame({self._value(args[0])},{argc},_frame_args);"
                         )
                         out.append("    }")
-                types[result] = "int"
+                    types[result] = "int"
         elif op == "return":
             if getattr(function, "is_coroutine", False):
                 if args[0] is not None and args[0] != "None":
@@ -1275,6 +1537,12 @@ class LinuxCEmitter:
                 out.append("    piton_gen->finished=1;")
                 out.append("    return 0;")
                 return out
+            if isinstance(args[0], str) and types.get(args[0]) == "builtin":
+                # BUILTIN_MARKER_V1: returning a builtin marker would hand the
+                # caller an uninitialized C value.
+                raise NativeBuildError(
+                    f"Linux native return of builtin '{aliases.get(args[0], args[0])}' is not supported"
+                )
             out.append(f"    return {self._value(args[0])};")
         elif op == "object_new":
             cls_name = args[0]
@@ -1468,8 +1736,10 @@ class LinuxCEmitter:
                 args_c = ",".join(self._value(v) for v in all_values)
                 out.append(f'    {{long _method_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_values)},_method_args);}}')
             else:
-                out.append(f'    {_name(result)}={_name(target)}({values});')
-            types[result] = "int"
+                out.append(f"    {_name(result)}={_name(target)}({values});")
+            # RETURNTYPE_V1: method results propagate the inferred return type
+            # (covers `devolver self` -> __str__ dispatch on print, etc).
+            types[result] = self.function_return_types.get(target, "int")
         elif op == "raise_chain":
             exc_type, payload, cause_type, cause_payload, handler_label = args
             message = f"(const char*){self._value(payload)}" if payload is not None else '""'
