@@ -474,6 +474,14 @@ class Win64NasmEmitter:
                 # TASK_SCHEDULER_V1: awaiting a task yields the task's result
                 # value (an int in the native subset) — never the task itself.
                 awaited_type = "int"
+            elif str(result_type).startswith("iterator:") or result_type in {"generator", "genexpr"}:
+                # PARITY_P0_V1 regression guard (mirrors the Linux backend):
+                # the awaited operand is a coroutine/generator OBJECT;
+                # `esperar` yields its return value, whose static type is not
+                # tracked here. Fall back to the historical default instead of
+                # propagating the iterator marker into the print lowering,
+                # which now fails closed on such markers.
+                awaited_type = "int"
             else:
                 awaited_type = result_type
             self.lines.append(f"    mov {self._address(result)}, rax")
@@ -684,7 +692,14 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
             if name in self.strkey_dict_temps:
                 self.strkey_dict_temps.add(result)
+
         elif op == "store":
+            if isinstance(args[1], str) and self.types.get(args[1]) == "builtin":
+                # BUILTIN_MARKER_V1: storing a builtin marker would copy an
+                # uninitialized slot — fail closed.
+                raise NativeBuildError(
+                    f"native store of builtin '{self.aliases.get(args[1], args[1])}' as a value is not supported"
+                )
             self.lines.append(f"    mov rax, {self._address(args[1]) if isinstance(args[1], str) and args[1].startswith('%') else self._immediate(args[1])}")
             self.lines.append(f"    mov {self._address(args[0])}, rax")
             if isinstance(args[1], str):
@@ -1728,7 +1743,7 @@ class Win64NasmEmitter:
                         continue
                     elif value_type == "module-pkg":
                         self._load_operand(value, "rcx")
-                        self.lines.append("    call piton_print_value")
+                        self.lines.append("    call piton_print_value_raw")
                         continue
                     else:
                         self._load_operand(value, "rdx")
@@ -2333,6 +2348,12 @@ class Win64NasmEmitter:
                 ])
                 return
             is_gen_return = (args[0] is None or args[0] == "None") and "@gen_result" in self.types
+            if isinstance(args[0], str) and self.types.get(args[0]) == "builtin":
+                # BUILTIN_MARKER_V1: returning a builtin marker would hand the
+                # caller an uninitialized slot.
+                raise NativeBuildError(
+                    f"native return of builtin '{self.aliases.get(args[0], args[0])}' is not supported"
+                )
             if is_gen_return:
                 self.lines.append(f"    mov rax, {self._address('@gen_result')}")
                 self.lines.append(f"    mov {self._address('@scratch0')}, rax")
