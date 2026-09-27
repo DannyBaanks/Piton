@@ -291,15 +291,23 @@ class Parser:
         tok = self._advance()
         name = self._consume(TokenType.NAME, "nombre de clase").value
         bases = []
+        keywords = []
         if self._match(TokenType.LPAREN):
             while not self._check(TokenType.RPAREN):
-                bases.append(self._parse_expression(0))
+                # Parse keyword arguments (e.g., metaclass=Meta)
+                if self._check(TokenType.NAME) and self._peek_n(1).type == TokenType.EQUAL:
+                    kw_name = self._advance().value
+                    self._advance()  # consume '='
+                    kw_value = self._parse_expression(0)
+                    keywords.append(Keyword(arg=kw_name, value=kw_value))
+                else:
+                    bases.append(self._parse_expression(0))
                 if not self._match(TokenType.COMMA):
                     break
             self._consume(TokenType.RPAREN)
         self._consume(TokenType.COLON)
         body = self._parse_block()
-        return ClassDef(name=name, bases=bases, body=body, decorators=decorators).set_pos(tok)
+        return ClassDef(name=name, bases=bases, keywords=keywords, body=body, decorators=decorators).set_pos(tok)
 
     def _parse_return(self) -> ReturnStmt:
         tok = self._advance()

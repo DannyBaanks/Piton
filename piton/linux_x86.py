@@ -448,7 +448,7 @@ class LinuxCEmitter:
         for function in module.functions:
             lines.extend(self._emit_function(function))
         if self._has_rich_runtime:
-            lines.append("__attribute__((used)) static int __argc=0;__attribute__((used)) static char**__argv=0;")
+            lines.append("__attribute__((used)) int __argc=0;__attribute__((used)) char**__argv=0;")
             lines.append("static long piton_argv_new(void){PitonSeq*s=piton_seq_new(PK_LIST,__argc);for(int i=0;i<__argc;++i){piton_seq_put(s,i,(PitonSlot){(long)__argv[i],PK_STR});}return(long)s;}")
             lines.append('__attribute__((naked)) void _start(void){__asm__ volatile("mov (%rsp),%rax;mov %rax,__argc(%rip);lea 8(%rsp),%rax;mov %rax,__argv(%rip);xor %rbp,%rbp;call piton_main;mov %rax,%rdi;mov $60,%eax;syscall");}')
         return "\n".join(lines) + "\n"

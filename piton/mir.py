@@ -185,6 +185,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "gen_retval": "READ",
     "agen_emit": "OPAQUE", "agen_next": "OPAQUE", "agen_done": "OPAQUE",
     "event_run": "OPAQUE", "coro_run": "OPAQUE",
+    "sys_exit": "OPAQUE",
 }
 
 

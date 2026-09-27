@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class NativeSubsetEvidenceTests(unittest.TestCase):
+    @unittest.skipIf(not sys.platform.startswith("win32"), "PE inspection requires Windows (NASM + MinGW)")
     def test_pe_inspection_proves_x86_64_without_python_import(self) -> None:
         with tempfile.TemporaryDirectory(prefix="piton-evidence-") as directory:
             executable = compile_native('imprimir("evidence")\n', Path(directory) / "program.exe")
@@ -26,6 +27,7 @@ class NativeSubsetEvidenceTests(unittest.TestCase):
             self.assertFalse(inspection["python_marker_in_image"])
             self.assertTrue(inspection["imports"])
 
+    @unittest.skipIf(not sys.platform.startswith("win32"), "PE backend requires Windows (NASM + MinGW)")
     def test_cli_writes_passing_native_subset_receipt(self) -> None:
         with tempfile.TemporaryDirectory(prefix="piton-evidence-") as directory:
             root = Path(directory)
