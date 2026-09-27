@@ -11,6 +11,19 @@ from piton.hir import HIRKind, HIRNode, Keyword, With
 
 _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
 
+
+def _os_name_const() -> str:
+    """OS_TIER1_V1: value of ``os.name`` for the platform the native binary targets.
+
+    Native binaries are built and executed on the host (``native_differential``
+    picks the Linux ELF or the Windows PE from ``platform.system()``), so the host
+    platform is also the target platform here.
+    """
+    import sys
+
+    return "nt" if sys.platform == "win32" else "posix"
+
+
 # TASK_SCHEDULER_V1 magic values, mirrored with native_runtime.c / linux_x86.py.
 PITON_TASK_MAGIC = 0x5049544E54414B4B
 PITON_GATHER_MAGIC = 0x5049544E47415448
@@ -186,6 +199,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "agen_emit": "OPAQUE", "agen_next": "OPAQUE", "agen_done": "OPAQUE",
     "event_run": "OPAQUE", "coro_run": "OPAQUE",
     "sys_exit": "OPAQUE",
+    "sys_argv": "OPAQUE",
 }
 
 
@@ -426,7 +440,7 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind == HIRKind.IMPORT:
                     for alias in node.names:
-                        if alias.name in {"asyncio", "math", "sys"}:
+                        if alias.name in {"asyncio", "math", "sys", "os"}:
                             self.module_aliases[alias.asname or alias.name] = alias.name
                             continue
                         if "." in alias.name:
@@ -457,11 +471,16 @@ class MIRLowerer:
                                 self.from_import_aliases[item.name] = f"{prefix}{item.name}"
                         continue
                     if mod_name:
-                        if mod_name not in imported_modules and mod_name not in {"asyncio", "math", "sys"}:
+                        # OS_TIER1_V1: `from os import name` resolves to the builtin
+                        # os.name attribute. A supplied real `os` module still wins;
+                        # every other absent module keeps failing closed.
+                        if mod_name not in imported_modules and mod_name not in {"asyncio", "math", "sys", "os"}:
                             raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                         for alias in node.names:
                             local = alias.asname or alias.name
-                            if mod_name in {"asyncio", "math"}:
+                            if mod_name in {"asyncio", "math"} or (
+                                mod_name == "os" and mod_name not in imported_modules
+                            ):
                                 self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
                             else:
                                 self.from_import_aliases[local] = f"{mod_name.replace('.', '__')}__{alias.name}"
@@ -679,7 +698,7 @@ class MIRLowerer:
                 names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
             elif item.kind == HIRKind.IMPORT:
                 for alias in item.names:
-                    if alias.name in {"asyncio", "math", "sys"}:
+                    if alias.name in {"asyncio", "math", "sys", "os"}:
                         modules[alias.asname or alias.name] = alias.name
                         continue
                     if "." in alias.name:
@@ -725,7 +744,7 @@ class MIRLowerer:
                                 raise MIRLoweringError(f"native module not supplied: {target}")
                             modules[alias.asname or alias.name] = target
                     continue
-                if mod_name in {"asyncio", "math", "sys"}:
+                if mod_name in {"asyncio", "math", "sys", "os"}:
                     for alias in item.names:
                         names[alias.asname or alias.name] = f"{mod_name}.{alias.name}"
                     continue
@@ -1822,10 +1841,19 @@ class MIRLowerer:
                 return result
             alias_target = builder.from_import_aliases.get(node.name)
             if alias_target == "os.name":
-                import sys as _sys
+                # OS_TIER1_V1: os.name is a compile-time platform constant.
                 result = builder.temp()
-                builder.emit("const", "nt" if _sys.platform == "win32" else "posix", result=result)
+                builder.emit("const", _os_name_const(), result=result)
                 return result
+            if alias_target == "sys.argv":
+                # SYS_ARGV_V1: bound to the process argument vector as a list.
+                result = builder.temp()
+                builder.emit("sys_argv", result=result)
+                return result
+            if alias_target is not None and alias_target.startswith("os."):
+                raise MIRLoweringError(
+                    f"native os.{alias_target[3:]} is not supported yet; only os.name is native"
+                )
             result = builder.temp()
             builder.emit("load", alias_target if alias_target is not None else node.name, result=result)
             return result
@@ -2327,6 +2355,21 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("const", None, result=result)
                 return result
+            # OS_TIER1_V1 / SYS_ARGV_V1: attributes reached through a
+            # `desde ... importar ...` alias are values, not backend symbols.
+            alias_qual = builder.from_import_aliases.get(node.name)
+            if alias_qual == "os.name":
+                result = builder.temp()
+                builder.emit("const", _os_name_const(), result=result)
+                return result
+            if alias_qual == "sys.argv":
+                result = builder.temp()
+                builder.emit("sys_argv", result=result)
+                return result
+            if alias_qual is not None and alias_qual.startswith("os."):
+                raise MIRLoweringError(
+                    f"native os.{alias_qual[3:]} is not supported yet; only os.name is native"
+                )
             result = builder.temp()
             builder.emit("load", builder.from_import_aliases.get(node.name, node.name), result=result)
             return result
@@ -2792,6 +2835,22 @@ class MIRLowerer:
                 const_value = 3.141592653589793 if node.attr == "pi" else 2.718281828459045
                 builder.emit("const", const_value, result=result)
                 return result
+            # OS_TIER1_V1 / SYS_ARGV_V1: builtin module attributes that are not
+            # objects with fields but values of the platform runtime.
+            if node.value.kind == HIRKind.LOAD and node.value.name in builder.module_aliases:
+                _alias_module = builder.module_aliases[node.value.name]
+                if _alias_module == "os" and node.attr == "name":
+                    result = builder.temp()
+                    builder.emit("const", _os_name_const(), result=result)
+                    return result
+                if _alias_module == "sys" and node.attr == "argv":
+                    result = builder.temp()
+                    builder.emit("sys_argv", result=result)
+                    return result
+                if _alias_module == "os":
+                    raise MIRLoweringError(
+                        f"native os.{node.attr} is not supported yet; only os.name is native"
+                    )
             if self._module_attr_chain(builder, node) is not None:
                 raise MIRLoweringError(
                     "native module attribute value access is not supported yet; "

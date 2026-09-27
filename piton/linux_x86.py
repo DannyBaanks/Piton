@@ -410,7 +410,7 @@ class LinuxCEmitter:
         # Rich runtime (with __argc/__argv/_start and object/dict/set structs) needed for
         # bigint or sys.argv/os.name or any object/dict/set operations
         self._has_rich_runtime = self._has_bigint or any(
-            instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put"}
+            instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv"}
             for function in module.functions
             for block in function.blocks
             for instruction in block.instructions
@@ -1497,6 +1497,10 @@ class LinuxCEmitter:
             if result:
                 out.append(f"    {_name(result)}=0;")
             out.append(f"    piton_exit((long)({value}));")
+        elif op == "sys_argv":
+            # SYS_ARGV_V1: sys.argv as a list of process argument strings.
+            out.append(f"    {_name(result)}=piton_argv_new();")
+            types[result] = "list"
         elif op == "math_sqrt":
             operand = self._value(args[0])
             if types.get(args[0]) != "float":

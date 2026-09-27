@@ -654,18 +654,15 @@ class Phase10LinuxGates(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(native_out, b'')
 
-    @unittest.skip("native backend does not support len(sys.argv) yet")
     def test_linux_sys_argv_is_list_with_entry(self):
         # CPython -c: sys.argv == ['-c']; nativo: argv[0] = ruta del ejecutable.
         self._assert_linux_equiv(
             'importar sys\nimprimir(len(sys.argv))\n'
         )
 
-    @unittest.skip("native backend does not support os module yet")
     def test_linux_os_name_match(self):
         self._assert_linux_equiv('importar os\nimprimir(os.name)\n')
 
-    @unittest.skip("native backend does not support os module yet")
     def test_linux_os_name_from_import(self):
         self._assert_linux_equiv('desde os importar name\nimprimir(name)\n')
 
@@ -710,7 +707,6 @@ class Phase10LinuxGates(unittest.TestCase):
             self.assertEqual(native_run.returncode, 0)
             self.assertTrue(native_run.stdout.strip().startswith(b'['))
 
-    @unittest.skip("native backend does not support os module yet")
     def test_linux_rich_os_name(self):
         self._assert_linux_equiv('importar os\nimprimir(os.name)\n')
 
