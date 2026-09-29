@@ -199,6 +199,7 @@ class Win64NasmEmitter:
             "extern piton_int_truediv",
             "extern piton_float_div", "extern piton_float_floor_div",
             "extern piton_str_contains", "extern piton_seq_contains",
+            "extern piton_str_index", "extern piton_str_slice", "extern piton_seq_slice",
             "extern piton_dict_contains", "extern piton_set_contains",
             "extern piton_closure_new8", "extern piton_closure_call6",
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
@@ -1078,6 +1079,14 @@ class Win64NasmEmitter:
         elif op == "get_item":
             container, key = args
             container_type = self.types.get(container)
+            if container_type == "str":
+                # PARITY_P2_V1: str[s] yields the one-character string.
+                self._load_operand(container, "rcx")
+                self._load_operand(key, "rdx")
+                self.lines.append("    call piton_str_index")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "str"
+                return
             if container_type not in {"list", "tuple", "dict", "dict:module"}:
                 raise NativeBuildError(f"native subscription not supported for {container_type}")
             if container_type in {"dict", "dict:module"}:
@@ -1092,6 +1101,40 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_collection_get")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
+        elif op == "get_slice":
+            # PARITY_P2_V1: [a:b] slices. Missing bounds arrive as None; the
+            # emitter substitutes 0 / INT64_MAX and the runtime helpers
+            # normalize negative indices and clamp, matching CPython.
+            container, lower, upper = args
+            container_type = self.types.get(container)
+            if container_type == "str":
+                self._load_operand(container, "rcx")
+                if lower is not None:
+                    self._load_operand(lower, "rdx")
+                else:
+                    self.lines.append("    xor edx, edx")
+                if upper is not None:
+                    self._load_operand(upper, "r8")
+                else:
+                    self.lines.append("    mov r8, 0x7fffffffffffffff")
+                self.lines.append("    call piton_str_slice")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "str"
+            elif container_type in {"list", "tuple"}:
+                self._load_operand(container, "rcx")
+                if lower is not None:
+                    self._load_operand(lower, "rdx")
+                else:
+                    self.lines.append("    xor edx, edx")
+                if upper is not None:
+                    self._load_operand(upper, "r8")
+                else:
+                    self.lines.append("    mov r8, 0x7fffffffffffffff")
+                self.lines.append("    call piton_seq_slice")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = container_type
+            else:
+                raise NativeBuildError(f"native slice not supported for {container_type}")
         elif op == "collection_len":
             collection = args[0]
             ctype = self.types.get(collection)

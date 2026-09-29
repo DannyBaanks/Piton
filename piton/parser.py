@@ -527,6 +527,24 @@ class Parser:
         start_tok = self._peek()
         expr = self._parse_expression(0)
 
+        # PARITY_P2_V1: tuple-target assignment — `a, b = ...` unpacks.
+        # Collect the comma-separated target expressions; if the sequence is
+        # terminated by '=', build a Tuple store-target (CPython models
+        # `a, b = x` as Assign(targets=[Tuple([a, b])])), NOT multiple
+        # assignment targets (that is `a = b = x`, a different construct).
+        if self._check(TokenType.COMMA):
+            targets = [expr]
+            while self._match(TokenType.COMMA):
+                targets.append(self._parse_expression(0))
+            if not self._check(TokenType.EQUAL):
+                raise ParseError("Se esperaba '=' tras la secuencia de asignacion", self._peek())
+            self._advance()
+            value = self._parse_expression(0)
+            for target in targets:
+                self._mark_store(target)
+            tuple_target = Tuple(elts=targets, ctx="Store").set_pos(start_tok)
+            return Assign(targets=[tuple_target], value=value).set_pos(start_tok)
+
         # Verificar augmented assign
         if self._check(TokenType.PLUS_EQUAL, TokenType.MINUS_EQUAL,
                        TokenType.STAR_EQUAL, TokenType.SLASH_EQUAL,
@@ -637,7 +655,7 @@ class Parser:
 
     # ---- Expresiones (precedencia) ----
 
-    def _parse_expression(self, min_prec: int = 0) -> CSTNode:
+    def _parse_expression(self, min_prec: int = 0, allow_ternary: bool = True) -> CSTNode:
         # Parse lhs
         lhs = self._parse_primary()
 
@@ -691,6 +709,20 @@ class Parser:
                 rhs = self._parse_expression(next_min_prec)
                 lhs = BinOp(left=lhs, op=op, right=rhs).set_pos(tok)
 
+        # PARITY_P2_V1: conditional expression `a si cond sino b` — lowest
+        # precedence, so it only binds at the top expression level
+        # (min_prec == 0), exactly like Python's `a if cond else b`.
+        # Statement-level `si:` is routed by _parse_statement long before an
+        # expression parser sees a leading `si`, so there is no ambiguity.
+        if allow_ternary and min_prec == 0 and self._check(TokenType.NAME) and self._peek().value == "si":
+            si_tok = self._advance()
+            cond = self._parse_expression(0)
+            if not (self._check(TokenType.NAME) and self._peek().value == "sino"):
+                raise ParseError("Se esperaba 'sino' en expresion condicional", self._peek())
+            self._advance()
+            orelse = self._parse_expression(0)
+            lhs = IfExpr(test=cond, body=lhs, orelse=orelse).set_pos(si_tok)
+
         return lhs
 
     def _parse_primary(self) -> CSTNode:
@@ -716,10 +748,13 @@ class Parser:
             self._advance()
             val = tok.value
             if val.startswith(("f'", 'f"', "F'", 'F"')):
-                return self._parse_fstring(val, tok)
+                return self._parse_postfix(self._parse_fstring(val, tok))
             import ast
             val = ast.literal_eval(val)
-            return Constant(value=val).set_pos(tok)
+            # PARITY_P2_V1: a string literal is a first-class expression —
+            # postfix `[...]` and attribute access must compose with it
+            # ('hola'[1] used to be a ParseError).
+            return self._parse_postfix(Constant(value=val).set_pos(tok))
 
         # Identificadores / keywords
         if tok.type == TokenType.NAME:
@@ -880,7 +915,25 @@ class Parser:
                 attr = self._consume(TokenType.NAME).value
                 node = Attribute(value=node, attr=attr, ctx="Load").set_pos(self._peek())
             elif self._match(TokenType.LBRACKET):
-                slice_ = self._parse_expression(0)
+                # PARITY_P2_V1: subscript now accepts slices — [a], [a:b],
+                # [:b], [a:] and [a:b:c] (the step is parsed and carried; the
+                # MIR layer rejects it fail-closed until supported).
+                lower = None
+                upper = None
+                step = None
+                if not self._check(TokenType.COLON):
+                    lower = self._parse_expression(0)
+                if self._check(TokenType.COLON):
+                    self._advance()
+                    if not self._check(TokenType.RBRACKET) and not self._check(TokenType.COLON):
+                        upper = self._parse_expression(0)
+                    if self._check(TokenType.COLON):
+                        self._advance()
+                        if not self._check(TokenType.RBRACKET):
+                            step = self._parse_expression(0)
+                    slice_ = Slice(lower=lower, upper=upper, step=step).set_pos(self._peek())
+                else:
+                    slice_ = lower
                 self._consume(TokenType.RBRACKET)
                 node = Subscript(value=node, slice=slice_, ctx="Load").set_pos(self._peek())
             elif self._check(TokenType.LPAREN):
@@ -928,11 +981,14 @@ class Parser:
         target = self._parse_expression(7)
         if not self._match(TokenType.IN):
             raise ParseError("Se esperaba 'en'", self._peek())
-        iter_ = self._parse_expression(0)
+        # PARITY_P2_V1: the iterable and the `si` filter slots cannot accept a
+        # trailing ternary — `si` there begins the comprehension filter, the
+        # same ambiguity CPython resolves by using or_test in comp_if.
+        iter_ = self._parse_expression(0, allow_ternary=False)
         ifs = []
         while self._check(TokenType.NAME) and self._peek().value == "si":
             self._advance()
-            ifs.append(self._parse_expression(0))
+            ifs.append(self._parse_expression(0, allow_ternary=False))
         return CompFor(target=target, iter=iter_, ifs=ifs, is_async=is_async).set_pos(tok)
 
     def _parse_comp_generators(self) -> list:
