@@ -73,10 +73,16 @@ class Phase5Gates(unittest.TestCase):
         )
         self.assertEqual(output, "-3\r\n2\r\n-3\r\n-2\r\n")
 
-    def test_x86_rejects_true_division_instead_of_miscompiling(self):
+    def test_x86_true_division_matches_cpython(self):
+        # TRUEDIV_V1: int / int used to be rejected fail-closed ("native true
+        # division requires float support"); it is now a supported double
+        # conversion that must match CPython. The fail-closed gate itself
+        # moves to integer power, which is still out of the native subset.
+        result = compare_native_to_cpython("imprimir(7 / 2, -7 / 2)\n")
+        self.assertTrue(result.equivalent, result)
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "true division"):
-                compile_native("imprimir(7 / 2)\n", Path(directory) / "program.exe")
+            with self.assertRaisesRegex(Exception, "binary operator"):
+                compile_native("imprimir(2 ** 3)\n", Path(directory) / "program.exe")
 
     def test_native_differential_corpus(self):
         corpus = (
