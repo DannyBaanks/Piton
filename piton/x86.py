@@ -94,6 +94,9 @@ class Win64NasmEmitter:
         self.next_string = 0
         self.aliases: dict[str, str] = {}
         self.types: dict[str, str] = {}
+        self._pushed_iters: set[str] = set()
+        self._popped_iters: set[str] = set()
+        self._loop_exit_pops: dict[str, int] = {}
         self.next_internal_label = 0
         self.owned_slots: list[tuple[str, str]] = []
         self.bigint_slots: list[str] = []
@@ -200,6 +203,10 @@ class Win64NasmEmitter:
             "extern piton_float_div", "extern piton_float_floor_div",
             "extern piton_str_contains", "extern piton_seq_contains",
             "extern piton_str_index", "extern piton_str_slice", "extern piton_seq_slice",
+            "extern piton_str_len", "extern piton_str_repeat",
+            "extern piton_seq_pop", "extern piton_seq_reverse", "extern piton_seq_insert",
+            "extern piton_seq_count", "extern piton_seq_sort",
+            "extern piton_dict_get_d", "extern piton_dict_get_1",
             "extern piton_str_case", "extern piton_str_find", "extern piton_str_startswith",
             "extern piton_str_endswith", "extern piton_str_replace", "extern piton_str_split",
             "extern piton_str_strip", "extern piton_str_join", "extern piton_str_format",
@@ -246,6 +253,9 @@ class Win64NasmEmitter:
         self.aliases = {}
         self.types = {}
         self.owned_slots = []
+        self._pushed_iters = set()
+        self._popped_iters = set()
+        self._loop_exit_pops = {}
         self.bigint_slots = []
         self.constants = {}
         if function.vararg:
@@ -309,6 +319,12 @@ class Win64NasmEmitter:
         labels["__exit"] = f"{label}__exit"
         for block in function.blocks:
             self.lines.append(f"{labels[block.label]}:")
+            for _ in range(self._loop_exit_pops.get(block.label, 0)):
+                # consume this loop's StopIteration signal (a nested loop's
+                # flag would otherwise trip the outer loop's jne check) and
+                # then restore the handler stack.
+                self.lines.append("    call piton_catch_clear")
+                self.lines.append("    call piton_try_pop")
             for instruction in block.instructions:
                 self._emit_instruction(instruction, labels)
             if not block.instructions or block.instructions[-1].op not in {"jump", "branch", "return"}:
@@ -346,6 +362,9 @@ class Win64NasmEmitter:
         self.aliases = {}
         self.types = {}
         self.owned_slots = []
+        self._pushed_iters = set()
+        self._popped_iters = set()
+        self._loop_exit_pops = {}
         self.bigint_slots = []
         self.constants = {}
         if function.vararg:
@@ -394,6 +413,9 @@ class Win64NasmEmitter:
         )
         self._gen_resume_labels = [f"{label}_genresume_{i}" for i in range(1, yield_count + 1)]
         self._gen_yield_counter = 0
+        self._pushed_iters = set()
+        self._popped_iters = set()
+        self._loop_exit_pops = {}
         if yield_count:
             self.lines.extend([
                 f"    mov rcx, {self._address('@gen_ptr')}",
@@ -411,6 +433,12 @@ class Win64NasmEmitter:
         labels["__exit"] = f"{label}__exit"
         for block in function.blocks:
             self.lines.append(f"{labels[block.label]}:")
+            for _ in range(self._loop_exit_pops.get(block.label, 0)):
+                # consume this loop's StopIteration signal (a nested loop's
+                # flag would otherwise trip the outer loop's jne check) and
+                # then restore the handler stack.
+                self.lines.append("    call piton_catch_clear")
+                self.lines.append("    call piton_try_pop")
             for instruction in block.instructions:
                 self._emit_instruction(instruction, labels)
             if not block.instructions or block.instructions[-1].op not in {"jump", "branch", "return"}:
@@ -555,6 +583,12 @@ class Win64NasmEmitter:
                 self._load_operand(source, "rcx")
                 self.lines.append(f"    mov {self._address(result)}, rcx")
                 self.types[result] = "generator"
+            elif source_type.startswith("iterator:"):
+                # ITER_PASSTHROUGH_V1: iter(x) on an iterator returns x itself
+                # (mirrors the Linux backend).
+                self._load_operand(source, "rcx")
+                self.lines.append(f"    mov {self._address(result)}, rcx")
+                self.types[result] = source_type
             elif source_type.startswith("object:"):
                 class_name = source_type.split(":", 1)[1]
                 resolved_class = next(
@@ -572,6 +606,19 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_iterator_new_any")
                 self.types[result] = f"iterator:{source_type or 'unknown'}"
             self.lines.append(f"    mov {self._address(result)}, rax")
+            if result and self.types.get(result, "").startswith("iterator:") and self.types[result] != "iterator:genexpr":
+                # ITER_LOOP_GUARD_V1: for-loop exhaustion raises StopIteration
+                # through piton_raise, which prints and exits when no handler
+                # accepts it. Push a StopIteration-only frame for the loop's
+                # lifetime so the static jne-handler in iter_next routes the
+                # exit; the matching pop is emitted at the loop-exit block.
+                # (genexpr iterators use the flag-only setter and generator
+                # bodies run under the coro frame, so they are excluded.)
+                self.lines.append("    call piton_try_push")
+                stop_label = self._string("StopIteration")
+                self.lines.append(f"    lea rcx, [{stop_label}]")
+                self.lines.append("    call piton_try_set_accepted")
+                self._pushed_iters.add(result)
         elif op == "builtin_iter_new":
             builtin, source, start = args
             if builtin == "calliter":
@@ -619,6 +666,12 @@ class Win64NasmEmitter:
         elif op == "iter_next":
             iterator, handler_label = args[0], args[1]
             iterator_type = self.types.get(iterator, "")
+            if iterator in self._pushed_iters and iterator not in self._popped_iters and handler_label:
+                # first loop consuming this iterator: its exit block pops the
+                # frame pushed in iter_new (covers normal exhaustion AND
+                # break, which both converge on the loop-exit label).
+                self._loop_exit_pops[handler_label] = self._loop_exit_pops.get(handler_label, 0) + 1
+                self._popped_iters.add(iterator)
             if iterator_type in {"genexpr", "iterator:genexpr"}:
                 self._load_operand(iterator, "rcx")
                 self.lines.append("    call piton_genexpr_next")
@@ -731,6 +784,22 @@ class Win64NasmEmitter:
                 if operator == "+" and left_type == right_type == "str":
                     self._emit_string_concat(left, right, result)
                     return
+                if operator == "*":
+                    # STR_REPEAT_V1: 'ab' * 3 (either order); '' for
+                    # non-positive counts, like CPython.
+                    if left_type == "str" and right_type in {"int", "bool"}:
+                        str_side, times_side = left, right
+                    elif right_type == "str" and left_type in {"int", "bool"}:
+                        str_side, times_side = right, left
+                    else:
+                        str_side, times_side = None, None
+                    if str_side is not None:
+                        self._load_operand(str_side, "rcx")
+                        self._load_operand(times_side, "rdx")
+                        self.lines.append("    call piton_str_repeat")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "str"
+                        return
                 raise NativeBuildError(f"native string operator not supported yet: {operator}")
             if {left_type, right_type} & {"list", "tuple", "dict", "set"}:
                 # SEQ_CONCAT_V1: list+list / tuple+tuple concatenate; any other
@@ -1141,6 +1210,13 @@ class Win64NasmEmitter:
         elif op == "collection_len":
             collection = args[0]
             ctype = self.types.get(collection)
+            if ctype == "str":
+                # STR_LEN_V1: len('hola') is the C string length.
+                self._load_operand(collection, "rcx")
+                self.lines.append("    call piton_str_len")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+                return
             if ctype not in {"list", "tuple", "dict", "set"}:
                 raise NativeBuildError("native collection_len requires a collection")
             self._load_operand(collection, "rcx")
@@ -1499,6 +1575,12 @@ class Win64NasmEmitter:
                 # STR_METHODS_V1: builtin str methods bind statically here;
                 # anything not in the table fails closed.
                 self._emit_str_method(result, method_name, owner, list(raw_values))
+                return
+            coll_type = self.types.get(owner, "")
+            if coll_type in {"list", "tuple", "dict", "set"}:
+                # COLL_METHODS_V1: builtin collection methods bind statically
+                # here, mirroring the Linux backend's table.
+                self._emit_collection_method(result, method_name, owner, list(raw_values), coll_type)
                 return
             class_name = explicit_class or (owner_type.split(":", 1)[1] if owner_type.startswith("object:") else None)
             if not class_name:
@@ -1903,11 +1985,14 @@ class Win64NasmEmitter:
                             self.lines.append(f"    mov {self._address(result)}, rax")
                             self.types[result] = "int"
                             return
-                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set"}:
+                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set", "str"}:
                     raise NativeBuildError("native len currently requires one collection")
                 self._load_operand(values[0], "rcx")
                 ctype = self.types.get(values[0])
-                if ctype == "dict":
+                if ctype == "str":
+                    # STR_LEN_V1: len('hola') is the C string length.
+                    self.lines.append("    call piton_str_len")
+                elif ctype == "dict":
                     self.lines.append("    call piton_dict_len")
                 elif ctype == "set":
                     self.lines.append("    call piton_set_len")
@@ -2756,6 +2841,101 @@ class Win64NasmEmitter:
             self._load_operand(value, "rax")
         else:
             raise NativeBuildError(f"native str.format() does not support {arg_type} arguments")
+
+    def _emit_collection_method(self, result: Any, method: str, owner: Any,
+                                  call_args: list[Any], coll_type: str) -> None:
+        """COLL_METHODS_V1: builtin collection methods bound by static dispatch.
+
+        Mirrors the Linux backend. Mutators return None, reads follow the
+        get_item convention (decoded values, statically "int"). Value
+        operands pass raw with type_tag 0 (int convention, like
+        piton_list_append); str needles inside collections are the known
+        untagged limitation.
+        """
+        def require_count(counts: tuple[int, ...], what: str) -> None:
+            if len(call_args) not in counts:
+                raise NativeBuildError(f"native {coll_type}.{method}() requires {what}")
+
+        self._load_operand(owner, "rcx")
+        if coll_type == "list":
+            if method == "append":
+                require_count((1,), "exactly one argument")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    xor r8d, r8d")
+                self.lines.append("    call piton_list_append")
+                self.types[result] = "none"
+            elif method == "pop":
+                require_count((0, 1), "zero or one int argument")
+                if call_args and self.types.get(call_args[0]) not in {"int", "bool"}:
+                    raise NativeBuildError("native list.pop() requires an int index or nothing")
+                if call_args:
+                    self._load_operand(call_args[0], "rdx")
+                else:
+                    self.lines.append("    mov rdx, -1")
+                self.lines.append("    call piton_seq_pop")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "reverse":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_seq_reverse")
+                self.types[result] = "none"
+            elif method == "insert":
+                require_count((2,), "exactly two arguments (index, value)")
+                if self.types.get(call_args[0]) not in {"int", "bool"}:
+                    raise NativeBuildError("native list.insert() requires an int index")
+                self._load_operand(call_args[0], "rdx")
+                self._load_operand(call_args[1], "r8")
+                self.lines.append("    xor r9d, r9d")
+                self.lines.append("    call piton_seq_insert")
+                self.types[result] = "none"
+            elif method == "count":
+                require_count((1,), "exactly one argument")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    xor r8d, r8d")
+                self.lines.append("    call piton_seq_count")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "sort":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_seq_sort")
+                self.types[result] = "none"
+            else:
+                raise NativeBuildError(f"native list.{method}() is not supported")
+        elif coll_type == "tuple":
+            if method == "count":
+                require_count((1,), "exactly one argument")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    xor r8d, r8d")
+                self.lines.append("    call piton_seq_count")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            else:
+                raise NativeBuildError(f"native tuple.{method}() is not supported")
+        elif coll_type == "dict":
+            if method == "get":
+                require_count((1, 2), "one or two arguments (key[, default])")
+                if len(call_args) == 2 and self.types.get(call_args[1]) not in {"int", "bool"}:
+                    raise NativeBuildError("native dict.get() default must be an int in this subset")
+                self._load_operand(call_args[0], "rdx")
+                if len(call_args) == 2:
+                    self._load_operand(call_args[1], "r8")
+                    self.lines.append("    call piton_dict_get_d")
+                else:
+                    self.lines.append("    call piton_dict_get_1")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            else:
+                raise NativeBuildError(f"native dict.{method}() is not supported")
+        elif coll_type == "set":
+            if method == "add":
+                require_count((1,), "exactly one argument")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_add")
+                self.types[result] = "none"
+            else:
+                raise NativeBuildError(f"native set.{method}() is not supported")
+        else:
+            raise NativeBuildError(f"native {coll_type}.{method}() is not supported")
 
     def _emit_truth_test(self, operand: Any) -> None:
         if self.types.get(operand, "int") == "str":
