@@ -1565,6 +1565,39 @@ const char *piton_str_slice(const char *s, int64_t lo, int64_t hi) {
     return p;
 }
 
+/* String character iteration (mirrors the Linux freestanding prelude):
+   yields heap 1-char C strings typed str; exhaustion raises StopIteration
+   through piton_raise so the for-loop guard routes it. */
+typedef struct {
+    int64_t magic;
+    const char *str;
+    int64_t index;
+    int64_t length;
+} PitonStrIterator;
+
+#define PITON_STR_ITERATOR_MAGIC 0x5049544E53545249LL
+
+void *piton_str_iterator_new(const char *s) {
+    if (!s) piton_raise_unhandled("TypeError", "'NoneType' object is not iterable");
+    PitonStrIterator *it = calloc(1, sizeof(*it));
+    it->magic = PITON_STR_ITERATOR_MAGIC;
+    it->str = s;
+    it->index = 0;
+    it->length = (int64_t)strlen(s);
+    return it;
+}
+
+int64_t piton_str_iterator_next(void *raw) {
+    PitonStrIterator *it = raw;
+    if (!it || it->magic != PITON_STR_ITERATOR_MAGIC)
+        piton_raise_unhandled("TypeError", "object is not an iterator");
+    if (it->index >= it->length) { piton_raise("StopIteration", ""); return 0; }
+    unsigned char c = (unsigned char)it->str[it->index++];
+    char *p = malloc(2);
+    p[0] = (char)c; p[1] = 0;
+    return (int64_t)p;
+}
+
 void *piton_seq_slice(void *raw, int64_t lo, int64_t hi) {
     PitonCollection *c = raw;
     if (!c) return NULL;

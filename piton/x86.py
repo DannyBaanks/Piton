@@ -203,6 +203,7 @@ class Win64NasmEmitter:
             "extern piton_float_div", "extern piton_float_floor_div",
             "extern piton_str_contains", "extern piton_seq_contains",
             "extern piton_str_index", "extern piton_str_slice", "extern piton_seq_slice",
+            "extern piton_str_iterator_new", "extern piton_str_iterator_next",
             "extern piton_str_len", "extern piton_str_repeat",
             "extern piton_seq_pop", "extern piton_seq_reverse", "extern piton_seq_insert",
             "extern piton_seq_count", "extern piton_seq_sort",
@@ -601,6 +602,10 @@ class Win64NasmEmitter:
                 self._load_operand(source, "rcx")
                 self.lines.append(f"    call {resolved_class}____iter__")
                 self.types[result] = f"iterator:object:{class_name}"
+            elif source_type == "str":
+                self._load_operand(source, "rcx")
+                self.lines.append("    call piton_str_iterator_new")
+                self.types[result] = "iterator:str"
             else:
                 self._load_operand(source, "rcx")
                 self.lines.append("    call piton_iterator_new_any")
@@ -691,7 +696,9 @@ class Win64NasmEmitter:
                 self.lines.append(f"    call {resolved_class}____next__")
             else:
                 self._load_operand(iterator, "rcx")
-                if iterator_type == "iterator:enumerate":
+                if iterator_type == "iterator:str":
+                    self.lines.append("    call piton_str_iterator_next")
+                elif iterator_type == "iterator:enumerate":
                     self.lines.append("    call piton_enumerate_next")
                 elif iterator_type == "iterator:reversed":
                     self.lines.append("    call piton_reversed_next")
@@ -704,7 +711,7 @@ class Win64NasmEmitter:
                 else:
                     self.lines.append("    call piton_iterator_next_any")
             self.lines.append(f"    mov {self._address(result)}, rax")
-            self.types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:dict" else "int"
+            self.types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type in {"iterator:dict", "iterator:str"} else "int"
             self.lines.append("    call piton_catch_flag")
             self.lines.append("    test rax, rax")
             if handler_label:
