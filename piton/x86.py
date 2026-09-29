@@ -196,6 +196,10 @@ class Win64NasmEmitter:
             "extern piton_bigint_floor_div", "extern piton_bigint_mod",
             "extern piton_bigint_print", "extern piton_bigint_print_raw",
             "extern piton_seq_concat",
+            "extern piton_int_truediv",
+            "extern piton_float_div", "extern piton_float_floor_div",
+            "extern piton_str_contains", "extern piton_seq_contains",
+            "extern piton_dict_contains", "extern piton_set_contains",
             "extern piton_closure_new8", "extern piton_closure_call6",
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
             "extern piton_frame_call",
@@ -714,6 +718,11 @@ class Win64NasmEmitter:
             handler_label = args[3] if len(args) > 3 else None
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
+            if operator == "in":
+                # CONTAINS_V1: membership. Must run before the str/collection
+                # branches: they treat 'in' as an unsupported operator.
+                self._emit_contains(result, left, right, negate=False)
+                return
             if "str" in {left_type, right_type}:
                 if operator == "+" and left_type == right_type == "str":
                     self._emit_string_concat(left, right, result)
@@ -737,13 +746,49 @@ class Win64NasmEmitter:
                 self._emit_bigint_binary(operator, left, right, result)
                 return
             if "float" in {left_type, right_type}:
-                if operator not in {"+", "-", "*"}:
+                # TRUEDIV_V1: / and // join the supported set. CPython raises
+                # ZeroDivisionError on float division by zero instead of IEEE
+                # infinities, so / and // go through raising helpers followed
+                # by the catch_flag routing. Float % stays fail-closed.
+                if operator not in {"+", "-", "*", "/", "//"}:
                     raise NativeBuildError(f"native float operator not supported yet: {operator}")
                 self._load_float_operand(left, "xmm0")
                 self._load_float_operand(right, "xmm1")
-                instruction_name = {"+": "addsd", "-": "subsd", "*": "mulsd"}[operator]
-                self.lines.append(f"    {instruction_name} xmm0, xmm1")
-                self.lines.extend(["    movq rax, xmm0", f"    mov {self._address(result)}, rax"])
+                if operator in {"/", "//"}:
+                    helper = "piton_float_div" if operator == "/" else "piton_float_floor_div"
+                    self.lines.append(f"    call {helper}")
+                    self._emit_exc_routing(handler_label, labels)
+                    self.lines.append("    movq rax, xmm0")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                else:
+                    instruction_name = {"+": "addsd", "-": "subsd", "*": "mulsd"}[operator]
+                    self.lines.append(f"    {instruction_name} xmm0, xmm1")
+                    self.lines.extend(["    movq rax, xmm0", f"    mov {self._address(result)}, rax"])
+                self.types[result] = "float"
+                return
+            if operator == "/" and {left_type, right_type} <= {"int", "bool"}:
+                # TRUEDIV_V1: int / int yields the double conversion, exactly
+                # like CPython's long_true_divide for the i64 subset. Constant
+                # operands fold exactly (Python true division IS the oracle).
+                left_const = self.constants.get(left) if isinstance(left, str) else None
+                right_const = self.constants.get(right) if isinstance(right, str) else None
+                if (
+                    isinstance(left_const, int) and not isinstance(left_const, bool)
+                    and isinstance(right_const, int) and not isinstance(right_const, bool)
+                    and right_const != 0
+                ):
+                    folded = left_const / right_const
+                    self.constants[result] = folded
+                    self._load_operand(folded)
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "float"
+                    return
+                self._load_operand(left, "rcx")
+                self._load_operand(right, "rdx")
+                self.lines.append("    call piton_int_truediv")
+                self._emit_exc_routing(handler_label, labels)
+                self.lines.append("    movq rax, xmm0")
+                self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "float"
                 return
             if operator in {"+", "-", "*"} and {left_type, right_type} <= {"int", "bool"}:
@@ -884,6 +929,10 @@ class Win64NasmEmitter:
             operator, left, right = args
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
+            if operator == "no en":
+                # CONTAINS_V1: `a no en b` shares the membership lowering.
+                self._emit_contains(result, left, right, negate=True)
+                return
             # SPECIAL_METHOD_LOOKUP_V1: `==` over native class instances
             # dispatches to the class-defined __eq__ (MRO resolved), same as
             # CPython. Fallback: object identity (cmp on *values*, documented).
@@ -2465,6 +2514,54 @@ class Win64NasmEmitter:
         label = f"__piton_{prefix}_{self.next_internal_label}"
         self.next_internal_label += 1
         return label
+
+    def _emit_exc_routing(self, handler_label, labels) -> None:
+        """TRUEDIV_V1 / CONTAINS_V1: after a call to a raising helper. The
+        helper's piton_raise already printed and exited when no handler
+        matched, so only the handler case needs the flag branch."""
+        if handler_label:
+            self.lines.append("    call piton_catch_flag")
+            self.lines.append("    test rax, rax")
+            target = labels.get(handler_label, handler_label)
+            self.lines.append(f"    jne {target}")
+
+    def _emit_contains(self, result: Any, left: Any, right: Any, negate: bool) -> None:
+        """CONTAINS_V1: CPython membership (`in` / `no en`) via the
+        native_runtime.c helpers.
+
+        Needle restrictions: int/bool needles compare as encoded values
+        (pv_int); str needles only work within str haystacks (raw C strings
+        both sides). Collection string ELEMENTS are tagged PitonStr objects
+        while literal needles are raw pointers — the known untagged-strings
+        limitation — so str needles in collections fail closed instead of
+        comparing pointers.
+        """
+        needle_type = self.types.get(left, "int")
+        haystack_type = self.types.get(right, "int")
+        if haystack_type == "str":
+            if needle_type != "str":
+                raise NativeBuildError("native 'in' on str requires a str needle")
+            self._load_operand(right, "rcx")
+            self._load_operand(left, "rdx")
+            self.lines.append("    call piton_str_contains")
+        elif haystack_type in {"list", "tuple", "dict", "set"}:
+            if needle_type not in {"int", "bool"}:
+                raise NativeBuildError(
+                    f"native 'in' on {haystack_type} requires an int/bool needle, not {needle_type} "
+                    "(str elements are tagged objects; untagged needle comparison would be silent approximation)"
+                )
+            helper = {"list": "piton_seq_contains", "tuple": "piton_seq_contains",
+                      "dict": "piton_dict_contains", "set": "piton_set_contains"}[haystack_type]
+            self._load_operand(right, "rcx")
+            self._load_operand(left, "rdx")
+            self.lines.append("    xor r8d, r8d")  # type_tag 0 = raw int, matches list_append
+            self.lines.append(f"    call {helper}")
+        else:
+            raise NativeBuildError(f"native 'in' is not supported on {haystack_type}")
+        if negate:
+            self.lines.append("    xor eax, 1")
+        self.lines.append(f"    mov {self._address(result)}, rax")
+        self.types[result] = "bool"
 
     def _emit_int_overflow_guard(self, handler_label, labels) -> None:
         """INTOVF_GUARD_V1: CPython promotes to arbitrary precision on int

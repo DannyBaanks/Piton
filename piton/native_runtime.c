@@ -1485,6 +1485,68 @@ void *piton_seq_concat(void *a_raw, void *b_raw) {
     return c;
 }
 
+/* ── TRUEDIV_V1 / CONTAINS_V1 ───────────────────────────────────────────── */
+
+double piton_int_truediv(int64_t a, int64_t b) {
+    if (b == 0) { piton_raise("ZeroDivisionError", "division by zero"); return 0.0; }
+    return (double)a / (double)b;
+}
+
+double piton_float_div(double x, double y) {
+    if (y == 0.0) { piton_raise("ZeroDivisionError", "float division by zero"); return 0.0; }
+    return x / y;
+}
+
+double piton_float_floor_div(double x, double y) {
+    if (y == 0.0) { piton_raise("ZeroDivisionError", "float floor division by zero"); return 0.0; }
+    return floor(x / y);
+}
+
+int piton_str_contains(const char *h, const char *n) {
+    size_t hl = strlen(h), nl = strlen(n);
+    if (nl == 0) return 1;
+    if (nl > hl) return 0;
+    for (size_t i = 0; i + nl <= hl; ++i) {
+        size_t j = 0;
+        while (j < nl && h[i + j] == n[j]) ++j;
+        if (j == nl) return 1;
+    }
+    return 0;
+}
+
+/* type_tag: 0 = raw int (pv_int encoding), 1 = object pointer — mirrors
+   piton_list_append's convention so needles compare against stored items. */
+static int64_t piton_encode_needle(int64_t value, int64_t type_tag) {
+    return (type_tag == 0) ? pv_int(value) : pv_encode(PITON_TAG_OBJECT, value);
+}
+
+int piton_seq_contains(void *raw, int64_t value, int64_t type_tag) {
+    PitonCollection *c = raw;
+    if (!c) return 0;
+    int64_t needle = piton_encode_needle(value, type_tag);
+    for (int64_t i = 0; i < c->length; ++i)
+        if (c->items[i] == needle) return 1;
+    return 0;
+}
+
+int piton_dict_contains(void *raw, int64_t value, int64_t type_tag) {
+    PitonDict *d = raw;
+    if (!d) return 0;
+    int64_t needle = piton_encode_needle(value, type_tag);
+    for (int64_t i = 0; i < d->length; ++i)
+        if (d->entries[i].key == needle) return 1;
+    return 0;
+}
+
+int piton_set_contains(void *raw, int64_t value, int64_t type_tag) {
+    PitonSet *s = raw;
+    if (!s) return 0;
+    int64_t needle = piton_encode_needle(value, type_tag);
+    for (int64_t i = 0; i < s->length; ++i)
+        if (s->items[i] == needle) return 1;
+    return 0;
+}
+
 void piton_collection_free(void *raw) {
     if (!raw) return;
     piton_value_deep_free(pv_encode(PITON_TAG_OBJECT, (int64_t)raw));

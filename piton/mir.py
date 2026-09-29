@@ -3014,11 +3014,13 @@ class MIRLowerer:
 
     def _binary(self, builder: _Builder, op: str, left: Any, right: Any) -> str:
         result = builder.temp()
-        if op in {"//", "%", "+", "-", "*"}:
+        if op in {"//", "%", "+", "-", "*", "/"}:
             # ZDIV_GUARD_V1 / INTOVF_GUARD_V1: mirror the call op — embed the
             # innermost active try handler so both backends can raise a
-            # catchable ZeroDivisionError (// %) or OverflowError (+ - *)
-            # instead of trapping the process or wrapping silently.
+            # catchable ZeroDivisionError (// % /), OverflowError (+ - *) or
+            # float-division ZeroDivisionError (/) instead of trapping the
+            # process, wrapping silently or emitting IEEE infinities where
+            # CPython raises.
             builder.emit("binary", op, left, right, _active_handler(builder), result=result)
         else:
             builder.emit("binary", op, left, right, result=result)

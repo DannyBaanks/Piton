@@ -162,14 +162,17 @@ class CliAndCorpusTests(unittest.TestCase):
             self.assertEqual(salida.read_bytes()[:4], b"\x7fELF")
 
     def test_compilar_reporta_error_nativo(self) -> None:
-        with tempfile.TemporaryDirectory() as temporal:
+        # TRUEDIV_V1 lifted the `imprimir(7 / 2)` gate: true division is now
+        # native. The fail-closed gate itself stays, pinned on a feature that
+        # is still out of the native subset: integer power.
+        with tempfile.TemporaryDirectory(prefix="piton-cli-") as temporal:
             fuente = Path(temporal) / "fuera_de_alcance.piton"
-            fuente.write_text("imprimir(7 / 2)\n", encoding="utf-8")
+            fuente.write_text("imprimir(2 ** 3)\n", encoding="utf-8")
             resultado = correr("compilar", str(fuente), "--backend=x86")
             self.assertEqual(resultado.returncode, 1)
             self.assertIn("PITON_NATIVE_BUILD_ERROR", resultado.stderr)
             self.assertTrue(
-                "true division" in resultado.stderr or "binary operator not supported" in resultado.stderr,
+                "unsupported binary operator" in resultado.stderr or "binary operator not supported" in resultado.stderr,
                 resultado.stderr,
             )
 

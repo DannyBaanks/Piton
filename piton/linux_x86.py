@@ -239,6 +239,10 @@ static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(
 static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
 static void piton_seq_put(PitonSeq*s,long i,PitonSlot v){if(i>=0&&i<s->length)s->items[i]=v;}
 static long piton_seq_concat(PitonSeq*a,PitonSeq*b){if(!a||!b||a->kind!=b->kind||((a->kind!=PK_LIST)&&(a->kind!=PK_TUPLE))){piton_write(2,"TypeError: cannot concatenate\n",30);piton_exit(1);}PitonSeq*s=piton_seq_new((int)a->kind,a->length+b->length);for(long i=0;i<a->length;++i)s->items[i]=a->items[i];for(long i=0;i<b->length;++i)s->items[a->length+i]=b->items[i];return(long)s;}
+static long piton_str_contains(const char*h,const char*n){usize hl=piton_strlen(h),nl=piton_strlen(n);if(nl==0)return 1;if(nl>hl)return 0;for(usize i=0;i+nl<=hl;++i){usize j=0;while(j<nl&&h[i+j]==n[j])++j;if(j==nl)return 1;}return 0;}
+static long piton_seq_contains(PitonSeq*s,PitonSlot v){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return 1;return 0;}
+static long piton_dict_contains(PitonDict*d,PitonSlot v){if(!d)return 0;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,v))return 1;return 0;}
+static long piton_set_contains(PitonSet*s,PitonSlot v){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return 1;return 0;}
 static void piton_seq_append(PitonSeq*s,PitonSlot v){if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}s->items[s->length++]=v;}
 static PitonSlot piton_seq_get(PitonSeq*s,long i){if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError\n",11);piton_exit(1);}return s->items[i];}
 static long piton_iterator_new(PitonSeq*s){if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->index=0;return(long)i;}
@@ -367,6 +371,9 @@ static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1
 static long piton_int_add(long a,long b){i64 r;if(__builtin_add_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static long piton_int_sub(long a,long b){i64 r;if(__builtin_sub_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static long piton_int_mul(long a,long b){i64 r;if(__builtin_mul_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
+static long piton_int_truediv(long a,long b){if(b==0){piton_raise_set("ZeroDivisionError","division by zero");return 0;}return piton_double_bits((double)a/(double)b);}
+static long piton_float_div(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float division by zero");return 0;}return piton_double_bits(x/y);}
+static long piton_float_floor_div(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float floor division by zero");return 0;}return piton_double_bits(__builtin_floor(x/y));}
 static void piton_raise_chain_set(const char*type,const char*message,const char*cause_type,const char*cause_msg){piton_exc_cause_type=cause_type;piton_exc_cause_msg=cause_msg;piton_raise_set(type,message);}
 static const char*piton_reraise_type=0;static const char*piton_reraise_message=0;
 static void piton_reraise_save(void){piton_reraise_type=piton_exc_type;piton_reraise_message=piton_exc_message;}
@@ -695,6 +702,48 @@ class LinuxCEmitter:
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
         return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
+
+    def _emit_exc_check(self, out: list[str], function: MIRFunction, handler_label: Any) -> None:
+        """Route a live native exception (piton_raise_set from a helper) to
+        the enclosing try handler, or report and exit when unhandled."""
+        out.append("    if(piton_exc_flag){")
+        if handler_label:
+            out.append(f"        goto {_name(function.name + '_' + handler_label)};")
+        else:
+            out.append("        piton_report_unhandled();piton_exit(1);")
+        out.append("    }")
+
+    def _emit_contains(self, out: list[str], result: Any, left: Any, right: Any,
+                       types: dict[str, str], negate: bool) -> None:
+        """CONTAINS_V1: CPython membership (`in` / `no en`).
+
+        The haystack dispatches statically; the needle becomes a PitonSlot so
+        elements compare by value (slot_eq: int bits, str strcmp). Needles of
+        any other type fail closed — value equality for floats (0.0 vs -0.0),
+        bigints and objects needs either a tagged runtime or __eq__ dispatch
+        (follow-up), and comparing raw bits would be silent approximation.
+        """
+        needle_type = types.get(left, "int")
+        haystack_type = types.get(right, "int")
+        if needle_type not in {"int", "bool", "str"}:
+            raise NativeBuildError(
+                f"Linux 'in' requires an int/bool/str needle, not {needle_type}"
+            )
+        if haystack_type == "str":
+            if needle_type != "str":
+                raise NativeBuildError("Linux 'in' on str requires a str needle")
+            expression = f"piton_str_contains((const char*){self._value(right)},(const char*){self._value(left)})"
+        elif haystack_type in {"list", "tuple"}:
+            expression = f"piton_seq_contains((PitonSeq*){self._value(right)},{self._slot(left, types)})"
+        elif haystack_type == "dict":
+            expression = f"piton_dict_contains((PitonDict*){self._value(right)},{self._slot(left, types)})"
+        elif haystack_type == "set":
+            expression = f"piton_set_contains((PitonSet*){self._value(right)},{self._slot(left, types)})"
+        else:
+            raise NativeBuildError(f"Linux 'in' is not supported on {haystack_type}")
+        prefix = "!" if negate else ""
+        out.append(f"    {_name(result)}={prefix}{expression};")
+        types[result] = "bool"
 
     def _resolve_method(self, class_name: str, method: str) -> str:
         for candidate in self.class_mro.get(class_name, []):
@@ -1144,6 +1193,13 @@ class LinuxCEmitter:
             handler_label = args[3] if len(args) > 3 else None
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
+            if operator == "in":
+                # CONTAINS_V1: membership; mir lowers `a in b` here and
+                # `a no en b` as a compare op that reuses the same helper.
+                # Must run before the str/collection branches: they treat
+                # 'in' as an unsupported str/collection operator.
+                self._emit_contains(out, result, left, right, types, negate=False)
+                return out
             if "str" in {left_type, right_type}:
                 if operator == "+" and left_type == right_type == "str":
                     out.append(f"    {_name(result)}=(long)piton_str_concat((const char*){_name(left)},(const char*){_name(right)});")
@@ -1161,7 +1217,13 @@ class LinuxCEmitter:
                     return out
                 raise NativeBuildError(f"Linux collection binary operator not supported: {operator} on {left_type}/{right_type}")
             if "float" in {left_type, right_type}:
-                if operator not in {"+", "-", "*"}:
+                # TRUEDIV_V1: float / and // join the supported set. CPython
+                # raises ZeroDivisionError on float division by zero instead
+                # of yielding IEEE infinities, so the helpers raise through
+                # the native exception machinery (handler-routed by the
+                # caller's exc check). Float % stays fail-closed: exact fmod
+                # needs software code under -nostdlib (follow-up).
+                if operator not in {"+", "-", "*", "/", "//"}:
                     raise NativeBuildError(f"Linux float binary operator not supported: {operator}")
                 left_value = self._value(left)
                 right_value = self._value(right)
@@ -1169,8 +1231,11 @@ class LinuxCEmitter:
                     left_value = f"piton_double_bits((double){left_value})"
                 if right_type != "float":
                     right_value = f"piton_double_bits((double){right_value})"
-                helper = {"+": "piton_float_add", "-": "piton_float_sub", "*": "piton_float_mul"}[operator]
+                helper = {"+": "piton_float_add", "-": "piton_float_sub", "*": "piton_float_mul",
+                          "/": "piton_float_div", "//": "piton_float_floor_div"}[operator]
                 out.append(f"    {_name(result)}={helper}({left_value},{right_value});")
+                if operator in {"/", "//"}:
+                    self._emit_exc_check(out, function, handler_label)
                 types[result] = "float"
                 return out
             if left_type == "bigint" or right_type == "bigint":
@@ -1187,6 +1252,27 @@ class LinuxCEmitter:
                 types[result] = "bigint"
                 bigint_slots.append(result)
                 return out
+            if operator == "/" and "float" not in {left_type, right_type}:
+                # TRUEDIV_V1: CPython int / int yields a double; both CPython
+                # and the helper convert the i64 operands to double first, so
+                # the results agree for the whole untagged subset. Division
+                # by zero raises a catchable ZeroDivisionError.
+                left_const = self._fn_consts.get(left) if isinstance(left, str) else None
+                right_const = self._fn_consts.get(right) if isinstance(right, str) else None
+                if (
+                    isinstance(left_const, int) and not isinstance(left_const, bool)
+                    and isinstance(right_const, int) and not isinstance(right_const, bool)
+                    and right_const != 0
+                ):
+                    folded = left_const / right_const  # Python true division IS the oracle
+                    self._fn_consts[result] = folded
+                    out.append(f"    {_name(result)}=piton_double_bits({_float_c_literal(folded)});")
+                    types[result] = "float"
+                    return out
+                out.append(f"    {_name(result)}=piton_int_truediv({self._value(left)},{self._value(right)});")
+                self._emit_exc_check(out, function, handler_label)
+                types[result] = "float"
+                return out
             if operator in {"//", "%"}:
                 # ZDIV_GUARD_V1: CPython raises ZeroDivisionError; the bare C
                 # division used to trap the process (SIGFPE/SIGILL). Raise the
@@ -1196,12 +1282,7 @@ class LinuxCEmitter:
                     f'    if({self._value(right)}==0){{piton_raise_set("ZeroDivisionError","integer division or modulo by zero");}}'
                 )
                 out.append(f"    else{{{_name(result)}={helper}({self._value(left)},{self._value(right)});}}")
-                out.append("    if(piton_exc_flag){")
-                if handler_label:
-                    out.append(f"        goto {_name(function.name + '_' + handler_label)};")
-                else:
-                    out.append("        piton_report_unhandled();piton_exit(1);")
-                out.append("    }")
+                self._emit_exc_check(out, function, handler_label)
                 types[result] = "int"
                 return out
             if operator in {"+", "-", "*"}:
@@ -1230,12 +1311,7 @@ class LinuxCEmitter:
                     return out
                 helper = {"+": "piton_int_add", "-": "piton_int_sub", "*": "piton_int_mul"}[operator]
                 out.append(f"    {_name(result)}={helper}({self._value(left)},{self._value(right)});")
-                out.append("    if(piton_exc_flag){")
-                if handler_label:
-                    out.append(f"        goto {_name(function.name + '_' + handler_label)};")
-                else:
-                    out.append("        piton_report_unhandled();piton_exit(1);")
-                out.append("    }")
+                self._emit_exc_check(out, function, handler_label)
                 types[result] = "int"
                 return out
             if operator in {"&", "|", "^", "<<", ">>"}:
@@ -1249,6 +1325,10 @@ class LinuxCEmitter:
             if operator == "es":
                 out.append(f"    {_name(result)}=({self._value(left)} == {self._value(right)});")
                 types[result] = "bool"
+                return out
+            if operator == "no en":
+                # CONTAINS_V1: `a no en b` shares the membership lowering.
+                self._emit_contains(out, result, left, right, types, negate=True)
                 return out
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
