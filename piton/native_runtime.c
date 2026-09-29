@@ -1538,6 +1538,55 @@ int piton_dict_contains(void *raw, int64_t value, int64_t type_tag) {
     return 0;
 }
 
+const char *piton_str_index(const char *s, int64_t i) {
+    int64_t n = (int64_t)strlen(s);
+    if (i < 0) i += n;
+    if (i < 0 || i >= n) { piton_raise_unhandled("IndexError", "string index out of range"); return NULL; }
+    char *p = malloc(2);
+    p[0] = s[i];
+    p[1] = 0;
+    return p;
+}
+
+/* PARITY_P2_V1: [a:b] slices. The emitter passes 0 for a missing lower bound
+   and INT64_MAX for a missing upper; negative indices normalize and bounds
+   clamp, matching CPython semantics. */
+const char *piton_str_slice(const char *s, int64_t lo, int64_t hi) {
+    int64_t n = (int64_t)strlen(s);
+    if (lo < 0) lo += n;
+    if (hi < 0) hi += n;
+    if (lo < 0) lo = 0;
+    if (hi > n) hi = n;
+    if (hi < lo) hi = lo;
+    int64_t len = hi - lo;
+    char *p = malloc((size_t)len + 1);
+    memcpy(p, s + lo, (size_t)len);
+    p[len] = 0;
+    return p;
+}
+
+void *piton_seq_slice(void *raw, int64_t lo, int64_t hi) {
+    PitonCollection *c = raw;
+    if (!c) return NULL;
+    int64_t n = c->length;
+    if (lo < 0) lo += n;
+    if (hi < 0) hi += n;
+    if (lo < 0) lo = 0;
+    if (hi > n) hi = n;
+    if (hi < lo) hi = lo;
+    PitonCollection *r = piton_collection_new(c->kind, hi - lo);
+    r->length = hi - lo;
+    for (int64_t i = 0; i < hi - lo; ++i) {
+        int64_t v = c->items[lo + i];
+        if (pv_tag(v) == PITON_TAG_OBJECT) {
+            PitonHeader *h = (PitonHeader *)pv_payload(v);
+            if (h) h->refcount++;
+        }
+        r->items[i] = v;
+    }
+    return r;
+}
+
 int piton_set_contains(void *raw, int64_t value, int64_t type_tag) {
     PitonSet *s = raw;
     if (!s) return 0;

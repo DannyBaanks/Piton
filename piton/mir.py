@@ -178,7 +178,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "build_collection": "PURE", "genexpr_new": "PURE", "gen_init": "PURE",
     "gather_new": "PURE",
     # READ
-    "cell_load": "READ", "get_item": "READ", "collection_len": "READ",
+    "cell_load": "READ", "get_item": "READ", "get_slice": "READ", "collection_len": "READ",
     "catch_type": "READ", "catch_message": "READ", "catch_flag": "READ",
     # WRITE
     "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
@@ -1036,7 +1036,22 @@ class MIRLowerer:
         elif kind == HIRKind.ASSIGN:
             value = self._lower_expr(builder, node.value)
             for target in node.targets:
-                self._store(builder, target, value)
+                if target.kind == HIRKind.TUPLE:
+                    # PARITY_P2_V1: tuple-target assignment unpacks
+                    # element-wise (CPython: a, b = pair). Value is evaluated
+                    # once; each target pulls its slot with get_item.
+                    for index, element in enumerate(target.elts):
+                        if element.kind not in (HIRKind.STORE, HIRKind.ATTR):
+                            raise MIRLoweringError(
+                                "desempaquetado solo soporta nombres y atributos (tuplas anidadas/*, pendientes)"
+                            )
+                        index_temp = builder.temp()
+                        builder.emit("const", index, result=index_temp)
+                        element_value = builder.temp()
+                        builder.emit("get_item", value, index_temp, result=element_value)
+                        self._store(builder, element, element_value)
+                else:
+                    self._store(builder, target, value)
         elif kind == HIRKind.ANN_ASSIGN:
             value = self._lower_expr(builder, node.value) if node.value else self._lower_expr(builder, node.annotation)
             self._store(builder, node.target, value)
@@ -2820,11 +2835,51 @@ class MIRLowerer:
             builder.emit("build_collection", "dict", items, result=result)
             return result
         if kind == HIRKind.SUBSCR:
+            # PARITY_P2_V1: slice subscripts ([a:b]) lower to a get_slice op;
+            # plain indexes keep the historical get_item path.
+            slice_info = (
+                getattr(node.slice, "annotations", {}).get("slice")
+                if node.slice is not None and getattr(node.slice, "kind", None) == HIRKind.MODULE
+                else None
+            )
+            if slice_info is not None:
+                if slice_info.get("step") is not None:
+                    raise MIRLoweringError("slice con paso aun no soportado")
+                value = self._lower_expr(builder, node.value)
+                lower = self._lower_expr(builder, slice_info["lower"]) if slice_info["lower"] is not None else None
+                upper = self._lower_expr(builder, slice_info["upper"]) if slice_info["upper"] is not None else None
+                result = builder.temp()
+                builder.emit("get_slice", value, lower, upper, result=result)
+                return result
             result = builder.temp()
             builder.emit(
                 "get_item", self._lower_expr(builder, node.value),
                 self._lower_expr(builder, node.slice), result=result,
             )
+            return result
+        if kind == HIRKind.IF_EXPR:
+            # PARITY_P2_V1: conditional expression `a si cond sino b` —
+            # branch over the two arms, each storing into a scratch variable;
+            # the merged load carries the (last-stored) static type through
+            # store/load type propagation. Mixed-type arms keep the known
+            # untagged limitation: the static type follows the else arm.
+            condition = self._lower_expr(builder, node.test)
+            then_block = builder.new_block()
+            else_block = builder.new_block()
+            end_block = builder.new_block()
+            builder.emit("branch", condition, then_block.label, else_block.label)
+            holder = "@" + builder.temp().lstrip("%")
+            builder.current = then_block
+            then_value = self._lower_expr(builder, node.body)
+            builder.emit("store", holder, then_value)
+            builder.emit("jump", end_block.label)
+            builder.current = else_block
+            else_value = self._lower_expr(builder, node.orelse)
+            builder.emit("store", holder, else_value)
+            builder.emit("jump", end_block.label)
+            builder.current = end_block
+            result = builder.temp()
+            builder.emit("load", holder, result=result)
             return result
         if kind == HIRKind.ATTR:
             # MATH_TIER1_V1: math.pi / math.e lower to float constants.
