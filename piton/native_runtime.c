@@ -1587,6 +1587,197 @@ void *piton_seq_slice(void *raw, int64_t lo, int64_t hi) {
     return r;
 }
 
+/* ── STR_METHODS_V1 (ASCII + fail-closed non-ASCII) ───────────────────────── */
+
+char *piton_str_case(const char *s, int upper) {
+    size_t n = strlen(s);
+    char *p = malloc(n + 1);
+    for (size_t i = 0; i < n; ++i) {
+        unsigned char c = (unsigned char)s[i];
+        if (c >= 0x80) piton_raise_unhandled("ValueError", "str case conversion on non-ASCII text is not supported in the native subset");
+        p[i] = (char)(upper ? ((c >= 'a' && c <= 'z') ? c - 32 : c) : ((c >= 'A' && c <= 'Z') ? c + 32 : c));
+    }
+    p[n] = 0;
+    return p;
+}
+
+int64_t piton_str_find(const char *s, const char *n) {
+    size_t hl = strlen(s), nl = strlen(n);
+    if (nl == 0) return 0;
+    if (nl > hl) return -1;
+    for (size_t i = 0; i + nl <= hl; ++i) {
+        size_t j = 0;
+        while (j < nl && s[i + j] == n[j]) ++j;
+        if (j == nl) return (int64_t)i;
+    }
+    return -1;
+}
+
+int piton_str_startswith(const char *s, const char *p) {
+    size_t hl = strlen(s), nl = strlen(p);
+    if (nl > hl) return 0;
+    for (size_t i = 0; i < nl; ++i) if (s[i] != p[i]) return 0;
+    return 1;
+}
+
+int piton_str_endswith(const char *s, const char *p) {
+    size_t hl = strlen(s), nl = strlen(p);
+    if (nl > hl) return 0;
+    for (size_t i = 0; i < nl; ++i) if (s[hl - nl + i] != p[i]) return 0;
+    return 1;
+}
+
+char *piton_str_replace(const char *s, const char *a, const char *b) {
+    size_t sl = strlen(s), al = strlen(a), bl = strlen(b);
+    size_t count = 0;
+    if (al == 0) { count = sl + 1; }
+    else { for (size_t i = 0; i + al <= sl;) { size_t k = 0; while (k < al && s[i + k] == a[k]) ++k; if (k == al) { ++count; i += al; } else ++i; } }
+    size_t total = sl + count * bl - (al == 0 ? 0 : count * al);
+    char *p = malloc(total + 1);
+    size_t o = 0;
+    if (al == 0) {
+        for (size_t i = 0; i < sl; ++i) { memcpy(p + o, b, bl); o += bl; p[o++] = s[i]; }
+        memcpy(p + o, b, bl); o += bl;
+    } else {
+        for (size_t i = 0; i < sl;) {
+            size_t k = 0;
+            while (k < al && i + k < sl && s[i + k] == a[k]) ++k;
+            if (k == al) { memcpy(p + o, b, bl); o += bl; i += al; }
+            else p[o++] = s[i++];
+        }
+    }
+    p[o] = 0;
+    return p;
+}
+
+static int piton_ws_local(unsigned char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
+}
+
+void *piton_str_split(const char *s, const char *sep) {
+    PitonCollection *r = piton_collection_new(1, 0);
+    size_t sl = strlen(s);
+    if (!sep) {
+        size_t i = 0;
+        while (i < sl) {
+            while (i < sl && piton_ws_local((unsigned char)s[i])) ++i;
+            if (i >= sl) break;
+            size_t j = i;
+            while (j < sl && !piton_ws_local((unsigned char)s[j])) ++j;
+            size_t len = j - i;
+            char *q = malloc(len + 1);
+            memcpy(q, s + i, len); q[len] = 0;
+            if (r->length >= r->capacity) { r->capacity = r->capacity ? r->capacity * 2 : 4; r->items = realloc(r->items, (size_t)r->capacity * sizeof(int64_t)); }
+            r->items[r->length++] = (int64_t)q;
+            i = j;
+        }
+        return r;
+    }
+    size_t nl = strlen(sep);
+    if (nl == 0) {
+        for (size_t k = 0; k <= sl; ++k) {
+            char *q = malloc(2);
+            q[0] = k < sl ? s[k] : 0; q[1] = 0;
+            if (r->length >= r->capacity) { r->capacity = r->capacity ? r->capacity * 2 : 4; r->items = realloc(r->items, (size_t)r->capacity * sizeof(int64_t)); }
+            r->items[r->length++] = (int64_t)q;
+        }
+        return r;
+    }
+    size_t i = 0;
+    while (1) {
+        size_t j = i;
+        while (j + nl <= sl) { size_t k = 0; while (k < nl && s[j + k] == sep[k]) ++k; if (k == nl) break; ++j; }
+        size_t len = j - i;
+        char *q = malloc(len + 1);
+        memcpy(q, s + i, len); q[len] = 0;
+        if (r->length >= r->capacity) { r->capacity = r->capacity ? r->capacity * 2 : 4; r->items = realloc(r->items, (size_t)r->capacity * sizeof(int64_t)); }
+        r->items[r->length++] = (int64_t)q;
+        if (j + nl > sl) break;
+        i = j + nl;
+    }
+    return r;
+}
+
+char *piton_str_strip(const char *s, int mode) {
+    size_t n = strlen(s), a = 0, b = n;
+    if (mode != 2) while (a < n && piton_ws_local((unsigned char)s[a])) ++a;
+    if (mode != 1) while (b > a && piton_ws_local((unsigned char)s[b - 1])) --b;
+    char *p = malloc(b - a + 1);
+    memcpy(p, s + a, b - a); p[b - a] = 0;
+    return p;
+}
+
+char *piton_str_join(const char *sep, void *raw) {
+    PitonCollection *items = raw;
+    size_t sl = strlen(sep);
+    size_t total = 0;
+    int64_t cnt = items ? items->length : 0;
+    for (int64_t i = 0; i < cnt; ++i) {
+        if (pv_tag(items->items[i]) == PITON_TAG_OBJECT) {
+            PitonHeader *h = (PitonHeader *)pv_payload(items->items[i]);
+            if (h && h->sub_tag == SUB_TAG_STR) { total += strlen((const char *)pv_payload(items->items[i])); continue; }
+        }
+        piton_raise_unhandled("TypeError", "sequence item is not a string");
+    }
+    total += sl * (size_t)(cnt > 0 ? cnt - 1 : 0);
+    char *p = malloc(total + 1);
+    size_t o = 0;
+    for (int64_t i = 0; i < cnt; ++i) {
+        if (i) { memcpy(p + o, sep, sl); o += sl; }
+        /* item is a tagged SUB_TAG_STR object (checked above); its payload
+           points at plain C text (PitonStr data layout guarantee) */
+        size_t el = strlen((const char *)pv_payload(items->items[i]));
+        memcpy(p + o, (const char *)pv_payload(items->items[i]), el); o += el;
+    }
+    p[o] = 0;
+    return p;
+}
+
+/* CPython {} / {N} positional substitution with {{ }} escapes; {name},
+   format specs and keywords are out of subset (runtime error, same
+   convention as the other helpers). Extra args are ignored. */
+char *piton_str_format(const char *t, int64_t n, const char **av) {
+    size_t total = 0;
+    int auto_idx = 0;
+    for (size_t i = 0; t[i];) {
+        if (t[i] == '{') {
+            if (t[i + 1] == '{') { total += 1; i += 2; continue; }
+            size_t j = i + 1;
+            int idx = -2, has = 0;
+            if (t[j] == '}') { idx = auto_idx++; j += 1; has = 1; }
+            else {
+                idx = 0;
+                while (t[j] >= '0' && t[j] <= '9') { idx = idx * 10 + (t[j] - '0'); j += 1; has = 1; }
+                if (has && t[j] == '}') { j += 1; } else { has = 0; }
+            }
+            if (!has) piton_raise_unhandled("ValueError", "single '{' in format string");
+            if (idx < 0 || idx >= n) piton_raise_unhandled("IndexError", "replacement index out of range");
+            total += strlen(av[idx]); i = j;
+        } else if (t[i] == '}') {
+            if (t[i + 1] == '}') { total += 1; i += 2; }
+            else piton_raise_unhandled("ValueError", "single '}' in format string");
+        } else { total += 1; i += 1; }
+    }
+    char *p = malloc(total + 1);
+    size_t o = 0;
+    auto_idx = 0;
+    for (size_t i = 0; t[i];) {
+        if (t[i] == '{') {
+            if (t[i + 1] == '{') { p[o++] = '{'; i += 2; continue; }
+            size_t j = i + 1;
+            int idx;
+            if (t[j] == '}') { idx = auto_idx++; j += 1; }
+            else { idx = 0; while (t[j] >= '0' && t[j] <= '9') { idx = idx * 10 + (t[j] - '0'); j += 1; } j += 1; }
+            size_t el = strlen(av[idx]);
+            memcpy(p + o, av[idx], el); o += el; i = j;
+        } else if (t[i] == '}') { p[o++] = '}'; i += 2; }
+        else p[o++] = t[i++];
+    }
+    p[o] = 0;
+    return p;
+}
+
+
 int piton_set_contains(void *raw, int64_t value, int64_t type_tag) {
     PitonSet *s = raw;
     if (!s) return 0;
