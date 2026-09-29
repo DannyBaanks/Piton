@@ -97,6 +97,7 @@ class Win64NasmEmitter:
         self._pushed_iters: set[str] = set()
         self._popped_iters: set[str] = set()
         self._loop_exit_pops: dict[str, int] = {}
+        self.tuple_elems: dict[str, tuple] = {}
         self.next_internal_label = 0
         self.owned_slots: list[tuple[str, str]] = []
         self.bigint_slots: list[str] = []
@@ -209,6 +210,7 @@ class Win64NasmEmitter:
             "extern piton_seq_count", "extern piton_seq_sort",
             "extern piton_dict_get_d", "extern piton_dict_get_1",
             "extern piton_str_case", "extern piton_str_find", "extern piton_str_startswith",
+            "extern piton_str_quote", "extern piton_str_single_char",
             "extern piton_str_endswith", "extern piton_str_replace", "extern piton_str_split",
             "extern piton_str_strip", "extern piton_str_join", "extern piton_str_format",
             "extern piton_dict_contains", "extern piton_set_contains",
@@ -257,6 +259,7 @@ class Win64NasmEmitter:
         self._pushed_iters = set()
         self._popped_iters = set()
         self._loop_exit_pops = {}
+        self.tuple_elems = {}
         self.bigint_slots = []
         self.constants = {}
         if function.vararg:
@@ -366,6 +369,7 @@ class Win64NasmEmitter:
         self._pushed_iters = set()
         self._popped_iters = set()
         self._loop_exit_pops = {}
+        self.tuple_elems = {}
         self.bigint_slots = []
         self.constants = {}
         if function.vararg:
@@ -417,6 +421,7 @@ class Win64NasmEmitter:
         self._pushed_iters = set()
         self._popped_iters = set()
         self._loop_exit_pops = {}
+        self.tuple_elems = {}
         if yield_count:
             self.lines.extend([
                 f"    mov rcx, {self._address('@gen_ptr')}",
@@ -745,6 +750,8 @@ class Win64NasmEmitter:
             name = args[0]
             self.aliases[result] = name
             self.types[result] = self.types.get(name, "int")
+            if name in self.tuple_elems:
+                self.tuple_elems[result] = self.tuple_elems[name]
             if name in self.function_names:
                 self.lines.append(f"    lea rax, [{name}]")
                 self.lines.append(f"    mov {self._address(result)}, rax")
@@ -772,6 +779,8 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(args[0])}, rax")
             if isinstance(args[1], str):
                 self.types[args[0]] = self.types.get(args[1], "int")
+                if args[1] in self.tuple_elems:
+                    self.tuple_elems[args[0]] = self.tuple_elems[args[1]]
                 if args[1] in self.strkey_dict_temps:
                     self.strkey_dict_temps.add(args[0])
         elif op == "binary":
@@ -807,6 +816,26 @@ class Win64NasmEmitter:
                         self.lines.append(f"    mov {self._address(result)}, rax")
                         self.types[result] = "str"
                         return
+                if operator == "%":
+                    # PCT_FORMAT_V1: "%s-%d" % args lowers through the {}
+                    # engine after static translation (mirrors the Linux
+                    # backend). The template must be a literal; tuple
+                    # arguments need a statically known length.
+                    template = self.constants.get(left)
+                    if not isinstance(template, str):
+                        raise NativeBuildError("native str % formatting requires a literal template")
+                    if self.types.get(right) == "tuple" and right in self.tuple_elems:
+                        arg_values = list(self.tuple_elems[right])
+                    elif self.types.get(right) == "tuple":
+                        raise NativeBuildError("native str % formatting requires a tuple of statically known length")
+                    else:
+                        if self.aliases.get(right, right) in getattr(self.function, "params", ()):
+                            raise NativeBuildError(
+                                "native str % formatting a bare parameter is not supported (type unknown)"
+                            )
+                        arg_values = [right]
+                    self._emit_percent(result, template, arg_values, handler_label, labels)
+                    return
                 raise NativeBuildError(f"native string operator not supported yet: {operator}")
             if {left_type, right_type} & {"list", "tuple", "dict", "set"}:
                 # SEQ_CONCAT_V1: list+list / tuple+tuple concatenate; any other
@@ -1133,6 +1162,9 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_set_add")
             else:
                 kind_id = {"list": 1, "tuple": 2}[kind]
+                if kind == "tuple" and result:
+                    # PCT_FORMAT_V1: record tuple elements for %-formatting
+                    self.tuple_elems[result] = tuple(raw_items)
                 self.lines.extend([
                     f"    mov rcx, {self._address(result)}",
                     "    call piton_collection_free",
@@ -2657,6 +2689,147 @@ class Win64NasmEmitter:
         label = f"__piton_{prefix}_{self.next_internal_label}"
         self.next_internal_label += 1
         return label
+
+    @staticmethod
+    def _parse_percent_template(template: str) -> tuple[str, list[str]]:
+        """PCT_FORMAT_V1: same translation contract as the Linux backend —
+        %-specs to {} fields for the piton_str_format engine. Anything
+        outside the V1 subset fails closed at build time."""
+        out: list[str] = []
+        specs: list[str] = []
+        i, n = 0, len(template)
+        while i < n:
+            ch = template[i]
+            if ch == "%":
+                i += 1
+                if i >= n:
+                    raise NativeBuildError("str % formatting: trailing %")
+                c2 = template[i]
+                if c2 == "%":
+                    out.append("%")
+                    i += 1
+                    continue
+                if c2 in "-0123456789. *hlL":
+                    raise NativeBuildError("str % formatting with flags/width/precision is not supported")
+                if c2 == "(":
+                    raise NativeBuildError("str % mapping (name)s is not supported")
+                if c2 in "sdrc":
+                    specs.append(c2)
+                    out.append("{}")
+                    i += 1
+                    continue
+                if c2 == "i":
+                    specs.append("d")
+                    out.append("{}")
+                    i += 1
+                    continue
+                raise NativeBuildError(f"str % conversion %{c2} is not supported")
+            elif ch == "{" or ch == "}":
+                out.append(ch * 2)
+                i += 1
+            else:
+                out.append(ch)
+                i += 1
+        return "".join(out), specs
+
+    def _convert_percent_operand(self, spec: str, value: Any) -> None:
+        """Load one %-conversion argument as a C string pointer into rax."""
+        arg_type = self.types.get(value, "int")
+        if spec == "s":
+            if arg_type == "int":
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_str_from_int")
+            elif arg_type == "float":
+                self._load_float_operand(value, "xmm0")
+                self.lines.append("    call piton_str_from_float")
+            elif arg_type == "bool":
+                false_label = self._internal_label("pct_bool_false")
+                ready_label = self._internal_label("pct_bool_ready")
+                self._load_operand(value, "rax")
+                self.lines.extend([
+                    "    test rax, rax",
+                    f"    jz {false_label}",
+                    "    lea rax, [lit_true]",
+                    f"    jmp {ready_label}",
+                    f"{false_label}:",
+                    "    lea rax, [lit_false]",
+                    f"{ready_label}:",
+                ])
+            elif arg_type == "none":
+                self.lines.append("    lea rax, [lit_none]")
+            elif arg_type == "str":
+                self._load_operand(value, "rax")
+            else:
+                raise NativeBuildError(f"native str %s does not support {arg_type} arguments")
+        elif spec == "d":
+            if arg_type in {"int", "bool"}:
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_str_from_int")
+            elif arg_type == "float":
+                self._load_float_operand(value, "xmm0")
+                self.lines.append("    cvttsd2si rax, xmm0")
+                self.lines.append("    mov rcx, rax")
+                self.lines.append("    call piton_str_from_int")
+            else:
+                raise NativeBuildError(f"native str %d requires a real number, not {arg_type}")
+        elif spec == "r":
+            if arg_type == "str":
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_str_quote")
+            elif arg_type in {"int", "bool", "float", "none"}:
+                self._convert_percent_operand("s", value)
+            else:
+                raise NativeBuildError(f"native str %r does not support {arg_type} arguments")
+        elif spec == "c":
+            if arg_type in {"int", "bool"}:
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_chr")
+            elif arg_type == "str":
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_str_single_char")
+            else:
+                raise NativeBuildError(f"native str %c requires int or 1-character str, not {arg_type}")
+        else:
+            raise NativeBuildError(f"native str %{spec} is not supported")
+
+    def _emit_percent(self, result: Any, template: str, arg_values: list[Any],
+                      handler_label: Any, labels: Any) -> None:
+        """PCT_FORMAT_V1 emission: translate the template, convert each
+        argument to a C string into a stack array, call piton_str_format."""
+        translated, specs = self._parse_percent_template(template)
+        if len(specs) != len(arg_values):
+            raise NativeBuildError(
+                f"native str % formatting: {len(specs)} conversion(s) but {len(arg_values)} argument(s)"
+            )
+        frame_size = ((len(arg_values) * 8 + 32 + 15) // 16) * 16
+        if frame_size:
+            self.lines.append(f"    sub rsp, {frame_size}")
+        for index, (spec, value) in enumerate(zip(specs, arg_values)):
+            self._convert_percent_operand(spec, value)
+            self.lines.append(f"    mov qword [rsp+32+{index * 8}], rax")
+            # a raising conversion (piton_chr out of range) yields NULL:
+            # route after EACH piece so the format engine never dereferences
+            # it (same left-to-right order as CPython).
+            self.lines.append("    call piton_catch_flag")
+            self.lines.append("    test rax, rax")
+            if handler_label:
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+            # without a static handler there is nothing to route to: an
+            # unhandled raise already printed and exited inside piton_raise,
+            # so reaching here means clean state (mirrors raise_typed).
+        string_label = self._string(translated)
+        self.lines.append(f"    lea rcx, [{string_label}]")
+        self.lines.extend([
+            f"    mov edx, {len(arg_values)}",
+            "    lea r8, [rsp+32]",
+            "    call piton_str_format",
+        ])
+        if frame_size:
+            self.lines.append(f"    add rsp, {frame_size}")
+        self._emit_exc_routing(handler_label, labels)
+        self.lines.append(f"    mov {self._address(result)}, rax")
+        self.types[result] = "str"
 
     def _emit_exc_routing(self, handler_label, labels) -> None:
         """TRUEDIV_V1 / CONTAINS_V1: after a call to a raising helper. The
