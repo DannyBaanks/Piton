@@ -285,5 +285,66 @@ class BuiltinMarkerV1(unittest.TestCase):
         _assert_matches(self, "para x en [10, 20]:\n    imprimir(x, x)\n")
 
 
+class IntOvfGuardV1(unittest.TestCase):
+    """INTOVF_GUARD_V1: CPython promotes int arithmetic to arbitrary precision.
+
+    Two layers, both backends:
+      - constant int operands fold EXACTLY in Python (bignum arithmetic IS the
+        oracle); results beyond i64 promote to bigint literals -> full
+        equivalence with CPython;
+      - runtime operands use checked helpers (Linux: __builtin_*_overflow,
+        Windows: jo after add/sub/imul) that raise a CATCHABLE OverflowError
+        instead of silently wrapping. This is a documented, intentional
+        divergence: CPython promotes at runtime, the untagged i64 subset
+        cannot (needs a tagged representation — follow-up).
+
+    NOTE (Windows): int literals beyond +-2^60 are typed bigint there, so
+    runtime + - * over i64-boundary values computes true bignum results and
+    matches CPython; the tests below keep every runtime operand well under
+    2^60 so both backends take the same path.
+    """
+
+    def test_fold_add_overflow_promotes(self):
+        _assert_matches(self, "imprimir(9223372036854775807 + 1)\n")
+
+    def test_fold_sub_overflow_promotes(self):
+        _assert_matches(self, "imprimir(-9223372036854775808 - 1)\n")
+
+    def test_fold_mul_overflow_promotes(self):
+        _assert_matches(self, "imprimir(9223372036854775807 * 2)\n")
+
+    def test_fold_mul_huge(self):
+        _assert_matches(self, "imprimir(123456789012345678 * 987654321)\n")
+
+    def test_fold_chained_second_level_overflow(self):
+        _assert_matches(self, "imprimir((3037000499 * 2) * 3037000499)\n")
+
+    def test_fold_small_regression(self):
+        _assert_matches(self, "imprimir(2 + 3 * 4)\n")
+
+    def test_runtime_mul_no_overflow_regression(self):
+        _assert_matches(self, "x = 5\nz = x * 3\nimprimir(z)\n")
+
+    def test_runtime_mul_overflow_is_catchable(self):
+        result = compare_native_to_cpython(
+            "intentar:\n"
+            "    x = 3037000500\n"
+            "    z = x * x\n"
+            "    imprimir('no-ovf')\n"
+            "excepto OverflowError:\n"
+            "    imprimir('mul')\n"
+        )
+        # NOT equivalent: CPython promotes (prints 'no-ovf'); the native
+        # subset raises. The gate is the catchable, explicit failure.
+        # (stdout is normalized to LF: the Windows PE emits CRLF.)
+        self.assertEqual(result.native.returncode, 0)
+        self.assertEqual(result.native.stdout.replace(b"\r\n", b"\n"), b"mul\n")
+
+    def test_runtime_mul_overflow_uncaught_exits_cleanly(self):
+        result = compare_native_to_cpython("x = 3037000500\nz = x * x\nimprimir('no')\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"OverflowError", result.native.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
