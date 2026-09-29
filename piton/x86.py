@@ -200,6 +200,9 @@ class Win64NasmEmitter:
             "extern piton_float_div", "extern piton_float_floor_div",
             "extern piton_str_contains", "extern piton_seq_contains",
             "extern piton_str_index", "extern piton_str_slice", "extern piton_seq_slice",
+            "extern piton_str_case", "extern piton_str_find", "extern piton_str_startswith",
+            "extern piton_str_endswith", "extern piton_str_replace", "extern piton_str_split",
+            "extern piton_str_strip", "extern piton_str_join", "extern piton_str_format",
             "extern piton_dict_contains", "extern piton_set_contains",
             "extern piton_closure_new8", "extern piton_closure_call6",
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
@@ -1492,6 +1495,11 @@ class Win64NasmEmitter:
         elif op == "method_call":
             explicit_class, method_name, owner, raw_values = args
             owner_type = self.types.get(owner, "")
+            if owner_type == "str":
+                # STR_METHODS_V1: builtin str methods bind statically here;
+                # anything not in the table fails closed.
+                self._emit_str_method(result, method_name, owner, list(raw_values))
+                return
             class_name = explicit_class or (owner_type.split(":", 1)[1] if owner_type.startswith("object:") else None)
             if not class_name:
                 raise NativeBuildError("native method receiver class is not statically known")
@@ -2628,6 +2636,126 @@ class Win64NasmEmitter:
         else:
             self.lines.append("    call piton_raise_unhandled")
         self.lines.append(f"{ok}:")
+
+    def _emit_str_method(self, result: Any, method: str, owner: Any, call_args: list[Any]) -> None:
+        """STR_METHODS_V1: builtin str methods bound by static dispatch.
+
+        Mirrors the Linux backend's table. Arity and argument static types
+        are validated at build time; anything else fails closed. The runtime
+        helpers print and exit on valid-Python but out-of-subset inputs
+        (non-ASCII case conversion, non-str join elements, bad format
+        fields) — the uncatchable-error convention of the other helpers.
+        """
+        def require_str(index: int, what: str) -> None:
+            if len(call_args) <= index or self.types.get(call_args[index]) != "str":
+                raise NativeBuildError(f"native str.{method}() requires {what}")
+
+        def require_count(count: int, what: str) -> None:
+            if len(call_args) != count:
+                raise NativeBuildError(f"native str.{method}() requires {what}")
+
+        self._load_operand(owner, "rcx")
+        if method in {"upper", "lower"}:
+            require_count(0, "no arguments")
+            self.lines.append(f"    mov edx, {1 if method == 'upper' else 0}")
+            self.lines.append("    call piton_str_case")
+            self.types[result] = "str"
+        elif method == "find":
+            require_count(1, "exactly one str argument")
+            require_str(0, "a str argument")
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append("    call piton_str_find")
+            self.types[result] = "int"
+        elif method in {"startswith", "endswith"}:
+            require_count(1, "exactly one str argument")
+            require_str(0, "a str argument")
+            helper = "piton_str_startswith" if method == "startswith" else "piton_str_endswith"
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append(f"    call {helper}")
+            self.types[result] = "bool"
+        elif method == "replace":
+            require_count(2, "exactly two str arguments")
+            require_str(0, "two str arguments")
+            require_str(1, "two str arguments")
+            self._load_operand(call_args[0], "rdx")
+            self._load_operand(call_args[1], "r8")
+            self.lines.append("    call piton_str_replace")
+            self.types[result] = "str"
+        elif method == "split":
+            if len(call_args) > 1:
+                raise NativeBuildError("native str.split() requires zero or one argument")
+            if call_args and self.types.get(call_args[0]) not in {"str", "none"}:
+                raise NativeBuildError("native str.split() requires a str separator or nothing")
+            if not call_args or self.types.get(call_args[0]) == "none":
+                self.lines.append("    xor edx, edx")
+            else:
+                self._load_operand(call_args[0], "rdx")
+            self.lines.append("    call piton_str_split")
+            self.types[result] = "list"
+        elif method in {"strip", "lstrip", "rstrip"}:
+            require_count(0, "no arguments")
+            mode = {"strip": 0, "lstrip": 1, "rstrip": 2}[method]
+            self.lines.append(f"    mov edx, {mode}")
+            self.lines.append("    call piton_str_strip")
+            self.types[result] = "str"
+        elif method == "join":
+            require_count(1, "exactly one list or tuple argument")
+            if self.types.get(call_args[0]) not in {"list", "tuple"}:
+                raise NativeBuildError("native str.join() requires one list or tuple argument")
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append("    call piton_str_join")
+            self.types[result] = "str"
+        elif method == "format":
+            for value in call_args:
+                if self.types.get(value, "int") not in {"int", "float", "bool", "none", "str"}:
+                    raise NativeBuildError(f"native str.format() does not support {self.types.get(value)} arguments")
+            frame_size = ((len(call_args) * 8 + 32 + 15) // 16) * 16
+            self.lines.append(f"    sub rsp, {frame_size}")
+            for index, value in enumerate(call_args):
+                self._convert_format_operand(value)
+                self.lines.append(f"    mov qword [rsp+32+{index * 8}], rax")
+            # the operand conversion above clobbered rcx: reload the template
+            self._load_operand(owner, "rcx")
+            self.lines.extend([
+                f"    mov edx, {len(call_args)}",
+                "    lea r8, [rsp+32]",
+                "    call piton_str_format",
+                f"    add rsp, {frame_size}",
+            ])
+            self.types[result] = "str"
+        else:
+            raise NativeBuildError(f"native str.{method}() is not supported")
+        self.lines.append(f"    mov {self._address(result)}, rax")
+
+    def _convert_format_operand(self, value: Any) -> None:
+        """Load one str.format() argument as a C string pointer into rax,
+        str()-converted by static type (mirrors CPython's str() conversion)."""
+        arg_type = self.types.get(value, "int")
+        if arg_type == "int":
+            self._load_operand(value, "rcx")
+            self.lines.append("    call piton_str_from_int")
+        elif arg_type == "float":
+            self._load_float_operand(value, "xmm0")
+            self.lines.append("    call piton_str_from_float")
+        elif arg_type == "bool":
+            false_label = self._internal_label("fmt_bool_false")
+            ready_label = self._internal_label("fmt_bool_ready")
+            self._load_operand(value, "rax")
+            self.lines.extend([
+                "    test rax, rax",
+                f"    jz {false_label}",
+                "    lea rax, [lit_true]",
+                f"    jmp {ready_label}",
+                f"{false_label}:",
+                "    lea rax, [lit_false]",
+                f"{ready_label}:",
+            ])
+        elif arg_type == "none":
+            self.lines.append("    lea rax, [lit_none]")
+        elif arg_type == "str":
+            self._load_operand(value, "rax")
+        else:
+            raise NativeBuildError(f"native str.format() does not support {arg_type} arguments")
 
     def _emit_truth_test(self, operand: Any) -> None:
         if self.types.get(operand, "int") == "str":

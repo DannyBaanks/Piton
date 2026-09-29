@@ -243,10 +243,22 @@ static long piton_str_contains(const char*h,const char*n){usize hl=piton_strlen(
 static long piton_seq_contains(PitonSeq*s,PitonSlot v){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return 1;return 0;}
 static long piton_dict_contains(PitonDict*d,PitonSlot v){if(!d)return 0;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,v))return 1;return 0;}
 static long piton_set_contains(PitonSet*s,PitonSlot v){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return 1;return 0;}
+static void piton_seq_append(PitonSeq*s,PitonSlot v){if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}s->items[s->length++]=v;}
+static int piton_ws(unsigned char c){return c==' '||c=='\t'||c=='\n'||c=='\r'||c=='\v'||c=='\f';}
+static long piton_str_case(const char*s,int upper){usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c>=0x80){piton_write(2,"ValueError: str case conversion on non-ASCII text is not supported in the native subset\n",88);piton_exit(1);}p[i]=(char)(upper?((c>='a'&&c<='z')?c-32:c):((c>='A'&&c<='Z')?c+32:c));}p[n]=0;return(long)p;}
+static long piton_str_find(const char*s,const char*n){usize hl=piton_strlen(s),nl=piton_strlen(n);if(nl==0)return 0;if(nl>hl)return -1;for(usize i=0;i+nl<=hl;++i){usize j=0;while(j<nl&&s[i+j]==n[j])++j;if(j==nl)return(long)i;}return -1;}
+static long piton_str_startswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[i]!=p[i])return 0;return 1;}
+static long piton_str_endswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[hl-nl+i]!=p[i])return 0;return 1;}
+static long piton_str_replace(const char*s,const char*a,const char*b){usize sl=piton_strlen(s),al=piton_strlen(a),bl=piton_strlen(b);usize count=0;if(al==0){count=sl+1;}else{for(usize i=0;i+al<=sl;){usize k=0;while(k<al&&s[i+k]==a[k])++k;if(k==al){++count;i+=al;}else++i;}}usize total=sl+count*bl-(al==0?0:count*al);char*p=piton_alloc(total+1);usize o=0;if(al==0){for(usize i=0;i<sl;++i){piton_memcpy(p+o,b,bl);o+=bl;p[o++]=s[i];}piton_memcpy(p+o,b,bl);o+=bl;}else{for(usize i=0;i<sl;){usize k=0;while(k<al&&i+k<sl&&s[i+k]==a[k])++k;if(k==al){piton_memcpy(p+o,b,bl);o+=bl;i+=al;}else p[o++]=s[i++];}}p[o]=0;return(long)p;}
+static long piton_str_format(const char*t,long n,const char**av){usize total=0;int auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){total+=1;i+=2;continue;}usize j=i+1;int idx=-2;int has=0;if(t[j]=='}'){idx=auto_idx++;j+=1;has=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;has=1;}if(has&&t[j]=='}'){j+=1;}else{has=0;}}if(!has){piton_write(2,"ValueError: single '{' in format string\n",40);piton_exit(1);}if(idx<0||idx>=n){piton_write(2,"IndexError: replacement index out of range\n",43);piton_exit(1);}total+=piton_strlen(av[idx]);i=j;}else if(t[i]=='}'){if(t[i+1]=='}'){total+=1;i+=2;}else{piton_write(2,"ValueError: single '}' in format string\n",40);piton_exit(1);}}else{total+=1;i+=1;}}char*p=piton_alloc(total+1);usize o=0;auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){p[o++]='{';i+=2;continue;}usize j=i+1;int idx=-2;if(t[j]=='}'){idx=auto_idx++;j+=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;}j+=1;}usize el=piton_strlen(av[idx]);piton_memcpy(p+o,av[idx],el);o+=el;i=j;}else if(t[i]=='}'){p[o++]='}';i+=2;}else{p[o++]=t[i++];}}p[o]=0;return(long)p;}
+
+static long piton_str_split_ws(const char*s){PitonSeq*r=piton_seq_new(PK_LIST,0);usize n=piton_strlen(s),i=0;while(i<n){while(i<n&&piton_ws((unsigned char)s[i]))++i;if(i>=n)break;usize j=i;while(j<n&&!piton_ws((unsigned char)s[j]))++j;usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});i=j;}return(long)r;}
+static long piton_str_split(const char*s,const char*sep){if(!sep)return piton_str_split_ws(s);PitonSeq*r=piton_seq_new(PK_LIST,0);usize sl=piton_strlen(s),nl=piton_strlen(sep);if(nl==0){for(usize k=0;k<=sl;++k){char*q=piton_alloc(2);q[0]=k<sl?s[k]:0;q[1]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});}return(long)r;}usize i=0;while(1){usize j=i;while(j+nl<=sl){usize k=0;while(k<nl&&s[j+k]==sep[k])++k;if(k==nl)break;++j;}usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});if(j+nl>sl)break;i=j+nl;}return(long)r;}
+static long piton_str_strip(const char*s,int mode){usize n=piton_strlen(s),a=0,b=n;if(mode!=2){while(a<n&&piton_ws((unsigned char)s[a]))++a;}if(mode!=1){while(b>a&&piton_ws((unsigned char)s[b-1]))--b;}char*p=piton_alloc(b-a+1);piton_memcpy(p,s+a,b-a);p[b-a]=0;return(long)p;}
+static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(sep);usize total=0;long cnt=items?items->length:0;for(long i=0;i<cnt;++i){if(items->items[i].kind!=PK_STR){piton_write(2,"TypeError: sequence item is not a string\n",41);piton_exit(1);}total+=piton_strlen((const char*)items->items[i].bits);}total+=sl*(usize)(cnt>0?cnt-1:0);char*p=piton_alloc(total+1);usize o=0;for(long i=0;i<cnt;++i){if(i){piton_memcpy(p+o,sep,sl);o+=sl;}usize el=piton_strlen((const char*)items->items[i].bits);piton_memcpy(p+o,(const char*)items->items[i].bits,el);o+=el;}p[o]=0;return(long)p;}
 static long piton_str_index(const char*s,long i){long n=(long)piton_strlen(s);if(i<0)i+=n;if(i<0||i>=n){piton_write(2,"IndexError\n",11);piton_exit(1);}char*p=piton_alloc(2);p[0]=s[i];p[1]=0;return(long)p;}
 static long piton_str_slice(const char*s,long lo,long hi){long n=(long)piton_strlen(s);if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;char*p=piton_alloc((usize)(hi-lo)+1);for(long i=0;i<hi-lo;++i)p[i]=s[lo+i];p[hi-lo]=0;return(long)p;}
 static long piton_seq_slice(PitonSeq*s,long lo,long hi){if(!s)return 0;long n=s->length;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;PitonSeq*r=piton_seq_new((int)s->kind,hi-lo);for(long i=0;i<hi-lo;++i)r->items[i]=s->items[lo+i];return(long)r;}
-static void piton_seq_append(PitonSeq*s,PitonSlot v){if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}s->items[s->length++]=v;}
 static PitonSlot piton_seq_get(PitonSeq*s,long i){if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError\n",11);piton_exit(1);}return s->items[i];}
 static long piton_iterator_new(PitonSeq*s){if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->index=0;return(long)i;}
 static long piton_iterator_next(long raw){PitonIterator*i=(PitonIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_write(2,"StopIteration\n",14);piton_exit(1);}return i->seq->items[i->index++].bits;}
@@ -705,6 +717,94 @@ class LinuxCEmitter:
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
         return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
+
+    def _emit_str_method(self, out: list[str], result: Any, method: str, obj: Any,
+                         call_args: list[Any], types: dict[str, str]) -> None:
+        """STR_METHODS_V1: builtin str methods bound by static dispatch.
+
+        Arity AND argument static types are validated at build time; the
+        wrong shape fails closed with NativeBuildError. The C helpers raise
+        clean process errors for inputs that are valid Python but outside
+        the subset (non-ASCII case conversion, non-str join elements, bad
+        format fields) — the same uncatchable-error convention as the other
+        runtime helpers (IndexError, TypeError in seq_get and friends).
+        """
+        operand = self._value(obj)
+
+        def require_str(index: int, what: str) -> str:
+            if len(call_args) <= index or types.get(call_args[index]) != "str":
+                raise NativeBuildError(f"Linux str.{method}() requires {what}")
+            return self._value(call_args[index])
+
+        def require_count(count: int, what: str) -> None:
+            if len(call_args) != count:
+                raise NativeBuildError(f"Linux str.{method}() requires {what}")
+
+        if method in {"upper", "lower"}:
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=(long)piton_str_case((const char*){operand},{1 if method == 'upper' else 0});")
+            types[result] = "str"
+        elif method == "find":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_find((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "int"
+        elif method in {"startswith", "endswith"}:
+            require_count(1, "exactly one str argument")
+            helper = "piton_str_startswith" if method == "startswith" else "piton_str_endswith"
+            out.append(f"    {_name(result)}={helper}((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "bool"
+        elif method == "replace":
+            require_count(2, "exactly two str arguments")
+            out.append(
+                f"    {_name(result)}=(long)piton_str_replace((const char*){operand},"
+                f"{require_str(0, 'two str arguments')},{require_str(1, 'two str arguments')});"
+            )
+            types[result] = "str"
+        elif method == "split":
+            if len(call_args) > 1:
+                raise NativeBuildError("Linux str.split() requires zero or one argument")
+            if call_args and types.get(call_args[0]) not in {"str", "none"}:
+                raise NativeBuildError("Linux str.split() requires a str separator or nothing")
+            sep = "(const char*)0" if not call_args or types.get(call_args[0]) == "none" else f"(const char*){self._value(call_args[0])}"
+            out.append(f"    {_name(result)}=piton_str_split((const char*){operand},{sep});")
+            types[result] = "list"
+        elif method in {"strip", "lstrip", "rstrip"}:
+            require_count(0, "no arguments")
+            mode = {"strip": 0, "lstrip": 1, "rstrip": 2}[method]
+            out.append(f"    {_name(result)}=(long)piton_str_strip((const char*){operand},{mode});")
+            types[result] = "str"
+        elif method == "join":
+            require_count(1, "exactly one list or tuple argument")
+            if types.get(call_args[0]) not in {"list", "tuple"}:
+                raise NativeBuildError("Linux str.join() requires one list or tuple argument")
+            out.append(f"    {_name(result)}=(long)piton_str_join((const char*){operand},(PitonSeq*){self._value(call_args[0])});")
+            types[result] = "str"
+        elif method == "format":
+            # CPython {}/ {N} positional substitution; each argument is
+            # str()-converted by static type first. {name}, format specs and
+            # keywords are out of subset (the C parser reports and exits).
+            pieces = []
+            for index, value in enumerate(call_args):
+                arg_type = types.get(value, "int")
+                if arg_type == "int":
+                    pieces.append(f"const char*_pf{index}=(const char*)piton_str_from_int({self._value(value)});")
+                elif arg_type == "float":
+                    pieces.append(f"const char*_pf{index}=(const char*)piton_str_from_float({self._value(value)});")
+                elif arg_type == "bool":
+                    pieces.append(f'const char*_pf{index}={self._value(value)}?"True":"False";')
+                elif arg_type == "none":
+                    pieces.append(f'const char*_pf{index}="None";')
+                elif arg_type == "str":
+                    pieces.append(f"const char*_pf{index}=(const char*){self._value(value)};")
+                else:
+                    raise NativeBuildError(f"Linux str.format() does not support {arg_type} arguments")
+            names = ",".join(f"_pf{index}" for index in range(len(call_args))) or "_pf0"
+            if not call_args:
+                pieces.append('const char*_pf0="";')
+            out.append(f"    {{{''.join(pieces)}const char*_fa[]={{{names}}}; {_name(result)}=(long)piton_str_format((const char*){operand},{len(call_args)},_fa);}}")
+            types[result] = "str"
+        else:
+            raise NativeBuildError(f"Linux str.{method}() is not supported")
 
     def _emit_exc_check(self, out: list[str], function: MIRFunction, handler_label: Any) -> None:
         """Route a live native exception (piton_raise_set from a helper) to
@@ -1888,6 +1988,11 @@ class LinuxCEmitter:
             call_args = args[3] if len(args) > 3 else ()
             if cls_name is None:
                 owner_type = types.get(obj, "")
+                if owner_type == "str":
+                    # STR_METHODS_V1: builtin str methods bind statically here;
+                    # anything not in the table fails closed.
+                    self._emit_str_method(out, result, method, obj, list(call_args), types)
+                    return out
                 if not owner_type.startswith("object:"):
                     raise NativeBuildError("Linux method receiver class is not statically known")
                 cls_name = owner_type.split(":", 1)[1]
