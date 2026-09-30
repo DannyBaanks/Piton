@@ -95,11 +95,25 @@ class TrueDivV1(unittest.TestCase):
             "    imprimir('ffz')\n",
         )
 
-    def test_float_modulo_stays_fail_closed(self):
-        # exact fmod needs software code under -nostdlib (follow-up); the gate
-        # must fail closed, never approximate.
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir(7.5 % 2.0)\n")
+    def test_float_modulo(self):
+        _assert_matches(self, "imprimir(7.5 % 2.0, -7.5 % 2.0, 7.5 % -2.0)\n")
+
+    def test_float_modulo_signed_zeros(self):
+        _assert_matches(self, "imprimir(-0.0 % 1.0, -0.0 % -1.0, 0.0 % -1.0)\n")
+
+    def test_float_modulo_by_zero_is_catchable(self):
+        _assert_matches(
+            self,
+            "intentar:\n"
+            "    imprimir(1.0 % 0.0)\n"
+            "excepto ZeroDivisionError:\n"
+            "    imprimir('mz')\n",
+        )
+
+    def test_float_modulo_by_zero_uncaught_exits_cleanly(self):
+        result = compare_native_to_cpython("imprimir(1.0 % 0.0)\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"ZeroDivisionError", result.native.stderr)
 
 
 class ContainsV1(unittest.TestCase):

@@ -1497,6 +1497,14 @@ double piton_float_div(double x, double y) {
     return x / y;
 }
 
+double piton_float_mod(double x, double y) {
+    if (y == 0.0) { piton_raise("ZeroDivisionError", "float modulo"); return 0.0; }
+    double r = fmod(x, y);
+    if (r == 0.0) return y < 0.0 ? -0.0 : 0.0;
+    if ((y < 0.0) != (r < 0.0)) r += y;
+    return r;
+}
+
 double piton_float_floor_div(double x, double y) {
     if (y == 0.0) { piton_raise("ZeroDivisionError", "float floor division by zero"); return 0.0; }
     return floor(x / y);
