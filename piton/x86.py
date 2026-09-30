@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 from typing import Any
 
-from piton.lower import lower_cst_to_hir
+from piton.lower import LoweringError, lower_cst_to_hir
 from piton.hir import HIRKind
 from piton.mir import MIRBlock, MIRFunction, MIRInstruction, MIRLoweringError, MIRModule, lower_hir_to_mir
 from piton.parser import parse
@@ -3335,7 +3335,10 @@ def compile_native(source: str, output: str | Path) -> Path:
     if not sys.platform.startswith("win32"):
         from .linux_x86 import compile_native_linux
         return compile_native_linux(source, output)
-    hir = lower_cst_to_hir(parse(source))
+    try:
+        hir = lower_cst_to_hir(parse(source))
+    except (MIRLoweringError, LoweringError) as error:
+        raise NativeBuildError(str(error)) from error
     from_imports = {}
     for statement in hir.body:
         if getattr(statement, "kind", None) == HIRKind.IMPORT_FROM:
@@ -3347,7 +3350,7 @@ def compile_native(source: str, output: str | Path) -> Path:
                     from_imports[(mod_name, alias.asname or alias.name)] = True
     try:
         mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
-    except MIRLoweringError as error:
+    except (MIRLoweringError, LoweringError) as error:
         raise NativeBuildError(str(error)) from error
     return _compile_native_mir(mir, output)
 
@@ -3622,14 +3625,17 @@ def compile_native_files(entry: str | Path, output: str | Path) -> Path:
         from .linux_x86 import compile_native_linux_files
         return compile_native_linux_files(entry, output)
     entry_path = Path(entry).resolve()
-    hir = lower_cst_to_hir(parse(entry_path.read_text(encoding="utf-8-sig")))
-    modules, from_imports, module_meta = _scan_native_modules(entry_path)
+    try:
+        hir = lower_cst_to_hir(parse(entry_path.read_text(encoding="utf-8-sig")))
+        modules, from_imports, module_meta = _scan_native_modules(entry_path)
+    except (MIRLoweringError, LoweringError) as error:
+        raise NativeBuildError(str(error)) from error
     try:
         mir = lower_hir_to_mir(
             hir, modules, from_imports=from_imports,
             entry_file=str(entry_path), module_meta=module_meta,
         )
-    except MIRLoweringError as error:
+    except (MIRLoweringError, LoweringError) as error:
         raise NativeBuildError(str(error)) from error
     return _compile_native_mir(mir, output)
 

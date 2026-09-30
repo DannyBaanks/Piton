@@ -35,6 +35,7 @@ from piton.cst import (
     List as CSTList, Tuple as CSTTuple, Set as CSTSet, Dict as CSTDict,
     ListComp as CSTListComp, SetComp as CSTSetComp, DictComp as CSTDictComp,
     GenExpr as CSTGenExpr, CompFor as CSTCompFor, IfExpr as CSTIfExpr,
+    FString as CSTFString, FStringPart as CSTFStringPart, FStringExpr as CSTFStringExpr,
     Await as CWAwait,
     ExprStmt, Assign, AnnAssign, AugAssign,
     Arguments as CSTArguments, Arg as CSTArg,
@@ -283,6 +284,39 @@ class Lowerer:
     def _lower_boolop(self, cst: CSTBoolOp):
         values = [self.lower(v) for v in cst.values]
         return BoolOp(kind=HIRKind.BOOL_OP, op=cst.op, values=values)
+
+    def _lower_fstring(self, cst: CSTFString):
+        # FSTRINGS_V1: f'...' with plain expressions lowers to
+        # '<template>'.format(arg, ...) — reusing STR_METHODS_V1 in both
+        # backends with zero mir/backend work. Conversions (!r !s !a) and
+        # format specs fail closed (LoweringError, wrapped to
+        # NativeBuildError at the compile entry points).
+        template_parts: List[str] = []
+        args = []
+        for part in cst.parts:
+            if isinstance(part, CSTFStringPart):
+                template_parts.append(part.value)
+            elif isinstance(part, CSTFStringExpr):
+                if part.format_spec is not None or part.conversion != -1:
+                    raise LoweringError(
+                        "f-string with conversion (!r !s !a) or format spec is not supported"
+                    )
+                template_parts.append("{}")
+                args.append(self.lower(part.value))
+            else:
+                raise LoweringError(
+                    f"f-string with unexpected part {type(part).__name__} is not supported"
+                )
+        return Call(
+            kind=HIRKind.CALL,
+            func=Attr(
+                kind=HIRKind.ATTR,
+                value=Const(kind=HIRKind.CONST, value="".join(template_parts)),
+                attr="format",
+                ctx="Load",
+            ),
+            args=args,
+        )
 
     def _lower_call(self, cst: CSTCall):
         func = self.lower(cst.func)
