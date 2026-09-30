@@ -238,6 +238,7 @@ static void piton_print_float_bits(long bits){piton_print_float_bits_raw(bits);p
 static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;return a.bits==b.bits;}
 static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
 static void piton_seq_put(PitonSeq*s,long i,PitonSlot v){if(i>=0&&i<s->length)s->items[i]=v;}
+static long piton_str_repeat(const char*s,long n){if(n<=0){char*p=piton_alloc(1);p[0]=0;return(long)p;}usize sl=piton_strlen(s);char*p=piton_alloc(sl*(usize)n+1);for(long i=0;i<n;++i)piton_memcpy(p+i*sl,s,sl);p[sl*(usize)n]=0;return(long)p;}
 static long piton_seq_concat(PitonSeq*a,PitonSeq*b){if(!a||!b||a->kind!=b->kind||((a->kind!=PK_LIST)&&(a->kind!=PK_TUPLE))){piton_write(2,"TypeError: cannot concatenate\n",30);piton_exit(1);}PitonSeq*s=piton_seq_new((int)a->kind,a->length+b->length);for(long i=0;i<a->length;++i)s->items[i]=a->items[i];for(long i=0;i<b->length;++i)s->items[a->length+i]=b->items[i];return(long)s;}
 static long piton_str_contains(const char*h,const char*n){usize hl=piton_strlen(h),nl=piton_strlen(n);if(nl==0)return 1;if(nl>hl)return 0;for(usize i=0;i+nl<=hl;++i){usize j=0;while(j<nl&&h[i+j]==n[j])++j;if(j==nl)return 1;}return 0;}
 static long piton_seq_contains(PitonSeq*s,PitonSlot v){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return 1;return 0;}
@@ -258,6 +259,13 @@ static long piton_str_strip(const char*s,int mode){usize n=piton_strlen(s),a=0,b
 static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(sep);usize total=0;long cnt=items?items->length:0;for(long i=0;i<cnt;++i){if(items->items[i].kind!=PK_STR){piton_write(2,"TypeError: sequence item is not a string\n",41);piton_exit(1);}total+=piton_strlen((const char*)items->items[i].bits);}total+=sl*(usize)(cnt>0?cnt-1:0);char*p=piton_alloc(total+1);usize o=0;for(long i=0;i<cnt;++i){if(i){piton_memcpy(p+o,sep,sl);o+=sl;}usize el=piton_strlen((const char*)items->items[i].bits);piton_memcpy(p+o,(const char*)items->items[i].bits,el);o+=el;}p[o]=0;return(long)p;}
 static long piton_str_index(const char*s,long i){long n=(long)piton_strlen(s);if(i<0)i+=n;if(i<0||i>=n){piton_write(2,"IndexError\n",11);piton_exit(1);}char*p=piton_alloc(2);p[0]=s[i];p[1]=0;return(long)p;}
 static long piton_str_slice(const char*s,long lo,long hi){long n=(long)piton_strlen(s);if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;char*p=piton_alloc((usize)(hi-lo)+1);for(long i=0;i<hi-lo;++i)p[i]=s[lo+i];p[hi-lo]=0;return(long)p;}
+static PitonSlot piton_seq_pop(PitonSeq*s,long i){if(!s||s->length<=0){piton_write(2,"IndexError: pop from empty list\n",32);piton_exit(1);}if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError: pop index out of range\n",35);piton_exit(1);}PitonSlot v=s->items[i];for(long j=i;j+1<s->length;++j)s->items[j]=s->items[j+1];--s->length;return v;}
+static void piton_seq_reverse(PitonSeq*s){if(!s)return;for(long i=0,j=s->length-1;i<j;++i,--j){PitonSlot t=s->items[i];s->items[i]=s->items[j];s->items[j]=t;}}
+static void piton_seq_insert(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0)i=0;if(i>s->length)i=s->length;if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}for(long j=s->length;j>i;--j)s->items[j]=s->items[j-1];s->items[i]=v;++s->length;}
+static long piton_seq_count(PitonSeq*s,PitonSlot v){if(!s)return 0;long n=0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))++n;return n;}
+static void piton_seq_sort(PitonSeq*s){if(!s||s->length<2)return;int allint=1,allstr=1;for(long i=0;i<s->length;++i){if(s->items[i].kind!=PK_INT&&s->items[i].kind!=PK_BOOL)allint=0;if(s->items[i].kind!=PK_STR)allstr=0;}if(!allint&&!allstr){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}for(long i=1;i<s->length;++i){PitonSlot k=s->items[i];long j=i-1;if(allstr&&!allint){while(j>=0&&piton_strcmp((const char*)s->items[j].bits,(const char*)k.bits)>0){s->items[j+1]=s->items[j];--j;}}else{while(j>=0&&s->items[j].bits>k.bits){s->items[j+1]=s->items[j];--j;}}s->items[j+1]=k;}}
+static PitonSlot piton_dict_get_1(PitonDict*d,PitonSlot k){if(d)for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k))return d->items[i].value;piton_write(2,"KeyError\n",9);piton_exit(1);}
+static PitonSlot piton_dict_get_d(PitonDict*d,PitonSlot k,PitonSlot dflt){if(d)for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k))return d->items[i].value;return dflt;}
 static long piton_seq_slice(PitonSeq*s,long lo,long hi){if(!s)return 0;long n=s->length;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;PitonSeq*r=piton_seq_new((int)s->kind,hi-lo);for(long i=0;i<hi-lo;++i)r->items[i]=s->items[lo+i];return(long)r;}
 static PitonSlot piton_seq_get(PitonSeq*s,long i){if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError\n",11);piton_exit(1);}return s->items[i];}
 static long piton_iterator_new(PitonSeq*s){if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->index=0;return(long)i;}
@@ -718,6 +726,85 @@ class LinuxCEmitter:
     def _slot(self, value: Any, types: dict[str, str]) -> str:
         return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
 
+    def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
+                                call_args: list[Any], coll_type: str, types: dict[str, str]) -> None:
+        """COLL_METHODS_V1: builtin collection methods bound by static dispatch.
+
+        Same contract as STR_METHODS_V1: exact arity checked at build time,
+        mutators return None (types "none"), element-returning reads follow
+        the get_item convention (types "int" — the untagged model cannot know
+        the element type). Out-of-subset runtime inputs (pop from empty,
+        heterogeneous sort) exit with the CPython exception name, like the
+        other runtime helpers.
+        """
+        operand = self._value(obj)
+
+        def require_count(counts: tuple[int, ...], what: str) -> None:
+            if len(call_args) not in counts:
+                raise NativeBuildError(f"Linux {coll_type}.{method}() requires {what}")
+
+        if coll_type == "list":
+            if method == "append":
+                require_count((1,), "exactly one argument")
+                out.append(f"    piton_seq_append((PitonSeq*){operand},{self._slot(call_args[0], types)});")
+                types[result] = "none"
+            elif method == "pop":
+                require_count((0, 1), "zero or one int argument")
+                if call_args and types.get(call_args[0]) not in {"int", "bool"}:
+                    raise NativeBuildError("Linux list.pop() requires an int index or nothing")
+                index = self._value(call_args[0]) if call_args else "-1"
+                out.append(f"    {_name(result)}=piton_seq_pop((PitonSeq*){operand},{index}).bits;")
+                types[result] = "int"
+            elif method == "reverse":
+                require_count((0,), "no arguments")
+                out.append(f"    piton_seq_reverse((PitonSeq*){operand});")
+                types[result] = "none"
+            elif method == "insert":
+                require_count((2,), "exactly two arguments (index, value)")
+                if types.get(call_args[0]) not in {"int", "bool"}:
+                    raise NativeBuildError("Linux list.insert() requires an int index")
+                out.append(f"    piton_seq_insert((PitonSeq*){operand},{self._value(call_args[0])},{self._slot(call_args[1], types)});")
+                types[result] = "none"
+            elif method == "count":
+                require_count((1,), "exactly one argument")
+                out.append(f"    {_name(result)}=piton_seq_count((PitonSeq*){operand},{self._slot(call_args[0], types)});")
+                types[result] = "int"
+            elif method == "sort":
+                require_count((0,), "no arguments")
+                out.append(f"    piton_seq_sort((PitonSeq*){operand});")
+                types[result] = "none"
+            else:
+                raise NativeBuildError(f"Linux list.{method}() is not supported")
+        elif coll_type == "tuple":
+            if method == "count":
+                require_count((1,), "exactly one argument")
+                out.append(f"    {_name(result)}=piton_seq_count((PitonSeq*){operand},{self._slot(call_args[0], types)});")
+                types[result] = "int"
+            else:
+                raise NativeBuildError(f"Linux tuple.{method}() is not supported")
+        elif coll_type == "dict":
+            if method == "get":
+                require_count((1, 2), "one or two arguments (key[, default])")
+                if len(call_args) == 2:
+                    default = self._slot(call_args[1], types)
+                    out.append(f"    {_name(result)}=piton_dict_get_d((PitonDict*){operand},{self._slot(call_args[0], types)},{default}).bits;")
+                else:
+                    # single-arg get on a missing key raises KeyError — the
+                    # untagged model cannot print an int-or-None union, and a
+                    # loud error beats a silent wrong value (consistent with
+                    # d[k] in this backend, which also raises KeyError).
+                    out.append(f"    {_name(result)}=piton_dict_get_1((PitonDict*){operand},{self._slot(call_args[0], types)}).bits;")
+                types[result] = "int"
+            else:
+                raise NativeBuildError(f"Linux dict.{method}() is not supported")
+        elif coll_type == "set":
+            if method == "add":
+                require_count((1,), "exactly one argument")
+                out.append(f"    piton_set_add((PitonSet*){operand},{self._slot(call_args[0], types)});")
+                types[result] = "none"
+            else:
+                raise NativeBuildError(f"Linux set.{method}() is not supported")
+
     def _emit_str_method(self, out: list[str], result: Any, method: str, obj: Any,
                          call_args: list[Any], types: dict[str, str]) -> None:
         """STR_METHODS_V1: builtin str methods bound by static dispatch.
@@ -1146,6 +1233,14 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}={self._value(source)};")
                 types[result] = "generator"
                 return out
+            elif source_type.startswith("iterator:"):
+                # ITER_PASSTHROUGH_V1: iter(x) on an iterator returns x
+                # itself (CPython semantics) — this unblocks for-loops over
+                # builtin iterators (enumerate/zip/map/filter/reversed),
+                # whose iter_next dispatch already exists.
+                out.append(f"    {_name(result)}={self._value(source)};")
+                types[result] = source_type
+                return out
             elif source_type == "str":
                 out.append(f"    {_name(result)}=piton_str_iterator_new((char*){self._value(source)});")
                 types[result] = "iterator:str"
@@ -1177,6 +1272,13 @@ class LinuxCEmitter:
             elif builtin in {"map", "filter"}:
                 if types.get(source) not in {"list", "tuple"}:
                     raise NativeBuildError("native map/filter require a list or tuple")
+                if types.get(start) == "builtin":
+                    # ITER_PASSTHROUGH_V1 guard: a builtin NAME has no native
+                    # function address — passing its uninitialized marker as
+                    # the callback would jump through garbage (crash).
+                    raise NativeBuildError(
+                        f"native {builtin} requires a user function callback, not a builtin name"
+                    )
                 callback = self._value(start)
                 out.append(f"    {_name(result)}=piton_callback_iterator_new((void*){self._value(source)},(long){callback},{1 if builtin == 'filter' else 0});")
             elif builtin == "sorted":
@@ -1189,6 +1291,12 @@ class LinuxCEmitter:
         elif op == "iter_next":
             iterator, handler_label = args[0], args[1]
             iterator_type = types.get(iterator, "")
+            # ITER_PASSTHROUGH_V1: a nested loop's exhaustion flag would
+            # otherwise trip the outer loop's check (same stale-flag class
+            # the Windows backend clears at the loop-exit block). Any live
+            # flag here is stale by construction — live raises route or exit
+            # at their own emission site — so clearing on entry is sound.
+            out.append("    piton_catch_clear();")
             if iterator_type in {"genexpr", "iterator:genexpr"}:
                 out.append(f"    {_name(result)}=piton_genexpr_next((PitonGenExpr*){self._value(iterator)});")
             elif iterator_type == "generator":
@@ -1308,6 +1416,19 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(long)piton_str_concat((const char*){_name(left)},(const char*){_name(right)});")
                     types[result] = "str"
                     return out
+                if operator == "*":
+                    # STR_REPEAT_V1: 'ab' * 3 (either order); CPython yields
+                    # '' for non-positive counts.
+                    if left_type == "str" and right_type in {"int", "bool"}:
+                        str_side, times_side = left, right
+                    elif right_type == "str" and left_type in {"int", "bool"}:
+                        str_side, times_side = right, left
+                    else:
+                        str_side, times_side = None, None
+                    if str_side is not None:
+                        out.append(f"    {_name(result)}=(long)piton_str_repeat((const char*){self._value(str_side)},{self._value(times_side)});")
+                        types[result] = "str"
+                        return out
                 raise NativeBuildError(f"Linux string binary operator not supported: {operator}")
             if {left_type, right_type} & {"list", "tuple", "dict", "set"}:
                 # SEQ_CONCAT_V1: list+list / tuple+tuple concatenate; any other
@@ -1552,6 +1673,11 @@ class LinuxCEmitter:
                             out.append(f'    {_name(result)}={_name(len_cls+"__"+"__len__")}({self._value(values[0])});')
                             types[result] = "int"
                             return out
+                if len(values) == 1 and types.get(values[0]) == "str":
+                    # STR_LEN_V1: len('hola') is the C string length.
+                    out.append(f"    {_name(result)}=(long)piton_strlen((const char*){self._value(values[0])});")
+                    types[result] = "int"
+                    return out
                 if len(values) != 1 or types.get(values[0]) not in {"list", "tuple", "dict", "set"}:
                     raise NativeBuildError("Linux len requires one collection")
                 value_type = types[values[0]]
@@ -1992,6 +2118,12 @@ class LinuxCEmitter:
                     # STR_METHODS_V1: builtin str methods bind statically here;
                     # anything not in the table fails closed.
                     self._emit_str_method(out, result, method, obj, list(call_args), types)
+                    return out
+                coll_type = types.get(obj, "")
+                if coll_type in {"list", "tuple", "dict", "set"}:
+                    # COLL_METHODS_V1: builtin collection methods bind
+                    # statically here, mirroring the str table.
+                    self._emit_collection_method(out, result, method, obj, list(call_args), coll_type, types)
                     return out
                 if not owner_type.startswith("object:"):
                     raise NativeBuildError("Linux method receiver class is not statically known")

@@ -1565,6 +1565,39 @@ const char *piton_str_slice(const char *s, int64_t lo, int64_t hi) {
     return p;
 }
 
+/* String character iteration (mirrors the Linux freestanding prelude):
+   yields heap 1-char C strings typed str; exhaustion raises StopIteration
+   through piton_raise so the for-loop guard routes it. */
+typedef struct {
+    int64_t magic;
+    const char *str;
+    int64_t index;
+    int64_t length;
+} PitonStrIterator;
+
+#define PITON_STR_ITERATOR_MAGIC 0x5049544E53545249LL
+
+void *piton_str_iterator_new(const char *s) {
+    if (!s) piton_raise_unhandled("TypeError", "'NoneType' object is not iterable");
+    PitonStrIterator *it = calloc(1, sizeof(*it));
+    it->magic = PITON_STR_ITERATOR_MAGIC;
+    it->str = s;
+    it->index = 0;
+    it->length = (int64_t)strlen(s);
+    return it;
+}
+
+int64_t piton_str_iterator_next(void *raw) {
+    PitonStrIterator *it = raw;
+    if (!it || it->magic != PITON_STR_ITERATOR_MAGIC)
+        piton_raise_unhandled("TypeError", "object is not an iterator");
+    if (it->index >= it->length) { piton_raise("StopIteration", ""); return 0; }
+    unsigned char c = (unsigned char)it->str[it->index++];
+    char *p = malloc(2);
+    p[0] = (char)c; p[1] = 0;
+    return (int64_t)p;
+}
+
 void *piton_seq_slice(void *raw, int64_t lo, int64_t hi) {
     PitonCollection *c = raw;
     if (!c) return NULL;
@@ -1588,6 +1621,17 @@ void *piton_seq_slice(void *raw, int64_t lo, int64_t hi) {
 }
 
 /* ── STR_METHODS_V1 (ASCII + fail-closed non-ASCII) ───────────────────────── */
+
+int64_t piton_str_len(const char *s) { return (int64_t)strlen(s); }
+
+char *piton_str_repeat(const char *s, int64_t n) {
+    if (n <= 0) { char *p = malloc(1); p[0] = 0; return p; }
+    size_t sl = strlen(s);
+    char *p = malloc(sl * (size_t)n + 1);
+    for (int64_t i = 0; i < n; ++i) memcpy(p + i * sl, s, sl);
+    p[sl * (size_t)n] = 0;
+    return p;
+}
 
 char *piton_str_case(const char *s, int upper) {
     size_t n = strlen(s);
@@ -1731,6 +1775,103 @@ char *piton_str_join(const char *sep, void *raw) {
     }
     p[o] = 0;
     return p;
+}
+
+/* ── COLL_METHODS_V1 ──────────────────────────────────────────────────── */
+
+int64_t piton_seq_pop(void *raw, int64_t i) {
+    PitonCollection *c = raw;
+    if (!c || c->length <= 0) piton_raise_unhandled("IndexError", "pop from empty list");
+    if (i < 0) i += c->length;
+    if (i < 0 || i >= c->length) piton_raise_unhandled("IndexError", "pop index out of range");
+    int64_t v = c->items[i];
+    for (int64_t j = i; j + 1 < c->length; ++j) c->items[j] = c->items[j + 1];
+    --c->length;
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    return v;
+}
+
+void piton_seq_reverse(void *raw) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    for (int64_t i = 0, j = c->length - 1; i < j; ++i, --j) {
+        int64_t t = c->items[i]; c->items[i] = c->items[j]; c->items[j] = t;
+    }
+}
+
+void piton_seq_insert(void *raw, int64_t i, int64_t value, int64_t type_tag) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    if (i < 0) i += c->length;
+    if (i < 0) i = 0;
+    if (i > c->length) i = c->length;
+    if (c->length >= c->capacity) {
+        int64_t nc = c->capacity ? c->capacity * 2 : 4;
+        c->items = realloc(c->items, (size_t)nc * sizeof(int64_t));
+        c->capacity = nc;
+    }
+    for (int64_t j = c->length; j > i; --j) c->items[j] = c->items[j - 1];
+    c->items[i] = (type_tag == 0) ? pv_int(value) : pv_encode(PITON_TAG_OBJECT, value);
+    ++c->length;
+}
+
+int64_t piton_seq_count(void *raw, int64_t value, int64_t type_tag) {
+    PitonCollection *c = raw;
+    if (!c) return 0;
+    int64_t needle = (type_tag == 0) ? pv_int(value) : pv_encode(PITON_TAG_OBJECT, value);
+    int64_t n = 0;
+    for (int64_t i = 0; i < c->length; ++i)
+        if (c->items[i] == needle) ++n;
+    return n;
+}
+
+void piton_seq_sort(void *raw) {
+    PitonCollection *c = raw;
+    if (!c || c->length < 2) return;
+    for (int64_t i = 0; i < c->length; ++i)
+        if (pv_tag(c->items[i]) != PITON_TAG_INT)
+            piton_raise_unhandled("TypeError", "'<' not supported between incompatible types");
+    for (int64_t i = 1; i < c->length; ++i) {
+        int64_t value = c->items[i], j = i;
+        while (j > 0 && pv_payload_signed(c->items[j - 1]) > pv_payload_signed(value)) {
+            c->items[j] = c->items[j - 1]; --j;
+        }
+        c->items[j] = value;
+    }
+}
+
+int64_t piton_dict_get_d(void *raw, int64_t key, int64_t dflt) {
+    PitonDict *d = raw;
+    if (!d) return dflt;
+    int64_t ek = pv_int(key);
+    for (int64_t i = 0; i < d->length; ++i)
+        if (piton_value_eq_raw(d->entries[i].key, ek)) {
+            int64_t v = d->entries[i].value;
+            if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+            if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+            return v;
+        }
+    return dflt;
+}
+
+int64_t piton_dict_get_1(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    if (d) {
+        int64_t ek = pv_int(key);
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, ek)) {
+                int64_t v = d->entries[i].value;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                return v;
+            }
+    }
+    /* single-arg get on a missing key: the untagged model cannot print an
+       int-or-None union, so it fails loud (consistent with d[k] here and
+       with the Linux backend) instead of a silent wrong value. */
+    piton_raise_unhandled("KeyError", "key not found");
+    return 0;
 }
 
 /* CPython {} / {N} positional substitution with {{ }} escapes; {name},
