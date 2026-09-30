@@ -466,6 +466,11 @@ class LinuxCEmitter:
         self.generator_layouts: dict[str, dict[str, int]] = {}
         self.function_params: dict[str, list[str]] = {}
         self.function_return_types: dict[str, str] = {}
+        self._func_globals: dict[str, set[str]] = {}
+        self._func_stores: dict[str, set[str]] = {}
+        self._module_stored: set[str] = set()
+        self._module_types: dict[str, str] = {}
+        self._shared_globals: set[str] = set()
         self._fn_consts: dict[str, Any] = {}
         self._tuple_elems: dict[str, tuple] = {}
         self._gen_layout: dict[str, int] = {}
@@ -482,6 +487,7 @@ class LinuxCEmitter:
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self.function_params = {function.name: list(function.params) for function in module.functions}
         self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
+        self._scan_module_globals(module)
         self.function_return_types = self._infer_return_types(module)
         self.generator_layouts = {}
         for function in module.functions:
@@ -532,6 +538,11 @@ class LinuxCEmitter:
                     continue
                 params = "long *frame" if function.frame_abi else ", ".join(f"long {_name(param)}" for param in function.params) or "void"
                 lines.append(f"static long {_name(function.name)}({params});")
+        if self._shared_globals:
+            # GLOBAL_DECL_V1: module-level names shared cross-function live
+            # in file scope so every function references the same variable.
+            for name in sorted(self._shared_globals):
+                lines.append(f"static long {_name(name)};")
         if self._has_rich_runtime:
             # Forward declarations for runtime helpers used in <module>
             lines.append("static long piton_argv_new(void);")
@@ -556,14 +567,14 @@ class LinuxCEmitter:
                     slots.add(instruction.result)
                 if instruction.op == "store":
                     slots.add(instruction.args[0])
-        locals_ = sorted(slots if function.frame_abi else slots - set(function.params))
+        locals_ = sorted((slots if function.frame_abi else slots - set(function.params)) - self._shared_globals)
         lines = [signature + " {"]
         if locals_:
             lines.append("    long " + ", ".join(f"{_name(slot)}=0" for slot in locals_) + ";")
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
-        self._tuple_elems = {}
+        self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         if function.vararg:
             types[function.vararg] = "tuple"
         if function.kwarg:
@@ -615,7 +626,7 @@ class LinuxCEmitter:
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
-        self._tuple_elems = {}
+        self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
             lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
@@ -670,7 +681,7 @@ class LinuxCEmitter:
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
-        self._tuple_elems = {}
+        self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
             lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
@@ -1121,6 +1132,79 @@ class LinuxCEmitter:
                                 return True
         return False
 
+    def _scan_module_globals(self, module: MIRModule) -> None:
+        """GLOBAL_DECL_V1: file-scope shared globals are the module-stored
+        names declared global in at least one function. Also records, per
+        function, the locally stored names (shadowing legitimately wins
+        over the module binding, like CPython) and the module-level value
+        types for constant initializers."""
+        self._func_globals = {}
+        self._func_stores = {}
+        self._module_stored = set()
+        self._module_types = {}
+
+        def literal_type(value: Any) -> str | None:
+            if value is None:
+                return "none"
+            if isinstance(value, bool):
+                return "bool"
+            if isinstance(value, str):
+                return "str"
+            if isinstance(value, float):
+                return "float"
+            if isinstance(value, int):
+                return "bigint" if abs(value) > 9223372036854775807 else "int"
+            return None
+
+        for function in module.functions:
+            declared: set[str] = set()
+            stored: set[str] = set()
+            local_consts: dict[str, Any] = {}
+            module_temps: set[str] = set()
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if instruction.op == "global_decl" and instruction.args:
+                        declared.add(instruction.args[0])
+                    elif (
+                        instruction.op == "object_new"
+                        and instruction.result
+                        and instruction.args
+                        and instruction.args[0] == "module"
+                    ):
+                        # module alias bindings (`importar b` stores the fresh
+                        # module object) are not user variables: skipping them
+                        # keeps import machinery (often dead loads consumed
+                        # through qualified names) out of the global checks.
+                        module_temps.add(instruction.result)
+                    elif instruction.op == "store" and instruction.args:
+                        stored.add(instruction.args[0])
+                        if function.name == "<module>":
+                            target, source = instruction.args[0], instruction.args[1]
+                            if target.startswith("__") and target.endswith("__"):
+                                continue
+                            if isinstance(source, str) and source in module_temps:
+                                continue
+                            self._module_stored.add(target)
+                            if isinstance(source, str) and source in local_consts:
+                                kind = local_consts[source]
+                                if kind:
+                                    self._module_types[target] = kind
+                    elif instruction.op == "const" and instruction.result and instruction.args:
+                        local_consts[instruction.result] = literal_type(instruction.args[0])
+                    elif instruction.op == "build_collection" and instruction.result and instruction.args:
+                        if instruction.args[0] in {"list", "tuple", "dict", "set"}:
+                            local_consts[instruction.result] = instruction.args[0]
+                    elif instruction.op == "object_new" and instruction.result and instruction.args:
+                        local_consts[instruction.result] = f"object:{instruction.args[0]}"
+            if declared:
+                self._func_globals[function.name] = declared
+            if stored:
+                self._func_stores[function.name] = stored
+        declared_anywhere: set[str] = set()
+        for names in self._func_globals.values():
+            declared_anywhere |= names
+        self._shared_globals = self._module_stored & declared_anywhere
+
     def _infer_return_types(self, module: MIRModule) -> dict[str, str]:
         """RETURNTYPE_V1: narrow, sound return-type inference over MIR.
 
@@ -1445,14 +1529,59 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=0;")
                 types[result] = "module"
                 return out
+            # GLOBAL_DECL_V1: the declaration wins over local stores
+            # (`global g` + `g = g + 1` reads the shared cell, like CPython).
+            if source in self._shared_globals and (
+                function.name == "<module>" or source in self._func_globals.get(function.name, ())
+            ):
+                if function.name != "<module>" and (
+                    getattr(function, "is_generator", False)
+                    or getattr(function, "is_coroutine", False)
+                    or getattr(function, "is_async_generator", False)
+                ):
+                    raise NativeBuildError(f"Linux global '{source}' inside generators is not supported yet")
+                out.append(f"    {_name(result)}={_name(source)};")
+                types[result] = self._module_types.get(source, types.get(source, "int"))
+                if source in self._tuple_elems:
+                    self._tuple_elems[result] = self._tuple_elems[source]
+                return out
+            if (
+                source in self._module_stored
+                and function.name != "<module>"
+                and source not in function.params
+                and source not in self._func_stores.get(function.name, ())
+            ):
+                # CPython allows reads without declaration, but the subset
+                # needs the explicit opt-in (it keeps writes local); fail
+                # closed with an actionable message instead of C spew.
+                raise NativeBuildError(
+                    f"Linux '{source}' is assigned at module level; declare it global to read it inside '{function.name}'"
+                )
             out.append(f"    {_name(result)}={_name(source)};")
+        elif op == "global_decl":
+            # GLOBAL_DECL_V1: pure metadata (resolved in the pre-scan); no code.
+            return out
         elif op == "store":
             if types.get(args[1]) == "builtin":
-                # BUILTIN_MARKER_V1: storing a builtin marker would copy an
-                # uninitialized C variable — fail closed.
+                # BUILTIN_MARKER_V1 (kept first: it applies to globals too).
                 raise NativeBuildError(
                     f"Linux native store of builtin '{aliases.get(args[1], args[1])}' as a value is not supported"
                 )
+            if (
+                args[0] in self._shared_globals
+                and (function.name == "<module>" or args[0] in self._func_globals.get(function.name, ()))
+            ):
+                if function.name != "<module>" and (
+                    getattr(function, "is_generator", False)
+                    or getattr(function, "is_coroutine", False)
+                    or getattr(function, "is_async_generator", False)
+                ):
+                    raise NativeBuildError(f"Linux global '{args[0]}' inside generators is not supported yet")
+                out.append(f"    {_name(args[0])}={self._value(args[1])};")
+                types[args[0]] = types.get(args[1], "int")
+                if args[1] in self._tuple_elems:
+                    self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
+                return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
             if args[1] in self._tuple_elems:
@@ -1529,10 +1658,19 @@ class LinuxCEmitter:
                     if not isinstance(template, str):
                         raise NativeBuildError("Linux str % formatting requires a literal template")
                     translated, specs = self._parse_percent_template(template)
-                    if types.get(right) == "tuple" and right in self._tuple_elems:
-                        arg_values = list(self._tuple_elems[right])
-                    elif types.get(right) == "tuple":
-                        raise NativeBuildError("Linux str % formatting requires a tuple of statically known length")
+                    operands: list[str] = []
+                    etypes: list[str] = []
+                    if types.get(right) == "tuple":
+                        known = self._tuple_elems.get(right)
+                        if known is None:
+                            known = self._tuple_elems.get(aliases.get(right, right))
+                        if known is None:
+                            raise NativeBuildError("Linux str % formatting requires a tuple of statically known length")
+                        for index, etype in enumerate(known):
+                            operands.append(
+                                f"piton_seq_get((PitonSeq*){self._value(right)},{index}).bits"
+                            )
+                            etypes.append(etype)
                     else:
                         if aliases.get(right, right) in function.params:
                             # the parameter's runtime type is unknown: treating
@@ -1541,15 +1679,14 @@ class LinuxCEmitter:
                             raise NativeBuildError(
                                 "Linux str % formatting a bare parameter is not supported (type unknown)"
                             )
-                        arg_values = [right]
-                    if len(specs) != len(arg_values):
+                        operands = [self._value(right)]
+                        etypes = [types.get(right, "int")]
+                    if len(specs) != len(operands):
                         raise NativeBuildError(
-                            f"Linux str % formatting: {len(specs)} conversion(s) but {len(arg_values)} argument(s)"
+                            f"Linux str % formatting: {len(specs)} conversion(s) but {len(operands)} argument(s)"
                         )
                     pieces = []
-                    for index, (spec, value) in enumerate(zip(specs, arg_values)):
-                        arg_type = types.get(value, "int")
-                        operand = self._value(value)
+                    for index, (spec, operand, arg_type) in enumerate(zip(specs, operands, etypes)):
                         if spec == "s":
                             if arg_type == "int":
                                 pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_int({operand});")
@@ -1586,8 +1723,8 @@ class LinuxCEmitter:
                                 pieces.append(f"const char*_pp{index}=(const char*)piton_str_single_char((const char*){operand});")
                             else:
                                 raise NativeBuildError(f"Linux str %c requires int or 1-character str, not {arg_type}")
-                    names = ",".join(f"_pp{index}" for index in range(len(arg_values))) or "_pp0"
-                    if not arg_values:
+                    names = ",".join(f"_pp{index}" for index in range(len(operands))) or "_pp0"
+                    if not operands:
                         pieces.append('const char*_pp0="";')
                     # a raising conversion (piton_chr out of range) yields NULL:
                     # route after EACH piece so the format engine never
@@ -1602,7 +1739,7 @@ class LinuxCEmitter:
                         else:
                             out.append("        piton_report_unhandled();piton_exit(1);")
                         out.append("    }")
-                    out.append(f"    {{const char*_pa[]={{{names}}}; {_name(result)}=(long)piton_str_format({json.dumps(translated)},{len(arg_values)},_pa);}}")
+                    out.append(f"    {{const char*_pa[]={{{names}}}; {_name(result)}=(long)piton_str_format({json.dumps(translated)},{len(operands)},_pa);}}")
                     self._emit_exc_check(out, function, handler_label)
                     out.append("    }")
                     types[result] = "str"
@@ -2482,10 +2619,11 @@ class LinuxCEmitter:
         elif op == "build_collection":
             kind, items = args[0], args[1]
             if kind == "tuple" and result:
-                # PCT_FORMAT_V1: record tuple elements so %-formatting can map
-                # conversion specs to argument values (tuples are immutable,
-                # so the recorded length is sound).
-                self._tuple_elems[result] = tuple(items)
+                # PCT_FORMAT_V1: record tuple ELEMENT TYPES so %-formatting
+                # can convert each element by static type. Types (unlike
+                # temps, which are SSA per-function) stay valid when the
+                # tuple crosses into another function via a global.
+                self._tuple_elems[result] = tuple(types.get(item, "int") for item in items)
             if kind in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=(long)piton_seq_new({self._kind(kind)},{len(items)});')
                 for index, value in enumerate(items):

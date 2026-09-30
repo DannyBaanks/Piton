@@ -189,9 +189,26 @@ def _nombre_asignado_en_scope(tokens: list[tokenize.TokenInfo]) -> set[str]:
         if siguiente is not None and siguiente.type == token.OP and siguiente.string == "=":
             asignados.add(actual.string)
         if actual.string in ("global", "no_local"):
-            sig2 = _siguiente_significativo(tokens, i + 1)
-            if sig2 is not None and sig2.type == token.NAME:
-                asignados.add(sig2.string)
+            # Collect every name in the `global a, b, ...` statement so a
+            # later load of a shadowed builtin is not mistranslated. Stop at
+            # the statement boundary (NEWLINE / `;`): an earlier version
+            # skipped newlines here and swallowed the next statement's first
+            # NAME — `global g` followed by `imprimir(g)` marked `imprimir`
+            # as assigned, so it was never translated to `print`.
+            k = i + 1
+            while k < len(tokens):
+                tok = tokens[k]
+                if tok.type in (token.INDENT, token.DEDENT, token.COMMENT, tokenize.NL):
+                    k += 1
+                    continue
+                if tok.type == token.NAME:
+                    asignados.add(tok.string)
+                    k += 1
+                    continue
+                if tok.type == token.OP and tok.string == ",":
+                    k += 1
+                    continue
+                break
     return asignados
 
 

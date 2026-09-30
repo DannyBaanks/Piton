@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import math
+import re
 import shutil
 import struct
 import subprocess
@@ -97,7 +98,12 @@ class Win64NasmEmitter:
         self._pushed_iters: set[str] = set()
         self._popped_iters: set[str] = set()
         self._loop_exit_pops: dict[str, int] = {}
-        self.tuple_elems: dict[str, tuple] = {}
+        self.tuple_etypes: dict[str, tuple] = {}
+        self._func_globals: dict[str, set[str]] = {}
+        self._func_stores: dict[str, set[str]] = {}
+        self._module_stored: set[str] = set()
+        self._module_types: dict[str, str] = {}
+        self._shared_globals: set[str] = set()
         self.next_internal_label = 0
         self.owned_slots: list[tuple[str, str]] = []
         self.bigint_slots: list[str] = []
@@ -126,6 +132,7 @@ class Win64NasmEmitter:
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self.function_param_map = {function.name: list(function.params) for function in module.functions}
         self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
+        self._scan_module_globals(module)
         # CALL_UNPACKING_DYNAMIC4_V1: temp/local names of dicts proven to be
         # built from constant-string keys (the only **-unpackable dicts).
         self.strkey_dict_temps: set[str] = set()
@@ -245,6 +252,12 @@ class Win64NasmEmitter:
             'lit_false: db "False", 0',
             'lit_none: db "None", 0',
         ])
+        if self._shared_globals:
+            # GLOBAL_DECL_V1: writable file-scope cells (the fmt block above
+            # lives in .rdata).
+            self.lines.append("section .data")
+            for name in sorted(self._shared_globals):
+                self.lines.append(f"{self._global_label(name)}: dq 0")
         return "\n".join(self.lines) + "\n"
 
     def _emit_function(self, function: MIRFunction) -> None:
@@ -260,7 +273,10 @@ class Win64NasmEmitter:
         self._pushed_iters = set()
         self._popped_iters = set()
         self._loop_exit_pops = {}
-        self.tuple_elems = {}
+        self.tuple_etypes = {k: v for k, v in self.tuple_etypes.items() if not k.startswith('%')}
+        # NOTE: the GLOBAL_DECL_V1 tables are set once by _scan_module_globals
+        # in emit() and must NOT be reset per function (that wiped them before
+        # any instruction was emitted).
         self.bigint_slots = []
         self.constants = {}
         if function.vararg:
@@ -370,7 +386,10 @@ class Win64NasmEmitter:
         self._pushed_iters = set()
         self._popped_iters = set()
         self._loop_exit_pops = {}
-        self.tuple_elems = {}
+        self.tuple_etypes = {k: v for k, v in self.tuple_etypes.items() if not k.startswith('%')}
+        # NOTE: the GLOBAL_DECL_V1 tables are set once by _scan_module_globals
+        # in emit() and must NOT be reset per function (that wiped them before
+        # any instruction was emitted).
         self.bigint_slots = []
         self.constants = {}
         if function.vararg:
@@ -422,7 +441,10 @@ class Win64NasmEmitter:
         self._pushed_iters = set()
         self._popped_iters = set()
         self._loop_exit_pops = {}
-        self.tuple_elems = {}
+        self.tuple_etypes = {k: v for k, v in self.tuple_etypes.items() if not k.startswith('%')}
+        # NOTE: the GLOBAL_DECL_V1 tables are set once by _scan_module_globals
+        # in emit() and must NOT be reset per function (that wiped them before
+        # any instruction was emitted).
         if yield_count:
             self.lines.extend([
                 f"    mov rcx, {self._address('@gen_ptr')}",
@@ -751,8 +773,8 @@ class Win64NasmEmitter:
             name = args[0]
             self.aliases[result] = name
             self.types[result] = self.types.get(name, "int")
-            if name in self.tuple_elems:
-                self.tuple_elems[result] = self.tuple_elems[name]
+            if name in self.tuple_etypes:
+                self.tuple_etypes[result] = self.tuple_etypes[name]
             if name in self.function_names:
                 self.lines.append(f"    lea rax, [{name}]")
                 self.lines.append(f"    mov {self._address(result)}, rax")
@@ -763,6 +785,36 @@ class Win64NasmEmitter:
                 # consumer fails closed instead of reading an uninitialized
                 # slot (previously: garbage / SIGSEGV).
                 self.types[result] = "builtin"
+                return
+            fname = getattr(self.function, "name", "<module>")
+            # GLOBAL_DECL_V1: the declaration wins over local stores.
+            if name in self._shared_globals and (
+                fname == "<module>" or name in self._func_globals.get(fname, ())
+            ):
+                if fname != "<module>" and self._is_gen_function():
+                    raise NativeBuildError(f"native global '{name}' inside generators is not supported yet")
+                self.lines.append(f"    mov rax, [{self._global_label(name)}]")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = self._module_types.get(name, self.types.get(name, "int"))
+                if name in self.tuple_etypes:
+                    self.tuple_etypes[result] = self.tuple_etypes[name]
+                return
+            if (
+                name in self._module_stored
+                and fname != "<module>"
+                and name not in getattr(self.function, "params", ())
+                and name not in self._func_stores.get(fname, ())
+            ):
+                raise NativeBuildError(
+                    f"native '{name}' is assigned at module level; declare it global to read it inside '{self.function.name}'"
+                )
+            if name in self._shared_globals and getattr(self.function, "name", "<module>") == "<module>":
+                # module-level access to the shared cell (the module store
+                # went to the data label, so the load must too — otherwise
+                # it would read an unreserved stack slot).
+                self.lines.append(f"    mov rax, [{self._global_label(name)}]")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = self._module_types.get(name, self.types.get(name, "int"))
                 return
             self.lines.append(f"    mov rax, {self._address(name)}")
             self.lines.append(f"    mov {self._address(result)}, rax")
@@ -776,12 +828,28 @@ class Win64NasmEmitter:
                 raise NativeBuildError(
                     f"native store of builtin '{self.aliases.get(args[1], args[1])}' as a value is not supported"
                 )
+            if (
+                args[0] in self._shared_globals
+                and (getattr(self.function, "name", "<module>") == "<module>"
+                     or args[0] in self._func_globals.get(getattr(self.function, "name", ""), ()))
+            ):
+                if getattr(self.function, "name", "<module>") != "<module>" and self._is_gen_function():
+                    raise NativeBuildError(f"native global '{args[0]}' inside generators is not supported yet")
+                self.lines.append(
+                    f"    mov rax, {self._address(args[1]) if isinstance(args[1], str) and args[1].startswith('%') else self._immediate(args[1])}"
+                )
+                self.lines.append(f"    mov [{self._global_label(args[0])}], rax")
+                if isinstance(args[1], str):
+                    self.types[args[0]] = self.types.get(args[1], "int")
+                    if args[1] in self.tuple_etypes:
+                        self.tuple_etypes[args[0]] = self.tuple_etypes[args[1]]
+                return
             self.lines.append(f"    mov rax, {self._address(args[1]) if isinstance(args[1], str) and args[1].startswith('%') else self._immediate(args[1])}")
             self.lines.append(f"    mov {self._address(args[0])}, rax")
             if isinstance(args[1], str):
                 self.types[args[0]] = self.types.get(args[1], "int")
-                if args[1] in self.tuple_elems:
-                    self.tuple_elems[args[0]] = self.tuple_elems[args[1]]
+                if args[1] in self.tuple_etypes:
+                    self.tuple_etypes[args[0]] = self.tuple_etypes[args[1]]
                 if args[1] in self.strkey_dict_temps:
                     self.strkey_dict_temps.add(args[0])
         elif op == "binary":
@@ -821,14 +889,32 @@ class Win64NasmEmitter:
                     # PCT_FORMAT_V1: "%s-%d" % args lowers through the {}
                     # engine after static translation (mirrors the Linux
                     # backend). The template must be a literal; tuple
-                    # arguments need a statically known length.
+                    # arguments need statically known elements (direct temps
+                    # same-function) or types (cross-function via a variable,
+                    # extracted with get_item).
                     template = self.constants.get(left)
                     if not isinstance(template, str):
                         raise NativeBuildError("native str % formatting requires a literal template")
-                    if self.types.get(right) == "tuple" and right in self.tuple_elems:
-                        arg_values = list(self.tuple_elems[right])
-                    elif self.types.get(right) == "tuple":
-                        raise NativeBuildError("native str % formatting requires a tuple of statically known length")
+                    if self.types.get(right) == "tuple":
+                        # element TYPES (not temps: SSA temps are meaningless
+                        # outside their function); elements come out via
+                        # get_item, which already decodes INT/BOOL payloads.
+                        etypes = self.tuple_etypes.get(right)
+                        if etypes is None:
+                            etypes = self.tuple_etypes.get(self.aliases.get(right, right))
+                        if etypes is None or any(e not in {"int", "bool", "str", "none"} for e in etypes):
+                            raise NativeBuildError(
+                                "native str % formatting requires a tuple of statically known element types"
+                            )
+                        arg_values = []
+                        for index, etype in enumerate(etypes):
+                            tmp = f"{right}_e{index}"
+                            self._load_operand(right, "rcx")
+                            self.lines.append(f"    mov rdx, {index}")
+                            self.lines.append("    call piton_collection_get")
+                            self.lines.append(f"    mov {self._address(tmp)}, rax")
+                            self.types[tmp] = etype
+                            arg_values.append(tmp)
                     else:
                         if self.aliases.get(right, right) in getattr(self.function, "params", ()):
                             raise NativeBuildError(
@@ -1237,8 +1323,10 @@ class Win64NasmEmitter:
             else:
                 kind_id = {"list": 1, "tuple": 2}[kind]
                 if kind == "tuple" and result:
-                    # PCT_FORMAT_V1: record tuple elements for %-formatting
-                    self.tuple_elems[result] = tuple(raw_items)
+                    # PCT_FORMAT_V1: record tuple elements (direct temps,
+                    # valid same-function) and element types (valid
+                    # cross-function: types outlive SSA temps).
+                    self.tuple_etypes[result] = tuple(self.types.get(item, "int") for item in raw_items)
                 self.lines.extend([
                     f"    mov rcx, {self._address(result)}",
                     "    call piton_collection_free",
@@ -2702,6 +2790,9 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address('@scratch0')}, rax")
                 self._emit_cleanup()
                 self.lines.extend([f"    mov rax, {self._address('@scratch0')}", "    leave", "    ret"])
+        elif op == "global_decl":
+            # GLOBAL_DECL_V1: pure metadata (resolved in the pre-scan); no code.
+            return
         elif op == "runtime_call":
             raise NativeBuildError(f"runtime operation not supported in native subset: {args[0]}")
 
@@ -3190,6 +3281,92 @@ class Win64NasmEmitter:
                 raise NativeBuildError(f"native set.{method}() is not supported")
         else:
             raise NativeBuildError(f"native {coll_type}.{method}() is not supported")
+
+    @staticmethod
+    def _global_label(name: str) -> str:
+        """GLOBAL_DECL_V1: nasm data label for a shared global."""
+        cleaned = re.sub(r"[^A-Za-z0-9_]", "_", name)
+        return f"piton_g_{cleaned}"
+
+    def _scan_module_globals(self, module: MIRModule) -> None:
+        """GLOBAL_DECL_V1: mirror of the Linux backend's pre-scan — shared
+        globals are the module-stored names declared global in at least one
+        function; module-level constant/collection/object initializers feed
+        the cross-function type table."""
+        self._func_globals = {}
+        self._func_stores = {}
+        self._module_stored = set()
+        self._module_types = {}
+
+        def literal_type(value: Any) -> str | None:
+            if value is None:
+                return "none"
+            if isinstance(value, bool):
+                return "bool"
+            if isinstance(value, str):
+                return "str"
+            if isinstance(value, float):
+                return "float"
+            if isinstance(value, int):
+                return "bigint" if abs(value) > (1 << 60) else "int"
+            return None
+
+        for function in module.functions:
+            declared: set[str] = set()
+            stored: set[str] = set()
+            local_consts: dict[str, Any] = {}
+            module_temps: set[str] = set()
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if instruction.op == "global_decl" and instruction.args:
+                        declared.add(instruction.args[0])
+                    elif (
+                        instruction.op == "object_new"
+                        and instruction.result
+                        and instruction.args
+                        and instruction.args[0] == "module"
+                    ):
+                        # module alias bindings (`importar b` stores the fresh
+                        # module object) are not user variables: skipping them
+                        # keeps import machinery (often dead loads consumed
+                        # through qualified names) out of the global checks.
+                        module_temps.add(instruction.result)
+                    elif instruction.op == "store" and instruction.args:
+                        stored.add(instruction.args[0])
+                        if function.name == "<module>":
+                            target, source = instruction.args[0], instruction.args[1]
+                            if target.startswith("__") and target.endswith("__"):
+                                continue
+                            if isinstance(source, str) and source in module_temps:
+                                continue
+                            self._module_stored.add(target)
+                            if isinstance(source, str) and source in local_consts:
+                                kind = local_consts[source]
+                                if kind:
+                                    self._module_types[target] = kind
+                    elif instruction.op == "const" and instruction.result and instruction.args:
+                        local_consts[instruction.result] = literal_type(instruction.args[0])
+                    elif instruction.op == "build_collection" and instruction.result and instruction.args:
+                        if instruction.args[0] in {"list", "tuple", "dict", "set"}:
+                            local_consts[instruction.result] = instruction.args[0]
+                    elif instruction.op == "object_new" and instruction.result and instruction.args:
+                        local_consts[instruction.result] = f"object:{instruction.args[0]}"
+            if declared:
+                self._func_globals[function.name] = declared
+            if stored:
+                self._func_stores[function.name] = stored
+        declared_anywhere: set[str] = set()
+        for names in self._func_globals.values():
+            declared_anywhere |= names
+        self._shared_globals = self._module_stored & declared_anywhere
+
+    def _is_gen_function(self) -> bool:
+        function = self.function
+        return bool(
+            getattr(function, "is_generator", False)
+            or getattr(function, "is_coroutine", False)
+            or getattr(function, "is_async_generator", False)
+        )
 
     def _emit_truth_test(self, operand: Any) -> None:
         if self.types.get(operand, "int") == "str":
