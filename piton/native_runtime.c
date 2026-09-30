@@ -2617,6 +2617,18 @@ void *piton_bigint_mul(void *a, void *b) {
     return r;
 }
 
+/* INT_POW_V1: exact non-negative integer power by square-and-multiply. */
+void *piton_bigint_pow_small(int64_t base, int64_t exp) {
+    void *acc = piton_bigint_from_i64(1);
+    void *b = piton_bigint_from_i64(base);
+    while (exp > 0) {
+        if (exp & 1) acc = piton_bigint_mul(acc, b);
+        exp >>= 1;
+        if (exp) b = piton_bigint_mul(b, b);
+    }
+    return acc;
+}
+
 void *piton_bigint_floor_div(void *a, void *b) {
     PitonBigInt *x = a, *y = b;
     if (y->count == 0) { fprintf(stderr, "ZeroDivisionError: division by zero\n"); exit(1); }

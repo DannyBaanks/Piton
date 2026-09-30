@@ -199,6 +199,7 @@ class Win64NasmEmitter:
             "extern piton_bigint_neg", "extern piton_bigint_cmp",
             "extern piton_bigint_floor_div", "extern piton_bigint_mod",
             "extern piton_bigint_print", "extern piton_bigint_print_raw",
+            "extern piton_bigint_pow_small",
             "extern piton_seq_concat",
             "extern piton_int_truediv",
             "extern piton_float_div", "extern piton_float_floor_div",
@@ -900,6 +901,71 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "float"
                 return
+            if operator == "**" and {left_type, right_type} <= {"int", "bool"}:
+                # INT_POW_V1: CPython int ** int is exact arbitrary precision
+                # for non-negative exponents (mirrors the Linux backend:
+                # bounded constant folds, square-and-multiply at runtime, a
+                # catchable ValueError for runtime negative exponents).
+                left_const = self.constants.get(left) if isinstance(left, str) else None
+                right_const = self.constants.get(right) if isinstance(right, str) else None
+                if (
+                    isinstance(left_const, int) and not isinstance(left_const, bool)
+                    and isinstance(right_const, int) and not isinstance(right_const, bool)
+                ):
+                    if right_const < 0:
+                        if left_const == 0:
+                            raise NativeBuildError("native int ** with zero base and negative exponent is not supported")
+                        folded = left_const ** right_const
+                        self.constants[result] = folded
+                        self._load_operand(folded)
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "float"
+                        return
+                    if right_const <= 1000000:
+                        folded = left_const ** right_const
+                        self.constants[result] = folded
+                        if -(1 << 63) <= folded < (1 << 63):
+                            self._load_operand(folded)
+                            self.lines.append(f"    mov {self._address(result)}, rax")
+                            self.types[result] = "int"
+                        else:
+                            self.lines.extend([
+                                f"    lea rcx, [{self._string(str(folded))}]",
+                                "    call piton_bigint_from_str",
+                                f"    mov {self._address(result)}, rax",
+                            ])
+                            self.bigint_slots.append(result)
+                            self.types[result] = "bigint"
+                        return
+                self._load_operand(left, "rcx")
+                self._load_operand(right, "rdx")
+                # INT_POW_V1: pre-zero the slot (same uninitialized-free
+                # hazard as the Linux backend on the raise path).
+                self.lines.append(f"    mov qword {self._address(result)}, 0")
+                self.lines.append("    test rdx, rdx")
+                neg_label = self._internal_label("pow_neg")
+                done_label = self._internal_label("pow_done")
+                self.lines.append(f"    js {neg_label}")
+                self.lines.append("    call piton_bigint_pow_small")
+                self.lines.append(f"    jmp {done_label}")
+                self.lines.append(f"{neg_label}:")
+                vtype = self._string("ValueError")
+                vmsg = self._string("negative exponent requires a float result (out of the int subset)")
+                self.lines.append(f"    lea rcx, [{vtype}]")
+                self.lines.append(f"    lea rdx, [{vmsg}]")
+                if handler_label:
+                    self.lines.append("    call piton_raise")
+                    self.lines.append("    call piton_catch_flag")
+                    self.lines.append("    test rax, rax")
+                    target = labels.get(handler_label, handler_label)
+                    self.lines.append(f"    jne {target}")
+                else:
+                    self.lines.append("    call piton_raise_unhandled")
+                self.lines.append(f"{done_label}:")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bigint"
+                self.bigint_slots.append(result)
+                return
             if operator in {"+", "-", "*"} and {left_type, right_type} <= {"int", "bool"}:
                 # INTOVF_GUARD_V1: constant int operands fold exactly (Python
                 # bignum arithmetic IS the oracle); results beyond i64 promote
@@ -1022,8 +1088,16 @@ class Win64NasmEmitter:
             elif operator == "-":
                 self.lines.append("    neg rax")
                 self.types[result] = "int"
+                # INT_POW_V1: record trivially-foldable unary int results so
+                # downstream folds see through `-1` (e.g. `2 ** -1`).
+                operand_const = self.constants.get(operand) if isinstance(operand, str) else None
+                if isinstance(operand_const, int) and not isinstance(operand_const, bool):
+                    self.constants[result] = -operand_const
             elif operator == "+":
                 self.types[result] = self.types.get(operand, "int")
+                operand_const = self.constants.get(operand) if isinstance(operand, str) else None
+                if isinstance(operand_const, int) and not isinstance(operand_const, bool):
+                    self.constants[result] = operand_const
             elif operator == "~":
                 self.lines.append("    not rax")
                 self.types[result] = "int"

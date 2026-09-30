@@ -422,13 +422,15 @@ static void bi_sub_mag(PitonBigInt*r,PitonBigInt*a,PitonBigInt*b){long max_c=a->
 static void*bi_from_u64(unsigned long v){PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=0;r->count=0;r->capacity=0;r->limbs=0;if(v){bi_ensure(r,1);r->limbs[0]=v;r->count=1;}return r;}
 static void*piton_bigint_from_i64(long v){if(v==0)return bi_from_u64(0);int neg=v<0?-1:1;unsigned long av=(unsigned long)(v<0?-v:v);void*r=bi_from_u64(av);((PitonBigInt*)r)->sign=neg;return r;}
 static void*piton_bigint_from_str(const char*s){PitonBigInt*a=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));a->sign=1;a->count=0;a->capacity=0;a->limbs=0;while(*s==' '||*s=='\t')++s;if(*s=='-'){a->sign=-1;++s;}else if(*s=='+'){++s;}while(*s>='0'&&*s<='9'){int digit=*s++-'0';u128 carry=0;for(long i=0;i<a->count;++i){carry+=(u128)a->limbs[i]*10;a->limbs[i]=(unsigned long)carry;carry>>=64;}if(carry){bi_ensure(a,a->count+1);a->limbs[a->count++]=(unsigned long)carry;}carry=digit;for(long i=0;i<a->count&&carry;++i){carry+=a->limbs[i];a->limbs[i]=(unsigned long)carry;carry>>=64;}if(carry){bi_ensure(a,a->count+1);a->limbs[a->count++]=(unsigned long)carry;}}bi_trim(a);return a;}
-static void piton_bigint_print_raw(void*a){PitonBigInt*x=(PitonBigInt*)a;if(!x||(!x->sign&&x->count==1&&!x->limbs[0])){piton_write(1,"0",1);return;}char buf[64];int pos=sizeof(buf);buf[--pos]=0;unsigned long tmp[64];int tc=0;for(long i=0;i<x->count;++i)tmp[i]=x->limbs[i];tc=(int)x->count;while(tc>0){unsigned long carry=0;for(int i=tc-1;i>=0;--i){unsigned long cur=(carry<<32)|(tmp[i]>>32);unsigned long q1=cur/10;unsigned long r1=cur-q1*10;unsigned long mid=(r1<<32)|(tmp[i]&0xFFFFFFFF);unsigned long q2=mid/10;unsigned long r2=mid-q2*10;tmp[i]=(q1<<32)|q2;carry=r2;}buf[--pos]=(char)('0'+carry);while(tc>0&&tmp[tc-1]==0)--tc;}if(x->sign<0)buf[--pos]='-';piton_write(1,buf+pos,piton_strlen(buf+pos));}
+static int piton_bigint_is_zero(void*a){PitonBigInt*x=(PitonBigInt*)a;if(!x)return 1;for(long i=0;i<x->count;++i)if(x->limbs[i])return 0;return 1;}
+static void piton_bigint_print_raw(void*a){if(piton_bigint_is_zero(a)){piton_write(1,"0",1);return;}PitonBigInt*x=(PitonBigInt*)a;char buf[64];int pos=sizeof(buf);buf[--pos]=0;unsigned long tmp[64];int tc=0;for(long i=0;i<x->count;++i)tmp[i]=x->limbs[i];tc=(int)x->count;while(tc>0){unsigned long carry=0;for(int i=tc-1;i>=0;--i){unsigned long cur=(carry<<32)|(tmp[i]>>32);unsigned long q1=cur/10;unsigned long r1=cur-q1*10;unsigned long mid=(r1<<32)|(tmp[i]&0xFFFFFFFF);unsigned long q2=mid/10;unsigned long r2=mid-q2*10;tmp[i]=(q1<<32)|q2;carry=r2;}buf[--pos]=(char)('0'+carry);while(tc>0&&tmp[tc-1]==0)--tc;}if(x->sign<0)buf[--pos]='-';piton_write(1,buf+pos,piton_strlen(buf+pos));}
 static void piton_bigint_print(void*a){piton_bigint_print_raw(a);piton_write(1,"\n",1);}
 static void*piton_bigint_add(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=0;r->count=0;r->capacity=0;r->limbs=0;if(x->sign==y->sign){r->sign=x->sign;bi_add_mag(r,x,y);}else{int c=bi_cmp_mag(x,y);if(c==0)return r;if(c>0){r->sign=x->sign;bi_sub_mag(r,x,y);}else{r->sign=y->sign;bi_sub_mag(r,y,x);}}bi_trim(r);return r;}
 static void*piton_bigint_negate(void*a){PitonBigInt*x=(PitonBigInt*)a;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=-x->sign;r->count=x->count;r->capacity=x->capacity;r->limbs=x->limbs;return r;}
 static void*piton_bigint_sub(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*negy=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));negy->sign=-y->sign;negy->count=y->count;negy->capacity=y->capacity;negy->limbs=y->limbs;return piton_bigint_add(x,negy);}
 static void bi_mul_mag(PitonBigInt*r,PitonBigInt*a,PitonBigInt*b){if(a->count==0||b->count==0){r->count=0;return;}long max_c=a->count+b->count;bi_ensure(r,max_c);for(unsigned long i=0;i<r->capacity;++i)r->limbs[i]=0;for(long i=0;i<a->count;++i){u128 carry=0;for(long j=0;j<b->count||carry;++j){u128 cur=r->limbs[i+j]+(u128)a->limbs[i]*(j<b->count?b->limbs[j]:0)+carry;r->limbs[i+j]=(unsigned long)cur;carry=cur>>64;}r->count=i+b->count+1;}bi_trim(r);}
 static void*piton_bigint_mul(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=x->sign^y->sign;r->count=0;r->capacity=0;r->limbs=0;bi_mul_mag(r,x,y);return r;}
+static void*piton_bigint_pow_small(long base,long exp){void*acc=piton_bigint_from_i64(1);void*b=piton_bigint_from_i64(base);while(exp>0){if(exp&1)acc=piton_bigint_mul(acc,b);exp>>=1;if(exp)b=piton_bigint_mul(b,b);}return acc;}
 static long bi_cmp_magnitude(PitonBigInt*a,PitonBigInt*b){long ac=a->count,bc=b->count;while(ac>0&&a->limbs[ac-1]==0)ac--;while(bc>0&&b->limbs[bc-1]==0)bc--;if(ac!=bc)return ac>bc?1:-1;for(long i=ac-1;i>=0;--i){if(a->limbs[i]!=b->limbs[i])return a->limbs[i]>b->limbs[i]?1:-1;}return 0;}
 static void bi_div_mod_internal(PitonBigInt*quot,PitonBigInt*rem,PitonBigInt*dividend,PitonBigInt*divisor){long dc=dividend->count;long dvc=divisor->count;bi_ensure(quot,dc);for(long i=0;i<dc;++i)quot->limbs[i]=0;quot->count=dc;bi_ensure(rem,dvc);for(long i=0;i<dvc;++i)rem->limbs[i]=0;rem->count=0;for(long i=dc-1;i>=0;--i){for(int b=63;b>=0;--b){rem->count=(i+1>rem->count)?i+1:rem->count;for(long j=rem->count-1;j>0;--j)rem->limbs[j]=((rem->limbs[j]<<1)|((rem->limbs[j-1]>>63)&1));rem->limbs[0]=(rem->limbs[0]<<1)|((dividend->limbs[i]>>b)&1);if(bi_cmp_magnitude(rem,divisor)>=0){bi_sub_mag(rem,rem,divisor);quot->limbs[i]|=(1UL<<b);}}}bi_trim(quot);bi_trim(rem);}
 static void*piton_bigint_floor_div(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*q=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));q->sign=0;q->count=0;q->capacity=0;q->limbs=0;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=0;r->count=0;r->capacity=0;r->limbs=0;bi_div_mod_internal(q,r,x,y);q->sign=x->sign^y->sign;bi_trim(q);return q;}
@@ -1073,11 +1075,20 @@ class LinuxCEmitter:
             consts: dict[str, Any] = {}
             for block in function.blocks:
                 for instruction in block.instructions:
+                    if instruction.op == "binary" and instruction.args and instruction.args[0] == "**":
+                        # INT_POW_V1: the runtime ** path always emits bigint
+                        # code (pow_small/print/free), so its mere presence
+                        # needs the bigint prelude — independently of folds.
+                        return True
                     if instruction.op == "const" and instruction.result and instruction.args:
                         consts[instruction.result] = instruction.args[0]
+                    elif instruction.op == "unary" and instruction.result and len(instruction.args) >= 2 and instruction.args[0] in {"+", "-"}:
+                        operand_const = consts.get(instruction.args[1]) if isinstance(instruction.args[1], str) else None
+                        if isinstance(operand_const, int) and not isinstance(operand_const, bool):
+                            consts[instruction.result] = operand_const if instruction.args[0] == "+" else -operand_const
                     elif instruction.op == "binary" and len(instruction.args) >= 3:
                         operator = instruction.args[0]
-                        if operator not in {"+", "-", "*"}:
+                        if operator not in {"+", "-", "*", "**"}:
                             continue
                         left_const = consts.get(instruction.args[1]) if isinstance(instruction.args[1], str) else None
                         right_const = consts.get(instruction.args[2]) if isinstance(instruction.args[2], str) else None
@@ -1085,11 +1096,23 @@ class LinuxCEmitter:
                             isinstance(left_const, int) and not isinstance(left_const, bool)
                             and isinstance(right_const, int) and not isinstance(right_const, bool)
                         ):
-                            folded = {
-                                "+": left_const + right_const,
-                                "-": left_const - right_const,
-                                "*": left_const * right_const,
-                            }[operator]
+                            if operator == "**" and not (0 <= right_const <= 1000000):
+                                continue
+                            try:
+                                # NOTE: never dispatch through a dict literal
+                                # here: it would evaluate a ** b for EVERY
+                                # binary op (a 3037000499 ** 3037000499-shaped
+                                # hang). Lazy branches only.
+                                if operator == "+":
+                                    folded = left_const + right_const
+                                elif operator == "-":
+                                    folded = left_const - right_const
+                                elif operator == "*":
+                                    folded = left_const * right_const
+                                else:
+                                    folded = left_const ** right_const
+                            except ZeroDivisionError:
+                                continue
                             # mirror the lowering: folded results are recorded
                             # so chained folds keep propagating
                             if instruction.result:
@@ -1455,6 +1478,12 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"Linux float unary operator not supported: {operator}")
             out.append(f"    {_name(result)}={operator}{self._value(args[1])};")
             types[result] = "bool" if operator == "!" else "int"
+            # INTOVF_GUARD_V1: record trivially-foldable unary int results so
+            # downstream folds see through `-1`/`+1` (e.g. `2 ** -1`).
+            if operator in {"+", "-"}:
+                operand_const = self._fn_consts.get(args[1]) if isinstance(args[1], str) else None
+                if isinstance(operand_const, int) and not isinstance(operand_const, bool):
+                    self._fn_consts[result] = operand_const if operator == "+" else -operand_const
         elif op == "binary":
             operator, left, right = args[0], args[1], args[2]
             # ZDIV_GUARD_V1: mir attaches the innermost try handler as an
@@ -1657,6 +1686,63 @@ class LinuxCEmitter:
                 out.append(f"    else{{{_name(result)}={helper}({self._value(left)},{self._value(right)});}}")
                 self._emit_exc_check(out, function, handler_label)
                 types[result] = "int"
+                return out
+            if operator == "**" and {left_type, right_type} <= {"int", "bool"}:
+                # INT_POW_V1: CPython int ** int is exact arbitrary precision
+                # for non-negative exponents. Constant operands fold exactly
+                # (bounded: astronomic exponents stay on the runtime path);
+                # runtime operands use square-and-multiply over the bigint
+                # helpers. A runtime negative exponent cannot produce a
+                # bigint in the untagged model, so it raises a catchable
+                # ValueError instead of corrupting (folded literal
+                # `2 ** -1` still yields the exact 0.5).
+                left_const = self._fn_consts.get(left) if isinstance(left, str) else None
+                right_const = self._fn_consts.get(right) if isinstance(right, str) else None
+                if (
+                    isinstance(left_const, int) and not isinstance(left_const, bool)
+                    and isinstance(right_const, int) and not isinstance(right_const, bool)
+                    and 0 <= right_const <= 1000000
+                ):
+                    try:
+                        folded = left_const ** right_const
+                    except ZeroDivisionError:
+                        raise NativeBuildError("Linux int ** with zero base and negative exponent is not supported")
+                    if -(2 ** 63) <= folded < 2 ** 63:
+                        # small results stay plain ints (better downstream:
+                        # indexing, int arithmetic, no bigint prelude needed)
+                        self._fn_consts[result] = folded
+                        out.append(f"    {_name(result)}=(long)({folded});")
+                        types[result] = "int"
+                    else:
+                        self._fn_consts.pop(result, None)
+                        out.append(f"    {_name(result)}=(long)piton_bigint_from_str({json.dumps(str(folded))});")
+                        types[result] = "bigint"
+                        bigint_slots.append(result)
+                    return out
+                if (
+                    isinstance(left_const, int) and not isinstance(left_const, bool)
+                    and isinstance(right_const, int) and not isinstance(right_const, bool)
+                    and right_const < 0
+                ):
+                    if left_const == 0:
+                        raise NativeBuildError("Linux int ** with zero base and negative exponent is not supported")
+                    folded = left_const ** right_const
+                    self._fn_consts[result] = folded
+                    out.append(f"    {_name(result)}=piton_double_bits({_float_c_literal(folded)});")
+                    types[result] = "float"
+                    return out
+                # INT_POW_V1: pre-zero the slot — the raise path below
+                # skips assignment, and the function-exit cleanup frees every
+                # bigint_slots entry (an uninitialized slot freed a garbage
+                # pointer: heap corruption, Windows-only crash).
+                out.append(f"    {_name(result)}=0;")
+                out.append(
+                    f'    if({self._value(right)}<0){{piton_raise_set("ValueError","negative exponent requires a float result (out of the int subset)");}}'
+                )
+                out.append(f"    else{{{_name(result)}=(long)piton_bigint_pow_small({self._value(left)},{self._value(right)});}}")
+                self._emit_exc_check(out, function, handler_label)
+                types[result] = "bigint"
+                bigint_slots.append(result)
                 return out
             if operator in {"+", "-", "*"}:
                 # INTOVF_GUARD_V1: CPython promotes to arbitrary precision on
