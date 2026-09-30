@@ -209,7 +209,7 @@ class Win64NasmEmitter:
             "extern piton_bigint_pow_small",
             "extern piton_seq_concat",
             "extern piton_int_truediv",
-            "extern piton_float_div", "extern piton_float_floor_div",
+            "extern piton_float_div", "extern piton_float_floor_div", "extern piton_float_mod",
             "extern piton_str_contains", "extern piton_seq_contains",
             "extern piton_str_index", "extern piton_str_slice", "extern piton_seq_slice",
             "extern piton_str_slice_step", "extern piton_seq_slice_step",
@@ -943,16 +943,16 @@ class Win64NasmEmitter:
                 self._emit_bigint_binary(operator, left, right, result)
                 return
             if "float" in {left_type, right_type}:
-                # TRUEDIV_V1: / and // join the supported set. CPython raises
-                # ZeroDivisionError on float division by zero instead of IEEE
-                # infinities, so / and // go through raising helpers followed
-                # by the catch_flag routing. Float % stays fail-closed.
-                if operator not in {"+", "-", "*", "/", "//"}:
+                # TRUEDIV_V1 + FLOAT_MOD_V1: / // and % join the supported
+                # set. CPython raises ZeroDivisionError on float division by
+                # zero instead of IEEE infinities, so the dividing ops go
+                # through raising helpers followed by the catch_flag routing.
+                if operator not in {"+", "-", "*", "/", "//", "%"}:
                     raise NativeBuildError(f"native float operator not supported yet: {operator}")
                 self._load_float_operand(left, "xmm0")
                 self._load_float_operand(right, "xmm1")
-                if operator in {"/", "//"}:
-                    helper = "piton_float_div" if operator == "/" else "piton_float_floor_div"
+                if operator in {"/", "//", "%"}:
+                    helper = {"/": "piton_float_div", "//": "piton_float_floor_div", "%": "piton_float_mod"}[operator]
                     self.lines.append(f"    call {helper}")
                     self._emit_exc_routing(handler_label, labels)
                     self.lines.append("    movq rax, xmm0")
