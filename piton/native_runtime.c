@@ -1877,6 +1877,39 @@ int64_t piton_dict_get_1(void *raw, int64_t key) {
 /* CPython {} / {N} positional substitution with {{ }} escapes; {name},
    format specs and keywords are out of subset (runtime error, same
    convention as the other helpers). Extra args are ignored. */
+/* %r quoting (CPython repr preference: single unless the text holds a
+   lone single-quote; backslash/newline/tab/CR escaped) and %c validation. */
+char *piton_str_quote(const char *s) {
+    size_t n = strlen(s);
+    int q = 0;
+    for (size_t i = 0; i < n; ++i) if (s[i] == '\'') q = 1;
+    char qc = q ? '"' : '\'';
+    size_t extra = 0;
+    for (size_t i = 0; i < n; ++i) {
+        unsigned char c = (unsigned char)s[i];
+        if (c == '\\' || c == '\n' || c == '\t' || c == '\r' || (unsigned char)c == qc) extra += 1;
+    }
+    char *p = malloc(n + extra + 3);
+    size_t o = 0;
+    p[o++] = qc;
+    for (size_t i = 0; i < n; ++i) {
+        unsigned char c = (unsigned char)s[i];
+        if (c == '\\') { p[o++] = '\\'; p[o++] = '\\'; }
+        else if (c == '\n') { p[o++] = '\\'; p[o++] = 'n'; }
+        else if (c == '\t') { p[o++] = '\\'; p[o++] = 't'; }
+        else if (c == '\r') { p[o++] = '\\'; p[o++] = 'r'; }
+        else if (c == qc) { p[o++] = '\\'; p[o++] = c; }
+        else p[o++] = c;
+    }
+    p[o++] = qc; p[o] = 0;
+    return p;
+}
+
+const char *piton_str_single_char(const char *s) {
+    if (strlen(s) != 1) piton_raise_unhandled("TypeError", "%c requires int or 1-character string");
+    return s;
+}
+
 char *piton_str_format(const char *t, int64_t n, const char **av) {
     size_t total = 0;
     int auto_idx = 0;

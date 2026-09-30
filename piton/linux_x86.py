@@ -251,6 +251,8 @@ static long piton_str_find(const char*s,const char*n){usize hl=piton_strlen(s),n
 static long piton_str_startswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[i]!=p[i])return 0;return 1;}
 static long piton_str_endswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[hl-nl+i]!=p[i])return 0;return 1;}
 static long piton_str_replace(const char*s,const char*a,const char*b){usize sl=piton_strlen(s),al=piton_strlen(a),bl=piton_strlen(b);usize count=0;if(al==0){count=sl+1;}else{for(usize i=0;i+al<=sl;){usize k=0;while(k<al&&s[i+k]==a[k])++k;if(k==al){++count;i+=al;}else++i;}}usize total=sl+count*bl-(al==0?0:count*al);char*p=piton_alloc(total+1);usize o=0;if(al==0){for(usize i=0;i<sl;++i){piton_memcpy(p+o,b,bl);o+=bl;p[o++]=s[i];}piton_memcpy(p+o,b,bl);o+=bl;}else{for(usize i=0;i<sl;){usize k=0;while(k<al&&i+k<sl&&s[i+k]==a[k])++k;if(k==al){piton_memcpy(p+o,b,bl);o+=bl;i+=al;}else p[o++]=s[i++];}}p[o]=0;return(long)p;}
+static long piton_str_quote(const char*s){usize n=piton_strlen(s);int q=0;for(usize i=0;i<n;++i)if(s[i]=='\'')q=1;char qc=q?'"':'\'';usize extra=0;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'||c=='\n'||c=='\t'||c=='\r'||(unsigned char)c==qc)extra+=1;}char*p=piton_alloc(n+extra+3);usize o=0;p[o++]=qc;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'){p[o++]='\\';p[o++]='\\';}else if(c=='\n'){p[o++]='\\';p[o++]='n';}else if(c=='\t'){p[o++]='\\';p[o++]='t';}else if(c=='\r'){p[o++]='\\';p[o++]='r';}else if(c==qc){p[o++]='\\';p[o++]=c;}else p[o++]=(char)c;}p[o++]=qc;p[o]=0;return(long)p;}
+static long piton_str_single_char(const char*s){if(piton_strlen(s)!=1){piton_write(2,"TypeError: %c requires int or 1-character string\n",49);piton_exit(1);}return(long)s;}
 static long piton_str_format(const char*t,long n,const char**av){usize total=0;int auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){total+=1;i+=2;continue;}usize j=i+1;int idx=-2;int has=0;if(t[j]=='}'){idx=auto_idx++;j+=1;has=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;has=1;}if(has&&t[j]=='}'){j+=1;}else{has=0;}}if(!has){piton_write(2,"ValueError: single '{' in format string\n",40);piton_exit(1);}if(idx<0||idx>=n){piton_write(2,"IndexError: replacement index out of range\n",43);piton_exit(1);}total+=piton_strlen(av[idx]);i=j;}else if(t[i]=='}'){if(t[i+1]=='}'){total+=1;i+=2;}else{piton_write(2,"ValueError: single '}' in format string\n",40);piton_exit(1);}}else{total+=1;i+=1;}}char*p=piton_alloc(total+1);usize o=0;auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){p[o++]='{';i+=2;continue;}usize j=i+1;int idx=-2;if(t[j]=='}'){idx=auto_idx++;j+=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;}j+=1;}usize el=piton_strlen(av[idx]);piton_memcpy(p+o,av[idx],el);o+=el;i=j;}else if(t[i]=='}'){p[o++]='}';i+=2;}else{p[o++]=t[i++];}}p[o]=0;return(long)p;}
 
 static long piton_str_split_ws(const char*s){PitonSeq*r=piton_seq_new(PK_LIST,0);usize n=piton_strlen(s),i=0;while(i<n){while(i<n&&piton_ws((unsigned char)s[i]))++i;if(i>=n)break;usize j=i;while(j<n&&!piton_ws((unsigned char)s[j]))++j;usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});i=j;}return(long)r;}
@@ -463,6 +465,7 @@ class LinuxCEmitter:
         self.function_params: dict[str, list[str]] = {}
         self.function_return_types: dict[str, str] = {}
         self._fn_consts: dict[str, Any] = {}
+        self._tuple_elems: dict[str, tuple] = {}
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
         self._gen_counter = 0
@@ -558,6 +561,7 @@ class LinuxCEmitter:
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
+        self._tuple_elems = {}
         if function.vararg:
             types[function.vararg] = "tuple"
         if function.kwarg:
@@ -609,6 +613,7 @@ class LinuxCEmitter:
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
+        self._tuple_elems = {}
         bigint_slots: list[str] = []
         for slot, index in ordered:
             lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
@@ -663,6 +668,7 @@ class LinuxCEmitter:
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
+        self._tuple_elems = {}
         bigint_slots: list[str] = []
         for slot, index in ordered:
             lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
@@ -725,6 +731,55 @@ class LinuxCEmitter:
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
         return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
+
+    @staticmethod
+    def _parse_percent_template(template: str) -> tuple[str, list[str]]:
+        """PCT_FORMAT_V1: translate a %-format template into a {}-template
+        for the piton_str_format engine, returning (template, specs) with one
+        conversion char per field ('s', 'd', 'r' or 'c').
+
+        V1 subset: %s %d %i %r %c %%. Flags, width, precision, length
+        modifiers, mappings and anything else fail closed at BUILD time —
+        the template is always a literal here, so every rejection is static.
+        Literal braces pass through escaped (CPython %-formatting leaves
+        braces alone; the {} engine would otherwise eat them).
+        """
+        out: list[str] = []
+        specs: list[str] = []
+        i, n = 0, len(template)
+        while i < n:
+            ch = template[i]
+            if ch == "%":
+                i += 1
+                if i >= n:
+                    raise NativeBuildError("str % formatting: trailing %")
+                c2 = template[i]
+                if c2 == "%":
+                    out.append("%")
+                    i += 1
+                    continue
+                if c2 in "-0123456789. *hlL":
+                    raise NativeBuildError("str % formatting with flags/width/precision is not supported")
+                if c2 == "(":
+                    raise NativeBuildError("str % mapping (name)s is not supported")
+                if c2 in "sdrc":
+                    specs.append(c2)
+                    out.append("{}")
+                    i += 1
+                    continue
+                if c2 == "i":
+                    specs.append("d")
+                    out.append("{}")
+                    i += 1
+                    continue
+                raise NativeBuildError(f"str % conversion %{c2} is not supported")
+            elif ch == "{" or ch == "}":
+                out.append(ch * 2)
+                i += 1
+            else:
+                out.append(ch)
+                i += 1
+        return "".join(out), specs
 
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
                                 call_args: list[Any], coll_type: str, types: dict[str, str]) -> None:
@@ -1344,6 +1399,8 @@ class LinuxCEmitter:
             source = args[0]
             aliases[result] = source
             types[result] = types.get(source, "int")
+            if source in self._tuple_elems:
+                self._tuple_elems[result] = self._tuple_elems[source]
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
@@ -1375,6 +1432,8 @@ class LinuxCEmitter:
                 )
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
+            if args[1] in self._tuple_elems:
+                self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
         elif op == "unary":
             operator = {"no": "!", "not": "!"}.get(args[0], args[0])
             if operator not in {"+", "-", "~", "!"}:
@@ -1429,6 +1488,96 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}=(long)piton_str_repeat((const char*){self._value(str_side)},{self._value(times_side)});")
                         types[result] = "str"
                         return out
+                if operator == "%":
+                    # PCT_FORMAT_V1: "%s-%d" % args lowers through the {}
+                    # engine after static translation. The template must be a
+                    # literal; tuple arguments must have a statically known
+                    # length (tuples are immutable); anything else fails
+                    # closed. Placeholder/argument count mismatches fail
+                    # closed at build (CPython raises TypeError at runtime —
+                    # the static subset rejects statically instead).
+                    template = self._fn_consts.get(left)
+                    if not isinstance(template, str):
+                        raise NativeBuildError("Linux str % formatting requires a literal template")
+                    translated, specs = self._parse_percent_template(template)
+                    if types.get(right) == "tuple" and right in self._tuple_elems:
+                        arg_values = list(self._tuple_elems[right])
+                    elif types.get(right) == "tuple":
+                        raise NativeBuildError("Linux str % formatting requires a tuple of statically known length")
+                    else:
+                        if aliases.get(right, right) in function.params:
+                            # the parameter's runtime type is unknown: treating
+                            # it as a scalar would print a raw pointer for
+                            # tuple/object arguments (fail-open).
+                            raise NativeBuildError(
+                                "Linux str % formatting a bare parameter is not supported (type unknown)"
+                            )
+                        arg_values = [right]
+                    if len(specs) != len(arg_values):
+                        raise NativeBuildError(
+                            f"Linux str % formatting: {len(specs)} conversion(s) but {len(arg_values)} argument(s)"
+                        )
+                    pieces = []
+                    for index, (spec, value) in enumerate(zip(specs, arg_values)):
+                        arg_type = types.get(value, "int")
+                        operand = self._value(value)
+                        if spec == "s":
+                            if arg_type == "int":
+                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_int({operand});")
+                            elif arg_type == "float":
+                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_float({operand});")
+                            elif arg_type == "bool":
+                                pieces.append(f'const char*_pp{index}={operand}?"True":"False";')
+                            elif arg_type == "none":
+                                pieces.append(f'const char*_pp{index}="None";')
+                            elif arg_type == "str":
+                                pieces.append(f"const char*_pp{index}=(const char*){operand};")
+                            else:
+                                raise NativeBuildError(f"Linux str %s does not support {arg_type} arguments")
+                        elif spec == "d":
+                            if arg_type in {"int", "bool"}:
+                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_int({operand});")
+                            elif arg_type == "float":
+                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_int((long)piton_bits_double({operand}));")
+                            else:
+                                raise NativeBuildError(f"Linux str %d requires a real number, not {arg_type}")
+                        elif spec == "r":
+                            if arg_type == "str":
+                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_quote((const char*){operand});")
+                            elif arg_type in {"int", "bool", "float", "none"}:
+                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_int({operand});" if arg_type in {"int", "bool"} else
+                                              f"const char*_pp{index}=(const char*)piton_str_from_float({operand});" if arg_type == "float" else
+                                              f'const char*_pp{index}="None";')
+                            else:
+                                raise NativeBuildError(f"Linux str %r does not support {arg_type} arguments")
+                        elif spec == "c":
+                            if arg_type in {"int", "bool"}:
+                                pieces.append(f"const char*_pp{index}=(const char*)piton_chr({operand});")
+                            elif arg_type == "str":
+                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_single_char((const char*){operand});")
+                            else:
+                                raise NativeBuildError(f"Linux str %c requires int or 1-character str, not {arg_type}")
+                    names = ",".join(f"_pp{index}" for index in range(len(arg_values))) or "_pp0"
+                    if not arg_values:
+                        pieces.append('const char*_pp0="";')
+                    # a raising conversion (piton_chr out of range) yields NULL:
+                    # route after EACH piece so the format engine never
+                    # dereferences it (CPython evaluates left to right, first
+                    # error wins — same order here).
+                    out.append("    {")
+                    for piece in pieces:
+                        out.append(f"    {piece}")
+                        out.append("    if(piton_exc_flag){")
+                        if handler_label:
+                            out.append(f"        goto {_name(function.name + '_' + handler_label)};")
+                        else:
+                            out.append("        piton_report_unhandled();piton_exit(1);")
+                        out.append("    }")
+                    out.append(f"    {{const char*_pa[]={{{names}}}; {_name(result)}=(long)piton_str_format({json.dumps(translated)},{len(arg_values)},_pa);}}")
+                    self._emit_exc_check(out, function, handler_label)
+                    out.append("    }")
+                    types[result] = "str"
+                    return out
                 raise NativeBuildError(f"Linux string binary operator not supported: {operator}")
             if {left_type, right_type} & {"list", "tuple", "dict", "set"}:
                 # SEQ_CONCAT_V1: list+list / tuple+tuple concatenate; any other
@@ -2246,6 +2395,11 @@ class LinuxCEmitter:
             types[result] = "int"
         elif op == "build_collection":
             kind, items = args[0], args[1]
+            if kind == "tuple" and result:
+                # PCT_FORMAT_V1: record tuple elements so %-formatting can map
+                # conversion specs to argument values (tuples are immutable,
+                # so the recorded length is sound).
+                self._tuple_elems[result] = tuple(items)
             if kind in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=(long)piton_seq_new({self._kind(kind)},{len(items)});')
                 for index, value in enumerate(items):
