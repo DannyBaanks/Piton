@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .lower import lower_cst_to_hir
+from .lower import LoweringError, lower_cst_to_hir
 from .mir import MIRFunction, MIRInstruction, MIRLoweringError, MIRModule, lower_hir_to_mir
 from .parser import parse
 from .x86 import NativeBuildError, _BUILTINS, _scan_native_modules, generator_slot_layout
@@ -2779,7 +2779,7 @@ def _gcc_compile(c_path: Path, output_path: Path) -> None:
 def compile_native_linux(source: str, output: str | Path) -> Path:
     try:
         mir = lower_hir_to_mir(lower_cst_to_hir(parse(source)))
-    except MIRLoweringError as error:
+    except (MIRLoweringError, LoweringError) as error:
         raise NativeBuildError(str(error)) from error
     output_path = Path(output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2801,7 +2801,7 @@ def compile_native_linux_files(entry: str | Path, output: str | Path) -> Path:
             hir, modules, from_imports=from_imports,
             entry_file=str(entry_path), module_meta=module_meta,
         )
-    except MIRLoweringError as error:
+    except (MIRLoweringError, LoweringError) as error:
         raise NativeBuildError(str(error)) from error
     output_path = Path(output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
