@@ -205,6 +205,7 @@ class Win64NasmEmitter:
             "extern piton_float_div", "extern piton_float_floor_div",
             "extern piton_str_contains", "extern piton_seq_contains",
             "extern piton_str_index", "extern piton_str_slice", "extern piton_seq_slice",
+            "extern piton_str_slice_step", "extern piton_seq_slice_step",
             "extern piton_str_iterator_new", "extern piton_str_iterator_next",
             "extern piton_str_len", "extern piton_str_repeat",
             "extern piton_seq_pop", "extern piton_seq_reverse", "extern piton_seq_insert",
@@ -1290,19 +1291,27 @@ class Win64NasmEmitter:
             # PARITY_P2_V1: [a:b] slices. Missing bounds arrive as None; the
             # emitter substitutes 0 / INT64_MAX and the runtime helpers
             # normalize negative indices and clamp, matching CPython.
-            container, lower, upper = args
+            # SLICE_STEP_V1: with a step operand (possibly runtime), missing
+            # bounds become INT64_MIN / INT64_MAX sentinels for
+            # direction-aware defaults inside the step helpers.
+            container, lower, upper = args[0], args[1], args[2]
+            step = args[3] if len(args) > 3 else None
             container_type = self.types.get(container)
             if container_type == "str":
                 self._load_operand(container, "rcx")
                 if lower is not None:
                     self._load_operand(lower, "rdx")
                 else:
-                    self.lines.append("    xor edx, edx")
+                    self.lines.append("    xor edx, edx" if step is None else "    mov rdx, 0x8000000000000000")
                 if upper is not None:
                     self._load_operand(upper, "r8")
                 else:
                     self.lines.append("    mov r8, 0x7fffffffffffffff")
-                self.lines.append("    call piton_str_slice")
+                if step is None:
+                    self.lines.append("    call piton_str_slice")
+                else:
+                    self._load_operand(step, "r9")
+                    self.lines.append("    call piton_str_slice_step")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "str"
             elif container_type in {"list", "tuple"}:
@@ -1310,12 +1319,16 @@ class Win64NasmEmitter:
                 if lower is not None:
                     self._load_operand(lower, "rdx")
                 else:
-                    self.lines.append("    xor edx, edx")
+                    self.lines.append("    xor edx, edx" if step is None else "    mov rdx, 0x8000000000000000")
                 if upper is not None:
                     self._load_operand(upper, "r8")
                 else:
                     self.lines.append("    mov r8, 0x7fffffffffffffff")
-                self.lines.append("    call piton_seq_slice")
+                if step is None:
+                    self.lines.append("    call piton_seq_slice")
+                else:
+                    self._load_operand(step, "r9")
+                    self.lines.append("    call piton_seq_slice_step")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = container_type
             else:

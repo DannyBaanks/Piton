@@ -1551,6 +1551,62 @@ const char *piton_str_index(const char *s, int64_t i) {
 /* PARITY_P2_V1: [a:b] slices. The emitter passes 0 for a missing lower bound
    and INT64_MAX for a missing upper; negative indices normalize and bounds
    clamp, matching CPython semantics. */
+/* SLICE_STEP_V1: sentinels INT64_MIN/INT64_MAX select direction-aware
+   defaults (slice.indices semantics); step 0 is a ValueError. */
+void *piton_seq_slice_step(void *raw, int64_t lo, int64_t hi, int64_t st) {
+    PitonCollection *c = raw;
+    if (!c) return NULL;
+    if (st == 0) piton_raise_unhandled("ValueError", "slice step cannot be zero");
+    int64_t n = c->length, len = 0;
+    if (st > 0) {
+        if (lo == INT64_MIN) lo = 0;
+        if (hi == INT64_MAX) hi = n;
+        if (lo < 0) lo += n; if (hi < 0) hi += n;
+        if (lo < 0) lo = 0; if (hi > n) hi = n; if (hi < lo) hi = lo;
+        len = (hi - lo + st - 1) / st;
+    } else {
+        if (lo == INT64_MIN) lo = n - 1;
+        if (hi == INT64_MAX) hi = -n - 1;
+        if (lo < 0) lo += n; if (hi < 0) hi += n;
+        if (lo >= n) lo = n - 1; if (hi < -1) hi = -1;
+        if (lo <= hi) len = 0; else len = (lo - hi - st - 1) / (-st);
+    }
+    PitonCollection *r = piton_collection_new(c->kind, len);
+    r->length = len;
+    for (int64_t i = 0; i < len; ++i) {
+        int64_t v = c->items[lo + i * st];
+        if (pv_tag(v) == PITON_TAG_OBJECT) {
+            PitonHeader *h = (PitonHeader *)pv_payload(v);
+            if (h) h->refcount++;
+        }
+        r->items[i] = v;
+    }
+    return r;
+}
+
+const char *piton_str_slice_step(const char *s, int64_t lo, int64_t hi, int64_t st) {
+    if (st == 0) piton_raise_unhandled("ValueError", "slice step cannot be zero");
+    int64_t n = (int64_t)strlen(s), len = 0, a = 0;
+    if (st > 0) {
+        if (lo == INT64_MIN) lo = 0;
+        if (hi == INT64_MAX) hi = n;
+        if (lo < 0) lo += n; if (hi < 0) hi += n;
+        if (lo < 0) lo = 0; if (hi > n) hi = n; if (hi < lo) hi = lo;
+        len = (hi - lo + st - 1) / st; a = lo;
+    } else {
+        if (lo == INT64_MIN) lo = n - 1;
+        if (hi == INT64_MAX) hi = -n - 1;
+        if (lo < 0) lo += n; if (hi < 0) hi += n;
+        if (lo >= n) lo = n - 1; if (hi < -1) hi = -1;
+        if (lo <= hi) len = 0; else len = (lo - hi - st - 1) / (-st);
+        a = lo;
+    }
+    char *p = malloc((size_t)len + 1);
+    for (int64_t i = 0; i < len; ++i) p[i] = s[a + i * st];
+    p[len] = 0;
+    return p;
+}
+
 const char *piton_str_slice(const char *s, int64_t lo, int64_t hi) {
     int64_t n = (int64_t)strlen(s);
     if (lo < 0) lo += n;
