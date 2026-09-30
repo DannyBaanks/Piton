@@ -1479,17 +1479,20 @@ class MIRLowerer:
             builder.current = after_else
 
     def _lower_try(self, builder: _Builder, node: HIRNode) -> None:
-        if node.orelse:
-            raise MIRLoweringError("native try does not support else yet")
         if len(node.handlers) > 1:
             raise MIRLoweringError("native try supports at most one except handler")
         finally_body = list(getattr(node, "finalbody", []) or [])
+        orelse_body = list(getattr(node, "orelse", []) or [])
 
         handler_block = None
         accepted = None
         end_block = builder.new_block()
         try_body_block = builder.new_block()
         finally_block = builder.new_block() if finally_body else None
+        # TRY_ELSE_V1: the else block runs only when the try body completes
+        # without an exception (CPython semantics); handlers still jump past
+        # it straight to the end/finally block.
+        else_block = builder.new_block() if orelse_body else None
 
         if node.handlers:
             handler = node.handlers[0]
@@ -1515,10 +1518,21 @@ class MIRLowerer:
         if handler_block:
             builder.exception_handlers.pop()
         builder.emit("try_pop")
-        if finally_body:
+        if else_block is not None:
+            builder.emit("jump", else_block.label)
+        elif finally_body:
             builder.emit("jump", finally_block.label)
         else:
             builder.emit("jump", end_block.label)
+
+        # else block (only reached on clean completion of the try body)
+        if else_block is not None:
+            builder.current = else_block
+            self._lower_statements(builder, orelse_body)
+            if finally_body:
+                builder.emit("jump", finally_block.label)
+            else:
+                builder.emit("jump", end_block.label)
 
         # handler block (reached via raise_typed's catch_flag check)
         if handler_block:
