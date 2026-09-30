@@ -167,7 +167,7 @@ MIR_EFFECT_CLASSES = frozenset({"PURE", "READ", "WRITE", "IO", "OPAQUE"})
 
 MIR_OP_EFFECTS: dict[str, str] = {
     # PURE
-    "const": "PURE", "load": "PURE", "store": "PURE",
+    "const": "PURE", "load": "PURE", "store": "PURE", "global_decl": "PURE",
     "jump": "PURE", "branch": "PURE", "return": "PURE",
     "binary": "PURE", "unary": "PURE", "compare": "PURE",
     "math_sqrt": "PURE",
@@ -1131,6 +1131,12 @@ class MIRLowerer:
             return
         elif kind == HIRKind.NONLOCAL:
             return
+        elif kind == HIRKind.GLOBAL:
+            # GLOBAL_DECL_V1: record module-global names per function; the
+            # backends resolve loads/stores of declared names to the shared
+            # variable instead of function locals (pure metadata op).
+            for name in node.names:
+                builder.emit("global_decl", name)
         elif kind == HIRKind.IF:
             self._lower_if(builder, node)
         elif kind == HIRKind.WHILE:
