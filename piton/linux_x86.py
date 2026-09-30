@@ -1731,6 +1731,11 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=piton_double_bits({_float_c_literal(folded)});")
                     types[result] = "float"
                     return out
+                # INT_POW_V1: pre-zero the slot — the raise path below
+                # skips assignment, and the function-exit cleanup frees every
+                # bigint_slots entry (an uninitialized slot freed a garbage
+                # pointer: heap corruption, Windows-only crash).
+                out.append(f"    {_name(result)}=0;")
                 out.append(
                     f'    if({self._value(right)}<0){{piton_raise_set("ValueError","negative exponent requires a float result (out of the int subset)");}}'
                 )

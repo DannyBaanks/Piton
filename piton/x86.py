@@ -939,6 +939,9 @@ class Win64NasmEmitter:
                         return
                 self._load_operand(left, "rcx")
                 self._load_operand(right, "rdx")
+                # INT_POW_V1: pre-zero the slot (same uninitialized-free
+                # hazard as the Linux backend on the raise path).
+                self.lines.append(f"    mov qword {self._address(result)}, 0")
                 self.lines.append("    test rdx, rdx")
                 neg_label = self._internal_label("pow_neg")
                 done_label = self._internal_label("pow_done")
