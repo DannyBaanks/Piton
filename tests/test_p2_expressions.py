@@ -140,11 +140,37 @@ class SliceV1(unittest.TestCase):
     def test_str_index_negative(self):
         _assert_matches(self, "s = 'hola'\nimprimir(s[1], s[-1])\n")
 
-    def test_slice_with_step_fails_closed(self):
-        # the step parses and is carried; the MIR layer rejects it fail-closed
-        parse("imprimir([1, 2, 3][0:2:1])\n")
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir([1, 2, 3][0:2:1])\n")
+class StepSliceV1(unittest.TestCase):
+    """SLICE_STEP_V1: full [a:b:c] with direction-aware bound defaults."""
+
+    def test_reverse_list(self):
+        _assert_matches(self, "imprimir([1, 2, 3, 4][::-1])\n")
+
+    def test_reverse_str(self):
+        _assert_matches(self, "imprimir('hola'[::-1])\n")
+
+    def test_reverse_tuple(self):
+        _assert_matches(self, "imprimir((1, 2, 3, 4)[::-1])\n")
+
+    def test_positive_step(self):
+        _assert_matches(self, "imprimir([1, 2, 3, 4][::2])\n")
+
+    def test_negative_step_bounds(self):
+        _assert_matches(self, "imprimir([1, 2, 3, 4, 5][3:0:-1])\n")
+
+    def test_negative_step_stride(self):
+        _assert_matches(self, "imprimir([1, 2, 3, 4, 5][4:1:-2])\n")
+
+    def test_negative_step_str(self):
+        _assert_matches(self, "imprimir('hola'[3:0:-1])\n")
+
+    def test_runtime_step(self):
+        _assert_matches(self, "n = 2\nimprimir([1, 2, 3, 4][::n])\n")
+
+    def test_step_zero_fails_at_runtime(self):
+        result = compare_native_to_cpython("imprimir([1, 2][::0])\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"ValueError", result.native.stderr)
 
 
 if __name__ == "__main__":

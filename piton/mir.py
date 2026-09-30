@@ -2863,13 +2863,17 @@ class MIRLowerer:
                 else None
             )
             if slice_info is not None:
-                if slice_info.get("step") is not None:
-                    raise MIRLoweringError("slice con paso aun no soportado")
+                # SLICE_STEP_V1: full [a:b:c] lowers with the step as an
+                # optional 4th get_slice argument (None = 1).
                 value = self._lower_expr(builder, node.value)
                 lower = self._lower_expr(builder, slice_info["lower"]) if slice_info["lower"] is not None else None
                 upper = self._lower_expr(builder, slice_info["upper"]) if slice_info["upper"] is not None else None
+                step = self._lower_expr(builder, slice_info["step"]) if slice_info.get("step") is not None else None
                 result = builder.temp()
-                builder.emit("get_slice", value, lower, upper, result=result)
+                if step is None:
+                    builder.emit("get_slice", value, lower, upper, result=result)
+                else:
+                    builder.emit("get_slice", value, lower, upper, step, result=result)
                 return result
             result = builder.temp()
             builder.emit(
