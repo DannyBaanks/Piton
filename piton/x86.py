@@ -210,6 +210,7 @@ class Win64NasmEmitter:
             "extern piton_seq_concat",
             "extern piton_int_truediv",
             "extern piton_float_div", "extern piton_float_floor_div", "extern piton_float_mod",
+            "extern piton_float_pow_v1",
             "extern piton_str_contains", "extern piton_seq_contains",
             "extern piton_str_index", "extern piton_str_slice", "extern piton_seq_slice",
             "extern piton_str_slice_step", "extern piton_seq_slice_step",
@@ -943,12 +944,41 @@ class Win64NasmEmitter:
                 self._emit_bigint_binary(operator, left, right, result)
                 return
             if "float" in {left_type, right_type}:
-                # TRUEDIV_V1 + FLOAT_MOD_V1: / // and % join the supported
-                # set. CPython raises ZeroDivisionError on float division by
-                # zero instead of IEEE infinities, so the dividing ops go
-                # through raising helpers followed by the catch_flag routing.
-                if operator not in {"+", "-", "*", "/", "//", "%"}:
+                # TRUEDIV_V1 + FLOAT_MOD_V1 + FLOAT_POW_V1: / // % and **
+                # join the supported set. CPython raises ZeroDivisionError on
+                # float division by zero instead of IEEE infinities, so the
+                # dividing ops go through raising helpers followed by the
+                # catch_flag routing. ** is exact for y in
+                # {-2,-1,-0.5,0,0.5,1,2}; constants fold exactly in Python.
+                if operator not in {"+", "-", "*", "/", "//", "%", "**"}:
                     raise NativeBuildError(f"native float operator not supported yet: {operator}")
+                if operator == "**":
+                    left_const = self.constants.get(left) if isinstance(left, str) else None
+                    right_const = self.constants.get(right) if isinstance(right, str) else None
+                    if (
+                        isinstance(left_const, (int, float)) and not isinstance(left_const, bool)
+                        and isinstance(right_const, (int, float)) and not isinstance(right_const, bool)
+                    ):
+                        try:
+                            folded = left_const ** right_const
+                        except (OverflowError, ZeroDivisionError):
+                            folded = None
+                        if isinstance(folded, complex):
+                            raise NativeBuildError("native float ** with negative base and fractional exponent yields complex (not supported)")
+                        if isinstance(folded, float):
+                            self.constants[result] = folded
+                            self._load_operand(folded)
+                            self.lines.append(f"    mov {self._address(result)}, rax")
+                            self.types[result] = "float"
+                            return
+                    self._load_float_operand(left, "xmm0")
+                    self._load_float_operand(right, "xmm1")
+                    self.lines.append("    call piton_float_pow_v1")
+                    self._emit_exc_routing(handler_label, labels)
+                    self.lines.append("    movq rax, xmm0")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "float"
+                    return
                 self._load_float_operand(left, "xmm0")
                 self._load_float_operand(right, "xmm1")
                 if operator in {"/", "//", "%"}:
@@ -1172,18 +1202,26 @@ class Win64NasmEmitter:
                 if operator == "-":
                     self.lines.append("    btc rax, 63")
                 self.types[result] = "float"
+                operand_const = self.constants.get(operand) if isinstance(operand, str) else None
+                if isinstance(operand_const, float):
+                    self.constants[result] = -operand_const if operator == "-" else operand_const
             elif operator == "-":
                 self.lines.append("    neg rax")
                 self.types[result] = "int"
-                # INT_POW_V1: record trivially-foldable unary int results so
-                # downstream folds see through `-1` (e.g. `2 ** -1`).
+                # INT_POW_V1 / FLOAT_POW_V1: record trivially-foldable unary
+                # int/float results so downstream folds see through `-1` and
+                # `-2.0`.
                 operand_const = self.constants.get(operand) if isinstance(operand, str) else None
-                if isinstance(operand_const, int) and not isinstance(operand_const, bool):
+                if isinstance(operand_const, bool):
+                    pass
+                elif isinstance(operand_const, (int, float)):
                     self.constants[result] = -operand_const
             elif operator == "+":
                 self.types[result] = self.types.get(operand, "int")
                 operand_const = self.constants.get(operand) if isinstance(operand, str) else None
-                if isinstance(operand_const, int) and not isinstance(operand_const, bool):
+                if isinstance(operand_const, bool):
+                    pass
+                elif isinstance(operand_const, (int, float)):
                     self.constants[result] = operand_const
             elif operator == "~":
                 self.lines.append("    not rax")
