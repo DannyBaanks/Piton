@@ -1160,19 +1160,35 @@ class LinuxCEmitter:
             declared: set[str] = set()
             stored: set[str] = set()
             local_consts: dict[str, Any] = {}
+            module_temps: set[str] = set()
             for block in function.blocks:
                 for instruction in block.instructions:
                     if instruction.op == "global_decl" and instruction.args:
                         declared.add(instruction.args[0])
+                    elif (
+                        instruction.op == "object_new"
+                        and instruction.result
+                        and instruction.args
+                        and instruction.args[0] == "module"
+                    ):
+                        # module alias bindings (`importar b` stores the fresh
+                        # module object) are not user variables: skipping them
+                        # keeps import machinery (often dead loads consumed
+                        # through qualified names) out of the global checks.
+                        module_temps.add(instruction.result)
                     elif instruction.op == "store" and instruction.args:
                         stored.add(instruction.args[0])
                         if function.name == "<module>":
-                            self._module_stored.add(instruction.args[0])
-                            source = instruction.args[1]
+                            target, source = instruction.args[0], instruction.args[1]
+                            if target.startswith("__") and target.endswith("__"):
+                                continue
+                            if isinstance(source, str) and source in module_temps:
+                                continue
+                            self._module_stored.add(target)
                             if isinstance(source, str) and source in local_consts:
                                 kind = local_consts[source]
                                 if kind:
-                                    self._module_types[instruction.args[0]] = kind
+                                    self._module_types[target] = kind
                     elif instruction.op == "const" and instruction.result and instruction.args:
                         local_consts[instruction.result] = literal_type(instruction.args[0])
                     elif instruction.op == "build_collection" and instruction.result and instruction.args:
