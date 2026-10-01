@@ -6,7 +6,7 @@ import json
 import operator
 from typing import Any, Dict, List, Optional, Sequence
 
-from piton.hir import HIRKind, HIRNode, Keyword, With
+from piton.hir import ExceptHandler, HIRKind, HIRNode, Keyword, With
 
 
 _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
@@ -351,6 +351,15 @@ class MIRLowerer:
         self.module_aliases: dict[str, str] = {}
         self.decorated_symbols: dict[int, str] = {}
 
+    def _store_loop_target(self, builder: _Builder, target: str, value: str) -> None:
+        """FOR_LOOP_CAPTURE_V1: a captured loop target must cell_store. A
+        plain store would overwrite the cell pointer slot with the raw
+        loop value and segfault the next cell_load (observed rc=-11)."""
+        if target in builder.cell_params:
+            builder.emit("cell_store", target, value)
+        else:
+            builder.emit("store", target, value)
+
     def _store(self, builder: _Builder, target: HIRNode, value: str) -> None:
         if target.kind == HIRKind.STORE:
             if target.name in builder.cell_params:
@@ -432,6 +441,10 @@ class MIRLowerer:
         self.function_frame_abi: dict[str, bool] = {}
         imported_modules = modules or {}
         self.imported_modules = imported_modules
+        self._validate_nonlocal_bindings(hir)
+        for imported in (modules or {}).values():
+            if getattr(imported, "kind", None) == HIRKind.MODULE:
+                self._validate_nonlocal_bindings(imported)
         if hir.kind == HIRKind.MODULE:
             module_body = getattr(hir, "body", [])
             self.async_functions = {
@@ -888,7 +901,9 @@ class MIRLowerer:
         self.function_posonly[qualified_name or node.name] = posonly_params
         self.function_kwonly[qualified_name or node.name] = kwonly_params
         self.function_frame_abi[qualified_name or node.name] = use_frame_abi
-        local_names = set(builder.function.params) | self._assigned_names(body)
+        local_names = (
+            set(builder.function.params) | self._assigned_names(body) | self._for_target_names(body)
+        )
 
         all_nested_captures: dict[str, tuple[str, tuple[str, ...]]] = {}
         available = local_names | (set(cell_vars) if cell_vars else set())
@@ -980,6 +995,204 @@ class MIRLowerer:
         elif isinstance(value, (list, tuple)):
             for item in value:
                 yield from self._walk(item)
+
+    _SCOPE_STOP = {
+        HIRKind.FUNC_DEF, HIRKind.CLASS_DEF, HIRKind.LAMBDA,
+        HIRKind.LIST_COMP, HIRKind.SET_COMP, HIRKind.DICT_COMP, HIRKind.GEN_EXPR,
+    }
+
+    def _validate_nonlocal_bindings(self, node: HIRNode) -> None:
+        """NONLOCAL_BINDING_V1: CPython rejects bad nonlocal bindings at
+        compile time (SyntaxError); the subset must fail closed at build
+        (MIRLoweringError, converted to NativeBuildError by both backends)
+        instead of silently accepting — the declaration used to be dropped,
+        so every invalid case below ran rc=0 natively while the oracle
+        raised. Valid declarations change nothing: cell capture already
+        works, so valid programs lower exactly as before.
+
+        Rules mirrored (message flavor included): module-level nonlocal,
+        parameter/nonlocal conflict, global/nonlocal conflict, binding or
+        use before the declaration in the same scope, and no binding in any
+        enclosing function scope (module-level bindings do not count, and
+        class bodies are transparent: methods skip the class when looking
+        outward). Comprehension/lambda interiors are not inspected: a missed
+        use-before inside one is a benign residual (the program still runs
+        correctly through the cells), while a comprehension-only
+        "binding" never counts for the ancestor check.
+        """
+        if getattr(node, "kind", None) == HIRKind.MODULE:
+            self._validate_scope(node, ancestors=())
+
+    def _validate_scope(self, node: HIRNode, ancestors) -> None:
+        # ancestors: enclosing FUNC_DEF scopes, innermost last — never
+        # including the scope itself (its own bindings do not satisfy its
+        # nonlocal declarations).
+        body = getattr(node, "body", [])
+        is_module = node.kind == HIRKind.MODULE
+        params = self._function_params(node) if node.kind == HIRKind.FUNC_DEF else None
+        events = list(self._iter_scope_events(body))
+        if is_module:
+            for event, name in events:
+                if event == "nonlocal":
+                    raise MIRLoweringError("native nonlocal declaration not allowed at module level")
+        else:
+            own_global = {name for event, name in events if event == "global"}
+            bound = set(params or ())
+            used: set[str] = set()
+            for event, name in events:
+                if event == "nonlocal":
+                    for target in name:
+                        if target in (params or ()):
+                            raise MIRLoweringError(f"native name '{target}' is parameter and nonlocal")
+                        if target in own_global:
+                            raise MIRLoweringError(f"native name '{target}' is nonlocal and global")
+                        if target in bound:
+                            raise MIRLoweringError(
+                                f"native name '{target}' is assigned to before nonlocal declaration"
+                            )
+                        if target in used:
+                            raise MIRLoweringError(
+                                f"native name '{target}' is used prior to nonlocal declaration"
+                            )
+                        if not any(self._scope_binds(scope, target) for scope in ancestors):
+                            raise MIRLoweringError(
+                                f"native no binding for nonlocal '{target}' found"
+                            )
+                elif event == "bind":
+                    bound.add(name)
+                elif event == "use":
+                    used.add(name)
+        # enclosing scopes for children: a function scope appends itself;
+        # module and class bodies are transparent (methods skip the class
+        # outward, matching CPython: the class neither binds nor satisfies).
+        child_ancestors = ancestors + (node,) if node.kind == HIRKind.FUNC_DEF else ancestors
+        for child in [n for n in self._walk(body) if n.kind in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}]:
+            self._validate_scope(child, child_ancestors)
+
+    @staticmethod
+    def _function_params(node: HIRNode) -> tuple:
+        args = getattr(node, "args", None)
+        if args is None:
+            return ()
+        names = list(getattr(args, "args", []) or []) + list(getattr(args, "kwonlyargs", []) or [])
+        for extra in ("vararg", "kwarg"):
+            value = getattr(args, extra, None)
+            if isinstance(value, str) and value:
+                names.append(value)
+            elif value is not None and getattr(value, "arg", None):
+                names.append(value.arg)
+        return tuple(names)
+
+    def _scope_binds(self, scope: HIRNode, name: str) -> bool:
+        """Order-free: does function scope bind name (params, stores,
+        nested def/class names, import aliases)? Nonlocal declarations in
+        the scope itself never count (they are not bindings)."""
+        if name in self._function_params(scope):
+            return True
+        body = getattr(scope, "body", [])
+        if any(
+            event == "bind" and target == name
+            for event, target in self._iter_scope_events(body)
+        ):
+            return True
+        # ancestor imports satisfy nonlocal (verified: `import sys` in the
+        # outer scope lets the inner `nonlocal sys` compile).
+        for node in self._walk(body):
+            if node.kind in {HIRKind.IMPORT, HIRKind.IMPORT_FROM}:
+                for alias in getattr(node, "names", []) or []:
+                    local = getattr(alias, "asname", None) or getattr(alias, "name", "")
+                    if (local.split(".")[0] if local else "") == name:
+                        return True
+        return False
+
+    def _iter_scope_events(self, body):
+        """Ordered (bind, name) / (use, name) / (nonlocal, names) /
+        (global, name) events for one scope. Never crosses a nested
+        scope boundary (def/class/lambda/comprehension)."""
+        for statement in body or ():
+            yield from self._scope_events_of(statement)
+
+    def _scope_events_of(self, node: HIRNode):
+        kind = getattr(node, "kind", None)
+        if kind == HIRKind.NONLOCAL:
+            yield ("nonlocal", list(getattr(node, "names", []) or []))
+            return
+        if kind == HIRKind.GLOBAL:
+            for name in getattr(node, "names", []) or []:
+                yield ("global", name)
+            return
+        if kind in self._SCOPE_STOP:
+            if kind in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
+                yield ("bind", getattr(node, "name", ""))
+            return
+        if kind == HIRKind.FOR:
+            for target_name in self._for_target_binds(getattr(node, "target", None)):
+                yield ("bind", target_name)
+            # fall through: the generic recursion below still visits iter,
+            # body and orelse (and any real uses inside complex targets)
+            # in source order
+        if kind == HIRKind.STORE:
+            if getattr(node, "name", None):
+                yield ("bind", node.name)
+            return
+        if kind == HIRKind.LOAD:
+            if getattr(node, "name", None):
+                yield ("use", node.name)
+            return
+        if kind in {HIRKind.IMPORT, HIRKind.IMPORT_FROM}:
+            # same-scope imports never conflict with nonlocal (CPython
+            # reports "no binding", never "assigned to before", for
+            # `import x` + `nonlocal x`): no ordered event. Ancestor
+            # imports DO satisfy nonlocal — see _scope_binds.
+            return
+        if isinstance(node, ExceptHandler):
+            # `except E como x` binds x (ExceptHandler reuses HIRKind.TRY,
+            # so it is detected by class, not by kind).
+            if getattr(node, "name", None):
+                yield ("bind", node.name)
+        if kind is None:
+            return
+        try:
+            descriptors = fields(node)
+        except Exception:
+            return
+        for descriptor in descriptors:
+            if descriptor.name in {"kind", "line", "col", "annotations"}:
+                continue
+            value = getattr(node, descriptor.name, None)
+            if isinstance(value, HIRNode):
+                yield from self._scope_events_of(value)
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    if isinstance(item, HIRNode):
+                        yield from self._scope_events_of(item)
+
+    def _for_target_names(self, body) -> set[str]:
+        """FOR_LOOP_CAPTURE_V1: loop targets are LOAD nodes in HIR, so
+        _assigned_names misses them and nested functions could never
+        capture a loop variable (C compile error). For-targets bind like
+        stores for capture purposes (the loop store already routes to the
+        cell via cell_params); local_names feeds ONLY the capture filter,
+        so this cannot change codegen of building programs."""
+        names: set[str] = set()
+        for node in self._walk(body):
+            if node.kind == HIRKind.FOR:
+                names |= self._for_target_binds(getattr(node, "target", None))
+        return names
+
+    def _for_target_binds(self, target) -> set[str]:
+        if target is None:
+            return set()
+        if target.kind == HIRKind.LOAD and getattr(target, "name", None):
+            return {target.name}
+        if target.kind in {HIRKind.TUPLE, HIRKind.LIST}:
+            out: set[str] = set()
+            for element in getattr(target, "elts", []) or []:
+                out |= self._for_target_binds(element)
+            return out
+        if type(target).__name__ == "Starred":
+            return self._for_target_binds(getattr(target, "value", None))
+        return set()
 
     def _assigned_names(self, body: Sequence[HIRNode]) -> set[str]:
         return {
@@ -1283,7 +1496,7 @@ class MIRLowerer:
         builder.emit("get_item", generator, index, result=item)
         if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
             raise MIRLoweringError("native generator loop target must be a name")
-        builder.emit("store", node.target.name, item)
+        self._store_loop_target(builder, node.target.name, item)
         self._lower_statements(builder, node.body)
         builder.emit("jump", increment_block.label)
         builder.current = increment_block
@@ -1353,7 +1566,7 @@ class MIRLowerer:
         builder.current = body_block
         if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
             raise MIRLoweringError("native generator loop target must be a name")
-        builder.emit("store", node.target.name, index)
+        self._store_loop_target(builder, node.target.name, index)
         self._lower_statements(builder, node.body)
         builder.emit("jump", increment_block.label)
         builder.current = increment_block
@@ -1405,7 +1618,7 @@ class MIRLowerer:
         builder.emit("iter_next", iterator, end_block.label, result=item)
         if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
             raise MIRLoweringError("native generator loop target must be a name")
-        builder.emit("store", node.target.name, item)
+        self._store_loop_target(builder, node.target.name, item)
         self._lower_statements(builder, node.body)
         builder.emit("jump", increment_block.label)
         builder.current = increment_block
@@ -1465,7 +1678,7 @@ class MIRLowerer:
         builder.current = body_block
         if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
             raise MIRLoweringError("native async generator loop target must be a name")
-        builder.emit("store", node.target.name, value)
+        self._store_loop_target(builder, node.target.name, value)
         self._lower_statements(builder, node.body)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
