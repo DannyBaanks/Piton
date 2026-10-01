@@ -2640,10 +2640,43 @@ class MIRLowerer:
             builder.emit("unary", node.op, operand, result=result)
             return result
         if kind == HIRKind.COMPARE:
-            left = self._lower_expr(builder, node.left)
-            for op, comparator in zip(node.ops, node.comparators):
-                left = self._compare(builder, op, left, self._lower_expr(builder, comparator))
-            return left
+            if len(node.ops) == 1:
+                left = self._lower_expr(builder, node.left)
+                for op, comparator in zip(node.ops, node.comparators):
+                    left = self._compare(builder, op, left, self._lower_expr(builder, comparator))
+                return left
+            # CHAINCMP_V1: CPython evaluates `a < b < c` as pairwise
+            # comparisons with the middle evaluated ONCE and `and`
+            # short-circuit (no `y`/`o` machinery exists natively, so the
+            # chain builds its own branch scaffold, mirroring IF_EXPR).
+            operands = [self._lower_expr(builder, node.left)]
+            operands.extend(self._lower_expr(builder, comparator) for comparator in node.comparators)
+            holder = "@" + builder.temp().lstrip("%")
+            end_block = builder.new_block()
+            false_block = builder.new_block()
+            for index, op in enumerate(node.ops[:-1]):
+                cmp_tmp = self._compare(builder, op, operands[index], operands[index + 1])
+                cont_block = builder.new_block()
+                builder.emit("branch", cmp_tmp, cont_block.label, false_block.label)
+                builder.current = cont_block
+            last = self._compare(builder, node.ops[-1], operands[-2], operands[-1])
+            builder.emit("store", holder, last)
+            builder.emit("jump", end_block.label)
+            builder.current = false_block
+            false_value = builder.temp()
+            builder.emit("const", False, result=false_value)
+            builder.emit("store", holder, false_value)
+            builder.emit("jump", end_block.label)
+            builder.current = end_block
+            merged = builder.temp()
+            builder.emit("load", holder, result=merged)
+            # the holder load loses its static bool type (blocks emit in
+            # layout order, stores after the load), so normalize through a
+            # trailing != 0: identity on {0, 1}, bool-typed on both backends.
+            zero = builder.temp()
+            builder.emit("const", 0, result=zero)
+            result = self._compare(builder, "!=", merged, zero)
+            return result
         if kind == HIRKind.LAMBDA:
             if node.name not in builder.closures:
                 raise MIRLoweringError(f"lambda '{node.name}' not lifted")

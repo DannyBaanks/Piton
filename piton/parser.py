@@ -30,7 +30,7 @@ PRECEDENCE = {
     "not": 5,
     "in": 6, "en": 6, "not in": 6, "no en": 6,
     "is": 6, "es": 6, "is not": 6, "no es": 6,
-    "==": 7, "!=": 7, "<": 7, "<=": 7, ">": 7, ">=": 7,
+    "==": 6, "!=": 6, "<": 6, "<=": 6, ">": 6, ">=": 6,
     "|": 8,
     "^": 9,
     "&": 10,
@@ -658,6 +658,12 @@ class Parser:
     def _parse_expression(self, min_prec: int = 0, allow_ternary: bool = True) -> CSTNode:
         # Parse lhs
         lhs = self._parse_primary()
+        # CHAINCMP_V1: the Compare node built by THIS loop invocation, if
+        # any. A following comparison merges into it (CPython chains);
+        # anything else (BinOp, BoolOp, a parenthesized Compare arriving
+        # as a fresh operand, ...) starts a new node — identity (not
+        # isinstance) keeps `(a < b) < c` right-nested like CPython.
+        chain = None
 
         # Parse operators with precedence
         while True:
@@ -689,20 +695,35 @@ class Parser:
                 if self._peek_n(1).type == TokenType.NAME and self._peek_n(1).value in ("es", "en"):
                     self._advance()
                     op2 = self._advance().value
-                    rhs = self._parse_expression(next_min_prec)
-                    lhs = Compare(left=lhs, ops=[f"no {op2}"], comparators=[rhs]).set_pos(tok)
+                    rhs = self._parse_expression(prec + 1)
+                    if lhs is chain:
+                        lhs.ops.append(f"no {op2}")
+                        lhs.comparators.append(rhs)
+                    else:
+                        lhs = Compare(left=lhs, ops=[f"no {op2}"], comparators=[rhs]).set_pos(tok)
+                        chain = lhs
                 else:
                     # unary not - handled in primary
                     break
             elif tok.type in (TokenType.IN, TokenType.NOT_IN, TokenType.IS, TokenType.IS_NOT):
                 self._advance()
-                rhs = self._parse_expression(next_min_prec)
-                lhs = Compare(left=lhs, ops=[op], comparators=[rhs]).set_pos(tok)
+                rhs = self._parse_expression(prec + 1)
+                if lhs is chain:
+                    lhs.ops.append(op)
+                    lhs.comparators.append(rhs)
+                else:
+                    lhs = Compare(left=lhs, ops=[op], comparators=[rhs]).set_pos(tok)
+                    chain = lhs
             elif tok.type in (TokenType.EQ, TokenType.NOT_EQ, TokenType.LT, TokenType.LT_EQ,
                              TokenType.GT, TokenType.GT_EQ):
                 self._advance()
-                rhs = self._parse_expression(next_min_prec)
-                lhs = Compare(left=lhs, ops=[op], comparators=[rhs]).set_pos(tok)
+                rhs = self._parse_expression(prec + 1)
+                if lhs is chain:
+                    lhs.ops.append(op)
+                    lhs.comparators.append(rhs)
+                else:
+                    lhs = Compare(left=lhs, ops=[op], comparators=[rhs]).set_pos(tok)
+                    chain = lhs
             else:
                 # Binary operators
                 self._advance()
