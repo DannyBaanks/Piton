@@ -1871,6 +1871,193 @@ int64_t piton_str_find(const char *s, const char *n) {
     return -1;
 }
 
+/* STR_PREDS_V1 + STR_TRANSFORMS_V1 + STR_PADS_V1: mirror of the Linux
+   inline helpers (isalpha/isdigit/isalnum/isspace/istitle/isupper/islower,
+   capitalize/title/swapcase, zfill/ljust/rjust/center, count/rfind and the
+   raising subindex/subrindex). ASCII subset; isupper/islower/istitle need
+   at least one cased character; center follows CPython
+   left = marg//2 + (marg & width & 1). */
+int64_t piton_str_pred(const char *s, int64_t mode) {
+    if (!s || !s[0]) return 0;
+    size_t i = 0;
+    if (mode == 0 || mode == 1 || mode == 2 || mode == 3) {
+        while (s[i]) {
+            unsigned char c = (unsigned char)s[i];
+            int alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+            int dig = c >= '0' && c <= '9';
+            if (mode == 0 && !alpha) return 0;
+            if (mode == 1 && !dig) return 0;
+            if (mode == 2 && !alpha && !dig) return 0;
+            if (mode == 3 && !(c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f')) return 0;
+            i++;
+        }
+        return 1;
+    }
+    /* cased modes: need at least one cased character */
+    int saw_cased = 0;
+    for (size_t j = 0; s[j]; ++j) {
+        unsigned char c = (unsigned char)s[j];
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) { saw_cased = 1; break; }
+    }
+    if (!saw_cased) return 0;
+    if (mode == 4) { /* istitle: each alpha run starts upper, rest lower */
+        int prev_alpha = 0;
+        for (size_t j = 0; s[j]; ++j) {
+            unsigned char c = (unsigned char)s[j];
+            int alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+            if (alpha) {
+                if (!prev_alpha && !(c >= 'A' && c <= 'Z')) return 0;
+                if (prev_alpha && !(c >= 'a' && c <= 'z')) return 0;
+            }
+            prev_alpha = alpha;
+        }
+        return 1;
+    }
+    for (size_t j = 0; s[j]; ++j) {
+        unsigned char c = (unsigned char)s[j];
+        int alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        if (!alpha) continue;
+        if (mode == 5 && !(c >= 'A' && c <= 'Z')) return 0;
+        if (mode == 6 && !(c >= 'a' && c <= 'z')) return 0;
+    }
+    return 1;
+}
+
+char *piton_str_capitalize(const char *s) {
+    if (!s) return NULL;
+    size_t n = strlen(s);
+    char *p = (char *)malloc(n + 1);
+    for (size_t i = 0; i < n; ++i) {
+        char c = s[i];
+        if (i == 0 && c >= 'a' && c <= 'z') p[i] = c - 32;
+        else if (i > 0 && c >= 'A' && c <= 'Z') p[i] = c + 32;
+        else p[i] = c;
+    }
+    p[n] = 0;
+    return p;
+}
+
+char *piton_str_title(const char *s) {
+    if (!s) return NULL;
+    size_t n = strlen(s);
+    char *p = (char *)malloc(n + 1);
+    int prev_alpha = 0;
+    for (size_t i = 0; i < n; ++i) {
+        char c = s[i];
+        int alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        if (alpha) {
+            if (!prev_alpha && c >= 'a' && c <= 'z') p[i] = c - 32;
+            else if (prev_alpha && c >= 'A' && c <= 'Z') p[i] = c + 32;
+            else p[i] = c;
+        } else p[i] = c;
+        prev_alpha = alpha;
+    }
+    p[n] = 0;
+    return p;
+}
+
+char *piton_str_swapcase(const char *s) {
+    if (!s) return NULL;
+    size_t n = strlen(s);
+    char *p = (char *)malloc(n + 1);
+    for (size_t i = 0; i < n; ++i) {
+        char c = s[i];
+        if (c >= 'a' && c <= 'z') p[i] = c - 32;
+        else if (c >= 'A' && c <= 'Z') p[i] = c + 32;
+        else p[i] = c;
+    }
+    p[n] = 0;
+    return p;
+}
+
+char *piton_str_zfill(const char *s, int64_t width) {
+    if (!s) return NULL;
+    size_t n = strlen(s);
+    int64_t pad = (width > (int64_t)n) ? (width - (int64_t)n) : 0;
+    int has_sign = (s[0] == '-' || s[0] == '+');
+    char *p = (char *)malloc(n + (size_t)pad + 1);
+    size_t o = 0;
+    if (pad > 0) {
+        if (has_sign) {
+            p[o++] = s[0];
+            for (int64_t i = 0; i < pad; ++i) p[o++] = '0';
+            for (size_t i = 1; i < n; ++i) p[o++] = s[i];
+        } else {
+            for (int64_t i = 0; i < pad; ++i) p[o++] = '0';
+            for (size_t i = 0; i < n; ++i) p[o++] = s[i];
+        }
+    } else {
+        for (size_t i = 0; i < n; ++i) p[o++] = s[i];
+    }
+    p[o] = 0;
+    return p;
+}
+
+char *piton_str_just(const char *s, int64_t width, int64_t fill, int64_t mode) {
+    if (!s) return NULL;
+    size_t n = strlen(s);
+    int64_t pad = (width > (int64_t)n) ? (width - (int64_t)n) : 0;
+    char f = (char)fill;
+    char *p = (char *)malloc(n + (size_t)pad + 1);
+    size_t o = 0;
+    if (mode == 0) { /* ljust */
+        for (size_t i = 0; i < n; ++i) p[o++] = s[i];
+        for (int64_t i = 0; i < pad; ++i) p[o++] = f;
+    } else if (mode == 1) { /* rjust */
+        for (int64_t i = 0; i < pad; ++i) p[o++] = f;
+        for (size_t i = 0; i < n; ++i) p[o++] = s[i];
+    } else { /* center: left = marg//2 + (marg & width & 1), CPython */
+        int64_t lp = pad / 2 + ((pad & width) & 1), rp = pad - lp;
+        for (int64_t i = 0; i < lp; ++i) p[o++] = f;
+        for (size_t i = 0; i < n; ++i) p[o++] = s[i];
+        for (int64_t i = 0; i < rp; ++i) p[o++] = f;
+    }
+    p[o] = 0;
+    return p;
+}
+
+int64_t piton_str_count(const char *s, const char *sub) {
+    if (!s || !sub) return 0;
+    size_t sl = strlen(s), tl = strlen(sub);
+    if (tl == 0) return (int64_t)(sl + 1);
+    if (tl > sl) return 0;
+    int64_t cnt = 0;
+    for (size_t i = 0; i + tl <= sl;) {
+        size_t j = 0;
+        while (j < tl && s[i + j] == sub[j]) ++j;
+        if (j == tl) { ++cnt; i += tl; }
+        else ++i;
+    }
+    return cnt;
+}
+
+int64_t piton_str_rfind(const char *s, const char *sub) {
+    if (!s || !sub) return -1;
+    size_t sl = strlen(s), tl = strlen(sub);
+    if (tl == 0) return (int64_t)sl;
+    if (tl > sl) return -1;
+    for (size_t i = sl - tl + 1; i-- > 0;) {
+        const char *p = s + i;
+        size_t k = 0;
+        while (k < tl && p[k] == sub[k]) ++k;
+        if (k == tl) return (int64_t)i;
+    }
+    return -1;
+}
+
+int64_t piton_str_subindex(const char *s, const char *n) {
+    int64_t i = piton_str_find(s, n);
+    if (i < 0) { piton_raise_unhandled("ValueError", "substring not found"); return 0; }
+    return i;
+}
+
+int64_t piton_str_subrindex(const char *s, const char *n) {
+    int64_t i = piton_str_rfind(s, n);
+    if (i < 0) { piton_raise_unhandled("ValueError", "substring not found"); return 0; }
+    return i;
+}
+
+
 int piton_str_startswith(const char *s, const char *p) {
     size_t hl = strlen(s), nl = strlen(p);
     if (nl > hl) return 0;

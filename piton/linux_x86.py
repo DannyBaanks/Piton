@@ -288,6 +288,16 @@ static char* piton_str_apply_spec(const char*s,const char*spec){
     out[o]=0;return out;
 }
 static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum){int neg=0;const char*digits=s;if(isnum&&s[0]=='-'){neg=1;digits=s+1;}usize dl=piton_strlen(digits);const char*core=digits;usize cl=dl;if(prec>=0){if(isnum){usize need=(usize)prec;if(dl==1&&digits[0]=='0'&&prec==0)need=0;if(dl<need){char*pad=piton_alloc(need+1);for(usize i=0;i<need-dl;++i)pad[i]='0';piton_memcpy(pad+need-dl,digits,dl);pad[need]=0;core=pad;cl=need;}}else{usize cut=piton_utf8_chars(s,(usize)prec);char*tr=piton_alloc(cut+1);piton_memcpy(tr,s,cut);tr[cut]=0;core=tr;cl=cut;neg=0;}}usize totallen=cl+(neg?1:0);long pad=(width>0&&totallen<(usize)width)?(width-(long)totallen):0;int left=(flags&1)!=0;int zero=(flags&2)&&!left&&isnum&&prec<0;char*out=piton_alloc(totallen+(usize)pad+1);usize o=0;if(!left){if(zero){if(neg)out[o++]='-';for(long i=0;i<pad;++i)out[o++]='0';}else{for(long i=0;i<pad;++i)out[o++]=' ';if(neg)out[o++]='-';}}else if(neg){out[o++]='-';}piton_memcpy(out+o,core,cl);o+=cl;if(left){for(long i=0;i<pad;++i)out[o++]=' ';}out[o]=0;return(long)out;}
+static long piton_str_pred(const char*s,int mode){if(!s||!s[0])return 0;long r=1;int saw_cased=0;int i=0;while(s[i]){unsigned char c=(unsigned char)s[i];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');int dig=(c>='0'&&c<='9');if(alpha)saw_cased=1;if(mode==0){if(!alpha){r=0;break;}}else if(mode==1){if(!dig){r=0;break;}}else if(mode==2){if(!alpha&&!dig){r=0;break;}}else if(mode==3){if(!(c==' '||c=='\t'||c=='\n'||c=='\r'||c=='\v'||c=='\f')){r=0;break;}}i++;}if(mode>=4&&mode<=6){if(!saw_cased)return 0;if(mode==4){int prev_alpha=0;for(usize j=0;s[j];++j){unsigned char c=(unsigned char)s[j];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(alpha){if(!prev_alpha){if(!(c>='A'&&c<='Z'))return 0;}else{if(!(c>='a'&&c<='z'))return 0;}}prev_alpha=alpha;}return 1;}for(usize j=0;s[j];++j){unsigned char c=(unsigned char)s[j];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(!alpha)continue;if(mode==5){if(!(c>='A'&&c<='Z'))return 0;}else{if(!(c>='a'&&c<='z'))return 0;}}return 1;}return r;}
+static long piton_str_capitalize(const char*s){if(!s)return 0;usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){char c=s[i];if(i==0&&c>='a'&&c<='z')p[i]=c-32;else if(i>0&&c>='A'&&c<='Z')p[i]=c+32;else p[i]=c;}p[n]=0;return(long)p;}
+static long piton_str_title(const char*s){if(!s)return 0;usize n=piton_strlen(s);char*p=piton_alloc(n+1);int prev_alpha=0;for(usize i=0;i<n;++i){char c=s[i];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(alpha){if(!prev_alpha&&c>='a'&&c<='z')p[i]=c-32;else if(prev_alpha&&c>='A'&&c<='Z')p[i]=c+32;else p[i]=c;}else p[i]=c;prev_alpha=alpha;}p[n]=0;return(long)p;}
+static long piton_str_swapcase(const char*s){if(!s)return 0;usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){char c=s[i];if(c>='a'&&c<='z')p[i]=c-32;else if(c>='A'&&c<='Z')p[i]=c+32;else p[i]=c;}p[n]=0;return(long)p;}
+static long piton_str_zfill(const char*s,long width){if(!s)return 0;usize n=piton_strlen(s);long pad=(width>(long)n)?(width-(long)n):0;int has_sign=(s[0]=='-'||s[0]=='+');char*p=piton_alloc((usize)(n+pad)+1);usize o=0;if(pad>0){if(has_sign){p[o++]=s[0];for(long i=0;i<pad;++i)p[o++]='0';for(usize i=1;i<n;++i)p[o++]=s[i];}else{for(long i=0;i<pad;++i)p[o++]='0';for(usize i=0;i<n;++i)p[o++]=s[i];}}else{for(usize i=0;i<n;++i)p[o++]=s[i];}p[o]=0;return(long)p;}
+static long piton_str_just(const char*s,long width,long fill,int mode){if(!s)return 0;usize n=piton_strlen(s);long pad=(width>(long)n)?(width-(long)n):0;char f=(char)fill;char*p=piton_alloc((usize)(n+pad)+1);usize o=0;if(mode==0){for(usize i=0;i<n;++i)p[o++]=s[i];for(long i=0;i<pad;++i)p[o++]=f;}else if(mode==1){for(long i=0;i<pad;++i)p[o++]=f;for(usize i=0;i<n;++i)p[o++]=s[i];}else{long lp=pad/2+((pad&width)&1),rp=pad-lp;for(long i=0;i<lp;++i)p[o++]=f;for(usize i=0;i<n;++i)p[o++]=s[i];for(long i=0;i<rp;++i)p[o++]=f;}p[o]=0;return(long)p;}
+static long piton_str_count(const char*s,const char*sub){if(!s||!sub)return 0;usize sl=piton_strlen(s),tl=piton_strlen(sub);if(tl==0)return(long)(sl+1);if(tl>sl)return 0;long cnt=0;for(usize i=0;i+tl<=sl;){usize j=0;while(j<tl&&s[i+j]==sub[j])++j;if(j==tl){++cnt;i+=tl;}else++i;}return cnt;}
+static long piton_str_rfind(const char*s,const char*sub){if(!s||!sub)return -1;usize sl=piton_strlen(s),tl=piton_strlen(sub);if(tl==0)return(long)sl;if(tl>sl)return -1;for(usize i=sl-tl+1;i-->0;){const char*p=s+i;usize k=0;while(k<tl&&p[k]==sub[k])++k;if(k==tl)return(long)i;}return -1;}
+static long piton_str_subindex(const char*s,const char*n){long i=piton_str_find(s,n);if(i<0){piton_write(2,"ValueError: substring not found\n",32);piton_exit(1);}return i;}
+static long piton_str_subrindex(const char*s,const char*n){long i=piton_str_rfind(s,n);if(i<0){piton_write(2,"ValueError: substring not found\n",32);piton_exit(1);}return i;}
 static long piton_str_quote(const char*s){usize n=piton_strlen(s);int q=0;for(usize i=0;i<n;++i)if(s[i]=='\'')q=1;char qc=q?'"':'\'';usize extra=0;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'||c=='\n'||c=='\t'||c=='\r'||(unsigned char)c==qc)extra+=1;}char*p=piton_alloc(n+extra+3);usize o=0;p[o++]=qc;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'){p[o++]='\\';p[o++]='\\';}else if(c=='\n'){p[o++]='\\';p[o++]='n';}else if(c=='\t'){p[o++]='\\';p[o++]='t';}else if(c=='\r'){p[o++]='\\';p[o++]='r';}else if(c==qc){p[o++]='\\';p[o++]=c;}else p[o++]=(char)c;}p[o++]=qc;p[o]=0;return(long)p;}
 static long piton_str_single_char(const char*s){if(piton_strlen(s)!=1){piton_raise_set("TypeError","%c requires int or char");return 0;}return(long)s;}
 static long piton_str_format(const char*t,long n,const char**av){usize total=0;int auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){total+=1;i+=2;continue;}usize j=i+1;int idx=-2;int has=0;if(t[j]=='}'){idx=auto_idx++;j+=1;has=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;has=1;}if(has&&t[j]=='}'){j+=1;}else{has=0;}}if(!has){piton_write(2,"ValueError: single '{' in format string\n",40);piton_exit(1);}if(idx<0||idx>=n){piton_write(2,"IndexError: replacement index out of range\n",43);piton_exit(1);}total+=piton_strlen(av[idx]);i=j;}else if(t[i]=='}'){if(t[i+1]=='}'){total+=1;i+=2;}else{piton_write(2,"ValueError: single '}' in format string\n",40);piton_exit(1);}}else{total+=1;i+=1;}}char*p=piton_alloc(total+1);usize o=0;auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){p[o++]='{';i+=2;continue;}usize j=i+1;int idx=-2;if(t[j]=='}'){idx=auto_idx++;j+=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;}j+=1;}usize el=piton_strlen(av[idx]);piton_memcpy(p+o,av[idx],el);o+=el;i=j;}else if(t[i]=='}'){p[o++]='}';i+=2;}else{p[o++]=t[i++];}}p[o]=0;return(long)p;}
@@ -1338,6 +1348,66 @@ class LinuxCEmitter:
             names = ",".join(f"_pf{index}" for index in range(len(call_args))) or "_pf0"
             out.append(f"    {{{''.join(pieces)}const char*_fa[]={{{names}}}; {_name(result)}=(long)piton_str_format((const char*){json.dumps(simplified)},{len(call_args)},_fa);}}")
             types[result] = "str"
+        elif method in {"isalpha", "isdigit", "isalnum", "isspace", "istitle", "isupper", "islower"}:
+            # STR_PREDS_V1: per-kind predicates (ASCII subset). Empty
+            # strings are False for all of them; isupper/islower/istitle
+            # also need at least one cased character (helper-internal).
+            require_count(0, "no arguments")
+            mode = {"isalpha": 0, "isdigit": 1, "isalnum": 2, "isspace": 3,
+                    "istitle": 4, "isupper": 5, "islower": 6}[method]
+            out.append(f"    {_name(result)}=piton_str_pred((const char*){operand},{mode});")
+            types[result] = "bool"
+        elif method == "capitalize":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=(long)piton_str_capitalize((const char*){operand});")
+            types[result] = "str"
+        elif method == "title":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=(long)piton_str_title((const char*){operand});")
+            types[result] = "str"
+        elif method == "swapcase":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=(long)piton_str_swapcase((const char*){operand});")
+            types[result] = "str"
+        elif method == "zfill":
+            # STR_PADS_V1: sign-aware zero fill ('-5'.zfill(3) -> '-05').
+            require_count(1, "exactly one int argument")
+            if types.get(call_args[0]) not in {"int", "bool"}:
+                raise NativeBuildError("Linux str.zfill() requires an int width")
+            out.append(f"    {_name(result)}=(long)piton_str_zfill((const char*){operand},{self._value(call_args[0])});")
+            types[result] = "str"
+        elif method in {"ljust", "rjust", "center"}:
+            # STR_PADS_V1: width + optional single-char fill (default ' ').
+            if len(call_args) not in (1, 2):
+                raise NativeBuildError(f"Linux str.{method}() requires one or two arguments")
+            if types.get(call_args[0]) not in {"int", "bool"}:
+                raise NativeBuildError(f"Linux str.{method}() requires an int width")
+            if len(call_args) == 2:
+                fill = self._fn_consts.get(call_args[1])
+                if not (isinstance(fill, str) and len(fill) == 1):
+                    raise NativeBuildError(f"Linux str.{method}() fill must be a 1-character str literal")
+                fill_c = ord(fill)
+            else:
+                fill_c = 32
+            mode = {"ljust": 0, "rjust": 1, "center": 2}[method]
+            out.append(f"    {_name(result)}=(long)piton_str_just((const char*){operand},{self._value(call_args[0])},{fill_c},{mode});")
+            types[result] = "str"
+        elif method == "count":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_count((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "int"
+        elif method == "rfind":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_rfind((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "int"
+        elif method == "rindex":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_subrindex((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "int"
+        elif method == "index":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_subindex((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "int"
         else:
             raise NativeBuildError(f"Linux str.{method}() is not supported")
 

@@ -227,6 +227,10 @@ class Win64NasmEmitter:
             "extern piton_str_case", "extern piton_str_find", "extern piton_str_startswith",
             "extern piton_str_quote", "extern piton_str_single_char",
             "extern piton_str_endswith", "extern piton_str_replace", "extern piton_str_split",
+            "extern piton_str_pred", "extern piton_str_capitalize", "extern piton_str_title",
+            "extern piton_str_swapcase", "extern piton_str_zfill", "extern piton_str_just",
+            "extern piton_str_count", "extern piton_str_rfind", "extern piton_str_subindex",
+            "extern piton_str_subrindex",
             "extern piton_str_strip", "extern piton_str_join", "extern piton_str_format",
             "extern piton_dict_contains", "extern piton_set_contains",
             "extern piton_closure_new8", "extern piton_closure_call6",
@@ -3872,6 +3876,68 @@ class Win64NasmEmitter:
                 self._emit_format_runtime(result, owner, call_args)
             else:
                 self._emit_format_specs(result, owner, template, call_args)
+        elif method in {"isalpha", "isdigit", "isalnum", "isspace", "istitle", "isupper", "islower"}:
+            # STR_PREDS_V1: per-kind predicates (ASCII subset), mirroring
+            # the Linux backend (empty -> False; isupper/islower/istitle
+            # need one cased character, helper-internal).
+            require_count(0, "no arguments")
+            mode = {"isalpha": 0, "isdigit": 1, "isalnum": 2, "isspace": 3,
+                    "istitle": 4, "isupper": 5, "islower": 6}[method]
+            self.lines.append(f"    mov edx, {mode}")
+            self.lines.append("    call piton_str_pred")
+            self.types[result] = "bool"
+        elif method in {"capitalize", "title", "swapcase"}:
+            require_count(0, "no arguments")
+            helper = {"capitalize": "piton_str_capitalize", "title": "piton_str_title",
+                     "swapcase": "piton_str_swapcase"}[method]
+            self.lines.append(f"    call {helper}")
+            self.types[result] = "str"
+        elif method == "zfill":
+            # STR_PADS_V1: sign-aware zero fill ('-5'.zfill(3) -> '-05').
+            require_count(1, "exactly one int argument")
+            if self.types.get(call_args[0]) not in {"int", "bool"}:
+                raise NativeBuildError("native str.zfill() requires an int width")
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append("    call piton_str_zfill")
+            self.types[result] = "str"
+        elif method in {"ljust", "rjust", "center"}:
+            # STR_PADS_V1: width + optional single-char fill (default ' ').
+            if len(call_args) not in (1, 2):
+                raise NativeBuildError(f"native str.{method}() requires one or two arguments")
+            if self.types.get(call_args[0]) not in {"int", "bool"}:
+                raise NativeBuildError(f"native str.{method}() requires an int width")
+            if len(call_args) == 2:
+                fill = self.constants.get(call_args[1])
+                if not (isinstance(fill, str) and len(fill) == 1):
+                    raise NativeBuildError(f"native str.{method}() fill must be a 1-character str literal")
+                fill_c = ord(fill)
+            else:
+                fill_c = 32
+            mode = {"ljust": 0, "rjust": 1, "center": 2}[method]
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append(f"    mov r8, {fill_c}")
+            self.lines.append(f"    mov r9, {mode}")
+            self.lines.append("    call piton_str_just")
+            self.types[result] = "str"
+        elif method == "count":
+            require_count(1, "exactly one str argument")
+            require_str(0, "a str argument")
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append("    call piton_str_count")
+            self.types[result] = "int"
+        elif method in {"rfind", "rindex"}:
+            require_count(1, "exactly one str argument")
+            require_str(0, "a str argument")
+            helper = "piton_str_rfind" if method == "rfind" else "piton_str_subrindex"
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append(f"    call {helper}")
+            self.types[result] = "int"
+        elif method == "index":
+            require_count(1, "exactly one str argument")
+            require_str(0, "a str argument")
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append("    call piton_str_subindex")
+            self.types[result] = "int"
         else:
             raise NativeBuildError(f"native str.{method}() is not supported")
         self.lines.append(f"    mov {self._address(result)}, rax")
