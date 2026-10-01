@@ -179,6 +179,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "gather_new": "PURE",
     # READ
     "cell_load": "READ", "get_item": "READ", "get_slice": "READ", "collection_len": "READ",
+    "unpack_check": "READ",
     "catch_type": "READ", "catch_message": "READ", "catch_flag": "READ",
     # WRITE
     "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
@@ -1253,6 +1254,11 @@ class MIRLowerer:
                     # PARITY_P2_V1: tuple-target assignment unpacks
                     # element-wise (CPython: a, b = pair). Value is evaluated
                     # once; each target pulls its slot with get_item.
+                    # UNPACK_ARITY_V1: verify the element count first
+                    # (CPython raises ValueError on mismatch instead of
+                    # silently slicing) — the handler rides along so
+                    # intentar/excepto ValueError routes.
+                    builder.emit("unpack_check", value, len(target.elts), _active_handler(builder))
                     for index, element in enumerate(target.elts):
                         if element.kind not in (HIRKind.STORE, HIRKind.ATTR):
                             raise MIRLoweringError(

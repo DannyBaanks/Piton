@@ -83,12 +83,6 @@ class UnpackV1(unittest.TestCase):
     def test_unpack_string(self):
         _assert_matches(self, "a, b = 'xy'\nimprimir(a, b)\n")
 
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "unpacking a function RETURN VALUE needs return-type inference, and "
-        "RETURNTYPE_V1 is implemented in the Linux backend first (Windows follow-up); "
-        "unpack itself is covered by the literal cases above",
-    )
     def test_unpack_expression_value(self):
         # the value must be evaluated once and indexed per target
         _assert_matches(
@@ -101,6 +95,62 @@ class UnpackV1(unittest.TestCase):
         parse("a, (b, c) = (1, (2, 3))\n")
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("a, (b, c) = (1, (2, 3))\n")
+
+
+class UnpackArityV1(unittest.TestCase):
+    """UNPACK_ARITY_V1: unpacking verifies the element count.
+
+    `a, b = (1, 2, 3)` used to slice silently (rc=0) while CPython raises
+    ValueError. Now MIR emits an unpack_check before the per-index
+    get_items: list/tuple/str verify their length at runtime (str counts
+    bytes, like str get_item), anything else fails closed at build, and
+    the check rides the intentar handler so ValueError routes.
+    """
+
+    def test_too_many_raises(self):
+        result = compare_native_to_cpython("a, b = (1, 2, 3)\nimprimir(a, b)\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"ValueError", result.native.stderr)
+
+    def test_too_few_raises(self):
+        result = compare_native_to_cpython("a, b = (1,)\nimprimir(a, b)\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"ValueError", result.native.stderr)
+
+    def test_too_many_caught(self):
+        _assert_matches(
+            self,
+            "intentar:\n    a, b = (1, 2, 3)\nexcepto ValueError:\n    imprimir('muchos')\n",
+        )
+
+    def test_too_few_caught(self):
+        _assert_matches(
+            self,
+            "intentar:\n    a, b = (1,)\nexcepto ValueError:\n    imprimir('pocos')\n",
+        )
+
+    def test_str_arity(self):
+        result = compare_native_to_cpython("a, b = 'xyz'\nimprimir(a, b)\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"ValueError", result.native.stderr)
+
+    def test_unpack_non_sequence_fails_closed(self):
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("a, b = 5\nimprimir(a, b)\n")
+
+    def test_unpack_dict_fails_closed(self):
+        # dict unpacking needs key iteration (separate item); today it
+        # dies at get_item with KeyError, so reject statically instead.
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("a, b = {'x': 1, 'y': 2}\nimprimir(a, b)\n")
+
+    def test_unpack_variable(self):
+        _assert_matches(self, "t = (1, 2)\na, b = t\nimprimir(a, b)\n")
+
+    def test_unpack_call_result_list(self):
+        _assert_matches(
+            self, "funcion par():\n    devolver [7, 8, 9]\na, b, c = par()\nimprimir(a, b, c)\n"
+        )
 
 
 class SliceV1(unittest.TestCase):

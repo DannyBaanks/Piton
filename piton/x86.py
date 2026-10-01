@@ -1484,6 +1484,76 @@ class Win64NasmEmitter:
                         self._load_operand(item, "r9")
                         self.lines.append("    call piton_collection_put")
             self.types[result] = kind
+        elif op == "unpack_check":
+            # UNPACK_ARITY_V1: CPython verifies the element count on
+            # unpacking (ValueError: too many / not enough values).
+            # list/tuple read their length; str counts bytes (str get_item
+            # is byte-based, so units agree); anything else fails closed
+            # at build (dict/set unpacking needs key iteration).
+            value, expected = args[0], args[1]
+            handler_label = args[2] if len(args) > 2 else None
+            vtype = self.types.get(value, "int")
+            if vtype not in {"list", "tuple", "str"}:
+                raise NativeBuildError(f"native unpack requires a list, tuple or str, not {vtype}")
+            self._load_operand(value, "rcx")
+            if vtype == "str":
+                self.lines.append("    call piton_str_len")
+            else:
+                self.lines.append("    call piton_collection_len")
+            # rax = actual length
+            ok_label = self._internal_label("unpack_ok")
+            many_label = self._internal_label("unpack_many")
+            self.lines.append(f"    cmp rax, {expected}")
+            self.lines.append(f"    je {ok_label}")
+            self.lines.append(f"    jg {many_label}")
+            # not enough: compose "not enough values to unpack
+            # (expected N, got M)" through the {} engine.
+            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+            self.lines.append(f"    mov rcx, {expected}")
+            self.lines.append("    call piton_str_from_int")
+            self.lines.append(f"    mov {self._address('@scratch1')}, rax")
+            self.lines.append(f"    mov rcx, {self._address('@scratch0')}")
+            self.lines.append("    call piton_str_from_int")
+            self.lines.append(f"    mov rdx, {self._address('@scratch1')}")
+            self.lines.append(f"    mov {self._address('@scratch0')}, rdx")
+            self.lines.append(f"    mov {self._address('@scratch1')}, rax")
+            self.lines.append(f"    sub rsp, 48")
+            self.lines.append(f"    mov rcx, {self._address('@scratch0')}")
+            self.lines.append(f"    mov qword [rsp+32], rcx")
+            self.lines.append(f"    mov rcx, {self._address('@scratch1')}")
+            self.lines.append(f"    mov qword [rsp+40], rcx")
+            tmpl = self._string("not enough values to unpack (expected {0}, got {1})")
+            self.lines.append(f"    lea rcx, [{tmpl}]")
+            self.lines.append(f"    mov edx, 2")
+            self.lines.append(f"    lea r8, [rsp+32]")
+            self.lines.append(f"    call piton_str_format")
+            self.lines.append(f"    add rsp, 48")
+            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+            vtype_label = self._string("ValueError")
+            self.lines.append(f"    lea rcx, [{vtype_label}]")
+            self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+            if handler_label:
+                self.lines.append("    call piton_raise")
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+            else:
+                self.lines.append("    call piton_raise_unhandled")
+            self.lines.append(f"    jmp {ok_label}")
+            self.lines.append(f"{many_label}:")
+            vmsg = self._string(f"too many values to unpack (expected {expected})")
+            self.lines.append(f"    lea rcx, [{vtype_label}]")
+            self.lines.append(f"    lea rdx, [{vmsg}]")
+            if handler_label:
+                self.lines.append("    call piton_raise")
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+            else:
+                self.lines.append("    call piton_raise_unhandled")
+            self.lines.append(f"{ok_label}:")
         elif op == "get_item":
             container, key = args
             container_type = self.types.get(container)
