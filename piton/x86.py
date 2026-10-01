@@ -99,6 +99,7 @@ class Win64NasmEmitter:
         self._popped_iters: set[str] = set()
         self._loop_exit_pops: dict[str, int] = {}
         self.tuple_etypes: dict[str, tuple] = {}
+        self.function_return_types: dict[str, str] = {}
         self.dict_elems: dict[str, dict[str, tuple]] = {}
         self._func_globals: dict[str, set[str]] = {}
         self._func_stores: dict[str, set[str]] = {}
@@ -130,6 +131,7 @@ class Win64NasmEmitter:
         self.mir_module_class_mro = getattr(module, 'class_mro', {})
         self.mir_module_class_properties = getattr(module, 'class_properties', {})
         self.function_names = {function.name for function in module.functions}
+        self.function_return_types = self._infer_return_types(module)
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self.function_param_map = {function.name: list(function.params) for function in module.functions}
         self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
@@ -994,6 +996,13 @@ class Win64NasmEmitter:
                 raise NativeBuildError(
                     f"native collection binary operator not supported: {operator} on {left_type}/{right_type}"
                 )
+            if "none" in {left_type, right_type}:
+                # WRETURNTYPE_V1: None-typed operands (e.g. a call result
+                # of a bare function) used to fall through to raw pointer
+                # arithmetic; CPython raises TypeError instead.
+                raise NativeBuildError(
+                    f"native {operator} with None is not supported (CPython raises TypeError)"
+                )
             if "bigint" in {left_type, right_type}:
                 self._emit_bigint_binary(operator, left, right, result)
                 return
@@ -1251,6 +1260,10 @@ class Win64NasmEmitter:
                     self.bigint_slots.append(result)
                     return
                 raise NativeBuildError(f"native bigint unary operator not supported: {operator}")
+            if self.types.get(operand) == "none" and operator in {"+", "-", "~"}:
+                raise NativeBuildError(
+                    f"native unary {operator} with None is not supported (CPython raises TypeError)"
+                )
             self._load_operand(operand, "rax")
             if self.types.get(operand) == "float" and operator in {"+", "-"}:
                 if operator == "-":
@@ -1953,7 +1966,7 @@ class Win64NasmEmitter:
                     self._load_operand(value, register)
                 self.lines.append(f"    call {target}")
             self.lines.append(f"    mov {self._address(result)}, rax")
-            self.types[result] = "int"
+            self.types[result] = self.function_return_types.get(target, "int")
         elif op in {"math_sqrt", "math_sin", "math_cos", "math_log"}:
             self._load_float_operand(args[0], "xmm0")
             # The Windows runtime helpers use the tagged float wire format:
@@ -2646,7 +2659,9 @@ class Win64NasmEmitter:
             if result:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 if not self.types.get(result):
-                    self.types[result] = "int"
+                    # WRETURNTYPE_V1: statically-known callees propagate
+                    # their inferred return type (none/str/float/bool).
+                    self.types[result] = self.function_return_types.get(function_name, "int")
         elif op == "call_unpack":
             # CALL_UNPACKING_DYNAMIC4_V1: runtime expansion of *seq / **mapping
             # for a statically-known callee with a plain signature (<=4 params).
@@ -2785,7 +2800,7 @@ class Win64NasmEmitter:
             if result:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 if not self.types.get(result):
-                    self.types[result] = "int"
+                    self.types[result] = self.function_return_types.get(func_name, "int")
             self.lines.append(f"    jmp {site}_done")
             self.lines.extend([
                 f"{site}_too_many:",
@@ -2988,6 +3003,171 @@ class Win64NasmEmitter:
         label = f"__piton_{prefix}_{self.next_internal_label}"
         self.next_internal_label += 1
         return label
+    _UNKNOWN = "\x00?"
+
+    def _infer_return_types(self, module) -> dict[str, str]:
+        """WRETURNTYPE_V1: narrow, sound return-type inference over MIR
+        (mirrors the Linux backend's RETURNTYPE_V1; Linux codegen is
+        untouched). Only statically unambiguous origins count: constant
+        literals, build_collection kinds, object_new classes, cell
+        loads/stores, and direct calls to known functions (recursive,
+        cycle-safe). Variables accumulate the union of every store origin
+        (fixpoint). A function is typed only when EVERY return resolves
+        to the SAME type; anything ambiguous keeps the historical "int"
+        default. Fixes `imprimir(f())` printing a raw pointer / 0 / 1
+        instead of the value for str/float/bool/None returns, and turns
+        None-arithmetic into a build-time rejection instead of computing
+        on a null slot. Big ints keep the default (Windows has no
+        bigint-return plumbing yet); generators are marked like on Linux
+        so their printed form fails closed instead of printing an int.
+        """
+        by_name = {function.name: function for function in module.functions}
+        memo: dict[str, str | None] = {}
+        resolving: set[str] = set()
+
+        def literal_type(value) -> str:
+            if value is None:
+                return "none"
+            if isinstance(value, bool):
+                return "bool"
+            if isinstance(value, str):
+                return "str"
+            if isinstance(value, float):
+                return "float"
+            if isinstance(value, int):
+                return "int"
+            return self._UNKNOWN
+
+        def infer(name: str):
+            if name in memo:
+                return memo[name]
+            if name in resolving:
+                return None
+            function = by_name.get(name)
+            if function is None:
+                return None
+            if (
+                getattr(function, "is_generator", False)
+                or getattr(function, "is_coroutine", False)
+                or getattr(function, "is_async_generator", False)
+            ):
+                memo[name] = "iterator:generator"
+                return memo[name]
+            resolving.add(name)
+            try:
+                var_sets: dict[str, set[str]] = {}
+                origins: dict[str, tuple[str, object]] = {}
+                load_src: dict[str, str] = {}
+                returns: list = []
+                seeded: set[str] = set()
+
+                def note_var(key: str, kind) -> bool:
+                    kinds = {kind} if kind else {self._UNKNOWN}
+                    if kinds <= var_sets.get(key, set()):
+                        return False
+                    var_sets.setdefault(key, set()).update(kinds)
+                    return True
+
+                def single(key: str):
+                    kinds = var_sets.get(key, set())
+                    if len(kinds) == 1 and self._UNKNOWN not in kinds:
+                        return next(iter(kinds))
+                    return None
+
+                changed = True
+                while changed:
+                    changed = False
+                    for block in function.blocks:
+                        for instruction in block.instructions:
+                            op, iargs = instruction.op, instruction.args
+                            result = instruction.result
+                            if op == "const" and result and iargs:
+                                origins[result] = ("literal", iargs[0])
+                            elif op == "build_collection" and result:
+                                origins[result] = ("kind", iargs[0])
+                            elif op == "object_new" and result:
+                                origins[result] = ("object", iargs[0])
+                            elif op in {"load", "cell_load"} and result and iargs:
+                                load_src[result] = iargs[0]
+                                origins[result] = ("var", iargs[0])
+                            elif op == "call" and result:
+                                callee = load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
+                                if isinstance(callee, str) and callee in by_name and callee not in function.params:
+                                    origins[result] = ("call", callee)
+                                else:
+                                    origins[result] = ("opaque", None)
+                            elif op in {"store", "cell_store"} and result is None and iargs:
+                                target, source = iargs[0], iargs[1]
+                                if isinstance(source, str) and source.startswith("%"):
+                                    origin = origins.get(source)
+                                    if origin is None:
+                                        changed = note_var(target, None) or changed
+                                    elif origin[0] == "literal":
+                                        changed = note_var(target, literal_type(origin[1])) or changed
+                                    elif origin[0] in {"kind", "object"}:
+                                        changed = note_var(target, origin[1]) or changed
+                                    elif origin[0] == "var":
+                                        kinds = var_sets.get(origin[1], set())
+                                        if not kinds:
+                                            changed = note_var(target, None) or changed
+                                        else:
+                                            for kind in kinds:
+                                                changed = note_var(target, None if kind == self._UNKNOWN else kind) or changed
+                                    elif origin[0] == "call":
+                                        changed = note_var(target, infer(origin[1])) or changed
+                                    else:
+                                        changed = note_var(target, None) or changed
+                                elif isinstance(source, str):
+                                    changed = note_var(target, single(source)) or changed
+                                else:
+                                    changed = note_var(target, literal_type(source)) or changed
+                            elif op == "return":
+                                returns.append(iargs[0] if iargs else None)
+                    if function.self_class and function.params and function.params[0] not in seeded:
+                        seeded.add(function.params[0])
+                        changed = note_var(function.params[0], f"object:{function.self_class}") or changed
+
+                def operand_type(operand):
+                    if operand is None or operand == "None":
+                        return "none"
+                    if isinstance(operand, str) and not operand.startswith("%"):
+                        return single(operand)
+                    if isinstance(operand, str):
+                        origin = origins.get(operand)
+                        if origin is None:
+                            return None
+                        if origin[0] == "literal":
+                            return literal_type(origin[1])
+                        if origin[0] in {"kind", "object"}:
+                            return origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
+                        if origin[0] == "var":
+                            return single(origin[1])
+                        if origin[0] == "call":
+                            return infer(origin[1])
+                        return None
+                    return literal_type(operand)
+
+                if not returns:
+                    inferred = "none"
+                else:
+                    candidates = {operand_type(operand) for operand in returns}
+                    if len(candidates) == 1:
+                        inferred = next(iter(candidates))
+                    else:
+                        inferred = None
+                if inferred is None or inferred == self._UNKNOWN:
+                    inferred = None
+            finally:
+                resolving.discard(name)
+            memo[name] = inferred
+            return inferred
+
+        resolved: dict[str, str] = {}
+        for function in module.functions:
+            inferred = infer(function.name)
+            resolved[function.name] = inferred if inferred else "int"
+        return resolved
+
 
     def _parse_percent_template(self, template: str) -> tuple[str, list[tuple]]:
         """PCT_FORMAT_V1: same translation contract as the Linux backend —

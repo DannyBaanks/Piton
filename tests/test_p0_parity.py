@@ -182,24 +182,12 @@ class ReturnTypeV1(unittest.TestCase):
     def test_function_returning_list_via_variable(self):
         _assert_matches(self, "funcion f():\n    x = [1, 2]\n    devolver x\nimprimir(f())\n")
 
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "RETURNTYPE_V1 is implemented in the Linux backend first (Windows follow-up)",
-    )
     def test_function_returning_str(self):
         _assert_matches(self, "funcion f():\n    devolver 'hola'\nimprimir(f())\n")
 
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "RETURNTYPE_V1 is implemented in the Linux backend first (Windows follow-up)",
-    )
     def test_bare_return_prints_none(self):
         _assert_matches(self, "funcion f():\n    devolver\nimprimir(f())\n")
 
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "RETURNTYPE_V1 is implemented in the Linux backend first (Windows follow-up)",
-    )
     def test_no_return_prints_none(self):
         # a function with only a print statement falls through -> None
         _assert_matches(
@@ -207,10 +195,6 @@ class ReturnTypeV1(unittest.TestCase):
             "funcion f():\n    x = 1\nimprimir(f())\n",
         )
 
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "RETURNTYPE_V1 is implemented in the Linux backend first (Windows follow-up)",
-    )
     def test_method_returning_self_prints_via_str(self):
         _assert_matches(
             self,
@@ -224,15 +208,65 @@ class ReturnTypeV1(unittest.TestCase):
             "imprimir(A(3).yo())\n",
         )
 
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "RETURNTYPE_V1 is implemented in the Linux backend first (Windows follow-up)",
-    )
     def test_unknown_return_type_prints_int(self):
         # binary-op results are not tracked by the narrow inference; the
         # historical "int" default must keep working for genuinely
         # int-returning functions.
         _assert_matches(self, "funcion f(n):\n    devolver n + 1\nimprimir(f(5))\n")
+
+
+class WindowsReturnTypeV1(unittest.TestCase):
+    """WRETURNTYPE_V1: the Windows backend infers call-result types.
+
+    Windows call results used to default to "int", so `imprimir(f())`
+    printed a raw pointer / 0 / 1 for str/float/bool/None returns and
+    None-arithmetic computed on a null slot. Now the NASM backend runs
+    the same narrow MIR inference as Linux (every return must resolve to
+    one type, else the historical default stays) and propagates it at
+    call, call_unpack and method_call sites; None in arithmetic fails
+    closed at build (CPython raises TypeError at runtime).
+    """
+
+    def test_function_returning_float(self):
+        _assert_matches(self, "funcion f():\n    devolver 3.5\nimprimir(f())\n")
+
+    def test_function_returning_bool(self):
+        _assert_matches(self, "funcion f():\n    devolver Verdadero\nimprimir(f())\n")
+
+    def test_function_returning_explicit_none(self):
+        _assert_matches(self, "funcion f():\n    devolver Nada\nimprimir(f())\n")
+
+    def test_str_concat_over_call_result(self):
+        _assert_matches(self, "funcion f():\n    devolver 'a'\nimprimir(f() + 'b')\n")
+
+    def test_float_arithmetic_over_call_result(self):
+        _assert_matches(self, "funcion f():\n    devolver 3.5\nimprimir(f() * 2)\n")
+
+    def test_bool_arithmetic_over_call_result(self):
+        _assert_matches(self, "funcion f():\n    devolver Verdadero\nimprimir(f() + 1)\n")
+
+    def test_call_chain_propagates(self):
+        _assert_matches(
+            self,
+            "funcion g():\n    devolver 7\nfuncion f():\n    devolver g()\nimprimir(f())\n",
+        )
+
+    def test_variable_return(self):
+        _assert_matches(self, "funcion f():\n    x = 'q'\n    devolver x\nimprimir(f())\n")
+
+    def test_method_call_propagates(self):
+        _assert_matches(
+            self,
+            "clase A:\n    funcion dame(self):\n        devolver 'hola'\nimprimir(A().dame())\n",
+        )
+
+    def test_none_comparison(self):
+        _assert_matches(self, "funcion f():\n    devolver Nada\nimprimir(f() == Nada)\n")
+        _assert_matches(self, "imprimir(Nada == Nada)\n")
+
+    def test_none_arithmetic_fails_closed(self):
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("funcion f():\n    w = 1\nx = f() + 1\nimprimir(x)\n")
 
 
 class BuiltinMarkerV1(unittest.TestCase):
