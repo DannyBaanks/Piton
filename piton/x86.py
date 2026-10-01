@@ -2933,8 +2933,19 @@ class Win64NasmEmitter:
                     "    leave", "    ret",
                 ])
             else:
-                if self.types.get(args[0]) in {"list", "tuple", "dict", "set"}:
-                    raise NativeBuildError("returning native collections is not supported yet")
+                if self.types.get(args[0]) in {"list", "tuple", "dict", "set", "bigint"}:
+                    # COLL_RETURN_V1: transfer ownership to the caller. The
+                    # pointer is stashed, cleanup frees everything EXCEPT
+                    # slots still holding it (value-compared skip: any alias
+                    # stays live), and the caller receives it live. Received
+                    # collections are never owned, so nothing double-frees
+                    # (mirrors Linux, which never frees). bigint returns ride
+                    # the same path (their slots live in bigint_slots).
+                    self._load_operand(args[0], "rax")
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    self._emit_cleanup(skip_slot="@scratch0")
+                    self.lines.extend([f"    mov rax, {self._address('@scratch0')}", "    leave", "    ret"])
+                    return
                 self._load_operand(args[0], "rax")
                 self.lines.append(f"    mov {self._address('@scratch0')}, rax")
                 self._emit_cleanup()
@@ -3035,7 +3046,7 @@ class Win64NasmEmitter:
             if isinstance(value, float):
                 return "float"
             if isinstance(value, int):
-                return "int"
+                return "bigint" if abs(value) > 9223372036854775807 else "int"
             return self._UNKNOWN
 
         def infer(name: str):
@@ -3126,6 +3137,12 @@ class Win64NasmEmitter:
                     if function.self_class and function.params and function.params[0] not in seeded:
                         seeded.add(function.params[0])
                         changed = note_var(function.params[0], f"object:{function.self_class}") or changed
+                    if function.vararg and function.vararg not in seeded:
+                        seeded.add(function.vararg)
+                        changed = note_var(function.vararg, "tuple") or changed
+                    if function.kwarg and function.kwarg not in seeded:
+                        seeded.add(function.kwarg)
+                        changed = note_var(function.kwarg, "dict") or changed
 
                 def operand_type(operand):
                     if operand is None or operand == "None":
@@ -3817,19 +3834,38 @@ class Win64NasmEmitter:
         ])
         self.types[result] = "str"
 
-    def _emit_cleanup(self) -> None:
+    def _emit_cleanup(self, skip_slot: Any = None) -> None:
+        # COLL_RETURN_V1: when returning a heap object, cleanup must skip
+        # every slot that still holds its pointer (a plain free would
+        # use-after-free through any alias). The skip compares VALUES, so
+        # it is sound for arbitrary store/load aliasing; skip_slot holds
+        # the stashed return pointer and is never in either free list.
         for slot, free_function in self.owned_slots:
+            self.lines.append(f"    mov rcx, {self._address(slot)}")
+            skip_label = None
+            if skip_slot is not None:
+                skip_label = self._internal_label("cleanup_skip")
+                self.lines.append(f"    cmp rcx, {self._address(skip_slot)}")
+                self.lines.append(f"    je {skip_label}")
             self.lines.extend([
-                f"    mov rcx, {self._address(slot)}",
                 f"    call {free_function}",
                 f"    mov qword {self._address(slot)}, 0",
             ])
+            if skip_label is not None:
+                self.lines.append(f"{skip_label}:")
         for slot in self.bigint_slots:
+            self.lines.append(f"    mov rcx, {self._address(slot)}")
+            skip_label = None
+            if skip_slot is not None:
+                skip_label = self._internal_label("cleanup_skip")
+                self.lines.append(f"    cmp rcx, {self._address(skip_slot)}")
+                self.lines.append(f"    je {skip_label}")
             self.lines.extend([
-                f"    mov rcx, {self._address(slot)}",
                 "    call piton_bigint_free",
                 f"    mov qword {self._address(slot)}, 0",
             ])
+            if skip_label is not None:
+                self.lines.append(f"{skip_label}:")
 
     def _load_float_operand(self, operand: Any, register: str) -> None:
         if self.types.get(operand) == "float":
