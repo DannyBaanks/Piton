@@ -168,17 +168,9 @@ class ZdivGuardV1(unittest.TestCase):
 class ReturnTypeV1(unittest.TestCase):
     """RETURNTYPE_V1: user function call results carry their return type."""
 
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "RETURNTYPE_V1 is implemented in the Linux backend first (Windows follow-up)",
-    )
     def test_function_returning_list(self):
         _assert_matches(self, "funcion f():\n    devolver [1, 2]\nimprimir(f())\n")
 
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "RETURNTYPE_V1 is implemented in the Linux backend first (Windows follow-up)",
-    )
     def test_function_returning_list_via_variable(self):
         _assert_matches(self, "funcion f():\n    x = [1, 2]\n    devolver x\nimprimir(f())\n")
 
@@ -267,6 +259,62 @@ class WindowsReturnTypeV1(unittest.TestCase):
     def test_none_arithmetic_fails_closed(self):
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("funcion f():\n    w = 1\nx = f() + 1\nimprimir(x)\n")
+
+
+class CollReturnV1(unittest.TestCase):
+    """COLL_RETURN_V1: Windows functions can return collections/bigints.
+
+    The NASM backend used to reject every collection return at build
+    ("returning native collections is not supported yet") because the
+    function-exit cleanup freed owned slots — including the returned
+    pointer (use-after-free through any alias). Now the return transfers
+    ownership: the pointer is stashed and cleanup skips every slot still
+    holding it (value-compared, so arbitrary store/load aliasing stays
+    live). Received collections are never owned, so nothing double-frees.
+    Out of scope (separate gaps, still failing closed or divergent):
+    collections containing strings (untagged-strings gap) and bigint
+    values produced by arithmetic (binary-op origins untracked — same on
+    Linux).
+    """
+
+    def test_returning_tuple(self):
+        _assert_matches(self, "funcion f():\n    devolver (1, 2)\nimprimir(f())\n")
+
+    def test_returning_dict(self):
+        _assert_matches(self, "funcion f():\n    devolver {1: 2}\nimprimir(f())\n")
+
+    def test_returning_set(self):
+        _assert_matches(self, "funcion f():\n    devolver {1, 2}\nimprimir(f())\n")
+
+    def test_returning_bigint_literal(self):
+        _assert_matches(self, "funcion f():\n    devolver 1180591620717411303424\nimprimir(f())\n")
+
+    def test_returning_bigint_variable(self):
+        _assert_matches(
+            self, "funcion f():\n    x = 1180591620717411303424\n    devolver x\nimprimir(f())\n"
+        )
+
+    def test_aliased_return_stays_live(self):
+        _assert_matches(
+            self, "funcion f():\n    t = [5]\n    u = t\n    devolver u\nimprimir(f())\n"
+        )
+
+    def test_nested_collection_return(self):
+        _assert_matches(
+            self, "funcion g():\n    devolver [1]\nfuncion f():\n    devolver g()\nimprimir(f())\n"
+        )
+
+    def test_concat_over_call_result(self):
+        _assert_matches(self, "funcion f():\n    devolver [1]\nimprimir(f() + [2, 3])\n")
+
+    def test_getitem_over_call_result(self):
+        _assert_matches(self, "funcion f():\n    devolver [10, 20]\nimprimir(f()[1])\n")
+
+    def test_mutate_received_collection(self):
+        _assert_matches(self, "funcion f():\n    devolver [1]\nx = f()\nx.append(2)\nimprimir(x)\n")
+
+    def test_vararg_tuple_return(self):
+        _assert_matches(self, "funcion f(*a):\n    devolver a\nimprimir(f(1, 2))\n")
 
 
 class BuiltinMarkerV1(unittest.TestCase):
