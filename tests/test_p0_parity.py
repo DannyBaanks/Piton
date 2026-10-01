@@ -554,5 +554,89 @@ class BoolShortV1(unittest.TestCase):
             compare_native_to_cpython("x = 1\nimprimir(x y 'x')\n")
 
 
+class BranchTruthinessV1(unittest.TestCase):
+    """TRUTHY_BRANCH_V1: la condicion de `si` es un test de verdad CPython.
+
+    Antes el backend emitia `if(<puntero>) goto ...`, de modo que cualquier
+    cadena o coleccion —incluidas las VACIAS— era truthy porque su puntero es
+    no nulo: `si "":` tomaba la rama verdadera. El corpus diferencial
+    (tools/parity_corpus.py, area branch_truthiness) encontro el bug.
+    """
+
+    def test_empty_containers_are_falsy(self):
+        for value in ('""', "[]", "()", "{}"):
+            _assert_matches(
+                self,
+                f"v = {value}\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+            )
+
+    def test_empty_containers_skip_while(self):
+        for value in ('""', "[]", "()", "{}"):
+            _assert_matches(self, f"v = {value}\nmientras v:\n    imprimir('nope')\nimprimir('fin')\n")
+
+    def test_non_empty_and_scalars(self):
+        for value in ("0", "1", "0.0", "0.5", "Nada", "'a'", "[1]", "[1, []]"):
+            _assert_matches(
+                self,
+                f"v = {value}\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+            )
+
+    def test_literal_empty_string_condition(self):
+        _assert_matches(self, 'si "":\n    imprimir("T")\nsino:\n    imprimir("F")\n')
+
+    def test_ternary_uses_truthiness(self):
+        _assert_matches(self, "v = []\nimprimir('T' si v sino 'F')\n")
+
+    def test_object_instance_still_truthy(self):
+        # un tipo que la tabla de verdad no modela NO debe fallar cerrado aqui
+        _assert_matches(
+            self,
+            "clase P:\n    pasar\np = P()\nsi p:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+        )
+
+
+class OperatorAssociativityV1(unittest.TestCase):
+    """ASOC_V1 + UNARY_POW_PREC_V1: precedencia y asociatividad correctas.
+
+    `next_min_prec` estaba invertido en el parser, asi que TODA cadena de
+    operadores no-asociativos se evaluaba de derecha a izquierda:
+    `10 - 3 - 2` daba 9, `100 / 5 / 2` daba 40.0, `1 << 2 << 3` daba 65536 y
+    `2 ** 3 ** 2` daba 64. `+` y `%` lo escondian porque son asociativos en
+    los operandos de prueba.
+    """
+
+    def test_left_associative_chains(self):
+        for expr in (
+            "10 - 3 - 2",
+            "100 / 5 / 2",
+            "100 // 5 // 2",
+            "1 << 2 << 3",
+            "64 >> 2 >> 1",
+            "7 & 3 & 1",
+            "6 | 2 | 1",
+            "7 ^ 3 ^ 1",
+            "20 - 5 - 3 - 2 - 1",
+        ):
+            _assert_matches(self, f"imprimir({expr})\n")
+
+    def test_associative_ops_still_agree(self):
+        for expr in ("10 + 3 + 2", "2 * 3 * 4", "20 % 7 % 3"):
+            _assert_matches(self, f"imprimir({expr})\n")
+
+    def test_power_is_right_associative(self):
+        for expr in ("2 ** 3 ** 2", "2 ** 3 ** 2 ** 2"):
+            _assert_matches(self, f"imprimir({expr})\n")
+
+    def test_unary_binds_looser_than_power(self):
+        for expr in ("-2 ** 2", "-(2 ** 2)", "-1.5 ** 0.0", "-2 ** 3 ** 2", "3 - 2 ** 2", "2 ** -1", "- -2"):
+            _assert_matches(self, f"imprimir({expr})\n")
+
+    def test_unary_with_variable_operand(self):
+        _assert_matches(self, "x = 2\nimprimir(-x ** 2)\n")
+
+    def test_mixed_precedence_chain(self):
+        _assert_matches(self, "imprimir(2 * 3 + 4 - 5 // 2)\n")
+
+
 if __name__ == "__main__":
     unittest.main()

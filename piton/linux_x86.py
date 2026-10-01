@@ -775,6 +775,35 @@ class LinuxCEmitter:
         lines.append("}")
         return lines
 
+    def _truth_expr(self, value: Any, vtype: str, strict: bool) -> str:
+        """C expression for CPython truthiness of `value` with static `vtype`.
+
+        TRUTHY_BRANCH_V1: single source of truth for both `branch` (the `si` /
+        `mientras` condition) and `truth_test` (`y`/`o` operands), so the two
+        cannot drift apart again. `strict=True` (truth_test) fails closed on
+        types the table cannot model; `strict=False` (branch) keeps the
+        historical raw test for them, because a `si <objeto>:` condition used
+        to compile and must not become a new build error here.
+        """
+        raw = self._value(value)
+        if vtype in {"int", "bool"}:
+            return f"({raw}!=0)"
+        if vtype == "float":
+            return f"(piton_bits_double({raw})!=0.0)"
+        if vtype == "none":
+            return "0"
+        if vtype == "str":
+            return f"(piton_strlen((const char*){raw})>0)"
+        if vtype in {"list", "tuple"}:
+            return f"(((PitonSeq*){raw})->length>0)"
+        if vtype == "dict":
+            return f"(((PitonDict*){raw})->length>0)"
+        if vtype == "set":
+            return f"(((PitonSet*){raw})->length>0)"
+        if strict:
+            raise NativeBuildError(f"Linux truth test does not support {vtype}")
+        return f"({raw})"
+
     def _value(self, value: Any) -> str:
         if isinstance(value, str) and value.startswith("%"):
             return _name(value)
@@ -2524,7 +2553,16 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}={expression};")
             types[result] = "bool"
         elif op == "branch":
-            out.append(f"    if({self._value(args[0])}) goto {_name(function.name + '_' + args[1])}; else goto {_name(function.name + '_' + args[2])};")
+            # TRUTHY_BRANCH_V1: the branch condition is a CPython truth test,
+            # not a raw pointer/integer test. `si ""`/`si []`/`si {}` used to
+            # take the TRUE branch because a non-null pointer is always
+            # truthy. Types the truth table does not model (objects,
+            # iterators, functions) keep the historical raw test instead of
+            # newly failing closed.
+            out.append(
+                f"    if({self._truth_expr(args[0], types.get(args[0], 'int'), strict=False)}) "
+                f"goto {_name(function.name + '_' + args[1])}; else goto {_name(function.name + '_' + args[2])};"
+            )
         elif op == "jump":
             out.append(f"    goto {_name(function.name + '_' + args[0])};")
         elif op == "call":
@@ -3259,22 +3297,7 @@ class LinuxCEmitter:
             # (non-null pointers are always truthy).
             value = args[0]
             vtype = types.get(value, "int")
-            if vtype in {"int", "bool"}:
-                out.append(f"    {_name(result)}=({self._value(value)}!=0);")
-            elif vtype == "float":
-                out.append(f"    {_name(result)}=(piton_bits_double({self._value(value)})!=0.0);")
-            elif vtype == "none":
-                out.append(f"    {_name(result)}=0;")
-            elif vtype == "str":
-                out.append(f"    {_name(result)}=(piton_strlen((const char*){self._value(value)})>0);")
-            elif vtype in {"list", "tuple"}:
-                out.append(f"    {_name(result)}=(((PitonSeq*){self._value(value)})->length>0);")
-            elif vtype == "dict":
-                out.append(f"    {_name(result)}=(((PitonDict*){self._value(value)})->length>0);")
-            elif vtype == "set":
-                out.append(f"    {_name(result)}=(((PitonSet*){self._value(value)})->length>0);")
-            else:
-                raise NativeBuildError(f"Linux truth test does not support {vtype}")
+            out.append(f"    {_name(result)}=({self._truth_expr(value, vtype, strict=True)});")
             types[result] = "bool"
         elif op == "unpack_check":
             # UNPACK_ARITY_V1: CPython verifies the element count on

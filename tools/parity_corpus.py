@@ -593,9 +593,71 @@ def area_generics_extra() -> list[Case]:
     ]
 
 
+def area_associativity() -> list[Case]:
+    """Cadenas de 3+ operandos del mismo operador.
+
+    La matriz de 2 operandos de `arithmetic` NO puede detectar un error de
+    asociatividad (`+` y `%` además son asociativos en los operandos de
+    prueba, así que un parser right-assoc pasaba verde). Estas cadenas si.
+    """
+    out = []
+    chains = [
+        ("sub", "-", "10 - 3 - 2"),
+        ("add", "+", "10 + 3 + 2"),
+        ("mul", "*", "2 * 3 * 4"),
+        ("div", "/", "100 / 5 / 2"),
+        ("floordiv", "//", "100 // 5 // 2"),
+        ("mod", "%", "20 % 7 % 3"),
+        ("shl", "<<", "1 << 2 << 3"),
+        ("shr", ">>", "64 >> 2 >> 1"),
+        ("pow", "**", "2 ** 3 ** 2"),
+        ("pow3", "**", "2 ** 3 ** 2 ** 2"),
+        ("band", "&", "7 & 3 & 1"),
+        ("bor", "|", "6 | 2 | 1"),
+        ("bxor", "^", "7 ^ 3 ^ 1"),
+        ("len5", "-", "20 - 5 - 3 - 2 - 1"),
+        ("mixed", "*", "2 * 3 + 4 - 5 // 2"),
+    ]
+    for name, _op, expr in chains:
+        out.append(_c("associativity", name, f"imprimir({expr})"))
+    # UNARY_POW_PREC_V1: `**` liga mas fuerte que el signo y que `no`.
+    for name, expr in (
+        ("neg", "-2 ** 2"),
+        ("negvar", "x = 2\nimprimir(-x ** 2)"),
+        ("negchain", "-2 ** 3 ** 2"),
+        ("parens", "-(2 ** 2)"),
+        ("negfloat", "-1.5 ** 0.0"),
+        ("negsub", "-2 + 3"),
+        ("negtimes", "-2 * 3"),
+        ("pownegexp", "2 ** -1"),
+        ("dblneg", "- -2"),
+        ("subinpow", "3 - 2 ** 2"),
+    ):
+        out.append(_c("associativity", name, expr))
+    return out
+
+
+def area_branch_truthiness() -> list[Case]:
+    """TRUTHY_BRANCH_V1: la condicion de `si`/`mientras` es un test de verdad
+    CPython, no un test crudo de puntero. Los contenedores vacios son falsy."""
+    out = []
+    empties = [("emptystr", '""'), ("emptylist", "[]"), ("emptytuple", "()"), ("emptydict", "{}")]
+    for name, value in empties:
+        out.append(_c("branch_truthiness", f"si-{name}", f"v = {value}\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')"))
+        out.append(_c("branch_truthiness", f"while-{name}", f"v = {value}\nmientras v:\n    imprimir('nope')\nimprimir('fin')"))
+    for name, value in (("int0", "0"), ("int1", "1"), ("float0", "0.0"), ("floatnz", "0.5"), ("none", "Nada"), ("str", "'a'"), ("list", "[1]"), ("listnest", "[1, []]")):
+        out.append(_c("branch_truthiness", f"si-{name}", f"v = {value}\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')"))
+    out.append(_c("branch_truthiness", "literal-empty-str", 'si "":\n    imprimir("T")\nsino:\n    imprimir("F")'))
+    out.append(_c("branch_truthiness", "ternary-empty", "v = []\nimprimir('T' si v sino 'F')"))
+    out.append(_c("branch_truthiness", "object-truthy", "clase P:\n    pasar\np = P()\nsi p:\n    imprimir('T')\nsino:\n    imprimir('F')"))
+    return out
+
+
 AREAS = {
     "literals": area_literals,
     "arithmetic": area_arithmetic,
+    "associativity": area_associativity,
+    "branch_truthiness": area_branch_truthiness,
     "comparisons": area_comparisons,
     "truthiness": area_truthiness,
     "builtins": area_builtins,

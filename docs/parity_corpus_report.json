@@ -6,6 +6,8 @@
     "areas": [
       "literals",
       "arithmetic",
+      "associativity",
+      "branch_truthiness",
       "comparisons",
       "truthiness",
       "builtins",
@@ -27,14 +29,14 @@
     "timeout": 10.0
   },
   "summary": {
-    "total": 1104,
+    "total": 1148,
     "by_bucket": {
       "DIVERGENT_CRASH": 2,
-      "DIVERGENT_MISMATCH": 29,
+      "DIVERGENT_MISMATCH": 23,
       "TIMEOUT": 0,
       "FAIL_CLOSED": 229,
       "RAISE_EQ": 1,
-      "EQUIV": 843
+      "EQUIV": 893
     },
     "by_area": {
       "literals": {
@@ -47,11 +49,27 @@
       },
       "arithmetic": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 4,
+        "DIVERGENT_MISMATCH": 2,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 129
+        "EQUIV": 131
+      },
+      "associativity": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 25
+      },
+      "branch_truthiness": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 19
       },
       "comparisons": {
         "DIVERGENT_CRASH": 0,
@@ -63,11 +81,11 @@
       },
       "truthiness": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 4,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 9,
         "RAISE_EQ": 0,
-        "EQUIV": 62
+        "EQUIV": 66
       },
       "builtins": {
         "DIVERGENT_CRASH": 0,
@@ -182,9 +200,9 @@
         "EQUIV": 2
       }
     },
-    "pct_equiv": 76.4,
-    "pct_honest": 97.2,
-    "pct_divergent": 2.8
+    "pct_equiv": 77.8,
+    "pct_honest": 97.8,
+    "pct_divergent": 2.2
   },
   "records": [
     {
@@ -1379,8 +1397,8 @@
       "area": "arithmetic",
       "name": "float**2",
       "src": "imprimir(-1.5 ** 0.0)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=1.0 err= || oracle rc=0 out=-1.0 err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -1523,8 +1541,404 @@
       "area": "arithmetic",
       "name": "int-neg",
       "src": "imprimir(-2 ** 2)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=4 err= || oracle rc=0 out=-4 err=",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "sub",
+      "src": "imprimir(10 - 3 - 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "add",
+      "src": "imprimir(10 + 3 + 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "mul",
+      "src": "imprimir(2 * 3 * 4)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "div",
+      "src": "imprimir(100 / 5 / 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "floordiv",
+      "src": "imprimir(100 // 5 // 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "mod",
+      "src": "imprimir(20 % 7 % 3)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "shl",
+      "src": "imprimir(1 << 2 << 3)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "shr",
+      "src": "imprimir(64 >> 2 >> 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "pow",
+      "src": "imprimir(2 ** 3 ** 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "pow3",
+      "src": "imprimir(2 ** 3 ** 2 ** 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "band",
+      "src": "imprimir(7 & 3 & 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "bor",
+      "src": "imprimir(6 | 2 | 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "bxor",
+      "src": "imprimir(7 ^ 3 ^ 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "len5",
+      "src": "imprimir(20 - 5 - 3 - 2 - 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "mixed",
+      "src": "imprimir(2 * 3 + 4 - 5 // 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "neg",
+      "src": "-2 ** 2\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "negvar",
+      "src": "x = 2\nimprimir(-x ** 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "negchain",
+      "src": "-2 ** 3 ** 2\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "parens",
+      "src": "-(2 ** 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "negfloat",
+      "src": "-1.5 ** 0.0\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "negsub",
+      "src": "-2 + 3\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "negtimes",
+      "src": "-2 * 3\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "pownegexp",
+      "src": "2 ** -1\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "dblneg",
+      "src": "- -2\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "associativity",
+      "name": "subinpow",
+      "src": "3 - 2 ** 2\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-emptystr",
+      "src": "v = \"\"\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "while-emptystr",
+      "src": "v = \"\"\nmientras v:\n    imprimir('nope')\nimprimir('fin')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-emptylist",
+      "src": "v = []\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "while-emptylist",
+      "src": "v = []\nmientras v:\n    imprimir('nope')\nimprimir('fin')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-emptytuple",
+      "src": "v = ()\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "while-emptytuple",
+      "src": "v = ()\nmientras v:\n    imprimir('nope')\nimprimir('fin')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-emptydict",
+      "src": "v = {}\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "while-emptydict",
+      "src": "v = {}\nmientras v:\n    imprimir('nope')\nimprimir('fin')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-int0",
+      "src": "v = 0\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-int1",
+      "src": "v = 1\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-float0",
+      "src": "v = 0.0\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-floatnz",
+      "src": "v = 0.5\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-none",
+      "src": "v = Nada\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-str",
+      "src": "v = 'a'\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-list",
+      "src": "v = [1]\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "si-listnest",
+      "src": "v = [1, []]\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "literal-empty-str",
+      "src": "si \"\":\n    imprimir(\"T\")\nsino:\n    imprimir(\"F\")\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "ternary-empty",
+      "src": "v = []\nimprimir('T' si v sino 'F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "branch_truthiness",
+      "name": "object-truthy",
+      "src": "clase P:\n    pasar\np = P()\nsi p:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -1578,7 +1992,7 @@
       "name": "==5",
       "src": "imprimir(a == a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-az784rei/program.c: In function ‘piton_main’:\n/tmp/piton-linux-az784rei/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-az784rei/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-xfnte01n/program.c: In function ‘piton_main’:\n/tmp/piton-linux-xfnte01n/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-xfnte01n/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1592,7 +2006,7 @@
       "name": "==7",
       "src": "imprimir(a == b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-49y0zsw5/program.c: In function ‘piton_main’:\n/tmp/piton-linux-49y0zsw5/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-49y0zsw5/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-49y0zsw5/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-qsczcl4f/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qsczcl4f/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-qsczcl4f/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-qsczcl4f/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1662,7 +2076,7 @@
       "name": "!=5",
       "src": "imprimir(a != a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-85cczzj0/program.c: In function ‘piton_main’:\n/tmp/piton-linux-85cczzj0/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-85cczzj0/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-v6rlt4kz/program.c: In function ‘piton_main’:\n/tmp/piton-linux-v6rlt4kz/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-v6rlt4kz/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1676,7 +2090,7 @@
       "name": "!=7",
       "src": "imprimir(a != b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-18xxudq_/program.c: In function ‘piton_main’:\n/tmp/piton-linux-18xxudq_/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-18xxudq_/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-18xxudq_/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-g07v2ewy/program.c: In function ‘piton_main’:\n/tmp/piton-linux-g07v2ewy/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-g07v2ewy/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-g07v2ewy/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1746,7 +2160,7 @@
       "name": "<5",
       "src": "imprimir(a < a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-2b3kj9sm/program.c: In function ‘piton_main’:\n/tmp/piton-linux-2b3kj9sm/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-2b3kj9sm/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-ccjtahmm/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ccjtahmm/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-ccjtahmm/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1760,7 +2174,7 @@
       "name": "<7",
       "src": "imprimir(a < b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-5e_udjwm/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5e_udjwm/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-5e_udjwm/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-5e_udjwm/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-1bzoxpkq/program.c: In function ‘piton_main’:\n/tmp/piton-linux-1bzoxpkq/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-1bzoxpkq/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-1bzoxpkq/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1830,7 +2244,7 @@
       "name": ">5",
       "src": "imprimir(a > a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-ynqn9jun/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ynqn9jun/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-ynqn9jun/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-hlbamnhd/program.c: In function ‘piton_main’:\n/tmp/piton-linux-hlbamnhd/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-hlbamnhd/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1844,7 +2258,7 @@
       "name": ">7",
       "src": "imprimir(a > b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-1273e6pv/program.c: In function ‘piton_main’:\n/tmp/piton-linux-1273e6pv/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-1273e6pv/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-1273e6pv/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-arxmvwhn/program.c: In function ‘piton_main’:\n/tmp/piton-linux-arxmvwhn/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-arxmvwhn/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-arxmvwhn/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1914,7 +2328,7 @@
       "name": "<=5",
       "src": "imprimir(a <= a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-gmt24y3w/program.c: In function ‘piton_main’:\n/tmp/piton-linux-gmt24y3w/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-gmt24y3w/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-w0x1065o/program.c: In function ‘piton_main’:\n/tmp/piton-linux-w0x1065o/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-w0x1065o/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1928,7 +2342,7 @@
       "name": "<=7",
       "src": "imprimir(a <= b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-scf5lwcx/program.c: In function ‘piton_main’:\n/tmp/piton-linux-scf5lwcx/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-scf5lwcx/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-scf5lwcx/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-gz92xbc3/program.c: In function ‘piton_main’:\n/tmp/piton-linux-gz92xbc3/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-gz92xbc3/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-gz92xbc3/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1998,7 +2412,7 @@
       "name": ">=5",
       "src": "imprimir(a >= a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-zlmj17e8/program.c: In function ‘piton_main’:\n/tmp/piton-linux-zlmj17e8/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-zlmj17e8/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-h9enbvv7/program.c: In function ‘piton_main’:\n/tmp/piton-linux-h9enbvv7/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-h9enbvv7/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2012,7 +2426,7 @@
       "name": ">=7",
       "src": "imprimir(a >= b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-oqb9bcue/program.c: In function ‘piton_main’:\n/tmp/piton-linux-oqb9bcue/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-oqb9bcue/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-oqb9bcue/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-k0wehk9k/program.c: In function ‘piton_main’:\n/tmp/piton-linux-k0wehk9k/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-k0wehk9k/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-k0wehk9k/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -2082,7 +2496,7 @@
       "name": "ides5",
       "src": "imprimir(a es a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-m2_kke_9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-m2_kke_9/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-m2_kke_9/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-dsne2_vx/program.c: In function ‘piton_main’:\n/tmp/piton-linux-dsne2_vx/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-dsne2_vx/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2698,8 +3112,8 @@
       "area": "truthiness",
       "name": "si-emptystr",
       "src": "v = \"\"\nsi \"\":\n    imprimir('T')\nsino:\n    imprimir('F')\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=T err= || oracle rc=0 out=F err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -2919,8 +3333,8 @@
       "area": "truthiness",
       "name": "si-emptylist",
       "src": "v = []\nsi []:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=T err= || oracle rc=0 out=F err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -3007,8 +3421,8 @@
       "area": "truthiness",
       "name": "si-emptytuple",
       "src": "v = ()\nsi ():\n    imprimir('T')\nsino:\n    imprimir('F')\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=T err= || oracle rc=0 out=F err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -3050,8 +3464,8 @@
       "area": "truthiness",
       "name": "si-emptydict",
       "src": "v = {}\nsi {}:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=T err= || oracle rc=0 out=F err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -8193,7 +8607,7 @@
       "name": "in",
       "src": "imprimir(2 en [1, 2])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-ul3cpynx/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ul3cpynx/program.c:905:13: error: expected ‘)’ before ‘en’\n  905 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-jkrajj43/program.c: In function ‘piton_main’:\n/tmp/piton-linux-jkrajj43/program.c:905:13: error: expected ‘)’ before ‘en’\n  905 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
     },
     {
       "area": "collections",
@@ -8435,7 +8849,7 @@
       "name": "in",
       "src": "d = {'a': 1}\nimprimir('a' en d)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-qr05498a/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qr05498a/program.c:906:13: error: expected ‘)’ before ‘en’\n  906 |     _15=(_13 en _14);\n      |         ~   ^~~\n      |             )\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-mk000s2x/program.c: In function ‘piton_main’:\n/tmp/piton-linux-mk000s2x/program.c:906:13: error: expected ‘)’ before ‘en’\n  906 |     _15=(_13 en _14);\n      |         ~   ^~~\n      |             )\n"
     },
     {
       "area": "dicts",
@@ -8554,7 +8968,7 @@
       "name": "in",
       "src": "imprimir(1 en {1, 2})\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-8vvlmdsp/program.c: In function ‘piton_main’:\n/tmp/piton-linux-8vvlmdsp/program.c:905:13: error: expected ‘)’ before ‘en’\n  905 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-w7eojiqm/program.c: In function ‘piton_main’:\n/tmp/piton-linux-w7eojiqm/program.c:905:13: error: expected ‘)’ before ‘en’\n  905 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
     },
     {
       "area": "sets",
@@ -9019,7 +9433,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-jjmk_4kv/program.c: In function ‘f’:\n/tmp/piton-linux-jjmk_4kv/program.c:921:8: error: ‘suma’ undeclared (first use in this function)\n  921 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-jjmk_4kv/program.c:921:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-9rh7y49e/program.c: In function ‘f’:\n/tmp/piton-linux-9rh7y49e/program.c:921:8: error: ‘suma’ undeclared (first use in this function)\n  921 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-9rh7y49e/program.c:921:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9035,7 +9449,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-d5my_3hl/program.c: In function ‘f’:\n/tmp/piton-linux-d5my_3hl/program.c:925:8: error: ‘suma’ undeclared (first use in this function)\n  925 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-d5my_3hl/program.c:925:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-33w4nn7e/program.c: In function ‘f’:\n/tmp/piton-linux-33w4nn7e/program.c:925:8: error: ‘suma’ undeclared (first use in this function)\n  925 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-33w4nn7e/program.c:925:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9113,21 +9527,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-lxio_whb/program.c: In function ‘piton_main’:\n/tmp/piton-linux-lxio_whb/program.c:903:9: error: too many arguments to function ‘f’\n  903 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-lxio_whb/program.c:876:13: note: declared here\n  876 | static long f(long a);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-s5pfi_vj/program.c: In function ‘piton_main’:\n/tmp/piton-linux-s5pfi_vj/program.c:903:9: error: too many arguments to function ‘f’\n  903 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-s5pfi_vj/program.c:876:13: note: declared here\n  876 | static long f(long a);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-e6ts5ra2/program.c: In function ‘piton_main’:\n/tmp/piton-linux-e6ts5ra2/program.c:902:9: error: too few arguments to function ‘f’\n  902 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-e6ts5ra2/program.c:876:13: note: declared here\n  876 | static long f(long a, long b);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-we3txasx/program.c: In function ‘piton_main’:\n/tmp/piton-linux-we3txasx/program.c:902:9: error: too few arguments to function ‘f’\n  902 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-we3txasx/program.c:876:13: note: declared here\n  876 | static long f(long a, long b);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-q83nzl6r/program.c: In function ‘piton_main’:\n/tmp/piton-linux-q83nzl6r/program.c:899:9: error: ‘no_existe’ undeclared (first use in this function)\n  899 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-q83nzl6r/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-f3tru3sp/program.c: In function ‘piton_main’:\n/tmp/piton-linux-f3tru3sp/program.c:899:9: error: ‘no_existe’ undeclared (first use in this function)\n  899 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-f3tru3sp/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9475,7 +9889,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-kafvclpc/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kafvclpc/program.c:902:9: error: too few arguments to function ‘P____init__’\n  902 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-kafvclpc/program.c:876:13: note: declared here\n  876 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-1qzsh39c/program.c: In function ‘piton_main’:\n/tmp/piton-linux-1qzsh39c/program.c:902:9: error: too few arguments to function ‘P____init__’\n  902 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-1qzsh39c/program.c:876:13: note: declared here\n  876 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
@@ -9589,7 +10003,7 @@
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-nxgo2ils/program.c: In function ‘piton_main’:\n/tmp/piton-linux-nxgo2ils/program.c:899:9: error: ‘divmod’ undeclared (first use in this function)\n  899 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-nxgo2ils/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-u29a1ctg/program.c: In function ‘piton_main’:\n/tmp/piton-linux-u29a1ctg/program.c:899:9: error: ‘divmod’ undeclared (first use in this function)\n  899 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-u29a1ctg/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "controls_closed",
