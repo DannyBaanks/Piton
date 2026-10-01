@@ -2416,13 +2416,37 @@ class LinuxCEmitter:
             elif function_name in {"min", "max"}:
                 if len(values) != 2:
                     raise NativeBuildError("Linux min/max requires two arguments")
+                # MINMAX_TYPES_V1 (mirrors Windows): the winner keeps its
+                # kind. Both str -> lexicographic; both float -> float;
+                # both int/bool -> int compare ("bool" only when both are
+                # bool); anything mixed fails closed (CPython raises
+                # TypeError, or the winner's type is not statically
+                # knowable for int/float mixes).
+                t0, t1 = types.get(values[0], "int"), types.get(values[1], "int")
                 comparison = "<" if function_name == "min" else ">"
-                if types.get(values[0]) == "float":
+                if t0 == t1 == "str":
+                    out.append(f"    {_name(result)}=(piton_strcmp((const char*){self._value(values[0])},(const char*){self._value(values[1])}){comparison}0)?{self._value(values[0])}:{self._value(values[1])};")
+                    types[result] = "str"
+                elif t0 == t1 == "float":
                     out.append(f"    {_name(result)}=piton_bits_double({self._value(values[0])}){comparison}piton_bits_double({self._value(values[1])})?{self._value(values[0])}:{self._value(values[1])};")
                     types[result] = "float"
-                else:
+                elif t0 == t1 == "bool":
+                    out.append(f"    {_name(result)}={self._value(values[0])}{comparison}{self._value(values[1])}?{self._value(values[0])}:{self._value(values[1])};")
+                    types[result] = "bool"
+                elif t0 == t1 == "int":
                     out.append(f"    {_name(result)}={self._value(values[0])}{comparison}{self._value(values[1])}?{self._value(values[0])}:{self._value(values[1])};")
                     types[result] = "int"
+                elif {t0, t1} <= {"int", "bool"}:
+                    # mixed bool/int: the winner's type depends on runtime
+                    # values (min(True, 5) is True, max(True, 5) is 5), so
+                    # the result type is not statically knowable.
+                    raise NativeBuildError(
+                        f"Linux min/max requires two values of the same kind, not {t0}/{t1}"
+                    )
+                else:
+                    raise NativeBuildError(
+                        f"Linux min/max requires two values of the same kind, not {t0}/{t1}"
+                    )
             elif function_name == "sum":
                 if len(values) != 1:
                     raise NativeBuildError("Linux sum requires one collection")

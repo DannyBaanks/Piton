@@ -1722,6 +1722,7 @@ void *piton_seq_slice(void *raw, int64_t lo, int64_t hi) {
 /* ── STR_METHODS_V1 (ASCII + fail-closed non-ASCII) ───────────────────────── */
 
 int64_t piton_str_len(const char *s) { return (int64_t)strlen(s); }
+int64_t piton_str_cmp(const char *a, const char *b) { return (int64_t)strcmp(a, b); }
 
 char *piton_str_repeat(const char *s, int64_t n) {
     if (n <= 0) { char *p = malloc(1); p[0] = 0; return p; }
