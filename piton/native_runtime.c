@@ -2002,8 +2002,108 @@ char *piton_str_quote(const char *s) {
 }
 
 const char *piton_str_single_char(const char *s) {
-    if (strlen(s) != 1) piton_raise_unhandled("TypeError", "%c requires int or 1-character string");
+    if (strlen(s) != 1) { piton_raise("TypeError", "%c requires int or char"); return 0; }
     return s;
+}
+
+int64_t piton_chr(int64_t cp);
+char *piton_str_from_int_base(int64_t v, int64_t base, int64_t upper) {
+    char *p = (char *)malloc(70);
+    size_t o = 0;
+    unsigned long long u;
+    if (v < 0) { p[o++] = '-'; u = (unsigned long long)(-(v + 1)) + 1; }
+    else u = (unsigned long long)v;
+    const char *digits = upper ? "0123456789ABCDEF" : "0123456789abcdef";
+    char tmp[64];
+    int n = 0;
+    do { tmp[n++] = digits[u % (unsigned)base]; u /= (unsigned)base; } while (u);
+    while (n) p[o++] = tmp[--n];
+    p[o] = 0;
+    return p;
+}
+
+static size_t piton_utf8_chars(const char *s, size_t maxbytes) {
+    size_t i = 0;
+    long cc = 0;
+    while (s[i] && (size_t)cc < maxbytes) {
+        unsigned char c = (unsigned char)s[i];
+        size_t adv = 1;
+        if (c >= 0x80) {
+            if ((c & 0xE0) == 0xC0) adv = 2;
+            else if ((c & 0xF0) == 0xE0) adv = 3;
+            else if ((c & 0xF8) == 0xF0) adv = 4;
+        }
+        i += adv;
+        ++cc;
+    }
+    return i;
+}
+
+/* P14: width/precision/flags padding. flags bit0 = '-', bit1 = '0',
+   bit2 = numeric (d/x/X/o: sign-aware zero padding, precision pads the
+   digits with zeros; text: precision truncates by characters). */
+char *piton_str_pad(const char *s, int64_t width, int64_t prec, int64_t flags) {
+    int isnum = (flags & 4) != 0;
+    int neg = 0;
+    const char *digits = s;
+    if (isnum && s[0] == '-') { neg = 1; digits = s + 1; }
+    size_t dl = strlen(digits);
+    const char *core = digits;
+    size_t cl = dl;
+    if (prec >= 0) {
+        if (isnum) {
+            size_t need = (size_t)prec;
+            if (dl == 1 && digits[0] == '0' && prec == 0) need = 0;
+            if (dl < need) {
+                char *pad = (char *)malloc(need + 1);
+                for (size_t i = 0; i < need - dl; ++i) pad[i] = '0';
+                memcpy(pad + need - dl, digits, dl);
+                pad[need] = 0;
+                core = pad;
+                cl = need;
+            }
+        } else {
+            size_t cut = piton_utf8_chars(s, (size_t)prec);
+            char *tr = (char *)malloc(cut + 1);
+            memcpy(tr, s, cut);
+            tr[cut] = 0;
+            core = tr;
+            cl = cut;
+            neg = 0;
+        }
+    }
+    size_t totallen = cl + (neg ? 1 : 0);
+    int64_t pad = (width > 0 && totallen < (size_t)width) ? (width - (int64_t)totallen) : 0;
+    int left = (flags & 1) != 0;
+    int zero = (flags & 2) && !left && isnum && prec < 0;
+    char *out = (char *)malloc(totallen + (size_t)pad + 1);
+    size_t o = 0;
+    if (!left) {
+        if (zero) {
+            if (neg) out[o++] = '-';
+            for (int64_t i = 0; i < pad; ++i) out[o++] = '0';
+        } else {
+            for (int64_t i = 0; i < pad; ++i) out[o++] = ' ';
+            if (neg) out[o++] = '-';
+        }
+    } else if (neg) {
+        out[o++] = '-';
+    }
+    memcpy(out + o, core, cl);
+    o += cl;
+    if (left) {
+        for (int64_t i = 0; i < pad; ++i) out[o++] = ' ';
+    }
+    out[o] = 0;
+    return out;
+}
+
+int64_t piton_percent_chr(int64_t cp) {
+    if (cp < 0 || cp > 0x10FFFF) {
+        piton_raise("OverflowError", "%c arg not in range(0x110000)");
+        return 0;
+    }
+    return piton_chr(cp);
 }
 
 char *piton_str_format(const char *t, int64_t n, const char **av) {
