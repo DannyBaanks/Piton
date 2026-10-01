@@ -30,11 +30,11 @@
     "total": 1104,
     "by_bucket": {
       "DIVERGENT_CRASH": 2,
-      "DIVERGENT_MISMATCH": 27,
+      "DIVERGENT_MISMATCH": 29,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 250,
+      "FAIL_CLOSED": 229,
       "RAISE_EQ": 1,
-      "EQUIV": 824
+      "EQUIV": 843
     },
     "by_area": {
       "literals": {
@@ -57,9 +57,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 5,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 26,
+        "FAIL_CLOSED": 25,
         "RAISE_EQ": 0,
-        "EQUIV": 80
+        "EQUIV": 81
       },
       "truthiness": {
         "DIVERGENT_CRASH": 0,
@@ -145,33 +145,33 @@
         "DIVERGENT_CRASH": 1,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 19,
+        "FAIL_CLOSED": 10,
         "RAISE_EQ": 0,
-        "EQUIV": 1
+        "EQUIV": 10
       },
       "exceptions": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 0,
+        "DIVERGENT_MISMATCH": 1,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 6,
+        "FAIL_CLOSED": 2,
         "RAISE_EQ": 1,
-        "EQUIV": 14
+        "EQUIV": 17
       },
       "classes": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 0,
+        "DIVERGENT_MISMATCH": 1,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 21,
+        "FAIL_CLOSED": 15,
         "RAISE_EQ": 0,
-        "EQUIV": 0
+        "EQUIV": 5
       },
       "generators": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 8,
+        "FAIL_CLOSED": 7,
         "RAISE_EQ": 0,
-        "EQUIV": 0
+        "EQUIV": 1
       },
       "controls_closed": {
         "DIVERGENT_CRASH": 0,
@@ -182,9 +182,9 @@
         "EQUIV": 2
       }
     },
-    "pct_equiv": 74.6,
-    "pct_honest": 97.4,
-    "pct_divergent": 2.6
+    "pct_equiv": 76.4,
+    "pct_honest": 97.2,
+    "pct_divergent": 2.8
   },
   "records": [
     {
@@ -1578,7 +1578,7 @@
       "name": "==5",
       "src": "imprimir(a == a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-z0o334uz/program.c: In function ‘piton_main’:\n/tmp/piton-linux-z0o334uz/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-z0o334uz/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-az784rei/program.c: In function ‘piton_main’:\n/tmp/piton-linux-az784rei/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-az784rei/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1592,7 +1592,7 @@
       "name": "==7",
       "src": "imprimir(a == b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-179nmw5l/program.c: In function ‘piton_main’:\n/tmp/piton-linux-179nmw5l/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-179nmw5l/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-179nmw5l/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-49y0zsw5/program.c: In function ‘piton_main’:\n/tmp/piton-linux-49y0zsw5/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-49y0zsw5/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-49y0zsw5/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1662,7 +1662,7 @@
       "name": "!=5",
       "src": "imprimir(a != a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-dit3twjl/program.c: In function ‘piton_main’:\n/tmp/piton-linux-dit3twjl/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-dit3twjl/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-85cczzj0/program.c: In function ‘piton_main’:\n/tmp/piton-linux-85cczzj0/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-85cczzj0/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1676,7 +1676,7 @@
       "name": "!=7",
       "src": "imprimir(a != b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-3qg29l4t/program.c: In function ‘piton_main’:\n/tmp/piton-linux-3qg29l4t/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-3qg29l4t/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-3qg29l4t/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-18xxudq_/program.c: In function ‘piton_main’:\n/tmp/piton-linux-18xxudq_/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-18xxudq_/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-18xxudq_/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1746,7 +1746,7 @@
       "name": "<5",
       "src": "imprimir(a < a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-ogrv0_um/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ogrv0_um/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-ogrv0_um/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-2b3kj9sm/program.c: In function ‘piton_main’:\n/tmp/piton-linux-2b3kj9sm/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-2b3kj9sm/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1760,7 +1760,7 @@
       "name": "<7",
       "src": "imprimir(a < b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-akc8prv5/program.c: In function ‘piton_main’:\n/tmp/piton-linux-akc8prv5/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-akc8prv5/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-akc8prv5/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-5e_udjwm/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5e_udjwm/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-5e_udjwm/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-5e_udjwm/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1830,7 +1830,7 @@
       "name": ">5",
       "src": "imprimir(a > a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-_o6_anb_/program.c: In function ‘piton_main’:\n/tmp/piton-linux-_o6_anb_/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-_o6_anb_/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-ynqn9jun/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ynqn9jun/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-ynqn9jun/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1844,7 +1844,7 @@
       "name": ">7",
       "src": "imprimir(a > b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-tzwsi_kk/program.c: In function ‘piton_main’:\n/tmp/piton-linux-tzwsi_kk/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-tzwsi_kk/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-tzwsi_kk/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-1273e6pv/program.c: In function ‘piton_main’:\n/tmp/piton-linux-1273e6pv/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-1273e6pv/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-1273e6pv/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1914,7 +1914,7 @@
       "name": "<=5",
       "src": "imprimir(a <= a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-pgwg4gav/program.c: In function ‘piton_main’:\n/tmp/piton-linux-pgwg4gav/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-pgwg4gav/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-gmt24y3w/program.c: In function ‘piton_main’:\n/tmp/piton-linux-gmt24y3w/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-gmt24y3w/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -1928,7 +1928,7 @@
       "name": "<=7",
       "src": "imprimir(a <= b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-5922dhip/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5922dhip/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-5922dhip/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-5922dhip/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-scf5lwcx/program.c: In function ‘piton_main’:\n/tmp/piton-linux-scf5lwcx/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-scf5lwcx/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-scf5lwcx/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -1998,7 +1998,7 @@
       "name": ">=5",
       "src": "imprimir(a >= a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-x7c2ltia/program.c: In function ‘piton_main’:\n/tmp/piton-linux-x7c2ltia/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-x7c2ltia/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-zlmj17e8/program.c: In function ‘piton_main’:\n/tmp/piton-linux-zlmj17e8/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-zlmj17e8/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2012,7 +2012,7 @@
       "name": ">=7",
       "src": "imprimir(a >= b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-32djg25e/program.c: In function ‘piton_main’:\n/tmp/piton-linux-32djg25e/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-32djg25e/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-32djg25e/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-oqb9bcue/program.c: In function ‘piton_main’:\n/tmp/piton-linux-oqb9bcue/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-oqb9bcue/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-oqb9bcue/program.c:900:9: error: ‘b’ undeclared (first use in this function)\n  900 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -2082,7 +2082,7 @@
       "name": "ides5",
       "src": "imprimir(a es a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-j_kf43ub/program.c: In function ‘piton_main’:\n/tmp/piton-linux-j_kf43ub/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-j_kf43ub/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-m2_kke_9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-m2_kke_9/program.c:899:9: error: ‘a’ undeclared (first use in this function)\n  899 |     _10=a;\n      |         ^\n/tmp/piton-linux-m2_kke_9/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2453,9 +2453,11 @@
     {
       "area": "comparisons",
       "name": "chain-eval",
-      "src": "def f(x):\n    imprimir('f')\n    devolver x\nimprimir(f(1) == f(1) == 1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:9) en 1:9"
+      "src": "funcion f(x):\n    imprimir('f')\n    devolver x\nimprimir(f(1) == f(1) == 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
@@ -8191,7 +8193,7 @@
       "name": "in",
       "src": "imprimir(2 en [1, 2])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-4a3az2ol/program.c: In function ‘piton_main’:\n/tmp/piton-linux-4a3az2ol/program.c:905:13: error: expected ‘)’ before ‘en’\n  905 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-ul3cpynx/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ul3cpynx/program.c:905:13: error: expected ‘)’ before ‘en’\n  905 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
     },
     {
       "area": "collections",
@@ -8433,7 +8435,7 @@
       "name": "in",
       "src": "d = {'a': 1}\nimprimir('a' en d)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-gpw7buay/program.c: In function ‘piton_main’:\n/tmp/piton-linux-gpw7buay/program.c:906:13: error: expected ‘)’ before ‘en’\n  906 |     _15=(_13 en _14);\n      |         ~   ^~~\n      |             )\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-qr05498a/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qr05498a/program.c:906:13: error: expected ‘)’ before ‘en’\n  906 |     _15=(_13 en _14);\n      |         ~   ^~~\n      |             )\n"
     },
     {
       "area": "dicts",
@@ -8552,7 +8554,7 @@
       "name": "in",
       "src": "imprimir(1 en {1, 2})\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-ooojoo38/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ooojoo38/program.c:905:13: error: expected ‘)’ before ‘en’\n  905 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-8vvlmdsp/program.c: In function ‘piton_main’:\n/tmp/piton-linux-8vvlmdsp/program.c:905:13: error: expected ‘)’ before ‘en’\n  905 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
     },
     {
       "area": "sets",
@@ -8979,72 +8981,84 @@
     {
       "area": "functions",
       "name": "def-basic",
-      "src": "def f(x):\n    devolver x + 1\nimprimir(f(1))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:9) en 1:9"
+      "src": "funcion f(x):\n    devolver x + 1\nimprimir(f(1))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "def-none",
-      "src": "def f():\n    devolver\nx = f()\nimprimir(x)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:8) en 1:8"
+      "src": "funcion f():\n    devolver\nx = f()\nimprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "def-default",
-      "src": "def f(a, b=2):\n    devolver a + b\nimprimir(f(1))\nimprimir(f(1, 5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:14) en 1:14"
+      "src": "funcion f(a, b=2):\n    devolver a + b\nimprimir(f(1))\nimprimir(f(1, 5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "def-kwarg",
-      "src": "def f(a, b=2):\n    devolver a + b\nimprimir(f(a=1, b=3))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:14) en 1:14"
+      "src": "funcion f(a, b=2):\n    devolver a + b\nimprimir(f(a=1, b=3))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "def-varargs",
-      "src": "def f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
+      "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:13) en 1:13"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-jjmk_4kv/program.c: In function ‘f’:\n/tmp/piton-linux-jjmk_4kv/program.c:921:8: error: ‘suma’ undeclared (first use in this function)\n  921 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-jjmk_4kv/program.c:921:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
       "name": "def-kwargs",
-      "src": "def f(**kw):\n    devolver longitud(kw)\nimprimir(f(a=1, b=2))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:12) en 1:12"
+      "src": "funcion f(**kw):\n    devolver longitud(kw)\nimprimir(f(a=1, b=2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "def-mixed",
-      "src": "def f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
+      "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:22) en 1:22"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-d5my_3hl/program.c: In function ‘f’:\n/tmp/piton-linux-d5my_3hl/program.c:925:8: error: ‘suma’ undeclared (first use in this function)\n  925 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-d5my_3hl/program.c:925:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
       "name": "def-recursion",
-      "src": "def fac(n):\n    si n <= 1:\n        devolver 1\n    devolver n * fac(n - 1)\nimprimir(fac(5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:11) en 1:11"
+      "src": "funcion fac(n):\n    si n <= 1:\n        devolver 1\n    devolver n * fac(n - 1)\nimprimir(fac(5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "def-closure",
-      "src": "def externo(x):\n    def interno():\n        devolver x * 2\n    devolver interno()\nimprimir(externo(3))\n",
+      "src": "funcion externo(x):\n    def interno():\n        devolver x * 2\n    devolver interno()\nimprimir(externo(3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:15) en 1:15"
+      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 2:18) en 2:18"
     },
     {
       "area": "functions",
       "name": "def-nested-capture",
-      "src": "def a():\n    x = 1\n    def b():\n        devolver x + 1\n    devolver b()\nimprimir(a())\n",
+      "src": "funcion a():\n    x = 1\n    def b():\n        devolver x + 1\n    devolver b()\nimprimir(a())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:8) en 1:8"
+      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 3:12) en 3:12"
     },
     {
       "area": "functions",
@@ -9072,44 +9086,48 @@
     {
       "area": "functions",
       "name": "nonlocal",
-      "src": "def ext():\n    y = 1\n    def int():\n        no_local y\n        y = 7\n    int()\n    devolver y\nimprimir(ext())\n",
+      "src": "funcion ext():\n    y = 1\n    def int():\n        no_local y\n        y = 7\n    int()\n    devolver y\nimprimir(ext())\n",
       "bucket": "FAIL_CLOSED",
       "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 4\n\nPython rechazó la traducción:\ninvalid syntax\n\n    and = 1"
     },
     {
       "area": "functions",
       "name": "func-as-value",
-      "src": "def f(x):\n    devolver x\nimprimir(f(3))\ng = f\nimprimir(g(4))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:9) en 1:9"
+      "src": "funcion f(x):\n    devolver x\nimprimir(f(3))\ng = f\nimprimir(g(4))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "call-in-expr",
-      "src": "def f():\n    devolver 2\nimprimir(f() * f() + 1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:8) en 1:8"
+      "src": "funcion f():\n    devolver 2\nimprimir(f() * f() + 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "too-many-args",
-      "src": "def f(a):\n    devolver a\nf(1, 2)\n",
+      "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:9) en 1:9"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-lxio_whb/program.c: In function ‘piton_main’:\n/tmp/piton-linux-lxio_whb/program.c:903:9: error: too many arguments to function ‘f’\n  903 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-lxio_whb/program.c:876:13: note: declared here\n  876 | static long f(long a);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
-      "src": "def f(a, b):\n    devolver a\nf(1)\n",
+      "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:12) en 1:12"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-e6ts5ra2/program.c: In function ‘piton_main’:\n/tmp/piton-linux-e6ts5ra2/program.c:902:9: error: too few arguments to function ‘f’\n  902 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-e6ts5ra2/program.c:876:13: note: declared here\n  876 | static long f(long a, long b);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-4jylr5qo/program.c: In function ‘piton_main’:\n/tmp/piton-linux-4jylr5qo/program.c:899:9: error: ‘no_existe’ undeclared (first use in this function)\n  899 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-4jylr5qo/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-q83nzl6r/program.c: In function ‘piton_main’:\n/tmp/piton-linux-q83nzl6r/program.c:899:9: error: ‘no_existe’ undeclared (first use in this function)\n  899 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-q83nzl6r/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9123,9 +9141,11 @@
     {
       "area": "functions",
       "name": "docstring-ignored",
-      "src": "def f():\n    'doc'\n    devolver 1\nimprimir(f())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:8) en 1:8"
+      "src": "funcion f():\n    'doc'\n    devolver 1\nimprimir(f())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "exceptions",
@@ -9216,23 +9236,29 @@
     {
       "area": "exceptions",
       "name": "custom-exc",
-      "src": "class E(Exception):\n    pasar\nintentar:\n    lanzar E('x')\nexcepto E:\n    imprimir('custom')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:19) en 1:19"
+      "src": "clase E(Exception):\n    pasar\nintentar:\n    lanzar E('x')\nexcepto E:\n    imprimir('custom')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "exceptions",
       "name": "custom-exc-msg",
-      "src": "class E(Exception):\n    pasar\nintentar:\n    lanzar E('detalle')\nexcepto E como e:\n    imprimir(e)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:19) en 1:19"
+      "src": "clase E(Exception):\n    pasar\nintentar:\n    lanzar E('detalle')\nexcepto E como e:\n    imprimir(e)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "exceptions",
       "name": "custom-exc-subclass",
-      "src": "class A(Exception):\n    pasar\nclass B(A):\n    pasar\nintentar:\n    lanzar B('x')\nexcepto A:\n    imprimir('A')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:19) en 1:19"
+      "src": "clase A(Exception):\n    pasar\nclase B(A):\n    pasar\nintentar:\n    lanzar B('x')\nexcepto A:\n    imprimir('A')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "exceptions",
@@ -9300,191 +9326,207 @@
     {
       "area": "exceptions",
       "name": "exc-in-func",
-      "src": "def f():\n    lanzar ValueError('in func')\nintentar:\n    f()\nexcepto ValueError:\n    imprimir('ok')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:8) en 1:8"
+      "src": "funcion f():\n    lanzar ValueError('in func')\nintentar:\n    f()\nexcepto ValueError:\n    imprimir('ok')\n",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=1 out= err=ValueError: in func || oracle rc=0 out=ok err=",
+      "native_rc": 1,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "init",
-      "src": "class P:\n    def __init__(self, x):\n        self.x = x\n    def ver(self):\n        devolver self.x\nimprimir(P(3).ver())\n",
+      "src": "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    def ver(self):\n        devolver self.x\nimprimir(P(3).ver())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:18) en 4:18"
     },
     {
       "area": "classes",
       "name": "attr",
-      "src": "class P:\n    def __init__(self):\n        self.x = 1\np = P()\nimprimir(p.x)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "src": "clase P:\n    funcion __init__(self):\n        self.x = 1\np = P()\nimprimir(p.x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "method-call",
-      "src": "class P:\n    def f(self, a):\n        devolver a * 2\nimprimir(P().f(3))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "src": "clase P:\n    funcion f(self, a):\n        devolver a * 2\nimprimir(P().f(3))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "str-dunder",
-      "src": "class P:\n    def __str__(self):\n        devolver 'soy P'\nimprimir(P())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "src": "clase P:\n    funcion __str__(self):\n        devolver 'soy P'\nimprimir(P())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "repr-dunder",
-      "src": "class P:\n    def __repr__(self):\n        devolver '<P>'\nimprimir(P())\n",
+      "src": "clase P:\n    funcion __repr__(self):\n        devolver '<P>'\nimprimir(P())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: NativeBuildError: Linux native print of a 'P' instance without __str__ is not supported (can never match CPython object repr)"
     },
     {
       "area": "classes",
       "name": "eq-dunder",
-      "src": "class P:\n    def __init__(self, x):\n        self.x = x\n    def __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))\n",
+      "src": "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    def __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 4\ncolumna: 21\n\nPython rechazó la traducción:\ninvalid syntax\n\n    def __eq__(self, or):"
     },
     {
       "area": "classes",
       "name": "len-dunder",
-      "src": "class P:\n    def __len__(self):\n        devolver 3\nimprimir(longitud(P()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "src": "clase P:\n    funcion __len__(self):\n        devolver 3\nimprimir(longitud(P()))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "iter-dunder",
-      "src": "class P:\n    def __iter__(self):\n    devolver iter([1, 2])\npara x en P():\n    imprimir(x)\n",
+      "src": "clase P:\n    funcion __iter__(self):\n    devolver iter([1, 2])\npara x en P():\n    imprimir(x)\n",
       "bucket": "FAIL_CLOSED",
       "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 3\ncolumna: 5\n\nPython rechazó la traducción:\nexpected an indented block after function definition on line 2\n\n    return iter([1, 2])"
     },
     {
       "area": "classes",
       "name": "inheritance",
-      "src": "class A:\n    def f(self):\n        devolver 'A'\nclass B(A):\n    pasar\nimprimir(B().f())\n",
+      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    pasar\nimprimir(B().f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:11) en 4:11"
     },
     {
       "area": "classes",
       "name": "override",
-      "src": "class A:\n    def f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B'\nimprimir(B().f())\n",
+      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B'\nimprimir(B().f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:11) en 4:11"
     },
     {
       "area": "classes",
       "name": "super",
-      "src": "class A:\n    def f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())\n",
+      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:11) en 4:11"
     },
     {
       "area": "classes",
       "name": "super-init",
-      "src": "class A:\n    def __init__(self, x):\n        self.x = x\nclass B(A):\n    def __init__(self):\n        super().__init__(7)\nimprimir(B().x)\n",
+      "src": "clase A:\n    funcion __init__(self, x):\n        self.x = x\nclass B(A):\n    def __init__(self):\n        super().__init__(7)\nimprimir(B().x)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:11) en 4:11"
     },
     {
       "area": "classes",
       "name": "class-attr",
-      "src": "class P:\n    v = 5\nimprimir(P.v)\n",
+      "src": "clase P:\n    v = 5\nimprimir(P.v)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: NativeBuildError: native classes currently require methods only, no keywords or class-level decorators"
     },
     {
       "area": "classes",
       "name": "instance-shared",
-      "src": "class P:\n    v = 5\nimprimir(P().v)\n",
+      "src": "clase P:\n    v = 5\nimprimir(P().v)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: NativeBuildError: native classes currently require methods only, no keywords or class-level decorators"
     },
     {
       "area": "classes",
       "name": "multi-base",
-      "src": "class A:\n    def f(self):\n        devolver 'A'\nclass B:\n    def f(self):\n        devolver 'B'\nclass C(A, B):\n    pasar\nimprimir(C().f())\n",
+      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B:\n    def f(self):\n        devolver 'B'\nclass C(A, B):\n    pasar\nimprimir(C().f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 5:1) en 5:1"
     },
     {
       "area": "classes",
       "name": "type-of",
-      "src": "class P:\n    pasar\nimprimir(tipo(P()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "src": "clase P:\n    pasar\nimprimir(tipo(P()))\n",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=<class 'object'> err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 3, in <module> | NameError: name 'tipo' is not defined",
+      "native_rc": 0,
+      "oracle_rc": 1
     },
     {
       "area": "classes",
       "name": "method-as-value",
-      "src": "class P:\n    def f(self):\n        devolver 1\nimprimir(P.f(P()))\n",
+      "src": "clase P:\n    funcion f(self):\n        devolver 1\nimprimir(P.f(P()))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
     },
     {
       "area": "classes",
       "name": "attr-missing",
-      "src": "class P:\n    pasar\nimprimir(P().zzz)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "src": "clase P:\n    pasar\nimprimir(P().zzz)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "classes",
       "name": "constructor-args",
-      "src": "class P:\n    def __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
+      "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-kafvclpc/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kafvclpc/program.c:902:9: error: too few arguments to function ‘P____init__’\n  902 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-kafvclpc/program.c:876:13: note: declared here\n  876 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
       "name": "dunder-add",
-      "src": "class P:\n    def __add__(self, o):\n        devolver 99\nimprimir(P() + 1)\n",
+      "src": "clase P:\n    funcion __add__(self, o):\n        devolver 99\nimprimir(P() + 1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 22\n\nPython rechazó la traducción:\ninvalid syntax\n\n    def __add__(self, or):"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 23\n\nPython rechazó la traducción:\ninvalid syntax\n\n    def __add__(self, or):"
     },
     {
       "area": "classes",
       "name": "bool-dunder",
-      "src": "class P:\n    def __bool__(self):\n        devolver Falso\nimprimir(P() o 'fallback')\n",
+      "src": "clase P:\n    funcion __bool__(self):\n        devolver Falso\nimprimir(P() o 'fallback')\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: NativeBuildError: Linux truth test does not support object:P"
     },
     {
       "area": "generators",
       "name": "yield-simple",
-      "src": "def f():\n    producir 1\n    producir 2\npara x en f():\n    imprimir(x)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:8) en 1:8"
+      "src": "funcion f():\n    producir 1\n    producir 2\npara x en f():\n    imprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
       "name": "yield-list",
-      "src": "def f():\n    para x en [1, 2]:\n        producir x\nimprimir(lista(f()))\n",
+      "src": "funcion f():\n    para x en [1, 2]:\n        producir x\nimprimir(lista(f()))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:8) en 1:8"
+      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
     },
     {
       "area": "generators",
       "name": "yield-infinite-take",
-      "src": "def f():\n    i = 0\n    mientras i < 3:\n        producir i\n        i = i + 1\nimprimir(lista(f()))\n",
+      "src": "funcion f():\n    i = 0\n    mientras i < 3:\n        producir i\n        i = i + 1\nimprimir(lista(f()))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:8) en 1:8"
+      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
     },
     {
       "area": "generators",
       "name": "yield-varargs",
-      "src": "def f(*args):\n    para a en args:\n        producir a * 2\nimprimir(lista(f(1, 2)))\n",
+      "src": "funcion f(*args):\n    para a en args:\n        producir a * 2\nimprimir(lista(f(1, 2)))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:13) en 1:13"
+      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
     },
     {
       "area": "generators",
       "name": "yield-sum",
-      "src": "def f():\n    producir 1\n    producir 2\nimprimir(sum(f()))\n",
+      "src": "funcion f():\n    producir 1\n    producir 2\nimprimir(sum(f()))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:8) en 1:8"
+      "detail": "build: NativeBuildError: Linux sum requires one collection"
     },
     {
       "area": "generators",
@@ -9496,14 +9538,14 @@
     {
       "area": "generators",
       "name": "class-generator",
-      "src": "class G:\n    def __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))\n",
+      "src": "clase G:\n    funcion __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1"
+      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
     },
     {
       "area": "generators",
       "name": "class-iter-self",
-      "src": "class G:\n    def __iter__(self):\n    devolver self\n    def __next__(self):\n        devolver 1\nimprimir(lista(G()))\n",
+      "src": "clase G:\n    funcion __iter__(self):\n    devolver self\n    def __next__(self):\n        devolver 1\nimprimir(lista(G()))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 3\ncolumna: 5\n\nPython rechazó la traducción:\nexpected an indented block after function definition on line 2\n\n    return self"
     },
@@ -9547,7 +9589,7 @@
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-0yrc2yv_/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0yrc2yv_/program.c:899:9: error: ‘divmod’ undeclared (first use in this function)\n  899 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-0yrc2yv_/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-nxgo2ils/program.c: In function ‘piton_main’:\n/tmp/piton-linux-nxgo2ils/program.c:899:9: error: ‘divmod’ undeclared (first use in this function)\n  899 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-nxgo2ils/program.c:899:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "controls_closed",
@@ -9619,9 +9661,9 @@
     {
       "area": "controls_closed",
       "name": "type-pattern-match",
-      "src": "def f(x):\n    segun x:\n        caso int:\n            devolver 1\nimprimir(f(1))\n",
+      "src": "funcion f(x):\n    segun x:\n        caso int:\n            devolver 1\nimprimir(f(1))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 1:9) en 1:9"
+      "detail": "build: NativeBuildError: runtime operation not supported in Linux native subset: unsupported"
     }
   ]
 }

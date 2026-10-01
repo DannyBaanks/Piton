@@ -259,7 +259,7 @@ def area_comparisons() -> list[Case]:
                 _c("comparisons", f"chain{o1}{o2}", f"imprimir(1 {o1} 2 {o2} 1)")
             )
     out += [
-        _c("comparisons", "chain-eval", "def f(x):\n    imprimir('f')\n    devolver x\nimprimir(f(1) == f(1) == 1)"),
+        _c("comparisons", "chain-eval", "funcion f(x):\n    imprimir('f')\n    devolver x\nimprimir(f(1) == f(1) == 1)"),
         _c("comparisons", "chain-mixed", "imprimir(1 < 2 < 3)"),
         _c("comparisons", "chain-false", "imprimir(1 < 2 < 1)"),
     ]
@@ -482,27 +482,27 @@ def area_control_flow() -> list[Case]:
 
 def area_functions() -> list[Case]:
     return [
-        _c("functions", "def-basic", "def f(x):\n    devolver x + 1\nimprimir(f(1))"),
-        _c("functions", "def-none", "def f():\n    devolver\nx = f()\nimprimir(x)"),
-        _c("functions", "def-default", "def f(a, b=2):\n    devolver a + b\nimprimir(f(1))\nimprimir(f(1, 5))"),
-        _c("functions", "def-kwarg", "def f(a, b=2):\n    devolver a + b\nimprimir(f(a=1, b=3))"),
-        _c("functions", "def-varargs", "def f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))"),
-        _c("functions", "def-kwargs", "def f(**kw):\n    devolver longitud(kw)\nimprimir(f(a=1, b=2))"),
-        _c("functions", "def-mixed", "def f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))"),
-        _c("functions", "def-recursion", "def fac(n):\n    si n <= 1:\n        devolver 1\n    devolver n * fac(n - 1)\nimprimir(fac(5))"),
-        _c("functions", "def-closure", "def externo(x):\n    def interno():\n        devolver x * 2\n    devolver interno()\nimprimir(externo(3))"),
-        _c("functions", "def-nested-capture", "def a():\n    x = 1\n    def b():\n        devolver x + 1\n    devolver b()\nimprimir(a())"),
+        _c("functions", "def-basic", "funcion f(x):\n    devolver x + 1\nimprimir(f(1))"),
+        _c("functions", "def-none", "funcion f():\n    devolver\nx = f()\nimprimir(x)"),
+        _c("functions", "def-default", "funcion f(a, b=2):\n    devolver a + b\nimprimir(f(1))\nimprimir(f(1, 5))"),
+        _c("functions", "def-kwarg", "funcion f(a, b=2):\n    devolver a + b\nimprimir(f(a=1, b=3))"),
+        _c("functions", "def-varargs", "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))"),
+        _c("functions", "def-kwargs", "funcion f(**kw):\n    devolver longitud(kw)\nimprimir(f(a=1, b=2))"),
+        _c("functions", "def-mixed", "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))"),
+        _c("functions", "def-recursion", "funcion fac(n):\n    si n <= 1:\n        devolver 1\n    devolver n * fac(n - 1)\nimprimir(fac(5))"),
+        _c("functions", "def-closure", "funcion externo(x):\n    def interno():\n        devolver x * 2\n    devolver interno()\nimprimir(externo(3))"),
+        _c("functions", "def-nested-capture", "funcion a():\n    x = 1\n    def b():\n        devolver x + 1\n    devolver b()\nimprimir(a())"),
         _c("functions", "def-lambda", "f = lambda x: x + 1\nimprimir(f(1))"),
         _c("functions", "def-lambda-2", "f = lambda x, y=2: x * y\nimprimir(f(3))"),
         _c("functions", "global", "x = 1\ndef f():\n    global x\n    x = 5\nf()\nimprimir(x)"),
-        _c("functions", "nonlocal", "def ext():\n    y = 1\n    def int():\n        no_local y\n        y = 7\n    int()\n    devolver y\nimprimir(ext())"),
-        _c("functions", "func-as-value", "def f(x):\n    devolver x\nimprimir(f(3))\ng = f\nimprimir(g(4))"),
-        _c("functions", "call-in-expr", "def f():\n    devolver 2\nimprimir(f() * f() + 1)"),
-        _c("functions", "too-many-args", "def f(a):\n    devolver a\nf(1, 2)"),
-        _c("functions", "too-few-args", "def f(a, b):\n    devolver a\nf(1)"),
+        _c("functions", "nonlocal", "funcion ext():\n    y = 1\n    def int():\n        no_local y\n        y = 7\n    int()\n    devolver y\nimprimir(ext())"),
+        _c("functions", "func-as-value", "funcion f(x):\n    devolver x\nimprimir(f(3))\ng = f\nimprimir(g(4))"),
+        _c("functions", "call-in-expr", "funcion f():\n    devolver 2\nimprimir(f() * f() + 1)"),
+        _c("functions", "too-many-args", "funcion f(a):\n    devolver a\nf(1, 2)"),
+        _c("functions", "too-few-args", "funcion f(a, b):\n    devolver a\nf(1)"),
         _c("functions", "undefined-name", "imprimir(no_existe)"),
         _c("functions", "call-nonfunc", "x = 5\nx()"),
-        _c("functions", "docstring-ignored", "def f():\n    'doc'\n    devolver 1\nimprimir(f())"),
+        _c("functions", "docstring-ignored", "funcion f():\n    'doc'\n    devolver 1\nimprimir(f())"),
     ]
 
 
@@ -518,9 +518,9 @@ def area_exceptions() -> list[Case]:
         _c("exceptions", "try-nested", "intentar:\n    intentar:\n        lanzar ValueError('in')\n    excepto ValueError:\n        imprimir('inner')\nexcepto Exception:\n    imprimir('outer')"),
         _c("exceptions", "try-else-raises", "intentar:\n    lanzar ValueError('x')\nexcepto ValueError:\n    imprimir('c')\nsino:\n    imprimir('no')"),
         _c("exceptions", "reraise", "intentar:\n    intentar:\n        lanzar ValueError('x')\n    excepto ValueError:\n        lanzar\nexcepto ValueError:\n    imprimir('outer caught')"),
-        _c("exceptions", "custom-exc", "class E(Exception):\n    pasar\nintentar:\n    lanzar E('x')\nexcepto E:\n    imprimir('custom')"),
-        _c("exceptions", "custom-exc-msg", "class E(Exception):\n    pasar\nintentar:\n    lanzar E('detalle')\nexcepto E como e:\n    imprimir(e)"),
-        _c("exceptions", "custom-exc-subclass", "class A(Exception):\n    pasar\nclass B(A):\n    pasar\nintentar:\n    lanzar B('x')\nexcepto A:\n    imprimir('A')"),
+        _c("exceptions", "custom-exc", "clase E(Exception):\n    pasar\nintentar:\n    lanzar E('x')\nexcepto E:\n    imprimir('custom')"),
+        _c("exceptions", "custom-exc-msg", "clase E(Exception):\n    pasar\nintentar:\n    lanzar E('detalle')\nexcepto E como e:\n    imprimir(e)"),
+        _c("exceptions", "custom-exc-subclass", "clase A(Exception):\n    pasar\nclase B(A):\n    pasar\nintentar:\n    lanzar B('x')\nexcepto A:\n    imprimir('A')"),
         _c("exceptions", "assert", "afirmar 1 == 1\nimprimir('ok')"),
         _c("exceptions", "assert-msg", "afirmar 1 == 2, 'no son iguales'"),
         _c("exceptions", "assert-caught", "intentar:\n    afirmar Falso, 'razon'\nexcepto AssertionError como e:\n    imprimir(e)"),
@@ -528,46 +528,46 @@ def area_exceptions() -> list[Case]:
         _c("exceptions", "index-error", "imprimir([1][5])"),
         _c("exceptions", "key-error", "d = {}\nimprimir(d['k'])"),
         _c("exceptions", "finally-reraise", "intentar:\n    lanzar ValueError('x')\nfinalmente:\n    imprimir('cleanup')"),
-        _c("exceptions", "exc-in-func", "def f():\n    lanzar ValueError('in func')\nintentar:\n    f()\nexcepto ValueError:\n    imprimir('ok')"),
+        _c("exceptions", "exc-in-func", "funcion f():\n    lanzar ValueError('in func')\nintentar:\n    f()\nexcepto ValueError:\n    imprimir('ok')"),
     ]
 
 
 def area_classes() -> list[Case]:
     return [
-        _c("classes", "init", "class P:\n    def __init__(self, x):\n        self.x = x\n    def ver(self):\n        devolver self.x\nimprimir(P(3).ver())"),
-        _c("classes", "attr", "class P:\n    def __init__(self):\n        self.x = 1\np = P()\nimprimir(p.x)"),
-        _c("classes", "method-call", "class P:\n    def f(self, a):\n        devolver a * 2\nimprimir(P().f(3))"),
-        _c("classes", "str-dunder", "class P:\n    def __str__(self):\n        devolver 'soy P'\nimprimir(P())"),
-        _c("classes", "repr-dunder", "class P:\n    def __repr__(self):\n        devolver '<P>'\nimprimir(P())"),
-        _c("classes", "eq-dunder", "class P:\n    def __init__(self, x):\n        self.x = x\n    def __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))"),
-        _c("classes", "len-dunder", "class P:\n    def __len__(self):\n        devolver 3\nimprimir(longitud(P()))"),
-        _c("classes", "iter-dunder", "class P:\n    def __iter__(self):\n    devolver iter([1, 2])\npara x en P():\n    imprimir(x)"),
-        _c("classes", "inheritance", "class A:\n    def f(self):\n        devolver 'A'\nclass B(A):\n    pasar\nimprimir(B().f())"),
-        _c("classes", "override", "class A:\n    def f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B'\nimprimir(B().f())"),
-        _c("classes", "super", "class A:\n    def f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())"),
-        _c("classes", "super-init", "class A:\n    def __init__(self, x):\n        self.x = x\nclass B(A):\n    def __init__(self):\n        super().__init__(7)\nimprimir(B().x)"),
-        _c("classes", "class-attr", "class P:\n    v = 5\nimprimir(P.v)"),
-        _c("classes", "instance-shared", "class P:\n    v = 5\nimprimir(P().v)"),
-        _c("classes", "multi-base", "class A:\n    def f(self):\n        devolver 'A'\nclass B:\n    def f(self):\n        devolver 'B'\nclass C(A, B):\n    pasar\nimprimir(C().f())"),
-        _c("classes", "type-of", "class P:\n    pasar\nimprimir(tipo(P()))"),
-        _c("classes", "method-as-value", "class P:\n    def f(self):\n        devolver 1\nimprimir(P.f(P()))"),
-        _c("classes", "attr-missing", "class P:\n    pasar\nimprimir(P().zzz)"),
-        _c("classes", "constructor-args", "class P:\n    def __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)"),
-        _c("classes", "dunder-add", "class P:\n    def __add__(self, o):\n        devolver 99\nimprimir(P() + 1)"),
-        _c("classes", "bool-dunder", "class P:\n    def __bool__(self):\n        devolver Falso\nimprimir(P() o 'fallback')"),
+        _c("classes", "init", "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    def ver(self):\n        devolver self.x\nimprimir(P(3).ver())"),
+        _c("classes", "attr", "clase P:\n    funcion __init__(self):\n        self.x = 1\np = P()\nimprimir(p.x)"),
+        _c("classes", "method-call", "clase P:\n    funcion f(self, a):\n        devolver a * 2\nimprimir(P().f(3))"),
+        _c("classes", "str-dunder", "clase P:\n    funcion __str__(self):\n        devolver 'soy P'\nimprimir(P())"),
+        _c("classes", "repr-dunder", "clase P:\n    funcion __repr__(self):\n        devolver '<P>'\nimprimir(P())"),
+        _c("classes", "eq-dunder", "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    def __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))"),
+        _c("classes", "len-dunder", "clase P:\n    funcion __len__(self):\n        devolver 3\nimprimir(longitud(P()))"),
+        _c("classes", "iter-dunder", "clase P:\n    funcion __iter__(self):\n    devolver iter([1, 2])\npara x en P():\n    imprimir(x)"),
+        _c("classes", "inheritance", "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    pasar\nimprimir(B().f())"),
+        _c("classes", "override", "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B'\nimprimir(B().f())"),
+        _c("classes", "super", "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())"),
+        _c("classes", "super-init", "clase A:\n    funcion __init__(self, x):\n        self.x = x\nclass B(A):\n    def __init__(self):\n        super().__init__(7)\nimprimir(B().x)"),
+        _c("classes", "class-attr", "clase P:\n    v = 5\nimprimir(P.v)"),
+        _c("classes", "instance-shared", "clase P:\n    v = 5\nimprimir(P().v)"),
+        _c("classes", "multi-base", "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B:\n    def f(self):\n        devolver 'B'\nclass C(A, B):\n    pasar\nimprimir(C().f())"),
+        _c("classes", "type-of", "clase P:\n    pasar\nimprimir(tipo(P()))"),
+        _c("classes", "method-as-value", "clase P:\n    funcion f(self):\n        devolver 1\nimprimir(P.f(P()))"),
+        _c("classes", "attr-missing", "clase P:\n    pasar\nimprimir(P().zzz)"),
+        _c("classes", "constructor-args", "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)"),
+        _c("classes", "dunder-add", "clase P:\n    funcion __add__(self, o):\n        devolver 99\nimprimir(P() + 1)"),
+        _c("classes", "bool-dunder", "clase P:\n    funcion __bool__(self):\n        devolver Falso\nimprimir(P() o 'fallback')"),
     ]
 
 
 def area_generators() -> list[Case]:
     return [
-        _c("generators", "yield-simple", "def f():\n    producir 1\n    producir 2\npara x en f():\n    imprimir(x)"),
-        _c("generators", "yield-list", "def f():\n    para x en [1, 2]:\n        producir x\nimprimir(lista(f()))"),
-        _c("generators", "yield-infinite-take", "def f():\n    i = 0\n    mientras i < 3:\n        producir i\n        i = i + 1\nimprimir(lista(f()))"),
-        _c("generators", "yield-varargs", "def f(*args):\n    para a en args:\n        producir a * 2\nimprimir(lista(f(1, 2)))"),
-        _c("generators", "yield-sum", "def f():\n    producir 1\n    producir 2\nimprimir(sum(f()))"),
+        _c("generators", "yield-simple", "funcion f():\n    producir 1\n    producir 2\npara x en f():\n    imprimir(x)"),
+        _c("generators", "yield-list", "funcion f():\n    para x en [1, 2]:\n        producir x\nimprimir(lista(f()))"),
+        _c("generators", "yield-infinite-take", "funcion f():\n    i = 0\n    mientras i < 3:\n        producir i\n        i = i + 1\nimprimir(lista(f()))"),
+        _c("generators", "yield-varargs", "funcion f(*args):\n    para a en args:\n        producir a * 2\nimprimir(lista(f(1, 2)))"),
+        _c("generators", "yield-sum", "funcion f():\n    producir 1\n    producir 2\nimprimir(sum(f()))"),
         _c("generators", "gen-in-comprehension", "imprimir(sum(x para x en rango(4)))"),
-        _c("generators", "class-generator", "class G:\n    def __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))"),
-        _c("generators", "class-iter-self", "class G:\n    def __iter__(self):\n    devolver self\n    def __next__(self):\n        devolver 1\nimprimir(lista(G()))"),
+        _c("generators", "class-generator", "clase G:\n    funcion __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))"),
+        _c("generators", "class-iter-self", "clase G:\n    funcion __iter__(self):\n    devolver self\n    def __next__(self):\n        devolver 1\nimprimir(lista(G()))"),
     ]
 
 
@@ -589,7 +589,7 @@ def area_generics_extra() -> list[Case]:
         _c("controls_closed", "str-splitlines", "imprimir('a\\nb'.splitlines())"),
         _c("controls_closed", "str-expandtabs", "imprimir('a\\tb'.expandtabs())"),
         _c("controls_closed", "list-sort-inplace", "a = [2, 1]\na.sort()\nimprimir(a)"),
-        _c("controls_closed", "type-pattern-match", "def f(x):\n    segun x:\n        caso int:\n            devolver 1\nimprimir(f(1))"),
+        _c("controls_closed", "type-pattern-match", "funcion f(x):\n    segun x:\n        caso int:\n            devolver 1\nimprimir(f(1))"),
     ]
 
 
