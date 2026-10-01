@@ -219,7 +219,7 @@ class Win64NasmEmitter:
             "extern piton_str_index", "extern piton_str_slice", "extern piton_seq_slice",
             "extern piton_str_slice_step", "extern piton_seq_slice_step",
             "extern piton_str_iterator_new", "extern piton_str_iterator_next",
-            "extern piton_str_len", "extern piton_str_repeat",
+            "extern piton_str_len", "extern piton_str_repeat", "extern piton_str_cmp",
             "extern piton_seq_pop", "extern piton_seq_reverse", "extern piton_seq_insert",
             "extern piton_seq_count", "extern piton_seq_sort",
             "extern piton_dict_get_d", "extern piton_dict_get_1",
@@ -2531,20 +2531,64 @@ class Win64NasmEmitter:
             elif function_name in {"min", "max"}:
                 if len(values) != 2:
                     raise NativeBuildError("native min/max requires two arguments")
-                vtype = self.types.get(values[0])
-                fn = "piton_min_int" if function_name == "min" else "piton_max_int"
-                if vtype == "float":
+                # MINMAX_TYPES_V1: the winner keeps its kind. Both str ->
+                # lexicographic compare (raw pointers used to order by
+                # address AND print as ints); both float -> float; both
+                # int/bool -> int compare ("bool" only when both are bool,
+                # else the repr diverges); anything mixed (str/int,
+                # int/float, None, bigint, collections) fails closed
+                # (CPython raises TypeError, or the winner's type is not
+                # statically knowable for int/float mixes).
+                t0, t1 = self.types.get(values[0], "int"), self.types.get(values[1], "int")
+                if t0 == t1 == "str":
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.append("    call piton_str_cmp")
+                    self.lines.append("    test rax, rax")
+                    pick = "jl" if function_name == "min" else "jg"
+                    hit = self._internal_label("minmax_hit")
+                    done = self._internal_label("minmax_done")
+                    self.lines.append(f"    {pick} {hit}")
+                    self._load_operand(values[1], "rax")
+                    self.lines.append(f"    jmp {done}")
+                    self.lines.append(f"{hit}:")
+                    self._load_operand(values[0], "rax")
+                    self.lines.append(f"{done}:")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "str"
+                elif t0 == t1 == "float":
                     fn = "piton_min_float" if function_name == "min" else "piton_max_float"
                     self._load_operand(values[0], "rcx")
                     self._load_operand(values[1], "rdx")
                     self.lines.extend(["    movq xmm0, rcx", "    movq xmm1, rdx", f"    call {fn}"])
                     self.lines.append("    movq rax, xmm0")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
                     self.types[result] = "float"
-                else:
+                elif t0 == t1 == "bool":
+                    fn = "piton_min_int" if function_name == "min" else "piton_max_int"
                     self._load_operand(values[0], "rcx")
                     self._load_operand(values[1], "rdx")
                     self.lines.append(f"    call {fn}")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "bool"
+                elif t0 == t1 == "int":
+                    fn = "piton_min_int" if function_name == "min" else "piton_max_int"
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.append(f"    call {fn}")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
                     self.types[result] = "int"
+                elif {t0, t1} <= {"int", "bool"}:
+                    # mixed bool/int: the winner's type depends on runtime
+                    # values (min(True, 5) is True, max(True, 5) is 5), so
+                    # the result type is not statically knowable.
+                    raise NativeBuildError(
+                        f"native min/max requires two values of the same kind, not {t0}/{t1}"
+                    )
+                else:
+                    raise NativeBuildError(
+                        f"native min/max requires two values of the same kind, not {t0}/{t1}"
+                    )
             elif function_name == "sum":
                 if len(values) != 1:
                     raise NativeBuildError("native sum requires one collection")

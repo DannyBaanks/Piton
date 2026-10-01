@@ -317,6 +317,65 @@ class CollReturnV1(unittest.TestCase):
         _assert_matches(self, "funcion f(*a):\n    devolver a\nimprimir(f(1, 2))\n")
 
 
+class MinMaxTypesV1(unittest.TestCase):
+    """MINMAX_TYPES_V1: min/max winners keep their kind.
+
+    Both backends used to compare raw pointers for str args (ordering by
+    address AND printing the pointer as an int) and to type every
+    non-float result as int. Now: both str -> lexicographic compare with
+    str result; both float -> float; both int -> int; both bool -> bool;
+    anything mixed (str/int, int/float, bool/int, None, bigint,
+    collections) fails closed at build — CPython raises TypeError for
+    those, or the winner's type is not statically knowable.
+    """
+
+    def test_str_min_max(self):
+        _assert_matches(self, "imprimir(min('b', 'a'))\n")
+        _assert_matches(self, "imprimir(max('a', 'b'))\n")
+        _assert_matches(self, "imprimir(min('abc', 'abd'))\n")
+        _assert_matches(self, "imprimir(min('', 'a'))\n")
+
+    def test_int_min_max(self):
+        _assert_matches(self, "imprimir(min(3, 1))\nimprimir(max(3, 1))\n")
+
+    def test_float_min_max(self):
+        _assert_matches(self, "imprimir(max(1.5, 2.5))\n")
+
+    def test_bool_min_max(self):
+        _assert_matches(self, "imprimir(min(Verdadero, Falso))\n")
+        _assert_matches(self, "imprimir(max(Verdadero, Falso))\n")
+
+    def test_mixed_types_fail_closed(self):
+        # Each case runs in a subprocess: the compiler keeps global state
+        # (constant caches, type maps) that leaks between in-process
+        # compilations and makes order-dependent failures.
+        import subprocess
+        import sys
+        for source in (
+            "imprimir(min(1, 2.5))\n",
+            "imprimir(min(2.5, 1))\n",
+            "imprimir(min('a', 1))\n",
+            "imprimir(min(1, 'a'))\n",
+            "imprimir(min(Nada, 1))\n",
+            "imprimir(min(Verdadero, 5))\n",
+            "imprimir(min(5, Verdadero))\n",
+            "imprimir(max(Verdadero, 5))\n",
+        ):
+            result = subprocess.run(
+                [sys.executable, "-c",
+                 "from piton.native_differential import compare_native_to_cpython\n"
+                 "from piton.x86 import NativeBuildError\n"
+                 f"try:\n"
+                 f"    compare_native_to_cpython({source!r})\n"
+                 f"except NativeBuildError:\n"
+                 f"    pass\n"
+                 f"else:\n"
+                 f"    raise SystemExit(1)"],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, f"not closed: {source}")
+
+
 class BuiltinMarkerV1(unittest.TestCase):
     """BUILTIN_MARKER_V1: builtins outside their supported context fail closed.
 
