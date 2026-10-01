@@ -1723,6 +1723,120 @@ void *piton_seq_slice(void *raw, int64_t lo, int64_t hi) {
 
 int64_t piton_str_len(const char *s) { return (int64_t)strlen(s); }
 int64_t piton_str_cmp(const char *a, const char *b) { return (int64_t)strcmp(a, b); }
+/* FMT_SPEC_V1: apply a Python str.format() spec to a string value.
+   Grammar: [[fill]align][sign][#][0][width][,][.precision][type]
+   The value arrives already converted to the target type's string
+   (backend converts ints to hex/octal/binary before calling). Handles
+   fill/align/width/sign/zero-pad/thousands/precision; unknown specs
+   fail closed (return NULL) so the caller can reject at build. */
+char *piton_str_apply_spec(const char *s, const char *spec) {
+    if (!s || !spec || !*spec) return NULL;
+    const char *p = spec;
+    char fill = ' ';
+    int left = 0, center = 0;
+    /* [[fill]align] */
+    if (p[1] && (p[1] == '<' || p[1] == '>' || p[1] == '^' || p[1] == '=')) {
+        fill = p[0];
+        p += 2;
+    } else if (*p == '<' || *p == '>' || *p == '^' || *p == '=') {
+        p += 1;
+    }
+    if (p[-1] == '<') left = 1;
+    else if (p[-1] == '^') center = 1;
+    else if (p[-1] == '=') { /* sign-aware: treat as right */ }
+    /* [sign] */
+    int sign = 0; /* 0=neg-only, 1=always, 2=space */
+    if (*p == '+') { sign = 1; p += 1; }
+    else if (*p == '-') { p += 1; }
+    else if (*p == ' ') { sign = 2; p += 1; }
+    /* [#] */
+    if (*p == '#') p += 1;
+    /* [0] */
+    int zero = 0;
+    if (*p == '0') { zero = 1; p += 1; }
+    /* [width] */
+    long width = 0;
+    while (*p >= '0' && *p <= '9') { width = width * 10 + (*p - '0'); p += 1; }
+    /* [,] */
+    int comma = 0;
+    if (*p == ',') { comma = 1; p += 1; }
+    /* [.precision] */
+    long prec = -1;
+    if (*p == '.') {
+        p += 1;
+        prec = 0;
+        while (*p >= '0' && *p <= '9') { prec = prec * 10 + (*p - '0'); p += 1; }
+    }
+    /* [type] — must be empty here (backend converts before calling) */
+    if (*p) return NULL;
+    /* Build the core string (sign + thousands + precision for strings). */
+    int neg = 0;
+    const char *digits = s;
+    if (s[0] == '-') { neg = 1; digits = s + 1; }
+    size_t dl = strlen(digits);
+    /* thousands separator on the integer part */
+    char *core = NULL;
+    size_t core_len = 0;
+    if (comma) {
+        /* count digits before any '.' */
+        size_t int_len = 0;
+        while (int_len < dl && digits[int_len] != '.') int_len++;
+        size_t groups = (int_len + 2) / 3;
+        core_len = int_len + (groups - 1) + (dl - int_len);
+        core = (char *)malloc(core_len + 1);
+        size_t o = 0, gi = 0;
+        for (size_t i = 0; i < int_len; ++i) {
+            if (gi && (int_len - gi) % 3 == 0) core[o++] = ',';
+            core[o++] = digits[gi++];
+        }
+        for (size_t i = int_len; i < dl; ++i) core[o++] = digits[i];
+        core[o] = 0;
+    } else {
+        core_len = dl;
+        core = (char *)malloc(dl + 1);
+        memcpy(core, digits, dl);
+        core[dl] = 0;
+    }
+    /* precision: truncate strings by bytes */
+    if (prec >= 0 && core_len > (size_t)prec) {
+        core[prec] = 0;
+        core_len = (size_t)prec;
+    }
+    /* sign prefix */
+    const char *sign_str = "";
+    if (neg) sign_str = "-";
+    else if (sign == 1) sign_str = "+";
+    else if (sign == 2) sign_str = " ";
+    size_t sign_len = strlen(sign_str);
+    size_t total = sign_len + core_len;
+    long pad = (width > 0 && total < (size_t)width) ? (width - (long)total) : 0;
+    char *out = (char *)malloc(total + (size_t)pad + 1);
+    size_t o = 0;
+    if (left) {
+        memcpy(out + o, sign_str, sign_len); o += sign_len;
+        memcpy(out + o, core, core_len); o += core_len;
+        for (long i = 0; i < pad; ++i) out[o++] = fill;
+    } else if (center) {
+        long left_pad = pad / 2, right_pad = pad - left_pad;
+        for (long i = 0; i < left_pad; ++i) out[o++] = fill;
+        memcpy(out + o, sign_str, sign_len); o += sign_len;
+        memcpy(out + o, core, core_len); o += core_len;
+        for (long i = 0; i < right_pad; ++i) out[o++] = fill;
+    } else {
+        if (zero && !center) {
+            memcpy(out + o, sign_str, sign_len); o += sign_len;
+            for (long i = 0; i < pad; ++i) out[o++] = '0';
+        } else {
+            for (long i = 0; i < pad; ++i) out[o++] = fill;
+            memcpy(out + o, sign_str, sign_len); o += sign_len;
+        }
+        memcpy(out + o, core, core_len); o += core_len;
+    }
+    out[o] = 0;
+    free(core);
+    return out;
+}
+
 
 char *piton_str_repeat(const char *s, int64_t n) {
     if (n <= 0) { char *p = malloc(1); p[0] = 0; return p; }

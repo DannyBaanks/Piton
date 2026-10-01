@@ -191,6 +191,7 @@ class Win64NasmEmitter:
             "extern piton_pow_int", "extern piton_pow_float",
             "extern piton_ord", "extern piton_chr", "extern piton_bin", "extern piton_round_float",
             "extern piton_percent_chr", "extern piton_str_from_int_base", "extern piton_str_pad",
+            "extern piton_str_apply_spec",
             "extern piton_int_from_str", "extern piton_float_from_str",
             "extern piton_str_from_int", "extern piton_str_from_bool",
             "extern piton_str_from_none", "extern piton_str_from_float",
@@ -782,6 +783,10 @@ class Win64NasmEmitter:
             name = args[0]
             self.aliases[result] = name
             self.types[result] = self.types.get(name, "int")
+            # FMT_SPEC_V1: a load of a tracked string constant keeps the
+            # literal, so `'{:>4}'.format(x)` stays provably a template.
+            if self.types.get(name) == "str" and name in self.constants:
+                self.constants[result] = self.constants[name]
             if name in self.tuple_etypes:
                 self.tuple_etypes[result] = self.tuple_etypes[name]
             if name in self.dict_elems:
@@ -3529,6 +3534,143 @@ class Win64NasmEmitter:
         self._emit_exc_routing(handler_label, labels)
         self.types[result] = "str"
 
+    def _literal_str_operand(self, operand: Any) -> str | None:
+        """FMT_SPEC_V1: the operand's string value when it is PROVABLY a
+        literal (a temp recorded in constants, or a literal embedded in the
+        MIR). A plain variable name returns None even if it is in constants,
+        because a name is not a template; such operands keep the historical
+        runtime path ({} / {N} only)."""
+        if not isinstance(operand, str):
+            return None
+        if operand.startswith("%"):
+            value = self.constants.get(operand)
+            return value if isinstance(value, str) else None
+        if operand.isidentifier() or operand in self.function_names:
+            return None
+        return operand
+
+    @staticmethod
+    def _parse_format_template(template: str) -> tuple[str, list[tuple[int, str]]]:
+        """FMT_SPEC_V1: mirror of the Linux backend — parse a str.format()
+        template into a simplified template (placeholders become {}) plus
+        (index, spec) fields. Named placeholders fail closed; escaped braces
+        ({{ }}) are left intact for the format engine."""
+        out: list[str] = []
+        fields: list[tuple[int, str, str]] = []
+        i, n = 0, len(template)
+        auto_idx = 0
+        saw_manual = saw_auto = False
+        while i < n:
+            ch = template[i]
+            if ch == "{":
+                if i + 1 < n and template[i + 1] == "{":
+                    out.append("{{")
+                    i += 2
+                    continue
+                j = template.find("}", i + 1)
+                if j < 0:
+                    raise NativeBuildError("str.format(): unmatched '{'")
+                content = template[i + 1:j]
+                i = j + 1
+                if ":" in content:
+                    idx_str, spec = content.split(":", 1)
+                else:
+                    idx_str, spec = content, ""
+                explicit = idx_str != ""
+                if idx_str == "":
+                    idx = auto_idx
+                    auto_idx += 1
+                    token = "{}"
+                else:
+                    try:
+                        idx = int(idx_str)
+                    except ValueError:
+                        raise NativeBuildError(
+                            f"str.format(): named placeholders not supported: {{{content}}}"
+                        )
+                    if idx < 0:
+                        raise NativeBuildError(
+                            f"str.format(): negative field index {idx} is not supported"
+                        )
+                    token = "{" + idx_str + "}"
+                # CPython refuses to mix automatic and manual numbering
+                # ("cannot switch from automatic field numbering to manual
+                # field specification"); the {} engine would silently accept
+                # it, so reject it here.
+                if explicit and saw_auto:
+                    raise NativeBuildError(
+                        "str.format(): cannot switch from automatic to manual field numbering"
+                    )
+                if not explicit and saw_manual:
+                    raise NativeBuildError(
+                        "str.format(): cannot switch from manual to automatic field numbering"
+                    )
+                saw_manual = saw_manual or explicit
+                saw_auto = saw_auto or not explicit
+                fields.append((idx, spec, token))
+                out.append(token)
+            elif ch == "}":
+                if i + 1 < n and template[i + 1] == "}":
+                    out.append("}}")
+                    i += 2
+                    continue
+                raise NativeBuildError("str.format(): single '}' in format string")
+            else:
+                out.append(ch)
+                i += 1
+        return "".join(out), fields
+
+    @staticmethod
+    def _format_spec_type(spec: str) -> str:
+        """FMT_SPEC_V1: type char of a format spec ('' when absent)."""
+        if not spec:
+            return ""
+        t = spec[-1]
+        return t if t in "bcdeEfFgGnosxX%" else ""
+
+    @staticmethod
+    def _format_spec_presentation(spec: str) -> str:
+        """FMT_SPEC_V1: the spec without its type char."""
+        if not spec:
+            return ""
+        t = spec[-1]
+        if t in "bcdeEfFgGnosxX%":
+            return spec[:-1]
+        return spec
+
+    @staticmethod
+    def _validate_presentation_spec(pres: str) -> None:
+        """FMT_SPEC_V1: static validation of [[fill]align][sign][#][0]
+        [width][,][.prec]; unknown specs fail closed at build (the C helper
+        returns NULL and a NULL template argument crashed the engine)."""
+        if not pres:
+            return
+        i, n = 0, len(pres)
+        if n >= 2 and pres[1] in "<>^=":
+            i = 2
+        elif pres[0] in "<>^=":
+            i = 1
+        if i < n and pres[i] in "+- ":
+            i += 1
+        if i < n and pres[i] == "#":
+            i += 1
+        if i < n and pres[i] == "0":
+            i += 1
+        while i < n and pres[i].isdigit():
+            i += 1
+        if i < n and pres[i] == ",":
+            i += 1
+        if i < n and pres[i] == ".":
+            i += 1
+            if i >= n or not pres[i].isdigit():
+                raise NativeBuildError(
+                    f"str.format(): precision needs at least one digit in {pres!r}"
+                )
+            while i < n and pres[i].isdigit():
+                i += 1
+        if i != n:
+            raise NativeBuildError(f"str.format(): unsupported format spec {pres!r}")
+
     def _emit_exc_routing(self, handler_label, labels) -> None:
         """TRUEDIV_V1 / CONTAINS_V1: after a call to a raising helper. The
         helper's piton_raise already printed and exited when no handler
@@ -3669,26 +3811,136 @@ class Win64NasmEmitter:
             self.lines.append("    call piton_str_join")
             self.types[result] = "str"
         elif method == "format":
-            for value in call_args:
-                if self.types.get(value, "int") not in {"int", "float", "bool", "none", "str"}:
-                    raise NativeBuildError(f"native str.format() does not support {self.types.get(value)} arguments")
-            frame_size = ((len(call_args) * 8 + 32 + 15) // 16) * 16
-            self.lines.append(f"    sub rsp, {frame_size}")
-            for index, value in enumerate(call_args):
-                self._convert_format_operand(value)
-                self.lines.append(f"    mov qword [rsp+32+{index * 8}], rax")
-            # the operand conversion above clobbered rcx: reload the template
-            self._load_operand(owner, "rcx")
-            self.lines.extend([
-                f"    mov edx, {len(call_args)}",
-                "    lea r8, [rsp+32]",
-                "    call piton_str_format",
-                f"    add rsp, {frame_size}",
-            ])
-            self.types[result] = "str"
+            # FMT_SPEC_V1: mirror of the Linux backend. A format spec needs a
+            # provably literal template; a runtime template keeps the
+            # historical pointer path ({} and {N} only).
+            template = self._literal_str_operand(owner)
+            if template is None:
+                self._emit_format_runtime(result, owner, call_args)
+            else:
+                self._emit_format_specs(result, owner, template, call_args)
         else:
             raise NativeBuildError(f"native str.{method}() is not supported")
         self.lines.append(f"    mov {self._address(result)}, rax")
+
+    def _emit_format_runtime(self, result: Any, owner: Any, call_args: list[Any]) -> None:
+        """FMT_SPEC_V1: historical str.format() path — the template pointer
+        is passed straight to piton_str_format, which handles {} and {N}.
+        Used when the template is not provably a literal."""
+        for value in call_args:
+            if self.types.get(value, "int") not in {"int", "float", "bool", "none", "str"}:
+                raise NativeBuildError(
+                    f"native str.format() does not support {self.types.get(value)} arguments"
+                )
+        frame_size = ((len(call_args) * 8 + 32 + 15) // 16) * 16
+        self.lines.append(f"    sub rsp, {frame_size}")
+        for index, value in enumerate(call_args):
+            self._convert_format_operand(value)
+            self.lines.append(f"    mov qword [rsp+32+{index * 8}], rax")
+        # the operand conversions clobbered rcx: reload the template
+        self._load_operand(owner, "rcx")
+        self.lines.extend([
+            f"    mov edx, {len(call_args)}",
+            "    lea r8, [rsp+32]",
+            "    call piton_str_format",
+            f"    add rsp, {frame_size}",
+        ])
+        self.types[result] = "str"
+
+    def _emit_format_specs(
+        self, result: Any, owner: Any, template: str, call_args: list[Any],
+    ) -> None:
+        """FMT_SPEC_V1: literal-template path. Each field converts to its
+        type's string (d/x/X/o/b) and then applies the presentation part
+        ([[fill]align][sign][#][0][width][,][.prec]) via
+        piton_str_apply_spec. Float presentations and unknown specs fail
+        closed at build."""
+        simplified, fields = self._parse_format_template(template)
+        # a field may be referenced twice ({0} {0}), so the count is not an
+        # equality: automatic numbering may not exceed the arguments, and
+        # explicit indices are bounds-checked below.
+        if len(fields) > len(call_args) and any(f[2] == "{}" for f in fields):
+            raise NativeBuildError(
+                f"native str.format(): {len(fields)} placeholder(s) but {len(call_args)} argument(s)"
+            )
+        if not call_args:
+            # no arguments: still run the template through the engine — it
+            # is what unescapes {{ }} into literal braces (returning the
+            # raw operand printed '{{}}' for 'literal {}'.format()).
+            # n=0 so the array is never indexed; the slot is a dummy.
+            self.lines.append("    sub rsp, 48")
+            self.lines.append('    lea rax, [fmt_nl]')
+            self.lines.append("    mov qword [rsp+32], rax")
+            string_label0 = self._string(simplified)
+            self.lines.append(f"    lea rcx, [{string_label0}]")
+            self.lines.extend([
+                "    mov edx, 0",
+                "    lea r8, [rsp+32]",
+                "    call piton_str_format",
+                "    add rsp, 48",
+            ])
+            self.types[result] = "str"
+            return
+        # the stack array is indexed by CALL position (the simplified
+        # template keeps explicit {N} tokens), so each call index is
+        # converted once with the spec of the field that references it.
+        by_index: dict[int, tuple[Any, str]] = {}
+        for arg_idx, spec, _token in fields:
+            if arg_idx in by_index:
+                continue
+            if arg_idx < 0 or arg_idx >= len(call_args):
+                raise NativeBuildError(
+                    f"native str.format(): field index {arg_idx} out of range "
+                    f"for {len(call_args)} argument(s)"
+                )
+            by_index[arg_idx] = (call_args[arg_idx], spec)
+        frame_size = ((len(call_args) * 8 + 32 + 15) // 16) * 16
+        self.lines.append(f"    sub rsp, {frame_size}")
+        for index in range(len(call_args)):
+            value, spec = by_index[index]
+            type_char = self._format_spec_type(spec)
+            pres = self._format_spec_presentation(spec)
+            self._validate_presentation_spec(pres)
+            arg_type = self.types.get(value, "int")
+            if type_char in {"x", "X", "o", "b"}:
+                if arg_type not in {"int", "bool"}:
+                    raise NativeBuildError(
+                        f"native str.format() %{type_char} requires an int, not {arg_type}"
+                    )
+                base = {"x": 16, "X": 16, "o": 8, "b": 2}[type_char]
+                self._load_operand(value, "rcx")
+                self.lines.append(f"    mov rdx, {base}")
+                self.lines.append(f"    mov r8, {1 if type_char == 'X' else 0}")
+                self.lines.append("    call piton_str_from_int_base")
+            elif type_char in {"f", "e", "E", "g", "G", "F", "n"}:
+                # FLOAT_PRESENT_V1: needs correctly-rounded decimal
+                # conversion; repr diverged from CPython, so fail closed.
+                raise NativeBuildError(
+                    f"native str.format() %{type_char} is not supported yet "
+                    "(needs rounded decimal conversion)"
+                )
+            elif type_char == "%":
+                raise NativeBuildError(
+                    "native str.format() %% is not supported yet "
+                    "(needs rounded percentage conversion)"
+                )
+            else:
+                self._convert_format_operand(value)
+            if pres:
+                pres_label = self._string(pres)
+                self.lines.append("    mov rcx, rax")
+                self.lines.append(f"    lea rdx, [{pres_label}]")
+                self.lines.append("    call piton_str_apply_spec")
+            self.lines.append(f"    mov qword [rsp+32+{index * 8}], rax")
+        string_label = self._string(simplified)
+        self.lines.append(f"    lea rcx, [{string_label}]")
+        self.lines.extend([
+            f"    mov edx, {len(call_args)}",
+            "    lea r8, [rsp+32]",
+            "    call piton_str_format",
+            f"    add rsp, {frame_size}",
+        ])
+        self.types[result] = "str"
 
     def _convert_format_operand(self, value: Any) -> None:
         """Load one str.format() argument as a C string pointer into rax,

@@ -185,15 +185,18 @@ class FormatV1(unittest.TestCase):
     def test_format_no_args(self):
         _assert_matches(self, "imprimir('plain'.format())\n")
 
-    def test_format_bad_field_fails_at_runtime(self):
-        result = compare_native_to_cpython("imprimir('{x}'.format(1))\n")
-        self.assertEqual(result.native.returncode, 1)
-        self.assertIn(b"ValueError", result.native.stderr)
+    def test_format_bad_field_fails_at_build(self):
+        # FMT_SPEC_V1: named placeholders now reject at BUILD (the template
+        # is always a literal, so every rejection is static — an upgrade
+        # from the old runtime ValueError).
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("imprimir('{x}'.format(1))\n")
 
-    def test_format_bad_index_fails_at_runtime(self):
-        result = compare_native_to_cpython("imprimir('{5}'.format(1))\n")
-        self.assertEqual(result.native.returncode, 1)
-        self.assertIn(b"IndexError", result.native.stderr)
+    def test_format_bad_index_fails_at_build(self):
+        # FMT_SPEC_V1: out-of-range field indices reject at BUILD (an
+        # upgrade from the old runtime IndexError).
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("imprimir('{5}'.format(1))\n")
 
     def test_unknown_method_fails_closed(self):
         with pytest.raises(NativeBuildError):
@@ -203,6 +206,105 @@ class FormatV1(unittest.TestCase):
 class StrMethodsChainedV1(unittest.TestCase):
     def test_chained_str_calls(self):
         _assert_matches(self, "imprimir('  a,b '.strip().upper().replace(',', ';'))\n")
+
+
+class FormatSpecV1(unittest.TestCase):
+    """FMT_SPEC_V1: str.format() format specs on literal templates.
+
+    `'{:>5}'.format('a')` used to die with "ValueError: single '{' in
+    format string" — the engine only knew {} and {N}. Now the backends
+    parse the template statically: each field converts to its type's
+    string (d/x/X/o/b) and applies the presentation part
+    ([[fill]align][sign][#][0][width][,][.prec]) through
+    piton_str_apply_spec. Explicit field indices reorder correctly
+    ({1} {0}) and a field may repeat ({0} {0}). Float presentations
+    (f/e/g/%) fail closed: repr output diverged from CPython ({:.2f}
+    printed "3.") and {:.2g} even crashed (rc=-11); unknown specs fail
+    closed at build because a NULL template argument crashed the engine.
+    """
+
+    def test_align_and_fill(self):
+        _assert_matches(self, "imprimir('{:>5}'.format('a'))\n")
+        _assert_matches(self, "imprimir('{:<5}'.format('a'))\n")
+        _assert_matches(self, "imprimir('{:^5}'.format('a'))\n")
+        _assert_matches(self, "imprimir('{:_>5}'.format('a'))\n")
+        _assert_matches(self, "imprimir('{:*^5}'.format('a'))\n")
+        _assert_matches(self, "imprimir('{:->8}'.format('a'))\n")
+
+    def test_numeric_pads(self):
+        _assert_matches(self, "imprimir('{:05d}'.format(42))\n")
+        _assert_matches(self, "imprimir('{:+d}'.format(5))\n")
+        _assert_matches(self, "imprimir('{: d}'.format(5))\n")
+
+    def test_integer_types(self):
+        _assert_matches(self, "imprimir('{:x}'.format(255))\n")
+        _assert_matches(self, "imprimir('{:X}'.format(255))\n")
+        _assert_matches(self, "imprimir('{:o}'.format(8))\n")
+        _assert_matches(self, "imprimir('{:b}'.format(5))\n")
+        _assert_matches(self, "imprimir('{:x}'.format(-255))\n")
+
+    def test_thousands_separator(self):
+        _assert_matches(self, "imprimir('{:,}'.format(1234567))\n")
+        _assert_matches(self, "imprimir('{:,}'.format(-1234567))\n")
+        _assert_matches(self, "imprimir('{:,}'.format(0))\n")
+        _assert_matches(self, "imprimir('{:,}'.format(999))\n")
+        _assert_matches(self, "imprimir('{:,}'.format(1234.5))\n")
+
+    def test_string_truncation_and_width(self):
+        _assert_matches(self, "imprimir('{:5}'.format('abcdef'))\n")
+        _assert_matches(self, "imprimir('{:.3}'.format('abcdef'))\n")
+
+    def test_explicit_indices(self):
+        _assert_matches(self, "imprimir('{1} {0}'.format('a', 'b'))\n")
+        _assert_matches(self, "imprimir('{1:>5}|{0}'.format('a', 'b'))\n")
+        _assert_matches(self, "imprimir('{0} {0}'.format('a'))\n")
+
+    def test_escaped_braces(self):
+        _assert_matches(self, "imprimir('{{}}'.format())\n")
+        _assert_matches(self, "imprimir('{{}} {}'.format(1))\n")
+
+    def test_custom_fill_percent(self):
+        # % is a legal FILL character when followed by an align op
+        _assert_matches(self, "imprimir('{:%>5}'.format(1))\n")
+
+    def test_runtime_template_keeps_old_path(self):
+        # a non-literal template cannot carry specs (the historical runtime
+        # path handles {} / {N}; a spec inside it errors loudly there)
+        _assert_matches(self, "s = 'plain'\nimprimir(s.format(1))\n")
+
+    def test_float_presentations_fail_closed(self):
+        for source in (
+            "imprimir('{:.2f}'.format(3.14))\n",
+            "imprimir('{:.1%}'.format(0.5))\n",
+            "imprimir('{:.2e}'.format(1234.5))\n",
+            "imprimir('{:.2g}'.format(0.5))\n",
+        ):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail(f"not closed: {source}")
+
+    def test_unknown_spec_fails_closed(self):
+        for source in (
+            "imprimir('{:q}'.format(1))\n",
+            "imprimir('{:.}'.format('a'))\n",
+        ):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail(f"not closed: {source}")
+
+    def test_mixing_numbering_fails_closed(self):
+        try:
+            compare_native_to_cpython("imprimir('{} {0}'.format(1, 2))\n")
+        except NativeBuildError:
+            pass
+        else:
+            self.fail("not closed: mixing automatic and manual numbering")
 
 
 if __name__ == "__main__":
