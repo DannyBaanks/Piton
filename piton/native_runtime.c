@@ -1507,6 +1507,8 @@ double piton_float_mod(double x, double y) {
 
 double piton_float_pow_v1(double x, double y) {
     if (y == 0.0) return 1.0;
+    int neg = (x < 0.0) && (y == -1.0 || y == 1.0);
+    double ax = neg ? -x : x;
     if (y == 1.0) return x;
     if (y == 2.0 || y == -2.0) {
         double sq = x * x;
@@ -1518,8 +1520,9 @@ double piton_float_pow_v1(double x, double y) {
         return r;
     }
     if (y == -1.0) {
-        if (x == 0.0) { piton_raise("ZeroDivisionError", "0.0 cannot be raised to a negative power"); return 0.0; }
-        double r = 1.0 / x;
+        if (ax == 0.0) { piton_raise("ZeroDivisionError", "0.0 cannot be raised to a negative power"); return 0.0; }
+        double r = 1.0 / ax;
+        if (neg) r = -r;
         if (isinf(r) && isfinite(x)) { piton_raise("OverflowError", "numerical result out of range"); return 0.0; }
         return r;
     }

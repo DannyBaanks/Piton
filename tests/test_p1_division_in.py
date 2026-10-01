@@ -233,6 +233,15 @@ class FloatPowV1(unittest.TestCase):
         self.assertEqual(result.native.returncode, 1)
         self.assertIn(b"ValueError", result.native.stderr)
 
+    def test_negative_base_odd_exponents(self):
+        _assert_matches(self, "imprimir((-2.0) ** -1.0, (-2.0) ** 1.0)\n")
+
+    def test_negative_base_even_exponents(self):
+        _assert_matches(self, "imprimir((-2.0) ** -2.0, (-2.0) ** 2.0)\n")
+
+    def test_negative_base_runtime_exponent(self):
+        _assert_matches(self, "x = -2.0\ne = -1.0\nimprimir(x ** e)\n")
+
 
 if __name__ == "__main__":
     unittest.main()
