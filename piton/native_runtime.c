@@ -1458,6 +1458,28 @@ void piton_collection_print(void *raw) {
     putchar('\n');
 }
 
+/* COLL_REPEAT_V1: list * n / tuple * n - a new collection with n shallow
+   copies (tagged items refcounted like seq_concat). Non-positive n -> []. */
+void *piton_seq_repeat_n(void *raw, int64_t n) {
+    PitonCollection *s = raw;
+    if (!s) return NULL;
+    if (n < 0) n = 0;
+    int64_t total = s->length * n;
+    PitonCollection *r = piton_collection_new(s->kind, total);
+    for (int64_t i = 0; i < n; ++i) {
+        for (int64_t j = 0; j < s->length; ++j) {
+            int64_t v = s->items[j];
+            if (pv_tag(v) == PITON_TAG_OBJECT) {
+                PitonHeader *h = (PitonHeader *)pv_payload(v);
+                if (h) h->refcount++;
+            }
+            r->items[i * s->length + j] = v;
+        }
+    }
+    r->length = total;
+    return r;
+}
+
 void *piton_seq_concat(void *a_raw, void *b_raw) {
     PitonCollection *a = a_raw, *b = b_raw;
     if (!a || !b || a->kind != b->kind) {

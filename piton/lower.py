@@ -101,6 +101,19 @@ class Lowerer:
             type_params=type_params,
         )
 
+    def _lower_assertstmt(self, cst: CSTNode) -> HIRNode:
+        """ASSERT_STMT_V1: `afirmar cond` / `afirmar cond, msg` lowers to
+        `si no cond: lanzar AssertionError(msg)` — reusing the IF + RAISE
+        machinery means the exception routes to intentar/excepto handlers
+        for free. A message expression becomes the raise payload (the same
+        str-payload convention as `lanzar E(msg)`)."""
+        test = self.lower(cst.test)
+        negated = UnOp(kind=HIRKind.UNOP, op="no", operand=test)
+        exc_args: List[HIRNode] = [self.lower(cst.msg)] if cst.msg is not None else []
+        exc_call = Call(kind=HIRKind.CALL, func=Load(name="AssertionError"), args=exc_args)
+        raise_node = Raise(kind=HIRKind.RAISE, exc=exc_call)
+        return If(kind=HIRKind.IF, test=negated, body=[raise_node], orelse=[])
+
     def _lower_lambda(self, cst: CSTLambda):
         args = self._lower_arguments(cst.args)
         body = self.lower(cst.body)

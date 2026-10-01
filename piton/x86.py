@@ -213,6 +213,7 @@ class Win64NasmEmitter:
             "extern piton_bigint_print", "extern piton_bigint_print_raw",
             "extern piton_bigint_pow_small",
             "extern piton_seq_concat",
+            "extern piton_seq_repeat_n",
             "extern piton_int_truediv",
             "extern piton_float_div", "extern piton_float_floor_div", "extern piton_float_mod",
             "extern piton_float_pow_v1",
@@ -1019,6 +1020,23 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_seq_concat")
                     self.lines.append(f"    mov {self._address(result)}, rax")
                     self.types[result] = left_type
+                    return
+                if operator == "*" and {left_type, right_type} == {"list", "int"}:
+                    # COLL_REPEAT_V1: list * n (either order).
+                    seq_side, times = (left, right) if left_type == "list" else (right, left)
+                    self._load_operand(seq_side, "rcx")
+                    self._load_operand(times, "rdx")
+                    self.lines.append("    call piton_seq_repeat_n")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "list"
+                    return
+                if operator == "*" and {left_type, right_type} == {"tuple", "int"}:
+                    seq_side, times = (left, right) if left_type == "tuple" else (right, left)
+                    self._load_operand(seq_side, "rcx")
+                    self._load_operand(times, "rdx")
+                    self.lines.append("    call piton_seq_repeat_n")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "tuple"
                     return
                 raise NativeBuildError(
                     f"native collection binary operator not supported: {operator} on {left_type}/{right_type}"

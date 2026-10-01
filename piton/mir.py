@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from piton.hir import BoolOp, ExceptHandler, HIRKind, HIRNode, Keyword, With
 
 
-_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
+_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError"}
 
 
 def _os_name_const() -> str:

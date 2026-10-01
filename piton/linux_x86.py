@@ -239,6 +239,7 @@ static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(
 static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
 static void piton_seq_put(PitonSeq*s,long i,PitonSlot v){if(i>=0&&i<s->length)s->items[i]=v;}
 static long piton_str_repeat(const char*s,long n){if(n<=0){char*p=piton_alloc(1);p[0]=0;return(long)p;}usize sl=piton_strlen(s);char*p=piton_alloc(sl*(usize)n+1);for(long i=0;i<n;++i)piton_memcpy(p+i*sl,s,sl);p[sl*(usize)n]=0;return(long)p;}
+static PitonSeq* piton_seq_repeat_n(PitonSeq*s,long n){if(!s)return 0;if(n<0)n=0;long total=s->length*n;PitonSeq*r=piton_seq_new((int)s->kind,total);for(long i=0;i<n;++i)for(long j=0;j<s->length;++j)r->items[i*s->length+j]=s->items[j];return r;}
 static long piton_seq_concat(PitonSeq*a,PitonSeq*b){if(!a||!b||a->kind!=b->kind||((a->kind!=PK_LIST)&&(a->kind!=PK_TUPLE))){piton_write(2,"TypeError: cannot concatenate\n",30);piton_exit(1);}PitonSeq*s=piton_seq_new((int)a->kind,a->length+b->length);for(long i=0;i<a->length;++i)s->items[i]=a->items[i];for(long i=0;i<b->length;++i)s->items[a->length+i]=b->items[i];return(long)s;}
 static long piton_str_contains(const char*h,const char*n){usize hl=piton_strlen(h),nl=piton_strlen(n);if(nl==0)return 1;if(nl>hl)return 0;for(usize i=0;i+nl<=hl;++i){usize j=0;while(j<nl&&h[i+j]==n[j])++j;if(j==nl)return 1;}return 0;}
 static long piton_seq_contains(PitonSeq*s,PitonSlot v){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return 1;return 0;}
@@ -2268,6 +2269,18 @@ class LinuxCEmitter:
                 if operator == "+" and left_type == right_type and left_type in {"list", "tuple"}:
                     out.append(f"    {_name(result)}=piton_seq_concat((PitonSeq*){self._value(left)},(PitonSeq*){self._value(right)});")
                     types[result] = left_type
+                    return out
+                if operator == "*" and {left_type, right_type} == {"list", "int"}:
+                    # COLL_REPEAT_V1: list * n (either order). CPython
+                    # yields [] for non-positive counts.
+                    seq_side, times = (left, right) if left_type == "list" else (right, left)
+                    out.append(f"    {_name(result)}=(long)piton_seq_repeat_n((PitonSeq*){self._value(seq_side)},{self._value(times)});")
+                    types[result] = "list"
+                    return out
+                if operator == "*" and {left_type, right_type} == {"tuple", "int"}:
+                    seq_side, times = (left, right) if left_type == "tuple" else (right, left)
+                    out.append(f"    {_name(result)}=(long)piton_seq_repeat_n((PitonSeq*){self._value(seq_side)},{self._value(times)});")
+                    types[result] = "tuple"
                     return out
                 raise NativeBuildError(f"Linux collection binary operator not supported: {operator} on {left_type}/{right_type}")
             if "none" in {left_type, right_type}:
