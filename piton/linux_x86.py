@@ -251,8 +251,11 @@ static long piton_str_find(const char*s,const char*n){usize hl=piton_strlen(s),n
 static long piton_str_startswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[i]!=p[i])return 0;return 1;}
 static long piton_str_endswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[hl-nl+i]!=p[i])return 0;return 1;}
 static long piton_str_replace(const char*s,const char*a,const char*b){usize sl=piton_strlen(s),al=piton_strlen(a),bl=piton_strlen(b);usize count=0;if(al==0){count=sl+1;}else{for(usize i=0;i+al<=sl;){usize k=0;while(k<al&&s[i+k]==a[k])++k;if(k==al){++count;i+=al;}else++i;}}usize total=sl+count*bl-(al==0?0:count*al);char*p=piton_alloc(total+1);usize o=0;if(al==0){for(usize i=0;i<sl;++i){piton_memcpy(p+o,b,bl);o+=bl;p[o++]=s[i];}piton_memcpy(p+o,b,bl);o+=bl;}else{for(usize i=0;i<sl;){usize k=0;while(k<al&&i+k<sl&&s[i+k]==a[k])++k;if(k==al){piton_memcpy(p+o,b,bl);o+=bl;i+=al;}else p[o++]=s[i++];}}p[o]=0;return(long)p;}
+static long piton_str_from_int_base(long v,int base,int upper){char*p=piton_alloc(70);usize o=0;unsigned long u;if(v<0){p[o++]='-';u=(unsigned long)(-(v+1))+1;}else u=(unsigned long)v;const char*digits=upper?"0123456789ABCDEF":"0123456789abcdef";char tmp[64];long n=0;do{tmp[n++]=digits[u%(unsigned)base];u/=(unsigned)base;}while(u);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
+static usize piton_utf8_chars(const char*s,usize maxbytes){usize i=0;long cc=0;while(s[i]&&(usize)cc<maxbytes){unsigned char c=(unsigned char)s[i];usize adv=1;if(c>=0x80){if((c&0xE0)==0xC0)adv=2;else if((c&0xF0)==0xE0)adv=3;else if((c&0xF8)==0xF0)adv=4;}i+=adv;++cc;}return i;}
+static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum){int neg=0;const char*digits=s;if(isnum&&s[0]=='-'){neg=1;digits=s+1;}usize dl=piton_strlen(digits);const char*core=digits;usize cl=dl;if(prec>=0){if(isnum){usize need=(usize)prec;if(dl==1&&digits[0]=='0'&&prec==0)need=0;if(dl<need){char*pad=piton_alloc(need+1);for(usize i=0;i<need-dl;++i)pad[i]='0';piton_memcpy(pad+need-dl,digits,dl);pad[need]=0;core=pad;cl=need;}}else{usize cut=piton_utf8_chars(s,(usize)prec);char*tr=piton_alloc(cut+1);piton_memcpy(tr,s,cut);tr[cut]=0;core=tr;cl=cut;neg=0;}}usize totallen=cl+(neg?1:0);long pad=(width>0&&totallen<(usize)width)?(width-(long)totallen):0;int left=(flags&1)!=0;int zero=(flags&2)&&!left&&isnum&&prec<0;char*out=piton_alloc(totallen+(usize)pad+1);usize o=0;if(!left){if(zero){if(neg)out[o++]='-';for(long i=0;i<pad;++i)out[o++]='0';}else{for(long i=0;i<pad;++i)out[o++]=' ';if(neg)out[o++]='-';}}else if(neg){out[o++]='-';}piton_memcpy(out+o,core,cl);o+=cl;if(left){for(long i=0;i<pad;++i)out[o++]=' ';}out[o]=0;return(long)out;}
 static long piton_str_quote(const char*s){usize n=piton_strlen(s);int q=0;for(usize i=0;i<n;++i)if(s[i]=='\'')q=1;char qc=q?'"':'\'';usize extra=0;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'||c=='\n'||c=='\t'||c=='\r'||(unsigned char)c==qc)extra+=1;}char*p=piton_alloc(n+extra+3);usize o=0;p[o++]=qc;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'){p[o++]='\\';p[o++]='\\';}else if(c=='\n'){p[o++]='\\';p[o++]='n';}else if(c=='\t'){p[o++]='\\';p[o++]='t';}else if(c=='\r'){p[o++]='\\';p[o++]='r';}else if(c==qc){p[o++]='\\';p[o++]=c;}else p[o++]=(char)c;}p[o++]=qc;p[o]=0;return(long)p;}
-static long piton_str_single_char(const char*s){if(piton_strlen(s)!=1){piton_write(2,"TypeError: %c requires int or 1-character string\n",49);piton_exit(1);}return(long)s;}
+static long piton_str_single_char(const char*s){if(piton_strlen(s)!=1){piton_raise_set("TypeError","%c requires int or char");return 0;}return(long)s;}
 static long piton_str_format(const char*t,long n,const char**av){usize total=0;int auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){total+=1;i+=2;continue;}usize j=i+1;int idx=-2;int has=0;if(t[j]=='}'){idx=auto_idx++;j+=1;has=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;has=1;}if(has&&t[j]=='}'){j+=1;}else{has=0;}}if(!has){piton_write(2,"ValueError: single '{' in format string\n",40);piton_exit(1);}if(idx<0||idx>=n){piton_write(2,"IndexError: replacement index out of range\n",43);piton_exit(1);}total+=piton_strlen(av[idx]);i=j;}else if(t[i]=='}'){if(t[i+1]=='}'){total+=1;i+=2;}else{piton_write(2,"ValueError: single '}' in format string\n",40);piton_exit(1);}}else{total+=1;i+=1;}}char*p=piton_alloc(total+1);usize o=0;auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){p[o++]='{';i+=2;continue;}usize j=i+1;int idx=-2;if(t[j]=='}'){idx=auto_idx++;j+=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;}j+=1;}usize el=piton_strlen(av[idx]);piton_memcpy(p+o,av[idx],el);o+=el;i=j;}else if(t[i]=='}'){p[o++]='}';i+=2;}else{p[o++]=t[i++];}}p[o]=0;return(long)p;}
 
 static long piton_str_split_ws(const char*s){PitonSeq*r=piton_seq_new(PK_LIST,0);usize n=piton_strlen(s),i=0;while(i<n){while(i<n&&piton_ws((unsigned char)s[i]))++i;if(i>=n)break;usize j=i;while(j<n&&!piton_ws((unsigned char)s[j]))++j;usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});i=j;}return(long)r;}
@@ -378,6 +381,8 @@ static long piton_any_seq(PitonSeq*s){if(!s)return 0;for(long i=0;i<s->length;++
 static long piton_pow_int(long b,long e){if(e<0){piton_raise_set("TypeError","pow() negative exponent unsupported (M14 v1)");return 0;}long acc=1;while(e>0){if(e&1)acc*=b;b*=b;e>>=1;}return acc;}
 static long piton_pow_float(long bb,long e){double b=piton_bits_double(bb);long neg=e<0;if(neg)e=-e;double acc=1.0;while(e>0){if(e&1)acc*=b;b*=b;e>>=1;}if(neg)acc=1.0/acc;return piton_double_bits(acc);}
 static long piton_ord(const char*s){if(!s||!s[0]){piton_raise_set("TypeError","ord() expected a character, but string of length 0 found");return 0;}const unsigned char*u=(const unsigned char*)s;long cp;long n;if(u[0]<0x80){cp=u[0];n=1;}else if((u[0]&0xE0)==0xC0){cp=u[0]&0x1F;n=2;}else if((u[0]&0xF0)==0xE0){cp=u[0]&0x0F;n=3;}else if((u[0]&0xF8)==0xF0){cp=u[0]&0x07;n=4;}else{piton_raise_set("TypeError","ord() received invalid UTF-8");return 0;}for(long i=1;i<n;++i)cp=(cp<<6)|(u[i]&0x3F);if(s[n]){piton_raise_set("TypeError","ord() expected a character, but string of length >1 found");return 0;}return cp;}
+static long piton_chr(long cp);
+static long piton_percent_chr(long cp){if(cp<0||cp>0x10FFFF){piton_raise_set("OverflowError","%c arg not in range(0x110000)");return 0;}return piton_chr(cp);}
 static long piton_chr(long cp){if(cp<0||cp>0x10FFFF){piton_raise_set("ValueError","chr() arg not in range(0x110000)");return 0;}char*p=piton_alloc(5);if(cp<0x80){p[0]=(char)cp;p[1]=0;}else if(cp<0x800){p[0]=(char)(0xC0|(cp>>6));p[1]=(char)(0x80|(cp&0x3F));p[2]=0;}else if(cp<0x10000){p[0]=(char)(0xE0|(cp>>12));p[1]=(char)(0x80|((cp>>6)&0x3F));p[2]=(char)(0x80|(cp&0x3F));p[3]=0;}else{p[0]=(char)(0xF0|(cp>>18));p[1]=(char)(0x80|((cp>>12)&0x3F));p[2]=(char)(0x80|((cp>>6)&0x3F));p[3]=(char)(0x80|(cp&0x3F));p[4]=0;}return(long)p;}
 static long piton_bin(long v){char*p=piton_alloc(70);usize o=0;unsigned long m;if(v<0){p[o++]='-';m=(unsigned long)(-(v+1))+1;}else m=(unsigned long)v;p[o++]='0';p[o++]='b';char tmp[64];long n=0;do{tmp[n++]=(char)('0'+(m&1));m>>=1;}while(m);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static long piton_round_float(long bits){double x=piton_bits_double(bits);double ax=x<0?-x:x;if(ax>=9.0e18){piton_raise_set("OverflowError","round() float too large to convert to int");return 0;}long t=(long)ax;double frac=ax-(double)t;long r;if(frac>0.5)r=t+1;else if(frac<0.5)r=t;else r=(t&1)?t+1:t;return x<0?-r:r;}
@@ -483,6 +488,7 @@ class LinuxCEmitter:
         self._shared_globals: set[str] = set()
         self._fn_consts: dict[str, Any] = {}
         self._tuple_elems: dict[str, tuple] = {}
+        self._dict_elems: dict[str, dict[str, tuple[str, str]]] = {}
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
         self._gen_counter = 0
@@ -585,6 +591,7 @@ class LinuxCEmitter:
         types: dict[str, str] = {}
         self._fn_consts = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
+        self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         if function.vararg:
             types[function.vararg] = "tuple"
         if function.kwarg:
@@ -637,6 +644,7 @@ class LinuxCEmitter:
         types: dict[str, str] = {}
         self._fn_consts = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
+        self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
             lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
@@ -692,6 +700,7 @@ class LinuxCEmitter:
         types: dict[str, str] = {}
         self._fn_consts = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
+        self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
             lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
@@ -756,19 +765,23 @@ class LinuxCEmitter:
         return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
 
     @staticmethod
-    def _parse_percent_template(template: str) -> tuple[str, list[str]]:
+    def _parse_percent_template(template: str) -> tuple[str, list[tuple]]:
         """PCT_FORMAT_V1: translate a %-format template into a {}-template
-        for the piton_str_format engine, returning (template, specs) with one
-        conversion char per field ('s', 'd', 'r' or 'c').
+        for the piton_str_format engine, returning (template, fields) with
+        one tuple per conversion: (name, conv, flags, width, prec).
 
-        V1 subset: %s %d %i %r %c %%. Flags, width, precision, length
-        modifiers, mappings and anything else fail closed at BUILD time —
-        the template is always a literal here, so every rejection is static.
-        Literal braces pass through escaped (CPython %-formatting leaves
-        braces alone; the {} engine would otherwise eat them).
+        name is None for positional fields, the mapping key for %(name)
+        fields. conv is one of s d r c x X o (i/u normalized to d).
+        flags is a bitmask (1 = '-', 2 = '0'), width/prec are ints or -1.
+        Only static widths/precisions are accepted (* needs runtime values).
+        '+', ' ', '#' flags, length modifiers and float conversions fail
+        closed at BUILD time — the template is always a literal here, so
+        every rejection is static. Literal braces pass through escaped
+        (CPython %-formatting leaves braces alone; the {} engine would
+        otherwise eat them).
         """
         out: list[str] = []
-        specs: list[str] = []
+        fields: list[tuple] = []
         i, n = 0, len(template)
         while i < n:
             ch = template[i]
@@ -776,22 +789,66 @@ class LinuxCEmitter:
                 i += 1
                 if i >= n:
                     raise NativeBuildError("str % formatting: trailing %")
+                name = None
+                if template[i] == "(":
+                    j = template.find(")", i + 1)
+                    if j < 0:
+                        raise NativeBuildError("str % mapping: missing closing )")
+                    name = template[i + 1:j]
+                    i = j + 1
+                    if i >= n:
+                        raise NativeBuildError("str % mapping: trailing %()")
+                flags = 0
+                while i < n and template[i] in "-0":
+                    if template[i] == "-":
+                        flags |= 1
+                    else:
+                        flags |= 2
+                    i += 1
+                if i < n and template[i] in "+ #":
+                    raise NativeBuildError("str % +, space and # flags are not supported")
+                width = -1
+                if i < n and template[i] == "*":
+                    raise NativeBuildError("str % dynamic width (*) is not supported")
+                j = i
+                while j < n and template[j].isdigit():
+                    j += 1
+                if j > i:
+                    width = int(template[i:j])
+                    i = j
+                prec = -1
+                if i < n and template[i] == ".":
+                    i += 1
+                    if i < n and template[i] == "*":
+                        raise NativeBuildError("str % dynamic precision (.*) is not supported")
+                    j = i
+                    while j < n and template[j].isdigit():
+                        j += 1
+                    prec = int(template[i:j]) if j > i else 0
+                    i = j
+                if i < n and template[i] in "hlL":
+                    raise NativeBuildError("str % length modifiers are not supported")
+                if i >= n:
+                    raise NativeBuildError("str % formatting: trailing %")
                 c2 = template[i]
                 if c2 == "%":
+                    if name is not None or flags or width >= 0 or prec >= 0:
+                        raise NativeBuildError("str %% with flags/width/precision is not supported")
                     out.append("%")
                     i += 1
                     continue
-                if c2 in "-0123456789. *hlL":
-                    raise NativeBuildError("str % formatting with flags/width/precision is not supported")
-                if c2 == "(":
-                    raise NativeBuildError("str % mapping (name)s is not supported")
-                if c2 in "sdrc":
-                    specs.append(c2)
+                if c2 in "srdc":
+                    fields.append((name, c2, flags, width, prec))
                     out.append("{}")
                     i += 1
                     continue
-                if c2 == "i":
-                    specs.append("d")
+                if c2 in "iu":
+                    fields.append((name, "d", flags, width, prec))
+                    out.append("{}")
+                    i += 1
+                    continue
+                if c2 in "xXo":
+                    fields.append((name, c2, flags, width, prec))
                     out.append("{}")
                     i += 1
                     continue
@@ -802,7 +859,22 @@ class LinuxCEmitter:
             else:
                 out.append(ch)
                 i += 1
-        return "".join(out), specs
+        return "".join(out), fields
+
+    @staticmethod
+    def _percent_literal_type(value) -> str:
+        """P14: exact static type of a frozen %-format operand literal."""
+        if isinstance(value, bool):
+            return "bool"
+        if isinstance(value, int):
+            return "int"
+        if isinstance(value, float):
+            return "float"
+        if isinstance(value, str):
+            return "str"
+        if value is None:
+            return "none"
+        raise NativeBuildError("Linux str % formatting: unsupported literal argument")
 
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
                                 call_args: list[Any], coll_type: str, types: dict[str, str]) -> None:
@@ -1529,6 +1601,8 @@ class LinuxCEmitter:
             types[result] = types.get(source, "int")
             if source in self._tuple_elems:
                 self._tuple_elems[result] = self._tuple_elems[source]
+            if source in self._dict_elems:
+                self._dict_elems[result] = self._dict_elems[source]
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
@@ -1565,6 +1639,8 @@ class LinuxCEmitter:
                 types[result] = self._module_types.get(source, types.get(source, "int"))
                 if source in self._tuple_elems:
                     self._tuple_elems[result] = self._tuple_elems[source]
+                if source in self._dict_elems:
+                    self._dict_elems[result] = self._dict_elems[source]
                 return out
             if (
                 source in self._module_stored
@@ -1602,11 +1678,15 @@ class LinuxCEmitter:
                 types[args[0]] = types.get(args[1], "int")
                 if args[1] in self._tuple_elems:
                     self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
+                if args[1] in self._dict_elems:
+                    self._dict_elems[args[0]] = self._dict_elems[args[1]]
                 return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
             if args[1] in self._tuple_elems:
                 self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
+            if args[1] in self._dict_elems:
+                self._dict_elems[args[0]] = self._dict_elems[args[1]]
         elif op == "unary":
             operator = {"no": "!", "not": "!"}.get(args[0], args[0])
             if operator not in {"+", "-", "~", "!"}:
@@ -1674,30 +1754,67 @@ class LinuxCEmitter:
                         types[result] = "str"
                         return out
                 if operator == "%":
-                    # PCT_FORMAT_V1: "%s-%d" % args lowers through the {}
-                    # engine after static translation. The template must be a
-                    # literal; tuple arguments must have a statically known
-                    # length (tuples are immutable); anything else fails
-                    # closed. Placeholder/argument count mismatches fail
+                    # PCT_FORMAT_V1 (+P14 width/precision/mapping/hex-octal):
+                    # "%..." % args lowers through the {} engine after static
+                    # translation. The template must be a literal; tuple
+                    # arguments must have statically known elements (tuples
+                    # are immutable); mapping arguments must be inline dict
+                    # literals with literal str keys, resolved at build time
+                    # (dicts built any other way fail closed). Anything else
+                    # fails closed. Placeholder/argument count mismatches fail
                     # closed at build (CPython raises TypeError at runtime —
-                    # the static subset rejects statically instead).
+                    # the static subset rejects statically instead). Element
+                    # types resolve at USE time: a variable can be reassigned
+                    # after the tuple/dict is built, so SSA temps and aliases
+                    # read the current static type while frozen literals keep
+                    # their recorded type. Anything flowing from a parameter
+                    # fails closed, like the single-value path below.
                     template = self._fn_consts.get(left)
                     if not isinstance(template, str):
                         raise NativeBuildError("Linux str % formatting requires a literal template")
-                    translated, specs = self._parse_percent_template(template)
+                    translated, fields = self._parse_percent_template(template)
+                    has_map = any(field[0] is not None for field in fields)
+                    has_pos = any(field[0] is None for field in fields)
+                    if has_map and has_pos:
+                        raise NativeBuildError("Linux str % formatting cannot mix positional and mapping conversions")
+
+                    def _resolve_etype(item, recorded):
+                        if isinstance(item, str) and item.startswith("%"):
+                            source = aliases.get(item, item)
+                            if source in function.params or item in function.params:
+                                raise NativeBuildError(
+                                    "Linux str % formatting a bare parameter is not supported (type unknown)"
+                                )
+                            return types.get(item, recorded)
+                        return recorded
+
                     operands: list[str] = []
                     etypes: list[str] = []
-                    if types.get(right) == "tuple":
+                    if has_map:
+                        if types.get(right) != "dict":
+                            raise NativeBuildError("Linux str % mapping requires a dict argument")
+                        record = self._dict_elems.get(right)
+                        if record is None:
+                            record = self._dict_elems.get(aliases.get(right, right))
+                        if record is None:
+                            raise NativeBuildError("Linux str % mapping requires a dict of statically known keys")
+                        for name, _c, _f, _w, _pr in fields:
+                            hit = record.get(name)
+                            if hit is None:
+                                raise NativeBuildError(f"Linux str % mapping: key {name!r} is not statically known")
+                            operands.append(self._value(hit[0]))
+                            etypes.append(_resolve_etype(hit[0], hit[1]))
+                    elif types.get(right) == "tuple":
                         known = self._tuple_elems.get(right)
                         if known is None:
                             known = self._tuple_elems.get(aliases.get(right, right))
                         if known is None:
                             raise NativeBuildError("Linux str % formatting requires a tuple of statically known length")
-                        for index, etype in enumerate(known):
+                        for index, (item, etype0) in enumerate(known):
                             operands.append(
                                 f"piton_seq_get((PitonSeq*){self._value(right)},{index}).bits"
                             )
-                            etypes.append(etype)
+                            etypes.append(_resolve_etype(item, etype0))
                     else:
                         if aliases.get(right, right) in function.params:
                             # the parameter's runtime type is unknown: treating
@@ -1708,57 +1825,80 @@ class LinuxCEmitter:
                             )
                         operands = [self._value(right)]
                         etypes = [types.get(right, "int")]
-                    if len(specs) != len(operands):
+                    if len(fields) != len(operands):
                         raise NativeBuildError(
-                            f"Linux str % formatting: {len(specs)} conversion(s) but {len(operands)} argument(s)"
+                            f"Linux str % formatting: {len(fields)} conversion(s) but {len(operands)} argument(s)"
                         )
-                    pieces = []
-                    for index, (spec, operand, arg_type) in enumerate(zip(specs, operands, etypes)):
+                    bases = []
+                    pads: list[tuple | None] = []
+                    for index, (field, operand, arg_type) in enumerate(zip(fields, operands, etypes)):
+                        _fname, spec, flags, width, prec = field
                         if spec == "s":
                             if arg_type == "int":
-                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_int({operand});")
+                                base = f"piton_str_from_int({operand})"
                             elif arg_type == "float":
-                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_float({operand});")
+                                base = f"piton_str_from_float({operand})"
                             elif arg_type == "bool":
-                                pieces.append(f'const char*_pp{index}={operand}?"True":"False";')
+                                base = f'({operand}?"True":"False")'
                             elif arg_type == "none":
-                                pieces.append(f'const char*_pp{index}="None";')
+                                base = '"None"'
                             elif arg_type == "str":
-                                pieces.append(f"const char*_pp{index}=(const char*){operand};")
+                                base = f"((const char*){operand})"
                             else:
                                 raise NativeBuildError(f"Linux str %s does not support {arg_type} arguments")
                         elif spec == "d":
                             if arg_type in {"int", "bool"}:
-                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_int({operand});")
+                                base = f"piton_str_from_int({operand})"
                             elif arg_type == "float":
-                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_int((long)piton_bits_double({operand}));")
+                                base = f"piton_str_from_int((long)piton_bits_double({operand}))"
                             else:
                                 raise NativeBuildError(f"Linux str %d requires a real number, not {arg_type}")
                         elif spec == "r":
                             if arg_type == "str":
-                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_quote((const char*){operand});")
-                            elif arg_type in {"int", "bool", "float", "none"}:
-                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_from_int({operand});" if arg_type in {"int", "bool"} else
-                                              f"const char*_pp{index}=(const char*)piton_str_from_float({operand});" if arg_type == "float" else
-                                              f'const char*_pp{index}="None";')
+                                base = f"piton_str_quote((const char*){operand})"
+                            elif arg_type == "bool":
+                                base = f'({operand}?"True":"False")'
+                            elif arg_type == "int":
+                                base = f"piton_str_from_int({operand})"
+                            elif arg_type == "float":
+                                base = f"piton_str_from_float({operand})"
+                            elif arg_type == "none":
+                                base = '"None"'
                             else:
                                 raise NativeBuildError(f"Linux str %r does not support {arg_type} arguments")
                         elif spec == "c":
+                            if prec >= 0:
+                                raise NativeBuildError("Linux str %c does not support precision")
                             if arg_type in {"int", "bool"}:
-                                pieces.append(f"const char*_pp{index}=(const char*)piton_chr({operand});")
+                                base = f"piton_percent_chr({operand})"
                             elif arg_type == "str":
-                                pieces.append(f"const char*_pp{index}=(const char*)piton_str_single_char((const char*){operand});")
+                                base = f"piton_str_single_char((const char*){operand})"
                             else:
                                 raise NativeBuildError(f"Linux str %c requires int or 1-character str, not {arg_type}")
+                        elif spec in {"x", "X", "o"}:
+                            if arg_type not in {"int", "bool"}:
+                                raise NativeBuildError(f"Linux str %{spec} requires an int, not {arg_type}")
+                            base_num = 16 if spec in {"x", "X"} else 8
+                            base = f"piton_str_from_int_base({operand},{base_num},{1 if spec == 'X' else 0})"
+                        else:
+                            raise NativeBuildError(f"Linux str %{spec} is not supported")
+                        bases.append(f"const char*_pb{index}=(const char*){base};")
+                        if width >= 0 or prec >= 0:
+                            isnum = 1 if spec in {"d", "x", "X", "o"} else 0
+                            pads.append((width, prec, flags, isnum))
+                        else:
+                            pads.append(None)
                     names = ",".join(f"_pp{index}" for index in range(len(operands))) or "_pp0"
                     if not operands:
-                        pieces.append('const char*_pp0="";')
-                    # a raising conversion (piton_chr out of range) yields NULL:
-                    # route after EACH piece so the format engine never
-                    # dereferences it (CPython evaluates left to right, first
-                    # error wins — same order here).
+                        bases.append('const char*_pb0="";')
+                        pads.append(None)
+                    # a raising conversion (piton_chr out of range,
+                    # single_char on a long string) yields NULL: route after
+                    # EACH base so the pad/format engine never dereferences
+                    # it (CPython evaluates left to right, first error wins
+                    # — same order here).
                     out.append("    {")
-                    for piece in pieces:
+                    for index, piece in enumerate(bases):
                         out.append(f"    {piece}")
                         out.append("    if(piton_exc_flag){")
                         if handler_label:
@@ -1766,6 +1906,12 @@ class LinuxCEmitter:
                         else:
                             out.append("        piton_report_unhandled();piton_exit(1);")
                         out.append("    }")
+                        pad = pads[index]
+                        if pad is None:
+                            out.append(f"    const char*_pp{index}=(const char*)_pb{index};")
+                        else:
+                            width, prec, flags, isnum = pad
+                            out.append(f"    const char*_pp{index}=(const char*)piton_str_pad((const char*)_pb{index},{width},{prec},{flags},{isnum});")
                     out.append(f"    {{const char*_pa[]={{{names}}}; {_name(result)}=(long)piton_str_format({json.dumps(translated)},{len(operands)},_pa);}}")
                     self._emit_exc_check(out, function, handler_label)
                     out.append("    }")
@@ -2676,12 +2822,38 @@ class LinuxCEmitter:
                 # can convert each element by static type. Types (unlike
                 # temps, which are SSA per-function) stay valid when the
                 # tuple crosses into another function via a global.
-                self._tuple_elems[result] = tuple(types.get(item, "int") for item in items)
+                elems = []
+                for item in items:
+                    if isinstance(item, str) and item.startswith("%"):
+                        elems.append((item, types.get(item, "int")))
+                    else:
+                        elems.append((item, self._percent_literal_type(item)))
+                self._tuple_elems[result] = tuple(elems)
             if kind in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=(long)piton_seq_new({self._kind(kind)},{len(items)});')
                 for index, value in enumerate(items):
                     out.append(f'    piton_seq_put((PitonSeq*){_name(result)},{index},{self._slot(value, types)});')
             elif kind == "dict":
+                if result:
+                    # P14 mapping: resolve %(name)s statically for inline
+                    # literals with literal str keys (anything else is not
+                    # recorded, so mapping use fails closed).
+                    _drec = {}
+                    for _k, _v in items:
+                        _ks = _k if (isinstance(_k, str) and not _k.startswith("%")) else self._fn_consts.get(_k)
+                        if not isinstance(_ks, str):
+                            _drec = None
+                            break
+                        if isinstance(_v, str) and _v.startswith("%"):
+                            _drec[_ks] = (_v, types.get(_v, "int"))
+                        else:
+                            try:
+                                _drec[_ks] = (_v, self._percent_literal_type(_v))
+                            except NativeBuildError:
+                                _drec = None
+                                break
+                    if _drec is not None:
+                        self._dict_elems[result] = _drec
                 out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
                 for index, (key, value) in enumerate(items):
                     key_is_str = isinstance(key, str) and not key.startswith("%")
@@ -2929,6 +3101,26 @@ class LinuxCEmitter:
             if types.get(coll) != "dict":
                 raise NativeBuildError("Linux dict_put requires a dict")
             out.append(f'    piton_dict_append((PitonDict*){self._value(coll)},piton_slot({self._value(key)},{self._kind(types.get(key, "int"))}),{self._slot(value, types)});')
+            _ptarget = coll if coll in self._dict_elems else aliases.get(coll)
+            if _ptarget is not None and _ptarget in self._dict_elems:
+                _ckey = key if (isinstance(key, str) and not key.startswith("%")) else None
+                if _ckey is None:
+                    try:
+                        _ckey = self._fn_consts.get(key)
+                    except TypeError:
+                        _ckey = None
+                if isinstance(_ckey, str):
+                    if isinstance(value, str) and value.startswith("%"):
+                        self._dict_elems[_ptarget][_ckey] = (value, types.get(value, "int"))
+                    else:
+                        try:
+                            self._dict_elems[_ptarget][_ckey] = (value, self._percent_literal_type(value))
+                        except NativeBuildError:
+                            del self._dict_elems[_ptarget]
+                else:
+                    # unknown key may overwrite a known one: drop the record
+                    # so later mapping use fails closed (sound over-strict).
+                    del self._dict_elems[_ptarget]
         elif op == "runtime_call":
             raise NativeBuildError(f"runtime operation not supported in Linux native subset: {args[0]}")
         else:
