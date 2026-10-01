@@ -253,6 +253,40 @@ static long piton_str_endswith(const char*s,const char*p){usize hl=piton_strlen(
 static long piton_str_replace(const char*s,const char*a,const char*b){usize sl=piton_strlen(s),al=piton_strlen(a),bl=piton_strlen(b);usize count=0;if(al==0){count=sl+1;}else{for(usize i=0;i+al<=sl;){usize k=0;while(k<al&&s[i+k]==a[k])++k;if(k==al){++count;i+=al;}else++i;}}usize total=sl+count*bl-(al==0?0:count*al);char*p=piton_alloc(total+1);usize o=0;if(al==0){for(usize i=0;i<sl;++i){piton_memcpy(p+o,b,bl);o+=bl;p[o++]=s[i];}piton_memcpy(p+o,b,bl);o+=bl;}else{for(usize i=0;i<sl;){usize k=0;while(k<al&&i+k<sl&&s[i+k]==a[k])++k;if(k==al){piton_memcpy(p+o,b,bl);o+=bl;i+=al;}else p[o++]=s[i++];}}p[o]=0;return(long)p;}
 static long piton_str_from_int_base(long v,int base,int upper){char*p=piton_alloc(70);usize o=0;unsigned long u;if(v<0){p[o++]='-';u=(unsigned long)(-(v+1))+1;}else u=(unsigned long)v;const char*digits=upper?"0123456789ABCDEF":"0123456789abcdef";char tmp[64];long n=0;do{tmp[n++]=digits[u%(unsigned)base];u/=(unsigned)base;}while(u);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static usize piton_utf8_chars(const char*s,usize maxbytes){usize i=0;long cc=0;while(s[i]&&(usize)cc<maxbytes){unsigned char c=(unsigned char)s[i];usize adv=1;if(c>=0x80){if((c&0xE0)==0xC0)adv=2;else if((c&0xF0)==0xE0)adv=3;else if((c&0xF8)==0xF0)adv=4;}i+=adv;++cc;}return i;}
+static char* piton_str_apply_spec(const char*s,const char*spec){
+    if(!s||!spec||!*spec)return 0;
+    const char*p=spec;char fill=' ';int left=0,center=0;
+    if(p[1]&&(p[1]=='<'||p[1]=='>'||p[1]=='^'||p[1]=='=')){fill=p[0];p+=2;}
+    else if(*p=='<'||*p=='>'||*p=='^'||*p=='='){p+=1;}
+    if(p[-1]=='<')left=1;else if(p[-1]=='^')center=1;
+    int sign=0;if(*p=='+'){sign=1;p+=1;}else if(*p=='-'){p+=1;}else if(*p==' '){sign=2;p+=1;}
+    if(*p=='#')p+=1;
+    int zero=0;if(*p=='0'){zero=1;p+=1;}
+    long width=0;while(*p>='0'&&*p<='9'){width=width*10+(*p-'0');p+=1;}
+    int comma=0;if(*p==','){comma=1;p+=1;}
+    long prec=-1;if(*p=='.'){p+=1;prec=0;while(*p>='0'&&*p<='9'){prec=prec*10+(*p-'0');p+=1;}}
+    if(*p)return 0;
+    int neg=0;const char*digits=s;if(s[0]=='-'){neg=1;digits=s+1;}
+    usize dl=piton_strlen(digits);
+    char*core=0;usize core_len=0;
+    if(comma){
+        usize int_len=0;while(int_len<dl&&digits[int_len]!='.')int_len++;
+        usize groups=(int_len+2)/3;core_len=int_len+(groups-1)+(dl-int_len);
+        core=piton_alloc(core_len+1);usize o=0,gi=0;
+        for(usize i=0;i<int_len;++i){if(gi&&(int_len-gi)%3==0)core[o++]=',';core[o++]=digits[gi++];}
+        for(usize i=int_len;i<dl;++i)core[o++]=digits[i];core[o]=0;
+    } else {core_len=dl;core=piton_alloc(dl+1);piton_memcpy(core,digits,dl);core[dl]=0;}
+    if(prec>=0&&core_len>(usize)prec){core[prec]=0;core_len=(usize)prec;}
+    const char*sign_str="";if(neg)sign_str="-";else if(sign==1)sign_str="+";else if(sign==2)sign_str=" ";
+    usize sign_len=piton_strlen(sign_str);
+    usize total=sign_len+core_len;
+    long pad=(width>0&&total<(usize)width)?(width-(long)total):0;
+    char*out=piton_alloc(total+(usize)pad+1);usize o=0;
+    if(left){piton_memcpy(out+o,sign_str,sign_len);o+=sign_len;piton_memcpy(out+o,core,core_len);o+=core_len;for(long i=0;i<pad;++i)out[o++]=fill;}
+    else if(center){long lp=pad/2,rp=pad-lp;for(long i=0;i<lp;++i)out[o++]=fill;piton_memcpy(out+o,sign_str,sign_len);o+=sign_len;piton_memcpy(out+o,core,core_len);o+=core_len;for(long i=0;i<rp;++i)out[o++]=fill;}
+    else{if(zero&&!center){piton_memcpy(out+o,sign_str,sign_len);o+=sign_len;for(long i=0;i<pad;++i)out[o++]='0';}else{for(long i=0;i<pad;++i)out[o++]=fill;piton_memcpy(out+o,sign_str,sign_len);o+=sign_len;}piton_memcpy(out+o,core,core_len);o+=core_len;}
+    out[o]=0;return out;
+}
 static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum){int neg=0;const char*digits=s;if(isnum&&s[0]=='-'){neg=1;digits=s+1;}usize dl=piton_strlen(digits);const char*core=digits;usize cl=dl;if(prec>=0){if(isnum){usize need=(usize)prec;if(dl==1&&digits[0]=='0'&&prec==0)need=0;if(dl<need){char*pad=piton_alloc(need+1);for(usize i=0;i<need-dl;++i)pad[i]='0';piton_memcpy(pad+need-dl,digits,dl);pad[need]=0;core=pad;cl=need;}}else{usize cut=piton_utf8_chars(s,(usize)prec);char*tr=piton_alloc(cut+1);piton_memcpy(tr,s,cut);tr[cut]=0;core=tr;cl=cut;neg=0;}}usize totallen=cl+(neg?1:0);long pad=(width>0&&totallen<(usize)width)?(width-(long)totallen):0;int left=(flags&1)!=0;int zero=(flags&2)&&!left&&isnum&&prec<0;char*out=piton_alloc(totallen+(usize)pad+1);usize o=0;if(!left){if(zero){if(neg)out[o++]='-';for(long i=0;i<pad;++i)out[o++]='0';}else{for(long i=0;i<pad;++i)out[o++]=' ';if(neg)out[o++]='-';}}else if(neg){out[o++]='-';}piton_memcpy(out+o,core,cl);o+=cl;if(left){for(long i=0;i<pad;++i)out[o++]=' ';}out[o]=0;return(long)out;}
 static long piton_str_quote(const char*s){usize n=piton_strlen(s);int q=0;for(usize i=0;i<n;++i)if(s[i]=='\'')q=1;char qc=q?'"':'\'';usize extra=0;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'||c=='\n'||c=='\t'||c=='\r'||(unsigned char)c==qc)extra+=1;}char*p=piton_alloc(n+extra+3);usize o=0;p[o++]=qc;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'){p[o++]='\\';p[o++]='\\';}else if(c=='\n'){p[o++]='\\';p[o++]='n';}else if(c=='\t'){p[o++]='\\';p[o++]='t';}else if(c=='\r'){p[o++]='\\';p[o++]='r';}else if(c==qc){p[o++]='\\';p[o++]=c;}else p[o++]=(char)c;}p[o++]=qc;p[o]=0;return(long)p;}
 static long piton_str_single_char(const char*s){if(piton_strlen(s)!=1){piton_raise_set("TypeError","%c requires int or char");return 0;}return(long)s;}
@@ -862,6 +896,151 @@ class LinuxCEmitter:
         return "".join(out), fields
 
     @staticmethod
+    def _literal_str_operand(operand: Any, consts: dict[str, Any]) -> str | None:
+        """FMT_SPEC_V1: the operand's string value when it is PROVABLY a
+        literal (a temp recorded in the constant table, or a literal embedded
+        in the MIR). A plain variable name returns None — a name is not a
+        template — so runtime templates keep the historical pointer path."""
+        if not isinstance(operand, str):
+            return None
+        if operand.startswith("%"):
+            value = consts.get(operand)
+            return value if isinstance(value, str) else None
+        if operand.isidentifier():
+            return None
+        return operand
+
+    @staticmethod
+    def _parse_format_template(template: str) -> tuple[str, list[tuple[int, str]]]:
+        """FMT_SPEC_V1: parse a str.format() template into a simplified
+        template (all placeholders replaced with {}) and a list of
+        (index, spec, token) tuples. Named placeholders fail closed. Escaped
+        braces ({{ }}) are left intact for the format engine, which
+        renders them as single literal braces."""
+        out: list[str] = []
+        fields: list[tuple[int, str, str]] = []
+        i, n = 0, len(template)
+        auto_idx = 0
+        saw_manual = saw_auto = False
+        while i < n:
+            ch = template[i]
+            if ch == "{":
+                if i + 1 < n and template[i + 1] == "{":
+                    out.append("{{")
+                    i += 2
+                    continue
+                j = template.find("}", i + 1)
+                if j < 0:
+                    raise NativeBuildError("str.format(): unmatched '{'")
+                content = template[i + 1:j]
+                i = j + 1
+                if ":" in content:
+                    idx_str, spec = content.split(":", 1)
+                else:
+                    idx_str, spec = content, ""
+                explicit = idx_str != ""
+                if idx_str == "":
+                    idx = auto_idx
+                    auto_idx += 1
+                    token = "{}"
+                else:
+                    try:
+                        idx = int(idx_str)
+                    except ValueError:
+                        raise NativeBuildError(
+                            f"str.format(): named placeholders not supported: {{{content}}}"
+                        )
+                    if idx < 0:
+                        raise NativeBuildError(
+                            f"str.format(): negative field index {idx} is not supported"
+                        )
+                    token = "{" + idx_str + "}"
+                # CPython refuses to mix automatic and manual numbering
+                # ("cannot switch from automatic field numbering to manual
+                # field specification"); the {} engine would silently accept
+                # it, so reject it here.
+                if explicit and saw_auto:
+                    raise NativeBuildError(
+                        "str.format(): cannot switch from automatic to manual field numbering"
+                    )
+                if not explicit and saw_manual:
+                    raise NativeBuildError(
+                        "str.format(): cannot switch from manual to automatic field numbering"
+                    )
+                saw_manual = saw_manual or explicit
+                saw_auto = saw_auto or not explicit
+                fields.append((idx, spec, token))
+                out.append(token)
+            elif ch == "}":
+                if i + 1 < n and template[i + 1] == "}":
+                    out.append("}}")
+                    i += 2
+                    continue
+                raise NativeBuildError("str.format(): single '}' in format string")
+            else:
+                out.append(ch)
+                i += 1
+        return "".join(out), fields
+
+    @staticmethod
+    def _format_spec_type(spec: str) -> str:
+        """FMT_SPEC_V1: extract the type char from a format spec (last char
+        if it's a known type). Returns '' for no type."""
+        if not spec:
+            return ""
+        t = spec[-1]
+        return t if t in "bcdeEfFgGnosxX%" else ""
+
+    @staticmethod
+    def _validate_presentation_spec(pres: str) -> None:
+        """FMT_SPEC_V1: validate [[fill]align][sign][#][0][width][,][.prec]
+        statically. Unknown specs fail closed at BUILD time: the C helper
+        returns NULL for them, and a NULL template argument crashed the
+        format engine (observed rc=-11 on '{:.2g}').
+
+        The `%` presentation is rejected (only used by the '%' type, which
+        has its own conversion) so `{:%>5}` cannot be mistaken for valid.
+        """
+        if not pres:
+            return
+        i, n = 0, len(pres)
+        if n >= 2 and pres[1] in "<>^=":
+            i = 2
+        elif pres[0] in "<>^=":
+            i = 1
+        if i < n and pres[i] in "+- ":
+            i += 1
+        if i < n and pres[i] == "#":
+            i += 1
+        if i < n and pres[i] == "0":
+            i += 1
+        while i < n and pres[i].isdigit():
+            i += 1
+        if i < n and pres[i] == ",":
+            i += 1
+        if i < n and pres[i] == ".":
+            i += 1
+            if i >= n or not pres[i].isdigit():
+                raise NativeBuildError(
+                    f"str.format(): precision needs at least one digit in {pres!r}"
+                )
+            while i < n and pres[i].isdigit():
+                i += 1
+        if i != n:
+            raise NativeBuildError(f"str.format(): unsupported format spec {pres!r}")
+
+    @staticmethod
+    def _format_spec_presentation(spec: str) -> str:
+        """FMT_SPEC_V1: strip the type char from a format spec, leaving the
+        presentation part (fill/align/sign/zero/width/comma/precision)."""
+        if not spec:
+            return ""
+        t = spec[-1]
+        if t in "dxXobfeG%":
+            return spec[:-1]
+        return spec
+
+    @staticmethod
     def _percent_literal_type(value) -> str:
         """P14: exact static type of a frozen %-format operand literal."""
         if isinstance(value, bool):
@@ -1017,28 +1196,144 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=(long)piton_str_join((const char*){operand},(PitonSeq*){self._value(call_args[0])});")
             types[result] = "str"
         elif method == "format":
-            # CPython {}/ {N} positional substitution; each argument is
-            # str()-converted by static type first. {name}, format specs and
-            # keywords are out of subset (the C parser reports and exits).
+            # FMT_SPEC_V1: {}/ {N} positional substitution with format
+            # specs. Each argument is converted to the target type's
+            # string (type char in the spec), then the presentation part
+            # (fill/align/sign/zero/width/comma/precision) is applied
+            # via piton_str_apply_spec. Named placeholders and keyword
+            # arguments fail closed.
+            # obj can be: a temp (%12) holding a literal, a variable name,
+            # or the literal string itself. Look up temps in constants,
+            # names in _fn_consts, and use literals directly.
+            template = self._literal_str_operand(obj, self._fn_consts)
+            if template is None:
+                # no-spec {} substitution on a runtime string: the old
+                # pointer-passing path still handles {} and {N} exactly.
+                pieces = []
+                for index, value in enumerate(call_args):
+                    arg_type = types.get(value, "int")
+                    if arg_type == "str":
+                        pieces.append(f"const char*_pf{index}=(const char*){self._value(value)};")
+                    elif arg_type == "int":
+                        pieces.append(f"const char*_pf{index}=(const char*)piton_str_from_int({self._value(value)});")
+                    elif arg_type == "float":
+                        pieces.append(f"const char*_pf{index}=(const char*)piton_str_from_float({self._value(value)});")
+                    elif arg_type == "bool":
+                        pieces.append(f'const char*_pf{index}={self._value(value)}?"True":"False";')
+                    elif arg_type == "none":
+                        pieces.append(f'const char*_pf{index}="None";')
+                    else:
+                        raise NativeBuildError(f"Linux str.format() does not support {arg_type} arguments")
+                names = ",".join(f"_pf{index}" for index in range(len(call_args))) or "_pf0"
+                out.append(
+                    f"    {{{''.join(pieces)}const char*_fa[]={{{names}}};"
+                    f" {_name(result)}=(long)piton_str_format((const char*){self._value(obj)},{len(call_args)},_fa);}}"
+                )
+                types[result] = "str"
+                return out
+            if not isinstance(template, str):
+                raise NativeBuildError(
+                    "Linux str.format() with a format spec requires a literal template"
+                )
+            simplified, fields = self._parse_format_template(template)
+            # a field may be referenced twice ({0} {0}), so the count is not
+            # an equality: automatic numbering may not exceed the arguments,
+            # and explicit indices are bounds-checked below.
+            if len(fields) > len(call_args) and any(f[2] == "{}" for f in fields):
+                raise NativeBuildError(
+                    f"Linux str.format(): {len(fields)} placeholder(s) but {len(call_args)} argument(s)"
+                )
+            # the _pfN array is indexed by CALL position (the simplified
+            # template keeps explicit {N} tokens), so each call index is
+            # converted once with the spec of the field that references it.
+            by_index: dict[int, tuple[Any, str]] = {}
+            for arg_idx, spec, _token in fields:
+                if arg_idx in by_index:
+                    continue
+                if arg_idx < 0 or arg_idx >= len(call_args):
+                    raise NativeBuildError(
+                        f"str.format(): field index {arg_idx} out of range "
+                        f"for {len(call_args)} argument(s)"
+                    )
+                by_index[arg_idx] = (call_args[arg_idx], spec)
             pieces = []
-            for index, value in enumerate(call_args):
+            for index in range(len(call_args)):
+                value, spec = by_index[index]
                 arg_type = types.get(value, "int")
-                if arg_type == "int":
-                    pieces.append(f"const char*_pf{index}=(const char*)piton_str_from_int({self._value(value)});")
-                elif arg_type == "float":
-                    pieces.append(f"const char*_pf{index}=(const char*)piton_str_from_float({self._value(value)});")
-                elif arg_type == "bool":
-                    pieces.append(f'const char*_pf{index}={self._value(value)}?"True":"False";')
-                elif arg_type == "none":
-                    pieces.append(f'const char*_pf{index}="None";')
-                elif arg_type == "str":
-                    pieces.append(f"const char*_pf{index}=(const char*){self._value(value)};")
+                type_char = self._format_spec_type(spec)
+                pres = self._format_spec_presentation(spec)
+                self._validate_presentation_spec(pres)
+                # convert to target type string
+                if type_char in {"x", "X", "o"}:
+                    base = {"x": 16, "X": 16, "o": 8}[type_char]
+                    if arg_type not in {"int", "bool"}:
+                        raise NativeBuildError(f"Linux str.format() %{type_char} requires an int, not {arg_type}")
+                    converted = f"piton_str_from_int_base({self._value(value)},{base},{1 if type_char == 'X' else 0})"
+                elif type_char == "b":
+                    if arg_type not in {"int", "bool"}:
+                        raise NativeBuildError(f"Linux str.format() %b requires an int, not {arg_type}")
+                    # binary without "0b" prefix (CPython {:b} is bare digits)
+                    converted = f"piton_str_from_int_base({self._value(value)},2,0)"
+                elif type_char == "d":
+                    if arg_type in {"int", "bool"}:
+                        converted = f"piton_str_from_int({self._value(value)})"
+                    elif arg_type == "float":
+                        converted = f"piton_str_from_int((long)piton_bits_double({self._value(value)}))"
+                    else:
+                        raise NativeBuildError(f"Linux str.format() %d requires a real number, not {arg_type}")
+                elif type_char in {"f", "e", "G", "F", "E", "n"}:
+                    # FLOAT_PRESENT_V1: fixed/scientific/general float specs
+                    # need correctly-rounded decimal conversion; repr output
+                    # diverges from CPython ({:.2f} gave "3.") and {:.2g}
+                    # even crashed (rc=-11), so they fail closed at build.
+                    raise NativeBuildError(
+                        f"Linux str.format() %{type_char} is not supported yet (needs rounded decimal conversion)"
+                    )
+                    # Extract precision from the presentation spec
+                    prec = 6
+                    if "." in pres:
+                        try:
+                            prec = int(pres.split(".")[1])
+                        except ValueError:
+                            prec = 6
+                    # Format the float with the given precision
+                    # For now, use a simple approach: format with %.{prec}f
+                    # and strip trailing zeros for 'g' type
+                    if type_char == "f":
+                        converted = f"piton_str_from_float({self._value(value)})"  # TODO: proper precision
+                    elif type_char == "e":
+                        converted = f"piton_str_from_float({self._value(value)})"  # TODO: scientific
+                    else:
+                        converted = f"piton_str_from_float({self._value(value)})"  # TODO: general
+                elif type_char == "%":
+                    raise NativeBuildError(
+                        "Linux str.format() %% is not supported yet (needs rounded percentage conversion)"
+                    )
                 else:
-                    raise NativeBuildError(f"Linux str.format() does not support {arg_type} arguments")
-            names = ",".join(f"_pf{index}" for index in range(len(call_args))) or "_pf0"
+                    # no type char: use the natural string conversion
+                    if arg_type == "int":
+                        converted = f"piton_str_from_int({self._value(value)})"
+                    elif arg_type == "float":
+                        converted = f"piton_str_from_float({self._value(value)})"
+                    elif arg_type == "bool":
+                        converted = f'{self._value(value)}?"True":"False"'
+                    elif arg_type == "none":
+                        converted = '"None"'
+                    elif arg_type == "str":
+                        converted = f"(const char*){self._value(value)}"
+                    else:
+                        raise NativeBuildError(f"Linux str.format() does not support {arg_type} arguments")
+                # apply presentation spec
+                if pres:
+                    pieces.append(f"const char*_pf{index}=(const char*)piton_str_apply_spec((const char*){converted},{json.dumps(pres)});")
+                else:
+                    pieces.append(f"const char*_pf{index}=(const char*){converted};")
             if not call_args:
+                # no placeholders: pass a one-element dummy array (the
+                # engine never indexes it; n=0) so the C declaration is valid
                 pieces.append('const char*_pf0="";')
-            out.append(f"    {{{''.join(pieces)}const char*_fa[]={{{names}}}; {_name(result)}=(long)piton_str_format((const char*){operand},{len(call_args)},_fa);}}")
+            names = ",".join(f"_pf{index}" for index in range(len(call_args))) or "_pf0"
+            out.append(f"    {{{''.join(pieces)}const char*_fa[]={{{names}}}; {_name(result)}=(long)piton_str_format((const char*){json.dumps(simplified)},{len(call_args)},_fa);}}")
             types[result] = "str"
         else:
             raise NativeBuildError(f"Linux str.{method}() is not supported")
