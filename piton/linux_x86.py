@@ -2876,6 +2876,31 @@ class LinuxCEmitter:
             else:
                 raise NativeBuildError(f"Linux collection kind not supported: {kind}")
             types[result] = kind
+        elif op == "unpack_check":
+            # UNPACK_ARITY_V1: CPython verifies the element count on
+            # unpacking (ValueError: too many / not enough values).
+            # list/tuple read their length; str counts bytes (str get_item
+            # is byte-based, so units agree); anything else fails closed
+            # at build (dict/set unpacking needs key iteration, a
+            # separate item — today it dies at get_item with KeyError).
+            value, expected = args[0], args[1]
+            handler_label = args[2] if len(args) > 2 else None
+            vtype = types.get(value, "int")
+            if vtype in {"list", "tuple"}:
+                length = f"((PitonSeq*){self._value(value)})->length"
+            elif vtype == "str":
+                length = f"(long)piton_strlen((const char*){self._value(value)})"
+            else:
+                raise NativeBuildError(f"Linux unpack requires a list, tuple or str, not {vtype}")
+            out.append("    {")
+            out.append(f"    long _ul={length};")
+            out.append(f"    if(_ul!={expected}){{")
+            out.append(f'    if(_ul>{expected}){{piton_raise_set("ValueError","too many values to unpack (expected {expected})");}}')
+            out.append("    else{const char*_ue[]={(const char*)piton_str_from_int(" + str(expected) + "),(const char*)piton_str_from_int(_ul)};")
+            out.append('    piton_raise_set("ValueError",(const char*)piton_str_format("not enough values to unpack (expected {0}, got {1})",(long)2,_ue));}')
+            out.append("    }")
+            self._emit_exc_check(out, function, handler_label)
+            out.append("    }")
         elif op == "get_item":
             coll, idx = args
             collection_type = types.get(coll)
