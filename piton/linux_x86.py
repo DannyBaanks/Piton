@@ -590,6 +590,7 @@ class LinuxCEmitter:
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
+        self._boolh_types: dict[str, str] = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         if function.vararg:
@@ -643,6 +644,7 @@ class LinuxCEmitter:
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
+        self._boolh_types: dict[str, str] = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
@@ -699,6 +701,7 @@ class LinuxCEmitter:
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
+        self._boolh_types: dict[str, str] = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
@@ -1683,6 +1686,19 @@ class LinuxCEmitter:
                 return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
+            if isinstance(args[0], str) and args[0].startswith("@boolh_"):
+                # BOOL_SHORT_V1: both arms of y/o must share one static
+                # type — the untagged model cannot print a mixed result
+                # (CPython returns the winning operand).
+                seen = self._boolh_types.get(args[0])
+                current = types.get(args[1], "int")
+                if seen is None:
+                    self._boolh_types[args[0]] = current
+                elif current != seen:
+                    raise NativeBuildError(
+                        f"Linux y/o with mixed operand types ({seen} vs {current}) "
+                        "is not supported (the winner type is not statically knowable)"
+                    )
             if args[1] in self._tuple_elems:
                 self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
             if args[1] in self._dict_elems:
@@ -1699,6 +1715,33 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=(long)piton_bigint_negate((void*){_name(args[1])});")
                 types[result] = "bigint"
                 bigint_slots.append(result)
+                return out
+            if operator == "!":
+                # TRUTHY_FIX_V1: `no X` is not !(raw value) — a non-null
+                # pointer (empty str/list/dict/set) is always truthy that
+                # way, so `no ''` and `no []` printed False instead of
+                # True. Route through the same per-kind truthiness as
+                # truth_test, negated (also opens float `no`, previously
+                # rejected).
+                operand = args[1]
+                vtype = types.get(operand, "int")
+                if vtype in {"int", "bool"}:
+                    out.append(f"    {_name(result)}=({self._value(operand)}==0);")
+                elif vtype == "float":
+                    out.append(f"    {_name(result)}=(piton_bits_double({self._value(operand)})==0.0);")
+                elif vtype == "none":
+                    out.append(f"    {_name(result)}=1;")
+                elif vtype == "str":
+                    out.append(f"    {_name(result)}=(piton_strlen((const char*){self._value(operand)})==0);")
+                elif vtype in {"list", "tuple"}:
+                    out.append(f"    {_name(result)}=(((PitonSeq*){self._value(operand)})->length==0);")
+                elif vtype == "dict":
+                    out.append(f"    {_name(result)}=(((PitonDict*){self._value(operand)})->length==0);")
+                elif vtype == "set":
+                    out.append(f"    {_name(result)}=(((PitonSet*){self._value(operand)})->length==0);")
+                else:
+                    raise NativeBuildError(f"Linux truth test does not support {vtype}")
+                types[result] = "bool"
                 return out
             if types.get(args[1]) == "float":
                 if operator == "-":
@@ -2900,6 +2943,31 @@ class LinuxCEmitter:
             else:
                 raise NativeBuildError(f"Linux collection kind not supported: {kind}")
             types[result] = kind
+        elif op == "truth_test":
+            # BOOL_SHORT_V1 / TRUTHY_FIX_V1: full truthiness per static kind
+            # (CPython bool()): int/bool != 0, float bits != 0.0, str
+            # length > 0, collections length > 0, None always false. The
+            # raw `!value` used to misjudge empty strings/collections
+            # (non-null pointers are always truthy).
+            value = args[0]
+            vtype = types.get(value, "int")
+            if vtype in {"int", "bool"}:
+                out.append(f"    {_name(result)}=({self._value(value)}!=0);")
+            elif vtype == "float":
+                out.append(f"    {_name(result)}=(piton_bits_double({self._value(value)})!=0.0);")
+            elif vtype == "none":
+                out.append(f"    {_name(result)}=0;")
+            elif vtype == "str":
+                out.append(f"    {_name(result)}=(piton_strlen((const char*){self._value(value)})>0);")
+            elif vtype in {"list", "tuple"}:
+                out.append(f"    {_name(result)}=(((PitonSeq*){self._value(value)})->length>0);")
+            elif vtype == "dict":
+                out.append(f"    {_name(result)}=(((PitonDict*){self._value(value)})->length>0);")
+            elif vtype == "set":
+                out.append(f"    {_name(result)}=(((PitonSet*){self._value(value)})->length>0);")
+            else:
+                raise NativeBuildError(f"Linux truth test does not support {vtype}")
+            types[result] = "bool"
         elif op == "unpack_check":
             # UNPACK_ARITY_V1: CPython verifies the element count on
             # unpacking (ValueError: too many / not enough values).
