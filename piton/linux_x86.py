@@ -1691,6 +1691,10 @@ class LinuxCEmitter:
             operator = {"no": "!", "not": "!"}.get(args[0], args[0])
             if operator not in {"+", "-", "~", "!"}:
                 raise NativeBuildError(f"Linux unary operator not supported: {operator}")
+            if types.get(args[1]) == "none" and operator in {"+", "-", "~"}:
+                raise NativeBuildError(
+                    f"Linux unary {operator} with None is not supported (CPython raises TypeError)"
+                )
             if operator == "-" and types.get(args[1]) == "bigint":
                 out.append(f"    {_name(result)}=(long)piton_bigint_negate((void*){_name(args[1])});")
                 types[result] = "bigint"
@@ -1928,6 +1932,12 @@ class LinuxCEmitter:
                     types[result] = left_type
                     return out
                 raise NativeBuildError(f"Linux collection binary operator not supported: {operator} on {left_type}/{right_type}")
+            if "none" in {left_type, right_type}:
+                # WRETURNTYPE_V1 (mirrors the Windows guard): None in
+                # arithmetic is a CPython TypeError, not pointer math.
+                raise NativeBuildError(
+                    f"Linux {operator} with None is not supported (CPython raises TypeError)"
+                )
             if "float" in {left_type, right_type}:
                 # TRUEDIV_V1: float / and // join the supported set. CPython
                 # raises ZeroDivisionError on float division by zero instead
