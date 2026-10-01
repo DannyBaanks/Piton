@@ -287,6 +287,7 @@ class Win64NasmEmitter:
         # any instruction was emitted).
         self.bigint_slots = []
         self.constants = {}
+        self._boolh_types: dict[str, str] = {}
         if function.vararg:
             self.types[function.vararg] = "tuple"
         if function.kwarg:
@@ -401,6 +402,7 @@ class Win64NasmEmitter:
         # any instruction was emitted).
         self.bigint_slots = []
         self.constants = {}
+        self._boolh_types: dict[str, str] = {}
         if function.vararg:
             self.types[function.vararg] = "tuple"
         if function.kwarg:
@@ -866,6 +868,26 @@ class Win64NasmEmitter:
                 return
             self.lines.append(f"    mov rax, {self._address(args[1]) if isinstance(args[1], str) and args[1].startswith('%') else self._immediate(args[1])}")
             self.lines.append(f"    mov {self._address(args[0])}, rax")
+            if isinstance(args[0], str) and args[0].startswith("@boolh_"):
+                # BOOL_SHORT_V1: both arms of y/o must share one static
+                # type — the untagged model cannot print a mixed result
+                # (CPython returns the winning operand).
+                seen = self._boolh_types.get(args[0])
+                if isinstance(args[1], str):
+                    current = self.types.get(args[1], "int")
+                elif isinstance(args[1], bool):
+                    current = "bool"
+                elif args[1] is None:
+                    current = "none"
+                else:
+                    current = "int"
+                if seen is None:
+                    self._boolh_types[args[0]] = current
+                elif current != seen:
+                    raise NativeBuildError(
+                        f"native y/o with mixed operand types ({seen} vs {current}) "
+                        "is not supported (the winner type is not statically knowable)"
+                    )
             if isinstance(args[1], str):
                 self.types[args[0]] = self.types.get(args[1], "int")
                 if args[1] in self.tuple_etypes:
@@ -2781,6 +2803,37 @@ class Win64NasmEmitter:
                     # WRETURNTYPE_V1: statically-known callees propagate
                     # their inferred return type (none/str/float/bool).
                     self.types[result] = self.function_return_types.get(function_name, "int")
+        elif op == "truth_test":
+            # BOOL_SHORT_V1 / TRUTHY_FIX_V1: full truthiness per static kind
+            # (CPython bool()). Reuses the collection len helpers.
+            value = args[0]
+            vtype = self.types.get(value, "int")
+            if vtype == "str":
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_str_len")
+                self.lines.extend(["    test rax, rax", "    setne al", "    movzx rax, al"])
+            elif vtype == "none":
+                self.lines.append("    xor eax, eax")
+            elif vtype in {"int", "bool", "float"}:
+                # int/bool: raw != 0; float: IEEE-754 bits, 0.0 == zero bits
+                self._load_operand(value, "rax")
+                self.lines.extend(["    test rax, rax", "    setne al", "    movzx rax, al"])
+            elif vtype in {"list", "tuple"}:
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_collection_len")
+                self.lines.extend(["    test rax, rax", "    setne al", "    movzx rax, al"])
+            elif vtype == "dict":
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_dict_len")
+                self.lines.extend(["    test rax, rax", "    setne al", "    movzx rax, al"])
+            elif vtype == "set":
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_set_len")
+                self.lines.extend(["    test rax, rax", "    setne al", "    movzx rax, al"])
+            else:
+                raise NativeBuildError(f"native truth test does not support {vtype}")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "bool"
         elif op == "call_unpack":
             # CALL_UNPACKING_DYNAMIC4_V1: runtime expansion of *seq / **mapping
             # for a statically-known callee with a plain signature (<=4 params).
@@ -4164,6 +4217,21 @@ class Win64NasmEmitter:
             self.lines.extend([
                 "    pxor xmm1, xmm1", "    ucomisd xmm0, xmm1", "    setne al",
                 "    setp dl", "    or al, dl", "    movzx eax, al", "    test eax, eax",
+            ])
+        elif self.types.get(operand) in {"list", "tuple"}:
+            self._load_operand(operand, "rcx")
+            self.lines.extend([
+                "    call piton_collection_len", "    test rax, rax",
+            ])
+        elif self.types.get(operand) == "dict":
+            self._load_operand(operand, "rcx")
+            self.lines.extend([
+                "    call piton_dict_len", "    test rax, rax",
+            ])
+        elif self.types.get(operand) == "set":
+            self._load_operand(operand, "rcx")
+            self.lines.extend([
+                "    call piton_set_len", "    test rax, rax",
             ])
         else:
             self._load_operand(operand, "rax")

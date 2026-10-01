@@ -487,5 +487,72 @@ class IntOvfGuardV1(unittest.TestCase):
         self.assertIn(b"OverflowError", result.native.stderr)
 
 
+class BoolShortV1(unittest.TestCase):
+    """BOOL_SHORT_V1 + TRUTHY_FIX_V1: y/o short-circuit with operand
+    results, and full truthiness for `no`.
+
+    `a y b` / `a o b` used to fail closed entirely (BOOL_OP reached MIR as
+    an unsupported runtime op). Now they follow CPython exactly: the
+    result is the WINNING OPERAND (1 y 2 is 2, 0 o 'x' is 'x'), the right
+    operand evaluates only when needed, and truthiness is per-kind
+    (empty str/collections are falsy). Dynamic mixed-type operands fail
+    closed (the winner's type is not statically knowable); literal heads
+    fold statically, which resolves the common idioms (None o X, 0 o X,
+    Verdadero y X). Bonus: `no` now handles floats (was closed) and empty
+    str/collections (used to print False — non-null pointers read truthy).
+    """
+
+    def test_bool_operands(self):
+        _assert_matches(self, "imprimir(Verdadero y Falso)\n")
+        _assert_matches(self, "imprimir(Verdadero o Falso)\n")
+
+    def test_int_operands(self):
+        _assert_matches(self, "imprimir(1 y 2)\n")
+        _assert_matches(self, "imprimir(0 o 3)\n")
+
+    def test_operand_result_not_bool(self):
+        _assert_matches(self, "imprimir(0 o 'x')\n")
+        _assert_matches(self, "imprimir(None o 'defecto')\n")
+        _assert_matches(self, "imprimir('' y 'otro')\n")
+        _assert_matches(self, "imprimir('a' o 'b')\n")
+
+    def test_chains(self):
+        _assert_matches(self, "imprimir(Verdadero y 1 y 2)\n")
+        _assert_matches(self, "imprimir(0 o 0 o 3)\n")
+        _assert_matches(self, "imprimir(1 y 0 o 3)\n")
+
+    def test_short_circuit_skips_evaluation(self):
+        _assert_matches(
+            self,
+            "funcion f():\n    imprimir('lado')\n    devolver 0\n"
+            "imprimir(1 y f())\nimprimir(0 o f())\n",
+        )
+
+    def test_division_guard_not_reached(self):
+        # x y (1 // x) with x=0: the right operand must never evaluate
+        _assert_matches(self, "x = 0\nimprimir(x y 1 // x)\n")
+
+    def test_literal_heads_fold(self):
+        _assert_matches(self, "imprimir(Falso y 1)\n")
+        _assert_matches(self, "imprimir(Nada y 5)\n")
+        _assert_matches(self, "imprimir([1] y 'x')\n")
+
+    def test_not_full_truthiness(self):
+        _assert_matches(self, "imprimir(no 0.0)\n")
+        _assert_matches(self, "imprimir(no 0.5)\n")
+        _assert_matches(self, "imprimir(no '')\n")
+        _assert_matches(self, "imprimir(no 'x')\n")
+        _assert_matches(self, "imprimir(no [])\n")
+        _assert_matches(self, "imprimir(no [1])\n")
+        _assert_matches(self, "imprimir(no {})\n")
+        _assert_matches(self, "imprimir(no (1,))\n")
+
+    def test_dynamic_mixed_types_fail_closed(self):
+        # a VARIABLE head is not statically foldable: the winner depends
+        # on runtime values, so the holder type cannot serve both arms.
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("x = 1\nimprimir(x y 'x')\n")
+
+
 if __name__ == "__main__":
     unittest.main()

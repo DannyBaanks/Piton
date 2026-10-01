@@ -6,7 +6,7 @@ import json
 import operator
 from typing import Any, Dict, List, Optional, Sequence
 
-from piton.hir import ExceptHandler, HIRKind, HIRNode, Keyword, With
+from piton.hir import BoolOp, ExceptHandler, HIRKind, HIRNode, Keyword, With
 
 
 _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
@@ -179,6 +179,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "gather_new": "PURE",
     # READ
     "cell_load": "READ", "get_item": "READ", "get_slice": "READ", "collection_len": "READ",
+    "truth_test": "READ",
     "unpack_check": "READ",
     "catch_type": "READ", "catch_message": "READ", "catch_flag": "READ",
     # WRITE
@@ -2639,6 +2640,62 @@ class MIRLowerer:
             result = builder.temp()
             builder.emit("unary", node.op, operand, result=result)
             return result
+        if kind == HIRKind.BOOL_OP:
+            # BOOL_SHORT_V1: CPython `y`/`o` return the OPERAND, not a bool:
+            # `1 y 2` is 2, `0 o 'x'` is 'x'. The right operand evaluates
+            # ONLY when needed (short-circuit). The scaffold mirrors IF_EXPR
+            # (truth_test + branch, holder load carries the static type
+            # because the end block is created LAST); the backends reject
+            # mixed-type operands on stores to @boolh_ holders (the
+            # untagged model cannot print both arms correctly).
+            # Literal folding first: a literal's truthiness is static, so
+            # `0 o 'x'` deterministically yields 'x' and `Verdadero y 1`
+            # deterministically evaluates the rest — this resolves the
+            # winner's type and lifts the same-type restriction for the
+            # common mixed idioms (None o X, 0 o X, ...).
+            if self._literal_truthiness(node.values[0]) is not None:
+                head_is_truthy = self._literal_truthiness(node.values[0])
+                rest = node.values[1:]
+                if not rest:
+                    return self._lower_expr(builder, node.values[0])
+                if node.op in {"y", "and"}:
+                    # truthy head -> result is the rest; falsy head -> head
+                    folded_rest = BoolOp(kind=HIRKind.BOOL_OP, op=node.op, values=rest)
+                    return (
+                        self._lower_expr(builder, folded_rest)
+                        if head_is_truthy
+                        else self._lower_expr(builder, node.values[0])
+                    )
+                # 'o': truthy head -> head; falsy head -> the rest
+                if head_is_truthy:
+                    return self._lower_expr(builder, node.values[0])
+                folded_rest = BoolOp(kind=HIRKind.BOOL_OP, op=node.op, values=rest)
+                return self._lower_expr(builder, folded_rest)
+            left = self._lower_expr(builder, node.values[0])
+            for value_node in node.values[1:]:
+                tt = builder.temp()
+                builder.emit("truth_test", left, result=tt)
+                holder = "@boolh_" + builder.temp().lstrip("%")
+                short_block = builder.new_block()
+                rest_block = builder.new_block()
+                end_block = builder.new_block()
+                if node.op in {"y", "and"}:
+                    # truthy -> evaluate the rest; falsy -> left is the result
+                    builder.emit("branch", tt, rest_block.label, short_block.label)
+                else:  # 'o' / 'or': truthy -> left is the result
+                    builder.emit("branch", tt, short_block.label, rest_block.label)
+                builder.current = short_block
+                builder.emit("store", holder, left)
+                builder.emit("jump", end_block.label)
+                builder.current = rest_block
+                right = self._lower_expr(builder, value_node)
+                builder.emit("store", holder, right)
+                builder.emit("jump", end_block.label)
+                builder.current = end_block
+                merged = builder.temp()
+                builder.emit("load", holder, result=merged)
+                left = merged
+            return left
         if kind == HIRKind.COMPARE:
             if len(node.ops) == 1:
                 left = self._lower_expr(builder, node.left)
@@ -3466,6 +3523,34 @@ class MIRLowerer:
             result=result,
         )
         return result
+
+    @staticmethod
+    def _literal_truthiness(node) -> bool | None:
+        """BOOL_SHORT_V1: the truthiness of a LITERAL operand, None when
+        the operand is not a literal (constants, empty vs non-empty
+        collection literals). Used to fold y/o chains whose winner is
+        static."""
+        kind = getattr(node, "kind", None)
+        if kind == HIRKind.CONST:
+            value = node.value
+            if value is None or isinstance(value, (bool, int, float)):
+                return bool(value)
+            if isinstance(value, str):
+                return bool(value)
+            return None
+        if kind == HIRKind.LOAD:
+            # Nada lowers as a LOAD (builtin-like name), not a CONST;
+            # Verdadero/Falso arrive as consts but accept the LOAD form
+            # too for robustness.
+            if node.name in {"Nada", "None"}:
+                return False
+            if node.name in {"Verdadero", "True", "Falso", "False"}:
+                return node.name in {"Verdadero", "True"}
+        if kind in {HIRKind.LIST, HIRKind.TUPLE, HIRKind.SET}:
+            return bool(getattr(node, "elts", []))
+        if kind == HIRKind.DICT:
+            return bool(getattr(node, "keys", []) or [])
+        return None
 
     def _compare(self, builder: _Builder, op: str, left: Any, right: Any) -> str:
         result = builder.temp()
