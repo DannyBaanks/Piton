@@ -153,6 +153,65 @@ class UnpackArityV1(unittest.TestCase):
         )
 
 
+class ChainCmpV1(unittest.TestCase):
+    """CHAINCMP_V1: chained comparisons evaluate pairwise with single
+    evaluation and short-circuit.
+
+    The Pratt parser used to nest right (`1 < (2 < 3)`) and MIR folded
+    left over the bool result (`(1 < 2) < 3`), so `1 < 2 < 3` printed
+    False... now True. All comparison ops share one precedence level
+    (CPython) and chains merge by identity — parenthesized compares
+    still nest (`(2 < 1) < 3` compares True < 3). The chain evaluates
+    each operand once, in order, and skips the rest after the first
+    False (observable via side effects).
+    """
+
+    def test_basic_chain(self):
+        _assert_matches(self, "imprimir(1 < 2 < 3)\n")
+
+    def test_descending_chain(self):
+        _assert_matches(self, "imprimir(3 > 2 > 1)\n")
+
+    def test_mixed_direction(self):
+        _assert_matches(self, "imprimir(1 < 2 > 3)\n")
+
+    def test_equality_chain(self):
+        _assert_matches(self, "imprimir(2 == 2 == 2)\n")
+
+    def test_failing_link(self):
+        _assert_matches(self, "imprimir(2 < 1 < 3)\n")
+
+    def test_chain_with_bool(self):
+        _assert_matches(self, "imprimir(1 < 2 == Verdadero)\n")
+
+    def test_parens_still_nest(self):
+        _assert_matches(self, "imprimir((2 < 1) < 3)\n")
+
+    def test_chain_over_expression(self):
+        _assert_matches(self, "imprimir(1 < 2 + 1 < 4)\n")
+
+    def test_long_chain(self):
+        _assert_matches(self, "imprimir(1 < 2 < 3 < 4)\n")
+
+    def test_chain_over_variable(self):
+        _assert_matches(self, "x = 2\nimprimir(1 < x < 3)\n")
+
+    def test_chain_over_strings(self):
+        _assert_matches(self, "imprimir('a' < 'b' < 'c')\n")
+
+    def test_single_evaluation_and_short_circuit(self):
+        _assert_matches(
+            self,
+            "funcion f():\n    imprimir('lado')\n    devolver 2\n"
+            "imprimir(0 < f() < 3)\nimprimir(5 < f() < 3)\n",
+        )
+
+    def test_chained_le_ge_ne(self):
+        _assert_matches(self, "imprimir(1 <= 1 <= 2)\n")
+        _assert_matches(self, "imprimir(3 >= 3 >= 4)\n")
+        _assert_matches(self, "imprimir(1 != 2 != 1)\n")
+
+
 class SliceV1(unittest.TestCase):
     """`s[a:b]` on str/list/tuple, including on literals."""
 
