@@ -1505,6 +1505,38 @@ double piton_float_mod(double x, double y) {
     return r;
 }
 
+double piton_float_pow_v1(double x, double y) {
+    if (y == 0.0) return 1.0;
+    if (y == 1.0) return x;
+    if (y == 2.0 || y == -2.0) {
+        double sq = x * x;
+        if (isinf(sq) && isfinite(x)) { piton_raise("OverflowError", "numerical result out of range"); return 0.0; }
+        if (y == 2.0) return sq;
+        if (x == 0.0) { piton_raise("ZeroDivisionError", "0.0 cannot be raised to a negative power"); return 0.0; }
+        double r = 1.0 / sq;
+        if (isinf(r) && isfinite(x)) { piton_raise("OverflowError", "numerical result out of range"); return 0.0; }
+        return r;
+    }
+    if (y == -1.0) {
+        if (x == 0.0) { piton_raise("ZeroDivisionError", "0.0 cannot be raised to a negative power"); return 0.0; }
+        double r = 1.0 / x;
+        if (isinf(r) && isfinite(x)) { piton_raise("OverflowError", "numerical result out of range"); return 0.0; }
+        return r;
+    }
+    if (y == 0.5 || y == -0.5) {
+        if (x < 0.0) { piton_raise("ValueError", "negative number cannot be raised to a fractional power"); return 0.0; }
+        if (x == 0.0) {
+            if (y < 0.0) { piton_raise("ZeroDivisionError", "0.0 cannot be raised to a negative power"); return 0.0; }
+            return 0.0;
+        }
+        double s = sqrt(x);
+        if (y == 0.5) return s;
+        return 1.0 / s;
+    }
+    piton_raise("ValueError", "float ** with non-trivial exponent is not supported in the native subset");
+    return 0.0;
+}
+
 double piton_float_floor_div(double x, double y) {
     if (y == 0.0) { piton_raise("ZeroDivisionError", "float floor division by zero"); return 0.0; }
     return floor(x / y);

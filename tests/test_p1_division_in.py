@@ -179,5 +179,60 @@ class ContainsV1(unittest.TestCase):
             compare_native_to_cpython("imprimir(1.5 in [1.5])\n")
 
 
+class FloatPowV1(unittest.TestCase):
+    """FLOAT_POW_V1: float ** exact for y in {-2,-1,-0.5,0,0.5,1,2}.
+
+    The exact set runs through single-rounding IEEE ops (mul/div/sqrt),
+    so it matches CPython bit-for-bit: x**0 is 1.0 (even 0/inf/nan),
+    x**1 is x, x**2 is x*x, negative bases work for integral exponents,
+    fractional exponents of negatives yield complex in CPython and fail
+    closed here (unrepresentable). Overflow/underflow edges follow
+    CPython (OverflowError on finite->inf, silent underflow to 0.0).
+    Constant operands always fold exactly in Python; a runtime exponent
+    outside the set raises a catchable ValueError (documented)."""
+
+    def test_exact_set(self):
+        _assert_matches(self, "imprimir(2.0 ** 2.0, 9.0 ** 0.5, 2.0 ** -1.0)\n")
+
+    def test_zero_one_identities(self):
+        _assert_matches(self, "imprimir(0.0 ** 0.0, 2.0 ** 0.0, 1e308 ** 0.0)\n")
+
+    def test_negative_base_integral(self):
+        _assert_matches(self, "imprimir((-2.0) ** 2.0, (-2.0) ** 3.0)\n")
+
+    def test_mixed_int_base(self):
+        _assert_matches(self, "imprimir(2 ** 0.5, 9 ** 0.5)\n")
+
+    def test_runtime_exponent_in_set(self):
+        _assert_matches(self, "x = 1.5\ne = 2.0\nimprimir(x ** e)\n")
+
+    def test_overflow_is_catchable(self):
+        _assert_matches(
+            self,
+            "intentar:\n"
+            "    imprimir(1e308 ** 2.0)\n"
+            "excepto OverflowError:\n"
+            "    imprimir('o')\n",
+        )
+
+    def test_zero_to_negative_is_catchable(self):
+        _assert_matches(
+            self,
+            "intentar:\n"
+            "    imprimir(0.0 ** -1.0)\n"
+            "excepto ZeroDivisionError:\n"
+            "    imprimir('z')\n",
+        )
+
+    def test_negative_base_fractional_fails_closed(self):
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("imprimir((-2.0) ** 0.5)\n")
+
+    def test_runtime_exponent_outside_set_fails_at_runtime(self):
+        result = compare_native_to_cpython("x = 2.0\ne = 0.3\nimprimir(x ** e)\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"ValueError", result.native.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -441,6 +441,9 @@ static void*bi_shl_u64(unsigned long v,long k){PitonBigInt*r=(PitonBigInt*)piton
 static int piton_bi_bit(void*a,long p){PitonBigInt*x=(PitonBigInt*)a;if(p<0)return 0;long i=p/64;int b=(int)(p%64);if(i>=x->count)return 0;return(int)((x->limbs[i]>>b)&1UL);}
 static double piton_bigint_scaled_to_double(void*a,long E,int xsign){PitonBigInt*x=(PitonBigInt*)a;long p=-1;for(long i=x->count-1;i>=0;--i){unsigned long w=x->limbs[i];if(w){p=i*64+63-__builtin_clzll(w);break;}}unsigned long long signbit=((unsigned long long)(xsign?1:0))<<63;if(p<0){double d;__builtin_memcpy(&d,&signbit,8);return d;}unsigned long long t=0;int sticky=0;for(long i=0;i<55;++i){long pos=p-i;t=(t<<1)|(unsigned long long)(pos>=0?piton_bi_bit(a,pos):0);}long lo=p-54;if(lo>0){for(long i=0;i<lo;++i)if(piton_bi_bit(a,i)){sticky=1;break;}}int e2=(int)(p+E);int guard=(int)((t>>1)&1ULL),rnd=(int)(t&1ULL);t>>=2;if(guard&&(rnd||sticky||(t&1ULL))){t+=1;if(t>=(1ULL<<53)){t>>=1;e2+=1;}}if(e2>=-1022){if(e2>1023){unsigned long long b=signbit|0x7FF0000000000000ULL;double d;__builtin_memcpy(&d,&b,8);return d;}unsigned long long b=signbit|((unsigned long long)(e2+1023)<<52)|(t&0xFFFFFFFFFFFFFULL);double d;__builtin_memcpy(&d,&b,8);return d;}int s=-1022-e2;if(s>=64){double d;__builtin_memcpy(&d,&signbit,8);return d;}unsigned long long dropped=t&((s==64)?~0ULL:((1ULL<<s)-1));int g2=(int)((t>>(s-1))&1ULL);int r2=(s>1)&&((dropped&(((1ULL<<(s-1))-1)))!=0);t>>=s;if(g2&&(r2||sticky||(t&1ULL)))t+=1;if(t>=(1ULL<<52)){unsigned long long b=signbit|(1ULL<<52);double d;__builtin_memcpy(&d,&b,8);return d;}unsigned long long b=signbit|t;double d;__builtin_memcpy(&d,&b,8);return d;}
 static double piton_fmod_core(double x,double y){unsigned long long ux,uy;__builtin_memcpy(&ux,&x,8);__builtin_memcpy(&uy,&y,8);int ex=(int)((ux>>52)&0x7FFULL),ey=(int)((uy>>52)&0x7FFULL);unsigned long long mx=ux&0xFFFFFFFFFFFFFULL,my=uy&0xFFFFFFFFFFFFFULL;int sx=(int)(ux>>63);if(ex==0x7FF||(ey==0x7FF&&my!=0)||(uy&0x7FFFFFFFFFFFFFFFULL)==0)return(x*y)/(x*y);if((ux&0x7FFFFFFFFFFFFFFFULL)==0)return x;int uex,uey;if(ex==0){int s=__builtin_clzll(mx)-11;mx<<=(unsigned)s;uex=-1074-s;}else{mx|=0x10000000000000ULL;uex=ex-1075;}if(ey==0){int s=__builtin_clzll(my)-11;my<<=(unsigned)s;uey=-1074-s;}else{my|=0x10000000000000ULL;uey=ey-1075;}if(uex<uey||(uex==uey&&mx<my))return x;long E=uex<uey?uex:uey;void*Mx=bi_shl_u64(mx,(long)(uex-E));void*My=bi_shl_u64(my,(long)(uey-E));void*R=piton_bigint_mod(Mx,My);return piton_bigint_scaled_to_double(R,E,sx);}
+static int piton_double_isinf(long bits){unsigned long long u=(unsigned long long)bits;return ((u&0x7FF0000000000000ULL)==0x7FF0000000000000ULL)&&((u&0xFFFFFFFFFFFFFULL)==0);}
+static int piton_double_isfinite(long bits){unsigned long long u=(unsigned long long)bits;return ((u&0x7FF0000000000000ULL)!=0x7FF0000000000000ULL);}
+static long piton_float_pow_v1(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0)return piton_double_bits(1.0);if(y==1.0)return a;if(y==2.0||y==-2.0){double sq=x*x;long sb=piton_double_bits(sq);if(piton_double_isinf(sb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}if(y==2.0)return sb;if(x==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/sq;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==-1.0){if(x==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/x;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==0.5||y==-0.5){if(x<0.0){piton_raise_set("ValueError","negative number cannot be raised to a fractional power");return 0;}if(x==0.0){if(y<0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}return piton_double_bits(0.0);}long sb=piton_float_sqrt(a);if(y==0.5)return sb;double r=1.0/piton_bits_double(sb);return piton_double_bits(r);}piton_raise_set("ValueError","float ** with non-trivial exponent is not supported in the native subset");return 0;}
 static long piton_float_mod(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float modulo");return 0;}double r=piton_fmod_core(x,y);if(r==0.0)r=(y<0.0?-0.0:0.0);else if((y<0.0)!=(r<0.0))r+=y;return piton_double_bits(r);}
 static long piton_bigint_cmp(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;if(x->sign!=y->sign)return x->sign?-1:1;int c=bi_cmp_mag(x,y);return x->sign?-c:c;}
 static void piton_bigint_free(void*a){(void)a;}
@@ -1617,6 +1620,9 @@ class LinuxCEmitter:
                 if operator == "-":
                     out.append(f"    {_name(result)}=piton_float_neg({self._value(args[1])});")
                     types[result] = "float"
+                    operand_const = self._fn_consts.get(args[1]) if isinstance(args[1], str) else None
+                    if isinstance(operand_const, float):
+                        self._fn_consts[result] = -operand_const
                     return out
                 if operator == "+":
                     out.append(f"    {_name(result)}={self._value(args[1])};")
@@ -1625,11 +1631,14 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"Linux float unary operator not supported: {operator}")
             out.append(f"    {_name(result)}={operator}{self._value(args[1])};")
             types[result] = "bool" if operator == "!" else "int"
-            # INTOVF_GUARD_V1: record trivially-foldable unary int results so
-            # downstream folds see through `-1`/`+1` (e.g. `2 ** -1`).
+            # INTOVF_GUARD_V1 / FLOAT_POW_V1: record trivially-foldable
+            # unary int/float results so downstream folds see through `-1`
+            # (e.g. `2 ** -1`) and `-2.0` (e.g. `(-2.0) ** 0.5`).
             if operator in {"+", "-"}:
                 operand_const = self._fn_consts.get(args[1]) if isinstance(args[1], str) else None
-                if isinstance(operand_const, int) and not isinstance(operand_const, bool):
+                if isinstance(operand_const, bool):
+                    pass
+                elif isinstance(operand_const, (int, float)):
                     self._fn_consts[result] = operand_const if operator == "+" else -operand_const
         elif op == "binary":
             operator, left, right = args[0], args[1], args[2]
@@ -1781,7 +1790,7 @@ class LinuxCEmitter:
                 # caller's exc check). Float % goes through an exact
                 # software fmod (bigint-backed) with the CPython sign
                 # adjustment — no libm under -nostdlib.
-                if operator not in {"+", "-", "*", "/", "//", "%"}:
+                if operator not in {"+", "-", "*", "/", "//", "%", "**"}:
                     raise NativeBuildError(f"Linux float binary operator not supported: {operator}")
                 left_value = self._value(left)
                 right_value = self._value(right)
@@ -1789,6 +1798,31 @@ class LinuxCEmitter:
                     left_value = f"piton_double_bits((double){left_value})"
                 if right_type != "float":
                     right_value = f"piton_double_bits((double){right_value})"
+                if operator == "**":
+                    # FLOAT_POW_V1: exact for y in {-2,-1,-0.5,0,0.5,1,2}
+                    # (see piton_float_pow_v1); constant operands fold exactly
+                    # in Python (correctly-rounded pow IS the oracle).
+                    left_const = self._fn_consts.get(left) if isinstance(left, str) else None
+                    right_const = self._fn_consts.get(right) if isinstance(right, str) else None
+                    if (
+                        isinstance(left_const, (int, float)) and not isinstance(left_const, bool)
+                        and isinstance(right_const, (int, float)) and not isinstance(right_const, bool)
+                    ):
+                        try:
+                            folded = left_const ** right_const
+                        except (OverflowError, ZeroDivisionError):
+                            folded = None
+                        if isinstance(folded, complex):
+                            raise NativeBuildError("Linux float ** with negative base and fractional exponent yields complex (not supported)")
+                        if isinstance(folded, float):
+                            self._fn_consts[result] = folded
+                            out.append(f"    {_name(result)}=piton_double_bits({_float_c_literal(folded)});")
+                            types[result] = "float"
+                            return out
+                    out.append(f"    {_name(result)}=piton_float_pow_v1({left_value},{right_value});")
+                    self._emit_exc_check(out, function, handler_label)
+                    types[result] = "float"
+                    return out
                 helper = {"+": "piton_float_add", "-": "piton_float_sub", "*": "piton_float_mul",
                           "/": "piton_float_div", "//": "piton_float_floor_div", "%": "piton_float_mod"}[operator]
                 out.append(f"    {_name(result)}={helper}({left_value},{right_value});")
