@@ -320,10 +320,17 @@ static long piton_seq_count(PitonSeq*s,PitonSlot v){if(!s)return 0;long n=0;for(
  * MINMAX_TYPES_V1 rule; a mixed element pair raises TypeError like CPython,
  * and an empty sequence raises ValueError. The flag is set only on error.
  */
-static int piton_slot_less(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return -1;
+static int piton_slot_less(PitonSlot a,PitonSlot b){
+  if(a.kind!=b.kind){
+    /* MINMAX_ITER_V1: numeric promotion (int/bool/float) like CPython . */
+    int an=(a.kind==PK_INT||a.kind==PK_BOOL||a.kind==PK_FLOAT);
+    int bn=(b.kind==PK_INT||b.kind==PK_BOOL||b.kind==PK_FLOAT);
+    if(an&&bn){double da=a.kind==PK_FLOAT?piton_bits_double(a.bits):(double)a.bits;double db=b.kind==PK_FLOAT?piton_bits_double(b.bits):(double)b.bits;return da<db?1:0;}
+    return -1;}
   if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)<0;
   if(a.kind==PK_INT||a.kind==PK_BOOL)return a.bits<b.bits;
   if(a.kind==PK_FLOAT)return piton_bits_double(a.bits)<piton_bits_double(b.bits);
+  if(a.kind==PK_LIST||a.kind==PK_TUPLE){PitonSeq*sa=(PitonSeq*)a.bits;PitonSeq*sb=(PitonSeq*)b.bits;long n=sa->length<sb->length?sa->length:sb->length;for(long i=0;i<n;++i){int l=piton_slot_less(sa->items[i],sb->items[i]);if(l<0)return -1;if(l)return 1;int g=piton_slot_less(sb->items[i],sa->items[i]);if(g<0)return -1;if(g)return 0;}return sa->length<sb->length?1:0;}
   return -1;}
 static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set("ValueError","min() arg is an empty sequence");return (PitonSlot){0,PK_INT};}
   PitonSlot best=s->items[0];
@@ -336,7 +343,7 @@ static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){
   return best;}
 
 static void piton_seq_sort(PitonSeq*s){if(!s||s->length<2)return;int allint=1,allstr=1;for(long i=0;i<s->length;++i){if(s->items[i].kind!=PK_INT&&s->items[i].kind!=PK_BOOL)allint=0;if(s->items[i].kind!=PK_STR)allstr=0;}if(!allint&&!allstr){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}for(long i=1;i<s->length;++i){PitonSlot k=s->items[i];long j=i-1;if(allstr&&!allint){while(j>=0&&piton_strcmp((const char*)s->items[j].bits,(const char*)k.bits)>0){s->items[j+1]=s->items[j];--j;}}else{while(j>=0&&s->items[j].bits>k.bits){s->items[j+1]=s->items[j];--j;}}s->items[j+1]=k;}}
-static PitonSlot piton_dict_get_1(PitonDict*d,PitonSlot k){if(d)for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k))return d->items[i].value;piton_write(2,"KeyError\n",9);piton_exit(1);}
+static PitonSlot piton_dict_get_1(PitonDict*d,PitonSlot k){if(d)for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k))return d->items[i].value;return (PitonSlot){0,PK_NONE};}
 static PitonSlot piton_dict_get_d(PitonDict*d,PitonSlot k,PitonSlot dflt){if(d)for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k))return d->items[i].value;return dflt;}
 static long piton_seq_slice_step(PitonSeq*s,long lo,long hi,long st){if(!s)return 0;if(st==0){piton_write(2,"ValueError: slice step cannot be zero\n",38);piton_exit(1);}long n=s->length;long len=0;if(st>0){if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=0;if(hi==0x7FFFFFFFFFFFFFFFL)hi=n;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;len=(hi-lo+st-1)/st;}else{if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=n-1;if(hi==0x7FFFFFFFFFFFFFFFL)hi=-n-1;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo>=n)lo=n-1;if(hi<-1)hi=-1;if(lo<=hi)len=0;else len=(lo-hi-st-1)/(-st);}PitonSeq*r=piton_seq_new((int)s->kind,len);for(long i=0;i<len;++i)r->items[i]=s->items[lo+i*st];return(long)r;}
 static long piton_str_slice_step(const char*s,long lo,long hi,long st){if(st==0){piton_write(2,"ValueError: slice step cannot be zero\n",38);piton_exit(1);}long n=(long)piton_strlen(s);long len=0;long a=0;if(st>0){if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=0;if(hi==0x7FFFFFFFFFFFFFFFL)hi=n;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;len=(hi-lo+st-1)/st;a=lo;}else{if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=n-1;if(hi==0x7FFFFFFFFFFFFFFFL)hi=-n-1;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo>=n)lo=n-1;if(hi<-1)hi=-1;if(lo<=hi)len=0;else len=(lo-hi-st-1)/(-st);a=lo;}char*p=piton_alloc((usize)len+1);for(long i=0;i<len;++i)p[i]=s[a+i*st];p[len]=0;return(long)p;}
@@ -701,6 +708,8 @@ class LinuxCEmitter:
         # builtin like sum() can tell what it is accumulating instead of
         # assuming int (which made it add raw pointers for bigints).
         self._coll_elems: dict[str, str] = {}
+        self._iter_source: dict[str, str] = {}
+        self._iter_source_r: dict[str, str] = {}
         # DICT_VAL_TYPE_V1: static type of a dict's VALUES, so `d[k]` and
         # `d.get(k)` return a correctly typed result instead of an int
         # slot holding a str/bigint pointer (printed as an address).
@@ -1387,7 +1396,10 @@ class LinuxCEmitter:
                     default = self._slot(call_args[1], types)
                     out.append(f"    {_name(result)}=piton_dict_get_d((PitonDict*){operand},{self._slot(call_args[0], types)},{default}).bits;")
                 else:
-                    out.append(f"    {_name(result)}=piton_dict_get_1((PitonDict*){operand},{self._slot(call_args[0], types)}).bits;")
+                    # DICT_VAL_TYPE_V1: a single-arg get yields the dict's
+                    # value on hit or None on miss, so the result is a
+                    # tagged slot whose printed form matches CPython.
+                    out.append(f"    {{PitonSlot*_gp=piton_alloc(sizeof(PitonSlot));*_gp=piton_dict_get_1((PitonDict*){operand},{self._slot(call_args[0], types)}); {_name(result)}=(long)_gp;}}")
                 # DICT_VAL_TYPE_V1: the hit yields the dict's value type; the
                 # miss yields the default's. A default of a different type
                 # than the values cannot be represented in the untagged
@@ -1414,6 +1426,11 @@ class LinuxCEmitter:
                     # DICT_VAL_TYPE_V1: provably empty dict -> the default
                     # alone determines the result type.
                     val_type = default_type
+                if len(call_args) == 1:
+                    # the miss case returns None (tagged slot), so the
+                    # static type is always the generic slot marker.
+                    types[result] = "slot"
+                    return out
                 if val_type is None:
                     raise NativeBuildError(
                         "native dict.get requires a statically known value type"
@@ -2139,6 +2156,10 @@ class LinuxCEmitter:
                 # whose iter_next dispatch already exists.
                 out.append(f"    {_name(result)}={self._value(source)};")
                 types[result] = source_type
+                if source_type.startswith("iterator:"):
+                    self._iter_source[result] = source
+                    if source in self._iter_source_r:
+                        self._iter_source_r[result] = self._iter_source_r[source]
                 return out
             elif source_type == "str":
                 out.append(f"    {_name(result)}=piton_str_iterator_new((char*){self._value(source)});")
@@ -2173,6 +2194,7 @@ class LinuxCEmitter:
                     raise NativeBuildError("native enumerate currently requires a list or tuple")
                 start_value = self._value(start) if start is not None else "0"
                 out.append(f"    {_name(result)}=piton_enumerate_new((void*){self._value(source)},{start_value});")
+                self._iter_source[result] = source
             elif builtin == "reversed":
                 if types.get(source) not in {"list", "tuple"}:
                     raise NativeBuildError("native reversed currently requires a list or tuple")
@@ -2182,6 +2204,8 @@ class LinuxCEmitter:
                 if types.get(left) not in {"list", "tuple"} or types.get(right) not in {"list", "tuple"}:
                     raise NativeBuildError("native zip currently requires two lists or tuples")
                 out.append(f"    {_name(result)}=piton_zip_new((void*){self._value(left)},(void*){self._value(right)});")
+                self._iter_source[result] = left
+                self._iter_source_r[result] = right
             elif builtin in {"map", "filter"}:
                 if types.get(source) not in {"list", "tuple"}:
                     raise NativeBuildError("native map/filter require a list or tuple")
@@ -2227,6 +2251,51 @@ class LinuxCEmitter:
             # type comes from the dict it was built from. Only when it is
             # unknown do we keep the historical "str"; a value that is really
             # a str pointer must never be printed as a raw int, and vice versa.
+            if iterator_type == "iterator:enumerate":
+                src = None
+                _k = args[0]
+                for _ in range(12):
+                    _h = self._iter_source.get(_k)
+                    if _h is None:
+                        _h = self._iter_source.get(aliases.get(_k, _k))
+                    if _h is not None:
+                        src = _h
+                        _k = _h
+                        if _h not in self._iter_source:
+                            break
+                        continue
+                    _k2 = aliases.get(_k)
+                    if _k2 is None or _k2 == _k:
+                        break
+                    _k = _k2
+                ekind = self._coll_elems.get(src) if src else None
+                self._tuple_elems[result] = (("%idx", "int"), (src or "%src", ekind if ekind and "|" not in ekind else "int"))
+            if iterator_type == "iterator:zip":
+                def _base(t):
+                    for _ in range(12):
+                        _h = self._iter_source.get(t) or self._iter_source.get(aliases.get(t, t))
+                        if _h is None:
+                            return t
+                        t = _h
+                    return t
+                it = _base(args[0])
+                it2 = None
+                _k = args[0]
+                for _ in range(12):
+                    _h2 = self._iter_source_r.get(_k) or self._iter_source_r.get(aliases.get(_k, _k))
+                    if _h2 is not None:
+                        it2 = _h2
+                        _k = _h2
+                        if _h2 not in self._iter_source_r:
+                            break
+                        continue
+                    _k2 = aliases.get(_k)
+                    if _k2 is None or _k2 == _k:
+                        break
+                    _k = _k2
+                e1 = self._coll_elems.get(it) if it else None
+                e2 = self._coll_elems.get(it2) if it2 else None
+                self._tuple_elems[result] = ((it or "%l", e1 if e1 and "|" not in e1 else "int"), (it2 or "%r", e2 if e2 and "|" not in e2 else "int"))
             if iterator_type == "iterator:dict":
                 key_type = self._dict_key_types.get(args[0])
                 if key_type is None:
@@ -3109,6 +3178,8 @@ class LinuxCEmitter:
                             # RANGE_VALUE_V1: CPython prints `range(0, 3)`, never
                             # the materialized elements.
                             out.append(f'    piton_range_print((PitonRange*){self._value(value)});')
+                        elif value_type == "slot":
+                            out.append(f'    piton_print_slot(*(PitonSlot*){self._value(value)});')
                         elif value_type in {"list", "tuple", "dict", "set"}:
                             out.append(f'    piton_print_slot({self._slot(value, types)});')
                         else:
@@ -3327,11 +3398,17 @@ class LinuxCEmitter:
                         out.append(f"    {{PitonSlot _mm=piton_seq_minmax({self._slot(values[0], types)},{want_min});")
                     else:
                         out.append(f"    {{PitonSlot _mm=piton_seq_minmax((PitonSeq*){self._value(values[0])},{want_min});")
-                    out.append(f"    {_name(result)}=_mm.bits;}}")
                     elem_type = self._coll_elems.get(values[0], "int")
                     if types.get(values[0]) == "str":
                         elem_type = "str"
-                    types[result] = elem_type if "|" not in elem_type else "int"
+                    if "|" in elem_type:
+                        # heterogeneous collection: the winner's kind is only
+                        # known at runtime, so hand out a tagged slot.
+                        out.append(f"    PitonSlot*_mmp=piton_alloc(sizeof(PitonSlot));*_mmp=_mm; {_name(result)}=(long)_mmp;}}")
+                        types[result] = "slot"
+                    else:
+                        out.append(f"    {_name(result)}=_mm.bits;}}")
+                        types[result] = elem_type
                     self._emit_exc_check(out, function, call_handler)
                     return out
                 if len(values) != 2:
@@ -4034,6 +4111,13 @@ class LinuxCEmitter:
                 elem_kind = self._coll_elems.get(coll)
                 if elem_kind and "|" not in elem_kind:
                     types[result] = elem_kind
+                    return out
+                te = self._tuple_elems.get(coll) or self._tuple_elems.get(aliases.get(coll, coll))
+                raw_idx = self._fn_consts.get(idx)
+                if raw_idx is None:
+                    raw_idx = self._fn_consts.get(aliases.get(idx, idx))
+                if te is not None and isinstance(raw_idx, int) and 0 <= raw_idx < len(te):
+                    types[result] = te[raw_idx][1]
                     return out
             elif collection_type == "str":
                 # PARITY_P2_V1: str[s] yields the one-character string.
