@@ -36,9 +36,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 149,
+      "FAIL_CLOSED": 116,
       "RAISE_EQ": 0,
-      "EQUIV": 1074
+      "EQUIV": 1107
     },
     "by_area": {
       "literals": {
@@ -109,17 +109,17 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 16,
+        "FAIL_CLOSED": 14,
         "RAISE_EQ": 0,
-        "EQUIV": 69
+        "EQUIV": 71
       },
       "strings": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 22,
+        "FAIL_CLOSED": 21,
         "RAISE_EQ": 0,
-        "EQUIV": 20
+        "EQUIV": 21
       },
       "formatting": {
         "DIVERGENT_CRASH": 0,
@@ -133,49 +133,49 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 5,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 389
+        "EQUIV": 394
       },
       "collections": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 7,
+        "FAIL_CLOSED": 2,
         "RAISE_EQ": 0,
-        "EQUIV": 27
+        "EQUIV": 32
       },
       "dicts": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 11,
+        "FAIL_CLOSED": 3,
         "RAISE_EQ": 0,
-        "EQUIV": 9
+        "EQUIV": 17
       },
       "sets": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 2,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 7
+        "EQUIV": 9
       },
       "comprehensions": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 8,
+        "FAIL_CLOSED": 6,
         "RAISE_EQ": 0,
-        "EQUIV": 19
+        "EQUIV": 21
       },
       "control_flow": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 4,
+        "FAIL_CLOSED": 3,
         "RAISE_EQ": 0,
-        "EQUIV": 16
+        "EQUIV": 17
       },
       "functions": {
         "DIVERGENT_CRASH": 0,
@@ -189,9 +189,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 2,
+        "FAIL_CLOSED": 1,
         "RAISE_EQ": 0,
-        "EQUIV": 19
+        "EQUIV": 20
       },
       "classes": {
         "DIVERGENT_CRASH": 0,
@@ -213,12 +213,12 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 14,
+        "FAIL_CLOSED": 8,
         "RAISE_EQ": 0,
-        "EQUIV": 2
+        "EQUIV": 8
       }
     },
-    "pct_equiv": 87.8,
+    "pct_equiv": 90.5,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -4866,8 +4866,10 @@
       "area": "builtins",
       "name": "min1",
       "src": "imprimir(min('abc'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-8swhre7d/program.c: In function ‘piton_main’:\n/tmp/piton-linux-8swhre7d/program.c:1097:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1097 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_11,PK_STR),1);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-8swhre7d/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
@@ -4900,8 +4902,10 @@
       "area": "builtins",
       "name": "max1",
       "src": "imprimir(max('abc'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-dtek4nj5/program.c: In function ‘piton_main’:\n/tmp/piton-linux-dtek4nj5/program.c:1097:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1097 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_11,PK_STR),0);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-dtek4nj5/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
@@ -5327,8 +5331,10 @@
       "area": "strings",
       "name": "iter",
       "src": "imprimir([c para c en 'abc'])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux collection_len requires a collection"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
@@ -9260,36 +9266,46 @@
       "area": "slices",
       "name": "range[1:4]",
       "src": "a = rango(7)\nimprimir(a[1:4])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux slice not supported for range"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slices",
       "name": "range[:3]",
       "src": "a = rango(7)\nimprimir(a[:3])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux slice not supported for range"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slices",
       "name": "range[::2]",
       "src": "a = rango(7)\nimprimir(a[::2])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux slice not supported for range"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slices",
       "name": "range[::-1]",
       "src": "a = rango(7)\nimprimir(a[::-1])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux slice not supported for range"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slices",
       "name": "range[-2:]",
       "src": "a = rango(7)\nimprimir(a[-2:])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux slice not supported for range"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
@@ -9439,29 +9455,37 @@
       "area": "collections",
       "name": "remove",
       "src": "a = [1, 2, 3]\na.remove(2)\nimprimir(a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux list.remove() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
       "name": "extend",
       "src": "a = [1]\na.extend([2, 3])\nimprimir(a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux list.extend() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
       "name": "clear",
       "src": "a = [1, 2]\na.clear()\nimprimir(a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux list.clear() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
       "name": "copy",
       "src": "a = [1, 2]\nb = a.copy()\nb.append(3)\nimprimir(a)\nimprimir(b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux list.copy() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
@@ -9548,8 +9572,10 @@
       "area": "collections",
       "name": "minmax-str",
       "src": "imprimir(min('cba'))\nimprimir(max('cba'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-beoo7i_8/program.c: In function ‘piton_main’:\n/tmp/piton-linux-beoo7i_8/program.c:1097:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1097 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_11,PK_STR),1);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-beoo7i_8/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n/tmp/piton-linux-beoo7i_8/program.c:1106:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1106 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_16,PK_STR),0);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-beoo7i_8/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
@@ -9587,22 +9613,28 @@
       "area": "dicts",
       "name": "keys",
       "src": "d = {'a': 1, 'b': 2}\npara k en d.keys():\n    imprimir(k)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux dict.keys() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dicts",
       "name": "values",
       "src": "d = {'a': 1, 'b': 2}\npara v en d.values():\n    imprimir(v)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux dict.values() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dicts",
       "name": "items",
       "src": "d = {'a': 1}\npara k, v en d.items():\n    imprimir(k)\n    imprimir(v)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux dict.items() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dicts",
@@ -9685,8 +9717,10 @@
       "area": "dicts",
       "name": "assign",
       "src": "d = {}\nd['a'] = 1\nimprimir(d)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: runtime operation not supported in Linux native subset: set_target"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dicts",
@@ -9699,22 +9733,28 @@
       "area": "dicts",
       "name": "keys-sorted",
       "src": "d = {'b': 1, 'a': 2}\nimprimir(ordenar(d.keys()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux dict.keys() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dicts",
       "name": "values-list",
       "src": "d = {'b': 2, 'a': 1}\nimprimir(ordenar(d.values()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux dict.values() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dicts",
       "name": "items-sorted",
       "src": "d = {'b': 2, 'a': 1}\npara k, v en ordenar(d.items()):\n    imprimir(k)\n    imprimir(v)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux dict.items() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dicts",
@@ -9738,8 +9778,10 @@
       "area": "dicts",
       "name": "comp-over-dict",
       "src": "d = {'a': 1, 'b': 2}\nimprimir({k: v * 10 para k, v en d.items()})\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux dict.items() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "sets",
@@ -9799,15 +9841,19 @@
       "area": "sets",
       "name": "discard",
       "src": "s = {1, 2}\ns.discard(1)\nimprimir(s)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux set.discard() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "sets",
       "name": "remove",
       "src": "s = {1, 2}\ns.remove(1)\nimprimir(s)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux set.remove() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "sets",
@@ -9876,22 +9922,26 @@
       "area": "comprehensions",
       "name": "list-cadena",
       "src": "imprimir([x para x en 'ab'])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux collection_len requires a collection"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
       "name": "listexpr-cadena",
       "src": "imprimir([x + 1 para x en 'ab'])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux collection_len requires a collection"
+      "detail": "build: NativeBuildError: Linux string binary operator not supported: +"
     },
     {
       "area": "comprehensions",
       "name": "listfilter-cadena",
       "src": "imprimir([x para x en 'ab' si x])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux collection_len requires a collection"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
@@ -10139,8 +10189,10 @@
       "area": "control_flow",
       "name": "pass",
       "src": "si Verdadero:\n    pasar\nimprimir('ok')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: runtime operation not supported in Linux native subset: unsupported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
@@ -10258,7 +10310,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-xeai1_ax/program.c: In function ‘f’:\n/tmp/piton-linux-xeai1_ax/program.c:1121:8: error: ‘suma’ undeclared (first use in this function)\n 1121 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-xeai1_ax/program.c:1121:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-yt7apjf5/program.c: In function ‘f’:\n/tmp/piton-linux-yt7apjf5/program.c:1138:8: error: ‘suma’ undeclared (first use in this function)\n 1138 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-yt7apjf5/program.c:1138:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10274,7 +10326,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-9axaf7ae/program.c: In function ‘f’:\n/tmp/piton-linux-9axaf7ae/program.c:1125:8: error: ‘suma’ undeclared (first use in this function)\n 1125 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-9axaf7ae/program.c:1125:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-6_nci5y3/program.c: In function ‘f’:\n/tmp/piton-linux-6_nci5y3/program.c:1142:8: error: ‘suma’ undeclared (first use in this function)\n 1142 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-6_nci5y3/program.c:1142:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10362,21 +10414,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-5dgys02z/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5dgys02z/program.c:1029:9: error: too many arguments to function ‘f’\n 1029 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-5dgys02z/program.c:1002:13: note: declared here\n 1002 | static long f(long a);\n      |             ^\n/tmp/piton-linux-5dgys02z/program.c: At top level:\n/tmp/piton-linux-5dgys02z/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-etoym6h1/program.c: In function ‘piton_main’:\n/tmp/piton-linux-etoym6h1/program.c:1046:9: error: too many arguments to function ‘f’\n 1046 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-etoym6h1/program.c:1019:13: note: declared here\n 1019 | static long f(long a);\n      |             ^\n/tmp/piton-linux-etoym6h1/program.c: At top level:\n/tmp/piton-linux-etoym6h1/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-pzkq9i4w/program.c: In function ‘piton_main’:\n/tmp/piton-linux-pzkq9i4w/program.c:1028:9: error: too few arguments to function ‘f’\n 1028 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-pzkq9i4w/program.c:1002:13: note: declared here\n 1002 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-pzkq9i4w/program.c: At top level:\n/tmp/piton-linux-pzkq9i4w/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-fml37mbi/program.c: In function ‘piton_main’:\n/tmp/piton-linux-fml37mbi/program.c:1045:9: error: too few arguments to function ‘f’\n 1045 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-fml37mbi/program.c:1019:13: note: declared here\n 1019 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-fml37mbi/program.c: At top level:\n/tmp/piton-linux-fml37mbi/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-jsnh617o/program.c: In function ‘piton_main’:\n/tmp/piton-linux-jsnh617o/program.c:1096:9: error: ‘no_existe’ undeclared (first use in this function)\n 1096 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-jsnh617o/program.c:1096:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-8xr0llq3/program.c: In function ‘piton_main’:\n/tmp/piton-linux-8xr0llq3/program.c:1113:9: error: ‘no_existe’ undeclared (first use in this function)\n 1113 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-8xr0llq3/program.c:1113:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10409,8 +10461,10 @@
       "area": "exceptions",
       "name": "raise-bare-class",
       "src": "lanzar ValueError\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native raise requires a call to an exception constructor"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "exceptions",
@@ -10738,7 +10792,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-zdivx6d0/program.c: In function ‘piton_main’:\n/tmp/piton-linux-zdivx6d0/program.c:1099:9: error: too few arguments to function ‘P____init__’\n 1099 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-zdivx6d0/program.c:1073:13: note: declared here\n 1073 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-0to_v3gl/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0to_v3gl/program.c:1116:9: error: too few arguments to function ‘P____init__’\n 1116 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-0to_v3gl/program.c:1090:13: note: declared here\n 1090 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
@@ -10834,36 +10888,46 @@
       "area": "controls_closed",
       "name": "map",
       "src": "imprimir(lista(map(lambda x: x * 2, [1, 2])))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'iterator:map' value"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
       "name": "filter",
       "src": "imprimir(lista(filter(lambda x: x, [0, 1])))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'iterator:filter' value"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
       "name": "zip",
       "src": "imprimir(lista(zip([1, 2], [3, 4])))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'iterator:zip' value"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-0bw7wv0d/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0bw7wv0d/program.c:1096:9: error: ‘divmod’ undeclared (first use in this function)\n 1096 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-0bw7wv0d/program.c:1096:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
       "name": "reversed",
       "src": "imprimir(lista(reversed([1, 2])))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'iterator:reversed' value"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
@@ -10885,8 +10949,10 @@
       "area": "controls_closed",
       "name": "subscript-assign",
       "src": "a = [0, 0]\na[0] = 1\nimprimir(a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: runtime operation not supported in Linux native subset: set_target"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",

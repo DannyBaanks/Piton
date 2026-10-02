@@ -6,10 +6,10 @@ import json
 import operator
 from typing import Any, Dict, List, Optional, Sequence
 
-from piton.hir import BoolOp, ExceptHandler, HIRKind, HIRNode, Keyword, With
+from piton.hir import BoolOp, Call, ExceptHandler, HIRKind, HIRNode, Keyword, With
 
 
-_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError"}
+_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError", "KeyError", "IndexError", "AttributeError", "NameError", "ZeroDivisionError", "OverflowError", "NotImplementedError"}
 
 
 def _os_name_const() -> str:
@@ -186,7 +186,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     # WRITE
     "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
     "set_add": "WRITE",
-    "try_push": "WRITE", "try_pop": "WRITE",
+    "try_push": "WRITE", "try_pop": "WRITE", "subscript_store": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
     "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE",
     "task_new": "WRITE", "task_cancel": "WRITE", "gather_add": "WRITE",
@@ -372,6 +372,10 @@ class MIRLowerer:
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
+        elif target.kind == HIRKind.SUBSCR:
+            obj = self._lower_expr(builder, target.value)
+            idx = self._lower_expr(builder, target.slice)
+            builder.emit("subscript_store", obj, idx, value)
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -1389,6 +1393,8 @@ class MIRLowerer:
                 owner = self._lower_expr(builder, target.value)
                 builder.emit("del_attr", owner, target.attr)
         else:
+            if kind == HIRKind.PASS:
+                return
             if kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
                 self._lower_expr(builder, node)
 
@@ -2063,6 +2069,8 @@ class MIRLowerer:
         if node.exc is None:
             self._lower_reraise(builder)
             return
+        if node.exc.kind == HIRKind.LOAD and (node.exc.name in _BUILTIN_EXCEPTIONS or node.exc.name in self.classes):
+            node = replace(node, exc=Call(kind=HIRKind.CALL, func=node.exc, args=[], keywords=[]))
         if node.exc.kind != HIRKind.CALL or node.exc.func.kind != HIRKind.LOAD:
             raise MIRLoweringError("native raise requires a call to an exception constructor")
         exception_type = node.exc.func.name
@@ -2698,6 +2706,10 @@ class MIRLowerer:
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
+        elif target.kind == HIRKind.SUBSCR:
+            obj = self._lower_expr(builder, target.value)
+            idx = self._lower_expr(builder, target.slice)
+            builder.emit("subscript_store", obj, idx, value)
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
