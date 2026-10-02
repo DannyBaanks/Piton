@@ -199,8 +199,9 @@ class FormatV1(unittest.TestCase):
             compare_native_to_cpython("imprimir('{5}'.format(1))\n")
 
     def test_unknown_method_fails_closed(self):
+        # title is implemented since P23; partition remains out of subset
         with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('a'.title())\n")
+            compare_native_to_cpython("imprimir('a'.partition('x'))\n")
 
 
 class StrMethodsChainedV1(unittest.TestCase):
@@ -305,6 +306,76 @@ class FormatSpecV1(unittest.TestCase):
             pass
         else:
             self.fail("not closed: mixing automatic and manual numbering")
+
+
+class StrMethodsP23(unittest.TestCase):
+    """STR_PREDS_V1 + STR_TRANSFORMS_V1 + STR_PADS_V1: the second str
+    methods wave (mirror of the Linux inline helpers on Windows).
+
+    Predicates are the ASCII subset; empty strings are False for all of
+    them, and isupper/islower/istitle need at least one cased character
+    ('123'.isupper() is False). center follows CPython's
+    left = marg//2 + (marg & width & 1) (the extra pad goes left only
+    when BOTH marg and width are odd). index/rindex report an uncatchable
+    ValueError (exit 1, name on stderr) when the substring is absent —
+    method calls carry no try-handler in MIR yet.
+    """
+
+    def test_case_transforms(self):
+        _assert_matches(self, "imprimir('abc'.capitalize())\n")
+        _assert_matches(self, "imprimir('aBc'.capitalize())\n")
+        _assert_matches(self, "imprimir('abc def'.title())\n")
+        _assert_matches(self, "imprimir('aBc'.swapcase())\n")
+
+    def test_predicates(self):
+        _assert_matches(self, "imprimir('abc'.isalpha())\n")
+        _assert_matches(self, "imprimir('ab1'.isalpha())\n")
+        _assert_matches(self, "imprimir(''.isalpha())\n")
+        _assert_matches(self, "imprimir('123'.isdigit())\n")
+        _assert_matches(self, "imprimir('12a'.isdigit())\n")
+        _assert_matches(self, "imprimir('ab12'.isalnum())\n")
+        _assert_matches(self, "imprimir('  '.isspace())\n")
+        _assert_matches(self, "imprimir(''.isspace())\n")
+
+    def test_cased_predicates(self):
+        _assert_matches(self, "imprimir('Abc'.istitle())\n")
+        _assert_matches(self, "imprimir('abc'.istitle())\n")
+        _assert_matches(self, "imprimir('ABC'.isupper())\n")
+        _assert_matches(self, "imprimir('123'.isupper())\n")
+        _assert_matches(self, "imprimir('abc'.islower())\n")
+
+    def test_zfill(self):
+        _assert_matches(self, "imprimir('5'.zfill(3))\n")
+        _assert_matches(self, "imprimir('-5'.zfill(3))\n")
+
+    def test_just(self):
+        _assert_matches(self, "imprimir('ab'.ljust(5))\n")
+        _assert_matches(self, "imprimir('ab'.rjust(5))\n")
+        _assert_matches(self, "imprimir('ab'.center(6))\n")
+        _assert_matches(self, "imprimir('ab'.center(7))\n")
+        _assert_matches(self, "imprimir('ab'.center(6, '*'))\n")
+        _assert_matches(self, "imprimir('x'.center(4))\n")
+
+    def test_search(self):
+        _assert_matches(self, "imprimir('abcabc'.count('bc'))\n")
+        _assert_matches(self, "imprimir('abc'.count('z'))\n")
+        _assert_matches(self, "imprimir('aaa'.count('aa'))\n")
+        _assert_matches(self, "imprimir('abcabc'.count(''))\n")
+        _assert_matches(self, "imprimir('abc'.rfind('b'))\n")
+        _assert_matches(self, "imprimir('abc'.rfind('z'))\n")
+        _assert_matches(self, "imprimir('abc'.index('b'))\n")
+        _assert_matches(self, "imprimir('abcabc'.rindex('b'))\n")
+
+    def test_index_missing_raises(self):
+        result = compare_native_to_cpython("imprimir('abc'.index('z'))\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"ValueError", result.native.stderr)
+
+    def test_bad_arity_fails_closed(self):
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("imprimir('a'.zfill())\n")
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("imprimir('a'.center())\n")
 
 
 if __name__ == "__main__":
