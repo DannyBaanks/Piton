@@ -855,5 +855,87 @@ class SumElementTypeV1(unittest.TestCase):
         _assert_matches(self, "imprimir(['a'])\n")
 
 
+class DivergentCluster29V1(unittest.TestCase):
+    """Los DIVERGENT que quedaban tras el corpus: tipo(), dict.get/[], comp
+    sobre dict, shift negativo, abs, identidad y sum con bigints."""
+
+    def test_tipo_call_and_instance(self):
+        for source in (
+            "imprimir(tipo(1))\n",
+            "imprimir(tipo('a'))\n",
+            "imprimir(tipo([1]))\n",
+            "imprimir(tipo(Nada))\n",
+            "clase P:\n    pasar\nimprimir(tipo(P()))\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_dict_subscript_and_get_carry_value_type(self):
+        for source in (
+            "d = {1: 'a'}\nimprimir(d[1])\n",
+            "d = {'a': 7}\nimprimir(d['a'])\n",
+            "d = {1: 2.5}\nimprimir(d[1])\n",
+            "d = {1: 'v'}\nimprimir(d.get(1))\n",
+            "d = {'a': 2.5}\nimprimir(d.get('a'))\n",
+            "d = {1: 'v'}\nimprimir(d.get(1, 'z'))\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_comprehension_over_dict_and_set_yields_keys(self):
+        for source in (
+            "imprimir([k para k en {'a': 1}])\n",
+            "d = {'a': 1}\nimprimir([k para k en d])\n",
+            "imprimir([k para k en {1: 'a', 2: 'b'}])\n",
+            "imprimir([x para x en {1, 2}])\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_explicit_dict_subscript_still_raises(self):
+        result = compare_native_to_cpython("d = {'a': 1}\nimprimir(d[0])\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertEqual(result.oracle.returncode, 1)
+
+    def test_negative_shift_raises_and_is_catchable(self):
+        for source in ("imprimir(2 << -3)\n", "imprimir(2 >> -3)\n"):
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1)
+            self.assertEqual(result.oracle.returncode, 1)
+        _assert_matches(
+            self,
+            "intentar:\n    x = 2 << -1\nexcepto ValueError:\n    imprimir('caught')\n",
+        )
+        _assert_matches(self, "imprimir(2 << 3)\nimprimir(64 >> 3)\n")
+
+    def test_abs_rejects_non_numeric(self):
+        for source in ("imprimir(abs(Nada))\n", "imprimir(abs('a'))\n", "imprimir(abs([1]))\n"):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail(f"abs of non-numeric not closed: {source}")
+        for source in ("imprimir(abs(-3))\n", "imprimir(abs(-2.5))\n"):
+            _assert_matches(self, source)
+
+    def test_identity_is_not_equality(self):
+        _assert_matches(self, "imprimir(1 es Verdadero)\n")
+        _assert_matches(self, "imprimir(1 es 1)\n")
+        _assert_matches(self, "imprimir(1 no es 2)\n")
+        _assert_matches(self, "imprimir(Nada es Nada)\n")
+
+    def test_sum_over_bigint_or_mixed_refuses(self):
+        for source in (
+            "imprimir(sum([10 ** 20, 1]))\n",
+            "imprimir(sum([10 ** 20]))\n",
+            "imprimir(sum([1, 'a']))\n",
+        ):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail(f"sum over unsupported element kinds not closed: {source}")
+        _assert_matches(self, "imprimir(sum([1, 2, 3]))\n")
+
+
 if __name__ == "__main__":
     unittest.main()

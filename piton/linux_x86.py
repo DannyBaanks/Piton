@@ -419,6 +419,11 @@ static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",
 static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(d->items[i].key);piton_write(1,": ",2);piton_print_slot(d->items[i].value);}piton_write(1,"}",1);}
 static void piton_print_set(PitonSet*s){piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}piton_write(1,"}",1);}
 static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,"'",1);piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(1,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;default:piton_write(1,"<object>",8);}}
+/* COMP_DICT_ITER_V1: the i-th KEY of a dict / the i-th element of a set,
+ * for a comprehension's index loop. Explicit subscripts keep using
+ * piton_dict_get, which raises KeyError as CPython does. */
+static PitonSlot piton_dict_nth_key(PitonDict*d,long i){if(!d||i<0||i>=d->length)piton_write(2,"IndexError\n",10),piton_exit(1);return d->items[i].key;}
+static PitonSlot piton_set_nth(PitonSet*s,long i){if(!s||i<0||i>=s->length)piton_write(2,"IndexError\n",10),piton_exit(1);return s->items[i];}
 static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i)r+=d->items[i].key.bits;return r;}
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
@@ -577,6 +582,10 @@ class LinuxCEmitter:
         # builtin like sum() can tell what it is accumulating instead of
         # assuming int (which made it add raw pointers for bigints).
         self._coll_elems: dict[str, str] = {}
+        # DICT_VAL_TYPE_V1: static type of a dict's VALUES, so `d[k]` and
+        # `d.get(k)` return a correctly typed result instead of an int
+        # slot holding a str/bigint pointer (printed as an address).
+        self._dict_val_types: dict[str, str] = {}
         self._dict_elems: dict[str, dict[str, tuple[str, str]]] = {}
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
@@ -683,6 +692,7 @@ class LinuxCEmitter:
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
         self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
+        self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         if function.vararg:
             types[function.vararg] = "tuple"
@@ -739,6 +749,7 @@ class LinuxCEmitter:
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
         self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
+        self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
@@ -798,6 +809,7 @@ class LinuxCEmitter:
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
         self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
+        self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
@@ -1176,6 +1188,10 @@ class LinuxCEmitter:
         other runtime helpers.
         """
         operand = self._value(obj)
+        # DICT_VAL_TYPE_V1: the static-type maps are keyed by the MIR operand,
+        # not by its already-rendered C expression (`operand`), so the lookup
+        # must use `obj`.
+        operand_key = obj
 
         def require_count(counts: tuple[int, ...], what: str) -> None:
             if len(call_args) not in counts:
@@ -1223,16 +1239,32 @@ class LinuxCEmitter:
         elif coll_type == "dict":
             if method == "get":
                 require_count((1, 2), "one or two arguments (key[, default])")
+                val_type = self._dict_val_types.get(operand_key)
                 if len(call_args) == 2:
                     default = self._slot(call_args[1], types)
                     out.append(f"    {_name(result)}=piton_dict_get_d((PitonDict*){operand},{self._slot(call_args[0], types)},{default}).bits;")
+                    # DICT_VAL_TYPE_V1: the hit yields the dict's value type; the
+                    # miss yields the default's. The static type can only be one
+                    # of them, so a default whose type differs from the values
+                    # fails closed instead of printing a pointer as an int.
+                    default_type = types.get(call_args[1], "int")
+                    if val_type is None:
+                        types[result] = default_type
+                    elif val_type == default_type:
+                        types[result] = val_type
+                    else:
+                        raise NativeBuildError(
+                            f"Linux dict.get default of type '{default_type}' cannot be "
+                            f"unioned with values of type '{val_type}' in the untagged model"
+                        )
                 else:
                     # single-arg get on a missing key raises KeyError — the
                     # untagged model cannot print an int-or-None union, and a
                     # loud error beats a silent wrong value (consistent with
                     # d[k] in this backend, which also raises KeyError).
                     out.append(f"    {_name(result)}=piton_dict_get_1((PitonDict*){operand},{self._slot(call_args[0], types)}).bits;")
-                types[result] = "int"
+                    if val_type is not None:
+                        types[result] = val_type
             else:
                 raise NativeBuildError(f"Linux dict.{method}() is not supported")
         elif coll_type == "set":
@@ -2031,6 +2063,8 @@ class LinuxCEmitter:
                 self._dict_key_types[result] = self._dict_key_types[source]
             if source in self._coll_elems:
                 self._coll_elems[result] = self._coll_elems[source]
+            if source in self._dict_val_types:
+                self._dict_val_types[result] = self._dict_val_types[source]
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
@@ -2076,6 +2110,8 @@ class LinuxCEmitter:
                     self._dict_key_types[result] = self._dict_key_types[source]
                 if source in self._coll_elems:
                     self._coll_elems[result] = self._coll_elems[source]
+                if source in self._dict_val_types:
+                    self._dict_val_types[result] = self._dict_val_types[source]
                 return out
             if (
                 source in self._module_stored
@@ -2126,6 +2162,8 @@ class LinuxCEmitter:
                 self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
             if args[1] in self._coll_elems:
                 self._coll_elems[args[0]] = self._coll_elems[args[1]]
+            if args[1] in self._dict_val_types:
+                self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
             if isinstance(args[0], str) and args[0].startswith("@boolh_"):
                 # BOOL_SHORT_V1: both arms of y/o must share one static
                 # type — the untagged model cannot print a mixed result
@@ -2615,6 +2653,14 @@ class LinuxCEmitter:
                 types[result] = "int"
                 return out
             if operator in {"&", "|", "^", "<<", ">>"}:
+                if operator in {"<<", ">>"}:
+                    # SHIFT_NEG_V1: CPython raises ValueError for a negative
+                    # shift count; the raw C shift used to answer 0 (or UB on
+                    # some targets) because the count was consumed as unsigned.
+                    out.append(
+                        f'    if({self._value(right)}<0){{piton_raise_set("ValueError","negative shift count");}}'
+                    )
+                    self._emit_exc_check(out, function, handler_label)
                 expression = f"({self._value(left)} {operator} {self._value(right)})"
             else:
                 raise NativeBuildError(f"Linux binary operator not supported: {operator}")
@@ -2622,8 +2668,20 @@ class LinuxCEmitter:
             types[result] = "int"
         elif op == "compare":
             operator, left, right = args
-            if operator == "es":
-                out.append(f"    {_name(result)}=({self._value(left)} == {self._value(right)});")
+            if operator in {"es", "no es"}:
+                # IS_IDENTITY_V1: `es` is IDENTITY, not equality. The raw C `==`
+                # answered True for `1 es Verdadero` (both are 1) where CPython
+                # says False. Compare raw bits: for the untagged model that is
+                # identity for the value types it can represent, and the
+                # differing static types are identity-different anyway.
+                identity = (
+                    f"(({self._value(left)})==({self._value(right)}))"
+                    f"&&{self._kind(types.get(left,'int'))}=={self._kind(types.get(right,'int'))}"
+                )
+                # IS_IDENTITY_V1: `x no es y` is the negation of identity, and it
+                # had no dispatch branch at all, so the operator name reached the
+                # C source and the compile failed.
+                out.append(f"    {_name(result)}={'!' if operator == 'no es' else ''}({identity});")
                 types[result] = "bool"
                 return out
             if operator in {"en", "no en"}:
@@ -2800,7 +2858,17 @@ class LinuxCEmitter:
             elif function_name == "abs":
                 if len(values) != 1:
                     raise NativeBuildError("Linux abs requires one argument")
-                if types.get(values[0]) == "float":
+                arg_type = types.get(values[0], "int")
+                # ABS_TYPE_V1: `abs` of a non-numeric operand is a TypeError in
+                # CPython; the else branch treated any non-float as an integer
+                # and read a string/collection POINTER as a long, so
+                # `abs('a')` printed an address and `abs(Nada)` answered 0.
+                if arg_type not in {"int", "bool", "float"}:
+                    raise NativeBuildError(
+                        f"Linux abs of '{arg_type}' is not supported "
+                        "(CPython raises TypeError: bad operand type for abs())"
+                    )
+                if arg_type == "float":
                     out.append(f"    {_name(result)}={self._value(values[0])}&0x7fffffffffffffffUL;")
                     types[result] = "float"
                 else:
@@ -2987,7 +3055,9 @@ class LinuxCEmitter:
                 # address (`sum([10 ** 20])` -> 4210752). Refuse anything whose
                 # element type is not int instead of accumulating garbage.
                 elem_type = self._coll_elems.get(values[0], "int")
-                if elem_type != "int":
+                kinds = set(elem_type.split("|")) if elem_type else {"int"}
+                if kinds != {"int"}:
+                    elem_type = "|".join(sorted(kinds))
                     raise NativeBuildError(
                         f"Linux sum over '{elem_type}' elements is not supported "
                         "(CPython sums them; the native helper only adds int bits)"
@@ -2997,7 +3067,19 @@ class LinuxCEmitter:
             elif function_name in {"type", "tipo"}:
                 if len(values) != 1:
                     raise NativeBuildError("Linux type requires one argument")
-                out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(types.get(values[0], 'int'))});")
+                value_type = types.get(values[0], "int")
+                if value_type.startswith("object:"):
+                    # TIPO_OBJ_V1: `tipo(instancia)` must name the class, not the
+                    # generic object slot: CPython prints `<class '__main__.P'>`.
+                    # The backend does not track which module a class came from,
+                    # so the module part is fixed to `__main__` (correct for
+                    # classes declared in the main script, which is what the
+                    # declared native subset covers).
+                    class_name = value_type.split(":", 1)[1]
+                    literal = json.dumps(f"<class '__main__.{class_name}'>")
+                    out.append(f"    {_name(result)}=(long){literal};")
+                else:
+                    out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
                 types[result] = "str"
             elif function_name in {"sorted", "ordenar"}:
                 if len(values) != 1 or types.get(values[0]) not in {"list", "tuple"}:
@@ -3414,6 +3496,12 @@ class LinuxCEmitter:
                         elem_kinds.add("int")
                 if len(elem_kinds) == 1:
                     self._coll_elems[result] = next(iter(elem_kinds))
+                elif elem_kinds:
+                    # COLL_ELEM_TYPE_V1: a MIXED collection is recorded as the
+                    # joined set, so `sum([10 ** 20, 1])` is recognized as
+                    # containing a bigint instead of silently defaulting to int
+                    # and adding pointers.
+                    self._coll_elems[result] = "|".join(sorted(elem_kinds))
             if kind in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=(long)piton_seq_new({self._kind(kind)},{len(items)});')
                 for index, value in enumerate(items):
@@ -3452,6 +3540,17 @@ class LinuxCEmitter:
                             kinds.add(types.get(key, "int"))
                     if len(kinds) == 1:
                         self._dict_key_types[result] = next(iter(kinds))
+                    if result and items:
+                        v_kinds = set()
+                        for _key, value in items:
+                            if isinstance(value, str) and value.startswith("%"):
+                                v_kinds.add(types.get(value, "int"))
+                            elif isinstance(value, str):
+                                v_kinds.add("str")
+                            else:
+                                v_kinds.add("int")
+                        if len(v_kinds) == 1:
+                            self._dict_val_types[result] = next(iter(v_kinds))
                 out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
                 for index, (key, value) in enumerate(items):
                     key_is_str = isinstance(key, str) and not key.startswith("%")
@@ -3509,8 +3608,35 @@ class LinuxCEmitter:
                 out.append(f'    {_name(result)}=(long)piton_str_index((const char*){self._value(coll)},{self._value(idx)});')
                 types[result] = "str"
                 return out
+            elif (
+                isinstance(idx, str)
+                and aliases.get(idx, idx).startswith("@comp_index")
+                and collection_type in {"dict", "dict:module", "set"}
+            ):
+                # COMP_DICT_ITER_V1: a comprehension lowers to an index loop, and
+                # the index temporaries are named `@comp_index_N` by convention
+                # (like the `@boolh_` holders). Indexing a dict by an integer
+                # raised KeyError, so `[k for k in {'a': 1}]` produced nothing,
+                # while a `para` loop over the same dict worked. CPython
+                # iteration over a dict yields KEYS, so that is what the
+                # comprehension step must fetch.
+                if collection_type in {"dict", "dict:module"}:
+                    out.append(f'    {_name(result)}=piton_dict_nth_key((PitonDict*){self._value(coll)},{self._value(idx)}).bits;')
+                    key_type = self._dict_key_types.get(coll, "str")
+                    types[result] = key_type
+                    return out
+                out.append(f'    {_name(result)}=piton_set_nth((PitonSet*){self._value(coll)},{self._value(idx)}).bits;')
+                types[result] = self._coll_elems.get(coll, "int")
+                return out
             elif collection_type in {"dict", "dict:module"}:
                 out.append(f'    {_name(result)}=piton_dict_get((PitonDict*){self._value(coll)},{self._slot(idx, types)}).bits;')
+                # DICT_VAL_TYPE_V1: `d[k]` must carry the dict's value type, or
+                # a str/bigint/float value is printed as a raw int slot (an
+                # address). Unknown value type keeps the historical int.
+                val_type = self._dict_val_types.get(coll)
+                if val_type is not None:
+                    types[result] = val_type
+                    return out
             else:
                 raise NativeBuildError(f"Linux subscription not supported for {collection_type}")
             types[result] = "object:module" if collection_type == "dict:module" else "int"

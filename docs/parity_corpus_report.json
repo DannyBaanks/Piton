@@ -33,11 +33,11 @@
     "total": 1180,
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
-      "DIVERGENT_MISMATCH": 22,
+      "DIVERGENT_MISMATCH": 5,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 198,
+      "FAIL_CLOSED": 196,
       "RAISE_EQ": 1,
-      "EQUIV": 959
+      "EQUIV": 978
     },
     "by_area": {
       "literals": {
@@ -50,11 +50,11 @@
       },
       "arithmetic": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 2,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 131
+        "EQUIV": 133
       },
       "associativity": {
         "DIVERGENT_CRASH": 0,
@@ -74,35 +74,35 @@
       },
       "comparisons": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 18,
+        "FAIL_CLOSED": 12,
         "RAISE_EQ": 0,
-        "EQUIV": 92
+        "EQUIV": 99
       },
       "truthiness": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 2,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 9,
         "RAISE_EQ": 0,
-        "EQUIV": 64
+        "EQUIV": 66
       },
       "bigint": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 0,
+        "FAIL_CLOSED": 1,
         "RAISE_EQ": 0,
         "EQUIV": 32
       },
       "builtins": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 7,
+        "DIVERGENT_MISMATCH": 1,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 39,
+        "FAIL_CLOSED": 40,
         "RAISE_EQ": 0,
-        "EQUIV": 40
+        "EQUIV": 45
       },
       "strings": {
         "DIVERGENT_CRASH": 0,
@@ -138,11 +138,11 @@
       },
       "dicts": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 3,
+        "DIVERGENT_MISMATCH": 1,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 10,
+        "FAIL_CLOSED": 11,
         "RAISE_EQ": 0,
-        "EQUIV": 7
+        "EQUIV": 8
       },
       "sets": {
         "DIVERGENT_CRASH": 0,
@@ -154,11 +154,11 @@
       },
       "comprehensions": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 2,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 18,
+        "FAIL_CLOSED": 19,
         "RAISE_EQ": 0,
-        "EQUIV": 7
+        "EQUIV": 8
       },
       "control_flow": {
         "DIVERGENT_CRASH": 0,
@@ -186,11 +186,11 @@
       },
       "classes": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 3,
+        "DIVERGENT_MISMATCH": 2,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 7,
         "RAISE_EQ": 0,
-        "EQUIV": 11
+        "EQUIV": 12
       },
       "generators": {
         "DIVERGENT_CRASH": 0,
@@ -209,9 +209,9 @@
         "EQUIV": 2
       }
     },
-    "pct_equiv": 81.3,
-    "pct_honest": 98.1,
-    "pct_divergent": 1.9
+    "pct_equiv": 82.9,
+    "pct_honest": 99.6,
+    "pct_divergent": 0.4
   },
   "records": [
     {
@@ -1046,9 +1046,9 @@
       "area": "arithmetic",
       "name": "int<<6",
       "src": "imprimir(2 << -3)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=0 err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | ValueError: negative shift count",
-      "native_rc": 0,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
       "oracle_rc": 1
     },
     {
@@ -1109,9 +1109,9 @@
       "area": "arithmetic",
       "name": "int>>6",
       "src": "imprimir(2 >> -3)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=0 err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | ValueError: negative shift count",
-      "native_rc": 0,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
       "oracle_rc": 1
     },
     {
@@ -2507,8 +2507,8 @@
       "area": "comparisons",
       "name": "ides4",
       "src": "imprimir(1 es Verdadero)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=True err= || oracle rc=0 out=False err=<string>:1: SyntaxWarning: \"is\" with 'int' literal. Did you mean \"==\"?",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -2525,43 +2525,55 @@
       "area": "comparisons",
       "name": "idno es0",
       "src": "imprimir(1 no es 1.0)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(1 not es 1.0)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "idno es1",
       "src": "imprimir(1 no es '1')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(1 not es '1')"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "idno es2",
       "src": "imprimir(0 no es 1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(0 not es 1)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "idno es3",
       "src": "imprimir(Falso no es 1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(False not es 1)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "idno es4",
       "src": "imprimir(1 no es Verdadero)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(1 not es True)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "idno es5",
       "src": "imprimir('a' no es 'a')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint('a' not es 'a')"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
@@ -3029,19 +3041,19 @@
       "area": "truthiness",
       "name": "no-neg",
       "src": "v = -1\nimprimir(no -1)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=False err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 2, in <module> | NameError: name 'no' is not defined",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
-      "oracle_rc": 1
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
       "name": "sino-neg",
       "src": "v = -1\nsi no -1:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=F err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 2, in <module> | NameError: name 'no' is not defined",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
-      "oracle_rc": 1
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
@@ -3836,10 +3848,8 @@
       "area": "bigint",
       "name": "sum-small",
       "src": "imprimir(sum([10 ** 20, 1]))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=4210753 err= || oracle rc=0 out=100000000000000000001 err=",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux sum over 'bigint|int' elements is not supported (CPython sums them; the native helper only adds int bits)"
     },
     {
       "area": "bigint",
@@ -3890,10 +3900,8 @@
       "area": "builtins",
       "name": "abs2",
       "src": "imprimir(abs(Nada))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=0 err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | TypeError: bad operand type for abs(): 'NoneType'",
-      "native_rc": 0,
-      "oracle_rc": 1
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux abs of 'none' is not supported (CPython raises TypeError: bad operand type for abs())"
     },
     {
       "area": "builtins",
@@ -4239,46 +4247,46 @@
       "area": "builtins",
       "name": "tipo0",
       "src": "imprimir(tipo(1))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=<class 'int'> err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | NameError: name 'tipo' is not defined",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
-      "oracle_rc": 1
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "tipo1",
       "src": "imprimir(tipo('a'))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=<class 'str'> err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | NameError: name 'tipo' is not defined",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
-      "oracle_rc": 1
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "tipo2",
       "src": "imprimir(tipo(1.0))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=<class 'float'> err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | NameError: name 'tipo' is not defined",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
-      "oracle_rc": 1
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "tipo3",
       "src": "imprimir(tipo([1]))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=<class 'list'> err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | NameError: name 'tipo' is not defined",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
-      "oracle_rc": 1
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "tipo4",
       "src": "imprimir(tipo({}))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=<class 'dict'> err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | NameError: name 'tipo' is not defined",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
-      "oracle_rc": 1
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
@@ -9170,10 +9178,8 @@
       "area": "dicts",
       "name": "get-callable-default",
       "src": "d = {}\nimprimir(d.get('a', list))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=0 err= || oracle rc=0 out=<class 'list'> err=",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux native print of a builtin value is not supported (can never match CPython output)"
     },
     {
       "area": "dicts",
@@ -9215,9 +9221,9 @@
       "area": "dicts",
       "name": "iter-values-view",
       "src": "imprimir([k para k en {'a': 1}])\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=1 out= err=KeyError || oracle rc=0 out=['a'] err=",
-      "native_rc": 1,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
@@ -9433,27 +9439,25 @@
       "area": "comprehensions",
       "name": "list-diccionario",
       "src": "imprimir([x para x en {'a': 1}])\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=1 out= err=KeyError || oracle rc=0 out=['a'] err=",
-      "native_rc": 1,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
       "area": "comprehensions",
       "name": "listexpr-diccionario",
       "src": "imprimir([x + 1 para x en {'a': 1}])\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 1,
-      "oracle_rc": 1
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux string binary operator not supported: +"
     },
     {
       "area": "comprehensions",
       "name": "listfilter-diccionario",
       "src": "imprimir([x para x en {'a': 1} si x])\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=1 out= err=KeyError || oracle rc=0 out=['a'] err=",
-      "native_rc": 1,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
@@ -9768,7 +9772,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-ggnhwc1d/program.c: In function ‘f’:\n/tmp/piton-linux-ggnhwc1d/program.c:935:8: error: ‘suma’ undeclared (first use in this function)\n  935 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-ggnhwc1d/program.c:935:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-o_e7zc04/program.c: In function ‘f’:\n/tmp/piton-linux-o_e7zc04/program.c:940:8: error: ‘suma’ undeclared (first use in this function)\n  940 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-o_e7zc04/program.c:940:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9784,7 +9788,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-x39bzxgl/program.c: In function ‘f’:\n/tmp/piton-linux-x39bzxgl/program.c:939:8: error: ‘suma’ undeclared (first use in this function)\n  939 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-x39bzxgl/program.c:939:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-fqdxcuer/program.c: In function ‘f’:\n/tmp/piton-linux-fqdxcuer/program.c:944:8: error: ‘suma’ undeclared (first use in this function)\n  944 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-fqdxcuer/program.c:944:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9870,21 +9874,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-r0aezfza/program.c: In function ‘piton_main’:\n/tmp/piton-linux-r0aezfza/program.c:917:9: error: too many arguments to function ‘f’\n  917 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-r0aezfza/program.c:890:13: note: declared here\n  890 | static long f(long a);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-nh16lfe0/program.c: In function ‘piton_main’:\n/tmp/piton-linux-nh16lfe0/program.c:922:9: error: too many arguments to function ‘f’\n  922 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-nh16lfe0/program.c:895:13: note: declared here\n  895 | static long f(long a);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-bpm8mhan/program.c: In function ‘piton_main’:\n/tmp/piton-linux-bpm8mhan/program.c:916:9: error: too few arguments to function ‘f’\n  916 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-bpm8mhan/program.c:890:13: note: declared here\n  890 | static long f(long a, long b);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-4uh3nl_n/program.c: In function ‘piton_main’:\n/tmp/piton-linux-4uh3nl_n/program.c:921:9: error: too few arguments to function ‘f’\n  921 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-4uh3nl_n/program.c:895:13: note: declared here\n  895 | static long f(long a, long b);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-kks4h8sl/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kks4h8sl/program.c:913:9: error: ‘no_existe’ undeclared (first use in this function)\n  913 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-kks4h8sl/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-gak5lda9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-gak5lda9/program.c:918:9: error: ‘no_existe’ undeclared (first use in this function)\n  918 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-gak5lda9/program.c:918:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10220,10 +10224,10 @@
       "area": "classes",
       "name": "type-of",
       "src": "clase P:\n    pasar\nimprimir(tipo(P()))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=<class 'object'> err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 3, in <module> | NameError: name 'tipo' is not defined",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
-      "oracle_rc": 1
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -10246,7 +10250,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-0y53z0k2/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0y53z0k2/program.c:916:9: error: too few arguments to function ‘P____init__’\n  916 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-0y53z0k2/program.c:890:13: note: declared here\n  890 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-afjk2pme/program.c: In function ‘piton_main’:\n/tmp/piton-linux-afjk2pme/program.c:921:9: error: too few arguments to function ‘P____init__’\n  921 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-afjk2pme/program.c:895:13: note: declared here\n  895 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
@@ -10362,7 +10366,7 @@
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-1y1_39cf/program.c: In function ‘piton_main’:\n/tmp/piton-linux-1y1_39cf/program.c:913:9: error: ‘divmod’ undeclared (first use in this function)\n  913 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-1y1_39cf/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-a1rxvkve/program.c: In function ‘piton_main’:\n/tmp/piton-linux-a1rxvkve/program.c:918:9: error: ‘divmod’ undeclared (first use in this function)\n  918 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-a1rxvkve/program.c:918:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "controls_closed",

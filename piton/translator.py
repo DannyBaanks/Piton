@@ -169,13 +169,33 @@ def _es_contexto_caso(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
     return True
 
 
+def _es_llamada_builtin(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
+    """True when a soft keyword is used as a CALL: `tipo(` -> `type(`."""
+    siguiente = _siguiente_significativo(tokens, indice)
+    return (
+        siguiente is not None
+        and siguiente.type == token.OP
+        and siguiente.string == "("
+    )
+
+
 def _es_contexto_tipo(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
+    """True when `tipo` spells `type` rather than being a plain name.
+
+    Besides the `segun`/`caso tipo:` pattern (a NAME follows), the CALL form
+    `tipo(x)` is also the builtin: the native backends implement `tipo`, so the
+    translation must say `type(x)`. It used to emit `tipo(1)`, which Python
+    cannot resolve — the oracle raised NameError while the native program
+    printed `<class 'int'>`, and every `tipo()` case was measured DIVERGENT.
+    """
     siguiente = _siguiente_significativo(tokens, indice)
     if siguiente is None:
         return False
-    if siguiente.type != token.NAME:
-        return False
-    return True
+    if siguiente.type == token.NAME:
+        return True
+    if siguiente.type == token.OP and siguiente.string == "(":
+        return True
+    return False
 
 
 # KEYWORD_EXPR_V1: Spanish keywords that spell an EXPRESSION operator and are
@@ -216,7 +236,10 @@ def _empieza_expresion(token_: "tokenize.TokenInfo | None") -> bool:
         return True
     # `{` opens a set/dict literal, which is a valid right operand:
     # `1 en {1, 2}` is `1 in {1, 2}`. Omitting it left `en` untranslated.
-    if token_.type == token.OP and token_.string in {"(", "[", "{"}:
+    # A SIGN also starts an expression: `no -1` is `not -1` and `1 y -2` is
+    # `1 and -2`. Without the sign the unary keyword was left untranslated and
+    # the oracle got `no -1`, which Python cannot resolve.
+    if token_.type == token.OP and token_.string in {"(", "[", "{", "-", "+", "~"}:
         return True
     if token_.type == token.NAME:
         return True
@@ -236,10 +259,25 @@ def _es_keyword_de_expresion(tokens: list[tokenize.TokenInfo], indice: int, nomb
     # `no en` is ONE operator spelled as two tokens: both must translate, or the
     # output is `not en` (invalid Python). Neither token is in operator position
     # by the rules below, because they are keywords themselves.
-    if nombre == "no" and siguiente is not None and siguiente.type == token.NAME and siguiente.string == "en":
-        return True
-    if nombre == "en" and anterior is not None and anterior.type == token.NAME and anterior.string == "no":
-        return True
+    # `no en` / `no es` are ONE operator spelled as two tokens: both must
+    # translate, or the output is `not in` / `not es` (invalid Python).
+    # Neither token is in operator position by the rules below, because each is
+    # itself a keyword.
+    for pareja in ("en", "es"):
+        if (
+            nombre == "no"
+            and siguiente is not None
+            and siguiente.type == token.NAME
+            and siguiente.string == pareja
+        ):
+            return True
+        if (
+            nombre == pareja
+            and anterior is not None
+            and anterior.type == token.NAME
+            and anterior.string == "no"
+        ):
+            return True
     if nombre in _KEYWORDS_BINARIOS:
         return _termina_expresion(anterior) and _empieza_expresion(siguiente)
     if nombre in _KEYWORDS_UNARIOS:
@@ -426,6 +464,54 @@ def analizar_tokens(
                     inicio_stmt = False
                     salida.append(actual)
                     continue
+                # NO_PAREJA_V1: `no en` / `no es` are ONE operator written as two
+                # tokens, and Python's spellings are `not in` / `is not` — a
+                # token-by-token mapping produced `not in` (fine) but `not is`
+                # (invalid) for the second. The pair is therefore rewritten as a
+                # unit: the first token takes the leading word and the second
+                # the trailing one, so the order comes out right.
+                if actual.string == "no":
+                    siguiente = _siguiente_significativo(tokens, indice)
+                    if (
+                        siguiente is not None
+                        and siguiente.type == token.NAME
+                        and siguiente.string == "es"
+                    ):
+                        # `no es` -> `is ... not`
+                        reemplazo = "is"
+                        categoria = "keyword-pair"
+                        inicio_stmt = False
+                        out_pair = None
+                        salida.append(actual._replace(string="is"))
+                        cambios.append(
+                            CambioToken(
+                                actual.start[0], actual.start[1] + 1,
+                                actual.string, "is", "keyword-pair",
+                            )
+                        )
+                        mapa.agregar(actual.end[0], actual.end[1], actual.start[0], actual.start[1])
+                        continue
+                if actual.string in {"es", "en"}:
+                    anterior = _anterior_significativo(tokens, indice)
+                    if (
+                        anterior is not None
+                        and anterior.type == token.NAME
+                        and anterior.string == "no"
+                        and actual.string == "es"
+                    ):
+                        # second token of `no es` -> `not`
+                        reemplazo = "not"
+                        categoria = "keyword-pair"
+                        inicio_stmt = False
+                        salida.append(actual._replace(string="not"))
+                        cambios.append(
+                            CambioToken(
+                                actual.start[0], actual.start[1] + 1,
+                                actual.string, "not", "keyword-pair",
+                            )
+                        )
+                        mapa.agregar(actual.end[0], actual.end[1], actual.start[0], actual.start[1])
+                        continue
                 reemplazo = HARD_KEYWORDS[actual.string]
                 categoria = "keyword"
                 inicio_stmt = False
@@ -441,6 +527,13 @@ def analizar_tokens(
                         es_keyword = True
                     elif actual.string == "tipo" and _es_contexto_tipo(tokens, indice):
                         es_keyword = True
+                elif actual.string == "tipo" and _es_llamada_builtin(tokens, indice):
+                    # TIPO_CALL_V1: `tipo(x)` is the builtin `type` even in the
+                    # middle of an expression. The native backends implement
+                    # `tipo`, so the translation must be `type(x)`; leaving it
+                    # as `tipo(1)` gave the oracle a NameError while the native
+                    # program printed `<class 'int'>`.
+                    es_keyword = True
 
                 if es_keyword:
                     reemplazo = SOFT_KEYWORDS[actual.string]

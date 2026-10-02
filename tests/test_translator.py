@@ -232,9 +232,30 @@ finalmente:
         fuente = "tipo = 5\nprint(tipo)\n"
         self.assertEqual(traducir_fuente(fuente), fuente)
 
-    def test_tipo_funcion_call_se_conserva(self) -> None:
-        fuente = "x = tipo(objeto)\n"
-        self.assertEqual(traducir_fuente(fuente), fuente)
+    def test_tipo_funcion_call_traduce_a_type(self) -> None:
+        """TIPO_CALL_V1: `tipo(x)` es el builtin `type`, no un nombre.
+
+        Este test afirmaba lo contrario desde el commit inicial (v1.0.0), pero
+        los backends nativos implementan `tipo` como builtin (`tipo` esta en
+        `_BUILTINS` y `imprimir(tipo(1))` produce `<class 'int'>`). Con la
+        traduccion anticuada el oracle recibia `tipo(1)`, que Python no
+        resuelve: el nativo imprimia `<class 'int'>` y el oracle lanzaba
+        NameError, y el corpus diferencial marcaba todos los casos `tipo()`
+        como DIVERGENT. `tipo` convive en los dos papeles: soft keyword en
+        `segun`/`caso tipo:` (ver test_soft_en_*), builtin en llamada.
+        """
+        self.assertEqual(traducir_fuente("x = tipo(objeto)\n"), "x = type(objeto)\n")
+        self.assertEqual(traducir_fuente("imprimir(tipo(1))\n"), "print(type(1))\n")
+
+    def test_tipo_soft_keyword_en_patron_segun_se_conserva(self) -> None:
+        # el otro papel de `tipo`: en `caso tipo:` NO es una llamada
+        fuente = "segun x:\n    caso tipo:\n        imprimir(1)\n"
+        traducido = traducir_fuente(fuente)
+        self.assertIn("case tipo:", traducido)
+
+    def test_tipo_como_nombre_se_conserva(self) -> None:
+        # sin llamada ni patron, `tipo` es un identificador normal
+        self.assertEqual(traducir_fuente("tipo = 5\n"), "tipo = 5\n")
 
     def test_tipo_parametro_se_conserva(self) -> None:
         fuente = "funcion f(tipo):\n    imprimir(tipo)\n"
@@ -536,6 +557,40 @@ class KeywordAsIdentifierTests(unittest.TestCase):
         ):
             with self.subTest(fuente=fuente):
                 ast.parse(traducir_fuente(fuente))
+
+
+class KeywordPairAndSignTests(unittest.TestCase):
+    """NO_PAREJA_V1 + signo unario: los operadores de dos palabras y `no -1`.
+
+    `no en` ya se traducía como `not in`, pero `no es` producía `not is` (Python
+    no lo acepta) y no tenía rama de dispatch en el backend. Además
+    `_empieza_expresion` no aceptaba un signo, así que `no -1` quedaba como
+    `no -1` y el oracle получаía un programa irresoluble.
+    """
+
+    def test_no_parejas_como_operador_unico(self):
+        for piton, python in (
+            ("imprimir(1 no es 2)\n", "print(1 is not 2)\n"),
+            ("imprimir(9 no en [1, 2])\n", "print(9 not in [1, 2])\n"),
+            ("imprimir(1 es 2)\n", "print(1 is 2)\n"),
+        ):
+            with self.subTest(piton=piton):
+                self.assertEqual(traducir_fuente(piton), python)
+
+    def test_signo_es_inicio_de_expresion(self):
+        for piton, python in (
+            ("imprimir(no -1)\n", "print(not -1)\n"),
+            ("imprimir(no +1)\n", "print(not +1)\n"),
+            ("imprimir(1 y -2)\n", "print(1 and -2)\n"),
+            ("imprimir(1 en {1, 2})\n", "print(1 in {1, 2})\n"),
+        ):
+            with self.subTest(piton=piton):
+                self.assertEqual(traducir_fuente(piton), python)
+
+    def test_identificadores_no_confunden(self):
+        for fuente in ("no = 5\n", "es = 5\n", "en = [1]\n", "y = 2\n"):
+            with self.subTest(fuente=fuente):
+                self.assertEqual(traducir_fuente(fuente), fuente)
 
 
 if __name__ == "__main__":

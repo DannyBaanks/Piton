@@ -24,6 +24,15 @@ class NativeBuildError(RuntimeError):
     pass
 
 
+# IS_IDENTITY_V1: a distinct tag per static type, so identity between two
+# differently typed values (1 vs True, both "1" as a raw word) is False, as in
+# CPython.
+_KIND_TAGS = {
+    "none": 1, "bool": 2, "int": 3, "float": 4, "str": 5,
+    "list": 6, "tuple": 7, "dict": 8, "set": 9, "bigint": 10,
+}
+
+
 def _ordering_pair_ok(left_type: str, right_type: str) -> bool:
     """ORDER_MIXED_TYPES_V1: can these two static types be ordered?
 
@@ -159,6 +168,8 @@ class Win64NasmEmitter:
         # yields the right static type. The iterator used to hardcode "str",
         # which made `para k en {1: 'a'}` print the int key as a string pointer.
         self._dict_key_types: dict[str, str] = {}
+        # DICT_VAL_TYPE_V1: static type of a dict's VALUES.
+        self._dict_val_types: dict[str, str] = {}
         # Per-call-site `dq` tables of parameter names for dict unpacking,
         # emitted into .rdata at the end of the module.
         self.unpack_tables: list[tuple[str, list[str]]] = []
@@ -878,6 +889,8 @@ class Win64NasmEmitter:
                 self.strkey_dict_temps.add(result)
             if name in self._dict_key_types:
                 self._dict_key_types[result] = self._dict_key_types[name]
+            if name in self._dict_val_types:
+                self._dict_val_types[result] = self._dict_val_types[name]
 
         elif op == "store":
             if isinstance(args[1], str) and self.types.get(args[1]) == "builtin":
@@ -936,6 +949,8 @@ class Win64NasmEmitter:
                     self.strkey_dict_temps.add(args[0])
                 if args[1] in self._dict_key_types:
                     self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
+                if args[1] in self._dict_val_types:
+                    self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
         elif op == "binary":
             operator, left, right = args[0], args[1], args[2]
             # ZDIV_GUARD_V1: mir attaches the innermost try handler as an
@@ -1274,10 +1289,28 @@ class Win64NasmEmitter:
                 self.lines.append("    or rax, rcx")
             elif operator == "^":
                 self.lines.append("    xor rax, rcx")
-            elif operator == "<<":
-                self.lines.append("    shl rax, cl")
-            elif operator == ">>":
-                self.lines.append("    sar rax, cl")
+            elif operator in {"<<", ">>"}:
+                # SHIFT_NEG_V1: CPython raises ValueError for a negative shift
+                # count; `shl`/`sar` mask the count to 6 bits (and x86 defines a
+                # masked count as UNDEFINED for counts > 63), so `2 << -3`
+                # answered garbage instead of raising.
+                neg_ok = self._internal_label("shift_ok")
+                stype = self._string("ValueError")
+                smsg = self._string("negative shift count")
+                self.lines.append("    test rcx, rcx")
+                self.lines.append(f"    jns {neg_ok}")
+                self.lines.append(f"    lea rcx, [{stype}]")
+                self.lines.append(f"    lea rdx, [{smsg}]")
+                if handler_label:
+                    self.lines.append("    call piton_raise")
+                    self.lines.append("    call piton_catch_flag")
+                    self.lines.append("    test rax, rax")
+                    target = labels.get(handler_label, handler_label)
+                    self.lines.append(f"    jne {target}")
+                else:
+                    self.lines.append("    call piton_raise_unhandled")
+                self.lines.append(f"{neg_ok}:")
+                self.lines.append("    shl rax, cl" if operator == "<<" else "    sar rax, cl")
             elif operator == "/":
                 raise NativeBuildError("native true division requires float support")
             elif operator in {"//", "%"}:
@@ -1433,13 +1466,22 @@ class Win64NasmEmitter:
                     self.lines.append(f"    mov {self._address(result)}, rax")
                     self.types[result] = "bool"
                     return
-            if operator == "es":
-                # Identidad / no-igualdad equivalente para el subset:
-                # compara punteros (objetos) o valores (escalares).
+            if operator in {"es", "no es"}:
+                # IS_IDENTITY_V1: identity, and `no es` had NO branch at all
+                # (KeyError). The value tags are compared too, so `1 es
+                # Verdadero` is False as in CPython instead of True from a raw
+                # scalar compare.
+                left_tag = _KIND_TAGS.get(self.types.get(left, "int"), 0)
+                right_tag = _KIND_TAGS.get(self.types.get(right, "int"), 0)
                 self._load_operand(left, "rax")
                 self._load_operand(right, "rcx")
                 self.lines.append("    cmp rax, rcx")
-                self.lines.extend(["    sete al", "    movzx rax, al"])
+                self.lines.append("    sete al")
+                self.lines.append("    movzx rax, al")
+                if left_tag != right_tag:
+                    self.lines.extend(["    xor eax, eax"])
+                elif operator == "no es":
+                    self.lines.extend(["    xor eax, 1"])
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "bool"
                 return
@@ -1523,6 +1565,20 @@ class Win64NasmEmitter:
                         # instead of yielding a mis-encoded key.
                         if key_kind in {"int", "bool", "str"}:
                             self._dict_key_types[result] = key_kind
+
+                    # DICT_VAL_TYPE_V1: same rule for the VALUES, so `d[k]` and
+                    # `d.get(k)` return a correctly typed result.
+                    if result and raw_items:
+                        v_kinds = set()
+                        for _k, v in raw_items:
+                            if isinstance(v, str) and v.startswith("%"):
+                                v_kinds.add(self.types.get(v, "int"))
+                            elif isinstance(v, str):
+                                v_kinds.add("str")
+                            else:
+                                v_kinds.add("int")
+                        if len(v_kinds) == 1:
+                            self._dict_val_types[result] = next(iter(v_kinds))
                 if result:
                     # P14 mapping: resolve %(name)s statically for inline
                     # literals with literal str keys. dict_put only accepts
@@ -1683,6 +1739,11 @@ class Win64NasmEmitter:
                 self._load_operand(key, "rdx")
                 self.lines.append("    call piton_dict_get")
                 self.lines.append(f"    mov {self._address(result)}, rax")
+                # NOTE: DICT_VAL_TYPE_V1 is NOT applied here. Typing the dict
+                # subscript result segfaulted in the comprehension path on
+                # Windows (a refcount bump on an untyped value); the Linux
+                # backend has the fix, Windows keeps the historical int until
+                # its collection value representation is consistent.
                 self.types[result] = "object:module" if container_type == "dict:module" else "int"
             else:
                 self._load_operand(container, "rcx")
@@ -2532,6 +2593,14 @@ class Win64NasmEmitter:
                 if len(values) != 1:
                     raise NativeBuildError("native abs requires one argument")
                 vtype = self.types.get(values[0])
+                # ABS_TYPE_V1: `abs` of a non-numeric operand is a TypeError in
+                # CPython; the else branch read a string/collection POINTER as a
+                # scalar, so `abs('a')` returned an address and `abs(Nada)` 0.
+                if vtype not in {"int", "bool", "float"}:
+                    raise NativeBuildError(
+                        f"native abs of '{vtype}' is not supported "
+                        "(CPython raises TypeError: bad operand type for abs())"
+                    )
                 if vtype == "float":
                     self._load_operand(values[0], "rcx")
                     self.lines.extend(["    movq xmm0, rcx", "    call piton_abs_float"])
@@ -2784,10 +2853,24 @@ class Win64NasmEmitter:
                     self._load_operand(values[0], "rcx")
                     self.lines.append("    call piton_sum_collection")
                 self.types[result] = "int"
-            elif function_name == "type":
+            elif function_name in {"type", "tipo"}:
                 if len(values) != 1:
                     raise NativeBuildError("native type requires one argument")
                 vtype = self.types.get(values[0], "int")
+                if vtype.startswith("object:"):
+                    # TIPO_OBJ_V1: `tipo(instancia)` must name the class, as in
+                    # CPython (`<class '__main__.P'>`), not the generic object
+                    # slot. The module part is fixed to `__main__` because the
+                    # backend does not track a class's origin module.
+                    class_name = vtype.split(":", 1)[1]
+                    self.lines.append(
+                        "    lea rax, ["
+                        + self._string("<class '__main__." + class_name + "'>")
+                        + "]"
+                    )
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "str"
+                    return
                 # Map emitter type to sub_tag for piton_type_from_raw
                 type_tag_map = {
                     "none": 0, "bool": 1, "int": 2, "float": 3,
