@@ -2549,10 +2549,15 @@ int64_t piton_closure_new_frame(int64_t addr, int64_t n_args,
     return (int64_t)c;
 }
 
+static int piton_is_code_addr(int64_t p);
+static void piton_raise_not_callable(void);
+
 int64_t piton_closure_call6(int64_t callee, int64_t argc,
                             int64_t a0, int64_t a1, int64_t a2, int64_t a3) {
-    if (!callee || ((int64_t *)callee)[0] != PITON_CLOSURE_MAGIC)
+    if (!callee || ((int64_t *)callee)[0] != PITON_CLOSURE_MAGIC) {
+        if (!piton_is_code_addr(callee)) piton_raise_not_callable();
         return ((int64_t(*)(int64_t, int64_t, int64_t, int64_t))callee)(a0, a1, a2, a3);
+    }
     PitonClosure *c = (PitonClosure *)callee;
     if (argc != c->n_args) {
         fprintf(stderr, "TypeError: closure called with wrong number of arguments\n");
@@ -2571,8 +2576,64 @@ int64_t piton_closure_call6(int64_t callee, int64_t argc,
     return ((int64_t(*)(int64_t, int64_t, int64_t, int64_t))c->addr)(x[0], x[1], x[2], x[3]);
 }
 
+/* CALL_NONCALLABLE_V1: a callee is callable only if it is a magic-tagged heap
+ * object or a real code address inside this executable. Without this,
+ * `x = 5; x()` treated the value as a code address (SIGSEGV on the int, a wild
+ * jump on a heap pointer). The static type cannot decide it: in this untagged
+ * model a function value and an int have the same representation, so `g = f`
+ * (callable) is indistinguishable from `x = 5` at build time. The executable
+ * range is read once from the module and cached; it fails CLOSED (empty range
+ * => every non-tagged callee refused) if the headers cannot be read. */
+static uintptr_t g_piton_code_lo = 1, g_piton_code_hi = 1; /* empty by default */
+
+static int piton_is_code_addr(int64_t p) {
+    if (p == 0) return 0;
+#ifdef _WIN32
+    if (g_piton_code_hi <= g_piton_code_lo) {
+        uintptr_t base = (uintptr_t)GetModuleHandleA(NULL);
+        if (base != 0) {
+            const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)base;
+            if (dos->e_magic == IMAGE_DOS_SIGNATURE && dos->e_lfanew > 0) {
+                const IMAGE_NT_HEADERS *nt =
+                    (const IMAGE_NT_HEADERS *)(base + (uintptr_t)dos->e_lfanew);
+                if (nt->Signature == IMAGE_NT_SIGNATURE) {
+                    const IMAGE_SECTION_HEADER *sections = IMAGE_FIRST_SECTION(nt);
+                    uintptr_t lo = (uintptr_t)-1, hi = 0;
+                    for (unsigned i = 0; i < nt->FileHeader.NumberOfSections; ++i) {
+                        const IMAGE_SECTION_HEADER *sec = &sections[i];
+                        if (sec->Characteristics & IMAGE_SCN_CNT_CODE) {
+                            uintptr_t start = base + (uintptr_t)sec->VirtualAddress;
+                            uintptr_t stop = start + (uintptr_t)sec->Misc.VirtualSize;
+                            if (start < lo) lo = start;
+                            if (stop > hi) hi = stop;
+                        }
+                    }
+                    if (lo < hi) { g_piton_code_lo = lo; g_piton_code_hi = hi; }
+                }
+            }
+        }
+    }
+    return (uintptr_t)p >= g_piton_code_lo && (uintptr_t)p < g_piton_code_hi;
+#else
+    /* host build (float-repr harness): linker symbols __executable_start and
+     * _etext are defined by the ELF linker used for native_runtime.c tests. */
+    extern char __executable_start[];
+    extern char _etext[];
+    return (char *)p >= __executable_start && (char *)p < _etext;
+#endif
+}
+
+static void piton_raise_not_callable(void) {
+    fprintf(stderr, "TypeError: 'X' object is not callable\n");
+    exit(1);
+}
+
 int64_t piton_closure_call_frame(int64_t callee, int64_t argc,
                                  const int64_t *args) {
+    /* Reject a non-pointer callee BEFORE dereferencing its magic word:
+     * reading address 5 faults on x64 even though it is not a code
+     * address. */
+    if (callee != 0 && (uintptr_t)callee < 0x10000) piton_raise_not_callable();
     if (callee && ((int64_t *)callee)[0] == PITON_BOUND_METHOD_MAGIC) {
         PitonBoundMethod *m = (PitonBoundMethod *)callee;
         if (argc != m->n_args || argc > 3) {
@@ -2583,6 +2644,7 @@ int64_t piton_closure_call_frame(int64_t callee, int64_t argc,
         return ((int64_t(*)(int64_t,int64_t,int64_t,int64_t))m->addr)(a[0],a[1],a[2],a[3]);
     }
     if (!callee || ((int64_t *)callee)[0] != PITON_CLOSURE_MAGIC) {
+        if (!piton_is_code_addr(callee)) piton_raise_not_callable();
         if (argc > 4) {
             fprintf(stderr, "TypeError: native call exceeds four direct arguments\n");
             exit(2);

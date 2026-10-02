@@ -638,5 +638,52 @@ class OperatorAssociativityV1(unittest.TestCase):
         _assert_matches(self, "imprimir(2 * 3 + 4 - 5 // 2)\n")
 
 
+class NonCallableCallV1(unittest.TestCase):
+    """CALL_NONCALLABLE_V1: llamar un valor no invocable da TypeError.
+
+    `x = 5; x()` hacia que el backend genérico emitted
+    `piton_closure_call_frame(<valor>, ...)` y el runtime lo TOMABA por una
+    direccion de codigo: SIGSEGV con un int (desreferencia la direccion 5) o
+    un salto selvaje con un puntero del heap. El tipo estatico no puede
+    decidirlo — en este modelo sin tags un valor de funcion y un int se
+    representan igual — asi que el runtime discrimina por rango: un valor
+    invocable es un objeto magic-tagged del heap o una direccion dentro del
+    texto del ejecutable.
+
+    El corpus diferencial (tools/parity_corpus.py, area functions) encontre el
+    crash; antes de este fix era DIVERGENT_CRASH (rc=-11).
+    """
+
+    def test_non_callable_scalars_raise_typeerror(self):
+        for value in ("5", "1.5", "Verdadero", "Falso", "Nada", "'abc'"):
+            result = compare_native_to_cpython(f"x = {value}\nx()\n")
+            self.assertEqual(result.native.returncode, 1, f"{value} should exit 1")
+            self.assertIn(b"TypeError", result.native.stderr)
+            self.assertEqual(result.oracle.returncode, 1)
+
+    def test_non_callable_collections_raise_typeerror(self):
+        for value in ("[1]", "()", "{}", "{1}"):
+            result = compare_native_to_cpython(f"x = {value}\nx()\n")
+            self.assertEqual(result.native.returncode, 1, f"{value} should exit 1")
+            self.assertIn(b"TypeError", result.native.stderr)
+
+    def test_function_value_stays_callable(self):
+        # el guard NO puede romper la funcion como valor (g = f)
+        _assert_matches(self, "funcion f(x):\n    devolver x\ng = f\nimprimir(g(4))\n")
+        _assert_matches(self, "funcion f(x):\n    devolver x + 1\ng = f\nh = g\nimprimir(h(1))\n")
+
+    def test_plain_function_callbacks(self):
+        _assert_matches(
+            self, "funcion f(x):\n    devolver x * 2\npara v en map(f, [1, 2]):\n    imprimir(v)\n"
+        )
+
+    def test_recursion_and_closures_unaffected(self):
+        _assert_matches(
+            self,
+            "funcion fac(n):\n    si n <= 1:\n        devolver 1\n"
+            "    devolver n * fac(n - 1)\nimprimir(fac(5))\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
