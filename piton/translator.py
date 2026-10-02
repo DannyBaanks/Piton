@@ -169,12 +169,126 @@ def _es_contexto_caso(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
     return True
 
 
+def _es_llamada_builtin(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
+    """True when a soft keyword is used as a CALL: `tipo(` -> `type(`."""
+    siguiente = _siguiente_significativo(tokens, indice)
+    return (
+        siguiente is not None
+        and siguiente.type == token.OP
+        and siguiente.string == "("
+    )
+
+
 def _es_contexto_tipo(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
+    """True when `tipo` spells `type` rather than being a plain name.
+
+    Besides the `segun`/`caso tipo:` pattern (a NAME follows), the CALL form
+    `tipo(x)` is also the builtin: the native backends implement `tipo`, so the
+    translation must say `type(x)`. It used to emit `tipo(1)`, which Python
+    cannot resolve — the oracle raised NameError while the native program
+    printed `<class 'int'>`, and every `tipo()` case was measured DIVERGENT.
+    """
     siguiente = _siguiente_significativo(tokens, indice)
     if siguiente is None:
         return False
-    if siguiente.type != token.NAME:
+    if siguiente.type == token.NAME:
+        return True
+    if siguiente.type == token.OP and siguiente.string == "(":
+        return True
+    return False
+
+
+# KEYWORD_EXPR_V1: Spanish keywords that spell an EXPRESSION operator and are
+# therefore indistinguishable from a plain identifier by text alone.
+# `y = 5` (a variable named y) used to translate to `and = 5`, which is not
+# valid Python, so the translator emitted a program that could not even be
+# parsed. Statement keywords (`si`, `para`, ...) are NOT in this set: they can
+# only appear at statement start, so they always translate.
+_KEYWORDS_BINARIOS = {"y", "o", "es", "en"}
+_KEYWORDS_UNARIOS = {"no", "esperar"}
+_KEYWORDS_INFIJOS = {"como"}
+_KEYWORDS_EXPRESION = _KEYWORDS_BINARIOS | _KEYWORDS_UNARIOS | _KEYWORDS_INFIJOS
+# VALUE keywords are translated too, but they are CONSTANTS: they end an
+# expression, so `imprimir(Verdadero y 1)` must still read `y` as `and`.
+# Statement keywords (`si`, `para`, ...) never end one.
+_KEYWORDS_VALOR = {"Verdadero", "Falso", "Nada"}
+_KEYWORDS_NO_TERMINAN = (set(HARD_KEYWORDS) - _KEYWORDS_VALOR) | set(SOFT_KEYWORDS)
+
+
+def _termina_expresion(token_: "tokenize.TokenInfo | None") -> bool:
+    """True when `token_` can end an expression (so the next NAME is an operator)."""
+    if token_ is None:
         return False
+    if token_.type in (token.NUMBER, token.STRING):
+        return True
+    if token_.type == token.OP and token_.string in {")", "]", "}"}:
+        return True
+    if token_.type == token.NAME:
+        if (token_.start[0], token_.start[1]) in _IDENTIFICADORES_DECIDIDOS:
+            return True
+        return token_.string not in _KEYWORDS_NO_TERMINAN
+    return False
+
+
+def _empieza_expresion(token_: "tokenize.TokenInfo | None") -> bool:
+    """True when `token_` can start an expression (so a unary keyword applies)."""
+    if token_ is None:
+        return False
+    if token_.type in (token.NUMBER, token.STRING):
+        return True
+    # `{` opens a set/dict literal, which is a valid right operand:
+    # `1 en {1, 2}` is `1 in {1, 2}`. Omitting it left `en` untranslated.
+    # A SIGN also starts an expression: `no -1` is `not -1` and `1 y -2` is
+    # `1 and -2`. Without the sign the unary keyword was left untranslated and
+    # the oracle got `no -1`, which Python cannot resolve.
+    if token_.type == token.OP and token_.string in {"(", "[", "{", "-", "+", "~"}:
+        return True
+    if token_.type == token.NAME:
+        return True
+    return False
+
+
+_IDENTIFICADORES_DECIDIDOS: "set[tuple[int, int]]" = set()
+
+
+def _es_keyword_de_expresion(tokens: list[tokenize.TokenInfo], indice: int, nombre: str) -> bool:
+    """KEYWORD_EXPR_V1: translate `nombre` only when it sits in operator position.
+
+    A binary keyword needs an expression on BOTH sides (`a y b`); a unary one
+    only needs the right side (`no x`, `esperar x`); an infix one needs only the
+    left (`con f como g`). Anywhere else the token is an identifier and must be
+    left alone — that is what makes `y = 5` translate to `y = 5`.
+    """
+    anterior = _anterior_significativo(tokens, indice)
+    siguiente = _siguiente_significativo(tokens, indice)
+    # `no en` / `no es` are ONE operator spelled as two tokens, but only when
+    # the `no` itself sits in operator position (it has a left operand). `9 no
+    # en [1]` is the pair; `imprimir(no en)` is unary `not` applied to a
+    # variable called `en`. The left-operand test uses the decided-identifiers
+    # set, so a variable named `y`/`o`/etc. still counts as an operand.
+    for pareja in ("en", "es"):
+        if (
+            nombre == "no"
+            and siguiente is not None
+            and siguiente.type == token.NAME
+            and siguiente.string == pareja
+            and _termina_expresion(anterior)
+        ):
+            return True
+        if nombre == pareja and anterior is not None and anterior.type == token.NAME and anterior.string == "no":
+            try:
+                idx_no = tokens.index(anterior)
+            except ValueError:
+                idx_no = None
+            antes_de_no = _anterior_significativo(tokens, idx_no) if idx_no is not None else None
+            if antes_de_no is not None and _termina_expresion(antes_de_no):
+                return True
+    if nombre in _KEYWORDS_BINARIOS:
+        return _termina_expresion(anterior) and _empieza_expresion(siguiente)
+    if nombre in _KEYWORDS_UNARIOS:
+        return _empieza_expresion(siguiente)
+    if nombre in _KEYWORDS_INFIJOS:
+        return _termina_expresion(anterior)
     return True
 
 
@@ -279,6 +393,7 @@ def analizar_tokens(
         raise PitonSyntaxError(archivo, str(error.args[0]), ubicacion[0], ubicacion[1]) from error
 
     asignados = _nombre_asignado_en_scope(tokens)
+    _IDENTIFICADORES_DECIDIDOS.clear()
     mapa = MapaFuente()
     salida: list[tokenize.TokenInfo] = []
     cambios: list[CambioToken] = []
@@ -345,6 +460,65 @@ def analizar_tokens(
                 # Hard keywords translate everywhere, including after a dot so
                 # `desde . importar x` becomes `from . import x`; a hard keyword
                 # can never be a valid attribute name (unlike soft keywords).
+                # KEYWORD_EXPR_V1: EXCEPT the expression keywords, whose text is
+                # also a legal identifier. Those translate only in operator
+                # position, otherwise `y = 5` became `and = 5` — Python that
+                # cannot even be parsed, so the oracle path silently broke.
+                if actual.string in _KEYWORDS_EXPRESION and not _es_keyword_de_expresion(
+                    tokens, indice, actual.string
+                ):
+                    inicio_stmt = False
+                    _IDENTIFICADORES_DECIDIDOS.add((actual.start[0], actual.start[1]))
+                    salida.append(actual)
+                    continue
+                # NO_PAREJA_V1: `no en` / `no es` are ONE operator written as two
+                # tokens, and Python's spellings are `not in` / `is not` — a
+                # token-by-token mapping produced `not in` (fine) but `not is`
+                # (invalid) for the second. The pair is therefore rewritten as a
+                # unit: the first token takes the leading word and the second
+                # the trailing one, so the order comes out right.
+                if actual.string == "no":
+                    siguiente = _siguiente_significativo(tokens, indice)
+                    if (
+                        siguiente is not None
+                        and siguiente.type == token.NAME
+                        and siguiente.string == "es"
+                    ):
+                        # `no es` -> `is ... not`
+                        reemplazo = "is"
+                        categoria = "keyword-pair"
+                        inicio_stmt = False
+                        out_pair = None
+                        salida.append(actual._replace(string="is"))
+                        cambios.append(
+                            CambioToken(
+                                actual.start[0], actual.start[1] + 1,
+                                actual.string, "is", "keyword-pair",
+                            )
+                        )
+                        mapa.agregar(actual.end[0], actual.end[1], actual.start[0], actual.start[1])
+                        continue
+                if actual.string in {"es", "en"}:
+                    anterior = _anterior_significativo(tokens, indice)
+                    if (
+                        anterior is not None
+                        and anterior.type == token.NAME
+                        and anterior.string == "no"
+                        and actual.string == "es"
+                    ):
+                        # second token of `no es` -> `not`
+                        reemplazo = "not"
+                        categoria = "keyword-pair"
+                        inicio_stmt = False
+                        salida.append(actual._replace(string="not"))
+                        cambios.append(
+                            CambioToken(
+                                actual.start[0], actual.start[1] + 1,
+                                actual.string, "not", "keyword-pair",
+                            )
+                        )
+                        mapa.agregar(actual.end[0], actual.end[1], actual.start[0], actual.start[1])
+                        continue
                 reemplazo = HARD_KEYWORDS[actual.string]
                 categoria = "keyword"
                 inicio_stmt = False
@@ -360,6 +534,13 @@ def analizar_tokens(
                         es_keyword = True
                     elif actual.string == "tipo" and _es_contexto_tipo(tokens, indice):
                         es_keyword = True
+                elif actual.string == "tipo" and _es_llamada_builtin(tokens, indice):
+                    # TIPO_CALL_V1: `tipo(x)` is the builtin `type` even in the
+                    # middle of an expression. The native backends implement
+                    # `tipo`, so the translation must be `type(x)`; leaving it
+                    # as `tipo(1)` gave the oracle a NameError while the native
+                    # program printed `<class 'int'>`.
+                    es_keyword = True
 
                 if es_keyword:
                     reemplazo = SOFT_KEYWORDS[actual.string]
@@ -391,6 +572,8 @@ def analizar_tokens(
         else:
             inicio_stmt = False
 
+        if actual.type == token.NAME and reemplazo is None:
+            _IDENTIFICADORES_DECIDIDOS.add((actual.start[0], actual.start[1]))
         if reemplazo is not None:
             salida.append(actual._replace(string=reemplazo))
             cambios.append(CambioToken(actual.start[0], actual.start[1] + 1, actual.string, reemplazo, categoria))

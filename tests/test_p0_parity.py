@@ -383,13 +383,93 @@ class BuiltinMarkerV1(unittest.TestCase):
     an uninitialized C variable — SIGSEGV or a raw pointer printed as an int.
     """
 
-    def test_rango_as_value_fail_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir(rango(3))\n")
+    def test_range_as_value(self):
+        """RANGE_VALUE_V1: `rango(...)` is a lazy value, not just loop sugar.
 
-    def test_lista_call_fail_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir(lista([1, 2]))\n")
+        Este test afirmaba que `rango(3)` como valor debia fallar cerrado: solo
+        se consumia en la cabecera `para`. Ahora produce un objeto perezoso
+        (start/stop/step, sin materializar) con repr, len, iteracion, indice,
+        pertenencia, igualdad y verdad exactos. El `for` conserva su fast path
+        de contador, que consume los argumentos directamente.
+        """
+        for source, esperado in (
+            ("imprimir(rango(3))\n", "range(0, 3)\n"),
+            ("imprimir(rango(0))\n", "range(0, 0)\n"),
+            ("imprimir(rango(1, 4))\n", "range(1, 4)\n"),
+            ("imprimir(rango(0, 6, 2))\n", "range(0, 6, 2)\n"),
+            ("imprimir(rango(5, 0, -1))\n", "range(5, 0, -1)\n"),
+        ):
+            with self.subTest(fuente=source):
+                result = compare_native_to_cpython(source)
+                self.assertEqual(result.native.stdout.decode(), esperado)
+                self.assertEqual(result.native.stdout, result.oracle.stdout)
+
+    def test_range_len_iter_index_contains(self):
+        for source in (
+            "imprimir(longitud(rango(5)))\n",
+            "r = rango(4)\npara x en r:\n    imprimir(x)\n",
+            "r = rango(5, 0, -2)\npara x en r:\n    imprimir(x)\n",
+            "r = rango(10, 20)\nimprimir(r[0])\nimprimir(r[-1])\n",
+            "r = rango(0, 10, 2)\nimprimir(4 en r)\nimprimir(5 en r)\n",
+            "imprimir(rango(0, 3) == rango(0, 3))\n",
+            "imprimir(rango(0, 0) == rango(5, 5))\n",
+            "imprimir(sum(rango(4)))\n",
+            "imprimir(lista(rango(3)))\n",
+            "imprimir(tipo(rango(3)))\n",
+            "r = rango(3)\nsi r:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+            "r = rango(0)\nsi r:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+        ):
+            with self.subTest(fuente=source):
+                _assert_matches(self, source)
+
+    def test_range_step_zero_raises_and_is_catchable(self):
+        for source in ("imprimir(rango(1, 4, 0))\n",):
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1)
+            self.assertEqual(result.oracle.returncode, 1)
+        _assert_matches(
+            self,
+            "intentar:\n    x = rango(1, 2, 0)\nexcepto ValueError:\n    imprimir('caught')\n",
+        )
+
+    def test_conversion_builtins_as_values(self):
+        """CONV_BUILTINS_V1: `lista`/`tupla`/`conjunto`/`diccionario` convert.
+
+        Este test afirmaba que `lista([1, 2])` debia fallar cerrado. La
+        conversion estaba rechazada en toda posicion salvo consumirla
+        directamente en una cabecera `para`, lo que hacia fallar 19 casos del
+        corpus sin motivo: los helpers de conversion ya existian y solo faltaba
+        el dispatch. Ahora convierte como CPython, y lo no representable
+        (un default de tipo distinto al de los valores) sigue fallando cerrado.
+        """
+        for source, esperado in (
+            ("imprimir(lista([1, 2]))\n", "[1, 2]\n"),
+            ("imprimir(lista((1, 2)))\n", "[1, 2]\n"),
+            ("imprimir(lista('ab'))\n", "['a', 'b']\n"),
+            ("imprimir(lista(()))\n", "[]\n"),
+            ("imprimir(tupla([1, 2]))\n", "(1, 2)\n"),
+            ("imprimir(tupla('ab'))\n", "('a', 'b')\n"),
+            ("imprimir(conjunto([1, 2, 2]))\n", "{1, 2}\n"),
+            ("imprimir(longitud(conjunto('aba')))\n", "2\n"),
+            ("imprimir(diccionario([(1, 2)]))\n", "{1: 2}\n"),
+            ("imprimir(diccionario())\n", "{}\n"),
+        ):
+            with self.subTest(fuente=source):
+                result = compare_native_to_cpython(source)
+                self.assertEqual(result.native.stdout.decode(), esperado)
+                self.assertEqual(result.native.stdout, result.oracle.stdout)
+
+    def test_converted_collection_keeps_element_type(self):
+        # COLL_ELEM_TYPE_V1: la conversion conserva el tipo de elemento, asi que
+        # un indice o un `para` imprimen el valor, no un puntero.
+        for source in (
+            "x = lista('abc')\nimprimir(x[1])\n",
+            "para c en lista('ab'):\n    imprimir(c)\n",
+            "x = tupla('ab')\nimprimir(x[0])\n",
+            "x = [10 ** 20]\nimprimir(x[0])\n",
+        ):
+            with self.subTest(fuente=source):
+                _assert_matches(self, source)
 
     def test_reversed_as_value_fail_closed(self):
         with pytest.raises(NativeBuildError):
@@ -552,6 +632,389 @@ class BoolShortV1(unittest.TestCase):
         # on runtime values, so the holder type cannot serve both arms.
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("x = 1\nimprimir(x y 'x')\n")
+
+
+class BranchTruthinessV1(unittest.TestCase):
+    """TRUTHY_BRANCH_V1: la condicion de `si` es un test de verdad CPython.
+
+    Antes el backend emitia `if(<puntero>) goto ...`, de modo que cualquier
+    cadena o coleccion —incluidas las VACIAS— era truthy porque su puntero es
+    no nulo: `si "":` tomaba la rama verdadera. El corpus diferencial
+    (tools/parity_corpus.py, area branch_truthiness) encontro el bug.
+    """
+
+    def test_empty_containers_are_falsy(self):
+        for value in ('""', "[]", "()", "{}"):
+            _assert_matches(
+                self,
+                f"v = {value}\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+            )
+
+    def test_empty_containers_skip_while(self):
+        for value in ('""', "[]", "()", "{}"):
+            _assert_matches(self, f"v = {value}\nmientras v:\n    imprimir('nope')\nimprimir('fin')\n")
+
+    def test_non_empty_and_scalars(self):
+        for value in ("0", "1", "0.0", "0.5", "Nada", "'a'", "[1]", "[1, []]"):
+            _assert_matches(
+                self,
+                f"v = {value}\nsi v:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+            )
+
+    def test_literal_empty_string_condition(self):
+        _assert_matches(self, 'si "":\n    imprimir("T")\nsino:\n    imprimir("F")\n')
+
+    def test_ternary_uses_truthiness(self):
+        _assert_matches(self, "v = []\nimprimir('T' si v sino 'F')\n")
+
+    def test_object_instance_still_truthy(self):
+        # un tipo que la tabla de verdad no modela NO debe fallar cerrado aqui
+        _assert_matches(
+            self,
+            "clase P:\n    pasar\np = P()\nsi p:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+        )
+
+
+class OperatorAssociativityV1(unittest.TestCase):
+    """ASOC_V1 + UNARY_POW_PREC_V1: precedencia y asociatividad correctas.
+
+    `next_min_prec` estaba invertido en el parser, asi que TODA cadena de
+    operadores no-asociativos se evaluaba de derecha a izquierda:
+    `10 - 3 - 2` daba 9, `100 / 5 / 2` daba 40.0, `1 << 2 << 3` daba 65536 y
+    `2 ** 3 ** 2` daba 64. `+` y `%` lo escondian porque son asociativos en
+    los operandos de prueba.
+    """
+
+    def test_left_associative_chains(self):
+        for expr in (
+            "10 - 3 - 2",
+            "100 / 5 / 2",
+            "100 // 5 // 2",
+            "1 << 2 << 3",
+            "64 >> 2 >> 1",
+            "7 & 3 & 1",
+            "6 | 2 | 1",
+            "7 ^ 3 ^ 1",
+            "20 - 5 - 3 - 2 - 1",
+        ):
+            _assert_matches(self, f"imprimir({expr})\n")
+
+    def test_associative_ops_still_agree(self):
+        for expr in ("10 + 3 + 2", "2 * 3 * 4", "20 % 7 % 3"):
+            _assert_matches(self, f"imprimir({expr})\n")
+
+    def test_power_is_right_associative(self):
+        for expr in ("2 ** 3 ** 2", "2 ** 3 ** 2 ** 2"):
+            _assert_matches(self, f"imprimir({expr})\n")
+
+    def test_unary_binds_looser_than_power(self):
+        for expr in ("-2 ** 2", "-(2 ** 2)", "-1.5 ** 0.0", "-2 ** 3 ** 2", "3 - 2 ** 2", "2 ** -1", "- -2"):
+            _assert_matches(self, f"imprimir({expr})\n")
+
+    def test_unary_with_variable_operand(self):
+        _assert_matches(self, "x = 2\nimprimir(-x ** 2)\n")
+
+    def test_mixed_precedence_chain(self):
+        _assert_matches(self, "imprimir(2 * 3 + 4 - 5 // 2)\n")
+
+
+class NonCallableCallV1(unittest.TestCase):
+    """CALL_NONCALLABLE_V1: llamar un valor no invocable da TypeError.
+
+    `x = 5; x()` hacia que el backend genérico emitted
+    `piton_closure_call_frame(<valor>, ...)` y el runtime lo TOMABA por una
+    direccion de codigo: SIGSEGV con un int (desreferencia la direccion 5) o
+    un salto selvaje con un puntero del heap. El tipo estatico no puede
+    decidirlo — en este modelo sin tags un valor de funcion y un int se
+    representan igual — asi que el runtime discrimina por rango: un valor
+    invocable es un objeto magic-tagged del heap o una direccion dentro del
+    texto del ejecutable.
+
+    El corpus diferencial (tools/parity_corpus.py, area functions) encontre el
+    crash; antes de este fix era DIVERGENT_CRASH (rc=-11).
+    """
+
+    def test_non_callable_scalars_raise_typeerror(self):
+        for value in ("5", "1.5", "Verdadero", "Falso", "Nada", "'abc'"):
+            result = compare_native_to_cpython(f"x = {value}\nx()\n")
+            self.assertEqual(result.native.returncode, 1, f"{value} should exit 1")
+            self.assertIn(b"TypeError", result.native.stderr)
+            self.assertEqual(result.oracle.returncode, 1)
+
+    def test_non_callable_collections_raise_typeerror(self):
+        for value in ("[1]", "()", "{}", "{1}"):
+            result = compare_native_to_cpython(f"x = {value}\nx()\n")
+            self.assertEqual(result.native.returncode, 1, f"{value} should exit 1")
+            self.assertIn(b"TypeError", result.native.stderr)
+
+    def test_function_value_stays_callable(self):
+        # el guard NO puede romper la funcion como valor (g = f)
+        _assert_matches(self, "funcion f(x):\n    devolver x\ng = f\nimprimir(g(4))\n")
+        _assert_matches(self, "funcion f(x):\n    devolver x + 1\ng = f\nh = g\nimprimir(h(1))\n")
+
+    def test_plain_function_callbacks(self):
+        _assert_matches(
+            self, "funcion f(x):\n    devolver x * 2\npara v en map(f, [1, 2]):\n    imprimir(v)\n"
+        )
+
+    def test_recursion_and_closures_unaffected(self):
+        _assert_matches(
+            self,
+            "funcion fac(n):\n    si n <= 1:\n        devolver 1\n"
+            "    devolver n * fac(n - 1)\nimprimir(fac(5))\n",
+        )
+
+
+class DictKeyTypeV1(unittest.TestCase):
+    """DICT_KEY_TYPE_V1: iterar un dict rinde el tipo real de sus CLAVES.
+
+    El iterador de dict se tipaba "str" fijo, asi que `para k en {1: 'a'}`
+    imprimia la clave int 1 con el printer de cadenas: leia un puntero del
+    heap como si fuera texto y moria con SIGSEGV. Ahora el tipo de clave se
+    registra al construir el dict y se propaga por store/load, y una clave de
+    tipo desconocido falla cerrado en vez de imprimir basura.
+    """
+
+    def test_int_keys(self):
+        _assert_matches(self, "d = {1: 'a', 2: 'b'}\npara k en d:\n    imprimir(k)\n")
+        _assert_matches(self, "d = {1: 'a'}\npara k en d:\n    imprimir(k * 10)\n")
+        _assert_matches(self, "para k en {1: 'a'}:\n    imprimir(k)\n")
+
+    def test_str_keys_unchanged(self):
+        _assert_matches(self, "d = {'a': 1, 'b': 2}\npara k en d:\n    imprimir(k)\n")
+
+    def test_bool_and_float_keys(self):
+        _assert_matches(self, "d = {Verdadero: 'a'}\npara k en d:\n    imprimir(k)\n")
+        _assert_matches(self, "d = {1.5: 'a'}\npara k en d:\n    imprimir(k)\n")
+
+    def test_reassignment_retypes(self):
+        _assert_matches(
+            self,
+            "d = {1: 'a'}\npara k en d:\n    imprimir(k)\n"
+            "d = {'x': 1}\npara j in d:\n    imprimir(j)\n".replace(" in ", " en "),
+        )
+
+
+class BigintCompareV1(unittest.TestCase):
+    """BI_CMP_MAG_FIX_V1 + BIGINT_CMP_MIXED_V1: comparar bigints correctamente.
+
+    Dos bugs en la misma familia, encontrados por el corpus enumerativo:
+    (1) `bi_cmp_mag` calculaba el ancho en bits llamando `bi_bit_width` con un
+        LIMB, pero esa funcion toma un `PitonBigInt*`: reinterpretaba el valor
+        del limb como puntero y producia un ancho basura. TODA comparacion
+        bigint-vs-bigint era incorrecta (`10**40 > 10**20` daba False), y como
+        `+`/`-` usan `bi_cmp_mag` para los signos, la aritmetica con signos
+        mixtos tambien.
+    (2) `piton_bigint_cmp` casteaba AMBOS operandos a `PitonBigInt*`, asi que
+        comparar un bigint con un int desreferenciaba el entero como struct:
+        SIGSEGV.
+    """
+
+    def test_bigint_vs_bigint(self):
+        for source in (
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a > b)\n",
+            "a = 10 ** 30\nb = 10 ** 20\nimprimir(a > b)\n",
+            "a = 10 ** 40\nb = 10 ** 20\nimprimir(a > b)\n",
+            "a = 10 ** 99\nb = 10 ** 100\nimprimir(a > b)\n",
+            # BI_CMP_SIGN_FIX_V1: `x->sign?-c:c` negated the result for
+            # POSITIVE bigints (sign == 1), inverting every ordering.
+            "a = 10 ** 40\nb = 10 ** 20\nimprimir(a > b)\n",
+            "a = 10 ** 30\nb = 10 ** 20\nimprimir(a <= b)\n",
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a >= b)\n",
+            "a = -(10 ** 40)\nb = -(10 ** 20)\nimprimir(a < b)\n",
+            "a = 10 ** 20\nb = 10 ** 20\nimprimir(a == b)\n",
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a != b)\n",
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a < b)\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_bigint_vs_int(self):
+        for source in (
+            "imprimir(10 ** 20 > 5)\n",
+            "x = 10 ** 20\nimprimir(5 > x)\n",
+            "x = 10 ** 20\nimprimir(x < 5)\n",
+            "x = 10 ** 20\nimprimir(x == 5)\n",
+            "x = 10 ** 20\nimprimir(x >= 5)\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_bigint_arithmetic_with_mixed_signs(self):
+        # bi_cmp_mag tambien decide el signo en + y -
+        for source in (
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a + b)\n",
+            "a = 10 ** 30\nb = 10 ** 20\nimprimir(a - b)\n",
+            "a = 10 ** 20\nb = 10 ** 20\nimprimir(a * b)\n",
+            "a = -(10 ** 20)\nb = 10 ** 20\nimprimir(a < b)\n",
+            "x = -(10 ** 20)\nimprimir(x < 0)\n",
+        ):
+            _assert_matches(self, source)
+
+
+class OrderingMixedTypesV1(unittest.TestCase):
+    """ORDER_MIXED_TYPES_V1: los operadores de orden no comparan representaciones.
+
+    El emitter caia a una comparacion C cruda entre las dos representaciones, de
+    modo que `None < None` respondia False y `1 < '1'` respondia True. CPython
+    lanza TypeError. Ahora se falla cerrado al compilar. `==`/`!=` entre tipos
+    distintos sigue siendo legal, como en Python.
+    """
+
+    def test_unorderable_pairs_fail_closed(self):
+        for source in (
+            "imprimir(1 < '1')\n",
+            "imprimir('1' > 1)\n",
+            "imprimir(Nada < Nada)\n",
+            "imprimir(Nada >= Nada)\n",
+            "imprimir([1] < 'a')\n",
+        ):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail(f"ordering between incomparable types not closed: {source}")
+
+    def test_orderable_pairs_still_work(self):
+        for source in (
+            "imprimir(1 < 2)\n",
+            "imprimir(1.5 < 2)\n",
+            "imprimir(2 < 1.5)\n",
+            "imprimir('a' < 'b')\n",
+            "imprimir([1] < [2])\n",
+            "imprimir((1,) < (2,))\n",
+            "imprimir(Verdadero < 2)\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_equality_across_types_is_still_legal(self):
+        for source in (
+            "imprimir(1 == '1')\n",
+            "imprimir(1 != '1')\n",
+            "imprimir(Nada == Nada)\n",
+            "imprimir(1 == 1.0)\n",
+        ):
+            _assert_matches(self, source)
+
+
+class SumElementTypeV1(unittest.TestCase):
+    """COLL_ELEM_TYPE_V1: `sum` acumula lo que la coleccion contiene.
+
+    `sum` fuerzaba el tipo de resultado a `int` y el helper runtime suma los
+    `bits` crudos de cada elemento, asi que un elemento bigint aportaba su
+    PUNTER: `sum([10 ** 20])` imprimia 4210752 (una direccion). Ahora se
+    registra el tipo de elemento de la coleccion y `sum` rechaza lo que no sea
+    int en vez de acumular basura.
+    """
+
+    def test_int_collections_still_sum(self):
+        for source in (
+            "imprimir(sum([1, 2, 3]))\n",
+            "imprimir(sum([]))\n",
+            "a = [1, 2]\nimprimir(sum(a))\n",
+            "imprimir(sum((1, 2)))\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_non_int_elements_fail_closed(self):
+        for source in (
+            "imprimir(sum([10 ** 20]))\n",
+            "imprimir(sum(['a', 'b']))\n",
+            "imprimir(sum([1.5, 2.5]))\n",
+        ):
+            try:
+                result = compare_native_to_cpython(source)
+            except NativeBuildError:
+                continue
+            self.fail(
+                f"sum over non-int elements produced {result.native.stdout!r} "
+                "instead of refusing (CPython sums them)"
+            )
+
+    def test_list_printing_unaffected(self):
+        _assert_matches(self, "imprimir([1, 2])\n")
+        _assert_matches(self, "imprimir(['a'])\n")
+
+
+class DivergentCluster29V1(unittest.TestCase):
+    """Los DIVERGENT que quedaban tras el corpus: tipo(), dict.get/[], comp
+    sobre dict, shift negativo, abs, identidad y sum con bigints."""
+
+    def test_tipo_call_and_instance(self):
+        for source in (
+            "imprimir(tipo(1))\n",
+            "imprimir(tipo('a'))\n",
+            "imprimir(tipo([1]))\n",
+            "imprimir(tipo(Nada))\n",
+            "clase P:\n    pasar\nimprimir(tipo(P()))\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_dict_subscript_and_get_carry_value_type(self):
+        for source in (
+            "d = {1: 'a'}\nimprimir(d[1])\n",
+            "d = {'a': 7}\nimprimir(d['a'])\n",
+            "d = {1: 2.5}\nimprimir(d[1])\n",
+            "d = {1: 'v'}\nimprimir(d.get(1))\n",
+            "d = {'a': 2.5}\nimprimir(d.get('a'))\n",
+            "d = {1: 'v'}\nimprimir(d.get(1, 'z'))\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_comprehension_over_dict_and_set_yields_keys(self):
+        for source in (
+            "imprimir([k para k en {'a': 1}])\n",
+            "d = {'a': 1}\nimprimir([k para k en d])\n",
+            "imprimir([k para k en {1: 'a', 2: 'b'}])\n",
+            "imprimir([x para x en {1, 2}])\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_explicit_dict_subscript_still_raises(self):
+        result = compare_native_to_cpython("d = {'a': 1}\nimprimir(d[0])\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertEqual(result.oracle.returncode, 1)
+
+    def test_negative_shift_raises_and_is_catchable(self):
+        for source in ("imprimir(2 << -3)\n", "imprimir(2 >> -3)\n"):
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1)
+            self.assertEqual(result.oracle.returncode, 1)
+        _assert_matches(
+            self,
+            "intentar:\n    x = 2 << -1\nexcepto ValueError:\n    imprimir('caught')\n",
+        )
+        _assert_matches(self, "imprimir(2 << 3)\nimprimir(64 >> 3)\n")
+
+    def test_abs_rejects_non_numeric(self):
+        for source in ("imprimir(abs(Nada))\n", "imprimir(abs('a'))\n", "imprimir(abs([1]))\n"):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail(f"abs of non-numeric not closed: {source}")
+        for source in ("imprimir(abs(-3))\n", "imprimir(abs(-2.5))\n"):
+            _assert_matches(self, source)
+
+    def test_identity_is_not_equality(self):
+        _assert_matches(self, "imprimir(1 es Verdadero)\n")
+        _assert_matches(self, "imprimir(1 es 1)\n")
+        _assert_matches(self, "imprimir(1 no es 2)\n")
+        _assert_matches(self, "imprimir(Nada es Nada)\n")
+
+    def test_sum_over_bigint_or_mixed_refuses(self):
+        for source in (
+            "imprimir(sum([10 ** 20, 1]))\n",
+            "imprimir(sum([10 ** 20]))\n",
+            "imprimir(sum([1, 'a']))\n",
+        ):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail(f"sum over unsupported element kinds not closed: {source}")
+        _assert_matches(self, "imprimir(sum([1, 2, 3]))\n")
 
 
 if __name__ == "__main__":

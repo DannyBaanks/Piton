@@ -684,8 +684,18 @@ class Parser:
             if prec == 0 or prec < min_prec:
                 break
 
-            # Special handling for right-associative **
-            next_min_prec = prec + 1 if op == "**" else prec
+            # Associativity: the rhs is parsed at min_prec = prec + 1 for
+            # LEFT-associative operators, so the recursive call cannot absorb
+            # another operator of the same precedence and the next one is
+            # applied to the accumulated lhs by this loop (10 - 3 - 2 == 5).
+            # `**` is the only RIGHT-associative operator in Python, so its rhs
+            # is parsed at min_prec = prec, letting the recursive call consume
+            # the rest of the chain (2 ** 3 ** 2 == 512).
+            # This ternary used to be INVERTED, which parsed every chain
+            # right-associatively: 10 - 3 - 2 evaluated to 9, 100 / 5 / 2 to
+            # 40.0, 1 << 2 << 3 to 65536 and 2 ** 3 ** 2 to 64. (+ and % hid
+            # it because they happen to be associative on the test operands.)
+            next_min_prec = prec if op == "**" else prec + 1
 
             if tok.type == TokenType.NAME and op in ("y", "o"):
                 self._advance()
@@ -903,12 +913,16 @@ class Parser:
         # Unary
         if self._match(TokenType.PLUS, TokenType.MINUS, TokenType.TILDE):
             op = tok.value
-            operand = self._parse_unary()
+            # UNARY_POW_PREC_V1: `**` binds tighter than unary minus in
+            # CPython, so `-2 ** 2 == -4`. See _parse_unary for the rationale;
+            # this duplicate branch is the one a statement-level leading sign
+            # actually reaches.
+            operand = self._parse_expression(PRECEDENCE["**"])
             return UnaryOp(op=op, operand=operand).set_pos(tok)
 
         if self._check(TokenType.NAME) and self._peek().value == "no":
             tok = self._advance()
-            operand = self._parse_unary()
+            operand = self._parse_expression(PRECEDENCE["**"])
             return UnaryOp(op="not", operand=operand).set_pos(tok)
 
         raise ParseError(f"Expresión inesperada: {tok}", tok)
@@ -918,11 +932,19 @@ class Parser:
         if tok.type in (TokenType.PLUS, TokenType.MINUS, TokenType.TILDE):
             self._advance()
             op = tok.value
-            operand = self._parse_unary()
+            # UNARY_POW_PREC_V1: in CPython `**` binds TIGHTER than unary
+            # minus, so `-2 ** 2 == -4` (the power applies to the operand,
+            # then the sign). Parsing the operand as a plain primary left
+            # `** 2` to bind to the unary result, yielding `(-2) ** 2 == 4`.
+            # Parse the operand at power precedence so `2 ** 2` is consumed
+            # as the operand. `-(a ** b)` and `-a ** b` agree; only the
+            # un-parenthesized form changes, which is exactly CPython.
+            operand = self._parse_expression(PRECEDENCE["**"])
             return UnaryOp(op=op, operand=operand).set_pos(tok)
         if self._check(TokenType.NAME) and tok.value == "no":
             self._advance()
-            operand = self._parse_unary()
+            # UNARY_POW_PREC_V1: `no` (not) is weaker than `**` in CPython.
+            operand = self._parse_expression(PRECEDENCE["**"])
             return UnaryOp(op="not", operand=operand).set_pos(tok)
         if self._check(TokenType.NAME) and tok.value == "esperar":
             self._advance()

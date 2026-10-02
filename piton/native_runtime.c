@@ -36,6 +36,7 @@ enum {
     SUB_TAG_SET     = 9,
     SUB_TAG_BIGINT  = 10,
     SUB_TAG_OBJECT  = 11,
+    SUB_TAG_RANGE   = 12,
 };
 
 /* Encoded wire format: same as ABI — 3-bit tag in high bits, 61-bit payload. */
@@ -170,10 +171,98 @@ typedef struct {
     int64_t index;
 } PitonAnyIterator;
 
+static void piton_gc_register(void *ptr);
+
+/* RANGE_VALUE_V1: `rango(...)` as a VALUE. A lazy range object carrying
+ * start/stop/step; elements are computed, never materialized. The `for` header
+ * keeps its own handling and never sees this object. */
+typedef struct {
+    PitonHeader header;
+    int64_t start;
+    int64_t stop;
+    int64_t step;
+} PitonRange;
+
+int64_t piton_range_len(PitonRange *r) {
+    if (!r) return 0;
+    int64_t start = r->start, stop = r->stop, step = r->step;
+    if (step > 0) { if (stop <= start) return 0; return (stop - start + (step - 1)) / step; }
+    if (stop >= start) return 0; return (start - stop + (-step - 1)) / (-step);
+}
+
+void *piton_range_new(int64_t start, int64_t stop, int64_t step) {
+    if (step == 0) { piton_raise("ValueError", "range() arg 3 must not be zero"); return NULL; }
+    PitonRange *r = calloc(1, sizeof(*r));
+    r->header.sub_tag = SUB_TAG_RANGE;
+    r->header.refcount = 1;
+    r->start = start; r->stop = stop; r->step = step;
+    piton_gc_register(r);
+    return r;
+}
+
+void piton_range_free(void *raw) {
+    PitonRange *r = raw;
+    if (!r) return;
+    piton_gc_unregister(r);
+    free(r);
+}
+
+int64_t piton_range_get(PitonRange *r, int64_t i) {
+    int64_t n = piton_range_len(r);
+    if (i < 0) i += n;
+    if (i < 0 || i >= n) { piton_raise_unhandled("IndexError", "range index out of range"); return 0; }
+    return r->start + i * r->step;
+}
+
+int64_t piton_range_contains(PitonRange *r, int64_t v) {
+    if (!r) return 0;
+    int64_t d = v - r->start;
+    if (r->step > 0) { if (v < r->start || v >= r->stop) return 0; }
+    else { if (v > r->start || v <= r->stop) return 0; }
+    return d % r->step == 0;
+}
+
+int64_t piton_range_eq(PitonRange *a, PitonRange *b) {
+    if (!a || !b) return a == b;
+    int64_t na = piton_range_len(a), nb = piton_range_len(b);
+    if (na != nb) return 0;
+    if (na == 0) return 1;
+    return a->start == b->start && a->step == b->step;
+}
+
+void piton_range_print_raw(PitonRange *r) {
+    if (!r) { fputs("range(0, 0)", stdout); return; }
+    /* CPython always spells (start, stop) and appends step unless it is 1:
+     * repr(range(3)) == 'range(0, 3)', never 'range(3)'. */
+    printf("range(%lld, %lld", (long long)r->start, (long long)r->stop);
+    if (r->step != 1) printf(", %lld", (long long)r->step);
+    putchar(')');
+}
+
+int64_t piton_sum_range(PitonRange *r) {
+    int64_t total = 0;
+    int64_t n = piton_range_len(r);
+    for (int64_t i = 0; i < n; ++i) total += r->start + i * r->step;
+    return total;
+}
+
+void *piton_range_to_list(PitonRange *r) {
+    /* Pre-size to the exact length: piton_collection_put silently drops any
+     * index at or past capacity, so a zero-capacity list would stay empty. */
+    int64_t n = piton_range_len(r);
+    PitonCollection *out = piton_collection_new(1, n);
+    for (int64_t i = 0; i < n; ++i) {
+        int64_t v = r->start + i * r->step;
+        piton_collection_put(out, out->length, 0,
+                             pv_encode(PITON_TAG_INT, (uint64_t)v));
+    }
+    return out;
+}
+
 void *piton_iterator_new_any(void *raw) {
     if (!raw) { fprintf(stderr, "TypeError: object is not iterable\n"); exit(1); }
     int64_t sub_tag = ((PitonHeader *)raw)->sub_tag;
-    if (sub_tag < SUB_TAG_LIST || sub_tag > SUB_TAG_SET) {
+    if (sub_tag < SUB_TAG_LIST || sub_tag > SUB_TAG_RANGE || sub_tag == SUB_TAG_BIGINT || sub_tag == SUB_TAG_OBJECT) {
         fprintf(stderr, "TypeError: object is not iterable\n"); exit(1);
     }
     PitonAnyIterator *iterator = calloc(1, sizeof(*iterator));
@@ -193,6 +282,8 @@ int64_t piton_iterator_next_any(void *raw) {
         length = ((PitonCollection *)iterator->raw)->length;
     else if (iterator->kind == SUB_TAG_DICT)
         length = ((PitonDict *)iterator->raw)->length;
+    else if (iterator->kind == SUB_TAG_RANGE)
+        length = piton_range_len((PitonRange *)iterator->raw);
     else
         length = ((PitonSet *)iterator->raw)->length;
     if (iterator->index >= length) {
@@ -204,6 +295,13 @@ int64_t piton_iterator_next_any(void *raw) {
         value = ((PitonCollection *)iterator->raw)->items[iterator->index++];
     else if (iterator->kind == SUB_TAG_DICT)
         value = ((PitonDict *)iterator->raw)->entries[iterator->index++].key;
+    else if (iterator->kind == SUB_TAG_RANGE) {
+        /* The emitter types a range iterator's values as plain ints, exactly
+         * like INT elements of a list (which next_any returns decoded). */
+        PitonRange *rr = iterator->raw;
+        int64_t v = rr->start + (iterator->index++) * rr->step;
+        return v;
+    }
     else
         value = ((PitonSet *)iterator->raw)->items[iterator->index++];
     if (pv_tag(value) == PITON_TAG_INT) return pv_payload_signed(value);
@@ -756,6 +854,10 @@ static void piton_value_print_inner(int64_t v, int recursing) {
                 piton_value_print_inner(s->items[i], 1);
             }
             putchar('}');
+            break;
+        }
+        case SUB_TAG_RANGE: {
+            piton_range_print_raw(ptr);
             break;
         }
         case SUB_TAG_BIGINT: {
@@ -1456,6 +1558,28 @@ void piton_collection_print_raw(void *raw) {
 void piton_collection_print(void *raw) {
     piton_collection_print_raw(raw);
     putchar('\n');
+}
+
+/* COLL_REPEAT_V1: list * n / tuple * n - a new collection with n shallow
+   copies (tagged items refcounted like seq_concat). Non-positive n -> []. */
+void *piton_seq_repeat_n(void *raw, int64_t n) {
+    PitonCollection *s = raw;
+    if (!s) return NULL;
+    if (n < 0) n = 0;
+    int64_t total = s->length * n;
+    PitonCollection *r = piton_collection_new(s->kind, total);
+    for (int64_t i = 0; i < n; ++i) {
+        for (int64_t j = 0; j < s->length; ++j) {
+            int64_t v = s->items[j];
+            if (pv_tag(v) == PITON_TAG_OBJECT) {
+                PitonHeader *h = (PitonHeader *)pv_payload(v);
+                if (h) h->refcount++;
+            }
+            r->items[i * s->length + j] = v;
+        }
+    }
+    r->length = total;
+    return r;
 }
 
 void *piton_seq_concat(void *a_raw, void *b_raw) {
@@ -2714,10 +2838,15 @@ int64_t piton_closure_new_frame(int64_t addr, int64_t n_args,
     return (int64_t)c;
 }
 
+static int piton_is_code_addr(int64_t p);
+static void piton_raise_not_callable(void);
+
 int64_t piton_closure_call6(int64_t callee, int64_t argc,
                             int64_t a0, int64_t a1, int64_t a2, int64_t a3) {
-    if (!callee || ((int64_t *)callee)[0] != PITON_CLOSURE_MAGIC)
+    if (!callee || ((int64_t *)callee)[0] != PITON_CLOSURE_MAGIC) {
+        if (!piton_is_code_addr(callee)) piton_raise_not_callable();
         return ((int64_t(*)(int64_t, int64_t, int64_t, int64_t))callee)(a0, a1, a2, a3);
+    }
     PitonClosure *c = (PitonClosure *)callee;
     if (argc != c->n_args) {
         fprintf(stderr, "TypeError: closure called with wrong number of arguments\n");
@@ -2736,8 +2865,64 @@ int64_t piton_closure_call6(int64_t callee, int64_t argc,
     return ((int64_t(*)(int64_t, int64_t, int64_t, int64_t))c->addr)(x[0], x[1], x[2], x[3]);
 }
 
+/* CALL_NONCALLABLE_V1: a callee is callable only if it is a magic-tagged heap
+ * object or a real code address inside this executable. Without this,
+ * `x = 5; x()` treated the value as a code address (SIGSEGV on the int, a wild
+ * jump on a heap pointer). The static type cannot decide it: in this untagged
+ * model a function value and an int have the same representation, so `g = f`
+ * (callable) is indistinguishable from `x = 5` at build time. The executable
+ * range is read once from the module and cached; it fails CLOSED (empty range
+ * => every non-tagged callee refused) if the headers cannot be read. */
+static uintptr_t g_piton_code_lo = 1, g_piton_code_hi = 1; /* empty by default */
+
+static int piton_is_code_addr(int64_t p) {
+    if (p == 0) return 0;
+#ifdef _WIN32
+    if (g_piton_code_hi <= g_piton_code_lo) {
+        uintptr_t base = (uintptr_t)GetModuleHandleA(NULL);
+        if (base != 0) {
+            const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)base;
+            if (dos->e_magic == IMAGE_DOS_SIGNATURE && dos->e_lfanew > 0) {
+                const IMAGE_NT_HEADERS *nt =
+                    (const IMAGE_NT_HEADERS *)(base + (uintptr_t)dos->e_lfanew);
+                if (nt->Signature == IMAGE_NT_SIGNATURE) {
+                    const IMAGE_SECTION_HEADER *sections = IMAGE_FIRST_SECTION(nt);
+                    uintptr_t lo = (uintptr_t)-1, hi = 0;
+                    for (unsigned i = 0; i < nt->FileHeader.NumberOfSections; ++i) {
+                        const IMAGE_SECTION_HEADER *sec = &sections[i];
+                        if (sec->Characteristics & IMAGE_SCN_CNT_CODE) {
+                            uintptr_t start = base + (uintptr_t)sec->VirtualAddress;
+                            uintptr_t stop = start + (uintptr_t)sec->Misc.VirtualSize;
+                            if (start < lo) lo = start;
+                            if (stop > hi) hi = stop;
+                        }
+                    }
+                    if (lo < hi) { g_piton_code_lo = lo; g_piton_code_hi = hi; }
+                }
+            }
+        }
+    }
+    return (uintptr_t)p >= g_piton_code_lo && (uintptr_t)p < g_piton_code_hi;
+#else
+    /* host build (float-repr harness): linker symbols __executable_start and
+     * _etext are defined by the ELF linker used for native_runtime.c tests. */
+    extern char __executable_start[];
+    extern char _etext[];
+    return (char *)p >= __executable_start && (char *)p < _etext;
+#endif
+}
+
+static void piton_raise_not_callable(void) {
+    fprintf(stderr, "TypeError: 'X' object is not callable\n");
+    exit(1);
+}
+
 int64_t piton_closure_call_frame(int64_t callee, int64_t argc,
                                  const int64_t *args) {
+    /* Reject a non-pointer callee BEFORE dereferencing its magic word:
+     * reading address 5 faults on x64 even though it is not a code
+     * address. */
+    if (callee != 0 && (uintptr_t)callee < 0x10000) piton_raise_not_callable();
     if (callee && ((int64_t *)callee)[0] == PITON_BOUND_METHOD_MAGIC) {
         PitonBoundMethod *m = (PitonBoundMethod *)callee;
         if (argc != m->n_args || argc > 3) {
@@ -2748,6 +2933,7 @@ int64_t piton_closure_call_frame(int64_t callee, int64_t argc,
         return ((int64_t(*)(int64_t,int64_t,int64_t,int64_t))m->addr)(a[0],a[1],a[2],a[3]);
     }
     if (!callee || ((int64_t *)callee)[0] != PITON_CLOSURE_MAGIC) {
+        if (!piton_is_code_addr(callee)) piton_raise_not_callable();
         if (argc > 4) {
             fprintf(stderr, "TypeError: native call exceeds four direct arguments\n");
             exit(2);
@@ -2988,6 +3174,10 @@ static void piton_gc_free_node(void *raw) {
         free(s->items); free(s); --live_sets;
         break;
     }
+    case SUB_TAG_RANGE: {
+        piton_range_free(raw);
+        break;
+    }
     case SUB_TAG_OBJECT: {
         PitonObject *o = raw;
         free(o); --live_objects;
@@ -3056,6 +3246,46 @@ void *piton_bigint_from_str(const char *s) {
 }
 
 void piton_bigint_free(void *a) { if (a) { free(((PitonBigInt*)a)->limbs); free(a); } }
+
+/* Correct bit width of a bigint from its limb array.
+ * bi_cmp_mag (and the mixed comparison) call bi_bit_width with a LIMB, but that
+ * function takes a PitonBigInt*, so it reinterprets the limb value as a pointer.
+ * It happens to read mapped heap (the limbs live there) and the limb-by-limb
+ * loop afterwards usually rescues the answer, but it faults when the limb value
+ * is not a readable address. This computes the width directly. */
+static int64_t bi_width_from_limbs(const uint64_t *limbs, long count) {
+    for (long i = count - 1; i >= 0; --i) {
+        if (limbs[i]) {
+            int64_t w = i * 64;
+            uint64_t v = limbs[i];
+            while (v) { ++w; v >>= 1; }
+            return w;
+        }
+    }
+    return 0;
+}
+
+/* BIGINT_CMP_MIXED_V1: compare a bigint against a plain int.
+ * piton_bigint_cmp casts BOTH operands to PitonBigInt*, so `10 ** 20 > 5`
+ * dereferenced the integer 5 as a struct pointer and died. Returns the sign of
+ * (bigint - int), exactly like piton_bigint_cmp. */
+int64_t piton_bigint_cmp_int(void *raw, int64_t v) {
+    PitonBigInt *x = raw;
+    if (!x) return v > 0 ? -1 : (v < 0 ? 1 : 0);
+    int vs = v < 0 ? -1 : (v > 0 ? 1 : 0);
+    if (x->sign != vs) return x->sign < 0 ? -1 : 1;
+    uint64_t mag = v < 0 ? (uint64_t)(-(v + 1)) + 1u : (uint64_t)v;
+    int width = (int)bi_width_from_limbs(x->limbs, x->count);
+    int mw = 0;
+    for (uint64_t t = mag; t; t >>= 1) ++mw;
+    if (width != mw) return width > mw ? 1 : -1;
+    for (long i = x->count - 1; i >= 0; --i) {
+        uint64_t lo = (i == 0) ? mag : 0u;
+        if (x->limbs[i] != lo) return x->limbs[i] > lo ? 1 : -1;
+    }
+    return 0;
+}
+
 
 int64_t piton_bigint_cmp(void *a, void *b) {
     PitonBigInt *x = a, *y = b;
@@ -3804,6 +4034,7 @@ const char *piton_type_from_raw(int64_t raw_ptr, int64_t type_tag) {
         case 7: return "<class 'tuple'>";
         case 8: return "<class 'dict'>";
         case 9: return "<class 'set'>";
+        case 12: return "<class 'range'>";
         case 10: return "<class 'int'>";
         default: return "<class 'object'>";
     }

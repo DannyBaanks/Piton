@@ -134,6 +134,37 @@ class ContainsV1(unittest.TestCase):
     def test_int_not_in_list(self):
         _assert_matches(self, "imprimir(5 no en [1, 2])\n")
 
+    def test_contains_positive_form(self):
+        """CONTAINS_V1 positive form.
+
+        The gate only exercised `no en`, so `x en y` reached the generic
+        comparison emitter, which wrote the operator name into the C source and
+        produced invalid C ("expected ')' before 'en'"). The enumerative corpus
+        (tools/parity_corpus.py) found it; both backends lacked the branch.
+        """
+        for source in (
+            "imprimir(2 en [1, 2])\n",
+            "imprimir(1 en {1, 2})\n",
+            "imprimir('a' en 'abc')\n",
+            "imprimir(1 en (1, 2))\n",
+            "x = [1, 2]\nimprimir(2 en x)\n",
+            "d = {'a': 1}\nimprimir('a' en d)\n",
+            "imprimir(9 en [1, 2])\n",
+            "imprimir('b' en 'abc')\n",
+            "d = {'a': 1}\nimprimir('z' en d)\n",
+            "imprimir(2 en [[1, 2], [3]])\n",
+            "imprimir('a' en {'a', 'b'})\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_contains_negative_form_still_matches(self):
+        for source in (
+            "imprimir(5 no en [1, 2])\n",
+            "imprimir('z' no en 'abc')\n",
+            "imprimir(1 no en [1, 2])\n",
+        ):
+            _assert_matches(self, source)
+
     def test_int_in_tuple(self):
         _assert_matches(self, "imprimir(2 in (1, 2))\n")
 

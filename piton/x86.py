@@ -24,6 +24,36 @@ class NativeBuildError(RuntimeError):
     pass
 
 
+# IS_IDENTITY_V1: a distinct tag per static type, so identity between two
+# differently typed values (1 vs True, both "1" as a raw word) is False, as in
+# CPython.
+_KIND_TAGS = {
+    "none": 1, "bool": 2, "int": 3, "float": 4, "str": 5,
+    "list": 6, "tuple": 7, "dict": 8, "set": 9, "bigint": 10,
+    "range": 12,
+}
+
+
+def _ordering_pair_ok(left_type: str, right_type: str) -> bool:
+    """ORDER_MIXED_TYPES_V1: can these two static types be ordered?
+
+    Mirrors the Linux backend: numeric against numeric, same collection type,
+    or two strings. Everything else (None with anything, int with str, list
+    with str, ...) is unorderable and must be refused instead of comparing the
+    raw representations.
+    """
+    # RANGE_VALUE_V1: ranges are never orderable (CPython raises TypeError);
+    # their equality lives in piton_range_eq, not here.
+    if "range" in {left_type, right_type}:
+        return False
+    numeric = {"int", "bool", "float", "bigint"}
+    if left_type in numeric and right_type in numeric:
+        return True
+    if left_type in {"list", "tuple", "dict", "set"} and left_type == right_type:
+        return True
+    return left_type == right_type and left_type not in {"none", ""}
+
+
 _BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "round", "redondear"}
 
 _math_fn_map = {
@@ -139,6 +169,12 @@ class Win64NasmEmitter:
         # CALL_UNPACKING_DYNAMIC4_V1: temp/local names of dicts proven to be
         # built from constant-string keys (the only **-unpackable dicts).
         self.strkey_dict_temps: set[str] = set()
+        # DICT_KEY_TYPE_V1: static type of a dict's KEYS, so iterating a dict
+        # yields the right static type. The iterator used to hardcode "str",
+        # which made `para k en {1: 'a'}` print the int key as a string pointer.
+        self._dict_key_types: dict[str, str] = {}
+        # DICT_VAL_TYPE_V1: static type of a dict's VALUES.
+        self._dict_val_types: dict[str, str] = {}
         # Per-call-site `dq` tables of parameter names for dict unpacking,
         # emitted into .rdata at the end of the module.
         self.unpack_tables: list[tuple[str, list[str]]] = []
@@ -172,6 +208,9 @@ class Win64NasmEmitter:
             "extern piton_collection_live_count",
             "extern piton_dict_new", "extern piton_dict_put",
             "extern piton_dict_len", "extern piton_dict_get",
+            "extern piton_range_new", "extern piton_range_len", "extern piton_range_get",
+            "extern piton_range_contains", "extern piton_range_eq", "extern piton_range_print_raw",
+            "extern piton_sum_range", "extern piton_range_to_list",
             "extern piton_dict_print", "extern piton_dict_print_raw", "extern piton_dict_free",
             "extern piton_dict_live_count",
             "extern piton_set_new", "extern piton_set_add",
@@ -208,11 +247,12 @@ class Win64NasmEmitter:
             "extern piton_print_value", "extern piton_print_value_raw",
             "extern piton_bigint_from_str", "extern piton_bigint_from_i64", "extern piton_bigint_free",
             "extern piton_bigint_add", "extern piton_bigint_sub", "extern piton_bigint_mul",
-            "extern piton_bigint_neg", "extern piton_bigint_cmp",
+            "extern piton_bigint_neg", "extern piton_bigint_cmp", "extern piton_bigint_cmp_int",
             "extern piton_bigint_floor_div", "extern piton_bigint_mod",
             "extern piton_bigint_print", "extern piton_bigint_print_raw",
             "extern piton_bigint_pow_small",
             "extern piton_seq_concat",
+            "extern piton_seq_repeat_n",
             "extern piton_int_truediv",
             "extern piton_float_div", "extern piton_float_floor_div", "extern piton_float_mod",
             "extern piton_float_pow_v1",
@@ -654,6 +694,9 @@ class Win64NasmEmitter:
                 self._load_operand(source, "rcx")
                 self.lines.append("    call piton_iterator_new_any")
                 self.types[result] = f"iterator:{source_type or 'unknown'}"
+                # DICT_KEY_TYPE_V1: carry the key type onto the iterator.
+                if result and source_type == 'dict' and source in self._dict_key_types:
+                    self._dict_key_types[result] = self._dict_key_types[source]
             self.lines.append(f"    mov {self._address(result)}, rax")
             if result and self.types.get(result, "").startswith("iterator:") and self.types[result] != "iterator:genexpr":
                 # ITER_LOOP_GUARD_V1: for-loop exhaustion raises StopIteration
@@ -755,7 +798,19 @@ class Win64NasmEmitter:
                 else:
                     self.lines.append("    call piton_iterator_next_any")
             self.lines.append(f"    mov {self._address(result)}, rax")
-            self.types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type in {"iterator:dict", "iterator:str"} else "int"
+            # DICT_KEY_TYPE_V1: a dict iterator yields its KEYS; the static type
+            # comes from the dict, and an unknown key type fails closed
+            # instead of printing a pointer as a string.
+            if iterator_type == "iterator:dict":
+                key_type = self._dict_key_types.get(args[0])
+                if key_type is None:
+                    raise NativeBuildError(
+                        "native dict iteration requires a statically known key type "
+                        "(CPython iterates keys of any type)"
+                    )
+                self.types[result] = key_type
+            else:
+                self.types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:str" else "int"
             self.lines.append("    call piton_catch_flag")
             self.lines.append("    test rax, rax")
             if handler_label:
@@ -844,6 +899,10 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
             if name in self.strkey_dict_temps:
                 self.strkey_dict_temps.add(result)
+            if name in self._dict_key_types:
+                self._dict_key_types[result] = self._dict_key_types[name]
+            if name in self._dict_val_types:
+                self._dict_val_types[result] = self._dict_val_types[name]
 
         elif op == "store":
             if isinstance(args[1], str) and self.types.get(args[1]) == "builtin":
@@ -900,6 +959,10 @@ class Win64NasmEmitter:
                     self.dict_elems[args[0]] = self.dict_elems[args[1]]
                 if args[1] in self.strkey_dict_temps:
                     self.strkey_dict_temps.add(args[0])
+                if args[1] in self._dict_key_types:
+                    self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
+                if args[1] in self._dict_val_types:
+                    self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
         elif op == "binary":
             operator, left, right = args[0], args[1], args[2]
             # ZDIV_GUARD_V1: mir attaches the innermost try handler as an
@@ -1023,6 +1086,23 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_seq_concat")
                     self.lines.append(f"    mov {self._address(result)}, rax")
                     self.types[result] = left_type
+                    return
+                if operator == "*" and {left_type, right_type} == {"list", "int"}:
+                    # COLL_REPEAT_V1: list * n (either order).
+                    seq_side, times = (left, right) if left_type == "list" else (right, left)
+                    self._load_operand(seq_side, "rcx")
+                    self._load_operand(times, "rdx")
+                    self.lines.append("    call piton_seq_repeat_n")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "list"
+                    return
+                if operator == "*" and {left_type, right_type} == {"tuple", "int"}:
+                    seq_side, times = (left, right) if left_type == "tuple" else (right, left)
+                    self._load_operand(seq_side, "rcx")
+                    self._load_operand(times, "rdx")
+                    self.lines.append("    call piton_seq_repeat_n")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "tuple"
                     return
                 raise NativeBuildError(
                     f"native collection binary operator not supported: {operator} on {left_type}/{right_type}"
@@ -1221,10 +1301,28 @@ class Win64NasmEmitter:
                 self.lines.append("    or rax, rcx")
             elif operator == "^":
                 self.lines.append("    xor rax, rcx")
-            elif operator == "<<":
-                self.lines.append("    shl rax, cl")
-            elif operator == ">>":
-                self.lines.append("    sar rax, cl")
+            elif operator in {"<<", ">>"}:
+                # SHIFT_NEG_V1: CPython raises ValueError for a negative shift
+                # count; `shl`/`sar` mask the count to 6 bits (and x86 defines a
+                # masked count as UNDEFINED for counts > 63), so `2 << -3`
+                # answered garbage instead of raising.
+                neg_ok = self._internal_label("shift_ok")
+                stype = self._string("ValueError")
+                smsg = self._string("negative shift count")
+                self.lines.append("    test rcx, rcx")
+                self.lines.append(f"    jns {neg_ok}")
+                self.lines.append(f"    lea rcx, [{stype}]")
+                self.lines.append(f"    lea rdx, [{smsg}]")
+                if handler_label:
+                    self.lines.append("    call piton_raise")
+                    self.lines.append("    call piton_catch_flag")
+                    self.lines.append("    test rax, rax")
+                    target = labels.get(handler_label, handler_label)
+                    self.lines.append(f"    jne {target}")
+                else:
+                    self.lines.append("    call piton_raise_unhandled")
+                self.lines.append(f"{neg_ok}:")
+                self.lines.append("    shl rax, cl" if operator == "<<" else "    sar rax, cl")
             elif operator == "/":
                 raise NativeBuildError("native true division requires float support")
             elif operator in {"//", "%"}:
@@ -1335,9 +1433,12 @@ class Win64NasmEmitter:
             operator, left, right = args
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
-            if operator == "no en":
-                # CONTAINS_V1: `a no en b` shares the membership lowering.
-                self._emit_contains(result, left, right, negate=True)
+            if operator in {"en", "no en"}:
+                # CONTAINS_V1: `a en b` and `a no en b` share the membership
+                # lowering. The POSITIVE form was missing here and emitted the
+                # operator name into the asm (invalid); the parity gate only
+                # covered `no en`, so the hole survived.
+                self._emit_contains(result, left, right, negate=(operator == "no en"))
                 return
             # SPECIAL_METHOD_LOOKUP_V1: `==` over native class instances
             # dispatches to the class-defined __eq__ (MRO resolved), same as
@@ -1377,17 +1478,48 @@ class Win64NasmEmitter:
                     self.lines.append(f"    mov {self._address(result)}, rax")
                     self.types[result] = "bool"
                     return
-            if operator == "es":
-                # Identidad / no-igualdad equivalente para el subset:
-                # compara punteros (objetos) o valores (escalares).
+            if operator in {"es", "no es"}:
+                # IS_IDENTITY_V1: identity, and `no es` had NO branch at all
+                # (KeyError). The value tags are compared too, so `1 es
+                # Verdadero` is False as in CPython instead of True from a raw
+                # scalar compare.
+                left_tag = _KIND_TAGS.get(self.types.get(left, "int"), 0)
+                right_tag = _KIND_TAGS.get(self.types.get(right, "int"), 0)
                 self._load_operand(left, "rax")
                 self._load_operand(right, "rcx")
                 self.lines.append("    cmp rax, rcx")
-                self.lines.extend(["    sete al", "    movzx rax, al"])
+                self.lines.append("    sete al")
+                self.lines.append("    movzx rax, al")
+                if left_tag != right_tag:
+                    self.lines.extend(["    xor eax, eax"])
+                elif operator == "no es":
+                    self.lines.extend(["    xor eax, 1"])
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "bool"
                 return
             numeric_types = {"int", "bool"}
+            if left_type == right_type == "range":
+                # RANGE_VALUE_V1: exact (len, start, step) equality with the
+                # empty-range rule; ordering a range raises TypeError as in
+                # CPython. Without this branch two equal ranges compared by
+                # pointer (always False) and ordering compared raw addresses.
+                if operator not in {"==", "!="}:
+                    raise NativeBuildError(
+                        f"native ordering comparison '{operator}' between 'range' and "
+                        f"'range' is not supported (CPython raises TypeError)"
+                    )
+                self._load_operand(left, "rcx")
+                self._load_operand(right, "rdx")
+                self.lines.append("    call piton_range_eq")
+                self.lines.append("    test rax, rax")
+                # NOTE: piton_range_eq answers 1 for equal (boolean style),
+                # unlike piton_bigint_cmp which answers 0, so the conditions
+                # are swapped relative to _emit_bigint_compare.
+                condition = "ne" if operator == "==" else "e"
+                self.lines.extend([f"    set{condition} al", "    movzx rax, al"])
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+                return
             if "bigint" in {left_type, right_type}:
                 self._emit_bigint_compare(operator, left, right, result)
                 return
@@ -1414,6 +1546,16 @@ class Win64NasmEmitter:
                 self._load_operand(right, "rdx")
                 self.lines.extend(["    call strcmp", "    cmp eax, 0"])
             else:
+                # ORDER_MIXED_TYPES_V1: CPython raises TypeError for `<`, `>`,
+                # `<=`, `>=` between operands it cannot order. `None < None`
+                # compared two zero slots and answered False. `==`/`!=` stay
+                # legal across types, as in Python.
+                if operator in {"<", ">", "<=", ">="} and not _ordering_pair_ok(left_type, right_type):
+                    raise NativeBuildError(
+                        f"native ordering comparison '{operator}' between '{left_type}' and "
+                        f"'{right_type}' is not supported (CPython raises TypeError: "
+                        f"'{operator}' not supported between instances of these types)"
+                    )
                 self._load_operand(left, "rax")
                 self._load_operand(right, "rcx")
                 self.lines.append("    cmp rax, rcx")
@@ -1443,6 +1585,34 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_dict_put")
                 if all(self.types.get(key) == "str" for key, _ in raw_items):
                     self.strkey_dict_temps.add(result)
+                if result and raw_items:
+                    # DICT_KEY_TYPE_V1: only a single key kind is typed;
+                    # a mixed-key dict stays untyped and fails closed.
+                    kinds = {"str" if isinstance(key, str) and not key.startswith("%")
+                             else self.types.get(key, "int") for key, _ in raw_items}
+                    if len(kinds) == 1:
+                        key_kind = next(iter(kinds))
+                        # The Windows dict stores keys as piton_value (int
+                        # auto-encoded) or a tracked string constant. Any other
+                        # key kind (e.g. float) is NOT supported by the runtime,
+                        # so it stays untyped and iteration fails closed
+                        # instead of yielding a mis-encoded key.
+                        if key_kind in {"int", "bool", "str"}:
+                            self._dict_key_types[result] = key_kind
+
+                    # DICT_VAL_TYPE_V1: same rule for the VALUES, so `d[k]` and
+                    # `d.get(k)` return a correctly typed result.
+                    if result and raw_items:
+                        v_kinds = set()
+                        for _k, v in raw_items:
+                            if isinstance(v, str) and v.startswith("%"):
+                                v_kinds.add(self.types.get(v, "int"))
+                            elif isinstance(v, str):
+                                v_kinds.add("str")
+                            else:
+                                v_kinds.add("int")
+                        if len(v_kinds) == 1:
+                            self._dict_val_types[result] = next(iter(v_kinds))
                 if result:
                     # P14 mapping: resolve %(name)s statically for inline
                     # literals with literal str keys. dict_put only accepts
@@ -1507,7 +1677,11 @@ class Win64NasmEmitter:
                         f"    mov rdx, {index}",
                     ])
                     item_type = self.types.get(item, "int")
-                    if item_type in {"list", "tuple", "dict", "set"} or item_type.startswith("object:"):
+                    # RANGE_VALUE_V1: a range element is a heap object like the
+                    # collections, so it takes the tagged path (which bumps the
+                    # refcount and encodes OBJECT); the int path would have
+                    # stored the raw pointer and printed an address.
+                    if item_type in {"list", "tuple", "dict", "set", "range"} or item_type.startswith("object:"):
                         self._load_operand(item, "r8")
                         self.lines.append("    call piton_collection_put_tagged")
                     else:
@@ -1596,6 +1770,14 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "str"
                 return
+            if container_type == "range":
+                # RANGE_VALUE_V1: indexing is exact, never materialized.
+                self._load_operand(container, "rcx")
+                self._load_operand(key, "rdx")
+                self.lines.append("    call piton_range_get")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+                return
             if container_type not in {"list", "tuple", "dict", "dict:module"}:
                 raise NativeBuildError(f"native subscription not supported for {container_type}")
             if container_type in {"dict", "dict:module"}:
@@ -1603,6 +1785,11 @@ class Win64NasmEmitter:
                 self._load_operand(key, "rdx")
                 self.lines.append("    call piton_dict_get")
                 self.lines.append(f"    mov {self._address(result)}, rax")
+                # NOTE: DICT_VAL_TYPE_V1 is NOT applied here. Typing the dict
+                # subscript result segfaulted in the comprehension path on
+                # Windows (a refcount bump on an untyped value); the Linux
+                # backend has the fix, Windows keeps the historical int until
+                # its collection value representation is consistent.
                 self.types[result] = "object:module" if container_type == "dict:module" else "int"
             else:
                 self._load_operand(container, "rcx")
@@ -2366,6 +2553,12 @@ class Win64NasmEmitter:
                             f"native print of a '{cls_name}' instance without __str__ is not supported "
                             "(can never match CPython object repr)"
                         )
+                    if value_type == "range":
+                        # RANGE_VALUE_V1: CPython prints `range(0, 3)`, never
+                        # the materialized elements.
+                        self._load_operand(value, "rcx")
+                        self.lines.append("    call piton_range_print_raw")
+                        continue
                     if value_type in {"list", "tuple", "dict", "set"}:
                         self._load_operand(value, "rcx")
                         if value_type == "dict":
@@ -2434,7 +2627,7 @@ class Win64NasmEmitter:
                             self.lines.append(f"    mov {self._address(result)}, rax")
                             self.types[result] = "int"
                             return
-                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set", "str"}:
+                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set", "str", "range"}:
                     raise NativeBuildError("native len currently requires one collection")
                 self._load_operand(values[0], "rcx")
                 ctype = self.types.get(values[0])
@@ -2445,6 +2638,9 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_dict_len")
                 elif ctype == "set":
                     self.lines.append("    call piton_set_len")
+                elif ctype == "range":
+                    # RANGE_VALUE_V1: exact, never materialized.
+                    self.lines.append("    call piton_range_len")
                 else:
                     self.lines.append("    call piton_collection_len")
                 self.types[result] = "int"
@@ -2452,6 +2648,14 @@ class Win64NasmEmitter:
                 if len(values) != 1:
                     raise NativeBuildError("native abs requires one argument")
                 vtype = self.types.get(values[0])
+                # ABS_TYPE_V1: `abs` of a non-numeric operand is a TypeError in
+                # CPython; the else branch read a string/collection POINTER as a
+                # scalar, so `abs('a')` returned an address and `abs(Nada)` 0.
+                if vtype not in {"int", "bool", "float"}:
+                    raise NativeBuildError(
+                        f"native abs of '{vtype}' is not supported "
+                        "(CPython raises TypeError: bad operand type for abs())"
+                    )
                 if vtype == "float":
                     self._load_operand(values[0], "rcx")
                     self.lines.extend(["    movq xmm0, rcx", "    call piton_abs_float"])
@@ -2700,18 +2904,64 @@ class Win64NasmEmitter:
                 elif ctype == "set":
                     self._load_operand(values[0], "rcx")
                     self.lines.append("    call piton_sum_set")
+                elif ctype == "range":
+                    # RANGE_VALUE_V1: exact, never materialized.
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_sum_range")
                 else:
                     self._load_operand(values[0], "rcx")
                     self.lines.append("    call piton_sum_collection")
                 self.types[result] = "int"
-            elif function_name == "type":
+            elif function_name in {"range", "rango"}:
+                # RANGE_VALUE_V1: `rango(...)` as a VALUE produces a lazy range
+                # object (never materialized). The `for` header keeps its own
+                # handling and never sees this object.
+                if len(values) < 1 or len(values) > 3:
+                    raise NativeBuildError("native rango() takes 1-3 arguments")
+                for value in values:
+                    if self.types.get(value, "int") not in {"int", "bool"}:
+                        raise NativeBuildError("native rango() arguments must be ints")
+                if len(values) == 1:
+                    self._load_operand(values[0], "rdx")
+                    self.lines.extend(["    xor ecx, ecx", "    mov r8d, 1"])
+                elif len(values) == 2:
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.append("    mov r8d, 1")
+                else:
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self._load_operand(values[2], "r8")
+                self.lines.append("    call piton_range_new")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "range"
+                if call_handler is not None:
+                    self.lines.append("    call piton_catch_flag")
+                    self.lines.append("    test rax, rax")
+                    self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+            elif function_name in {"type", "tipo"}:
                 if len(values) != 1:
                     raise NativeBuildError("native type requires one argument")
                 vtype = self.types.get(values[0], "int")
+                if vtype.startswith("object:"):
+                    # TIPO_OBJ_V1: `tipo(instancia)` must name the class, as in
+                    # CPython (`<class '__main__.P'>`), not the generic object
+                    # slot. The module part is fixed to `__main__` because the
+                    # backend does not track a class's origin module.
+                    class_name = vtype.split(":", 1)[1]
+                    self.lines.append(
+                        "    lea rax, ["
+                        + self._string("<class '__main__." + class_name + "'>")
+                        + "]"
+                    )
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "str"
+                    return
                 # Map emitter type to sub_tag for piton_type_from_raw
                 type_tag_map = {
                     "none": 0, "bool": 1, "int": 2, "float": 3,
                     "str": 5, "list": 6, "tuple": 7, "dict": 8, "set": 9, "bigint": 10,
+                    "range": 12,
                 }
                 type_tag = type_tag_map.get(vtype, 2)
                 self._load_operand(values[0], "rcx")
@@ -2720,8 +2970,20 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "str"
             elif function_name in {"sorted", "ordenar"}:
-                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple"}:
-                    raise NativeBuildError("native sorted currently requires one list or tuple")
+                if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "range"}:
+                    raise NativeBuildError("native sorted currently requires one list, tuple or range")
+                if self.types.get(values[0]) == "range":
+                    # RANGE_VALUE_V1: a range is not a PitonCollection, so it is
+                    # materialized to a list before sorting. This returns early
+                    # because the shared tail below would reload rcx with the
+                    # range itself.
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_range_to_list")
+                    self.lines.append("    mov rcx, rax")
+                    self.lines.append("    call piton_sorted_new")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "list"
+                    return
                 self._load_operand(values[0], "rcx")
                 self.lines.append("    call piton_sorted_new")
                 self.types[result] = "list"
@@ -3769,6 +4031,18 @@ class Win64NasmEmitter:
             self._load_operand(left, "rdx")
             self.lines.append("    xor r8d, r8d")  # type_tag 0 = raw int, matches list_append
             self.lines.append(f"    call {helper}")
+        elif haystack_type == "range":
+            # RANGE_VALUE_V1: CPython answers False for a non-int needle
+            # (`'a' in range(3)`) instead of raising, so this is a static
+            # False rather than an error.
+            if needle_type not in {"int", "bool"}:
+                self.lines.append("    xor eax, eax")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+                return
+            self._load_operand(right, "rcx")
+            self._load_operand(left, "rdx")
+            self.lines.append("    call piton_range_contains")
         else:
             raise NativeBuildError(f"native 'in' is not supported on {haystack_type}")
         if negate:
@@ -4299,6 +4573,12 @@ class Win64NasmEmitter:
             self.lines.extend([
                 "    call piton_set_len", "    test rax, rax",
             ])
+        elif self.types.get(operand) == "range":
+            # RANGE_VALUE_V1: an empty range is falsy.
+            self._load_operand(operand, "rcx")
+            self.lines.extend([
+                "    call piton_range_len", "    test rax, rax",
+            ])
         else:
             self._load_operand(operand, "rax")
             self.lines.append("    test rax, rax")
@@ -4429,12 +4709,32 @@ class Win64NasmEmitter:
         self.bigint_slots.append(result)
 
     def _emit_bigint_compare(self, operator: str, left: Any, right: Any, result: str) -> None:
-        self.lines.extend([
-            f"    mov rcx, {self._address(left)}",
-            f"    mov rdx, {self._address(right)}",
-            "    call piton_bigint_cmp",
-            "    cmp rax, 0",
-        ])
+        # BIGINT_CMP_MIXED_V1: a plain int is not a PitonBigInt*, so the
+        # both-sides-pointer helper dereferenced it as a struct (SIGSEGV on
+        # `10 ** 20 > 5`). The mixed case uses the int-aware helper, negating
+        # when the int is the left operand.
+        left_big = self.types.get(left) == "bigint"
+        right_big = self.types.get(right) == "bigint"
+        if left_big and not right_big:
+            self.lines.extend([
+                f"    mov rcx, {self._address(left)}",
+                f"    mov rdx, {self._address(right)}",
+                "    call piton_bigint_cmp_int",
+            ])
+        elif right_big and not left_big:
+            self.lines.extend([
+                f"    mov rcx, {self._address(right)}",
+                f"    mov rdx, {self._address(left)}",
+                "    call piton_bigint_cmp_int",
+                "    neg rax",
+            ])
+        else:
+            self.lines.extend([
+                f"    mov rcx, {self._address(left)}",
+                f"    mov rdx, {self._address(right)}",
+                "    call piton_bigint_cmp",
+            ])
+        self.lines.append("    cmp rax, 0")
         condition = {"==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge"}[operator]
         self.lines.extend([f"    set{condition} al", "    movzx rax, al"])
         self.lines.append(f"    mov {self._address(result)}, rax")

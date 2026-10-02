@@ -282,5 +282,93 @@ class StepSliceV1(unittest.TestCase):
         self.assertIn(b"ValueError", result.native.stderr)
 
 
+class AssertStmtV1(unittest.TestCase):
+    """ASSERT_STMT_V1: `afirmar cond` / `afirmar cond, msg`.
+
+    AssertStmt used to hit the generic CST lowering and die as
+    "unsupported". Now it lowers to `si no cond: lanzar
+    AssertionError(msg)` — reusing the IF + RAISE machinery, so the
+    exception routes to intentar/excepto handlers (with message
+    extraction) for free. A failing assert reports rc=1 with
+    AssertionError on stderr, exactly like the existing raise convention.
+    """
+
+    def test_pass(self):
+        _assert_matches(self, "afirmar 1 == 1\nimprimir('ok')\n")
+
+    def test_pass_with_message(self):
+        _assert_matches(self, "afirmar 1 == 1, 'nunca'\nimprimir('ok')\n")
+
+    def test_failing_reports_error(self):
+        result = compare_native_to_cpython("afirmar 1 == 2\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"AssertionError", result.native.stderr)
+
+    def test_failing_with_message(self):
+        result = compare_native_to_cpython("afirmar 1 == 2, 'valores distintos'\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"AssertionError", result.native.stderr)
+        self.assertIn(b"valores distintos", result.native.stderr)
+
+    def test_caught_with_message(self):
+        _assert_matches(
+            self,
+            "intentar:\n    afirmar Falso, 'razon'\n"
+            "excepto AssertionError como e:\n    imprimir(e)\n",
+        )
+
+    def test_caught_bare(self):
+        _assert_matches(
+            self, "intentar:\n    afirmar Falso\nexcepto AssertionError:\n    imprimir('capturado')\n"
+        )
+
+
+class CollRepeatV1(unittest.TestCase):
+    """COLL_REPEAT_V1: list/tuple * n.
+
+    `[1] * 3` used to fail closed ("collection binary operator not
+    supported"). Now a new collection holds n shallow copies (either
+    operand order); CPython yields [] for non-positive counts. str * int
+    keeps its existing path; dict/set repeat stays closed (TypeError-like).
+    """
+
+    def test_list_repeat(self):
+        _assert_matches(self, "imprimir([1] * 3)\n")
+        _assert_matches(self, "imprimir([1, 2] * 2)\n")
+
+    def test_tuple_repeat(self):
+        _assert_matches(self, "imprimir((1, 2) * 3)\n")
+
+    def test_non_positive_counts(self):
+        _assert_matches(self, "imprimir([1] * 0)\n")
+        _assert_matches(self, "imprimir([1] * -2)\n")
+
+    def test_reversed_operands(self):
+        _assert_matches(self, "imprimir(3 * [1])\n")
+
+    def test_runtime_count(self):
+        _assert_matches(self, "n = 2\nimprimir([7] * n)\n")
+
+    def test_usable_result(self):
+        _assert_matches(self, "r = [0] * 3\nimprimir(longitud(r))\n")
+
+    def test_str_repeat_unchanged(self):
+        _assert_matches(self, "imprimir('ab' * 2)\n")
+
+    def test_unsupported_kinds_fail_closed(self):
+        for source in (
+            "imprimir({1: 2} * 2)\n",
+            "imprimir({1} * 2)\n",
+            "imprimir([1] * [2])\n",
+            "imprimir([1] * 2.5)\n",
+        ):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail(f"not closed: {source}")
+
+
 if __name__ == "__main__":
     unittest.main()

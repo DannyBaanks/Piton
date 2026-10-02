@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from piton.hir import BoolOp, ExceptHandler, HIRKind, HIRNode, Keyword, With
 
 
-_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration"}
+_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError"}
 
 
 def _os_name_const() -> str:
@@ -3402,13 +3402,16 @@ class MIRLowerer:
 
     def _binary(self, builder: _Builder, op: str, left: Any, right: Any) -> str:
         result = builder.temp()
-        if op in {"//", "%", "+", "-", "*", "/", "**"}:
+        if op in {"//", "%", "+", "-", "*", "/", "**", "<<", ">>"}:
             # ZDIV_GUARD_V1 / INTOVF_GUARD_V1: mirror the call op — embed the
             # innermost active try handler so both backends can raise a
             # catchable ZeroDivisionError (// % /), OverflowError (+ - *) or
             # ValueError (runtime negative ** exponent) instead of trapping
             # the process, wrapping silently or emitting IEEE infinities
-            # where CPython raises.
+            # where CPython raises. SHIFT_NEG_V1: `<<` and `>>` are here too
+            # because a negative shift count raises ValueError, and without the
+            # handler the raise was reported as unhandled instead of reaching
+            # the enclosing intentar/excepto.
             builder.emit("binary", op, left, right, _active_handler(builder), result=result)
         else:
             builder.emit("binary", op, left, right, result=result)
