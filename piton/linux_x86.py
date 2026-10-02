@@ -212,7 +212,7 @@ static long piton_float_sub(long a,long b){return piton_double_bits(piton_bits_d
 static long piton_float_mul(long a,long b){return piton_double_bits(piton_bits_double(a)*piton_bits_double(b));}
 static long piton_float_neg(long a){return(long)((unsigned long)a^(1UL<<63));}
 static long piton_float_sqrt(long a){double x=piton_bits_double(a),r;__asm__ volatile("sqrtsd %1,%0":"=x"(r):"x"(x));return piton_double_bits(r);}
-static double piton_pow10(int p){static const double t[]={1.0,10.0,100.0,1000.0,10000.0,100000.0,1000000.0,10000000.0,100000000.0,1000000000.0,10000000000.0,100000000000.0,1000000000000.0,10000000000000.0,100000000000000.0,1000000000000000.0};int i=p<0?0:(p>15?15:p);return t[i];}
+static double piton_pow10(int p){if(p<0)p=0;if(p>15)p=15;double r=1.0;for(int i=0;i<p;++i)r*=10.0;return r;}
 static int piton_frac_digits(long whole_scaled,int width,char*out){long w=whole_scaled;char rev[64];int rn=0;if(w==0)rev[rn++]='0';while(w){rev[rn++]=(char)('0'+w%10);w/=10;}for(int i=0;i<rn;++i)out[i]=rev[rn-1-i];out[rn]=0;return rn;}
 static long piton_float_fmt_fixed(long bits,int prec){double x=piton_bits_double(bits);int p=prec>=0?prec:6;int neg=x<0;if(neg)x=-x;double scaled=piton_round_h(x*piton_pow10(p));char digits[80];int rn=piton_frac_digits((long)scaled,p+2,digits);char*out=piton_alloc(128);int o=0;if(neg)out[o++]='-';if(rn>p){for(int i=0;i<rn-p;++i)out[o++]=digits[i];if(p>0){out[o++]='.';for(int i=rn-p;i<rn;++i)out[o++]=digits[i];}}else{out[o++]='0';if(p>0){out[o++]='.';for(int i=0;i<p-rn;++i)out[o++]='0';for(int i=0;i<rn;++i)out[o++]=digits[i];}}out[o]=0;return(long)out;}
 static long piton_float_fmt_pct(long bits,int prec){double x=piton_bits_double(bits)*100.0;long s=piton_float_fmt_fixed(piton_double_bits(x),prec>=0?prec:6);char*p=(char*)s;usize n=piton_strlen(p);char*r=piton_alloc(n+2);piton_memcpy(r,p,n+1);r[n]='%';r[n+1]=0;return(long)r;}
@@ -271,11 +271,11 @@ static long piton_str_capitalize(const char*s){usize n=piton_strlen(s);char*p=pi
 static long piton_str_title(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);int wordbreak=1;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];int letter=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(letter){if(wordbreak&&c>='a'&&c<='z')c-=32;else if(!wordbreak&&c>='A'&&c<='Z')c+=32;wordbreak=0;}else wordbreak=1;p[i]=(char)c;}p[n]=0;return(long)p;}
 static long piton_str_swapcase(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c>='a'&&c<='z')p[i]=(char)(c-32);else if(c>='A'&&c<='Z')p[i]=(char)(c+32);else p[i]=(char)c;}p[n]=0;return(long)p;}
 static long piton_str_zfill(const char*s,long width){usize n=piton_strlen(s);usize sign=(n&&(s[0]=='+'||s[0]=='-'))?1:0;if((long)n>=width){char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}usize pad=(usize)width-n;char*p=piton_alloc((usize)width+1);usize o=0;if(sign){p[o++]=s[0];}for(usize i=0;i<pad;++i)p[o++]='0';piton_memcpy(p+o,s+sign,n-sign+1);return(long)p;}
-static long piton_str_padw(const char*s,long width,int left){usize n=piton_strlen(s);if((long)n>=width){char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}usize pad=(usize)width-n;char*p=piton_alloc((usize)width+1);usize o=0;if(!left){piton_memcpy(p+o,s,n+1);for(usize i=0;i<pad;++i)p[o+n+i]=' ';p[width]=0;}else{for(usize i=0;i<pad;++i)p[o++]=' ';piton_memcpy(p+pad,s,n+1);}return(long)p;}
-static long piton_str_center(const char*s,long width){usize n=piton_strlen(s);if((long)n>=width){char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}usize pad=(usize)width-n,left=pad/2;char*p=piton_alloc((usize)width+1);for(usize i=0;i<left;++i)p[i]=' ';piton_memcpy(p+left,s,n+1);for(usize i=left+n;i<(usize)width;++i)p[i]=' ';p[width]=0;return(long)p;}
+static long piton_str_padw(const char*s,long width,int left,char fill){usize n=piton_strlen(s);if((long)n>=width){char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}usize pad=(usize)width-n;char*p=piton_alloc((usize)width+1);usize o=0;if(!left){piton_memcpy(p+o,s,n);for(usize i=0;i<pad;++i)p[o+n+i]=fill;p[width]=0;}else{for(usize i=0;i<pad;++i)p[o++]=fill;piton_memcpy(p+pad,s,n);p[width]=0;}return(long)p;}
+static long piton_str_center(const char*s,long width,char fill){usize n=piton_strlen(s);if((long)n>=width){char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}usize pad=(usize)width-n,left=pad/2+((pad&(usize)width)&1);char*p=piton_alloc((usize)width+1);for(usize i=0;i<left;++i)p[i]=fill;piton_memcpy(p+left,s,n);for(usize i=left+n;i<(usize)width;++i)p[i]=fill;p[width]=0;return(long)p;}
 static long piton_str_count(const char*s,const char*sub){usize n=piton_strlen(s),m=piton_strlen(sub);long cnt=0;if(m==0)return (long)(n+1);for(usize i=0;i+m<=n;){usize k=0;while(k<m&&s[i+k]==sub[k])++k;if(k==m){++cnt;i+=m;}else ++i;}return cnt;}
 static long piton_str_rfind(const char*s,const char*sub){usize n=piton_strlen(s),m=piton_strlen(sub);if(m==0)return(long)n;if(m>n)return -1;for(long i=(long)(n-m);i>=0;--i){usize k=0;while(k<m&&s[i+k]==sub[k])++k;if(k==m)return i;}return -1;}
-static void piton_str_index_err(void){piton_raise_set("ValueError","substring not found");}
+static void piton_str_index_err(void){piton_write(2,"ValueError: substring not found\n",32);piton_exit(1);}
 static long piton_str_index_f(const char*s,const char*sub){long v=piton_str_find(s,sub);if(v<0)piton_str_index_err();return v;}
 static long piton_str_rindex_f(const char*s,const char*sub){long v=piton_str_rfind(s,sub);if(v<0)piton_str_index_err();return v;}
 static int piton_str_islapha_impl(const char*s,int mode){usize n=piton_strlen(s);if(n==0)return 0;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];int letter=(c>='a'&&c<='z')||(c>='A'&&c<='Z');int digit=(c>='0'&&c<='9');switch(mode){case 0:if(!letter)return 0;break;case 1:if(!digit)return 0;break;case 2:if(!letter&&!digit)return 0;break;case 3:if(c!=' '&&c!='\t'&&c!='\n'&&c!='\v'&&c!='\f'&&c!='\r')return 0;break;}}return 1;}
@@ -319,13 +319,7 @@ static char* piton_str_apply_spec(const char*s,const char*spec){
 }
 static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum){int neg=0;const char*digits=s;if(isnum&&s[0]=='-'){neg=1;digits=s+1;}usize dl=piton_strlen(digits);const char*core=digits;usize cl=dl;if(prec>=0){if(isnum){usize need=(usize)prec;if(dl==1&&digits[0]=='0'&&prec==0)need=0;if(dl<need){char*pad=piton_alloc(need+1);for(usize i=0;i<need-dl;++i)pad[i]='0';piton_memcpy(pad+need-dl,digits,dl);pad[need]=0;core=pad;cl=need;}}else{usize cut=piton_utf8_chars(s,(usize)prec);char*tr=piton_alloc(cut+1);piton_memcpy(tr,s,cut);tr[cut]=0;core=tr;cl=cut;neg=0;}}usize totallen=cl+(neg?1:0);long pad=(width>0&&totallen<(usize)width)?(width-(long)totallen):0;int left=(flags&1)!=0;int zero=(flags&2)&&!left&&isnum&&prec<0;char*out=piton_alloc(totallen+(usize)pad+1);usize o=0;if(!left){if(zero){if(neg)out[o++]='-';for(long i=0;i<pad;++i)out[o++]='0';}else{for(long i=0;i<pad;++i)out[o++]=' ';if(neg)out[o++]='-';}}else if(neg){out[o++]='-';}piton_memcpy(out+o,core,cl);o+=cl;if(left){for(long i=0;i<pad;++i)out[o++]=' ';}out[o]=0;return(long)out;}
 static long piton_str_pred(const char*s,int mode){if(!s||!s[0])return 0;long r=1;int saw_cased=0;int i=0;while(s[i]){unsigned char c=(unsigned char)s[i];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');int dig=(c>='0'&&c<='9');if(alpha)saw_cased=1;if(mode==0){if(!alpha){r=0;break;}}else if(mode==1){if(!dig){r=0;break;}}else if(mode==2){if(!alpha&&!dig){r=0;break;}}else if(mode==3){if(!(c==' '||c=='\t'||c=='\n'||c=='\r'||c=='\v'||c=='\f')){r=0;break;}}i++;}if(mode>=4&&mode<=6){if(!saw_cased)return 0;if(mode==4){int prev_alpha=0;for(usize j=0;s[j];++j){unsigned char c=(unsigned char)s[j];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(alpha){if(!prev_alpha){if(!(c>='A'&&c<='Z'))return 0;}else{if(!(c>='a'&&c<='z'))return 0;}}prev_alpha=alpha;}return 1;}for(usize j=0;s[j];++j){unsigned char c=(unsigned char)s[j];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(!alpha)continue;if(mode==5){if(!(c>='A'&&c<='Z'))return 0;}else{if(!(c>='a'&&c<='z'))return 0;}}return 1;}return r;}
-static long piton_str_capitalize(const char*s){if(!s)return 0;usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){char c=s[i];if(i==0&&c>='a'&&c<='z')p[i]=c-32;else if(i>0&&c>='A'&&c<='Z')p[i]=c+32;else p[i]=c;}p[n]=0;return(long)p;}
-static long piton_str_title(const char*s){if(!s)return 0;usize n=piton_strlen(s);char*p=piton_alloc(n+1);int prev_alpha=0;for(usize i=0;i<n;++i){char c=s[i];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(alpha){if(!prev_alpha&&c>='a'&&c<='z')p[i]=c-32;else if(prev_alpha&&c>='A'&&c<='Z')p[i]=c+32;else p[i]=c;}else p[i]=c;prev_alpha=alpha;}p[n]=0;return(long)p;}
-static long piton_str_swapcase(const char*s){if(!s)return 0;usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){char c=s[i];if(c>='a'&&c<='z')p[i]=c-32;else if(c>='A'&&c<='Z')p[i]=c+32;else p[i]=c;}p[n]=0;return(long)p;}
-static long piton_str_zfill(const char*s,long width){if(!s)return 0;usize n=piton_strlen(s);long pad=(width>(long)n)?(width-(long)n):0;int has_sign=(s[0]=='-'||s[0]=='+');char*p=piton_alloc((usize)(n+pad)+1);usize o=0;if(pad>0){if(has_sign){p[o++]=s[0];for(long i=0;i<pad;++i)p[o++]='0';for(usize i=1;i<n;++i)p[o++]=s[i];}else{for(long i=0;i<pad;++i)p[o++]='0';for(usize i=0;i<n;++i)p[o++]=s[i];}}else{for(usize i=0;i<n;++i)p[o++]=s[i];}p[o]=0;return(long)p;}
 static long piton_str_just(const char*s,long width,long fill,int mode){if(!s)return 0;usize n=piton_strlen(s);long pad=(width>(long)n)?(width-(long)n):0;char f=(char)fill;char*p=piton_alloc((usize)(n+pad)+1);usize o=0;if(mode==0){for(usize i=0;i<n;++i)p[o++]=s[i];for(long i=0;i<pad;++i)p[o++]=f;}else if(mode==1){for(long i=0;i<pad;++i)p[o++]=f;for(usize i=0;i<n;++i)p[o++]=s[i];}else{long lp=pad/2+((pad&width)&1),rp=pad-lp;for(long i=0;i<lp;++i)p[o++]=f;for(usize i=0;i<n;++i)p[o++]=s[i];for(long i=0;i<rp;++i)p[o++]=f;}p[o]=0;return(long)p;}
-static long piton_str_count(const char*s,const char*sub){if(!s||!sub)return 0;usize sl=piton_strlen(s),tl=piton_strlen(sub);if(tl==0)return(long)(sl+1);if(tl>sl)return 0;long cnt=0;for(usize i=0;i+tl<=sl;){usize j=0;while(j<tl&&s[i+j]==sub[j])++j;if(j==tl){++cnt;i+=tl;}else++i;}return cnt;}
-static long piton_str_rfind(const char*s,const char*sub){if(!s||!sub)return -1;usize sl=piton_strlen(s),tl=piton_strlen(sub);if(tl==0)return(long)sl;if(tl>sl)return -1;for(usize i=sl-tl+1;i-->0;){const char*p=s+i;usize k=0;while(k<tl&&p[k]==sub[k])++k;if(k==tl)return(long)i;}return -1;}
 static long piton_str_subindex(const char*s,const char*n){long i=piton_str_find(s,n);if(i<0){piton_write(2,"ValueError: substring not found\n",32);piton_exit(1);}return i;}
 static long piton_str_subrindex(const char*s,const char*n){long i=piton_str_rfind(s,n);if(i<0){piton_write(2,"ValueError: substring not found\n",32);piton_exit(1);}return i;}
 static long piton_str_quote(const char*s){usize n=piton_strlen(s);int q=0;for(usize i=0;i<n;++i)if(s[i]=='\'')q=1;char qc=q?'"':'\'';usize extra=0;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'||c=='\n'||c=='\t'||c=='\r'||(unsigned char)c==qc)extra+=1;}char*p=piton_alloc(n+extra+3);usize o=0;p[o++]=qc;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'){p[o++]='\\';p[o++]='\\';}else if(c=='\n'){p[o++]='\\';p[o++]='n';}else if(c=='\t'){p[o++]='\\';p[o++]='t';}else if(c=='\r'){p[o++]='\\';p[o++]='r';}else if(c==qc){p[o++]='\\';p[o++]=c;}else p[o++]=(char)c;}p[o++]=qc;p[o]=0;return(long)p;}
@@ -333,6 +327,10 @@ static long piton_str_single_char(const char*s){if(piton_strlen(s)!=1){piton_rai
 static long piton_str_format(const char*t,long n,const char**av){usize total=0;int auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){total+=1;i+=2;continue;}usize j=i+1;int idx=-2;int has=0;if(t[j]=='}'){idx=auto_idx++;j+=1;has=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;has=1;}if(has&&t[j]=='}'){j+=1;}else{has=0;}}if(!has){piton_write(2,"ValueError: single '{' in format string\n",40);piton_exit(1);}if(idx<0||idx>=n){piton_write(2,"IndexError: replacement index out of range\n",43);piton_exit(1);}total+=piton_strlen(av[idx]);i=j;}else if(t[i]=='}'){if(t[i+1]=='}'){total+=1;i+=2;}else{piton_write(2,"ValueError: single '}' in format string\n",40);piton_exit(1);}}else{total+=1;i+=1;}}char*p=piton_alloc(total+1);usize o=0;auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){p[o++]='{';i+=2;continue;}usize j=i+1;int idx=-2;if(t[j]=='}'){idx=auto_idx++;j+=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;}j+=1;}usize el=piton_strlen(av[idx]);piton_memcpy(p+o,av[idx],el);o+=el;i=j;}else if(t[i]=='}'){p[o++]='}';i+=2;}else{p[o++]=t[i++];}}p[o]=0;return(long)p;}
 
 static long piton_str_split_ws(const char*s){PitonSeq*r=piton_seq_new(PK_LIST,0);usize n=piton_strlen(s),i=0;while(i<n){while(i<n&&piton_ws((unsigned char)s[i]))++i;if(i>=n)break;usize j=i;while(j<n&&!piton_ws((unsigned char)s[j]))++j;usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});i=j;}return(long)r;}
+static long piton_str_partition(const char*s,const char*sep){usize n=piton_strlen(s),m=piton_strlen(sep);long at=-1;for(usize i=0;i+m<=n;++i){usize k=0;while(k<m&&s[i+k]==sep[k])++k;if(k==m){at=(long)i;break;}}PitonSeq*r=piton_seq_new(PK_TUPLE,3);long b=at<0?(long)n:at,a=at<0?(long)n:(long)(at+m);char*p1=piton_alloc((usize)b+1);piton_memcpy(p1,s,(usize)b);p1[b]=0;char*p2=piton_alloc(m+1);if(at<0)p2[0]=0;else piton_memcpy(p2,sep,m+1);char*p3=piton_alloc(n-(usize)a+1);piton_memcpy(p3,s+a,n-(usize)a);p3[n-(usize)a]=0;r->items[0]=(PitonSlot){(long)p1,PK_STR};r->items[1]=(PitonSlot){(long)p2,PK_STR};r->items[2]=(PitonSlot){(long)p3,PK_STR};return(long)r;}
+static long piton_str_rsplit(const char*s,const char*sep,long maxsplit){if(!sep)return piton_str_split_ws(s);usize n=piton_strlen(s),m=piton_strlen(sep);PitonSeq*r=piton_seq_new(PK_LIST,0);if(m==0){for(long k=(long)n;k>=0;--k){char*q=piton_alloc(2);q[0]=s[k];q[1]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});}return(long)r;}usize end=n;long budget=maxsplit<0?(long)n:maxsplit;while(budget>0){long at=-1;for(long i=(long)end-(long)m;i>=0;--i){usize k=0;while(k<m&&s[i+(long)k]==sep[k])++k;if(k==m){at=i;break;}}if(at<0)break;--budget;usize tail=end-(usize)at-m;char*q=piton_alloc(tail+1);piton_memcpy(q,s+(usize)at+m,tail);q[tail]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});end=(usize)at;}char*head=piton_alloc(end+1);piton_memcpy(head,s,end);head[end]=0;piton_seq_append(r,(PitonSlot){(long)head,PK_STR});long total=r->length;for(long i=0;i<total/2;++i){PitonSlot t=r->items[i];r->items[i]=r->items[total-1-i];r->items[total-1-i]=t;}return(long)r;}
+static long piton_str_splitlines(const char*s){usize n=piton_strlen(s);PitonSeq*r=piton_seq_new(PK_LIST,0);usize i=0;while(i<n){usize j=i;while(j<n&&s[j]!='\n'&&s[j]!='\r')++j;usize take=j-i;if(take>0&&s[j-1]=='\r')--take;char*q=piton_alloc(take+1);piton_memcpy(q,s+i,take);q[take]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});if(j<n&&s[j]=='\r'&&j+1<n&&s[j+1]=='\n')i=j+2;else i=j+1;}return(long)r;}
+static long piton_str_expandtabs(const char*s,long tabsize){usize n=piton_strlen(s);char*out=piton_alloc(n*2+n+1);usize o=0,col=0;if(tabsize<1)tabsize=1;for(usize i=0;i<n;++i){char c=s[i];if(c=='\t'){usize w=(usize)tabsize-(col%(usize)tabsize);for(usize k=0;k<w;++k)out[o++]=' ';col+=w;}else{out[o++]=c;++col;}}out[o]=0;return(long)out;}
 static long piton_str_split(const char*s,const char*sep){if(!sep)return piton_str_split_ws(s);PitonSeq*r=piton_seq_new(PK_LIST,0);usize sl=piton_strlen(s),nl=piton_strlen(sep);if(nl==0){for(usize k=0;k<=sl;++k){char*q=piton_alloc(2);q[0]=k<sl?s[k]:0;q[1]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});}return(long)r;}usize i=0;while(1){usize j=i;while(j+nl<=sl){usize k=0;while(k<nl&&s[j+k]==sep[k])++k;if(k==nl)break;++j;}usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});if(j+nl>sl)break;i=j+nl;}return(long)r;}
 static long piton_str_strip(const char*s,int mode){usize n=piton_strlen(s),a=0,b=n;if(mode!=2){while(a<n&&piton_ws((unsigned char)s[a]))++a;}if(mode!=1){while(b>a&&piton_ws((unsigned char)s[b-1]))--b;}char*p=piton_alloc(b-a+1);piton_memcpy(p,s+a,b-a);p[b-a]=0;return(long)p;}
 static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(sep);usize total=0;long cnt=items?items->length:0;for(long i=0;i<cnt;++i){if(items->items[i].kind!=PK_STR){piton_write(2,"TypeError: sequence item is not a string\n",41);piton_exit(1);}total+=piton_strlen((const char*)items->items[i].bits);}total+=sl*(usize)(cnt>0?cnt-1:0);char*p=piton_alloc(total+1);usize o=0;for(long i=0;i<cnt;++i){if(i){piton_memcpy(p+o,sep,sl);o+=sl;}usize el=piton_strlen((const char*)items->items[i].bits);piton_memcpy(p+o,(const char*)items->items[i].bits,el);o+=el;}p[o]=0;return(long)p;}
@@ -621,7 +619,9 @@ static long piton_range_slice(PitonRange*r,long lo,long hi){if(!r)return 0;long 
 static long piton_range_slice_step(PitonRange*r,long lo,long hi,long st){if(!r)return 0;if(st==0){piton_raise_set("ValueError","slice step cannot be zero");return 0;}long n=piton_range_len(r);long a=0,b=0;if(st>0){if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=0;if(hi==0x7FFFFFFFFFFFFFFFL)hi=n;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;a=lo;b=hi;}else{if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=n-1;if(hi==0x7FFFFFFFFFFFFFFFL)hi=-n-1;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo>=n)lo=n-1;if(hi<-1)hi=-1;a=lo;b=hi;}return(long)piton_range_new(r->start+a*r->step,r->start+b*r->step,r->step*st);}
 static long piton_divmod_xy(long a,long b){if(!b){piton_raise_set("ZeroDivisionError","integer division or modulo by zero");return 0;}long q=a/b,r=a%b;if(r&&((r<0)!=(b<0))){q-=1;r+=b;}PitonSeq*p=piton_seq_new(PK_TUPLE,2);p->items[0]=(PitonSlot){q,PK_INT};p->items[1]=(PitonSlot){r,PK_INT};return(long)p;}
 static PitonSlot piton_str_minmax(const char*s,int want_min){if(!s||!*s){piton_raise_set("ValueError","min() arg is an empty sequence");return (PitonSlot){0,PK_STR};}unsigned char best=(unsigned char)s[0];for(long i=1;s[i];++i){unsigned char c=(unsigned char)s[i];if(want_min?c<best:c>best)best=c;}char*r=piton_alloc(2);r[0]=(char)best;r[1]=0;return (PitonSlot){(long)r,PK_STR};}
-static long piton_collect(int which,long raw,int elemkind){PitonSeq*s=piton_seq_new(PK_LIST,0);if(!s)return 0;for(;;){long v;if(which==0)v=piton_enumerate_next(raw);else if(which==1)v=piton_reversed_next(raw);else if(which==2)v=piton_callback_iterator_next(raw);else if(which==3)v=piton_zip_next(raw);else{piton_raise_set("TypeError","collect");return 0;}if(piton_exc_flag){if(piton_exc_type&&piton_strcmp(piton_exc_type,"StopIteration")==0){piton_catch_clear();break;}return 0;}piton_seq_append(s,(PitonSlot){v,elemkind});}return(long)s;}
+static long piton_collect(int which,long raw,int elemkind){PitonSeq*s=piton_seq_new(PK_LIST,0);if(!s)return 0;for(;;){long v;if(which==0)v=piton_enumerate_next(raw);else if(which==1)v=piton_reversed_next(raw);else if(which==2)v=piton_callback_iterator_next(raw);else if(which==3)v=piton_zip_next(raw);else if(which==4)v=piton_gen_next(raw);else{piton_raise_set("TypeError","collect");return 0;}if(piton_exc_flag){if(piton_exc_type&&piton_strcmp(piton_exc_type,"StopIteration")==0){piton_catch_clear();break;}return 0;}piton_seq_append(s,(PitonSlot){v,elemkind});}return(long)s;}
+static PitonSeq* piton_collect_gen(long raw){return (PitonSeq*)piton_collect(4,raw,PK_INT);}
+static PitonSeq* piton_str_explode(const char*s){usize n=piton_strlen(s);PitonSeq*r=piton_seq_new(PK_LIST,n);for(usize i=0;i<n;++i){char*q=piton_alloc(2);q[0]=s[i];q[1]=0;piton_seq_put(r,(long)i,(PitonSlot){(long)q,PK_STR});}return r;}
 static void piton_report_unhandled(void){if(piton_exc_cause_type){piton_write(2,piton_exc_cause_type,piton_strlen(piton_exc_cause_type));if(piton_exc_cause_msg&&piton_exc_cause_msg[0]){piton_write(2,": ",2);piton_write(2,piton_exc_cause_msg,piton_strlen(piton_exc_cause_msg));}piton_write(2," -> causada por\n",16);}piton_write(2,piton_exc_type,piton_strlen(piton_exc_type));piton_write(2,": ",2);if(piton_exc_message)piton_write(2,piton_exc_message,piton_strlen(piton_exc_message));piton_write(2,"\n",1);}
 """
 
@@ -1647,22 +1647,34 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=(long)piton_str_zfill((const char*){operand},{self._value(call_args[0])});")
             types[result] = "str"
         elif method == "ljust":
-            require_count(1, "exactly one int argument")
+            if len(call_args) not in {1, 2}:
+                raise NativeBuildError(f"Linux str.ljust() requires one int argument and an optional str fill")
             if types.get(call_args[0]) not in {"int", "bool"}:
                 raise NativeBuildError("Linux str.ljust() requires an int")
-            out.append(f"    {_name(result)}=(long)piton_str_padw((const char*){operand},{self._value(call_args[0])},0);")
+            _fill = f"*((const char*){self._value(call_args[1])})" if len(call_args) == 2 else "' '"
+            if len(call_args) == 2 and types.get(call_args[1]) != "str":
+                raise NativeBuildError(f"Linux str.{method}() fill must be a str")
+            out.append(f"    {_name(result)}=(long)piton_str_padw((const char*){operand},{self._value(call_args[0])},0,{_fill});")
             types[result] = "str"
         elif method == "rjust":
-            require_count(1, "exactly one int argument")
+            if len(call_args) not in {1, 2}:
+                raise NativeBuildError(f"Linux str.rjust() requires one int argument and an optional str fill")
             if types.get(call_args[0]) not in {"int", "bool"}:
                 raise NativeBuildError("Linux str.rjust() requires an int")
-            out.append(f"    {_name(result)}=(long)piton_str_padw((const char*){operand},{self._value(call_args[0])},1);")
+            _fill = f"*((const char*){self._value(call_args[1])})" if len(call_args) == 2 else "' '"
+            if len(call_args) == 2 and types.get(call_args[1]) != "str":
+                raise NativeBuildError(f"Linux str.{method}() fill must be a str")
+            out.append(f"    {_name(result)}=(long)piton_str_padw((const char*){operand},{self._value(call_args[0])},1,{_fill});")
             types[result] = "str"
         elif method == "center":
-            require_count(1, "exactly one int argument")
+            if len(call_args) not in {1, 2}:
+                raise NativeBuildError("Linux str.center() requires one int argument and an optional str fill")
             if types.get(call_args[0]) not in {"int", "bool"}:
                 raise NativeBuildError("Linux str.center() requires an int")
-            out.append(f"    {_name(result)}=(long)piton_str_center((const char*){operand},{self._value(call_args[0])});")
+            _fill = f"*((const char*){self._value(call_args[1])})" if len(call_args) == 2 else "' '"
+            if len(call_args) == 2 and types.get(call_args[1]) != "str":
+                raise NativeBuildError("Linux str.center() fill must be a str")
+            out.append(f"    {_name(result)}=(long)piton_str_center((const char*){operand},{self._value(call_args[0])},{_fill});")
             types[result] = "str"
         elif method in {"isalpha", "isdigit", "isalnum", "isspace"}:
             require_count(0, "no arguments")
@@ -1694,6 +1706,38 @@ class LinuxCEmitter:
             require_count(1, "exactly one str argument")
             out.append(f"    {_name(result)}=piton_str_rindex_f((const char*){operand},{require_str(0, 'a str argument')});")
             types[result] = "int"
+        elif method == "partition":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_partition((const char*){operand},{require_str(0, 'a str separator')});")
+            types[result] = "tuple"
+            self._tuple_elems[result] = (("%pre", "str"), ("%sep", "str"), ("%suf", "str"))
+        elif method == "rsplit":
+            if len(call_args) not in {0, 1, 2}:
+                raise NativeBuildError("Linux str.rsplit() requires zero, one or two arguments")
+            if call_args and types.get(call_args[0]) != "str":
+                raise NativeBuildError("Linux str.rsplit() requires a str separator")
+            sep = "(const char*)0" if not call_args else f"(const char*){self._value(call_args[0])}"
+            maxsplit = "-1"
+            if len(call_args) == 2:
+                if types.get(call_args[1]) not in {"int", "bool"}:
+                    raise NativeBuildError("Linux str.rsplit() maxsplit must be an int")
+                maxsplit = self._value(call_args[1])
+            out.append(f"    {_name(result)}=piton_str_rsplit((const char*){operand},{sep},{maxsplit});")
+            types[result] = "list"
+            self._coll_elems[result] = "str"
+        elif method == "splitlines":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=piton_str_splitlines((const char*){operand});")
+            types[result] = "list"
+            self._coll_elems[result] = "str"
+        elif method == "expandtabs":
+            if len(call_args) not in {0, 1}:
+                raise NativeBuildError("Linux str.expandtabs() requires zero or one argument")
+            size = self._value(call_args[0]) if call_args else "8"
+            if call_args and types.get(call_args[0]) not in {"int", "bool"}:
+                raise NativeBuildError("Linux str.expandtabs() requires an int tabsize")
+            out.append(f"    {_name(result)}=piton_str_expandtabs((const char*){operand},{size});")
+            types[result] = "str"
         elif method == "join":
             require_count(1, "exactly one list or tuple argument")
             if types.get(call_args[0]) not in {"list", "tuple"}:
@@ -1898,11 +1942,11 @@ class LinuxCEmitter:
             types[result] = "int"
         elif method == "rindex":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_subrindex((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_rindex_f((const char*){operand},{require_str(0, 'a str argument')});")
             types[result] = "int"
         elif method == "index":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_subindex((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_index_f((const char*){operand},{require_str(0, 'a str argument')});")
             types[result] = "int"
         else:
             raise NativeBuildError(f"Linux str.{method}() is not supported")
@@ -2999,7 +3043,7 @@ class LinuxCEmitter:
                         bases.append(f"const char*_pb{index}=(const char*){base};")
                         if width >= 0 or prec >= 0:
                             isnum = 1 if spec in {"d", "x", "X", "o", "f", "F", "e", "E", "g", "G"} else 0
-                            pads.append((width, prec if spec in {"d", "x", "X", "o", "s"} else -1, flags, isnum))
+                            pads.append((width, prec if spec in {"d", "x", "X", "o", "s", "r", "c"} else -1, flags, isnum))
                         else:
                             pads.append(None)
                     names = ",".join(f"_pp{index}" for index in range(len(operands))) or "_pp0"
@@ -3743,6 +3787,13 @@ class LinuxCEmitter:
                 if len(values) != 1:
                     raise NativeBuildError("Linux sum requires one collection")
                 value_type = types.get(values[0])
+                if value_type == "generator":
+                    # GEN_SUM_V1: sum over a generator materializes it once.
+                    out.append(f"    PitonSeq*_gsum=piton_collect_gen({self._value(values[0])});")
+                    out.append(f"    {_name(result)}=piton_sum_seq(_gsum);")
+                    types[result] = "int"
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 if value_type == "range":
                     # RANGE_VALUE_V1: exact, never materialized.
                     out.append(f"    {_name(result)}=piton_sum_range((PitonRange*){self._value(values[0])});")
@@ -3813,6 +3864,12 @@ class LinuxCEmitter:
                 if len(values) != 1:
                     raise NativeBuildError(f"Linux {alias}() takes at most one argument")
                 source_type = types.get(values[0], "int")
+                if source_type == "generator" and seq_kind == "PK_LIST":
+                    # CONV_GEN_V1: lista(generador) materializa en el runtime.
+                    out.append(f"    {_name(result)}=piton_collect_gen({self._value(values[0])});")
+                    types[result] = "list"
+                    self._coll_elems[result] = "int"
+                    return out
                 if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter"} and seq_kind == "PK_LIST":
                     _which = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3}[source_type]
                     _elemkind = "PK_TUPLE" if source_type in {"iterator:enumerate", "iterator:zip"} else "PK_INT"
@@ -3857,6 +3914,12 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
                 types[result] = "str"
             elif function_name in {"sorted", "ordenar"}:
+                # SORTED_STR_V1: a str sorts like its list of 1-char strings.
+                if len(values) == 1 and types.get(values[0]) == "str":
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_str_explode((const char*){self._value(values[0])}));")
+                    types[result] = "list"
+                    self._coll_elems[result] = "str"
+                    return out
                 if len(values) != 1 or types.get(values[0]) not in {"list", "tuple", "range"}:
                     raise NativeBuildError("native sorted currently requires one list, tuple or range")
                 if types.get(values[0]) == "range":
@@ -3886,6 +3949,23 @@ class LinuxCEmitter:
                         )
                 values = self._complete_call_args(function_name, list(values))
                 if function_name in self.function_names:
+                    _gen_layout = self.generator_layouts.get(function_name)
+                    if _gen_layout is not None:
+                        # GEN_CALL_V1: calling a generator function yields the
+                        # generator OBJECT (not one step of it), so
+                        # `lista(f())` materializes it like CPython.
+                        _params = self.function_params.get(function_name, [])
+                        if len(values) != len(_params):
+                            raise NativeBuildError(
+                                f"native generator '{function_name}' called with wrong number of arguments"
+                            )
+                        if len(values) > 4:
+                            raise NativeBuildError("native generator calls with more than four arguments are not supported yet")
+                        out.append(f"    {_name(result)}=piton_gen_new((long)&{_name(function_name)},{len(_gen_layout)});")
+                        for _arg, _param in zip(values, _params):
+                            out.append(f"    ((PitonGenerator*){_name(result)})->slots[{_gen_layout[_param]}]={self._value(_arg)};")
+                        types[result] = "generator"
+                        return out
                     encoded_values = ",".join(self._value(value) for value in values)
                     out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
                     # CALL_PROPAGATE_V1: a call is a potential raise site. The

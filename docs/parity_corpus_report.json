@@ -36,9 +36,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 81,
+      "FAIL_CLOSED": 72,
       "RAISE_EQ": 0,
-      "EQUIV": 1142
+      "EQUIV": 1151
     },
     "by_area": {
       "literals": {
@@ -109,9 +109,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 14,
+        "FAIL_CLOSED": 13,
         "RAISE_EQ": 0,
-        "EQUIV": 71
+        "EQUIV": 72
       },
       "strings": {
         "DIVERGENT_CRASH": 0,
@@ -141,9 +141,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 2,
+        "FAIL_CLOSED": 1,
         "RAISE_EQ": 0,
-        "EQUIV": 32
+        "EQUIV": 33
       },
       "dicts": {
         "DIVERGENT_CRASH": 0,
@@ -205,20 +205,20 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 6,
+        "FAIL_CLOSED": 3,
         "RAISE_EQ": 0,
-        "EQUIV": 2
+        "EQUIV": 5
       },
       "controls_closed": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 8,
+        "FAIL_CLOSED": 4,
         "RAISE_EQ": 0,
-        "EQUIV": 8
+        "EQUIV": 12
       }
     },
-    "pct_equiv": 93.4,
+    "pct_equiv": 94.1,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -4929,8 +4929,10 @@
       "area": "builtins",
       "name": "ordenar1",
       "src": "imprimir(ordenar('cba'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native sorted currently requires one list, tuple or range"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
@@ -9660,8 +9662,10 @@
       "area": "collections",
       "name": "sorted-str",
       "src": "imprimir(ordenar('cba'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native sorted currently requires one list, tuple or range"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
@@ -10380,7 +10384,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-5vxwzi8j/program.c: In function ‘f’:\n/tmp/piton-linux-5vxwzi8j/program.c:1161:8: error: ‘suma’ undeclared (first use in this function)\n 1161 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-5vxwzi8j/program.c:1161:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-3mnc3nef/program.c: In function ‘f’:\n/tmp/piton-linux-3mnc3nef/program.c:1171:8: error: ‘suma’ undeclared (first use in this function)\n 1171 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-3mnc3nef/program.c:1171:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10396,7 +10400,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-syl_w_ry/program.c: In function ‘f’:\n/tmp/piton-linux-syl_w_ry/program.c:1165:8: error: ‘suma’ undeclared (first use in this function)\n 1165 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-syl_w_ry/program.c:1165:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-nbfeq_oh/program.c: In function ‘f’:\n/tmp/piton-linux-nbfeq_oh/program.c:1175:8: error: ‘suma’ undeclared (first use in this function)\n 1175 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-nbfeq_oh/program.c:1175:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10484,21 +10488,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-qwhvcfte/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qwhvcfte/program.c:1069:9: error: too many arguments to function ‘f’\n 1069 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-qwhvcfte/program.c:1042:13: note: declared here\n 1042 | static long f(long a);\n      |             ^\n/tmp/piton-linux-qwhvcfte/program.c: At top level:\n/tmp/piton-linux-qwhvcfte/program.c:971:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  971 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-f1yh0uit/program.c: In function ‘piton_main’:\n/tmp/piton-linux-f1yh0uit/program.c:1079:9: error: too many arguments to function ‘f’\n 1079 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-f1yh0uit/program.c:1052:13: note: declared here\n 1052 | static long f(long a);\n      |             ^\n/tmp/piton-linux-f1yh0uit/program.c: At top level:\n/tmp/piton-linux-f1yh0uit/program.c:979:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  979 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-uyp96nbd/program.c: In function ‘piton_main’:\n/tmp/piton-linux-uyp96nbd/program.c:1068:9: error: too few arguments to function ‘f’\n 1068 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-uyp96nbd/program.c:1042:13: note: declared here\n 1042 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-uyp96nbd/program.c: At top level:\n/tmp/piton-linux-uyp96nbd/program.c:971:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  971 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-r_dmffng/program.c: In function ‘piton_main’:\n/tmp/piton-linux-r_dmffng/program.c:1078:9: error: too few arguments to function ‘f’\n 1078 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-r_dmffng/program.c:1052:13: note: declared here\n 1052 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-r_dmffng/program.c: At top level:\n/tmp/piton-linux-r_dmffng/program.c:979:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  979 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-bmmvsw4r/program.c: In function ‘piton_main’:\n/tmp/piton-linux-bmmvsw4r/program.c:1136:9: error: ‘no_existe’ undeclared (first use in this function)\n 1136 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-bmmvsw4r/program.c:1136:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-b128b6cg/program.c: In function ‘piton_main’:\n/tmp/piton-linux-b128b6cg/program.c:1146:9: error: ‘no_existe’ undeclared (first use in this function)\n 1146 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-b128b6cg/program.c:1146:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10862,7 +10866,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-0d4pbh08/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0d4pbh08/program.c:1139:9: error: too few arguments to function ‘P____init__’\n 1139 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-0d4pbh08/program.c:1113:13: note: declared here\n 1113 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-p_2s_2f9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-p_2s_2f9/program.c:1149:9: error: too few arguments to function ‘P____init__’\n 1149 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-p_2s_2f9/program.c:1123:13: note: declared here\n 1123 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
@@ -10893,29 +10897,35 @@
       "area": "generators",
       "name": "yield-list",
       "src": "funcion f():\n    para x en [1, 2]:\n        producir x\nimprimir(lista(f()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'none' value"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
       "name": "yield-infinite-take",
       "src": "funcion f():\n    i = 0\n    mientras i < 3:\n        producir i\n        i = i + 1\nimprimir(lista(f()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'none' value"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
       "name": "yield-varargs",
       "src": "funcion f(*args):\n    para a en args:\n        producir a * 2\nimprimir(lista(f(1, 2)))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'none' value"
+      "detail": "build: NativeBuildError: native generator 'f' with *args/**kwargs is not supported yet"
     },
     {
       "area": "generators",
       "name": "yield-sum",
       "src": "funcion f():\n    producir 1\n    producir 2\nimprimir(sum(f()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux sum requires one collection"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
@@ -11028,29 +11038,37 @@
       "area": "controls_closed",
       "name": "str-partition",
       "src": "imprimir('a-b'.partition('-'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.partition() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
       "name": "str-rsplit",
       "src": "imprimir('a b'.rsplit())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.rsplit() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
       "name": "str-splitlines",
       "src": "imprimir('a\\nb'.splitlines())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.splitlines() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
       "name": "str-expandtabs",
       "src": "imprimir('a\\tb'.expandtabs())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.expandtabs() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",

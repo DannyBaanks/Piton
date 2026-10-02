@@ -128,9 +128,11 @@ class StripV1(unittest.TestCase):
     def test_strip_lstrip_rstrip(self):
         _assert_matches(self, "imprimir('  x  '.strip(), '  y'.lstrip(), 'z  '.rstrip())\n")
 
-    def test_strip_with_chars_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('xx'.strip('x'))\n")
+    def test_strip_with_chars(self):
+        # P36: strip/lstrip/rstrip aceptan el conjunto de caracteres (CPython).
+        _assert_matches(self, "imprimir('xx'.strip('x'))\n")
+        _assert_matches(self, "imprimir('xxay'.lstrip('x'))\n")
+        _assert_matches(self, "imprimir('ayxx'.rstrip('x'))\n")
 
 
 class JoinV1(unittest.TestCase):
@@ -199,9 +201,9 @@ class FormatV1(unittest.TestCase):
             compare_native_to_cpython("imprimir('{5}'.format(1))\n")
 
     def test_unknown_method_fails_closed(self):
-        # title is implemented since P23; partition remains out of subset
+        # title (P23), partition (P36) implemented; removeprefix still outside
         with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('a'.partition('x'))\n")
+            compare_native_to_cpython("imprimir('a'.removeprefix('x'))\n")
 
 
 class StrMethodsChainedV1(unittest.TestCase):
@@ -273,19 +275,15 @@ class FormatSpecV1(unittest.TestCase):
         # path handles {} / {N}; a spec inside it errors loudly there)
         _assert_matches(self, "s = 'plain'\nimprimir(s.format(1))\n")
 
-    def test_float_presentations_fail_closed(self):
+    def test_float_presentations(self):
+        # P36 FMT_FLOAT_V1: f/e/g/% with real decimal rounding.
         for source in (
             "imprimir('{:.2f}'.format(3.14))\n",
             "imprimir('{:.1%}'.format(0.5))\n",
             "imprimir('{:.2e}'.format(1234.5))\n",
             "imprimir('{:.2g}'.format(0.5))\n",
         ):
-            try:
-                compare_native_to_cpython(source)
-            except NativeBuildError:
-                pass
-            else:
-                self.fail(f"not closed: {source}")
+            _assert_matches(self, source)
 
     def test_unknown_spec_fails_closed(self):
         for source in (

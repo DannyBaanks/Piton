@@ -560,10 +560,26 @@ class MIRLowerer:
                     else:
                         self.class_properties.setdefault(node.name, {}).setdefault(prop_name, {})[role] = symbol
             for node in module_body:
-                if node.kind == HIRKind.FUNC_DEF and any(
-                    item.kind in {HIRKind.YIELD, HIRKind.YIELD_FROM}
-                    for item in node.body
-                ):
+                # YIELD_SCAN_V1: a `producir` nested inside a loop/if counts —
+                # the old top-level-only scan missed `para x en xs: producir x`
+                # and the function degraded into a plain function returning None.
+                # Nested function/class bodies are their own scope: not walked.
+                def _has_yield(items, _depth=0):
+                    for item in items or []:
+                        if getattr(item, "kind", None) in {HIRKind.YIELD, HIRKind.YIELD_FROM}:
+                            return True
+                        if getattr(item, "kind", None) in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF, HIRKind.LAMBDA}:
+                            continue
+                        for attr in ("body", "finalbody", "orelse"):
+                            sub = getattr(item, attr, None)
+                            if isinstance(sub, list) and _has_yield(sub, _depth + 1):
+                                return True
+                        for handler in (getattr(item, "handlers", None) or []):
+                            if _has_yield(getattr(handler, "body", None), _depth + 1):
+                                return True
+                    return False
+
+                if node.kind == HIRKind.FUNC_DEF and _has_yield(node.body):
                     args = getattr(node, "args", None)
                     params = list(getattr(args, "args", []) or []) if args else []
                     if not params and node.body and all(

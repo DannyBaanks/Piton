@@ -2,7 +2,7 @@
 
 - backend medido: **linux_x86 (Linux native)** (instrumento: `tools/parity_corpus.py`)
 - oracle: CPython 3.12.3
-- casos: **1223** | EQUIV **93.4%** | comportamiento honesto (EQUIV+RAISE_EQ+FAIL_CLOSED) **100.0%** | DIVERGENT **0.0%**
+- casos: **1223** | EQUIV **94.1%** | comportamiento honesto (EQUIV+RAISE_EQ+FAIL_CLOSED) **100.0%** | DIVERGENT **0.0%**
 
 Este reporte NO es un gate. Mide el subconjecto declarado en `NATIVE_COMPATIBILITY.md` mediante matrices enumeradas, no casos elegidos a mano.
 
@@ -13,9 +13,9 @@ Este reporte NO es un gate. Mide el subconjecto declarado en `NATIVE_COMPATIBILI
 | DIVERGENT_CRASH | 0 |
 | DIVERGENT_MISMATCH | 0 |
 | TIMEOUT | 0 |
-| FAIL_CLOSED | 81 |
+| FAIL_CLOSED | 72 |
 | RAISE_EQ | 0 |
-| EQUIV | 1142 |
+| EQUIV | 1151 |
 
 ## Por area
 
@@ -29,11 +29,11 @@ Este reporte NO es un gate. Mide el subconjecto declarado en `NATIVE_COMPATIBILI
 | truthiness | 66 | 0 | 9 | 0 | 0 |
 | ranges | 43 | 0 | 1 | 0 | 0 |
 | bigint | 32 | 0 | 1 | 0 | 0 |
-| builtins | 71 | 0 | 14 | 0 | 0 |
+| builtins | 72 | 0 | 13 | 0 | 0 |
 | strings | 42 | 0 | 0 | 0 | 0 |
 | formatting | 46 | 0 | 3 | 0 | 0 |
 | slices | 394 | 0 | 0 | 0 | 0 |
-| collections | 32 | 0 | 2 | 0 | 0 |
+| collections | 33 | 0 | 1 | 0 | 0 |
 | dicts | 17 | 0 | 3 | 0 | 0 |
 | sets | 9 | 0 | 0 | 0 | 0 |
 | comprehensions | 21 | 0 | 6 | 0 | 0 |
@@ -41,8 +41,8 @@ Este reporte NO es un gate. Mide el subconjecto declarado en `NATIVE_COMPATIBILI
 | functions | 16 | 0 | 5 | 0 | 0 |
 | exceptions | 20 | 0 | 1 | 0 | 0 |
 | classes | 14 | 0 | 7 | 0 | 0 |
-| generators | 2 | 0 | 6 | 0 | 0 |
-| controls_closed | 8 | 0 | 8 | 0 | 0 |
+| generators | 5 | 0 | 3 | 0 | 0 |
+| controls_closed | 12 | 0 | 4 | 0 | 0 |
 
 ## Divergencias y timeouts (0)
 
