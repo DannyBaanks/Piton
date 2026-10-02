@@ -3283,7 +3283,10 @@ class LinuxCEmitter:
                             # the materialized elements.
                             out.append(f'    piton_range_print((PitonRange*){self._value(value)});')
                         elif value_type == "slot":
-                            out.append(f'    piton_print_slot(*(PitonSlot*){self._value(value)});')
+                            # PRINT-slot-marker need.s a dispatched print: a
+                            # str slot prints raw like imprimir(str); the
+                            # others stay repr-shaped (lists, None, etc.).
+                            out.append(f'    {{PitonSlot _sl=*(PitonSlot*){self._value(value)};if(_sl.kind==PK_STR){{piton_print_str_raw((char*)_sl.bits);}}else{{piton_print_slot(_sl);}}}}')
                         elif value_type in {"list", "tuple", "dict", "set"}:
                             out.append(f'    piton_print_slot({self._slot(value, types)});')
                         else:
