@@ -36,9 +36,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 72,
+      "FAIL_CLOSED": 69,
       "RAISE_EQ": 0,
-      "EQUIV": 1151
+      "EQUIV": 1154
     },
     "by_area": {
       "literals": {
@@ -165,9 +165,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 6,
+        "FAIL_CLOSED": 3,
         "RAISE_EQ": 0,
-        "EQUIV": 21
+        "EQUIV": 24
       },
       "control_flow": {
         "DIVERGENT_CRASH": 0,
@@ -218,7 +218,7 @@
         "EQUIV": 12
       }
     },
-    "pct_equiv": 94.1,
+    "pct_equiv": 94.4,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -10046,22 +10046,26 @@
       "area": "comprehensions",
       "name": "list-enumerado",
       "src": "imprimir([x para x en enumerar(['x', 'y'])])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux collection_len requires a collection"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
       "name": "listexpr-enumerado",
       "src": "imprimir([x + 1 para x en enumerar(['x', 'y'])])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux collection_len requires a collection"
+      "detail": "build: NativeBuildError: Linux collection binary operator not supported: + on tuple/int"
     },
     {
       "area": "comprehensions",
       "name": "listfilter-enumerado",
       "src": "imprimir([x para x en enumerar(['x', 'y']) si x])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux collection_len requires a collection"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
@@ -10166,8 +10170,10 @@
       "area": "comprehensions",
       "name": "enumerar-tupla",
       "src": "imprimir([(i, v) para i, v en enumerar('ab')])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux collection_len requires a collection"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
@@ -10384,7 +10390,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-3mnc3nef/program.c: In function ‘f’:\n/tmp/piton-linux-3mnc3nef/program.c:1171:8: error: ‘suma’ undeclared (first use in this function)\n 1171 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-3mnc3nef/program.c:1171:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-hji0l5c5/program.c: In function ‘f’:\n/tmp/piton-linux-hji0l5c5/program.c:1171:8: error: ‘suma’ undeclared (first use in this function)\n 1171 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-hji0l5c5/program.c:1171:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10400,7 +10406,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-nbfeq_oh/program.c: In function ‘f’:\n/tmp/piton-linux-nbfeq_oh/program.c:1175:8: error: ‘suma’ undeclared (first use in this function)\n 1175 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-nbfeq_oh/program.c:1175:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-of30bchk/program.c: In function ‘f’:\n/tmp/piton-linux-of30bchk/program.c:1175:8: error: ‘suma’ undeclared (first use in this function)\n 1175 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-of30bchk/program.c:1175:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10488,21 +10494,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-f1yh0uit/program.c: In function ‘piton_main’:\n/tmp/piton-linux-f1yh0uit/program.c:1079:9: error: too many arguments to function ‘f’\n 1079 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-f1yh0uit/program.c:1052:13: note: declared here\n 1052 | static long f(long a);\n      |             ^\n/tmp/piton-linux-f1yh0uit/program.c: At top level:\n/tmp/piton-linux-f1yh0uit/program.c:979:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  979 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-nn6hayl0/program.c: In function ‘piton_main’:\n/tmp/piton-linux-nn6hayl0/program.c:1079:9: error: too many arguments to function ‘f’\n 1079 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-nn6hayl0/program.c:1052:13: note: declared here\n 1052 | static long f(long a);\n      |             ^\n/tmp/piton-linux-nn6hayl0/program.c: At top level:\n/tmp/piton-linux-nn6hayl0/program.c:979:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  979 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-r_dmffng/program.c: In function ‘piton_main’:\n/tmp/piton-linux-r_dmffng/program.c:1078:9: error: too few arguments to function ‘f’\n 1078 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-r_dmffng/program.c:1052:13: note: declared here\n 1052 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-r_dmffng/program.c: At top level:\n/tmp/piton-linux-r_dmffng/program.c:979:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  979 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-jtiewcwq/program.c: In function ‘piton_main’:\n/tmp/piton-linux-jtiewcwq/program.c:1078:9: error: too few arguments to function ‘f’\n 1078 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-jtiewcwq/program.c:1052:13: note: declared here\n 1052 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-jtiewcwq/program.c: At top level:\n/tmp/piton-linux-jtiewcwq/program.c:979:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  979 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-b128b6cg/program.c: In function ‘piton_main’:\n/tmp/piton-linux-b128b6cg/program.c:1146:9: error: ‘no_existe’ undeclared (first use in this function)\n 1146 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-b128b6cg/program.c:1146:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-mpiwp0ux/program.c: In function ‘piton_main’:\n/tmp/piton-linux-mpiwp0ux/program.c:1146:9: error: ‘no_existe’ undeclared (first use in this function)\n 1146 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-mpiwp0ux/program.c:1146:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10866,7 +10872,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-p_2s_2f9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-p_2s_2f9/program.c:1149:9: error: too few arguments to function ‘P____init__’\n 1149 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-p_2s_2f9/program.c:1123:13: note: declared here\n 1123 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-fzrrd2_m/program.c: In function ‘piton_main’:\n/tmp/piton-linux-fzrrd2_m/program.c:1149:9: error: too few arguments to function ‘P____init__’\n 1149 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-fzrrd2_m/program.c:1123:13: note: declared here\n 1123 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",

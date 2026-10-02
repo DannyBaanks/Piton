@@ -467,7 +467,7 @@ typedef struct{long magic;const char*str;long index;long length;}PitonStrIterato
 static long piton_str_iterator_new(const char*str){if(!str){piton_write(2,"TypeError: 'NoneType' object is not iterable\n",42);piton_exit(1);}PitonStrIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E53545249LL;i->str=str;i->index=0;i->length=piton_strlen(str);return(long)i;}
 static long piton_str_iterator_next(long raw){PitonStrIterator*i=(PitonStrIterator*)raw;if(!i||i->magic!=0x5049544E53545249LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->length){piton_raise_set("StopIteration","");return 0;}unsigned char c=i->str[i->index++];char*p=piton_alloc(2);p[0]=(char)c;p[1]=0;return(long)p;}
 typedef struct{long magic;long index;long start;PitonSeq*seq;}PitonEnumerateIterator;
-static long piton_enumerate_new(void*raw,long start){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: enumerate() argument is not iterable\n",48);piton_exit(1);}PitonEnumerateIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->start=start;return(long)i;}
+static long piton_enumerate_new(PitonSlot src,long start){PitonSeq*s=(PitonSeq*)src.bits;if(src.kind==PK_STR){/* ENUM_STR_V1: enumerate() sobre un str explota 1-char */const char*txt=(const char*)src.bits;usize n=piton_strlen(txt);PitonSeq*l=piton_seq_new(PK_LIST,0);for(usize i=0;i<n;++i){char*q=piton_alloc(2);q[0]=txt[i];q[1]=0;piton_seq_append(l,(PitonSlot){(long)q,PK_STR});}s=l;}if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: enumerate() argument is not iterable\n",48);piton_exit(1);}PitonEnumerateIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->start=start;return(long)i;}
 static long piton_enumerate_next(long raw){PitonEnumerateIterator*i=(PitonEnumerateIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}long n=i->index++;PitonSeq*p=piton_seq_new(PK_TUPLE,2);piton_seq_put(p,0,(PitonSlot){i->start+n,PK_INT});piton_seq_put(p,1,i->seq->items[n]);return(long)p;}
 typedef struct{long magic,index;PitonSeq*seq;}PitonReversedIterator;
 typedef struct{long magic,index;PitonSeq*left,*right;}PitonZipIterator;
@@ -760,6 +760,7 @@ class LinuxCEmitter:
         self._coll_elems: dict[str, str] = {}
         self._tuple_list_elems: dict[str, tuple[str, str]] = {}
         self._iter_source: dict[str, str] = {}
+        self._enum_elem: dict[str, str] = {}
         self._iter_source_r: dict[str, str] = {}
         # DICT_VAL_TYPE_V1: static type of a dict's VALUES, so `d[k]` and
         # `d.get(k)` return a correctly typed result instead of an int
@@ -2491,7 +2492,11 @@ class LinuxCEmitter:
                 if types.get(source) not in {"list", "tuple", "str"}:
                     raise NativeBuildError("native enumerate currently requires a list or tuple")
                 start_value = self._value(start) if start is not None else "0"
-                out.append(f"    {_name(result)}=piton_enumerate_new((void*){self._value(source)},{start_value});")
+                out.append(f"    {_name(result)}=piton_enumerate_new({self._slot(source, types)},{start_value});")
+                if types.get(source) == "str":
+                    # ENUM_STR_V1: el runtime explota el str; el elemento
+                    #-yielded sigue siendo str (no un puntero suelto).
+                    self._enum_elem[result] = "str"
                 self._iter_source[result] = source
             elif builtin == "reversed":
                 if types.get(source) not in {"list", "tuple"}:
@@ -2551,11 +2556,11 @@ class LinuxCEmitter:
             # a str pointer must never be printed as a raw int, and vice versa.
             if iterator_type == "iterator:enumerate":
                 src = None
+                _elem = None
                 _k = args[0]
                 for _ in range(12):
+                    _elem = _elem or self._enum_elem.get(_k)
                     _h = self._iter_source.get(_k)
-                    if _h is None:
-                        _h = self._iter_source.get(aliases.get(_k, _k))
                     if _h is not None:
                         src = _h
                         _k = _h
@@ -2566,34 +2571,8 @@ class LinuxCEmitter:
                     if _k2 is None or _k2 == _k:
                         break
                     _k = _k2
-                ekind = self._coll_elems.get(src) if src else None
+                ekind = (self._coll_elems.get(src) if src else None) or _elem
                 self._tuple_elems[result] = (("%idx", "int"), (src or "%src", ekind if ekind and "|" not in ekind else "int"))
-            if iterator_type == "iterator:zip":
-                def _base(t):
-                    for _ in range(12):
-                        _h = self._iter_source.get(t) or self._iter_source.get(aliases.get(t, t))
-                        if _h is None:
-                            return t
-                        t = _h
-                    return t
-                it = _base(args[0])
-                it2 = None
-                _k = args[0]
-                for _ in range(12):
-                    _h2 = self._iter_source_r.get(_k) or self._iter_source_r.get(aliases.get(_k, _k))
-                    if _h2 is not None:
-                        it2 = _h2
-                        _k = _h2
-                        if _h2 not in self._iter_source_r:
-                            break
-                        continue
-                    _k2 = aliases.get(_k)
-                    if _k2 is None or _k2 == _k:
-                        break
-                    _k = _k2
-                e1 = self._coll_elems.get(it) if it else None
-                e2 = self._coll_elems.get(it2) if it2 else None
-                self._tuple_elems[result] = ((it or "%l", e1 if e1 and "|" not in e1 else "int"), (it2 or "%r", e2 if e2 and "|" not in e2 else "int"))
             if iterator_type == "iterator:dict":
                 key_type = self._dict_key_types.get(args[0])
                 if key_type is None:
@@ -4612,6 +4591,42 @@ class LinuxCEmitter:
                 return out
             if collection_type == "str":
                 out.append(f'    {_name(result)}=(long)piton_strlen((const char*){self._value(coll)});')
+                types[result] = "int"
+                return out
+            if collection_type.startswith("iterator:") or collection_type in {"generator", "genexpr"}:
+                # COMP_ITER_V1: a comprehension over an iterator materializes
+                # it IN PLACE (the temp is rewritten as the list), so the
+                # following get_item on that same temp reads the list.
+                _which = {
+                    "iterator:enumerate": 0, "iterator:reversed": 1,
+                    "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3,
+                    "generator": 4, "genexpr": 4,
+                }.get(collection_type)
+                if _which is None:
+                    raise NativeBuildError(f"Linux collection_len requires a collection (not {collection_type})")
+                _tuple_items = collection_type in {"iterator:enumerate", "iterator:zip"}
+                _elemkind = "PK_TUPLE" if _tuple_items else "PK_INT"
+                # the loop condition re-evaluates this every iteration: a
+                # static flag keeps the materialization a ONE-TIME event.
+                _mat = "_piton_mat" + re.sub(r"[^A-Za-z0-9]", "", _name(coll))
+                # COMP_ITER_V1: si el iterador rinde tuplas (enumerate/zip),
+                # el target tupla necesita los tipos POR ÍNDICE: se dejan
+                # anotados para el desempaquetado del cuerpo.
+                if _tuple_items and collection_type == "iterator:enumerate":
+                    # enumerate rinde (int, elemento): el primer índice es
+                    # siempre int; el segundo es el tipo de la fuente.
+                    _src_kind = self._enum_elem.get(args[0]) or self._coll_elems.get(args[0])
+                    if not _src_kind:
+                        _src_kind = self._coll_elems.get(self._iter_source.get(args[0], ""))
+                    _val_kind = _src_kind
+                    self._tuple_list_elems[coll] = ("int", _val_kind if _val_kind and "|" not in _val_kind else "int")
+                out.append(f"    static int {_mat}_done=0;")
+                out.append(f"    if(!{_mat}_done){{{_mat}_done=1;")
+                out.append(f"    long {_mat}=piton_collect({_which},{self._value(coll)},{_elemkind});")
+                out.append(f"    {_name(coll)}={_mat};}}")
+                types[coll] = "list"
+                self._coll_elems[coll] = "tuple" if _tuple_items else "int"
+                out.append(f'    {_name(result)}=((PitonSeq*){self._value(coll)})->length;')
                 types[result] = "int"
                 return out
             struct_name = {"list": "PitonSeq", "tuple": "PitonSeq", "dict": "PitonDict", "set": "PitonSet"}.get(collection_type)
