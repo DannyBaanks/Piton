@@ -3463,6 +3463,17 @@ class Win64NasmEmitter:
             return
         elif op == "runtime_call":
             raise NativeBuildError(f"runtime operation not supported in native subset: {args[0]}")
+        elif op == "branch_exc":
+            # FINALBODY_UNWIND_V1: mirror of linux_x86.py. If the exception
+            # flag is still set after the finally, keep propagating (or exit);
+            # otherwise resume normal flow at the given label.
+            ok = self._internal_label("branch_exc_ok")
+            self.lines.append("    call piton_catch_flag")
+            self.lines.append("    test rax, rax")
+            self.lines.append(f"    jz {ok}")
+            self._emit_propagate_or_exit()
+            self.lines.append(f"{ok}:")
+            self.lines.append(f"    jmp {labels[args[0]]}")
 
     def _immediate(self, value: Any) -> str:
         if value is None:

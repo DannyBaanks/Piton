@@ -2316,6 +2316,12 @@ class LinuxCEmitter:
             else:
                 out.append("        piton_report_unhandled();piton_exit(1);")
             out.append("    }")
+        elif op == "branch_exc":
+            # FINALBODY_UNWIND_V1: if an exception is still live (the finally
+            # was reached through unwinding), propagate it; otherwise continue
+            # to the end of the try/finally.
+            self._emit_exc_check(out, function, None)
+            out.append(f"    goto {_name(function.name + '_' + args[0])};")
         elif op == "const":
             value = args[0]
             # INTOVF_GUARD_V1: record constant values so the binary lowering

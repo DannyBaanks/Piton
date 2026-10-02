@@ -37,8 +37,8 @@
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
       "FAIL_CLOSED": 149,
-      "RAISE_EQ": 1,
-      "EQUIV": 1073
+      "RAISE_EQ": 0,
+      "EQUIV": 1074
     },
     "by_area": {
       "literals": {
@@ -190,8 +190,8 @@
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 2,
-        "RAISE_EQ": 1,
-        "EQUIV": 18
+        "RAISE_EQ": 0,
+        "EQUIV": 19
       },
       "classes": {
         "DIVERGENT_CRASH": 0,
@@ -218,7 +218,7 @@
         "EQUIV": 2
       }
     },
-    "pct_equiv": 87.7,
+    "pct_equiv": 87.8,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -4867,7 +4867,7 @@
       "name": "min1",
       "src": "imprimir(min('abc'))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-599wzko_/program.c: In function ‘piton_main’:\n/tmp/piton-linux-599wzko_/program.c:1097:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1097 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_11,PK_STR),1);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-599wzko_/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-8swhre7d/program.c: In function ‘piton_main’:\n/tmp/piton-linux-8swhre7d/program.c:1097:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1097 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_11,PK_STR),1);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-8swhre7d/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n"
     },
     {
       "area": "builtins",
@@ -4901,7 +4901,7 @@
       "name": "max1",
       "src": "imprimir(max('abc'))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-rlelwt26/program.c: In function ‘piton_main’:\n/tmp/piton-linux-rlelwt26/program.c:1097:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1097 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_11,PK_STR),0);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-rlelwt26/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-dtek4nj5/program.c: In function ‘piton_main’:\n/tmp/piton-linux-dtek4nj5/program.c:1097:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1097 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_11,PK_STR),0);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-dtek4nj5/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n"
     },
     {
       "area": "builtins",
@@ -9549,7 +9549,7 @@
       "name": "minmax-str",
       "src": "imprimir(min('cba'))\nimprimir(max('cba'))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-l9tss5g6/program.c: In function ‘piton_main’:\n/tmp/piton-linux-l9tss5g6/program.c:1097:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1097 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_11,PK_STR),1);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-l9tss5g6/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n/tmp/piton-linux-l9tss5g6/program.c:1106:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1106 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_16,PK_STR),0);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-l9tss5g6/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-beoo7i_8/program.c: In function ‘piton_main’:\n/tmp/piton-linux-beoo7i_8/program.c:1097:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1097 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_11,PK_STR),1);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-beoo7i_8/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n/tmp/piton-linux-beoo7i_8/program.c:1106:37: error: incompatible type for argument 1 of ‘piton_seq_minmax’\n 1106 |     {PitonSlot _mm=piton_seq_minmax(piton_slot(_16,PK_STR),0);\n      |                                     ^~~~~~~~~~~~~~~~~~~~~~\n      |                                     |\n      |                                     PitonSlot\n/tmp/piton-linux-beoo7i_8/program.c:760:44: note: expected ‘PitonSeq *’ but argument is of type ‘PitonSlot’\n  760 | static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set(\"ValueError\",\"min() arg is an empty sequence\");return (PitonSlot){0,PK_INT};}\n      |                                   ~~~~~~~~~^\n"
     },
     {
       "area": "collections",
@@ -10258,7 +10258,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-bcne0fwm/program.c: In function ‘f’:\n/tmp/piton-linux-bcne0fwm/program.c:1121:8: error: ‘suma’ undeclared (first use in this function)\n 1121 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-bcne0fwm/program.c:1121:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-xeai1_ax/program.c: In function ‘f’:\n/tmp/piton-linux-xeai1_ax/program.c:1121:8: error: ‘suma’ undeclared (first use in this function)\n 1121 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-xeai1_ax/program.c:1121:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10274,7 +10274,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-dkqwrv8z/program.c: In function ‘f’:\n/tmp/piton-linux-dkqwrv8z/program.c:1125:8: error: ‘suma’ undeclared (first use in this function)\n 1125 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-dkqwrv8z/program.c:1125:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-9axaf7ae/program.c: In function ‘f’:\n/tmp/piton-linux-9axaf7ae/program.c:1125:8: error: ‘suma’ undeclared (first use in this function)\n 1125 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-9axaf7ae/program.c:1125:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10362,21 +10362,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-yi7pqngv/program.c: In function ‘piton_main’:\n/tmp/piton-linux-yi7pqngv/program.c:1029:9: error: too many arguments to function ‘f’\n 1029 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-yi7pqngv/program.c:1002:13: note: declared here\n 1002 | static long f(long a);\n      |             ^\n/tmp/piton-linux-yi7pqngv/program.c: At top level:\n/tmp/piton-linux-yi7pqngv/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-5dgys02z/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5dgys02z/program.c:1029:9: error: too many arguments to function ‘f’\n 1029 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-5dgys02z/program.c:1002:13: note: declared here\n 1002 | static long f(long a);\n      |             ^\n/tmp/piton-linux-5dgys02z/program.c: At top level:\n/tmp/piton-linux-5dgys02z/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-kfvfi77z/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kfvfi77z/program.c:1028:9: error: too few arguments to function ‘f’\n 1028 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-kfvfi77z/program.c:1002:13: note: declared here\n 1002 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-kfvfi77z/program.c: At top level:\n/tmp/piton-linux-kfvfi77z/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-pzkq9i4w/program.c: In function ‘piton_main’:\n/tmp/piton-linux-pzkq9i4w/program.c:1028:9: error: too few arguments to function ‘f’\n 1028 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-pzkq9i4w/program.c:1002:13: note: declared here\n 1002 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-pzkq9i4w/program.c: At top level:\n/tmp/piton-linux-pzkq9i4w/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-w4re4e1b/program.c: In function ‘piton_main’:\n/tmp/piton-linux-w4re4e1b/program.c:1096:9: error: ‘no_existe’ undeclared (first use in this function)\n 1096 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-w4re4e1b/program.c:1096:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-jsnh617o/program.c: In function ‘piton_main’:\n/tmp/piton-linux-jsnh617o/program.c:1096:9: error: ‘no_existe’ undeclared (first use in this function)\n 1096 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-jsnh617o/program.c:1096:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10567,8 +10567,8 @@
       "area": "exceptions",
       "name": "finally-reraise",
       "src": "intentar:\n    lanzar ValueError('x')\nfinalmente:\n    imprimir('cleanup')\n",
-      "bucket": "RAISE_EQ",
-      "detail": "ValueError",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 1,
       "oracle_rc": 1
     },
@@ -10738,7 +10738,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-qhxke0tp/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qhxke0tp/program.c:1099:9: error: too few arguments to function ‘P____init__’\n 1099 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-qhxke0tp/program.c:1073:13: note: declared here\n 1073 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-zdivx6d0/program.c: In function ‘piton_main’:\n/tmp/piton-linux-zdivx6d0/program.c:1099:9: error: too few arguments to function ‘P____init__’\n 1099 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-zdivx6d0/program.c:1073:13: note: declared here\n 1073 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
@@ -10856,7 +10856,7 @@
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-qe6nrmyy/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qe6nrmyy/program.c:1096:9: error: ‘divmod’ undeclared (first use in this function)\n 1096 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-qe6nrmyy/program.c:1096:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-0bw7wv0d/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0bw7wv0d/program.c:1096:9: error: ‘divmod’ undeclared (first use in this function)\n 1096 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-0bw7wv0d/program.c:1096:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "controls_closed",

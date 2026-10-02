@@ -169,6 +169,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     # PURE
     "const": "PURE", "load": "PURE", "store": "PURE", "global_decl": "PURE",
     "jump": "PURE", "branch": "PURE", "return": "PURE",
+    "branch_exc": "OPAQUE",
     "binary": "PURE", "unary": "PURE", "compare": "PURE",
     "math_sqrt": "PURE",
     "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE",
@@ -1843,8 +1844,14 @@ class MIRLowerer:
         builder.current = try_body_block
         if handler_block:
             builder.exception_handlers.append((handler_block.label, accepted))
+        elif finally_body:
+            # FINALBODY_UNWIND_V1: an exception escaping the try still runs
+            # the finally block first, instead of skipping it.
+            builder.exception_handlers.append((finally_block.label, None))
         self._lower_statements(builder, node.body)
         if handler_block:
+            builder.exception_handlers.pop()
+        elif finally_body:
             builder.exception_handlers.pop()
         builder.emit("try_pop")
         if else_block is not None:
@@ -1892,7 +1899,10 @@ class MIRLowerer:
         if finally_body:
             builder.current = finally_block
             self._lower_statements(builder, finally_body)
-            builder.emit("jump", end_block.label)
+            # FINALBODY_UNWIND_V1: the finally may have been reached by an
+            # active exception (the live flag survives it) — if so, keep
+            # propagating instead of falling through to normal flow.
+            builder.emit("branch_exc", end_block.label)
 
         builder.current = end_block
 
