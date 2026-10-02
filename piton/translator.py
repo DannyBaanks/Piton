@@ -178,6 +178,77 @@ def _es_contexto_tipo(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
     return True
 
 
+# KEYWORD_EXPR_V1: Spanish keywords that spell an EXPRESSION operator and are
+# therefore indistinguishable from a plain identifier by text alone.
+# `y = 5` (a variable named y) used to translate to `and = 5`, which is not
+# valid Python, so the translator emitted a program that could not even be
+# parsed. Statement keywords (`si`, `para`, ...) are NOT in this set: they can
+# only appear at statement start, so they always translate.
+_KEYWORDS_BINARIOS = {"y", "o", "es", "en"}
+_KEYWORDS_UNARIOS = {"no", "esperar"}
+_KEYWORDS_INFIJOS = {"como"}
+_KEYWORDS_EXPRESION = _KEYWORDS_BINARIOS | _KEYWORDS_UNARIOS | _KEYWORDS_INFIJOS
+# VALUE keywords are translated too, but they are CONSTANTS: they end an
+# expression, so `imprimir(Verdadero y 1)` must still read `y` as `and`.
+# Statement keywords (`si`, `para`, ...) never end one.
+_KEYWORDS_VALOR = {"Verdadero", "Falso", "Nada"}
+_KEYWORDS_NO_TERMINAN = (set(HARD_KEYWORDS) - _KEYWORDS_VALOR) | set(SOFT_KEYWORDS)
+
+
+def _termina_expresion(token_: "tokenize.TokenInfo | None") -> bool:
+    """True when `token_` can end an expression (so the next NAME is an operator)."""
+    if token_ is None:
+        return False
+    if token_.type in (token.NUMBER, token.STRING):
+        return True
+    if token_.type == token.OP and token_.string in {")", "]", "}"}:
+        return True
+    if token_.type == token.NAME:
+        return token_.string not in _KEYWORDS_NO_TERMINAN
+    return False
+
+
+def _empieza_expresion(token_: "tokenize.TokenInfo | None") -> bool:
+    """True when `token_` can start an expression (so a unary keyword applies)."""
+    if token_ is None:
+        return False
+    if token_.type in (token.NUMBER, token.STRING):
+        return True
+    # `{` opens a set/dict literal, which is a valid right operand:
+    # `1 en {1, 2}` is `1 in {1, 2}`. Omitting it left `en` untranslated.
+    if token_.type == token.OP and token_.string in {"(", "[", "{"}:
+        return True
+    if token_.type == token.NAME:
+        return True
+    return False
+
+
+def _es_keyword_de_expresion(tokens: list[tokenize.TokenInfo], indice: int, nombre: str) -> bool:
+    """KEYWORD_EXPR_V1: translate `nombre` only when it sits in operator position.
+
+    A binary keyword needs an expression on BOTH sides (`a y b`); a unary one
+    only needs the right side (`no x`, `esperar x`); an infix one needs only the
+    left (`con f como g`). Anywhere else the token is an identifier and must be
+    left alone — that is what makes `y = 5` translate to `y = 5`.
+    """
+    anterior = _anterior_significativo(tokens, indice)
+    siguiente = _siguiente_significativo(tokens, indice)
+    # `no en` is ONE operator spelled as two tokens: both must translate, or the
+    # output is `not en` (invalid Python). Neither token is in operator position
+    # by the rules below, because they are keywords themselves.
+    if nombre == "no" and siguiente is not None and siguiente.type == token.NAME and siguiente.string == "en":
+        return True
+    if nombre == "en" and anterior is not None and anterior.type == token.NAME and anterior.string == "no":
+        return True
+    if nombre in _KEYWORDS_BINARIOS:
+        return _termina_expresion(anterior) and _empieza_expresion(siguiente)
+    if nombre in _KEYWORDS_UNARIOS:
+        return _empieza_expresion(siguiente)
+    if nombre in _KEYWORDS_INFIJOS:
+        return _termina_expresion(anterior)
+    return True
+
+
 def _nombre_asignado_en_scope(tokens: list[tokenize.TokenInfo]) -> set[str]:
     """Pre-scan: find names that are assigned (left side of = or augmented assign)."""
     asignados: set[str] = set()
@@ -345,6 +416,16 @@ def analizar_tokens(
                 # Hard keywords translate everywhere, including after a dot so
                 # `desde . importar x` becomes `from . import x`; a hard keyword
                 # can never be a valid attribute name (unlike soft keywords).
+                # KEYWORD_EXPR_V1: EXCEPT the expression keywords, whose text is
+                # also a legal identifier. Those translate only in operator
+                # position, otherwise `y = 5` became `and = 5` — Python that
+                # cannot even be parsed, so the oracle path silently broke.
+                if actual.string in _KEYWORDS_EXPRESION and not _es_keyword_de_expresion(
+                    tokens, indice, actual.string
+                ):
+                    inicio_stmt = False
+                    salida.append(actual)
+                    continue
                 reemplazo = HARD_KEYWORDS[actual.string]
                 categoria = "keyword"
                 inicio_stmt = False

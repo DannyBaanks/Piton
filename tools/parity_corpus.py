@@ -78,18 +78,22 @@ ARITH_OPS = ["+", "-", "*", "/", "//", "%", "**", "&", "|", "^", "<<", ">>"]
 FLOAT_OPS = ["+", "-", "*", "/", "//", "%", "**"]
 CMP_OPS = ["==", "!=", "<", ">", "<=", ">="]
 IDENT_OPS = ["es", "no es"]
+# Source fragments, NOT python values: f-string interpolation of a python str
+# yields a bare identifier (`imprimir(a == a)` -> 'a' undeclared), which looked
+# like a compiler bug in the report but was a corpus bug.
 CMP_PAIRS = [
-    (1, 1.0),
-    (1, "1"),
-    (0, 1),
-    ("Falso", 1),
-    (1, "Verdadero"),
-    ("a", "a"),
-    ("", ""),
-    ("a", "b"),
+    ("1", "1.0"),
+    ("1", "'1'"),
+    ("0", "1"),
+    ("Falso", "1"),
+    ("1", "Verdadero"),
+    ("'a'", "'a'"),
+    ("''", "''"),
+    ("'a'", "'b'"),
     ("Nada", "Nada"),
-    ("1", 1),
+    ("'1'", "1"),
 ]
+
 TRUTHY_VALUES = [
     ("cero", "0"),
     ("uno", "1"),
@@ -138,38 +142,41 @@ INT_BUILTINS = [
     ("pow", [("(2, 64)",)]),
 ]
 STR_METHODS = [
-    ("upper", "('Hola mundo',)"),
-    ("lower", "('Hola Mundo',)"),
-    ("strip", "('  x  ',)"),
-    ("lstrip", "('xxay',)"),
-    ("rstrip", "('ayxx',)"),
-    ("split", "('a b  c',)"),
-    ("split", "('a,b',)"),
-    ("join", "(',', ['a', 'b'])",),
-    ("replace", "('aXa', 'X', 'y')"),
-    ("startswith", "('abc', 'a')"),
-    ("endswith", "('abc', 'c')"),
-    ("find", "('abcabc', 'bc')"),
-    ("rfind", "('abcabc', 'bc')"),
-    ("count", "('aaa', 'a')"),
-    ("index", "('abc', 'b')"),
-    ("rindex", "('abcb', 'b')"),
-    ("capitalize", "('hola MUNDO',)"),
-    ("title", "('hola mundo',)"),
-    ("swapcase", "('Hola 123',)"),
-    ("isalpha", "('abc',)"),
-    ("isalpha", "('ab1',)"),
-    ("isdigit", "('123',)"),
-    ("isalnum", "('ab1',)"),
-    ("isspace", "('  ',)"),
-    ("istitle", "('Hola Mundo',)"),
-    ("isupper", "('ABC',)"),
-    ("islower", "('abc',)"),
-    ("zfill", "('42', 5)"),
-    ("ljust", "('x', 4)"),
-    ("rjust", "('x', 4)"),
-    ("center", "('x', 5)"),
-    ("format", "('{} {}')"),
+    # (label, full call source). The receiver is part of the fragment: an
+    # earlier version passed it as the first argument and generated
+    # `'abc'.upper('Hola mundo',)`, which is a PARSE error, not a gap.
+    ("upper", "'Hola mundo'.upper()"),
+    ("lower", "'Hola Mundo'.lower()"),
+    ("strip", "'  x  '.strip()"),
+    ("lstrip", "'xxay'.lstrip('x')"),
+    ("rstrip", "'ayxx'.rstrip('x')"),
+    ("split", "'a b  c'.split()"),
+    ("split-sep", "'a,b'.split(',')"),
+    ("join", "','.join(['a', 'b'])"),
+    ("replace", "'aXa'.replace('X', 'y')"),
+    ("startswith", "'abc'.startswith('a')"),
+    ("endswith", "'abc'.endswith('c')"),
+    ("find", "'abcabc'.find('bc')"),
+    ("rfind", "'abcabc'.rfind('bc')"),
+    ("count", "'aaa'.count('a')"),
+    ("index", "'abc'.index('b')"),
+    ("rindex", "'abcb'.rindex('b')"),
+    ("capitalize", "'hola MUNDO'.capitalize()"),
+    ("title", "'hola mundo'.title()"),
+    ("swapcase", "'Hola 123'.swapcase()"),
+    ("isalpha", "'abc'.isalpha()"),
+    ("isalpha-digit", "'ab1'.isalpha()"),
+    ("isdigit", "'123'.isdigit()"),
+    ("isalnum", "'ab1'.isalnum()"),
+    ("isspace", "'  '.isspace()"),
+    ("istitle", "'Hola Mundo'.istitle()"),
+    ("isupper", "'ABC'.isupper()"),
+    ("islower", "'abc'.islower()"),
+    ("zfill", "'42'.zfill(5)"),
+    ("ljust", "'x'.ljust(4)"),
+    ("rjust", "'x'.rjust(4)"),
+    ("center", "'x'.center(5)"),
+    ("format", "'{} {}'.format(1, 2)"),
 ]
 FMT_SPECS = [
     "'{:>5}'", "'{:<5}'", "'{:^5}'", "'{:05d}'", "'{:+d}'", "'{: d}'",
@@ -292,8 +299,8 @@ def area_builtins() -> list[Case]:
 
 def area_strings() -> list[Case]:
     out = []
-    for meth, args in STR_METHODS:
-        out.append(_c("strings", meth + str(args), f"imprimir('abc'.{meth}{args})"))
+    for label, call in STR_METHODS:
+        out.append(_c("strings", label, f"imprimir({call})"))
     out += [
         _c("strings", "concat", "imprimir('a' + 'b')"),
         _c("strings", "mul", "imprimir('ab' * 3)"),
@@ -490,12 +497,12 @@ def area_functions() -> list[Case]:
         _c("functions", "def-kwargs", "funcion f(**kw):\n    devolver longitud(kw)\nimprimir(f(a=1, b=2))"),
         _c("functions", "def-mixed", "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))"),
         _c("functions", "def-recursion", "funcion fac(n):\n    si n <= 1:\n        devolver 1\n    devolver n * fac(n - 1)\nimprimir(fac(5))"),
-        _c("functions", "def-closure", "funcion externo(x):\n    def interno():\n        devolver x * 2\n    devolver interno()\nimprimir(externo(3))"),
-        _c("functions", "def-nested-capture", "funcion a():\n    x = 1\n    def b():\n        devolver x + 1\n    devolver b()\nimprimir(a())"),
+        _c("functions", "def-closure", "funcion externo(x):\n    funcion interno():\n        devolver x * 2\n    devolver interno()\nimprimir(externo(3))"),
+        _c("functions", "def-nested-capture", "funcion a():\n    x = 1\n    funcion b():\n        devolver x + 1\n    devolver b()\nimprimir(a())"),
         _c("functions", "def-lambda", "f = lambda x: x + 1\nimprimir(f(1))"),
         _c("functions", "def-lambda-2", "f = lambda x, y=2: x * y\nimprimir(f(3))"),
-        _c("functions", "global", "x = 1\ndef f():\n    global x\n    x = 5\nf()\nimprimir(x)"),
-        _c("functions", "nonlocal", "funcion ext():\n    y = 1\n    def int():\n        no_local y\n        y = 7\n    int()\n    devolver y\nimprimir(ext())"),
+        _c("functions", "global", "x = 1\nfuncion f():\n    global x\n    x = 5\nf()\nimprimir(x)"),
+        _c("functions", "nonlocal", "funcion ext():\n    y = 1\n    funcion int():\n        no_local y\n        y = 7\n    int()\n    devolver y\nimprimir(ext())"),
         _c("functions", "func-as-value", "funcion f(x):\n    devolver x\nimprimir(f(3))\ng = f\nimprimir(g(4))"),
         _c("functions", "call-in-expr", "funcion f():\n    devolver 2\nimprimir(f() * f() + 1)"),
         _c("functions", "too-many-args", "funcion f(a):\n    devolver a\nf(1, 2)"),
@@ -534,21 +541,21 @@ def area_exceptions() -> list[Case]:
 
 def area_classes() -> list[Case]:
     return [
-        _c("classes", "init", "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    def ver(self):\n        devolver self.x\nimprimir(P(3).ver())"),
+        _c("classes", "init", "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    funcion ver(self):\n        devolver self.x\nimprimir(P(3).ver())"),
         _c("classes", "attr", "clase P:\n    funcion __init__(self):\n        self.x = 1\np = P()\nimprimir(p.x)"),
         _c("classes", "method-call", "clase P:\n    funcion f(self, a):\n        devolver a * 2\nimprimir(P().f(3))"),
         _c("classes", "str-dunder", "clase P:\n    funcion __str__(self):\n        devolver 'soy P'\nimprimir(P())"),
         _c("classes", "repr-dunder", "clase P:\n    funcion __repr__(self):\n        devolver '<P>'\nimprimir(P())"),
-        _c("classes", "eq-dunder", "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    def __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))"),
+        _c("classes", "eq-dunder", "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    funcion __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))"),
         _c("classes", "len-dunder", "clase P:\n    funcion __len__(self):\n        devolver 3\nimprimir(longitud(P()))"),
         _c("classes", "iter-dunder", "clase P:\n    funcion __iter__(self):\n    devolver iter([1, 2])\npara x en P():\n    imprimir(x)"),
-        _c("classes", "inheritance", "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    pasar\nimprimir(B().f())"),
-        _c("classes", "override", "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B'\nimprimir(B().f())"),
-        _c("classes", "super", "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())"),
-        _c("classes", "super-init", "clase A:\n    funcion __init__(self, x):\n        self.x = x\nclass B(A):\n    def __init__(self):\n        super().__init__(7)\nimprimir(B().x)"),
+        _c("classes", "inheritance", "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    pasar\nimprimir(B().f())"),
+        _c("classes", "override", "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    funcion f(self):\n        devolver 'B'\nimprimir(B().f())"),
+        _c("classes", "super", "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    funcion f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())"),
+        _c("classes", "super-init", "clase A:\n    funcion __init__(self, x):\n        self.x = x\nclase B(A):\n    funcion __init__(self):\n        super().__init__(7)\nimprimir(B().x)"),
         _c("classes", "class-attr", "clase P:\n    v = 5\nimprimir(P.v)"),
         _c("classes", "instance-shared", "clase P:\n    v = 5\nimprimir(P().v)"),
-        _c("classes", "multi-base", "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B:\n    def f(self):\n        devolver 'B'\nclass C(A, B):\n    pasar\nimprimir(C().f())"),
+        _c("classes", "multi-base", "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B:\n    funcion f(self):\n        devolver 'B'\nclase C(A, B):\n    pasar\nimprimir(C().f())"),
         _c("classes", "type-of", "clase P:\n    pasar\nimprimir(tipo(P()))"),
         _c("classes", "method-as-value", "clase P:\n    funcion f(self):\n        devolver 1\nimprimir(P.f(P()))"),
         _c("classes", "attr-missing", "clase P:\n    pasar\nimprimir(P().zzz)"),
@@ -567,7 +574,7 @@ def area_generators() -> list[Case]:
         _c("generators", "yield-sum", "funcion f():\n    producir 1\n    producir 2\nimprimir(sum(f()))"),
         _c("generators", "gen-in-comprehension", "imprimir(sum(x para x en rango(4)))"),
         _c("generators", "class-generator", "clase G:\n    funcion __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))"),
-        _c("generators", "class-iter-self", "clase G:\n    funcion __iter__(self):\n    devolver self\n    def __next__(self):\n        devolver 1\nimprimir(lista(G()))"),
+        _c("generators", "class-iter-self", "clase G:\n    funcion __iter__(self):\n    devolver self\n    funcion __next__(self):\n        devolver 1\nimprimir(lista(G()))"),
     ]
 
 
@@ -637,6 +644,39 @@ def area_associativity() -> list[Case]:
     return out
 
 
+def area_bigint() -> list[Case]:
+    """BI_CMP_MAG_FIX_V1 / BI_CMP_SIGN_FIX_V1 / BIGINT_CMP_MIXED_V1.
+
+    El corpus no cubria bigints, y ahi estaban los bugs mas graves: el ancho en
+    bits se calculaba pasando un LIMB donde se esperaba un puntero, y el signo
+    de la comparacion se negaba para los positivos. Ordenar dos bigintsposite
+    daba siempre lo contrario.
+    """
+    out = []
+    pairs = [("20", "30"), ("30", "20"), ("40", "20"), ("20", "20"), ("100", "99"), ("99", "100")]
+    for a, b in pairs:
+        out.append(_c("bigint", f"gt-{a}-{b}", f"x = 10 ** {a}\ny = 10 ** {b}\nimprimir(x > y)"))
+        out.append(_c("bigint", f"lt-{a}-{b}", f"x = 10 ** {a}\ny = 10 ** {b}\nimprimir(x < y)"))
+        out.append(_c("bigint", f"eq-{a}-{b}", f"x = 10 ** {a}\ny = 10 ** {b}\nimprimir(x == y)"))
+    for op in ("+", "-", "*"):
+        out.append(_c("bigint", f"arith{op}", f"x = 10 ** 20\ny = 10 ** 30\nimprimir(x {op} y)"))
+    out += [
+        _c("bigint", "print", "x = 10 ** 40\nimprimir(x)"),
+        _c("bigint", "neg-print", "x = -(10 ** 20)\nimprimir(x)"),
+        _c("bigint", "neg-cmp", "x = -(10 ** 20)\ny = 10 ** 20\nimprimir(x < y)"),
+        _c("bigint", "neg-neg-cmp", "x = -(10 ** 40)\ny = -(10 ** 20)\nimprimir(x < y)"),
+        _c("bigint", "vs-int-gt", "imprimir(10 ** 20 > 5)"),
+        _c("bigint", "vs-int-lt", "x = 10 ** 20\nimprimir(x < 5)"),
+        _c("bigint", "int-vs-big", "x = 10 ** 20\nimprimir(5 > x)"),
+        _c("bigint", "vs-int-eq", "x = 10 ** 20\nimprimir(x == 5)"),
+        _c("bigint", "sum-small", "imprimir(sum([10 ** 20, 1]))"),
+        _c("bigint", "pow-chain", "imprimir(2 ** 100)"),
+        _c("bigint", "big-plus-small", "x = 10 ** 20\nimprimir(x + 1)"),
+        _c("bigint", "compare-chain", "x = 10 ** 20\nimprimir(1 < x)"),
+    ]
+    return out
+
+
 def area_branch_truthiness() -> list[Case]:
     """TRUTHY_BRANCH_V1: la condicion de `si`/`mientras` es un test de verdad
     CPython, no un test crudo de puntero. Los contenedores vacios son falsy."""
@@ -660,6 +700,7 @@ AREAS = {
     "branch_truthiness": area_branch_truthiness,
     "comparisons": area_comparisons,
     "truthiness": area_truthiness,
+    "bigint": area_bigint,
     "builtins": area_builtins,
     "strings": area_strings,
     "formatting": area_formatting,

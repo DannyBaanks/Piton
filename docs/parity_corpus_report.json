@@ -10,6 +10,7 @@
       "branch_truthiness",
       "comparisons",
       "truthiness",
+      "bigint",
       "builtins",
       "strings",
       "formatting",
@@ -29,14 +30,14 @@
     "timeout": 10.0
   },
   "summary": {
-    "total": 1148,
+    "total": 1180,
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
-      "DIVERGENT_MISMATCH": 23,
+      "DIVERGENT_MISMATCH": 22,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 229,
+      "FAIL_CLOSED": 198,
       "RAISE_EQ": 1,
-      "EQUIV": 895
+      "EQUIV": 959
     },
     "by_area": {
       "literals": {
@@ -73,25 +74,33 @@
       },
       "comparisons": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 5,
+        "DIVERGENT_MISMATCH": 1,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 25,
+        "FAIL_CLOSED": 18,
         "RAISE_EQ": 0,
-        "EQUIV": 81
+        "EQUIV": 92
       },
       "truthiness": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 0,
+        "DIVERGENT_MISMATCH": 2,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 9,
         "RAISE_EQ": 0,
-        "EQUIV": 66
+        "EQUIV": 64
+      },
+      "bigint": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 1,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 32
       },
       "builtins": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 9,
+        "DIVERGENT_MISMATCH": 7,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 37,
+        "FAIL_CLOSED": 39,
         "RAISE_EQ": 0,
         "EQUIV": 40
       },
@@ -99,9 +108,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 33,
+        "FAIL_CLOSED": 22,
         "RAISE_EQ": 0,
-        "EQUIV": 10
+        "EQUIV": 20
       },
       "formatting": {
         "DIVERGENT_CRASH": 0,
@@ -123,25 +132,25 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 11,
+        "FAIL_CLOSED": 10,
         "RAISE_EQ": 0,
-        "EQUIV": 23
+        "EQUIV": 24
       },
       "dicts": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 3,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 11,
+        "FAIL_CLOSED": 10,
         "RAISE_EQ": 0,
-        "EQUIV": 6
+        "EQUIV": 7
       },
       "sets": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 5,
+        "FAIL_CLOSED": 4,
         "RAISE_EQ": 0,
-        "EQUIV": 4
+        "EQUIV": 5
       },
       "comprehensions": {
         "DIVERGENT_CRASH": 0,
@@ -163,9 +172,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 10,
+        "FAIL_CLOSED": 6,
         "RAISE_EQ": 0,
-        "EQUIV": 11
+        "EQUIV": 15
       },
       "exceptions": {
         "DIVERGENT_CRASH": 0,
@@ -177,11 +186,11 @@
       },
       "classes": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 3,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 15,
+        "FAIL_CLOSED": 7,
         "RAISE_EQ": 0,
-        "EQUIV": 5
+        "EQUIV": 11
       },
       "generators": {
         "DIVERGENT_CRASH": 0,
@@ -200,9 +209,9 @@
         "EQUIV": 2
       }
     },
-    "pct_equiv": 78.0,
-    "pct_honest": 98.0,
-    "pct_divergent": 2.0
+    "pct_equiv": 81.3,
+    "pct_honest": 98.1,
+    "pct_divergent": 1.9
   },
   "records": [
     {
@@ -1954,7 +1963,7 @@
     {
       "area": "comparisons",
       "name": "==1",
-      "src": "imprimir(1 == 1)\n",
+      "src": "imprimir(1 == '1')\n",
       "bucket": "EQUIV",
       "detail": "",
       "native_rc": 0,
@@ -1990,23 +1999,29 @@
     {
       "area": "comparisons",
       "name": "==5",
-      "src": "imprimir(a == a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-md9e0y1k/program.c: In function ‘piton_main’:\n/tmp/piton-linux-md9e0y1k/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-md9e0y1k/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "src": "imprimir('a' == 'a')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "==6",
-      "src": "imprimir( == )\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 0\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint( == )"
+      "src": "imprimir('' == '')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "==7",
-      "src": "imprimir(a == b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-truc6vy3/program.c: In function ‘piton_main’:\n/tmp/piton-linux-truc6vy3/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-truc6vy3/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-truc6vy3/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "src": "imprimir('a' == 'b')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
@@ -2020,7 +2035,7 @@
     {
       "area": "comparisons",
       "name": "==9",
-      "src": "imprimir(1 == 1)\n",
+      "src": "imprimir('1' == 1)\n",
       "bucket": "EQUIV",
       "detail": "",
       "native_rc": 0,
@@ -2038,7 +2053,7 @@
     {
       "area": "comparisons",
       "name": "!=1",
-      "src": "imprimir(1 != 1)\n",
+      "src": "imprimir(1 != '1')\n",
       "bucket": "EQUIV",
       "detail": "",
       "native_rc": 0,
@@ -2074,23 +2089,29 @@
     {
       "area": "comparisons",
       "name": "!=5",
-      "src": "imprimir(a != a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-rjexvf9d/program.c: In function ‘piton_main’:\n/tmp/piton-linux-rjexvf9d/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-rjexvf9d/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "src": "imprimir('a' != 'a')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "!=6",
-      "src": "imprimir( != )\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 0\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint( != )"
+      "src": "imprimir('' != '')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "!=7",
-      "src": "imprimir(a != b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-n88vnhax/program.c: In function ‘piton_main’:\n/tmp/piton-linux-n88vnhax/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-n88vnhax/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-n88vnhax/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "src": "imprimir('a' != 'b')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
@@ -2104,7 +2125,7 @@
     {
       "area": "comparisons",
       "name": "!=9",
-      "src": "imprimir(1 != 1)\n",
+      "src": "imprimir('1' != 1)\n",
       "bucket": "EQUIV",
       "detail": "",
       "native_rc": 0,
@@ -2122,11 +2143,9 @@
     {
       "area": "comparisons",
       "name": "<1",
-      "src": "imprimir(1 < 1)\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "src": "imprimir(1 < '1')\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '<' between 'int' and 'str' is not supported (CPython raises TypeError: '<' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
@@ -2158,41 +2177,43 @@
     {
       "area": "comparisons",
       "name": "<5",
-      "src": "imprimir(a < a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-kqsyknw9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kqsyknw9/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-kqsyknw9/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "src": "imprimir('a' < 'a')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "<6",
-      "src": "imprimir( < )\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 0\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint( < )"
+      "src": "imprimir('' < '')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "<7",
-      "src": "imprimir(a < b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-brsdbbhx/program.c: In function ‘piton_main’:\n/tmp/piton-linux-brsdbbhx/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-brsdbbhx/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-brsdbbhx/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "src": "imprimir('a' < 'b')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "<8",
       "src": "imprimir(Nada < Nada)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=False err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | TypeError: '<' not supported between instances of 'NoneType' and 'NoneType'",
-      "native_rc": 0,
-      "oracle_rc": 1
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '<' between 'none' and 'none' is not supported (CPython raises TypeError: '<' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
       "name": "<9",
-      "src": "imprimir(1 < 1)\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "src": "imprimir('1' < 1)\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '<' between 'str' and 'int' is not supported (CPython raises TypeError: '<' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
@@ -2206,11 +2227,9 @@
     {
       "area": "comparisons",
       "name": ">1",
-      "src": "imprimir(1 > 1)\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "src": "imprimir(1 > '1')\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '>' between 'int' and 'str' is not supported (CPython raises TypeError: '>' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
@@ -2242,41 +2261,43 @@
     {
       "area": "comparisons",
       "name": ">5",
-      "src": "imprimir(a > a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-s3x85gx3/program.c: In function ‘piton_main’:\n/tmp/piton-linux-s3x85gx3/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-s3x85gx3/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "src": "imprimir('a' > 'a')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": ">6",
-      "src": "imprimir( > )\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 0\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint( > )"
+      "src": "imprimir('' > '')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": ">7",
-      "src": "imprimir(a > b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-3wkrvtrz/program.c: In function ‘piton_main’:\n/tmp/piton-linux-3wkrvtrz/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-3wkrvtrz/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-3wkrvtrz/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "src": "imprimir('a' > 'b')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": ">8",
       "src": "imprimir(Nada > Nada)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=False err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | TypeError: '>' not supported between instances of 'NoneType' and 'NoneType'",
-      "native_rc": 0,
-      "oracle_rc": 1
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '>' between 'none' and 'none' is not supported (CPython raises TypeError: '>' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
       "name": ">9",
-      "src": "imprimir(1 > 1)\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "src": "imprimir('1' > 1)\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '>' between 'str' and 'int' is not supported (CPython raises TypeError: '>' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
@@ -2290,11 +2311,9 @@
     {
       "area": "comparisons",
       "name": "<=1",
-      "src": "imprimir(1 <= 1)\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "src": "imprimir(1 <= '1')\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '<=' between 'int' and 'str' is not supported (CPython raises TypeError: '<=' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
@@ -2326,41 +2345,43 @@
     {
       "area": "comparisons",
       "name": "<=5",
-      "src": "imprimir(a <= a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-z8x0gm8y/program.c: In function ‘piton_main’:\n/tmp/piton-linux-z8x0gm8y/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-z8x0gm8y/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "src": "imprimir('a' <= 'a')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "<=6",
-      "src": "imprimir( <= )\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 0\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint( <= )"
+      "src": "imprimir('' <= '')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "<=7",
-      "src": "imprimir(a <= b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-xnwuiqcv/program.c: In function ‘piton_main’:\n/tmp/piton-linux-xnwuiqcv/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-xnwuiqcv/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-xnwuiqcv/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "src": "imprimir('a' <= 'b')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "<=8",
       "src": "imprimir(Nada <= Nada)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=True err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | TypeError: '<=' not supported between instances of 'NoneType' and 'NoneType'",
-      "native_rc": 0,
-      "oracle_rc": 1
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '<=' between 'none' and 'none' is not supported (CPython raises TypeError: '<=' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
       "name": "<=9",
-      "src": "imprimir(1 <= 1)\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "src": "imprimir('1' <= 1)\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '<=' between 'str' and 'int' is not supported (CPython raises TypeError: '<=' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
@@ -2374,11 +2395,9 @@
     {
       "area": "comparisons",
       "name": ">=1",
-      "src": "imprimir(1 >= 1)\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "src": "imprimir(1 >= '1')\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '>=' between 'int' and 'str' is not supported (CPython raises TypeError: '>=' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
@@ -2410,41 +2429,43 @@
     {
       "area": "comparisons",
       "name": ">=5",
-      "src": "imprimir(a >= a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-ivzuuu2l/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ivzuuu2l/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-ivzuuu2l/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "src": "imprimir('a' >= 'a')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": ">=6",
-      "src": "imprimir( >= )\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 0\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint( >= )"
+      "src": "imprimir('' >= '')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": ">=7",
-      "src": "imprimir(a >= b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-zirz18vr/program.c: In function ‘piton_main’:\n/tmp/piton-linux-zirz18vr/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-zirz18vr/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-zirz18vr/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "src": "imprimir('a' >= 'b')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": ">=8",
       "src": "imprimir(Nada >= Nada)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=True err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | TypeError: '>=' not supported between instances of 'NoneType' and 'NoneType'",
-      "native_rc": 0,
-      "oracle_rc": 1
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '>=' between 'none' and 'none' is not supported (CPython raises TypeError: '>=' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
       "name": ">=9",
-      "src": "imprimir(1 >= 1)\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 0,
-      "oracle_rc": 0
+      "src": "imprimir('1' >= 1)\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '>=' between 'str' and 'int' is not supported (CPython raises TypeError: '>=' not supported between instances of these types)"
     },
     {
       "area": "comparisons",
@@ -2458,7 +2479,7 @@
     {
       "area": "comparisons",
       "name": "ides1",
-      "src": "imprimir(1 es 1)\n",
+      "src": "imprimir(1 es '1')\n",
       "bucket": "EQUIV",
       "detail": "",
       "native_rc": 0,
@@ -2494,51 +2515,53 @@
     {
       "area": "comparisons",
       "name": "ides5",
-      "src": "imprimir(a es a)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-70b_lb_s/program.c: In function ‘piton_main’:\n/tmp/piton-linux-70b_lb_s/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-70b_lb_s/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "src": "imprimir('a' es 'a')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comparisons",
       "name": "idno es0",
       "src": "imprimir(1 no es 1.0)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 11\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint(1 not is 1.0)"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(1 not es 1.0)"
     },
     {
       "area": "comparisons",
       "name": "idno es1",
-      "src": "imprimir(1 no es 1)\n",
+      "src": "imprimir(1 no es '1')\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 11\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint(1 not is 1)"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(1 not es '1')"
     },
     {
       "area": "comparisons",
       "name": "idno es2",
       "src": "imprimir(0 no es 1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 11\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint(0 not is 1)"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(0 not es 1)"
     },
     {
       "area": "comparisons",
       "name": "idno es3",
       "src": "imprimir(Falso no es 1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 15\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint(False not is 1)"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(False not es 1)"
     },
     {
       "area": "comparisons",
       "name": "idno es4",
       "src": "imprimir(1 no es Verdadero)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 11\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint(1 not is True)"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(1 not es True)"
     },
     {
       "area": "comparisons",
       "name": "idno es5",
-      "src": "imprimir(a no es a)\n",
+      "src": "imprimir('a' no es 'a')\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 11\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint(a not is a)"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 7\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint('a' not es 'a')"
     },
     {
       "area": "comparisons",
@@ -3006,19 +3029,19 @@
       "area": "truthiness",
       "name": "no-neg",
       "src": "v = -1\nimprimir(no -1)\n",
-      "bucket": "EQUIV",
-      "detail": "",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=False err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 2, in <module> | NameError: name 'no' is not defined",
       "native_rc": 0,
-      "oracle_rc": 0
+      "oracle_rc": 1
     },
     {
       "area": "truthiness",
       "name": "sino-neg",
       "src": "v = -1\nsi no -1:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
-      "bucket": "EQUIV",
-      "detail": "",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=F err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 2, in <module> | NameError: name 'no' is not defined",
       "native_rc": 0,
-      "oracle_rc": 0
+      "oracle_rc": 1
     },
     {
       "area": "truthiness",
@@ -3543,6 +3566,303 @@
       "area": "truthiness",
       "name": "sino-list",
       "src": "v = [1, 2]\nsi no [1, 2]:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "gt-20-30",
+      "src": "x = 10 ** 20\ny = 10 ** 30\nimprimir(x > y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "lt-20-30",
+      "src": "x = 10 ** 20\ny = 10 ** 30\nimprimir(x < y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "eq-20-30",
+      "src": "x = 10 ** 20\ny = 10 ** 30\nimprimir(x == y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "gt-30-20",
+      "src": "x = 10 ** 30\ny = 10 ** 20\nimprimir(x > y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "lt-30-20",
+      "src": "x = 10 ** 30\ny = 10 ** 20\nimprimir(x < y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "eq-30-20",
+      "src": "x = 10 ** 30\ny = 10 ** 20\nimprimir(x == y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "gt-40-20",
+      "src": "x = 10 ** 40\ny = 10 ** 20\nimprimir(x > y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "lt-40-20",
+      "src": "x = 10 ** 40\ny = 10 ** 20\nimprimir(x < y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "eq-40-20",
+      "src": "x = 10 ** 40\ny = 10 ** 20\nimprimir(x == y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "gt-20-20",
+      "src": "x = 10 ** 20\ny = 10 ** 20\nimprimir(x > y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "lt-20-20",
+      "src": "x = 10 ** 20\ny = 10 ** 20\nimprimir(x < y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "eq-20-20",
+      "src": "x = 10 ** 20\ny = 10 ** 20\nimprimir(x == y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "gt-100-99",
+      "src": "x = 10 ** 100\ny = 10 ** 99\nimprimir(x > y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "lt-100-99",
+      "src": "x = 10 ** 100\ny = 10 ** 99\nimprimir(x < y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "eq-100-99",
+      "src": "x = 10 ** 100\ny = 10 ** 99\nimprimir(x == y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "gt-99-100",
+      "src": "x = 10 ** 99\ny = 10 ** 100\nimprimir(x > y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "lt-99-100",
+      "src": "x = 10 ** 99\ny = 10 ** 100\nimprimir(x < y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "eq-99-100",
+      "src": "x = 10 ** 99\ny = 10 ** 100\nimprimir(x == y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "arith+",
+      "src": "x = 10 ** 20\ny = 10 ** 30\nimprimir(x + y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "arith-",
+      "src": "x = 10 ** 20\ny = 10 ** 30\nimprimir(x - y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "arith*",
+      "src": "x = 10 ** 20\ny = 10 ** 30\nimprimir(x * y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "print",
+      "src": "x = 10 ** 40\nimprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "neg-print",
+      "src": "x = -(10 ** 20)\nimprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "neg-cmp",
+      "src": "x = -(10 ** 20)\ny = 10 ** 20\nimprimir(x < y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "neg-neg-cmp",
+      "src": "x = -(10 ** 40)\ny = -(10 ** 20)\nimprimir(x < y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "vs-int-gt",
+      "src": "imprimir(10 ** 20 > 5)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "vs-int-lt",
+      "src": "x = 10 ** 20\nimprimir(x < 5)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "int-vs-big",
+      "src": "x = 10 ** 20\nimprimir(5 > x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "vs-int-eq",
+      "src": "x = 10 ** 20\nimprimir(x == 5)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "sum-small",
+      "src": "imprimir(sum([10 ** 20, 1]))\n",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=4210753 err= || oracle rc=0 out=100000000000000000001 err=",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "pow-chain",
+      "src": "imprimir(2 ** 100)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "big-plus-small",
+      "src": "x = 10 ** 20\nimprimir(x + 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bigint",
+      "name": "compare-chain",
+      "src": "x = 10 ** 20\nimprimir(1 < x)\n",
       "bucket": "EQUIV",
       "detail": "",
       "native_rc": 0,
@@ -4076,10 +4396,8 @@
       "area": "builtins",
       "name": "sum0",
       "src": "imprimir(sum(([1, 2, 3],)))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=8406896 err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | TypeError: unsupported operand type(s) for +: 'int' and 'list'",
-      "native_rc": 0,
-      "oracle_rc": 1
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux sum over 'list' elements is not supported (CPython sums them; the native helper only adds int bits)"
     },
     {
       "area": "builtins",
@@ -4092,10 +4410,8 @@
       "area": "builtins",
       "name": "sum2",
       "src": "imprimir(sum((('a', 'b'),)))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=8406896 err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 1, in <module> | TypeError: unsupported operand type(s) for +: 'int' and 'tuple'",
-      "native_rc": 0,
-      "oracle_rc": 1
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux sum over 'tuple' elements is not supported (CPython sums them; the native helper only adds int bits)"
     },
     {
       "area": "builtins",
@@ -4250,227 +4566,249 @@
     },
     {
       "area": "strings",
-      "name": "upper('Hola mundo',)",
-      "src": "imprimir('abc'.upper('Hola mundo',))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:35) en 1:35"
+      "name": "upper",
+      "src": "imprimir('Hola mundo'.upper())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "lower('Hola Mundo',)",
-      "src": "imprimir('abc'.lower('Hola Mundo',))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:35) en 1:35"
+      "name": "lower",
+      "src": "imprimir('Hola Mundo'.lower())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "strip('  x  ',)",
-      "src": "imprimir('abc'.strip('  x  ',))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:30) en 1:30"
+      "name": "strip",
+      "src": "imprimir('  x  '.strip())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "lstrip('xxay',)",
-      "src": "imprimir('abc'.lstrip('xxay',))\n",
+      "name": "lstrip",
+      "src": "imprimir('xxay'.lstrip('x'))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:30) en 1:30"
+      "detail": "build: NativeBuildError: Linux str.lstrip() requires no arguments"
     },
     {
       "area": "strings",
-      "name": "rstrip('ayxx',)",
-      "src": "imprimir('abc'.rstrip('ayxx',))\n",
+      "name": "rstrip",
+      "src": "imprimir('ayxx'.rstrip('x'))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:30) en 1:30"
+      "detail": "build: NativeBuildError: Linux str.rstrip() requires no arguments"
     },
     {
       "area": "strings",
-      "name": "split('a b  c',)",
-      "src": "imprimir('abc'.split('a b  c',))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:31) en 1:31"
+      "name": "split",
+      "src": "imprimir('a b  c'.split())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "split('a,b',)",
-      "src": "imprimir('abc'.split('a,b',))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:28) en 1:28"
+      "name": "split-sep",
+      "src": "imprimir('a,b'.split(','))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "join(',', ['a', 'b'])",
-      "src": "imprimir('abc'.join(',', ['a', 'b']))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.join() requires exactly one list or tuple argument"
+      "name": "join",
+      "src": "imprimir(','.join(['a', 'b']))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "replace('aXa', 'X', 'y')",
-      "src": "imprimir('abc'.replace('aXa', 'X', 'y'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.replace() requires exactly two str arguments"
+      "name": "replace",
+      "src": "imprimir('aXa'.replace('X', 'y'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "startswith('abc', 'a')",
-      "src": "imprimir('abc'.startswith('abc', 'a'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.startswith() requires exactly one str argument"
+      "name": "startswith",
+      "src": "imprimir('abc'.startswith('a'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "endswith('abc', 'c')",
-      "src": "imprimir('abc'.endswith('abc', 'c'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.endswith() requires exactly one str argument"
+      "name": "endswith",
+      "src": "imprimir('abc'.endswith('c'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "find('abcabc', 'bc')",
-      "src": "imprimir('abc'.find('abcabc', 'bc'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.find() requires exactly one str argument"
+      "name": "find",
+      "src": "imprimir('abcabc'.find('bc'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
-      "name": "rfind('abcabc', 'bc')",
-      "src": "imprimir('abc'.rfind('abcabc', 'bc'))\n",
+      "name": "rfind",
+      "src": "imprimir('abcabc'.rfind('bc'))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux str.rfind() is not supported"
     },
     {
       "area": "strings",
-      "name": "count('aaa', 'a')",
-      "src": "imprimir('abc'.count('aaa', 'a'))\n",
+      "name": "count",
+      "src": "imprimir('aaa'.count('a'))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux str.count() is not supported"
     },
     {
       "area": "strings",
-      "name": "index('abc', 'b')",
-      "src": "imprimir('abc'.index('abc', 'b'))\n",
+      "name": "index",
+      "src": "imprimir('abc'.index('b'))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux str.index() is not supported"
     },
     {
       "area": "strings",
-      "name": "rindex('abcb', 'b')",
-      "src": "imprimir('abc'.rindex('abcb', 'b'))\n",
+      "name": "rindex",
+      "src": "imprimir('abcb'.rindex('b'))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux str.rindex() is not supported"
     },
     {
       "area": "strings",
-      "name": "capitalize('hola MUNDO',)",
-      "src": "imprimir('abc'.capitalize('hola MUNDO',))\n",
+      "name": "capitalize",
+      "src": "imprimir('hola MUNDO'.capitalize())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:40) en 1:40"
+      "detail": "build: NativeBuildError: Linux str.capitalize() is not supported"
     },
     {
       "area": "strings",
-      "name": "title('hola mundo',)",
-      "src": "imprimir('abc'.title('hola mundo',))\n",
+      "name": "title",
+      "src": "imprimir('hola mundo'.title())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:35) en 1:35"
+      "detail": "build: NativeBuildError: Linux str.title() is not supported"
     },
     {
       "area": "strings",
-      "name": "swapcase('Hola 123',)",
-      "src": "imprimir('abc'.swapcase('Hola 123',))\n",
+      "name": "swapcase",
+      "src": "imprimir('Hola 123'.swapcase())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:36) en 1:36"
+      "detail": "build: NativeBuildError: Linux str.swapcase() is not supported"
     },
     {
       "area": "strings",
-      "name": "isalpha('abc',)",
-      "src": "imprimir('abc'.isalpha('abc',))\n",
+      "name": "isalpha",
+      "src": "imprimir('abc'.isalpha())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:30) en 1:30"
+      "detail": "build: NativeBuildError: Linux str.isalpha() is not supported"
     },
     {
       "area": "strings",
-      "name": "isalpha('ab1',)",
-      "src": "imprimir('abc'.isalpha('ab1',))\n",
+      "name": "isalpha-digit",
+      "src": "imprimir('ab1'.isalpha())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:30) en 1:30"
+      "detail": "build: NativeBuildError: Linux str.isalpha() is not supported"
     },
     {
       "area": "strings",
-      "name": "isdigit('123',)",
-      "src": "imprimir('abc'.isdigit('123',))\n",
+      "name": "isdigit",
+      "src": "imprimir('123'.isdigit())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:30) en 1:30"
+      "detail": "build: NativeBuildError: Linux str.isdigit() is not supported"
     },
     {
       "area": "strings",
-      "name": "isalnum('ab1',)",
-      "src": "imprimir('abc'.isalnum('ab1',))\n",
+      "name": "isalnum",
+      "src": "imprimir('ab1'.isalnum())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:30) en 1:30"
+      "detail": "build: NativeBuildError: Linux str.isalnum() is not supported"
     },
     {
       "area": "strings",
-      "name": "isspace('  ',)",
-      "src": "imprimir('abc'.isspace('  ',))\n",
+      "name": "isspace",
+      "src": "imprimir('  '.isspace())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:29) en 1:29"
+      "detail": "build: NativeBuildError: Linux str.isspace() is not supported"
     },
     {
       "area": "strings",
-      "name": "istitle('Hola Mundo',)",
-      "src": "imprimir('abc'.istitle('Hola Mundo',))\n",
+      "name": "istitle",
+      "src": "imprimir('Hola Mundo'.istitle())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:37) en 1:37"
+      "detail": "build: NativeBuildError: Linux str.istitle() is not supported"
     },
     {
       "area": "strings",
-      "name": "isupper('ABC',)",
-      "src": "imprimir('abc'.isupper('ABC',))\n",
+      "name": "isupper",
+      "src": "imprimir('ABC'.isupper())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:30) en 1:30"
+      "detail": "build: NativeBuildError: Linux str.isupper() is not supported"
     },
     {
       "area": "strings",
-      "name": "islower('abc',)",
-      "src": "imprimir('abc'.islower('abc',))\n",
+      "name": "islower",
+      "src": "imprimir('abc'.islower())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(RPAREN, ')', 1:30) en 1:30"
+      "detail": "build: NativeBuildError: Linux str.islower() is not supported"
     },
     {
       "area": "strings",
-      "name": "zfill('42', 5)",
-      "src": "imprimir('abc'.zfill('42', 5))\n",
+      "name": "zfill",
+      "src": "imprimir('42'.zfill(5))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux str.zfill() is not supported"
     },
     {
       "area": "strings",
-      "name": "ljust('x', 4)",
-      "src": "imprimir('abc'.ljust('x', 4))\n",
+      "name": "ljust",
+      "src": "imprimir('x'.ljust(4))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux str.ljust() is not supported"
     },
     {
       "area": "strings",
-      "name": "rjust('x', 4)",
-      "src": "imprimir('abc'.rjust('x', 4))\n",
+      "name": "rjust",
+      "src": "imprimir('x'.rjust(4))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux str.rjust() is not supported"
     },
     {
       "area": "strings",
-      "name": "center('x', 5)",
-      "src": "imprimir('abc'.center('x', 5))\n",
+      "name": "center",
+      "src": "imprimir('x'.center(5))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux str.center() is not supported"
     },
     {
       "area": "strings",
-      "name": "format('{} {}')",
-      "src": "imprimir('abc'.format('{} {}'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: KeyError: 0"
+      "name": "format",
+      "src": "imprimir('{} {}'.format(1, 2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
@@ -4541,15 +4879,6 @@
       "src": "imprimir([c para c en 'abc'])\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux collection_len requires a collection"
-    },
-    {
-      "area": "strings",
-      "name": "index",
-      "src": "imprimir('abc'[1])\n",
-      "bucket": "EQUIV",
-      "detail": "",
-      "native_rc": 0,
-      "oracle_rc": 0
     },
     {
       "area": "strings",
@@ -8606,8 +8935,10 @@
       "area": "collections",
       "name": "in",
       "src": "imprimir(2 en [1, 2])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-kg8ug23u/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kg8ug23u/program.c:919:13: error: expected ‘)’ before ‘en’\n  919 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
@@ -8848,8 +9179,10 @@
       "area": "dicts",
       "name": "in",
       "src": "d = {'a': 1}\nimprimir('a' en d)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-k99kpjlc/program.c: In function ‘piton_main’:\n/tmp/piton-linux-k99kpjlc/program.c:920:13: error: expected ‘)’ before ‘en’\n  920 |     _15=(_13 en _14);\n      |         ~   ^~~\n      |             )\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dicts",
@@ -8967,8 +9300,10 @@
       "area": "sets",
       "name": "in",
       "src": "imprimir(1 en {1, 2})\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-89ftzqbu/program.c: In function ‘piton_main’:\n/tmp/piton-linux-89ftzqbu/program.c:919:13: error: expected ‘)’ before ‘en’\n  919 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "sets",
@@ -9202,14 +9537,14 @@
       "name": "nested",
       "src": "imprimir([y para x en rango(3) para y en rango(x)])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 0\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint([and for x in range(3) for and in range(x)])"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 32\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint([y for x in range(3) for y en range(x)])"
     },
     {
       "area": "comprehensions",
       "name": "list-tuple",
       "src": "imprimir([(x, y) para x en rango(2) para y en rango(2)])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 12\n\nPython rechazó la traducción:\ninvalid syntax\n\nprint([(x, and) for x in range(2) for and in range(2)])"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 37\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint([(x, y) for x in range(2) for y en range(2)])"
     },
     {
       "area": "comprehensions",
@@ -9309,14 +9644,14 @@
       "name": "nested-for",
       "src": "para x en rango(2):\n    para y en rango(2):\n        imprimir(x * 10 + y)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 9\n\nPython rechazó la traducción:\ninvalid syntax\n\n    for and in range(2):"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 11\n\nPython rechazó la traducción:\ninvalid syntax\n\n    for y en range(2):"
     },
     {
       "area": "control_flow",
       "name": "break-inner",
       "src": "para x en rango(2):\n    para y en rango(3):\n        romper\n    imprimir(x)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 9\n\nPython rechazó la traducción:\ninvalid syntax\n\n    for and in range(3):"
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 11\n\nPython rechazó la traducción:\ninvalid syntax\n\n    for y en range(3):"
     },
     {
       "area": "control_flow",
@@ -9433,7 +9768,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-u6jiyxdi/program.c: In function ‘f’:\n/tmp/piton-linux-u6jiyxdi/program.c:935:8: error: ‘suma’ undeclared (first use in this function)\n  935 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-u6jiyxdi/program.c:935:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-ggnhwc1d/program.c: In function ‘f’:\n/tmp/piton-linux-ggnhwc1d/program.c:935:8: error: ‘suma’ undeclared (first use in this function)\n  935 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-ggnhwc1d/program.c:935:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9449,7 +9784,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-voq_6ami/program.c: In function ‘f’:\n/tmp/piton-linux-voq_6ami/program.c:939:8: error: ‘suma’ undeclared (first use in this function)\n  939 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-voq_6ami/program.c:939:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-x39bzxgl/program.c: In function ‘f’:\n/tmp/piton-linux-x39bzxgl/program.c:939:8: error: ‘suma’ undeclared (first use in this function)\n  939 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-x39bzxgl/program.c:939:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9463,16 +9798,20 @@
     {
       "area": "functions",
       "name": "def-closure",
-      "src": "funcion externo(x):\n    def interno():\n        devolver x * 2\n    devolver interno()\nimprimir(externo(3))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 2:18) en 2:18"
+      "src": "funcion externo(x):\n    funcion interno():\n        devolver x * 2\n    devolver interno()\nimprimir(externo(3))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "def-nested-capture",
-      "src": "funcion a():\n    x = 1\n    def b():\n        devolver x + 1\n    devolver b()\nimprimir(a())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 3:12) en 3:12"
+      "src": "funcion a():\n    x = 1\n    funcion b():\n        devolver x + 1\n    devolver b()\nimprimir(a())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
@@ -9488,21 +9827,25 @@
       "name": "def-lambda-2",
       "src": "f = lambda x, y=2: x * y\nimprimir(f(3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 14\n\nPython rechazó la traducción:\ninvalid syntax\n\nf = lambda x, and=2: x * and"
+      "detail": "build: ParseError: Se esperaba COLON:  en 1:16"
     },
     {
       "area": "functions",
       "name": "global",
-      "src": "x = 1\ndef f():\n    global x\n    x = 5\nf()\nimprimir(x)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 2:8) en 2:8"
+      "src": "x = 1\nfuncion f():\n    global x\n    x = 5\nf()\nimprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
       "name": "nonlocal",
-      "src": "funcion ext():\n    y = 1\n    def int():\n        no_local y\n        y = 7\n    int()\n    devolver y\nimprimir(ext())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 4\n\nPython rechazó la traducción:\ninvalid syntax\n\n    and = 1"
+      "src": "funcion ext():\n    y = 1\n    funcion int():\n        no_local y\n        y = 7\n    int()\n    devolver y\nimprimir(ext())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
@@ -9527,21 +9870,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-n7ns6y1p/program.c: In function ‘piton_main’:\n/tmp/piton-linux-n7ns6y1p/program.c:917:9: error: too many arguments to function ‘f’\n  917 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-n7ns6y1p/program.c:890:13: note: declared here\n  890 | static long f(long a);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-r0aezfza/program.c: In function ‘piton_main’:\n/tmp/piton-linux-r0aezfza/program.c:917:9: error: too many arguments to function ‘f’\n  917 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-r0aezfza/program.c:890:13: note: declared here\n  890 | static long f(long a);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-7z__ccgh/program.c: In function ‘piton_main’:\n/tmp/piton-linux-7z__ccgh/program.c:916:9: error: too few arguments to function ‘f’\n  916 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-7z__ccgh/program.c:890:13: note: declared here\n  890 | static long f(long a, long b);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-bpm8mhan/program.c: In function ‘piton_main’:\n/tmp/piton-linux-bpm8mhan/program.c:916:9: error: too few arguments to function ‘f’\n  916 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-bpm8mhan/program.c:890:13: note: declared here\n  890 | static long f(long a, long b);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-b3kfu0j_/program.c: In function ‘piton_main’:\n/tmp/piton-linux-b3kfu0j_/program.c:913:9: error: ‘no_existe’ undeclared (first use in this function)\n  913 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-b3kfu0j_/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-kks4h8sl/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kks4h8sl/program.c:913:9: error: ‘no_existe’ undeclared (first use in this function)\n  913 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-kks4h8sl/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9749,9 +10092,11 @@
     {
       "area": "classes",
       "name": "init",
-      "src": "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    def ver(self):\n        devolver self.x\nimprimir(P(3).ver())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:18) en 4:18"
+      "src": "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    funcion ver(self):\n        devolver self.x\nimprimir(P(3).ver())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -9790,9 +10135,11 @@
     {
       "area": "classes",
       "name": "eq-dunder",
-      "src": "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    def __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 4\ncolumna: 21\n\nPython rechazó la traducción:\ninvalid syntax\n\n    def __eq__(self, or):"
+      "src": "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    funcion __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -9813,30 +10160,38 @@
     {
       "area": "classes",
       "name": "inheritance",
-      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    pasar\nimprimir(B().f())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:11) en 4:11"
+      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    pasar\nimprimir(B().f())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "override",
-      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B'\nimprimir(B().f())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:11) en 4:11"
+      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    funcion f(self):\n        devolver 'B'\nimprimir(B().f())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "super",
-      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B(A):\n    def f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:11) en 4:11"
+      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    funcion f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())\n",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=16789664 err= || oracle rc=0 out=BA err=",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "super-init",
-      "src": "clase A:\n    funcion __init__(self, x):\n        self.x = x\nclass B(A):\n    def __init__(self):\n        super().__init__(7)\nimprimir(B().x)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COLON, ':', 4:11) en 4:11"
+      "src": "clase A:\n    funcion __init__(self, x):\n        self.x = x\nclase B(A):\n    funcion __init__(self):\n        super().__init__(7)\nimprimir(B().x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -9855,9 +10210,11 @@
     {
       "area": "classes",
       "name": "multi-base",
-      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclass B:\n    def f(self):\n        devolver 'B'\nclass C(A, B):\n    pasar\nimprimir(C().f())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(INDENT, '    ', 5:1) en 5:1"
+      "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B:\n    funcion f(self):\n        devolver 'B'\nclase C(A, B):\n    pasar\nimprimir(C().f())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -9889,14 +10246,16 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-n34x5n9k/program.c: In function ‘piton_main’:\n/tmp/piton-linux-n34x5n9k/program.c:916:9: error: too few arguments to function ‘P____init__’\n  916 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-n34x5n9k/program.c:890:13: note: declared here\n  890 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-0y53z0k2/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0y53z0k2/program.c:916:9: error: too few arguments to function ‘P____init__’\n  916 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-0y53z0k2/program.c:890:13: note: declared here\n  890 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
       "name": "dunder-add",
       "src": "clase P:\n    funcion __add__(self, o):\n        devolver 99\nimprimir(P() + 1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 23\n\nPython rechazó la traducción:\ninvalid syntax\n\n    def __add__(self, or):"
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=8402833 err= || oracle rc=0 out=99 err=",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -9959,7 +10318,7 @@
     {
       "area": "generators",
       "name": "class-iter-self",
-      "src": "clase G:\n    funcion __iter__(self):\n    devolver self\n    def __next__(self):\n        devolver 1\nimprimir(lista(G()))\n",
+      "src": "clase G:\n    funcion __iter__(self):\n    devolver self\n    funcion __next__(self):\n        devolver 1\nimprimir(lista(G()))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 3\ncolumna: 5\n\nPython rechazó la traducción:\nexpected an indented block after function definition on line 2\n\n    return self"
     },
@@ -10003,7 +10362,7 @@
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-l_grx0tu/program.c: In function ‘piton_main’:\n/tmp/piton-linux-l_grx0tu/program.c:913:9: error: ‘divmod’ undeclared (first use in this function)\n  913 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-l_grx0tu/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-1y1_39cf/program.c: In function ‘piton_main’:\n/tmp/piton-linux-1y1_39cf/program.c:913:9: error: ‘divmod’ undeclared (first use in this function)\n  913 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-1y1_39cf/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "controls_closed",

@@ -470,7 +470,12 @@ static void*piton_bump_alloc(unsigned long n){void*r=(void*)piton_bump_ptr;piton
 typedef struct{int sign;long count;unsigned long capacity;unsigned long*limbs;}PitonBigInt;
 static long bi_bit_width(unsigned long v){long w=0;while(v){v>>=1;++w;}return w;}
 static void*bi_from_u64(unsigned long v);
-static int bi_cmp_mag(PitonBigInt*a,PitonBigInt*b){long aw=0,bw=0;for(long i=a->count-1;i>=0;--i){long w=bi_bit_width(a->limbs[i]);if(!w)w=1;aw=i*64+w;if(aw<0)aw=0;}for(long i=b->count-1;i>=0;--i){long w=bi_bit_width(b->limbs[i]);if(!w)w=1;bw=i*64+w;if(bw<0)bw=0;}if(aw!=bw)return aw>bw?1:-1;for(long i=a->count-1;i>=0;--i){if(a->limbs[i]!=b->limbs[i])return a->limbs[i]>b->limbs[i]?1:-1;}return 0;}
+/* BI_CMP_MAG_FIX_V1: the previous version computed a bit width by calling
+ * bi_bit_width with a LIMB, but that function takes a PitonBigInt*, so it
+ * reinterpreted the limb value as a pointer and produced a garbage width.
+ * Comparing magnitudes by trimmed limb count and then limb by limb is exact
+ * and needs no pointer arithmetic on limb values. */
+static int bi_cmp_mag(PitonBigInt*a,PitonBigInt*b){long ac=a->count,bc=b->count;while(ac>0&&a->limbs[ac-1]==0)ac--;while(bc>0&&b->limbs[bc-1]==0)bc--;if(ac!=bc)return ac>bc?1:-1;for(long i=ac-1;i>=0;--i){if(a->limbs[i]!=b->limbs[i])return a->limbs[i]>b->limbs[i]?1:-1;}return 0;}
 static void bi_ensure(PitonBigInt*r,long n){if(n<=0)n=1;if((unsigned long)n<=r->capacity)return;unsigned long c=r->capacity?r->capacity*2:2;while(c<(unsigned long)n)c*=2;unsigned long*p=(unsigned long*)piton_bump_alloc(c*sizeof(unsigned long));for(unsigned long i=0;i<r->count;++i)p[i]=r->limbs[i];for(unsigned long i=r->count;i<c;++i)p[i]=0;r->limbs=p;r->capacity=c;}
 static void bi_trim(PitonBigInt*r){while(r->count>0&&r->limbs[r->count-1]==0)--r->count;if(r->count==0){r->count=1;r->sign=0;}}
 static void bi_add_mag(PitonBigInt*r,PitonBigInt*a,PitonBigInt*b){long max_c=a->count>b->count?a->count:b->count;bi_ensure(r,max_c+1);u128 carry=0;for(long i=0;i<=max_c;++i){if(i<a->count)carry+=a->limbs[i];if(i<b->count)carry+=b->limbs[i];r->limbs[i]=(unsigned long)carry;carry>>=64;r->count=i+1;}bi_trim(r);}
@@ -499,7 +504,34 @@ static int piton_double_isinf(long bits){unsigned long long u=(unsigned long lon
 static int piton_double_isfinite(long bits){unsigned long long u=(unsigned long long)bits;return ((u&0x7FF0000000000000ULL)!=0x7FF0000000000000ULL);}
 static long piton_float_pow_v1(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0)return piton_double_bits(1.0);int neg=(x<0.0)&&(y==-1.0||y==1.0);double ax=neg?-x:x;if(y==1.0)return a;if(y==2.0||y==-2.0){double sq=ax*ax;long sb=piton_double_bits(sq);if(piton_double_isinf(sb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}if(y==2.0)return sb;if(x==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/sq;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==-1.0){if(ax==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/ax;if(neg)r=-r;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==0.5||y==-0.5){if(x<0.0){piton_raise_set("ValueError","negative number cannot be raised to a fractional power");return 0;}if(x==0.0){if(y<0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}return piton_double_bits(0.0);}long sb=piton_float_sqrt(a);if(y==0.5)return sb;double r=1.0/piton_bits_double(sb);return piton_double_bits(r);}piton_raise_set("ValueError","float ** with non-trivial exponent is not supported in the native subset");return 0;}
 static long piton_float_mod(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float modulo");return 0;}double r=piton_fmod_core(x,y);if(r==0.0)r=(y<0.0?-0.0:0.0);else if((y<0.0)!=(r<0.0))r+=y;return piton_double_bits(r);}
-static long piton_bigint_cmp(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;if(x->sign!=y->sign)return x->sign?-1:1;int c=bi_cmp_mag(x,y);return x->sign?-c:c;}
+/* BIGINT_CMP_MIXED_V1: compare a bigint against a plain int. piton_bigint_cmp casts BOTH operands to PitonBigInt*, so `10 ** 20 > 5` dereferenced the integer 5 as a struct pointer and died with SIGSEGV. Returns the sign of (bigint - int) exactly like piton_bigint_cmp. */
+/* Correct bit width of a bigint from its limb array.
+ * bi_cmp_mag (and the mixed comparison) call bi_bit_width with a LIMB, but that
+ * function takes a PitonBigInt*, so it reinterprets the limb value as a pointer.
+ * It happens to read mapped heap (the limbs live there) and the limb-by-limb
+ * loop afterwards usually rescues the answer, but it faults when the limb value
+ * is not a readable address. This computes the width directly. */
+static long bi_width_from_limbs(const unsigned long *limbs, long count) {
+    for (long i = count - 1; i >= 0; --i) {
+        if (limbs[i]) {
+            long w = i * 64;
+            unsigned long v = limbs[i];
+            while (v) { ++w; v >>= 1; }
+            return w;
+        }
+    }
+    return 0;
+}
+
+static long piton_bigint_cmp_int(void*raw,long v){PitonBigInt*x=(PitonBigInt*)raw;if(!x)return v>0?-1:(v<0?1:0);int vs=v<0?-1:(v>0?1:0);if(x->sign!=vs)return x->sign?-1:1;unsigned long mag=v<0?(unsigned long)(-(v+1))+1UL:(unsigned long)v;long width=bi_width_from_limbs(x->limbs,x->count);
+int mw=0;for(unsigned long t=mag;t;t>>=1)++mw;if(width!=mw)return width>mw?1:-1;for(long i=x->count-1;i>=0;--i){unsigned long lo=(i==0)?mag:0UL;if(x->limbs[i]!=lo)return x->limbs[i]>lo?1:-1;}
+return 0;}
+/* BI_CMP_SIGN_FIX_V1: `x->sign?-c:c` negated the result for POSITIVE
+ * bigints, because a positive bigint carries sign == 1. Every ordering
+ * comparison of two positive bigints was therefore inverted
+ * (`10 ** 20 > 10 ** 30` answered True). The magnitude sign must only be
+ * flipped for NEGATIVE values, as the Windows backend already did. */
+static long piton_bigint_cmp(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;if(x->sign!=y->sign)return x->sign<y->sign?-1:1;int c=bi_cmp_mag(x,y);return x->sign<0?-c:c;}
 static void piton_bigint_free(void*a){(void)a;}
 """
 
@@ -541,6 +573,10 @@ class LinuxCEmitter:
         # yields the right static type (it used to hardcode "str", which made
         # `para k en {1: 'a'}` print the int key 1 as a string pointer -> SIGSEGV).
         self._dict_key_types: dict[str, str] = {}
+        # COLL_ELEM_TYPE_V1: static type of a collection's ELEMENTS, so a
+        # builtin like sum() can tell what it is accumulating instead of
+        # assuming int (which made it add raw pointers for bigints).
+        self._coll_elems: dict[str, str] = {}
         self._dict_elems: dict[str, dict[str, tuple[str, str]]] = {}
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
@@ -646,6 +682,7 @@ class LinuxCEmitter:
         self._boolh_types: dict[str, str] = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
+        self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         if function.vararg:
             types[function.vararg] = "tuple"
@@ -701,6 +738,7 @@ class LinuxCEmitter:
         self._boolh_types: dict[str, str] = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
+        self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
@@ -759,6 +797,7 @@ class LinuxCEmitter:
         self._boolh_types: dict[str, str] = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
+        self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
@@ -795,6 +834,22 @@ class LinuxCEmitter:
         lines.append("    return 0;")
         lines.append("}")
         return lines
+
+    def _ordering_pair_ok(self, left_type: str, right_type: str) -> bool:
+        """ORDER_MIXED_TYPES_V1: can these two static types be ordered?
+
+        CPython raises TypeError for `<`, `>`, `<=`, `>=` between operands it
+        cannot order (`1 < '1'`, `None < None`). The emitter used to fall
+        through to a raw C comparison of the two representations, so `None <
+        None` answered False and `1 < '1'` answered True. `==`/`!=` are NOT
+        restricted: Python allows equality across types.
+        """
+        numeric = {"int", "bool", "float", "bigint"}
+        if left_type in numeric and right_type in numeric:
+            return True
+        if left_type in {"list", "tuple", "dict", "set"} and left_type == right_type:
+            return True
+        return left_type == right_type and left_type not in {"none", ""}
 
     def _truth_expr(self, value: Any, vtype: str, strict: bool) -> str:
         """C expression for CPython truthiness of `value` with static `vtype`.
@@ -1974,6 +2029,8 @@ class LinuxCEmitter:
             # `para k en d` (whose iter_new source is the load temp) resolves.
             if source in self._dict_key_types:
                 self._dict_key_types[result] = self._dict_key_types[source]
+            if source in self._coll_elems:
+                self._coll_elems[result] = self._coll_elems[source]
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
@@ -2017,6 +2074,8 @@ class LinuxCEmitter:
                 # the keys are ints.
                 if source in self._dict_key_types:
                     self._dict_key_types[result] = self._dict_key_types[source]
+                if source in self._coll_elems:
+                    self._coll_elems[result] = self._coll_elems[source]
                 return out
             if (
                 source in self._module_stored
@@ -2065,6 +2124,8 @@ class LinuxCEmitter:
             # so iterating `d` after `d = {1: 'a'}` still knows it yields ints.
             if args[1] in self._dict_key_types:
                 self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
+            if args[1] in self._coll_elems:
+                self._coll_elems[args[0]] = self._coll_elems[args[1]]
             if isinstance(args[0], str) and args[0].startswith("@boolh_"):
                 # BOOL_SHORT_V1: both arms of y/o must share one static
                 # type — the untagged model cannot print a mixed result
@@ -2565,9 +2626,15 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=({self._value(left)} == {self._value(right)});")
                 types[result] = "bool"
                 return out
-            if operator == "no en":
-                # CONTAINS_V1: `a no en b` shares the membership lowering.
-                self._emit_contains(out, result, left, right, types, negate=True)
+            if operator in {"en", "no en"}:
+                # CONTAINS_V1: `a en b` and `a no en b` share the membership
+                # lowering. The POSITIVE form was missing here: `x en y` fell
+                # through to the generic comparison emitter, which wrote the
+                # operator name into the C source and produced invalid C
+                # ("expected ')' before 'en'"). The parity gate only covered
+                # `no en`, so the hole survived; the enumerative corpus found it.
+                self._emit_contains(out, result, left, right, types,
+                                    negate=(operator == "no en"))
                 return out
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
@@ -2591,7 +2658,16 @@ class LinuxCEmitter:
                     types[result] = "bool"
                     return out
             if left_type == "bigint" or right_type == "bigint":
-                out.append(f"    {_name(result)}=(piton_bigint_cmp((void*){_name(left)},(void*){_name(right)}) {operator} 0);")
+                # BIGINT_CMP_MIXED_V1: a plain int is NOT a PitonBigInt*, so
+                # the both-sides-pointer cast dereferenced it as a struct and
+                # `10 ** 20 > 5` died with SIGSEGV. Route the mixed case to the
+                # int-aware helper and reverse the sign when the int is left.
+                if left_type == "bigint" and right_type == "bigint":
+                    out.append(f"    {_name(result)}=(piton_bigint_cmp((void*){_name(left)},(void*){_name(right)}) {operator} 0);")
+                elif left_type == "bigint":
+                    out.append(f"    {_name(result)}=(piton_bigint_cmp_int((void*){_name(left)},{self._value(right)}) {operator} 0);")
+                else:
+                    out.append(f"    {_name(result)}=(-piton_bigint_cmp_int((void*){_name(right)},{self._value(left)}) {operator} 0);")
                 types[result] = "bool"
                 return out
             if "float" in {left_type, right_type}:
@@ -2603,6 +2679,14 @@ class LinuxCEmitter:
             if types.get(left) == types.get(right) == "str":
                 expression = f"(piton_strcmp((char*){self._value(left)},(char*){self._value(right)}) {operator} 0)"
             else:
+                if operator in {"<", ">", "<=", ">="} and not self._ordering_pair_ok(left_type, right_type):
+                    # ORDER_MIXED_TYPES_V1: refuse instead of comparing the raw
+                    # representations of two incomparable operands.
+                    raise NativeBuildError(
+                        f"Linux ordering comparison '{operator}' between '{left_type}' and "
+                        f"'{right_type}' is not supported (CPython raises TypeError: "
+                        f"'{operator}' not supported between instances of these types)"
+                    )
                 expression = f"({self._value(left)} {operator} {self._value(right)})"
             out.append(f"    {_name(result)}={expression};")
             types[result] = "bool"
@@ -2898,6 +2982,16 @@ class LinuxCEmitter:
                 helper_map = {"list": "piton_sum_seq", "tuple": "piton_sum_seq", "dict": "piton_sum_dict", "set": "piton_sum_set"}
                 if value_type not in struct_map:
                     raise NativeBuildError("Linux sum requires one collection")
+                # COLL_ELEM_TYPE_V1: the helper adds each element's raw bits, so
+                # a bigint element contributed its POINTER and sum printed an
+                # address (`sum([10 ** 20])` -> 4210752). Refuse anything whose
+                # element type is not int instead of accumulating garbage.
+                elem_type = self._coll_elems.get(values[0], "int")
+                if elem_type != "int":
+                    raise NativeBuildError(
+                        f"Linux sum over '{elem_type}' elements is not supported "
+                        "(CPython sums them; the native helper only adds int bits)"
+                    )
                 out.append(f"    {_name(result)}={helper_map[value_type]}(({struct_map[value_type]}*){self._value(values[0])});")
                 types[result] = "int"
             elif function_name in {"type", "tipo"}:
@@ -3306,6 +3400,20 @@ class LinuxCEmitter:
                     else:
                         elems.append((item, self._percent_literal_type(item)))
                 self._tuple_elems[result] = tuple(elems)
+            if result and items:
+                # COLL_ELEM_TYPE_V1: a single element kind is recorded; mixed or
+                # empty collections stay untyped so sum() refuses them.
+                elem_kinds = set()
+                for item in items:
+                    if isinstance(item, str) and item.startswith("%"):
+                        elem_kinds.add(types.get(item, "int"))
+                    elif isinstance(item, str):
+                        # a bare string operand is a literal in this position
+                        elem_kinds.add("str")
+                    else:
+                        elem_kinds.add("int")
+                if len(elem_kinds) == 1:
+                    self._coll_elems[result] = next(iter(elem_kinds))
             if kind in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=(long)piton_seq_new({self._kind(kind)},{len(items)});')
                 for index, value in enumerate(items):

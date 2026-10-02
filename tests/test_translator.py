@@ -479,5 +479,64 @@ no_local cuenta
         self.assertIn("nonlocal cuenta", traducido)
 
 
+class KeywordAsIdentifierTests(unittest.TestCase):
+    """KEYWORD_EXPR_V1: un identificador no puede renombrarse a un keyword.
+
+    `y`, `o`, `no`, `es`, `en` y `como` son keywords de expresion en PITON y
+    tambien identificadores legales. El traductor los renombraba SIEMPRE, asi
+    que `y = 5` producia `and = 5`: Python que ni siquiera parsea. Eso rompia
+    el camino del oracle (ningun caso con esas variables podia medirse) y a
+    cualquier consumidor del traductor. Ahora solo se traducen en posicion de
+    operador.
+    """
+
+    def test_keyword_named_variables_translate_unchanged(self) -> None:
+        for nombre in ("y", "o", "no", "es", "en"):
+            with self.subTest(nombre=nombre):
+                self.assertEqual(traducir_fuente(f"{nombre} = 5\n"), f"{nombre} = 5\n")
+
+    def test_keyword_named_parameters_and_reads(self) -> None:
+        self.assertEqual(
+            traducir_fuente("funcion f(y):\n    devolver y\n"),
+            "def f(y):\n    return y\n",
+        )
+        self.assertEqual(traducir_fuente("y = 2\nlongitud(y)\n"), "y = 2\nlen(y)\n")
+        self.assertEqual(traducir_fuente("si y:\n    imprimir(y)\n"), "if y:\n    print(y)\n")
+
+    def test_keyword_variables_still_usable_as_operators(self) -> None:
+        # el mismo nombre puede ser variable en una linea y operador en otra
+        self.assertEqual(
+            traducir_fuente("y = 1\nimprimir(1 y 2)\n"), "y = 1\nprint(1 and 2)\n"
+        )
+
+    def test_operator_forms_still_translate(self) -> None:
+        for piton, python in (
+            ("imprimir(1 y 2)\n", "print(1 and 2)\n"),
+            ("imprimir(1 o 2)\n", "print(1 or 2)\n"),
+            ("imprimir(no 1)\n", "print(not 1)\n"),
+            ("imprimir(1 es 2)\n", "print(1 is 2)\n"),
+            ("imprimir(1 en [1])\n", "print(1 in [1])\n"),
+            ("imprimir(9 no en [1, 2])\n", "print(9 not in [1, 2])\n"),
+            ("imprimir(1 en {1, 2})\n", "print(1 in {1, 2})\n"),
+            ("imprimir(Verdadero y 1)\n", "print(True and 1)\n"),
+            ("imprimir(Nada o 'x')\n", "print(None or 'x')\n"),
+        ):
+            with self.subTest(piton=piton):
+                self.assertEqual(traducir_fuente(piton), python)
+
+    def test_every_translation_is_valid_python(self) -> None:
+        # el contrato del traductor: su salida siempre parsea como Python
+        for fuente in (
+            "y = 5\nsi y:\n    imprimir(y)\n",
+            "o = 1\no = o + 1\nimprimir(o)\n",
+            "no = Falso\nimprimir(no)\n",
+            "en = [1]\nimprimir(1 en en)\nimprimir(9 no en en)\n",
+            "es = 2\nimprimir(1 es es)\n",
+            "funcion g(no, y):\n    devolver no + y\n",
+        ):
+            with self.subTest(fuente=fuente):
+                ast.parse(traducir_fuente(fuente))
+
+
 if __name__ == "__main__":
     unittest.main()

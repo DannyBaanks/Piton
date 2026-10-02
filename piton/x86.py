@@ -24,6 +24,22 @@ class NativeBuildError(RuntimeError):
     pass
 
 
+def _ordering_pair_ok(left_type: str, right_type: str) -> bool:
+    """ORDER_MIXED_TYPES_V1: can these two static types be ordered?
+
+    Mirrors the Linux backend: numeric against numeric, same collection type,
+    or two strings. Everything else (None with anything, int with str, list
+    with str, ...) is unorderable and must be refused instead of comparing the
+    raw representations.
+    """
+    numeric = {"int", "bool", "float", "bigint"}
+    if left_type in numeric and right_type in numeric:
+        return True
+    if left_type in {"list", "tuple", "dict", "set"} and left_type == right_type:
+        return True
+    return left_type == right_type and left_type not in {"none", ""}
+
+
 _BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "round", "redondear"}
 
 _math_fn_map = {
@@ -212,7 +228,7 @@ class Win64NasmEmitter:
             "extern piton_print_value", "extern piton_print_value_raw",
             "extern piton_bigint_from_str", "extern piton_bigint_from_i64", "extern piton_bigint_free",
             "extern piton_bigint_add", "extern piton_bigint_sub", "extern piton_bigint_mul",
-            "extern piton_bigint_neg", "extern piton_bigint_cmp",
+            "extern piton_bigint_neg", "extern piton_bigint_cmp", "extern piton_bigint_cmp_int",
             "extern piton_bigint_floor_div", "extern piton_bigint_mod",
             "extern piton_bigint_print", "extern piton_bigint_print_raw",
             "extern piton_bigint_pow_small",
@@ -1372,9 +1388,12 @@ class Win64NasmEmitter:
             operator, left, right = args
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
-            if operator == "no en":
-                # CONTAINS_V1: `a no en b` shares the membership lowering.
-                self._emit_contains(result, left, right, negate=True)
+            if operator in {"en", "no en"}:
+                # CONTAINS_V1: `a en b` and `a no en b` share the membership
+                # lowering. The POSITIVE form was missing here and emitted the
+                # operator name into the asm (invalid); the parity gate only
+                # covered `no en`, so the hole survived.
+                self._emit_contains(result, left, right, negate=(operator == "no en"))
                 return
             # SPECIAL_METHOD_LOOKUP_V1: `==` over native class instances
             # dispatches to the class-defined __eq__ (MRO resolved), same as
@@ -1451,6 +1470,16 @@ class Win64NasmEmitter:
                 self._load_operand(right, "rdx")
                 self.lines.extend(["    call strcmp", "    cmp eax, 0"])
             else:
+                # ORDER_MIXED_TYPES_V1: CPython raises TypeError for `<`, `>`,
+                # `<=`, `>=` between operands it cannot order. `None < None`
+                # compared two zero slots and answered False. `==`/`!=` stay
+                # legal across types, as in Python.
+                if operator in {"<", ">", "<=", ">="} and not _ordering_pair_ok(left_type, right_type):
+                    raise NativeBuildError(
+                        f"native ordering comparison '{operator}' between '{left_type}' and "
+                        f"'{right_type}' is not supported (CPython raises TypeError: "
+                        f"'{operator}' not supported between instances of these types)"
+                    )
                 self._load_operand(left, "rax")
                 self._load_operand(right, "rcx")
                 self.lines.append("    cmp rax, rcx")
@@ -4418,12 +4447,32 @@ class Win64NasmEmitter:
         self.bigint_slots.append(result)
 
     def _emit_bigint_compare(self, operator: str, left: Any, right: Any, result: str) -> None:
-        self.lines.extend([
-            f"    mov rcx, {self._address(left)}",
-            f"    mov rdx, {self._address(right)}",
-            "    call piton_bigint_cmp",
-            "    cmp rax, 0",
-        ])
+        # BIGINT_CMP_MIXED_V1: a plain int is not a PitonBigInt*, so the
+        # both-sides-pointer helper dereferenced it as a struct (SIGSEGV on
+        # `10 ** 20 > 5`). The mixed case uses the int-aware helper, negating
+        # when the int is the left operand.
+        left_big = self.types.get(left) == "bigint"
+        right_big = self.types.get(right) == "bigint"
+        if left_big and not right_big:
+            self.lines.extend([
+                f"    mov rcx, {self._address(left)}",
+                f"    mov rdx, {self._address(right)}",
+                "    call piton_bigint_cmp_int",
+            ])
+        elif right_big and not left_big:
+            self.lines.extend([
+                f"    mov rcx, {self._address(right)}",
+                f"    mov rdx, {self._address(left)}",
+                "    call piton_bigint_cmp_int",
+                "    neg rax",
+            ])
+        else:
+            self.lines.extend([
+                f"    mov rcx, {self._address(left)}",
+                f"    mov rdx, {self._address(right)}",
+                "    call piton_bigint_cmp",
+            ])
+        self.lines.append("    cmp rax, 0")
         condition = {"==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge"}[operator]
         self.lines.extend([f"    set{condition} al", "    movzx rax, al"])
         self.lines.append(f"    mov {self._address(result)}, rax")

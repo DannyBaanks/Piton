@@ -715,5 +715,145 @@ class DictKeyTypeV1(unittest.TestCase):
         )
 
 
+class BigintCompareV1(unittest.TestCase):
+    """BI_CMP_MAG_FIX_V1 + BIGINT_CMP_MIXED_V1: comparar bigints correctamente.
+
+    Dos bugs en la misma familia, encontrados por el corpus enumerativo:
+    (1) `bi_cmp_mag` calculaba el ancho en bits llamando `bi_bit_width` con un
+        LIMB, pero esa funcion toma un `PitonBigInt*`: reinterpretaba el valor
+        del limb como puntero y producia un ancho basura. TODA comparacion
+        bigint-vs-bigint era incorrecta (`10**40 > 10**20` daba False), y como
+        `+`/`-` usan `bi_cmp_mag` para los signos, la aritmetica con signos
+        mixtos tambien.
+    (2) `piton_bigint_cmp` casteaba AMBOS operandos a `PitonBigInt*`, asi que
+        comparar un bigint con un int desreferenciaba el entero como struct:
+        SIGSEGV.
+    """
+
+    def test_bigint_vs_bigint(self):
+        for source in (
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a > b)\n",
+            "a = 10 ** 30\nb = 10 ** 20\nimprimir(a > b)\n",
+            "a = 10 ** 40\nb = 10 ** 20\nimprimir(a > b)\n",
+            "a = 10 ** 99\nb = 10 ** 100\nimprimir(a > b)\n",
+            # BI_CMP_SIGN_FIX_V1: `x->sign?-c:c` negated the result for
+            # POSITIVE bigints (sign == 1), inverting every ordering.
+            "a = 10 ** 40\nb = 10 ** 20\nimprimir(a > b)\n",
+            "a = 10 ** 30\nb = 10 ** 20\nimprimir(a <= b)\n",
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a >= b)\n",
+            "a = -(10 ** 40)\nb = -(10 ** 20)\nimprimir(a < b)\n",
+            "a = 10 ** 20\nb = 10 ** 20\nimprimir(a == b)\n",
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a != b)\n",
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a < b)\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_bigint_vs_int(self):
+        for source in (
+            "imprimir(10 ** 20 > 5)\n",
+            "x = 10 ** 20\nimprimir(5 > x)\n",
+            "x = 10 ** 20\nimprimir(x < 5)\n",
+            "x = 10 ** 20\nimprimir(x == 5)\n",
+            "x = 10 ** 20\nimprimir(x >= 5)\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_bigint_arithmetic_with_mixed_signs(self):
+        # bi_cmp_mag tambien decide el signo en + y -
+        for source in (
+            "a = 10 ** 20\nb = 10 ** 30\nimprimir(a + b)\n",
+            "a = 10 ** 30\nb = 10 ** 20\nimprimir(a - b)\n",
+            "a = 10 ** 20\nb = 10 ** 20\nimprimir(a * b)\n",
+            "a = -(10 ** 20)\nb = 10 ** 20\nimprimir(a < b)\n",
+            "x = -(10 ** 20)\nimprimir(x < 0)\n",
+        ):
+            _assert_matches(self, source)
+
+
+class OrderingMixedTypesV1(unittest.TestCase):
+    """ORDER_MIXED_TYPES_V1: los operadores de orden no comparan representaciones.
+
+    El emitter caia a una comparacion C cruda entre las dos representaciones, de
+    modo que `None < None` respondia False y `1 < '1'` respondia True. CPython
+    lanza TypeError. Ahora se falla cerrado al compilar. `==`/`!=` entre tipos
+    distintos sigue siendo legal, como en Python.
+    """
+
+    def test_unorderable_pairs_fail_closed(self):
+        for source in (
+            "imprimir(1 < '1')\n",
+            "imprimir('1' > 1)\n",
+            "imprimir(Nada < Nada)\n",
+            "imprimir(Nada >= Nada)\n",
+            "imprimir([1] < 'a')\n",
+        ):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail(f"ordering between incomparable types not closed: {source}")
+
+    def test_orderable_pairs_still_work(self):
+        for source in (
+            "imprimir(1 < 2)\n",
+            "imprimir(1.5 < 2)\n",
+            "imprimir(2 < 1.5)\n",
+            "imprimir('a' < 'b')\n",
+            "imprimir([1] < [2])\n",
+            "imprimir((1,) < (2,))\n",
+            "imprimir(Verdadero < 2)\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_equality_across_types_is_still_legal(self):
+        for source in (
+            "imprimir(1 == '1')\n",
+            "imprimir(1 != '1')\n",
+            "imprimir(Nada == Nada)\n",
+            "imprimir(1 == 1.0)\n",
+        ):
+            _assert_matches(self, source)
+
+
+class SumElementTypeV1(unittest.TestCase):
+    """COLL_ELEM_TYPE_V1: `sum` acumula lo que la coleccion contiene.
+
+    `sum` fuerzaba el tipo de resultado a `int` y el helper runtime suma los
+    `bits` crudos de cada elemento, asi que un elemento bigint aportaba su
+    PUNTER: `sum([10 ** 20])` imprimia 4210752 (una direccion). Ahora se
+    registra el tipo de elemento de la coleccion y `sum` rechaza lo que no sea
+    int en vez de acumular basura.
+    """
+
+    def test_int_collections_still_sum(self):
+        for source in (
+            "imprimir(sum([1, 2, 3]))\n",
+            "imprimir(sum([]))\n",
+            "a = [1, 2]\nimprimir(sum(a))\n",
+            "imprimir(sum((1, 2)))\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_non_int_elements_fail_closed(self):
+        for source in (
+            "imprimir(sum([10 ** 20]))\n",
+            "imprimir(sum(['a', 'b']))\n",
+            "imprimir(sum([1.5, 2.5]))\n",
+        ):
+            try:
+                result = compare_native_to_cpython(source)
+            except NativeBuildError:
+                continue
+            self.fail(
+                f"sum over non-int elements produced {result.native.stdout!r} "
+                "instead of refusing (CPython sums them)"
+            )
+
+    def test_list_printing_unaffected(self):
+        _assert_matches(self, "imprimir([1, 2])\n")
+        _assert_matches(self, "imprimir(['a'])\n")
+
+
 if __name__ == "__main__":
     unittest.main()

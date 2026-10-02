@@ -2954,6 +2954,46 @@ void *piton_bigint_from_str(const char *s) {
 
 void piton_bigint_free(void *a) { if (a) { free(((PitonBigInt*)a)->limbs); free(a); } }
 
+/* Correct bit width of a bigint from its limb array.
+ * bi_cmp_mag (and the mixed comparison) call bi_bit_width with a LIMB, but that
+ * function takes a PitonBigInt*, so it reinterprets the limb value as a pointer.
+ * It happens to read mapped heap (the limbs live there) and the limb-by-limb
+ * loop afterwards usually rescues the answer, but it faults when the limb value
+ * is not a readable address. This computes the width directly. */
+static int64_t bi_width_from_limbs(const uint64_t *limbs, long count) {
+    for (long i = count - 1; i >= 0; --i) {
+        if (limbs[i]) {
+            int64_t w = i * 64;
+            uint64_t v = limbs[i];
+            while (v) { ++w; v >>= 1; }
+            return w;
+        }
+    }
+    return 0;
+}
+
+/* BIGINT_CMP_MIXED_V1: compare a bigint against a plain int.
+ * piton_bigint_cmp casts BOTH operands to PitonBigInt*, so `10 ** 20 > 5`
+ * dereferenced the integer 5 as a struct pointer and died. Returns the sign of
+ * (bigint - int), exactly like piton_bigint_cmp. */
+int64_t piton_bigint_cmp_int(void *raw, int64_t v) {
+    PitonBigInt *x = raw;
+    if (!x) return v > 0 ? -1 : (v < 0 ? 1 : 0);
+    int vs = v < 0 ? -1 : (v > 0 ? 1 : 0);
+    if (x->sign != vs) return x->sign < 0 ? -1 : 1;
+    uint64_t mag = v < 0 ? (uint64_t)(-(v + 1)) + 1u : (uint64_t)v;
+    int width = (int)bi_width_from_limbs(x->limbs, x->count);
+    int mw = 0;
+    for (uint64_t t = mag; t; t >>= 1) ++mw;
+    if (width != mw) return width > mw ? 1 : -1;
+    for (long i = x->count - 1; i >= 0; --i) {
+        uint64_t lo = (i == 0) ? mag : 0u;
+        if (x->limbs[i] != lo) return x->limbs[i] > lo ? 1 : -1;
+    }
+    return 0;
+}
+
+
 int64_t piton_bigint_cmp(void *a, void *b) {
     PitonBigInt *x = a, *y = b;
     if (x->sign != y->sign) return x->sign < y->sign ? -1 : 1;
