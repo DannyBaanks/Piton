@@ -13,7 +13,7 @@ from piton.cst import (
     PassStmt, BreakStmt, ContinueStmt,
     Name, Constant, BinOp, UnaryOp, Compare, BoolOp, Call, Keyword,
     Attribute, Subscript, Slice, List, Tuple, Set, Dict,
-    ListComp, SetComp, DictComp, GenExpr, CompFor, IfExpr, Lambda,
+    ListComp, SetComp, DictComp, GenExpr, CompFor, IfExpr, Lambda, Starred,
     Await, FString, FStringPart, FStringExpr,
     MatchValue, MatchSingleton, MatchSequence, MatchMapping,
     MatchClass, MatchStar, MatchAs, MatchOr,
@@ -260,7 +260,18 @@ class Parser:
 
     def _parse_for(self, is_async: bool = False) -> ForStmt:
         tok = self._advance()
-        target = self._parse_expression(7)
+        # FOR_TUPLE_TARGET_V1: `para k, v en ...` unpacks each item, like the
+        # tuple-target assignment does.
+        first_target = self._parse_maybe_starred_target()
+        if self._check(TokenType.COMMA):
+            elements = [first_target]
+            while self._match(TokenType.COMMA):
+                elements.append(self._parse_maybe_starred_target())
+            for element in elements:
+                self._mark_store(element)
+            target = Tuple(elts=elements, ctx="Store").set_pos(tok)
+        else:
+            target = first_target
         if not self._match(TokenType.IN):
             raise ParseError("Se esperaba 'en' en bucle para", self._peek())
         iter_ = self._parse_expression(0)
@@ -522,9 +533,39 @@ class Parser:
         value = self._parse_expression(0)
         return AnnAssign(target=target, annotation=value, value=None, simple=1).set_pos(tok)
 
+    def _parse_maybe_starred_target(self) -> CSTNode:
+        """A store target that may carry a `*` prefix (`a, *resto = ...`).
+
+        Targets parse above the comparison operators (min_prec 7, like the
+        original `for` target): otherwise `v` in `para k, v en ...` would
+        consume `v en [...]` as an `in`-comparison and the `en` would vanish.
+        """
+        if self._check(TokenType.STAR):
+            star_tok = self._advance()
+            inner = self._parse_expression(7)
+            self._mark_store(inner)
+            return Starred(value=inner, ctx="Store").set_pos(star_tok)
+        return self._parse_expression(7)
+
     def _parse_expr_stmt(self) -> CSTNode:
         """Parsea: assignment, annotated assign, augmented assign, o expresión simple."""
         start_tok = self._peek()
+        # STARRED_FIRST_V1: `*r, b = ...` starts with a star, which is not an
+        # expression. Parse it as a target directly.
+        if self._check(TokenType.STAR):
+            targets = [self._parse_maybe_starred_target()]
+            while self._match(TokenType.COMMA):
+                if self._check(TokenType.EQUAL):
+                    break
+                targets.append(self._parse_maybe_starred_target())
+            if not self._check(TokenType.EQUAL):
+                raise ParseError("Se esperaba '=' tras la secuencia de asignacion", self._peek())
+            self._advance()
+            value = self._parse_expression(0)
+            for target in targets:
+                self._mark_store(target)
+            tuple_target = Tuple(elts=targets, ctx="Store").set_pos(start_tok)
+            return Assign(targets=[tuple_target], value=value).set_pos(start_tok)
         expr = self._parse_expression(0)
 
         # PARITY_P2_V1: tuple-target assignment — `a, b = ...` unpacks.
@@ -535,11 +576,22 @@ class Parser:
         if self._check(TokenType.COMMA):
             targets = [expr]
             while self._match(TokenType.COMMA):
-                targets.append(self._parse_expression(0))
+                if self._check(TokenType.EQUAL):
+                    break
+                targets.append(self._parse_maybe_starred_target())
             if not self._check(TokenType.EQUAL):
                 raise ParseError("Se esperaba '=' tras la secuencia de asignacion", self._peek())
             self._advance()
-            value = self._parse_expression(0)
+            # TUPLE_VALUE_V1: `a, b = 1, 2` assigns the TUPLE (1, 2), so the
+            # right side is collected the same way when a comma follows.
+            first_value = self._parse_expression(0)
+            if self._check(TokenType.COMMA):
+                values = [first_value]
+                while self._match(TokenType.COMMA):
+                    values.append(self._parse_expression(0))
+                value = Tuple(elts=values, ctx="Load").set_pos(first_value)
+            else:
+                value = first_value
             for target in targets:
                 self._mark_store(target)
             tuple_target = Tuple(elts=targets, ctx="Store").set_pos(start_tok)
@@ -567,13 +619,19 @@ class Parser:
             self._mark_store(expr)
             return AnnAssign(target=expr, annotation=annotation, value=value, simple=1).set_pos(start_tok)
 
-        # Verificar asignación simple (target = value)
+        # Verificar asignación simple (target = value) o encadenada (a = b = 7)
         if self._match(TokenType.EQUAL):
-            # Podría ser asignación múltiple: a, b = 1, 2
+            # Podría ser asignación múltiple: a, b = 1, 2 (manejado arriba si
+            # había coma antes del primer '=')
             targets = [expr]
-            while self._match(TokenType.COMMA):
-                targets.append(self._parse_expression(0))
             value = self._parse_expression(0)
+            # CHAINED_ASSIGN_V1: `a = b = 7` assigns 7 to both names. Each
+            # intermediate value becomes an additional target.
+            while self._check(TokenType.EQUAL):
+                self._advance()
+                self._mark_store(value)
+                targets.append(value)
+                value = self._parse_expression(0)
             for target in targets:
                 self._mark_store(target)
             return Assign(targets=targets, value=value).set_pos(start_tok)
@@ -794,10 +852,16 @@ class Parser:
 
             # Lambda keyword
             if val == "lambda":
+                # LAMBDA_DEFAULT_V1: `lambda x, y=2` carries defaults exactly
+                # like `funcion` does; the lowering already consumes
+                # Arguments.defaults, so only the parser was missing.
                 args = Arguments()
                 while not self._check(TokenType.COLON):
                     name = self._consume(TokenType.NAME).value
-                    args.args.append(Arg(arg=name).set_pos(self._peek()))
+                    arg = Arg(arg=name).set_pos(self._peek())
+                    args.args.append(arg)
+                    if self._match(TokenType.EQUAL):
+                        args.defaults.append(self._parse_expression(0))
                     if not self._match(TokenType.COMMA):
                         break
                 self._consume(TokenType.COLON)
@@ -1012,7 +1076,24 @@ class Parser:
                     value = self._parse_expression(0)
                     keywords.append(Keyword(arg=None, value=value).set_pos(self._peek()))
                 else:
-                    args.append(self._parse_expression(0))
+                    arg = self._parse_expression(0)
+                    # GENEXP_ARG_V1: `f(x para x en ...)` — a bare generator
+                    # expression as the SOLE call argument (CPython allows it
+                    # without parentheses). Only valid when it is the only
+                    # argument; a following comma is a syntax error, as in
+                    # CPython.
+                    if (
+                        not args and not keywords and not starred_args
+                        and self._check(TokenType.NAME) and self._peek().value == "para"
+                    ):
+                        generators = self._parse_comp_generators()
+                        arg = GenExpr(elt=arg, generators=generators).set_pos(arg)
+                        if self._check(TokenType.COMMA):
+                            raise ParseError(
+                                "una expresion generadora sin parentesis debe ser el unico argumento",
+                                self._peek(),
+                            )
+                    args.append(arg)
                 if not self._match(TokenType.COMMA):
                     break
         self._consume(TokenType.RPAREN)
@@ -1021,7 +1102,20 @@ class Parser:
     def _parse_comprehension(self) -> CompFor:
         tok = self._advance()  # 'para'
         is_async = False
-        target = self._parse_expression(7)
+        # COMP_TUPLE_TARGET_V1: `para a, b en xs` unpacks each iteration item,
+        # exactly like the for-loop target and the tuple-target assignment.
+        first_target = self._parse_maybe_starred_target()
+        if self._check(TokenType.COMMA):
+            elements = [first_target]
+            while self._match(TokenType.COMMA):
+                if self._check(TokenType.IN):
+                    break
+                elements.append(self._parse_maybe_starred_target())
+            for element in elements:
+                self._mark_store(element)
+            target = Tuple(elts=elements, ctx="Store").set_pos(tok)
+        else:
+            target = first_target
         if not self._match(TokenType.IN):
             raise ParseError("Se esperaba 'en'", self._peek())
         # PARITY_P2_V1: the iterable and the `si` filter slots cannot accept a

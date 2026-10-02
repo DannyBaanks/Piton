@@ -34,11 +34,11 @@
     "total": 1224,
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
-      "DIVERGENT_MISMATCH": 2,
+      "DIVERGENT_MISMATCH": 5,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 165,
+      "FAIL_CLOSED": 147,
       "RAISE_EQ": 1,
-      "EQUIV": 1056
+      "EQUIV": 1071
     },
     "by_area": {
       "literals": {
@@ -107,11 +107,11 @@
       },
       "builtins": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 3,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 21,
+        "FAIL_CLOSED": 14,
         "RAISE_EQ": 0,
-        "EQUIV": 64
+        "EQUIV": 69
       },
       "strings": {
         "DIVERGENT_CRASH": 0,
@@ -139,11 +139,11 @@
       },
       "collections": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 0,
+        "DIVERGENT_MISMATCH": 1,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 9,
+        "FAIL_CLOSED": 6,
         "RAISE_EQ": 0,
-        "EQUIV": 25
+        "EQUIV": 27
       },
       "dicts": {
         "DIVERGENT_CRASH": 0,
@@ -165,25 +165,25 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 11,
+        "FAIL_CLOSED": 9,
         "RAISE_EQ": 0,
-        "EQUIV": 16
+        "EQUIV": 18
       },
       "control_flow": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 8,
+        "FAIL_CLOSED": 4,
         "RAISE_EQ": 0,
-        "EQUIV": 12
+        "EQUIV": 16
       },
       "functions": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 6,
+        "FAIL_CLOSED": 5,
         "RAISE_EQ": 0,
-        "EQUIV": 15
+        "EQUIV": 16
       },
       "exceptions": {
         "DIVERGENT_CRASH": 0,
@@ -205,9 +205,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 7,
+        "FAIL_CLOSED": 6,
         "RAISE_EQ": 0,
-        "EQUIV": 1
+        "EQUIV": 2
       },
       "controls_closed": {
         "DIVERGENT_CRASH": 0,
@@ -218,9 +218,9 @@
         "EQUIV": 2
       }
     },
-    "pct_equiv": 86.3,
-    "pct_honest": 99.8,
-    "pct_divergent": 0.2
+    "pct_equiv": 87.5,
+    "pct_honest": 99.6,
+    "pct_divergent": 0.4
   },
   "records": [
     {
@@ -4823,8 +4823,8 @@
       "area": "builtins",
       "name": "conjunto1",
       "src": "imprimir(conjunto(['a', 'b']))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out={'a', 'b'} err= || oracle rc=0 out={'b', 'a'} err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -4866,50 +4866,64 @@
       "area": "builtins",
       "name": "min0",
       "src": "imprimir(min([3, 1, 2]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux min/max requires two arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "min1",
       "src": "imprimir(min('abc'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux min/max requires two arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "min2",
       "src": "imprimir(min([1.5, 2]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux min/max requires two arguments"
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=1 out= err=TypeError: '<>' not supported between instances || oracle rc=0 out=1.5 err=",
+      "native_rc": 1,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "min3",
       "src": "imprimir(min([[1], [2]]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux min/max requires two arguments"
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=1 out= err=TypeError: '<>' not supported between instances || oracle rc=0 out=[1] err=",
+      "native_rc": 1,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "max0",
       "src": "imprimir(max([3, 1, 2]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux min/max requires two arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "max1",
       "src": "imprimir(max('abc'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux min/max requires two arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "max2",
       "src": "imprimir(max([1.5, 2]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux min/max requires two arguments"
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=1 out= err=TypeError: '<>' not supported between instances || oracle rc=0 out=2 err=",
+      "native_rc": 1,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
@@ -9493,8 +9507,10 @@
       "area": "collections",
       "name": "for-enumerate",
       "src": "para i, v en enumerar(['a', 'b']):\n    imprimir(i)\n    imprimir(v)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba 'en' en bucle para en 1:7"
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=0 | 4206670 | 1 | 4206672 err= || oracle rc=0 out=0 | a | 1 | b err=",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
@@ -9536,15 +9552,19 @@
       "area": "collections",
       "name": "minmax-list",
       "src": "imprimir(min([3, 1]))\nimprimir(max([3, 1]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux min/max requires two arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
       "name": "minmax-str",
       "src": "imprimir(min('cba'))\nimprimir(max('cba'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux min/max requires two arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
@@ -9597,7 +9617,7 @@
       "name": "items",
       "src": "d = {'a': 1}\npara k, v en d.items():\n    imprimir(k)\n    imprimir(v)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba 'en' en bucle para en 2:7"
+      "detail": "build: NativeBuildError: Linux dict.items() is not supported"
     },
     {
       "area": "dicts",
@@ -9709,7 +9729,7 @@
       "name": "items-sorted",
       "src": "d = {'b': 2, 'a': 1}\npara k, v en ordenar(d.items()):\n    imprimir(k)\n    imprimir(v)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba 'en' en bucle para en 2:7"
+      "detail": "build: NativeBuildError: Linux dict.items() is not supported"
     },
     {
       "area": "dicts",
@@ -9983,15 +10003,19 @@
       "area": "comprehensions",
       "name": "genexp-sum",
       "src": "imprimir(sum(x para x en rango(4)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba RPAREN:  en 1:16"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
       "name": "genexp-list",
       "src": "imprimir(lista(x para x en rango(3)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba RPAREN:  en 1:18"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
@@ -10144,29 +10168,37 @@
       "area": "control_flow",
       "name": "chained-assign",
       "src": "a = b = 7\nimprimir(a)\nimprimir(b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(EQUAL, '=', 1:7) en 1:7"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
       "name": "multi-assign",
       "src": "a, b = 1, 2\nimprimir(a)\nimprimir(b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COMMA, ',', 1:9) en 1:9"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
       "name": "swap",
       "src": "a, b = 1, 2\na, b = b, a\nimprimir(a)\nimprimir(b)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(COMMA, ',', 1:9) en 1:9"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
       "name": "starred",
       "src": "a, *r = [1, 2, 3]\nimprimir(a)\nimprimir(r)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Expresión inesperada: Token(STAR, '*', 1:4) en 1:4"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
@@ -10239,7 +10271,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-x646rc59/program.c: In function ‘f’:\n/tmp/piton-linux-x646rc59/program.c:1094:8: error: ‘suma’ undeclared (first use in this function)\n 1094 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-x646rc59/program.c:1094:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-y8eggjxm/program.c: In function ‘f’:\n/tmp/piton-linux-y8eggjxm/program.c:1114:8: error: ‘suma’ undeclared (first use in this function)\n 1114 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-y8eggjxm/program.c:1114:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10255,7 +10287,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-kkj143pu/program.c: In function ‘f’:\n/tmp/piton-linux-kkj143pu/program.c:1098:8: error: ‘suma’ undeclared (first use in this function)\n 1098 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-kkj143pu/program.c:1098:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-r50slr94/program.c: In function ‘f’:\n/tmp/piton-linux-r50slr94/program.c:1118:8: error: ‘suma’ undeclared (first use in this function)\n 1118 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-r50slr94/program.c:1118:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10297,8 +10329,10 @@
       "area": "functions",
       "name": "def-lambda-2",
       "src": "f = lambda x, y=2: x * y\nimprimir(f(3))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba COLON:  en 1:16"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
@@ -10341,21 +10375,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-k600i0td/program.c: In function ‘piton_main’:\n/tmp/piton-linux-k600i0td/program.c:1002:9: error: too many arguments to function ‘f’\n 1002 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-k600i0td/program.c:975:13: note: declared here\n  975 | static long f(long a);\n      |             ^\n/tmp/piton-linux-k600i0td/program.c: At top level:\n/tmp/piton-linux-k600i0td/program.c:921:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  921 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-bh1zfz5v/program.c: In function ‘piton_main’:\n/tmp/piton-linux-bh1zfz5v/program.c:1022:9: error: too many arguments to function ‘f’\n 1022 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-bh1zfz5v/program.c:995:13: note: declared here\n  995 | static long f(long a);\n      |             ^\n/tmp/piton-linux-bh1zfz5v/program.c: At top level:\n/tmp/piton-linux-bh1zfz5v/program.c:941:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  941 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-5fis6cg1/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5fis6cg1/program.c:1001:9: error: too few arguments to function ‘f’\n 1001 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-5fis6cg1/program.c:975:13: note: declared here\n  975 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-5fis6cg1/program.c: At top level:\n/tmp/piton-linux-5fis6cg1/program.c:921:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  921 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-o6ybnn3y/program.c: In function ‘piton_main’:\n/tmp/piton-linux-o6ybnn3y/program.c:1021:9: error: too few arguments to function ‘f’\n 1021 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-o6ybnn3y/program.c:995:13: note: declared here\n  995 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-o6ybnn3y/program.c: At top level:\n/tmp/piton-linux-o6ybnn3y/program.c:941:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  941 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-5cawy3b9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5cawy3b9/program.c:1069:9: error: ‘no_existe’ undeclared (first use in this function)\n 1069 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-5cawy3b9/program.c:1069:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-v_x8oh2a/program.c: In function ‘piton_main’:\n/tmp/piton-linux-v_x8oh2a/program.c:1089:9: error: ‘no_existe’ undeclared (first use in this function)\n 1089 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-v_x8oh2a/program.c:1089:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10717,7 +10751,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-e9mcp38z/program.c: In function ‘piton_main’:\n/tmp/piton-linux-e9mcp38z/program.c:1072:9: error: too few arguments to function ‘P____init__’\n 1072 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-e9mcp38z/program.c:1046:13: note: declared here\n 1046 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-xkfnp_2f/program.c: In function ‘piton_main’:\n/tmp/piton-linux-xkfnp_2f/program.c:1092:9: error: too few arguments to function ‘P____init__’\n 1092 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-xkfnp_2f/program.c:1066:13: note: declared here\n 1066 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
@@ -10776,8 +10810,10 @@
       "area": "generators",
       "name": "gen-in-comprehension",
       "src": "imprimir(sum(x para x en rango(4)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba RPAREN:  en 1:16"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
@@ -10833,7 +10869,7 @@
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-kcoehnhh/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kcoehnhh/program.c:1069:9: error: ‘divmod’ undeclared (first use in this function)\n 1069 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-kcoehnhh/program.c:1069:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-3c82nuok/program.c: In function ‘piton_main’:\n/tmp/piton-linux-3c82nuok/program.c:1089:9: error: ‘divmod’ undeclared (first use in this function)\n 1089 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-3c82nuok/program.c:1089:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "controls_closed",

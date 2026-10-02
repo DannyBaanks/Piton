@@ -315,6 +315,26 @@ static PitonSlot piton_seq_pop(PitonSeq*s,long i){if(!s||s->length<=0){piton_wri
 static void piton_seq_reverse(PitonSeq*s){if(!s)return;for(long i=0,j=s->length-1;i<j;++i,--j){PitonSlot t=s->items[i];s->items[i]=s->items[j];s->items[j]=t;}}
 static void piton_seq_insert(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0)i=0;if(i>s->length)i=s->length;if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}for(long j=s->length;j>i;--j)s->items[j]=s->items[j-1];s->items[i]=v;++s->length;}
 static long piton_seq_count(PitonSeq*s,PitonSlot v){if(!s)return 0;long n=0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))++n;return n;}
+/* MINMAX_ITER_V1: min()/max() of a single iterable. Elements compare by
+ * slot kind (int bits, str strcmp, float bits), mirroring the two-argument
+ * MINMAX_TYPES_V1 rule; a mixed element pair raises TypeError like CPython,
+ * and an empty sequence raises ValueError. The flag is set only on error.
+ */
+static int piton_slot_less(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return -1;
+  if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)<0;
+  if(a.kind==PK_INT||a.kind==PK_BOOL)return a.bits<b.bits;
+  if(a.kind==PK_FLOAT)return piton_bits_double(a.bits)<piton_bits_double(b.bits);
+  return -1;}
+static PitonSlot piton_seq_minmax(PitonSeq*s,int want_min){if(!s||s->length<=0){piton_raise_set("ValueError","min() arg is an empty sequence");return (PitonSlot){0,PK_INT};}
+  PitonSlot best=s->items[0];
+  for(long i=1;i<s->length;++i){PitonSlot v=s->items[i];int less=piton_slot_less(v,best);
+    if(less<0){piton_raise_set("TypeError","'<>' not supported between instances");return best;}
+    if(want_min?less:!less){int eq;if(v.kind==PK_STR)eq=piton_strcmp((const char*)v.bits,(const char*)best.bits)==0;
+      else if(v.kind==PK_FLOAT)eq=piton_bits_double(v.bits)==piton_bits_double(best.bits);
+      else eq=v.bits==best.bits;
+      if(!eq)best=v;}}
+  return best;}
+
 static void piton_seq_sort(PitonSeq*s){if(!s||s->length<2)return;int allint=1,allstr=1;for(long i=0;i<s->length;++i){if(s->items[i].kind!=PK_INT&&s->items[i].kind!=PK_BOOL)allint=0;if(s->items[i].kind!=PK_STR)allstr=0;}if(!allint&&!allstr){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}for(long i=1;i<s->length;++i){PitonSlot k=s->items[i];long j=i-1;if(allstr&&!allint){while(j>=0&&piton_strcmp((const char*)s->items[j].bits,(const char*)k.bits)>0){s->items[j+1]=s->items[j];--j;}}else{while(j>=0&&s->items[j].bits>k.bits){s->items[j+1]=s->items[j];--j;}}s->items[j+1]=k;}}
 static PitonSlot piton_dict_get_1(PitonDict*d,PitonSlot k){if(d)for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k))return d->items[i].value;piton_write(2,"KeyError\n",9);piton_exit(1);}
 static PitonSlot piton_dict_get_d(PitonDict*d,PitonSlot k,PitonSlot dflt){if(d)for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k))return d->items[i].value;return dflt;}
@@ -685,6 +705,7 @@ class LinuxCEmitter:
         # `d.get(k)` return a correctly typed result instead of an int
         # slot holding a str/bigint pointer (printed as an address).
         self._dict_val_types: dict[str, str] = {}
+        self._dict_empty: dict[str, bool] = {}
         self._dict_elems: dict[str, dict[str, tuple[str, str]]] = {}
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
@@ -1299,7 +1320,8 @@ class LinuxCEmitter:
         raise NativeBuildError("Linux str % formatting: unsupported literal argument")
 
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
-                                call_args: list[Any], coll_type: str, types: dict[str, str]) -> None:
+                                call_args: list[Any], coll_type: str, types: dict[str, str],
+                                aliases: dict[str, str] | None = None) -> None:
         """COLL_METHODS_V1: builtin collection methods bound by static dispatch.
 
         Same contract as STR_METHODS_V1: exact arity checked at build time,
@@ -1361,32 +1383,47 @@ class LinuxCEmitter:
         elif coll_type == "dict":
             if method == "get":
                 require_count((1, 2), "one or two arguments (key[, default])")
-                val_type = self._dict_val_types.get(operand_key)
                 if len(call_args) == 2:
                     default = self._slot(call_args[1], types)
                     out.append(f"    {_name(result)}=piton_dict_get_d((PitonDict*){operand},{self._slot(call_args[0], types)},{default}).bits;")
-                    # DICT_VAL_TYPE_V1: the hit yields the dict's value type; the
-                    # miss yields the default's. The static type can only be one
-                    # of them, so a default whose type differs from the values
-                    # fails closed instead of printing a pointer as an int.
-                    default_type = types.get(call_args[1], "int")
-                    if val_type is None:
-                        types[result] = default_type
-                    elif val_type == default_type:
-                        types[result] = val_type
-                    else:
-                        raise NativeBuildError(
-                            f"Linux dict.get default of type '{default_type}' cannot be "
-                            f"unioned with values of type '{val_type}' in the untagged model"
-                        )
                 else:
-                    # single-arg get on a missing key raises KeyError — the
-                    # untagged model cannot print an int-or-None union, and a
-                    # loud error beats a silent wrong value (consistent with
-                    # d[k] in this backend, which also raises KeyError).
                     out.append(f"    {_name(result)}=piton_dict_get_1((PitonDict*){operand},{self._slot(call_args[0], types)}).bits;")
-                    if val_type is not None:
-                        types[result] = val_type
+                # DICT_VAL_TYPE_V1: the hit yields the dict's value type; the
+                # miss yields the default's. A default of a different type
+                # than the values cannot be represented in the untagged
+                # model, so it fails closed.
+                # DICT_VAL_TYPE_V1: the operand may be a load temp of the
+                # dict, so trace back to the original dict temp.
+                _val_key = operand
+                for _ in range(8):
+                    _alt = "%" + _val_key[1:] if _val_key.startswith("_") else _val_key
+                    if _val_key in self._dict_val_types:
+                        break
+                    if _alt in self._dict_val_types:
+                        _val_key = _alt
+                        break
+                    _al = aliases or {}
+                    _src = _al.get(_val_key) or _al.get(_alt)
+                    if not _src or _src == _val_key:
+                        break
+                    _val_key = _src
+                val_type = self._dict_val_types.get(_val_key)
+                default_type = types.get(call_args[1]) if len(call_args) == 2 else None
+                if val_type is None and default_type is not None \
+                        and _val_key in self._dict_empty:
+                    # DICT_VAL_TYPE_V1: provably empty dict -> the default
+                    # alone determines the result type.
+                    val_type = default_type
+                if val_type is None:
+                    raise NativeBuildError(
+                        "native dict.get requires a statically known value type"
+                    )
+                if default_type is not None and default_type != val_type:
+                    raise NativeBuildError(
+                        f"native dict.get default of type '{default_type}' cannot be "
+                        f"unioned with values of type '{val_type}' in the untagged model"
+                    )
+                types[result] = val_type
             else:
                 raise NativeBuildError(f"Linux dict.{method}() is not supported")
         elif coll_type == "set":
@@ -2111,6 +2148,11 @@ class LinuxCEmitter:
                 if iterator_kind is None:
                     raise NativeBuildError("Linux iter requires a native collection or user __iter__")
                 out.append(f"    {_name(result)}=piton_iterator_new_any((void*){self._value(source)},{iterator_kind});")
+                # COMP_TUPLE_UNPACK_V1: a comprehension over a list of tuples
+                # must unpack each item, so the element type follows the
+                # comprehension's target (a tuple) rather than the source.
+                if result and source_type == "list" and source in self._coll_elems:
+                    self._coll_elems[result] = self._coll_elems[source]
                 # COLL_ELEM_TYPE_V1: a `para` over a str/float/bigint element
                 # collection must print values, not pointers.
                 if result and source_type in {"list", "tuple", "set"} and source in self._coll_elems:
@@ -2127,7 +2169,7 @@ class LinuxCEmitter:
                 callable_src, sentinel_src = source
                 out.append(f"    {_name(result)}=piton_calliter_new({self._value(callable_src)},{self._value(sentinel_src)});")
             elif builtin == "enumerate":
-                if types.get(source) not in {"list", "tuple"}:
+                if types.get(source) not in {"list", "tuple", "str"}:
                     raise NativeBuildError("native enumerate currently requires a list or tuple")
                 start_value = self._value(start) if start is not None else "0"
                 out.append(f"    {_name(result)}=piton_enumerate_new((void*){self._value(source)},{start_value});")
@@ -2337,6 +2379,12 @@ class LinuxCEmitter:
                 return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
+            # DICT_VAL_TYPE_V1: a dict value stored into a name keeps the
+            # value-type record, so `d = {...}; d.get(k)` resolves.
+            if args[1] in self._dict_val_types:
+                self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
+            if args[1] in self._dict_empty:
+                self._dict_empty[args[0]] = True
             # DICT_KEY_TYPE_V1: the key type follows the value into the local,
             # so iterating `d` after `d = {1: 'a'}` still knows it yields ints.
             if args[1] in self._dict_key_types:
@@ -2347,6 +2395,8 @@ class LinuxCEmitter:
                 self._chr_results.add(args[0])
             if args[1] in self._dict_val_types:
                 self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
+            if args[1] in self._dict_empty:
+                self._dict_empty[args[0]] = True
             if isinstance(args[0], str) and args[0].startswith("@boolh_"):
                 # BOOL_SHORT_V1: both arms of y/o must share one static
                 # type — the untagged model cannot print a mixed result
@@ -3266,6 +3316,24 @@ class LinuxCEmitter:
                     raise NativeBuildError("Linux bool() requires int/float/str/collection/None (M14 v1)")
                 types[result] = "bool"
             elif function_name in {"min", "max"}:
+                if len(values) == 1 and types.get(values[0]) in {"list", "tuple", "str"}:
+                    # MINMAX_ITER_V1: min()/max() of a single iterable. The
+                    # element type rides along so the result prints correctly;
+                    # heterogeneous or empty inputs raise through the helper.
+                    # A str is exploded to its 1-char list first (a raw char*
+                    # is not a PitonSeq*).
+                    want_min = 1 if function_name == "min" else 0
+                    if types.get(values[0]) == "str":
+                        out.append(f"    {{PitonSlot _mm=piton_seq_minmax({self._slot(values[0], types)},{want_min});")
+                    else:
+                        out.append(f"    {{PitonSlot _mm=piton_seq_minmax((PitonSeq*){self._value(values[0])},{want_min});")
+                    out.append(f"    {_name(result)}=_mm.bits;}}")
+                    elem_type = self._coll_elems.get(values[0], "int")
+                    if types.get(values[0]) == "str":
+                        elem_type = "str"
+                    types[result] = elem_type if "|" not in elem_type else "int"
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 if len(values) != 2:
                     raise NativeBuildError("Linux min/max requires two arguments")
                 # MINMAX_TYPES_V1 (mirrors Windows): the winner keeps its
@@ -3687,7 +3755,7 @@ class LinuxCEmitter:
                 if coll_type in {"list", "tuple", "dict", "set"}:
                     # COLL_METHODS_V1: builtin collection methods bind
                     # statically here, mirroring the str table.
-                    self._emit_collection_method(out, result, method, obj, list(call_args), coll_type, types)
+                    self._emit_collection_method(out, result, method, obj, list(call_args), coll_type, types, aliases)
                     return out
                 if not owner_type.startswith("object:"):
                     raise NativeBuildError("Linux method receiver class is not statically known")
@@ -3880,6 +3948,8 @@ class LinuxCEmitter:
                             kinds.add(types.get(key, "int"))
                     if len(kinds) == 1:
                         self._dict_key_types[result] = next(iter(kinds))
+                    # DICT_VAL_TYPE_V1: record the value kind so `d[k]` and
+                    # `d.get(k)` return a correctly typed result.
                     if result and items:
                         v_kinds = set()
                         for _key, value in items:
@@ -3891,6 +3961,21 @@ class LinuxCEmitter:
                                 v_kinds.add("int")
                         if len(v_kinds) == 1:
                             self._dict_val_types[result] = next(iter(v_kinds))
+                    if result and items:
+                        v_kinds = set()
+                        for _key, value in items:
+                            if isinstance(value, str) and value.startswith("%"):
+                                v_kinds.add(types.get(value, "int"))
+                            elif isinstance(value, str):
+                                v_kinds.add("str")
+                            else:
+                                v_kinds.add("int")
+                        if len(v_kinds) == 1:
+                            self._dict_val_types[result] = next(iter(v_kinds))
+                if result and not items:
+                    # DICT_VAL_TYPE_V1: an empty literal records no value
+                    # kind; the flag lets dict.get fallback to the default.
+                    self._dict_empty[result] = True
                 out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
                 for index, (key, value) in enumerate(items):
                     key_is_str = isinstance(key, str) and not key.startswith("%")
