@@ -10,6 +10,7 @@
       "branch_truthiness",
       "comparisons",
       "truthiness",
+      "ranges",
       "bigint",
       "builtins",
       "strings",
@@ -30,14 +31,14 @@
     "timeout": 10.0
   },
   "summary": {
-    "total": 1180,
+    "total": 1224,
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
-      "DIVERGENT_MISMATCH": 5,
+      "DIVERGENT_MISMATCH": 6,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 196,
+      "FAIL_CLOSED": 165,
       "RAISE_EQ": 1,
-      "EQUIV": 978
+      "EQUIV": 1052
     },
     "by_area": {
       "literals": {
@@ -88,6 +89,14 @@
         "RAISE_EQ": 0,
         "EQUIV": 66
       },
+      "ranges": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 1,
+        "RAISE_EQ": 0,
+        "EQUIV": 43
+      },
       "bigint": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
@@ -98,11 +107,11 @@
       },
       "builtins": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 2,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 40,
+        "FAIL_CLOSED": 21,
         "RAISE_EQ": 0,
-        "EQUIV": 45
+        "EQUIV": 63
       },
       "strings": {
         "DIVERGENT_CRASH": 0,
@@ -132,9 +141,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 10,
+        "FAIL_CLOSED": 9,
         "RAISE_EQ": 0,
-        "EQUIV": 24
+        "EQUIV": 25
       },
       "dicts": {
         "DIVERGENT_CRASH": 0,
@@ -148,25 +157,25 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 4,
+        "FAIL_CLOSED": 2,
         "RAISE_EQ": 0,
-        "EQUIV": 5
+        "EQUIV": 7
       },
       "comprehensions": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 19,
+        "FAIL_CLOSED": 11,
         "RAISE_EQ": 0,
-        "EQUIV": 8
+        "EQUIV": 16
       },
       "control_flow": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 10,
+        "FAIL_CLOSED": 8,
         "RAISE_EQ": 0,
-        "EQUIV": 10
+        "EQUIV": 12
       },
       "functions": {
         "DIVERGENT_CRASH": 0,
@@ -209,9 +218,9 @@
         "EQUIV": 2
       }
     },
-    "pct_equiv": 82.9,
-    "pct_honest": 99.6,
-    "pct_divergent": 0.4
+    "pct_equiv": 85.9,
+    "pct_honest": 99.5,
+    "pct_divergent": 0.5
   },
   "records": [
     {
@@ -3584,6 +3593,400 @@
       "oracle_rc": 0
     },
     {
+      "area": "ranges",
+      "name": "repr-n3",
+      "src": "imprimir(rango(3))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "len-n3",
+      "src": "imprimir(longitud(rango(3)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "repr-n0",
+      "src": "imprimir(rango(0))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "len-n0",
+      "src": "imprimir(longitud(rango(0)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "repr-s1e4",
+      "src": "imprimir(rango(1, 4))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "len-s1e4",
+      "src": "imprimir(longitud(rango(1, 4)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "repr-step2",
+      "src": "imprimir(rango(0, 6, 2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "len-step2",
+      "src": "imprimir(longitud(rango(0, 6, 2)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "repr-neg",
+      "src": "imprimir(rango(5, 0, -1))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "len-neg",
+      "src": "imprimir(longitud(rango(5, 0, -1)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "repr-empty",
+      "src": "imprimir(rango(1, 1))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "len-empty",
+      "src": "imprimir(longitud(rango(1, 1)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "repr-empty0",
+      "src": "imprimir(rango(0, 0))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "len-empty0",
+      "src": "imprimir(longitud(rango(0, 0)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "iter-var",
+      "src": "r = rango(4)\npara x en r:\n    imprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "iter-neg",
+      "src": "r = rango(5, 0, -2)\npara x en r:\n    imprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "iter-twice",
+      "src": "r = rango(2)\npara x en r:\n    imprimir(x)\npara y en r:\n    imprimir(y)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "index",
+      "src": "r = rango(10, 20)\nimprimir(r[0])\nimprimir(r[3])\nimprimir(r[-1])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "index-oob",
+      "src": "r = rango(3)\nimprimir(r[9])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "ranges",
+      "name": "in-hit",
+      "src": "r = rango(0, 10, 2)\nimprimir(4 en r)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "in-miss",
+      "src": "r = rango(0, 10, 2)\nimprimir(5 en r)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "in-str",
+      "src": "r = rango(3)\nimprimir('a' en r)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "not-in",
+      "src": "r = rango(3)\nimprimir(9 no en r)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "truthy",
+      "src": "r = rango(3)\nsi r:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "falsy",
+      "src": "r = rango(0)\nsi r:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "no-range",
+      "src": "r = rango(0)\nimprimir(no r)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "eq",
+      "src": "imprimir(rango(0, 3) == rango(0, 3))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "eq-empty",
+      "src": "imprimir(rango(0, 0) == rango(5, 5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "ne",
+      "src": "imprimir(rango(0, 3) != rango(0, 4))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "eq-list",
+      "src": "imprimir(rango(0, 2) == [0, 1])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "ne-list",
+      "src": "imprimir(rango(0, 2) != [0, 1])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "lt-closed",
+      "src": "imprimir(rango(0, 3) < rango(0, 4))\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux ordering comparison '<' between 'range' and 'range' is not supported (CPython raises TypeError: '<' not supported between instances of 'range' and ...)"
+    },
+    {
+      "area": "ranges",
+      "name": "sum",
+      "src": "imprimir(sum(rango(4)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "sum-neg",
+      "src": "imprimir(sum(rango(5, 0, -1)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "sum-empty",
+      "src": "imprimir(sum(rango(0)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "lista",
+      "src": "imprimir(lista(rango(3)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "conjunto",
+      "src": "imprimir(conjunto(rango(3)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "ordenar",
+      "src": "imprimir(ordenar(rango(4, 0, -1)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "ordenar-asc",
+      "src": "imprimir(ordenar(rango(3)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "tipo",
+      "src": "imprimir(tipo(rango(3)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "step0",
+      "src": "imprimir(rango(1, 4, 0))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "ranges",
+      "name": "step0-caught",
+      "src": "intentar:\n    x = rango(1, 2, 0)\nexcepto ValueError:\n    imprimir('caught')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "reuse",
+      "src": "r = rango(2)\nimprimir(r)\nimprimir(longitud(r))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "ranges",
+      "name": "nested-print",
+      "src": "imprimir([rango(2), rango(1, 3)])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
       "area": "bigint",
       "name": "gt-20-30",
       "src": "x = 10 ** 20\ny = 10 ** 30\nimprimir(x > y)\n",
@@ -4069,8 +4472,10 @@
       "area": "builtins",
       "name": "longitud4",
       "src": "imprimir(longitud((rango(3),)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
@@ -4292,188 +4697,224 @@
       "area": "builtins",
       "name": "rango0",
       "src": "imprimir(rango(3))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "rango1",
       "src": "imprimir(rango(0))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "rango2",
       "src": "imprimir(rango(1, 4))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "rango3",
       "src": "imprimir(rango(0, 6, 2))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "lista0",
       "src": "imprimir(lista((1, 2)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "lista1",
       "src": "imprimir(lista('ab'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "lista2",
-      "src": "imprimir(lista((rango(3),)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "src": "imprimir(lista(rango(3)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "lista3",
       "src": "imprimir(lista(()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "tupla0",
-      "src": "imprimir(tupla(([1, 2],)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'tupla' is not supported in this position"
+      "src": "imprimir(tupla([1, 2]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "tupla1",
-      "src": "imprimir(tupla(('ab',)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'tupla' is not supported in this position"
+      "src": "imprimir(tupla('ab'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "diccionario0",
       "src": "imprimir(diccionario(()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'diccionario' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "diccionario1",
-      "src": "imprimir(diccionario(([(1, 2)],)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'diccionario' is not supported in this position"
+      "src": "imprimir(diccionario(([(1, 2)])))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "diccionario2",
-      "src": "imprimir(diccionario(([('a', 1)],)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'diccionario' is not supported in this position"
+      "src": "imprimir(diccionario(([('a', 1)])))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "conjunto0",
-      "src": "imprimir(conjunto(([1, 2, 2],)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'conjunto' is not supported in this position"
+      "src": "imprimir(conjunto([1, 2, 2]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "conjunto1",
-      "src": "imprimir(conjunto((['a', 'b'],)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'conjunto' is not supported in this position"
+      "src": "imprimir(conjunto(['a', 'b']))\n",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out={'a', 'b'} err= || oracle rc=0 out={'b', 'a'} err=",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "conjunto2",
-      "src": "imprimir(conjunto((rango(3),)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "src": "imprimir(conjunto(rango(3)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "sum0",
-      "src": "imprimir(sum(([1, 2, 3],)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux sum over 'list' elements is not supported (CPython sums them; the native helper only adds int bits)"
+      "src": "imprimir(sum([1, 2, 3]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "sum1",
-      "src": "imprimir(sum((rango(4),)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "src": "imprimir(sum(rango(4)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins",
       "name": "sum2",
-      "src": "imprimir(sum((('a', 'b'),)))\n",
+      "src": "imprimir(sum(('a', 'b')))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux sum over 'tuple' elements is not supported (CPython sums them; the native helper only adds int bits)"
+      "detail": "build: NativeBuildError: Linux sum over 'str' elements is not supported (CPython sums them; the native helper only adds int bits)"
     },
     {
       "area": "builtins",
       "name": "min0",
-      "src": "imprimir(min(([3, 1, 2],)))\n",
+      "src": "imprimir(min([3, 1, 2]))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux min/max requires two arguments"
     },
     {
       "area": "builtins",
       "name": "min1",
-      "src": "imprimir(min(('abc',)))\n",
+      "src": "imprimir(min('abc'))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux min/max requires two arguments"
     },
     {
       "area": "builtins",
       "name": "min2",
-      "src": "imprimir(min(([1.5, 2],)))\n",
+      "src": "imprimir(min([1.5, 2]))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux min/max requires two arguments"
     },
     {
       "area": "builtins",
       "name": "min3",
-      "src": "imprimir(min(([[1], [2]],)))\n",
+      "src": "imprimir(min([[1], [2]]))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux min/max requires two arguments"
     },
     {
       "area": "builtins",
       "name": "max0",
-      "src": "imprimir(max(([3, 1, 2],)))\n",
+      "src": "imprimir(max([3, 1, 2]))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux min/max requires two arguments"
     },
     {
       "area": "builtins",
       "name": "max1",
-      "src": "imprimir(max(('abc',)))\n",
+      "src": "imprimir(max('abc'))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux min/max requires two arguments"
     },
     {
       "area": "builtins",
       "name": "max2",
-      "src": "imprimir(max(([1.5, 2],)))\n",
+      "src": "imprimir(max([1.5, 2]))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux min/max requires two arguments"
     },
     {
       "area": "builtins",
       "name": "ordenar0",
-      "src": "imprimir(ordenar(([3, 1, 2],)))\n",
+      "src": "imprimir(ordenar([3, 1, 2]))\n",
       "bucket": "EQUIV",
       "detail": "",
       "native_rc": 0,
@@ -4482,7 +4923,14 @@
     {
       "area": "builtins",
       "name": "ordenar1",
-      "src": "imprimir(ordenar(('cba',)))\n",
+      "src": "imprimir(ordenar('cba'))\n",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native sorted currently requires one list, tuple or range"
+    },
+    {
+      "area": "builtins",
+      "name": "ordenar2",
+      "src": "imprimir(ordenar(rango(3)))\n",
       "bucket": "EQUIV",
       "detail": "",
       "native_rc": 0,
@@ -4490,31 +4938,24 @@
     },
     {
       "area": "builtins",
-      "name": "ordenar2",
-      "src": "imprimir(ordenar((rango(3),)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
-    },
-    {
-      "area": "builtins",
       "name": "enumerar0",
-      "src": "imprimir(enumerar(('ab',)))\n",
+      "src": "imprimir(enumerar('ab'))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native print of a iterator:enumerate value is not supported (can never match CPython output)"
+      "detail": "build: NativeBuildError: native enumerate currently requires a list or tuple"
     },
     {
       "area": "builtins",
       "name": "enumerar1",
-      "src": "imprimir(enumerar(([7, 8],)))\n",
+      "src": "imprimir(enumerar([7, 8]))\n",
       "bucket": "FAIL_CLOSED",
       "detail": "build: NativeBuildError: Linux native print of a iterator:enumerate value is not supported (can never match CPython output)"
     },
     {
       "area": "builtins",
       "name": "enumerar2",
-      "src": "imprimir(enumerar((rango(2),)))\n",
+      "src": "imprimir(enumerar(rango(2)))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "detail": "build: NativeBuildError: native enumerate currently requires a list or tuple"
     },
     {
       "area": "builtins",
@@ -8819,35 +9260,35 @@
       "name": "range[1:4]",
       "src": "a = rango(7)\nimprimir(a[1:4])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux slice not supported for range"
     },
     {
       "area": "slices",
       "name": "range[:3]",
       "src": "a = rango(7)\nimprimir(a[:3])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux slice not supported for range"
     },
     {
       "area": "slices",
       "name": "range[::2]",
       "src": "a = rango(7)\nimprimir(a[::2])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux slice not supported for range"
     },
     {
       "area": "slices",
       "name": "range[::-1]",
       "src": "a = rango(7)\nimprimir(a[::-1])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux slice not supported for range"
     },
     {
       "area": "slices",
       "name": "range[-2:]",
       "src": "a = rango(7)\nimprimir(a[-2:])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux slice not supported for range"
     },
     {
       "area": "collections",
@@ -9025,8 +9466,10 @@
       "area": "collections",
       "name": "nested-index",
       "src": "imprimir([[1, 2], [3, 4]][1][0])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux subscription not supported for int"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "collections",
@@ -9117,7 +9560,7 @@
       "name": "sorted-str",
       "src": "imprimir(ordenar('cba'))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native sorted currently requires one list or tuple"
+      "detail": "build: NativeBuildError: native sorted currently requires one list, tuple or range"
     },
     {
       "area": "collections",
@@ -9342,8 +9785,10 @@
       "area": "sets",
       "name": "comp",
       "src": "imprimir({x * 2 para x en rango(4)})\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "sets",
@@ -9363,29 +9808,37 @@
       "area": "sets",
       "name": "from-list",
       "src": "imprimir(conjunto([1, 1, 2]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'conjunto' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
       "name": "list-rango",
       "src": "imprimir([x para x en rango(4)])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
       "name": "listexpr-rango",
       "src": "imprimir([x + 1 para x en rango(4)])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
       "name": "listfilter-rango",
       "src": "imprimir([x para x en rango(4) si x])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
@@ -9512,15 +9965,19 @@
       "area": "comprehensions",
       "name": "set",
       "src": "imprimir({x % 2 para x en rango(5)})\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
       "name": "dict",
       "src": "imprimir({x: x * 2 para x en rango(3)})\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
@@ -9540,15 +9997,19 @@
       "area": "comprehensions",
       "name": "nested",
       "src": "imprimir([y para x en rango(3) para y en rango(x)])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 32\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint([y for x in range(3) for y en range(x)])"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
       "name": "list-tuple",
       "src": "imprimir([(x, y) para x en rango(2) para y en rango(2)])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 1\ncolumna: 37\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint([(x, y) for x in range(2) for y en range(2)])"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
@@ -9561,8 +10022,10 @@
       "area": "comprehensions",
       "name": "cond-expr",
       "src": "imprimir([x si x > 1 sino -x para x en rango(3)])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'rango' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "comprehensions",
@@ -9647,15 +10110,19 @@
       "area": "control_flow",
       "name": "nested-for",
       "src": "para x en rango(2):\n    para y en rango(2):\n        imprimir(x * 10 + y)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 11\n\nPython rechazó la traducción:\ninvalid syntax\n\n    for y en range(2):"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
       "name": "break-inner",
       "src": "para x en rango(2):\n    para y en rango(3):\n        romper\n    imprimir(x)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 2\ncolumna: 11\n\nPython rechazó la traducción:\ninvalid syntax\n\n    for y en range(3):"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
@@ -9772,7 +10239,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-o_e7zc04/program.c: In function ‘f’:\n/tmp/piton-linux-o_e7zc04/program.c:940:8: error: ‘suma’ undeclared (first use in this function)\n  940 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-o_e7zc04/program.c:940:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-wn48m1jn/program.c: In function ‘f’:\n/tmp/piton-linux-wn48m1jn/program.c:1085:8: error: ‘suma’ undeclared (first use in this function)\n 1085 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-wn48m1jn/program.c:1085:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9788,7 +10255,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-fqdxcuer/program.c: In function ‘f’:\n/tmp/piton-linux-fqdxcuer/program.c:944:8: error: ‘suma’ undeclared (first use in this function)\n  944 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-fqdxcuer/program.c:944:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-8wkuqbbb/program.c: In function ‘f’:\n/tmp/piton-linux-8wkuqbbb/program.c:1089:8: error: ‘suma’ undeclared (first use in this function)\n 1089 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-8wkuqbbb/program.c:1089:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9874,21 +10341,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-nh16lfe0/program.c: In function ‘piton_main’:\n/tmp/piton-linux-nh16lfe0/program.c:922:9: error: too many arguments to function ‘f’\n  922 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-nh16lfe0/program.c:895:13: note: declared here\n  895 | static long f(long a);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-qqmpxxzk/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qqmpxxzk/program.c:996:9: error: too many arguments to function ‘f’\n  996 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-qqmpxxzk/program.c:969:13: note: declared here\n  969 | static long f(long a);\n      |             ^\n/tmp/piton-linux-qqmpxxzk/program.c: At top level:\n/tmp/piton-linux-qqmpxxzk/program.c:915:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  915 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-4uh3nl_n/program.c: In function ‘piton_main’:\n/tmp/piton-linux-4uh3nl_n/program.c:921:9: error: too few arguments to function ‘f’\n  921 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-4uh3nl_n/program.c:895:13: note: declared here\n  895 | static long f(long a, long b);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-kdb945ux/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kdb945ux/program.c:995:9: error: too few arguments to function ‘f’\n  995 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-kdb945ux/program.c:969:13: note: declared here\n  969 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-kdb945ux/program.c: At top level:\n/tmp/piton-linux-kdb945ux/program.c:915:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  915 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-gak5lda9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-gak5lda9/program.c:918:9: error: ‘no_existe’ undeclared (first use in this function)\n  918 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-gak5lda9/program.c:918:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-kw5kik5o/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kw5kik5o/program.c:1063:9: error: ‘no_existe’ undeclared (first use in this function)\n 1063 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-kw5kik5o/program.c:1063:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10250,7 +10717,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-afjk2pme/program.c: In function ‘piton_main’:\n/tmp/piton-linux-afjk2pme/program.c:921:9: error: too few arguments to function ‘P____init__’\n  921 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-afjk2pme/program.c:895:13: note: declared here\n  895 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-jz8rlgmg/program.c: In function ‘piton_main’:\n/tmp/piton-linux-jz8rlgmg/program.c:1066:9: error: too few arguments to function ‘P____init__’\n 1066 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-jz8rlgmg/program.c:1040:13: note: declared here\n 1040 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
@@ -10282,21 +10749,21 @@
       "name": "yield-list",
       "src": "funcion f():\n    para x en [1, 2]:\n        producir x\nimprimir(lista(f()))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'none' value"
     },
     {
       "area": "generators",
       "name": "yield-infinite-take",
       "src": "funcion f():\n    i = 0\n    mientras i < 3:\n        producir i\n        i = i + 1\nimprimir(lista(f()))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'none' value"
     },
     {
       "area": "generators",
       "name": "yield-varargs",
       "src": "funcion f(*args):\n    para a en args:\n        producir a * 2\nimprimir(lista(f(1, 2)))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'none' value"
     },
     {
       "area": "generators",
@@ -10317,7 +10784,7 @@
       "name": "class-generator",
       "src": "clase G:\n    funcion __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'object:G' value"
     },
     {
       "area": "generators",
@@ -10345,35 +10812,35 @@
       "name": "map",
       "src": "imprimir(lista(map(lambda x: x * 2, [1, 2])))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'iterator:map' value"
     },
     {
       "area": "controls_closed",
       "name": "filter",
       "src": "imprimir(lista(filter(lambda x: x, [0, 1])))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'iterator:filter' value"
     },
     {
       "area": "controls_closed",
       "name": "zip",
       "src": "imprimir(lista(zip([1, 2], [3, 4])))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'iterator:zip' value"
     },
     {
       "area": "controls_closed",
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-a1rxvkve/program.c: In function ‘piton_main’:\n/tmp/piton-linux-a1rxvkve/program.c:918:9: error: ‘divmod’ undeclared (first use in this function)\n  918 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-a1rxvkve/program.c:918:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-leoq307z/program.c: In function ‘piton_main’:\n/tmp/piton-linux-leoq307z/program.c:1063:9: error: ‘divmod’ undeclared (first use in this function)\n 1063 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-leoq307z/program.c:1063:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "controls_closed",
       "name": "reversed",
       "src": "imprimir(lista(reversed([1, 2])))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'lista' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'iterator:reversed' value"
     },
     {
       "area": "controls_closed",

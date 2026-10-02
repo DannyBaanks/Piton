@@ -127,15 +127,15 @@ INT_BUILTINS = [
     ("booleano", [("0",), ("1",), ("''",), ("[]",), ("[0]",)]),
     ("tipo", [("1",), ("'a'",), ("1.0",), ("[1]",), ("{}",)]),
     ("rango", [("3",), ("0",), ("1, 4",), ("0, 6, 2",)]),
-    ("lista", [("(1, 2)",), ("'ab'",), ("(rango(3),)",), ("()",)]),
-    ("tupla", [("([1, 2],)",), ("('ab',)",)]),
-    ("diccionario", [("()",), ("([(1, 2)],)",), ("([('a', 1)],)",)]),
-    ("conjunto", [("([1, 2, 2],)",), ("(['a', 'b'],)",), ("(rango(3),)",)]),
-    ("sum", [("([1, 2, 3],)",), ("(rango(4),)",), ("(('a', 'b'),)",)]),
-    ("min", [("([3, 1, 2],)",), ("('abc',)",), ("([1.5, 2],)",), ("([[1], [2]],)",)]),
-    ("max", [("([3, 1, 2],)",), ("('abc',)",), ("([1.5, 2],)",)]),
-    ("ordenar", [("([3, 1, 2],)",), ("('cba',)",), ("(rango(3),)",)]),
-    ("enumerar", [("('ab',)",), ("([7, 8],)",), ("(rango(2),)",)]),
+    ("lista", [("(1, 2)",), ("'ab'",), ("rango(3)",), ("()",)]),
+    ("tupla", [("[1, 2]",), ("'ab'",)]),
+    ("diccionario", [("()",), ("([(1, 2)])",), ("([('a', 1)])",)]),
+    ("conjunto", [("[1, 2, 2]",), ("['a', 'b']",), ("rango(3)",)]),
+    ("sum", [("[1, 2, 3]",), ("rango(4)",), ("('a', 'b')",)]),
+    ("min", [("[3, 1, 2]",), ("'abc'",), ("[1.5, 2]",), ("[[1], [2]]",)]),
+    ("max", [("[3, 1, 2]",), ("'abc'",), ("[1.5, 2]",)]),
+    ("ordenar", [("[3, 1, 2]",), ("'cba'",), ("rango(3)",)]),
+    ("enumerar", [("'ab'",), ("[7, 8]",), ("rango(2)",)]),
     ("pow", [("(2, 10)",), ("(2, 0)",), ("(2.0, 0.5)",), ("(2, -1)",), ("(2, 1000)",)]),
     ("redondear", [("(2.567, 2)",), ("(2.5,)",), ("(3.14159, 3)",)]),
     ("pow", [("(2, 62)",)]),
@@ -677,6 +677,56 @@ def area_bigint() -> list[Case]:
     return out
 
 
+def area_ranges() -> list[Case]:
+    """RANGE_VALUE_V1: `rango(...)` as a lazy value.
+
+    Iteration of a bare call already worked (the `for` header consumes the
+    arguments), but the VALUE had no object: repr, len, indexing, membership,
+    equality, truthiness, sum, conversions and sorting all failed closed.
+    """
+    out = []
+    for label, call in (
+        ("n3", "rango(3)"), ("n0", "rango(0)"), ("s1e4", "rango(1, 4)"),
+        ("step2", "rango(0, 6, 2)"), ("neg", "rango(5, 0, -1)"),
+        ("empty", "rango(1, 1)"), ("empty0", "rango(0, 0)"),
+    ):
+        out.append(_c("ranges", f"repr-{label}", f"imprimir({call})"))
+        out.append(_c("ranges", f"len-{label}", f"imprimir(longitud({call}))"))
+    out += [
+        _c("ranges", "iter-var", "r = rango(4)\npara x en r:\n    imprimir(x)"),
+        _c("ranges", "iter-neg", "r = rango(5, 0, -2)\npara x en r:\n    imprimir(x)"),
+        _c("ranges", "iter-twice", "r = rango(2)\npara x en r:\n    imprimir(x)\npara y en r:\n    imprimir(y)"),
+        _c("ranges", "index", "r = rango(10, 20)\nimprimir(r[0])\nimprimir(r[3])\nimprimir(r[-1])"),
+        _c("ranges", "index-oob", "r = rango(3)\nimprimir(r[9])"),
+        _c("ranges", "in-hit", "r = rango(0, 10, 2)\nimprimir(4 en r)"),
+        _c("ranges", "in-miss", "r = rango(0, 10, 2)\nimprimir(5 en r)"),
+        _c("ranges", "in-str", "r = rango(3)\nimprimir('a' en r)"),
+        _c("ranges", "not-in", "r = rango(3)\nimprimir(9 no en r)"),
+        _c("ranges", "truthy", "r = rango(3)\nsi r:\n    imprimir('T')\nsino:\n    imprimir('F')"),
+        _c("ranges", "falsy", "r = rango(0)\nsi r:\n    imprimir('T')\nsino:\n    imprimir('F')"),
+        _c("ranges", "no-range", "r = rango(0)\nimprimir(no r)"),
+        _c("ranges", "eq", "imprimir(rango(0, 3) == rango(0, 3))"),
+        _c("ranges", "eq-empty", "imprimir(rango(0, 0) == rango(5, 5))"),
+        _c("ranges", "ne", "imprimir(rango(0, 3) != rango(0, 4))"),
+        _c("ranges", "eq-list", "imprimir(rango(0, 2) == [0, 1])"),
+        _c("ranges", "ne-list", "imprimir(rango(0, 2) != [0, 1])"),
+        _c("ranges", "lt-closed", "imprimir(rango(0, 3) < rango(0, 4))"),
+        _c("ranges", "sum", "imprimir(sum(rango(4)))"),
+        _c("ranges", "sum-neg", "imprimir(sum(rango(5, 0, -1)))"),
+        _c("ranges", "sum-empty", "imprimir(sum(rango(0)))"),
+        _c("ranges", "lista", "imprimir(lista(rango(3)))"),
+        _c("ranges", "conjunto", "imprimir(conjunto(rango(3)))"),
+        _c("ranges", "ordenar", "imprimir(ordenar(rango(4, 0, -1)))"),
+        _c("ranges", "ordenar-asc", "imprimir(ordenar(rango(3)))"),
+        _c("ranges", "tipo", "imprimir(tipo(rango(3)))"),
+        _c("ranges", "step0", "imprimir(rango(1, 4, 0))"),
+        _c("ranges", "step0-caught", "intentar:\n    x = rango(1, 2, 0)\nexcepto ValueError:\n    imprimir('caught')"),
+        _c("ranges", "reuse", "r = rango(2)\nimprimir(r)\nimprimir(longitud(r))"),
+        _c("ranges", "nested-print", "imprimir([rango(2), rango(1, 3)])"),
+    ]
+    return out
+
+
 def area_branch_truthiness() -> list[Case]:
     """TRUTHY_BRANCH_V1: la condicion de `si`/`mientras` es un test de verdad
     CPython, no un test crudo de puntero. Los contenedores vacios son falsy."""
@@ -700,6 +750,7 @@ AREAS = {
     "branch_truthiness": area_branch_truthiness,
     "comparisons": area_comparisons,
     "truthiness": area_truthiness,
+    "ranges": area_ranges,
     "bigint": area_bigint,
     "builtins": area_builtins,
     "strings": area_strings,

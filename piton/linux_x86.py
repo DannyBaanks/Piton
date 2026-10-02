@@ -22,8 +22,11 @@ from .x86 import NativeBuildError, _BUILTINS, _scan_native_modules, generator_sl
 _FLOAT_REPR_C = Path(__file__).with_name("float_repr.h").read_text(encoding="utf-8")
 
 _RICH_FREESTANDING_C = r"""
-enum{PK_NONE,PK_BOOL,PK_INT,PK_FLOAT,PK_STR,PK_LIST,PK_TUPLE,PK_DICT,PK_SET,PK_OBJECT,PK_BIGINT};
+enum{PK_NONE,PK_BOOL,PK_INT,PK_FLOAT,PK_STR,PK_LIST,PK_TUPLE,PK_DICT,PK_SET,PK_OBJECT,PK_BIGINT,PK_RANGE};
 typedef struct{long bits;int kind;}PitonSlot;
+typedef struct{long refcount;long kind;long start;long stop;long step;}PitonRange;
+static long piton_range_len(PitonRange*r);
+static long piton_range_eq(PitonRange*a,PitonRange*b);
 static unsigned char piton_arena[8*1024*1024];
 static usize piton_arena_used=0;
 static void piton_memzero(void*p,usize n){unsigned char*b=p;for(usize i=0;i<n;++i)b[i]=0;}
@@ -92,10 +95,10 @@ typedef struct{const char*name;PitonSlot value;}PitonAttr;
 typedef struct PitonObject{long refcount;long kind;const char*class_name;const char*parent_name;long length;PitonAttr attrs[32];long finalizer;long finalizer_called;struct PitonObject*next_all;}PitonObject;
 /* Refcount helpers */
 static long piton_slot_rc(PitonSlot v){
-    if(v.kind>=PK_LIST&&v.kind<=PK_OBJECT){long*rc=(long*)v.bits;return*rc;}
+    if((v.kind>=PK_LIST&&(v.kind<=PK_OBJECT||v.kind==PK_RANGE))){long*rc=(long*)v.bits;return*rc;}
     return-1;
 }
-static void piton_slot_incref(PitonSlot v){if(v.kind>=PK_LIST&&v.kind<=PK_OBJECT){long*rc=(long*)v.bits;++(*rc);}}
+static void piton_slot_incref(PitonSlot v){if((v.kind>=PK_LIST&&(v.kind<=PK_OBJECT||v.kind==PK_RANGE))){long*rc=(long*)v.bits;++(*rc);}}
 static void piton_slot_decref(PitonSlot v);
 /* Deep free: decrements refcount; if zero, detach children and free struct */
 static void piton_slot_decref(PitonSlot v){
@@ -113,6 +116,8 @@ static void piton_slot_decref(PitonSlot v){
     case PK_SET:{PitonSet*s=(PitonSet*)v.bits;
         for(long i=0;i<s->length;++i)piton_slot_decref(s->items[i]);
         piton_gc_unregister(s);piton_heap_free(s);--live_sets;break;}
+    case PK_RANGE:{PitonRange*r=(PitonRange*)v.bits;
+        piton_gc_unregister(r);piton_heap_free(r);break;}
     case PK_OBJECT:{PitonObject*o=(PitonObject*)v.bits;
         if(o->finalizer&&!o->finalizer_called){o->finalizer_called=1;((long(*)(long))o->finalizer)((long)o);}
         for(long i=0;i<o->length;++i)piton_slot_decref(o->attrs[i].value);
@@ -144,6 +149,7 @@ static void piton_gc_free_node(void*raw){
     case PK_LIST:case PK_TUPLE:{PitonSeq*s=(PitonSeq*)raw;piton_heap_free(s);--live_collections;break;}
     case PK_DICT:{PitonDict*d=(PitonDict*)raw;piton_heap_free(d);--live_dicts;break;}
     case PK_SET:{PitonSet*s=(PitonSet*)raw;piton_heap_free(s);--live_sets;break;}
+    case PK_RANGE:{PitonRange*r=(PitonRange*)raw;piton_heap_free(r);break;}
     case PK_OBJECT:{PitonObject*o=(PitonObject*)raw;piton_heap_free(o);--live_objects;break;}
     default:break;
     }
@@ -235,7 +241,7 @@ static void piton_write_uint(unsigned long v){char b[32];usize i=sizeof(b);do{b[
 static void piton_write_uint_big(double d){unsigned long u;double t=d;int i,n=0,be;unsigned long frac,m;int e;unsigned int w[32];unsigned int c;unsigned long cur,rem;int nz;char buf[400];__builtin_memcpy(&u,&t,8);frac=u&0xFFFFFFFFFFFFFULL;be=(int)((u>>52)&0x7FF);m=be?frac|0x10000000000000UL:frac;e=be?be-1075:-1074;for(i=0;i<32;++i)w[i]=0;w[0]=(unsigned int)m;w[1]=(unsigned int)(m>>32);while(e>0){c=0;for(i=0;i<32;++i){cur=((unsigned long)w[i]<<1)|c;w[i]=(unsigned int)cur;c=(unsigned int)(cur>>32);}--e;}for(;;){rem=0;nz=0;for(i=31;i>=0;--i){cur=(rem<<32)|w[i];w[i]=(unsigned int)(cur/10);rem=cur%10;if(w[i])nz=1;}buf[n++]=(char)('0'+(char)rem);if(!nz)break;}while(n>0){--n;piton_write(1,buf+n,1);}}
 static void piton_print_float_bits_raw(long bits){char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)bits);piton_write(1,r,(usize)n);}
 static void piton_print_float_bits(long bits){piton_print_float_bits_raw(bits);piton_write(1,"\n",1);}
-static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;return a.bits==b.bits;}
+static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(a.kind==PK_RANGE)return piton_range_eq((PitonRange*)a.bits,(PitonRange*)b.bits);if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;return a.bits==b.bits;}
 static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
 static void piton_seq_put(PitonSeq*s,long i,PitonSlot v){if(i>=0&&i<s->length)s->items[i]=v;}
 static long piton_str_repeat(const char*s,long n){if(n<=0){char*p=piton_alloc(1);p[0]=0;return(long)p;}usize sl=piton_strlen(s);char*p=piton_alloc(sl*(usize)n+1);for(long i=0;i<n;++i)piton_memcpy(p+i*sl,s,sl);p[sl*(usize)n]=0;return(long)p;}
@@ -322,10 +328,77 @@ static PitonSlot piton_dict_get(PitonDict*d,PitonSlot key){for(long i=0;i<d->len
 static int piton_unpack_seq4(PitonSlot obj,long capacity,long*out4){if(obj.kind!=PK_LIST&&obj.kind!=PK_TUPLE){piton_raise_set("TypeError","argument after * must be a list or tuple");return -1;}PitonSeq*s=(PitonSeq*)obj.bits;if(s->length>capacity){piton_raise_set("TypeError","too many positional arguments for call");return -1;}for(long i=0;i<s->length;++i)out4[i]=s->items[i].bits;return s->length;}
 static int piton_dict_unpack4(PitonSlot obj,const char**names,long count,long*out4,long*mask){if(obj.kind!=PK_DICT){piton_raise_set("TypeError","argument after ** must be a dict");return -1;}PitonDict*d=(PitonDict*)obj.bits;for(long i=0;i<d->length;++i){PitonSlot k=d->items[i].key;if(k.kind!=PK_STR){piton_raise_set("TypeError","keywords must be strings");return -1;}const char*key=(const char*)k.bits;long matched=-1;for(long j=0;j<count;++j)if(piton_strcmp(key,names[j])==0){matched=j;break;}if(matched<0){piton_raise_set("TypeError","unexpected keyword argument in ** expansion");return -1;}if(*mask&(1LL<<matched)){piton_raise_set("TypeError","multiple values for argument");return -1;}*mask|=1LL<<matched;out4[matched]=d->items[i].value.bits;}return 0;}
 static PitonSet*piton_set_new(long cap){PitonSet*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=PK_SET;s->capacity=cap;s->items=cap>0?piton_alloc((usize)cap*sizeof(PitonSlot)):0;return s;}
+/* RANGE_VALUE_V1: `rango(...)` as a VALUE. Iteration of a bare `rango(...)` call
+ * already works because the `for` header consumes the call's arguments directly
+ * (counter loop), so making the call produce an object changes nothing there.
+ * A range is a tiny refcounted struct; laziness is preserved everywhere (the
+ * elements are computed from start/stop/step, never materialized). */
+static long piton_range_len(PitonRange*r){if(!r)return 0;long start=r->start,stop=r->stop,step=r->step;
+  if(step>0){if(stop<=start)return 0;return (stop-start+(step-1))/step;}
+  if(stop>=start)return 0;return (start-stop+(-step-1))/(-step);}
+static PitonRange*piton_range_new(long start,long stop,long step){
+  if(step==0){piton_raise_set("ValueError","range() arg 3 must not be zero");return 0;}
+  PitonRange*r=piton_alloc(sizeof(*r));r->refcount=1;r->kind=PK_RANGE;
+  r->start=start;r->stop=stop;r->step=step;return r;}
+static long piton_range_get(PitonRange*r,long i){long n=piton_range_len(r);
+  if(i<0)i+=n;if(i<0||i>=n){piton_write(2,"IndexError\n",11);piton_exit(1);}
+  return r->start+i*r->step;}
+static long piton_range_contains(PitonRange*r,long v){if(!r)return 0;
+  long d=v-r->start;if(r->step>0){if(v<r->start||v>=r->stop)return 0;}else{if(v>r->start||v<=r->stop)return 0;}
+  return d%r->step==0;}
+static long piton_range_eq(PitonRange*a,PitonRange*b){if(!a||!b)return a==b;
+  long na=piton_range_len(a),nb=piton_range_len(b);if(na!=nb)return 0;
+  if(na==0)return 1;return a->start==b->start&&a->step==b->step;}
+static void piton_range_print(PitonRange*r){if(!r){piton_write(1,"range(0, 0)",11);return;}
+  piton_write(1,"range(",6);piton_write_int(r->start);piton_write(1,", ",2);
+  piton_write_int(r->stop);
+  if(r->step!=1){piton_write(1,", ",2);piton_write_int(r->step);}
+  piton_write(1,")",1);}
+static long piton_sum_range(PitonRange*r){long total=0;long n=piton_range_len(r);
+  for(long i=0;i<n;++i)total+=r->start+i*r->step;return total;}
 static void piton_set_add(PitonSet*s,PitonSlot v){for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return;if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*ni=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(ni,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=ni;s->capacity=nc;}s->items[s->length++]=v;}
+/* CONV_BUILTINS_V1: the conversion builtins as VALUES. They used to be
+ * rejected everywhere except directly under a `for` header, failing 19 corpus
+ * cases for no reason. Each mirrors CPython; a shallow copy shares element
+ * refcounts, following the existing convention. */
+static PitonSeq*piton_conv_seq(int kind,PitonSlot src){
+  PitonSeq*r=piton_seq_new(kind,0);
+  if(src.kind==PK_STR){const char*s=(const char*)src.bits;usize n=piton_strlen(s);
+    for(usize i=0;i<n;++i){char*p=piton_alloc(2);p[0]=s[i];p[1]=0;piton_slot_incref((PitonSlot){(long)p,PK_STR});piton_seq_append(r,(PitonSlot){(long)p,PK_STR});}return r;}
+  if(src.kind==PK_LIST||src.kind==PK_TUPLE){PitonSeq*a=(PitonSeq*)src.bits;
+    for(long i=0;i<a->length;++i){piton_slot_incref(a->items[i]);piton_seq_append(r,a->items[i]);}return r;}
+  if(src.kind==PK_SET){PitonSet*a=(PitonSet*)src.bits;
+    for(long i=0;i<a->length;++i){piton_slot_incref(a->items[i]);piton_seq_append(r,a->items[i]);}return r;}
+  if(src.kind==PK_DICT){PitonDict*a=(PitonDict*)src.bits;
+    for(long i=0;i<a->length;++i){piton_slot_incref(a->items[i].key);piton_seq_append(r,a->items[i].key);}return r;}
+  if(src.kind==PK_RANGE){PitonRange*g=(PitonRange*)src.bits;long n=piton_range_len(g);
+    for(long i=0;i<n;++i)piton_seq_append(r,(PitonSlot){g->start+i*g->step,PK_INT});return r;}
+  piton_write(2,"TypeError: cannot convert to a sequence\n",35);piton_exit(1);return r;}
+static PitonSet*piton_conv_set(PitonSlot src){
+  PitonSet*r=piton_set_new(0);
+  if(src.kind==PK_SET){PitonSet*a=(PitonSet*)src.bits;
+    for(long i=0;i<a->length;++i){piton_slot_incref(a->items[i]);piton_set_add(r,a->items[i]);}return r;}
+  if(src.kind==PK_STR){const char*s=(const char*)src.bits;usize n=piton_strlen(s);
+    for(usize i=0;i<n;++i){char*p=piton_alloc(2);p[0]=s[i];p[1]=0;piton_set_add(r,(PitonSlot){(long)p,PK_STR});}return r;}
+  if(src.kind==PK_LIST||src.kind==PK_TUPLE){PitonSeq*a=(PitonSeq*)src.bits;
+    for(long i=0;i<a->length;++i){piton_slot_incref(a->items[i]);piton_set_add(r,a->items[i]);}return r;}
+  if(src.kind==PK_RANGE){PitonRange*g=(PitonRange*)src.bits;long n=piton_range_len(g);
+    for(long i=0;i<n;++i)piton_set_add(r,(PitonSlot){g->start+i*g->step,PK_INT});return r;}
+  piton_write(2,"TypeError: cannot convert to a set\n",31);piton_exit(1);return r;}
+static PitonDict*piton_conv_dict(PitonSlot src){
+  if(src.kind!=PK_LIST&&src.kind!=PK_TUPLE){
+    piton_write(2,"TypeError: cannot convert to a dict\n",33);piton_exit(1);}
+  PitonSeq*a=(PitonSeq*)src.bits;PitonDict*r=piton_dict_new(a->length);
+  for(long i=0;i<a->length;++i){
+    if(a->items[i].kind!=PK_LIST&&a->items[i].kind!=PK_TUPLE){
+      piton_write(2,"ValueError: dictionary update sequence element is not a pair\n",63);piton_exit(1);}
+    PitonSeq*pair=(PitonSeq*)a->items[i].bits;
+    if(pair->length!=2){piton_write(2,"ValueError: dictionary update sequence element has wrong length\n",67);piton_exit(1);}
+    piton_dict_put(r,i,pair->items[0],pair->items[1]);}
+  return r;}
 typedef struct{long magic;long kind;void*raw;long index;}PitonAnyIterator;
-static long piton_iterator_new_any(void*raw,long kind){if(!raw||(kind!=PK_LIST&&kind!=PK_TUPLE&&kind!=PK_DICT&&kind!=PK_SET)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonAnyIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->raw=raw;i->index=0;i->kind=kind;return(long)i;}
-static long piton_iterator_next_any(long raw){PitonAnyIterator*i=(PitonAnyIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_SET)n=((PitonSet*)i->raw)->length;else{piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
+static long piton_iterator_new_any(void*raw,long kind){if(!raw||(kind!=PK_LIST&&kind!=PK_TUPLE&&kind!=PK_DICT&&kind!=PK_SET&&kind!=PK_RANGE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonAnyIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->raw=raw;i->index=0;i->kind=kind;return(long)i;}
+static long piton_iterator_next_any(long raw){PitonAnyIterator*i=(PitonAnyIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_RANGE)n=piton_range_len((PitonRange*)i->raw);else if(i->kind==PK_SET)n=((PitonSet*)i->raw)->length;else{piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else if(i->kind==PK_RANGE){PitonRange*rr=(PitonRange*)i->raw;v.bits=rr->start+(i->index++)*rr->step;v.kind=PK_INT;}else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
 typedef struct{long magic;const char*str;long index;long length;}PitonStrIterator;
 static long piton_str_iterator_new(const char*str){if(!str){piton_write(2,"TypeError: 'NoneType' object is not iterable\n",42);piton_exit(1);}PitonStrIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E53545249LL;i->str=str;i->index=0;i->length=piton_strlen(str);return(long)i;}
 static long piton_str_iterator_next(long raw){PitonStrIterator*i=(PitonStrIterator*)raw;if(!i||i->magic!=0x5049544E53545249LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->length){piton_raise_set("StopIteration","");return 0;}unsigned char c=i->str[i->index++];char*p=piton_alloc(2);p[0]=(char)c;p[1]=0;return(long)p;}
@@ -414,11 +487,12 @@ static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cell
 static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
 static long piton_callback_invoke(long callback,long value){long args[1]={value};return piton_closure_call_frame(callback,1,args);}
 static long piton_frame_call(long addr,long argc,long*args){long*frame=piton_alloc((usize)argc*sizeof(long));for(long i=0;i<argc;++i)frame[i]=args[i];return((long(*)(long*))addr)(frame);}
+static void piton_bigint_print_raw(void*a);
 static void piton_print_slot(PitonSlot v);
 static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}if(s->kind==PK_TUPLE&&s->length==1)piton_write(1,",",1);piton_write(1,s->kind==PK_TUPLE?")":"]",1);}
 static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(d->items[i].key);piton_write(1,": ",2);piton_print_slot(d->items[i].value);}piton_write(1,"}",1);}
 static void piton_print_set(PitonSet*s){piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}piton_write(1,"}",1);}
-static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,"'",1);piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(1,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;default:piton_write(1,"<object>",8);}}
+static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,"'",1);piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(1,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;default:piton_write(1,"<object>",8);}}
 /* COMP_DICT_ITER_V1: the i-th KEY of a dict / the i-th element of a set,
  * for a comprehension's index loop. Explicit subscripts keep using
  * piton_dict_get, which raises KeyError as CPython does. */
@@ -427,9 +501,9 @@ static PitonSlot piton_set_nth(PitonSet*s,long i){if(!s||i<0||i>=s->length)piton
 static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i)r+=d->items[i].key.bits;return r;}
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
-static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";default:return"<class 'object'>";}}
+static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";case PK_RANGE:return"<class 'range'>";default:return"<class 'object'>";}}
 /* M14 BUILTINS_CORE_V2 (matriz declarada; ver native_runtime.c) */
-static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;default:return v.bits!=0;}}
+static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;case PK_RANGE:return piton_range_len((PitonRange*)v.bits)>0;default:return v.bits!=0;}}
 static long piton_all_seq(PitonSeq*s){if(!s)return 1;for(long i=0;i<s->length;++i)if(!piton_slot_truthy(s->items[i]))return 0;return 1;}
 static long piton_any_seq(PitonSeq*s){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_truthy(s->items[i]))return 1;return 0;}
 static long piton_pow_int(long b,long e){if(e<0){piton_raise_set("TypeError","pow() negative exponent unsupported (M14 v1)");return 0;}long acc=1;while(e>0){if(e&1)acc*=b;b*=b;e>>=1;}return acc;}
@@ -607,13 +681,31 @@ class LinuxCEmitter:
         for function in module.functions:
             if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
                 self.generator_layouts[function.name] = generator_slot_layout(function)
+        # A printed collection decodes its elements by slot kind, so the bigint
+        # runtime must be present whenever a collection is printed: otherwise
+        # `case PK_BIGINT` in piton_print_slot would reference a function that
+        # was never emitted (PK_BIGINT_SLOT_PRINT_V1).
+        _print_temps = {
+            instruction.result
+            for function in module.functions
+            for block in function.blocks
+            for instruction in block.instructions
+            if instruction.op == "load" and instruction.args
+            and str(instruction.args[0]).strip("'\"") in {"imprimir", "print"}
+        }
+        _prints_collection = any(
+            instruction.op == "call" and instruction.args and instruction.args[0] in _print_temps
+            for function in module.functions
+            for block in function.blocks
+            for instruction in block.instructions
+        )
         self._has_bigint = any(
             instruction.op == "const" and instruction.args
             and isinstance(instruction.args[0], int) and abs(instruction.args[0]) > 9223372036854775807
             for function in module.functions
             for block in function.blocks
             for instruction in block.instructions
-        ) or self._const_fold_overflows(module) or self._uses_float_mod(module)
+        ) or self._const_fold_overflows(module) or self._uses_float_mod(module) or _prints_collection
         # Rich runtime (with __argc/__argv/_start and object/dict/set structs) needed for
         # bigint or sys.argv/os.name or any object/dict/set operations
         self._has_rich_runtime = self._has_bigint or any(
@@ -888,6 +980,8 @@ class LinuxCEmitter:
             return f"(((PitonDict*){raw})->length>0)"
         if vtype == "set":
             return f"(((PitonSet*){raw})->length>0)"
+        if vtype == "range":
+            return f"(piton_range_len((PitonRange*){raw})>0)"
         if strict:
             raise NativeBuildError(f"Linux truth test does not support {vtype}")
         return f"({raw})"
@@ -913,7 +1007,7 @@ class LinuxCEmitter:
             "none": "PK_NONE", "bool": "PK_BOOL", "int": "PK_INT",
             "float": "PK_FLOAT", "str": "PK_STR", "list": "PK_LIST",
             "tuple": "PK_TUPLE", "dict": "PK_DICT", "set": "PK_SET",
-            "bigint": "PK_BIGINT",
+            "bigint": "PK_BIGINT", "range": "PK_RANGE",
         }.get(value_type or "int", "PK_OBJECT")
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
@@ -1515,6 +1609,15 @@ class LinuxCEmitter:
             expression = f"piton_dict_contains((PitonDict*){self._value(right)},{self._slot(left, types)})"
         elif haystack_type == "set":
             expression = f"piton_set_contains((PitonSet*){self._value(right)},{self._slot(left, types)})"
+        elif haystack_type == "range":
+            # RANGE_VALUE_V1: CPython answers False for a non-int needle
+            # (`'a' in range(3)`) instead of raising, so this is a static False
+            # rather than an error.
+            if needle_type not in {"int", "bool"}:
+                out.append(f"    {_name(result)}={'!' if negate else ''}0;")
+                types[result] = "bool"
+                return
+            expression = f"piton_range_contains((PitonRange*){self._value(right)},{self._value(left)})"
         else:
             raise NativeBuildError(f"Linux 'in' is not supported on {haystack_type}")
         prefix = "!" if negate else ""
@@ -1936,10 +2039,14 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_str_iterator_new((char*){self._value(source)});")
                 types[result] = "iterator:str"
             else:
-                iterator_kind = {"list": "PK_LIST", "tuple": "PK_TUPLE", "dict": "PK_DICT", "set": "PK_SET"}.get(source_type)
+                iterator_kind = {"list": "PK_LIST", "tuple": "PK_TUPLE", "dict": "PK_DICT", "set": "PK_SET", "range": "PK_RANGE"}.get(source_type)
                 if iterator_kind is None:
                     raise NativeBuildError("Linux iter requires a native collection or user __iter__")
                 out.append(f"    {_name(result)}=piton_iterator_new_any((void*){self._value(source)},{iterator_kind});")
+                # COLL_ELEM_TYPE_V1: a `para` over a str/float/bigint element
+                # collection must print values, not pointers.
+                if result and source_type in {"list", "tuple", "set"} and source in self._coll_elems:
+                    self._coll_elems[result] = self._coll_elems[source]
                 # DICT_KEY_TYPE_V1: `iter_new` receives a load temp, so the key
                 # type is followed through the load as well as the store.
                 if result and source_type == 'dict':
@@ -2018,6 +2125,10 @@ class LinuxCEmitter:
                         "(CPython iterates keys of any type)"
                     )
                 types[result] = key_type
+            elif iterator_type in {"iterator:list", "iterator:tuple", "iterator:set"}:
+                # COLL_ELEM_TYPE_V1: the yielded value carries the element kind.
+                elem_kind = self._coll_elems.get(args[0])
+                types[result] = elem_kind if elem_kind and "|" not in elem_kind else "int"
             else:
                 types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:str" else "int"
             out.append("    if(piton_exc_flag){")
@@ -2217,6 +2328,9 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(((PitonDict*){self._value(operand)})->length==0);")
                 elif vtype == "set":
                     out.append(f"    {_name(result)}=(((PitonSet*){self._value(operand)})->length==0);")
+                elif vtype == "range":
+                    # RANGE_VALUE_V1: `no rango(0)` is True.
+                    out.append(f"    {_name(result)}=(piton_range_len((PitonRange*){self._value(operand)})==0);")
                 else:
                     raise NativeBuildError(f"Linux truth test does not support {vtype}")
                 types[result] = "bool"
@@ -2696,6 +2810,23 @@ class LinuxCEmitter:
                 return out
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
+            if "range" in {left_type, right_type}:
+                # RANGE_VALUE_V1: a range only ever equals another range (exact
+                # len/start/step with the empty-range rule); against anything
+                # else CPython answers False for `==` and True for `!=`.
+                # Ordering a range raises TypeError, like any incomparable pair.
+                if operator in {"==", "!="}:
+                    if left_type == right_type == "range":
+                        out.append(f"    {_name(result)}=(piton_range_eq((PitonRange*){self._value(left)},(PitonRange*){self._value(right)}) {'==' if operator == '==' else '!='} 1);")
+                    else:
+                        out.append(f"    {_name(result)}={1 if operator == '!=' else 0};")
+                    types[result] = "bool"
+                    return out
+                raise NativeBuildError(
+                    f"Linux ordering comparison '{operator}' between '{left_type}' and "
+                    f"'{right_type}' is not supported (CPython raises TypeError: "
+                    f"'{operator}' not supported between instances of 'range' and ...)"
+                )
             if operator == "==" and (left_type.startswith("object:") or right_type.startswith("object:")):
                 owner_side = left_type if left_type.startswith("object:") else right_type
                 cls_name = owner_side.split(":", 1)[1]
@@ -2815,6 +2946,10 @@ class LinuxCEmitter:
                             out.append(f'    piton_print_float_bits_raw({self._value(value)});')
                         elif value_type == "module-pkg":
                             out.append(f'    piton_print_dynamic({self._value(value)});')
+                        elif value_type == "range":
+                            # RANGE_VALUE_V1: CPython prints `range(0, 3)`, never
+                            # the materialized elements.
+                            out.append(f'    piton_range_print((PitonRange*){self._value(value)});')
                         elif value_type in {"list", "tuple", "dict", "set"}:
                             out.append(f'    piton_print_slot({self._slot(value, types)});')
                         else:
@@ -2842,6 +2977,11 @@ class LinuxCEmitter:
                 if len(values) == 1 and types.get(values[0]) == "str":
                     # STR_LEN_V1: len('hola') is the C string length.
                     out.append(f"    {_name(result)}=(long)piton_strlen((const char*){self._value(values[0])});")
+                    types[result] = "int"
+                    return out
+                if len(values) == 1 and types.get(values[0]) == "range":
+                    # RANGE_VALUE_V1: len() of a range is exact, never materialized.
+                    out.append(f"    {_name(result)}=piton_range_len((PitonRange*){self._value(values[0])});")
                     types[result] = "int"
                     return out
                 if len(values) != 1 or types.get(values[0]) not in {"list", "tuple", "dict", "set"}:
@@ -3046,6 +3186,11 @@ class LinuxCEmitter:
                 if len(values) != 1:
                     raise NativeBuildError("Linux sum requires one collection")
                 value_type = types.get(values[0])
+                if value_type == "range":
+                    # RANGE_VALUE_V1: exact, never materialized.
+                    out.append(f"    {_name(result)}=piton_sum_range((PitonRange*){self._value(values[0])});")
+                    types[result] = "int"
+                    return out
                 struct_map = {"list": "PitonSeq", "tuple": "PitonSeq", "dict": "PitonDict", "set": "PitonSet"}
                 helper_map = {"list": "piton_sum_seq", "tuple": "piton_sum_seq", "dict": "piton_sum_dict", "set": "piton_sum_set"}
                 if value_type not in struct_map:
@@ -3064,6 +3209,72 @@ class LinuxCEmitter:
                     )
                 out.append(f"    {_name(result)}={helper_map[value_type]}(({struct_map[value_type]}*){self._value(values[0])});")
                 types[result] = "int"
+            elif function_name in {"range", "rango"}:
+                # RANGE_VALUE_V1: `rango(...)` as a VALUE produces a lazy range
+                # object (never materialized). The `for` header keeps its
+                # counter-loop fast path, which consumes the call's arguments
+                # directly, so this changes nothing there.
+                if len(values) < 1 or len(values) > 3:
+                    raise NativeBuildError("Linux rango() takes 1-3 arguments")
+                for value in values:
+                    if types.get(value, "int") not in {"int", "bool"}:
+                        raise NativeBuildError("Linux rango() arguments must be ints")
+                if len(values) == 1:
+                    start, stop, step = "0", self._value(values[0]), "1"
+                elif len(values) == 2:
+                    start, stop = (self._value(value) for value in values)
+                    step = "1"
+                else:
+                    start, stop, step = (self._value(value) for value in values)
+                out.append(f"    {_name(result)}=(long)piton_range_new({start},{stop},{step});")
+                types[result] = "range"
+                # the elements of a range are always ints
+                self._coll_elems[result] = "int"
+                if call_handler is not None:
+                    out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + call_handler)};}}")
+                else:
+                    out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
+            elif function_name in {"list", "lista", "tuple", "tupla", "set", "conjunto", "dict", "diccionario"}:
+                # CONV_BUILTINS_V1: the conversion builtins as values.
+                alias, seq_kind = {
+                    "list": ("lista", "PK_LIST"), "lista": ("lista", "PK_LIST"),
+                    "tuple": ("tupla", "PK_TUPLE"), "tupla": ("tupla", "PK_TUPLE"),
+                    "set": ("conjunto", None), "conjunto": ("conjunto", None),
+                    "dict": ("diccionario", None), "diccionario": ("diccionario", None),
+                }[function_name]
+                if len(values) == 0:
+                    if alias == "diccionario":
+                        out.append(f"    {_name(result)}=(long)piton_dict_new(0);")
+                        types[result] = "dict"
+                    elif alias == "conjunto":
+                        out.append(f"    {_name(result)}=(long)piton_set_new(0);")
+                        types[result] = "set"
+                    else:
+                        out.append(f"    {_name(result)}=(long)piton_seq_new({seq_kind},0);")
+                        types[result] = "list" if alias == "lista" else "tuple"
+                    return out
+                if len(values) != 1:
+                    raise NativeBuildError(f"Linux {alias}() takes at most one argument")
+                source_type = types.get(values[0], "int")
+                if source_type not in {"list", "tuple", "str", "set", "dict", "range"}:
+                    raise NativeBuildError(f"Linux {alias}() cannot convert a '{source_type}' value")
+                # COLL_ELEM_TYPE_V1: a conversion preserves the element kind, so
+                # `x = lista('abc'); x[1]` prints 'b' instead of a pointer.
+                elem_of_result = "str" if source_type == "str" else self._coll_elems.get(values[0], "int")
+                if "|" in elem_of_result:
+                    elem_of_result = "int"
+                slot = self._slot(values[0], types)
+                if seq_kind:
+                    out.append(f"    {_name(result)}=(long)piton_conv_seq({seq_kind},{slot});")
+                    types[result] = "list" if alias == "lista" else "tuple"
+                    self._coll_elems[result] = elem_of_result
+                elif alias == "conjunto":
+                    out.append(f"    {_name(result)}=(long)piton_conv_set({slot});")
+                    types[result] = "set"
+                    self._coll_elems[result] = elem_of_result
+                else:
+                    out.append(f"    {_name(result)}=(long)piton_conv_dict({slot});")
+                    types[result] = "dict"
             elif function_name in {"type", "tipo"}:
                 if len(values) != 1:
                     raise NativeBuildError("Linux type requires one argument")
@@ -3082,9 +3293,12 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
                 types[result] = "str"
             elif function_name in {"sorted", "ordenar"}:
-                if len(values) != 1 or types.get(values[0]) not in {"list", "tuple"}:
-                    raise NativeBuildError("native sorted currently requires one list or tuple")
-                out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(values[0])});")
+                if len(values) != 1 or types.get(values[0]) not in {"list", "tuple", "range"}:
+                    raise NativeBuildError("native sorted currently requires one list, tuple or range")
+                if types.get(values[0]) == "range":
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_conv_seq(PK_LIST,{self._slot(values[0], types)}));")
+                else:
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(values[0])});")
                 types[result] = "list"
             else:
                 # BUILTIN_MARKER_V1: a builtin name that reached the generic
@@ -3603,6 +3817,13 @@ class LinuxCEmitter:
             collection_type = types.get(coll)
             if collection_type in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=piton_seq_get((PitonSeq*){self._value(coll)},{self._value(idx)}).bits;')
+                # COLL_ELEM_TYPE_V1: an index carries the element kind. Without it
+                # `lista('abc')[1]` returned a str pointer in an int slot and
+                # printed an address, and `[10 ** 20][0]` printed `<object>`.
+                elem_kind = self._coll_elems.get(coll)
+                if elem_kind and "|" not in elem_kind:
+                    types[result] = elem_kind
+                    return out
             elif collection_type == "str":
                 # PARITY_P2_V1: str[s] yields the one-character string.
                 out.append(f'    {_name(result)}=(long)piton_str_index((const char*){self._value(coll)},{self._value(idx)});')
@@ -3627,6 +3848,11 @@ class LinuxCEmitter:
                     return out
                 out.append(f'    {_name(result)}=piton_set_nth((PitonSet*){self._value(coll)},{self._value(idx)}).bits;')
                 types[result] = self._coll_elems.get(coll, "int")
+                return out
+            elif collection_type == "range":
+                # RANGE_VALUE_V1: indexing is exact, never materialized.
+                out.append(f'    {_name(result)}=piton_range_get((PitonRange*){self._value(coll)},{self._value(idx)});')
+                types[result] = "int"
                 return out
             elif collection_type in {"dict", "dict:module"}:
                 out.append(f'    {_name(result)}=piton_dict_get((PitonDict*){self._value(coll)},{self._slot(idx, types)}).bits;')
@@ -3676,6 +3902,11 @@ class LinuxCEmitter:
         elif op == "collection_len":
             coll = args[0]
             collection_type = types.get(coll)
+            if collection_type == "range":
+                # RANGE_VALUE_V1: exact, never materialized.
+                out.append(f'    {_name(result)}=piton_range_len((PitonRange*){self._value(coll)});')
+                types[result] = "int"
+                return out
             struct_name = {"list": "PitonSeq", "tuple": "PitonSeq", "dict": "PitonDict", "set": "PitonSet"}.get(collection_type)
             if not struct_name:
                 raise NativeBuildError("Linux collection_len requires a collection")

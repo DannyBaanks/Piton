@@ -383,13 +383,93 @@ class BuiltinMarkerV1(unittest.TestCase):
     an uninitialized C variable — SIGSEGV or a raw pointer printed as an int.
     """
 
-    def test_rango_as_value_fail_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir(rango(3))\n")
+    def test_range_as_value(self):
+        """RANGE_VALUE_V1: `rango(...)` is a lazy value, not just loop sugar.
 
-    def test_lista_call_fail_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir(lista([1, 2]))\n")
+        Este test afirmaba que `rango(3)` como valor debia fallar cerrado: solo
+        se consumia en la cabecera `para`. Ahora produce un objeto perezoso
+        (start/stop/step, sin materializar) con repr, len, iteracion, indice,
+        pertenencia, igualdad y verdad exactos. El `for` conserva su fast path
+        de contador, que consume los argumentos directamente.
+        """
+        for source, esperado in (
+            ("imprimir(rango(3))\n", "range(0, 3)\n"),
+            ("imprimir(rango(0))\n", "range(0, 0)\n"),
+            ("imprimir(rango(1, 4))\n", "range(1, 4)\n"),
+            ("imprimir(rango(0, 6, 2))\n", "range(0, 6, 2)\n"),
+            ("imprimir(rango(5, 0, -1))\n", "range(5, 0, -1)\n"),
+        ):
+            with self.subTest(fuente=source):
+                result = compare_native_to_cpython(source)
+                self.assertEqual(result.native.stdout.decode(), esperado)
+                self.assertEqual(result.native.stdout, result.oracle.stdout)
+
+    def test_range_len_iter_index_contains(self):
+        for source in (
+            "imprimir(longitud(rango(5)))\n",
+            "r = rango(4)\npara x en r:\n    imprimir(x)\n",
+            "r = rango(5, 0, -2)\npara x en r:\n    imprimir(x)\n",
+            "r = rango(10, 20)\nimprimir(r[0])\nimprimir(r[-1])\n",
+            "r = rango(0, 10, 2)\nimprimir(4 en r)\nimprimir(5 en r)\n",
+            "imprimir(rango(0, 3) == rango(0, 3))\n",
+            "imprimir(rango(0, 0) == rango(5, 5))\n",
+            "imprimir(sum(rango(4)))\n",
+            "imprimir(lista(rango(3)))\n",
+            "imprimir(tipo(rango(3)))\n",
+            "r = rango(3)\nsi r:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+            "r = rango(0)\nsi r:\n    imprimir('T')\nsino:\n    imprimir('F')\n",
+        ):
+            with self.subTest(fuente=source):
+                _assert_matches(self, source)
+
+    def test_range_step_zero_raises_and_is_catchable(self):
+        for source in ("imprimir(rango(1, 4, 0))\n",):
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1)
+            self.assertEqual(result.oracle.returncode, 1)
+        _assert_matches(
+            self,
+            "intentar:\n    x = rango(1, 2, 0)\nexcepto ValueError:\n    imprimir('caught')\n",
+        )
+
+    def test_conversion_builtins_as_values(self):
+        """CONV_BUILTINS_V1: `lista`/`tupla`/`conjunto`/`diccionario` convert.
+
+        Este test afirmaba que `lista([1, 2])` debia fallar cerrado. La
+        conversion estaba rechazada en toda posicion salvo consumirla
+        directamente en una cabecera `para`, lo que hacia fallar 19 casos del
+        corpus sin motivo: los helpers de conversion ya existian y solo faltaba
+        el dispatch. Ahora convierte como CPython, y lo no representable
+        (un default de tipo distinto al de los valores) sigue fallando cerrado.
+        """
+        for source, esperado in (
+            ("imprimir(lista([1, 2]))\n", "[1, 2]\n"),
+            ("imprimir(lista((1, 2)))\n", "[1, 2]\n"),
+            ("imprimir(lista('ab'))\n", "['a', 'b']\n"),
+            ("imprimir(lista(()))\n", "[]\n"),
+            ("imprimir(tupla([1, 2]))\n", "(1, 2)\n"),
+            ("imprimir(tupla('ab'))\n", "('a', 'b')\n"),
+            ("imprimir(conjunto([1, 2, 2]))\n", "{1, 2}\n"),
+            ("imprimir(longitud(conjunto('aba')))\n", "2\n"),
+            ("imprimir(diccionario([(1, 2)]))\n", "{1: 2}\n"),
+            ("imprimir(diccionario())\n", "{}\n"),
+        ):
+            with self.subTest(fuente=source):
+                result = compare_native_to_cpython(source)
+                self.assertEqual(result.native.stdout.decode(), esperado)
+                self.assertEqual(result.native.stdout, result.oracle.stdout)
+
+    def test_converted_collection_keeps_element_type(self):
+        # COLL_ELEM_TYPE_V1: la conversion conserva el tipo de elemento, asi que
+        # un indice o un `para` imprimen el valor, no un puntero.
+        for source in (
+            "x = lista('abc')\nimprimir(x[1])\n",
+            "para c en lista('ab'):\n    imprimir(c)\n",
+            "x = tupla('ab')\nimprimir(x[0])\n",
+            "x = [10 ** 20]\nimprimir(x[0])\n",
+        ):
+            with self.subTest(fuente=source):
+                _assert_matches(self, source)
 
     def test_reversed_as_value_fail_closed(self):
         with pytest.raises(NativeBuildError):

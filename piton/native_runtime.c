@@ -36,6 +36,7 @@ enum {
     SUB_TAG_SET     = 9,
     SUB_TAG_BIGINT  = 10,
     SUB_TAG_OBJECT  = 11,
+    SUB_TAG_RANGE   = 12,
 };
 
 /* Encoded wire format: same as ABI — 3-bit tag in high bits, 61-bit payload. */
@@ -170,10 +171,98 @@ typedef struct {
     int64_t index;
 } PitonAnyIterator;
 
+static void piton_gc_register(void *ptr);
+
+/* RANGE_VALUE_V1: `rango(...)` as a VALUE. A lazy range object carrying
+ * start/stop/step; elements are computed, never materialized. The `for` header
+ * keeps its own handling and never sees this object. */
+typedef struct {
+    PitonHeader header;
+    int64_t start;
+    int64_t stop;
+    int64_t step;
+} PitonRange;
+
+int64_t piton_range_len(PitonRange *r) {
+    if (!r) return 0;
+    int64_t start = r->start, stop = r->stop, step = r->step;
+    if (step > 0) { if (stop <= start) return 0; return (stop - start + (step - 1)) / step; }
+    if (stop >= start) return 0; return (start - stop + (-step - 1)) / (-step);
+}
+
+void *piton_range_new(int64_t start, int64_t stop, int64_t step) {
+    if (step == 0) { piton_raise("ValueError", "range() arg 3 must not be zero"); return NULL; }
+    PitonRange *r = calloc(1, sizeof(*r));
+    r->header.sub_tag = SUB_TAG_RANGE;
+    r->header.refcount = 1;
+    r->start = start; r->stop = stop; r->step = step;
+    piton_gc_register(r);
+    return r;
+}
+
+void piton_range_free(void *raw) {
+    PitonRange *r = raw;
+    if (!r) return;
+    piton_gc_unregister(r);
+    free(r);
+}
+
+int64_t piton_range_get(PitonRange *r, int64_t i) {
+    int64_t n = piton_range_len(r);
+    if (i < 0) i += n;
+    if (i < 0 || i >= n) { piton_raise_unhandled("IndexError", "range index out of range"); return 0; }
+    return r->start + i * r->step;
+}
+
+int64_t piton_range_contains(PitonRange *r, int64_t v) {
+    if (!r) return 0;
+    int64_t d = v - r->start;
+    if (r->step > 0) { if (v < r->start || v >= r->stop) return 0; }
+    else { if (v > r->start || v <= r->stop) return 0; }
+    return d % r->step == 0;
+}
+
+int64_t piton_range_eq(PitonRange *a, PitonRange *b) {
+    if (!a || !b) return a == b;
+    int64_t na = piton_range_len(a), nb = piton_range_len(b);
+    if (na != nb) return 0;
+    if (na == 0) return 1;
+    return a->start == b->start && a->step == b->step;
+}
+
+void piton_range_print_raw(PitonRange *r) {
+    if (!r) { fputs("range(0, 0)", stdout); return; }
+    /* CPython always spells (start, stop) and appends step unless it is 1:
+     * repr(range(3)) == 'range(0, 3)', never 'range(3)'. */
+    printf("range(%lld, %lld", (long long)r->start, (long long)r->stop);
+    if (r->step != 1) printf(", %lld", (long long)r->step);
+    putchar(')');
+}
+
+int64_t piton_sum_range(PitonRange *r) {
+    int64_t total = 0;
+    int64_t n = piton_range_len(r);
+    for (int64_t i = 0; i < n; ++i) total += r->start + i * r->step;
+    return total;
+}
+
+void *piton_range_to_list(PitonRange *r) {
+    /* Pre-size to the exact length: piton_collection_put silently drops any
+     * index at or past capacity, so a zero-capacity list would stay empty. */
+    int64_t n = piton_range_len(r);
+    PitonCollection *out = piton_collection_new(1, n);
+    for (int64_t i = 0; i < n; ++i) {
+        int64_t v = r->start + i * r->step;
+        piton_collection_put(out, out->length, 0,
+                             pv_encode(PITON_TAG_INT, (uint64_t)v));
+    }
+    return out;
+}
+
 void *piton_iterator_new_any(void *raw) {
     if (!raw) { fprintf(stderr, "TypeError: object is not iterable\n"); exit(1); }
     int64_t sub_tag = ((PitonHeader *)raw)->sub_tag;
-    if (sub_tag < SUB_TAG_LIST || sub_tag > SUB_TAG_SET) {
+    if (sub_tag < SUB_TAG_LIST || sub_tag > SUB_TAG_RANGE || sub_tag == SUB_TAG_BIGINT || sub_tag == SUB_TAG_OBJECT) {
         fprintf(stderr, "TypeError: object is not iterable\n"); exit(1);
     }
     PitonAnyIterator *iterator = calloc(1, sizeof(*iterator));
@@ -193,6 +282,8 @@ int64_t piton_iterator_next_any(void *raw) {
         length = ((PitonCollection *)iterator->raw)->length;
     else if (iterator->kind == SUB_TAG_DICT)
         length = ((PitonDict *)iterator->raw)->length;
+    else if (iterator->kind == SUB_TAG_RANGE)
+        length = piton_range_len((PitonRange *)iterator->raw);
     else
         length = ((PitonSet *)iterator->raw)->length;
     if (iterator->index >= length) {
@@ -204,6 +295,13 @@ int64_t piton_iterator_next_any(void *raw) {
         value = ((PitonCollection *)iterator->raw)->items[iterator->index++];
     else if (iterator->kind == SUB_TAG_DICT)
         value = ((PitonDict *)iterator->raw)->entries[iterator->index++].key;
+    else if (iterator->kind == SUB_TAG_RANGE) {
+        /* The emitter types a range iterator's values as plain ints, exactly
+         * like INT elements of a list (which next_any returns decoded). */
+        PitonRange *rr = iterator->raw;
+        int64_t v = rr->start + (iterator->index++) * rr->step;
+        return v;
+    }
     else
         value = ((PitonSet *)iterator->raw)->items[iterator->index++];
     if (pv_tag(value) == PITON_TAG_INT) return pv_payload_signed(value);
@@ -756,6 +854,10 @@ static void piton_value_print_inner(int64_t v, int recursing) {
                 piton_value_print_inner(s->items[i], 1);
             }
             putchar('}');
+            break;
+        }
+        case SUB_TAG_RANGE: {
+            piton_range_print_raw(ptr);
             break;
         }
         case SUB_TAG_BIGINT: {
@@ -2885,6 +2987,10 @@ static void piton_gc_free_node(void *raw) {
         free(s->items); free(s); --live_sets;
         break;
     }
+    case SUB_TAG_RANGE: {
+        piton_range_free(raw);
+        break;
+    }
     case SUB_TAG_OBJECT: {
         PitonObject *o = raw;
         free(o); --live_objects;
@@ -3741,6 +3847,7 @@ const char *piton_type_from_raw(int64_t raw_ptr, int64_t type_tag) {
         case 7: return "<class 'tuple'>";
         case 8: return "<class 'dict'>";
         case 9: return "<class 'set'>";
+        case 12: return "<class 'range'>";
         case 10: return "<class 'int'>";
         default: return "<class 'object'>";
     }

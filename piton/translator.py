@@ -224,6 +224,8 @@ def _termina_expresion(token_: "tokenize.TokenInfo | None") -> bool:
     if token_.type == token.OP and token_.string in {")", "]", "}"}:
         return True
     if token_.type == token.NAME:
+        if (token_.start[0], token_.start[1]) in _IDENTIFICADORES_DECIDIDOS:
+            return True
         return token_.string not in _KEYWORDS_NO_TERMINAN
     return False
 
@@ -246,6 +248,9 @@ def _empieza_expresion(token_: "tokenize.TokenInfo | None") -> bool:
     return False
 
 
+_IDENTIFICADORES_DECIDIDOS: "set[tuple[int, int]]" = set()
+
+
 def _es_keyword_de_expresion(tokens: list[tokenize.TokenInfo], indice: int, nombre: str) -> bool:
     """KEYWORD_EXPR_V1: translate `nombre` only when it sits in operator position.
 
@@ -256,28 +261,28 @@ def _es_keyword_de_expresion(tokens: list[tokenize.TokenInfo], indice: int, nomb
     """
     anterior = _anterior_significativo(tokens, indice)
     siguiente = _siguiente_significativo(tokens, indice)
-    # `no en` is ONE operator spelled as two tokens: both must translate, or the
-    # output is `not en` (invalid Python). Neither token is in operator position
-    # by the rules below, because they are keywords themselves.
-    # `no en` / `no es` are ONE operator spelled as two tokens: both must
-    # translate, or the output is `not in` / `not es` (invalid Python).
-    # Neither token is in operator position by the rules below, because each is
-    # itself a keyword.
+    # `no en` / `no es` are ONE operator spelled as two tokens, but only when
+    # the `no` itself sits in operator position (it has a left operand). `9 no
+    # en [1]` is the pair; `imprimir(no en)` is unary `not` applied to a
+    # variable called `en`. The left-operand test uses the decided-identifiers
+    # set, so a variable named `y`/`o`/etc. still counts as an operand.
     for pareja in ("en", "es"):
         if (
             nombre == "no"
             and siguiente is not None
             and siguiente.type == token.NAME
             and siguiente.string == pareja
+            and _termina_expresion(anterior)
         ):
             return True
-        if (
-            nombre == pareja
-            and anterior is not None
-            and anterior.type == token.NAME
-            and anterior.string == "no"
-        ):
-            return True
+        if nombre == pareja and anterior is not None and anterior.type == token.NAME and anterior.string == "no":
+            try:
+                idx_no = tokens.index(anterior)
+            except ValueError:
+                idx_no = None
+            antes_de_no = _anterior_significativo(tokens, idx_no) if idx_no is not None else None
+            if antes_de_no is not None and _termina_expresion(antes_de_no):
+                return True
     if nombre in _KEYWORDS_BINARIOS:
         return _termina_expresion(anterior) and _empieza_expresion(siguiente)
     if nombre in _KEYWORDS_UNARIOS:
@@ -388,6 +393,7 @@ def analizar_tokens(
         raise PitonSyntaxError(archivo, str(error.args[0]), ubicacion[0], ubicacion[1]) from error
 
     asignados = _nombre_asignado_en_scope(tokens)
+    _IDENTIFICADORES_DECIDIDOS.clear()
     mapa = MapaFuente()
     salida: list[tokenize.TokenInfo] = []
     cambios: list[CambioToken] = []
@@ -462,6 +468,7 @@ def analizar_tokens(
                     tokens, indice, actual.string
                 ):
                     inicio_stmt = False
+                    _IDENTIFICADORES_DECIDIDOS.add((actual.start[0], actual.start[1]))
                     salida.append(actual)
                     continue
                 # NO_PAREJA_V1: `no en` / `no es` are ONE operator written as two
@@ -565,6 +572,8 @@ def analizar_tokens(
         else:
             inicio_stmt = False
 
+        if actual.type == token.NAME and reemplazo is None:
+            _IDENTIFICADORES_DECIDIDOS.add((actual.start[0], actual.start[1]))
         if reemplazo is not None:
             salida.append(actual._replace(string=reemplazo))
             cambios.append(CambioToken(actual.start[0], actual.start[1] + 1, actual.string, reemplazo, categoria))
