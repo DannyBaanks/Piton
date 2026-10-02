@@ -685,5 +685,35 @@ class NonCallableCallV1(unittest.TestCase):
         )
 
 
+class DictKeyTypeV1(unittest.TestCase):
+    """DICT_KEY_TYPE_V1: iterar un dict rinde el tipo real de sus CLAVES.
+
+    El iterador de dict se tipaba "str" fijo, asi que `para k en {1: 'a'}`
+    imprimia la clave int 1 con el printer de cadenas: leia un puntero del
+    heap como si fuera texto y moria con SIGSEGV. Ahora el tipo de clave se
+    registra al construir el dict y se propaga por store/load, y una clave de
+    tipo desconocido falla cerrado en vez de imprimir basura.
+    """
+
+    def test_int_keys(self):
+        _assert_matches(self, "d = {1: 'a', 2: 'b'}\npara k en d:\n    imprimir(k)\n")
+        _assert_matches(self, "d = {1: 'a'}\npara k en d:\n    imprimir(k * 10)\n")
+        _assert_matches(self, "para k en {1: 'a'}:\n    imprimir(k)\n")
+
+    def test_str_keys_unchanged(self):
+        _assert_matches(self, "d = {'a': 1, 'b': 2}\npara k en d:\n    imprimir(k)\n")
+
+    def test_bool_and_float_keys(self):
+        _assert_matches(self, "d = {Verdadero: 'a'}\npara k en d:\n    imprimir(k)\n")
+        _assert_matches(self, "d = {1.5: 'a'}\npara k en d:\n    imprimir(k)\n")
+
+    def test_reassignment_retypes(self):
+        _assert_matches(
+            self,
+            "d = {1: 'a'}\npara k en d:\n    imprimir(k)\n"
+            "d = {'x': 1}\npara j in d:\n    imprimir(j)\n".replace(" in ", " en "),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

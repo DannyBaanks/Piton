@@ -31,12 +31,12 @@
   "summary": {
     "total": 1148,
     "by_bucket": {
-      "DIVERGENT_CRASH": 1,
+      "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 23,
       "TIMEOUT": 0,
       "FAIL_CLOSED": 229,
       "RAISE_EQ": 1,
-      "EQUIV": 894
+      "EQUIV": 895
     },
     "by_area": {
       "literals": {
@@ -128,12 +128,12 @@
         "EQUIV": 23
       },
       "dicts": {
-        "DIVERGENT_CRASH": 1,
+        "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 3,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 11,
         "RAISE_EQ": 0,
-        "EQUIV": 5
+        "EQUIV": 6
       },
       "sets": {
         "DIVERGENT_CRASH": 0,
@@ -200,9 +200,9 @@
         "EQUIV": 2
       }
     },
-    "pct_equiv": 77.9,
-    "pct_honest": 97.9,
-    "pct_divergent": 2.1
+    "pct_equiv": 78.0,
+    "pct_honest": 98.0,
+    "pct_divergent": 2.0
   },
   "records": [
     {
@@ -1992,7 +1992,7 @@
       "name": "==5",
       "src": "imprimir(a == a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-c5nusylr/program.c: In function ‘piton_main’:\n/tmp/piton-linux-c5nusylr/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-c5nusylr/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-md9e0y1k/program.c: In function ‘piton_main’:\n/tmp/piton-linux-md9e0y1k/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-md9e0y1k/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2006,7 +2006,7 @@
       "name": "==7",
       "src": "imprimir(a == b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-bzmadgj5/program.c: In function ‘piton_main’:\n/tmp/piton-linux-bzmadgj5/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-bzmadgj5/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-bzmadgj5/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-truc6vy3/program.c: In function ‘piton_main’:\n/tmp/piton-linux-truc6vy3/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-truc6vy3/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-truc6vy3/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -2076,7 +2076,7 @@
       "name": "!=5",
       "src": "imprimir(a != a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-s2g84ama/program.c: In function ‘piton_main’:\n/tmp/piton-linux-s2g84ama/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-s2g84ama/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-rjexvf9d/program.c: In function ‘piton_main’:\n/tmp/piton-linux-rjexvf9d/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-rjexvf9d/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2090,7 +2090,7 @@
       "name": "!=7",
       "src": "imprimir(a != b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-blmn7od1/program.c: In function ‘piton_main’:\n/tmp/piton-linux-blmn7od1/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-blmn7od1/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-blmn7od1/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-n88vnhax/program.c: In function ‘piton_main’:\n/tmp/piton-linux-n88vnhax/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-n88vnhax/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-n88vnhax/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -2160,7 +2160,7 @@
       "name": "<5",
       "src": "imprimir(a < a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-fkr4_h4b/program.c: In function ‘piton_main’:\n/tmp/piton-linux-fkr4_h4b/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-fkr4_h4b/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-kqsyknw9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kqsyknw9/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-kqsyknw9/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2174,7 +2174,7 @@
       "name": "<7",
       "src": "imprimir(a < b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-gmp7xa4t/program.c: In function ‘piton_main’:\n/tmp/piton-linux-gmp7xa4t/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-gmp7xa4t/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-gmp7xa4t/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-brsdbbhx/program.c: In function ‘piton_main’:\n/tmp/piton-linux-brsdbbhx/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-brsdbbhx/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-brsdbbhx/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -2244,7 +2244,7 @@
       "name": ">5",
       "src": "imprimir(a > a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-x9ocbkwh/program.c: In function ‘piton_main’:\n/tmp/piton-linux-x9ocbkwh/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-x9ocbkwh/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-s3x85gx3/program.c: In function ‘piton_main’:\n/tmp/piton-linux-s3x85gx3/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-s3x85gx3/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2258,7 +2258,7 @@
       "name": ">7",
       "src": "imprimir(a > b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-om664kke/program.c: In function ‘piton_main’:\n/tmp/piton-linux-om664kke/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-om664kke/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-om664kke/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-3wkrvtrz/program.c: In function ‘piton_main’:\n/tmp/piton-linux-3wkrvtrz/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-3wkrvtrz/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-3wkrvtrz/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -2328,7 +2328,7 @@
       "name": "<=5",
       "src": "imprimir(a <= a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-g2xp7vbk/program.c: In function ‘piton_main’:\n/tmp/piton-linux-g2xp7vbk/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-g2xp7vbk/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-z8x0gm8y/program.c: In function ‘piton_main’:\n/tmp/piton-linux-z8x0gm8y/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-z8x0gm8y/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2342,7 +2342,7 @@
       "name": "<=7",
       "src": "imprimir(a <= b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-gyjzynky/program.c: In function ‘piton_main’:\n/tmp/piton-linux-gyjzynky/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-gyjzynky/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-gyjzynky/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-xnwuiqcv/program.c: In function ‘piton_main’:\n/tmp/piton-linux-xnwuiqcv/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-xnwuiqcv/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-xnwuiqcv/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -2412,7 +2412,7 @@
       "name": ">=5",
       "src": "imprimir(a >= a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-hj0wlkyc/program.c: In function ‘piton_main’:\n/tmp/piton-linux-hj0wlkyc/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-hj0wlkyc/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-ivzuuu2l/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ivzuuu2l/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-ivzuuu2l/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -2426,7 +2426,7 @@
       "name": ">=7",
       "src": "imprimir(a >= b)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-4dzrhxkp/program.c: In function ‘piton_main’:\n/tmp/piton-linux-4dzrhxkp/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-4dzrhxkp/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-4dzrhxkp/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-zirz18vr/program.c: In function ‘piton_main’:\n/tmp/piton-linux-zirz18vr/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-zirz18vr/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n/tmp/piton-linux-zirz18vr/program.c:914:9: error: ‘b’ undeclared (first use in this function)\n  914 |     _11=b;\n      |         ^\n"
     },
     {
       "area": "comparisons",
@@ -2496,7 +2496,7 @@
       "name": "ides5",
       "src": "imprimir(a es a)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-ozkvmoy_/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ozkvmoy_/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-ozkvmoy_/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-70b_lb_s/program.c: In function ‘piton_main’:\n/tmp/piton-linux-70b_lb_s/program.c:913:9: error: ‘a’ undeclared (first use in this function)\n  913 |     _10=a;\n      |         ^\n/tmp/piton-linux-70b_lb_s/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "comparisons",
@@ -8607,7 +8607,7 @@
       "name": "in",
       "src": "imprimir(2 en [1, 2])\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-qlicy56m/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qlicy56m/program.c:919:13: error: expected ‘)’ before ‘en’\n  919 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-kg8ug23u/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kg8ug23u/program.c:919:13: error: expected ‘)’ before ‘en’\n  919 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
     },
     {
       "area": "collections",
@@ -8849,7 +8849,7 @@
       "name": "in",
       "src": "d = {'a': 1}\nimprimir('a' en d)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-l_q44ofu/program.c: In function ‘piton_main’:\n/tmp/piton-linux-l_q44ofu/program.c:920:13: error: expected ‘)’ before ‘en’\n  920 |     _15=(_13 en _14);\n      |         ~   ^~~\n      |             )\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-k99kpjlc/program.c: In function ‘piton_main’:\n/tmp/piton-linux-k99kpjlc/program.c:920:13: error: expected ‘)’ before ‘en’\n  920 |     _15=(_13 en _14);\n      |         ~   ^~~\n      |             )\n"
     },
     {
       "area": "dicts",
@@ -8942,9 +8942,9 @@
       "area": "dicts",
       "name": "int-keys",
       "src": "d = {1: 'a', 2: 'b'}\npara k en d:\n    imprimir(k)\n",
-      "bucket": "DIVERGENT_CRASH",
-      "detail": "native rc=-11 out= err= || oracle rc=0 out=1 | 2 err=",
-      "native_rc": -11,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
@@ -8968,7 +8968,7 @@
       "name": "in",
       "src": "imprimir(1 en {1, 2})\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-tpyxaa8x/program.c: In function ‘piton_main’:\n/tmp/piton-linux-tpyxaa8x/program.c:919:13: error: expected ‘)’ before ‘en’\n  919 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-89ftzqbu/program.c: In function ‘piton_main’:\n/tmp/piton-linux-89ftzqbu/program.c:919:13: error: expected ‘)’ before ‘en’\n  919 |     _14=(_10 en _13);\n      |         ~   ^~~\n      |             )\n"
     },
     {
       "area": "sets",
@@ -9433,7 +9433,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-xi5jonr3/program.c: In function ‘f’:\n/tmp/piton-linux-xi5jonr3/program.c:935:8: error: ‘suma’ undeclared (first use in this function)\n  935 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-xi5jonr3/program.c:935:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-u6jiyxdi/program.c: In function ‘f’:\n/tmp/piton-linux-u6jiyxdi/program.c:935:8: error: ‘suma’ undeclared (first use in this function)\n  935 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-u6jiyxdi/program.c:935:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9449,7 +9449,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-9qgfdjfb/program.c: In function ‘f’:\n/tmp/piton-linux-9qgfdjfb/program.c:939:8: error: ‘suma’ undeclared (first use in this function)\n  939 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-9qgfdjfb/program.c:939:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-voq_6ami/program.c: In function ‘f’:\n/tmp/piton-linux-voq_6ami/program.c:939:8: error: ‘suma’ undeclared (first use in this function)\n  939 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-voq_6ami/program.c:939:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9527,21 +9527,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-77c5u5co/program.c: In function ‘piton_main’:\n/tmp/piton-linux-77c5u5co/program.c:917:9: error: too many arguments to function ‘f’\n  917 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-77c5u5co/program.c:890:13: note: declared here\n  890 | static long f(long a);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-n7ns6y1p/program.c: In function ‘piton_main’:\n/tmp/piton-linux-n7ns6y1p/program.c:917:9: error: too many arguments to function ‘f’\n  917 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-n7ns6y1p/program.c:890:13: note: declared here\n  890 | static long f(long a);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-m3ykq7w7/program.c: In function ‘piton_main’:\n/tmp/piton-linux-m3ykq7w7/program.c:916:9: error: too few arguments to function ‘f’\n  916 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-m3ykq7w7/program.c:890:13: note: declared here\n  890 | static long f(long a, long b);\n      |             ^\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-7z__ccgh/program.c: In function ‘piton_main’:\n/tmp/piton-linux-7z__ccgh/program.c:916:9: error: too few arguments to function ‘f’\n  916 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-7z__ccgh/program.c:890:13: note: declared here\n  890 | static long f(long a, long b);\n      |             ^\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-uuof7o5g/program.c: In function ‘piton_main’:\n/tmp/piton-linux-uuof7o5g/program.c:913:9: error: ‘no_existe’ undeclared (first use in this function)\n  913 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-uuof7o5g/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-b3kfu0j_/program.c: In function ‘piton_main’:\n/tmp/piton-linux-b3kfu0j_/program.c:913:9: error: ‘no_existe’ undeclared (first use in this function)\n  913 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-b3kfu0j_/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -9889,7 +9889,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-1luhy493/program.c: In function ‘piton_main’:\n/tmp/piton-linux-1luhy493/program.c:916:9: error: too few arguments to function ‘P____init__’\n  916 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-1luhy493/program.c:890:13: note: declared here\n  890 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-n34x5n9k/program.c: In function ‘piton_main’:\n/tmp/piton-linux-n34x5n9k/program.c:916:9: error: too few arguments to function ‘P____init__’\n  916 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-n34x5n9k/program.c:890:13: note: declared here\n  890 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
@@ -10003,7 +10003,7 @@
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-hr7mk3zq/program.c: In function ‘piton_main’:\n/tmp/piton-linux-hr7mk3zq/program.c:913:9: error: ‘divmod’ undeclared (first use in this function)\n  913 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-hr7mk3zq/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-l_grx0tu/program.c: In function ‘piton_main’:\n/tmp/piton-linux-l_grx0tu/program.c:913:9: error: ‘divmod’ undeclared (first use in this function)\n  913 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-l_grx0tu/program.c:913:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "controls_closed",

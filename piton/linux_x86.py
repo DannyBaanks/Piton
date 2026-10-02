@@ -537,6 +537,10 @@ class LinuxCEmitter:
         self._shared_globals: set[str] = set()
         self._fn_consts: dict[str, Any] = {}
         self._tuple_elems: dict[str, tuple] = {}
+        # DICT_KEY_TYPE_V1: static type of a dict's KEYS, so iterating a dict
+        # yields the right static type (it used to hardcode "str", which made
+        # `para k en {1: 'a'}` print the int key 1 as a string pointer -> SIGSEGV).
+        self._dict_key_types: dict[str, str] = {}
         self._dict_elems: dict[str, dict[str, tuple[str, str]]] = {}
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
@@ -641,6 +645,7 @@ class LinuxCEmitter:
         self._fn_consts = {}
         self._boolh_types: dict[str, str] = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
+        self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         if function.vararg:
             types[function.vararg] = "tuple"
@@ -695,6 +700,7 @@ class LinuxCEmitter:
         self._fn_consts = {}
         self._boolh_types: dict[str, str] = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
+        self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
@@ -752,6 +758,7 @@ class LinuxCEmitter:
         self._fn_consts = {}
         self._boolh_types: dict[str, str] = {}
         self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
+        self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
@@ -1846,6 +1853,11 @@ class LinuxCEmitter:
                 if iterator_kind is None:
                     raise NativeBuildError("Linux iter requires a native collection or user __iter__")
                 out.append(f"    {_name(result)}=piton_iterator_new_any((void*){self._value(source)},{iterator_kind});")
+                # DICT_KEY_TYPE_V1: `iter_new` receives a load temp, so the key
+                # type is followed through the load as well as the store.
+                if result and source_type == 'dict':
+                    if source in self._dict_key_types:
+                        self._dict_key_types[result] = self._dict_key_types[source]
             types[result] = f"iterator:{source_type or 'unknown'}"
         elif op == "builtin_iter_new":
             builtin, source, start = args
@@ -1907,7 +1919,20 @@ class LinuxCEmitter:
             else:
                 next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
                 out.append(f"    {_name(result)}={next_helper}({self._value(iterator)});")
-            types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type in {"iterator:dict", "iterator:str"} else "int"
+            # DICT_KEY_TYPE_V1: a dict iterator yields its KEYS, whose static
+            # type comes from the dict it was built from. Only when it is
+            # unknown do we keep the historical "str"; a value that is really
+            # a str pointer must never be printed as a raw int, and vice versa.
+            if iterator_type == "iterator:dict":
+                key_type = self._dict_key_types.get(args[0])
+                if key_type is None:
+                    raise NativeBuildError(
+                        "Linux native dict iteration requires a statically known key type "
+                        "(CPython iterates keys of any type)"
+                    )
+                types[result] = key_type
+            else:
+                types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:str" else "int"
             out.append("    if(piton_exc_flag){")
             if handler_label:
                 out.append(f"        goto {_name(function.name + '_' + handler_label)};")
@@ -1945,6 +1970,10 @@ class LinuxCEmitter:
                 self._tuple_elems[result] = self._tuple_elems[source]
             if source in self._dict_elems:
                 self._dict_elems[result] = self._dict_elems[source]
+            # DICT_KEY_TYPE_V1: the key type follows a load, so
+            # `para k en d` (whose iter_new source is the load temp) resolves.
+            if source in self._dict_key_types:
+                self._dict_key_types[result] = self._dict_key_types[source]
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
@@ -1983,6 +2012,11 @@ class LinuxCEmitter:
                     self._tuple_elems[result] = self._tuple_elems[source]
                 if source in self._dict_elems:
                     self._dict_elems[result] = self._dict_elems[source]
+                # DICT_KEY_TYPE_V1: the key type follows the value through an
+                # assignment, so `d = {1: 'a'}` then `para k en d` still knows
+                # the keys are ints.
+                if source in self._dict_key_types:
+                    self._dict_key_types[result] = self._dict_key_types[source]
                 return out
             if (
                 source in self._module_stored
@@ -2022,9 +2056,15 @@ class LinuxCEmitter:
                     self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
                 if args[1] in self._dict_elems:
                     self._dict_elems[args[0]] = self._dict_elems[args[1]]
+                if args[1] in self._dict_key_types:
+                    self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
                 return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
+            # DICT_KEY_TYPE_V1: the key type follows the value into the local,
+            # so iterating `d` after `d = {1: 'a'}` still knows it yields ints.
+            if args[1] in self._dict_key_types:
+                self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
             if isinstance(args[0], str) and args[0].startswith("@boolh_"):
                 # BOOL_SHORT_V1: both arms of y/o must share one static
                 # type — the untagged model cannot print a mixed result
@@ -3291,6 +3331,19 @@ class LinuxCEmitter:
                                 break
                     if _drec is not None:
                         self._dict_elems[result] = _drec
+                if result and items:
+                    # DICT_KEY_TYPE_V1: every key must share one static kind for
+                    # the iterator to be typed; a mixed-key dict stays untyped
+                    # and its iteration fails closed instead of printing a
+                    # pointer as if it were a string.
+                    kinds = set()
+                    for key, _value in items:
+                        if isinstance(key, str) and not key.startswith("%"):
+                            kinds.add("str")
+                        else:
+                            kinds.add(types.get(key, "int"))
+                    if len(kinds) == 1:
+                        self._dict_key_types[result] = next(iter(kinds))
                 out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
                 for index, (key, value) in enumerate(items):
                     key_is_str = isinstance(key, str) and not key.startswith("%")

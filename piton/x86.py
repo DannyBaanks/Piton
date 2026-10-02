@@ -139,6 +139,10 @@ class Win64NasmEmitter:
         # CALL_UNPACKING_DYNAMIC4_V1: temp/local names of dicts proven to be
         # built from constant-string keys (the only **-unpackable dicts).
         self.strkey_dict_temps: set[str] = set()
+        # DICT_KEY_TYPE_V1: static type of a dict's KEYS, so iterating a dict
+        # yields the right static type. The iterator used to hardcode "str",
+        # which made `para k en {1: 'a'}` print the int key as a string pointer.
+        self._dict_key_types: dict[str, str] = {}
         # Per-call-site `dq` tables of parameter names for dict unpacking,
         # emitted into .rdata at the end of the module.
         self.unpack_tables: list[tuple[str, list[str]]] = []
@@ -651,6 +655,9 @@ class Win64NasmEmitter:
                 self._load_operand(source, "rcx")
                 self.lines.append("    call piton_iterator_new_any")
                 self.types[result] = f"iterator:{source_type or 'unknown'}"
+                # DICT_KEY_TYPE_V1: carry the key type onto the iterator.
+                if result and source_type == 'dict' and source in self._dict_key_types:
+                    self._dict_key_types[result] = self._dict_key_types[source]
             self.lines.append(f"    mov {self._address(result)}, rax")
             if result and self.types.get(result, "").startswith("iterator:") and self.types[result] != "iterator:genexpr":
                 # ITER_LOOP_GUARD_V1: for-loop exhaustion raises StopIteration
@@ -752,7 +759,19 @@ class Win64NasmEmitter:
                 else:
                     self.lines.append("    call piton_iterator_next_any")
             self.lines.append(f"    mov {self._address(result)}, rax")
-            self.types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type in {"iterator:dict", "iterator:str"} else "int"
+            # DICT_KEY_TYPE_V1: a dict iterator yields its KEYS; the static type
+            # comes from the dict, and an unknown key type fails closed
+            # instead of printing a pointer as a string.
+            if iterator_type == "iterator:dict":
+                key_type = self._dict_key_types.get(args[0])
+                if key_type is None:
+                    raise NativeBuildError(
+                        "native dict iteration requires a statically known key type "
+                        "(CPython iterates keys of any type)"
+                    )
+                self.types[result] = key_type
+            else:
+                self.types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:str" else "int"
             self.lines.append("    call piton_catch_flag")
             self.lines.append("    test rax, rax")
             if handler_label:
@@ -841,6 +860,8 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
             if name in self.strkey_dict_temps:
                 self.strkey_dict_temps.add(result)
+            if name in self._dict_key_types:
+                self._dict_key_types[result] = self._dict_key_types[name]
 
         elif op == "store":
             if isinstance(args[1], str) and self.types.get(args[1]) == "builtin":
@@ -897,6 +918,8 @@ class Win64NasmEmitter:
                     self.dict_elems[args[0]] = self.dict_elems[args[1]]
                 if args[1] in self.strkey_dict_temps:
                     self.strkey_dict_temps.add(args[0])
+                if args[1] in self._dict_key_types:
+                    self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
         elif op == "binary":
             operator, left, right = args[0], args[1], args[2]
             # ZDIV_GUARD_V1: mir attaches the innermost try handler as an
@@ -1457,6 +1480,20 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_dict_put")
                 if all(self.types.get(key) == "str" for key, _ in raw_items):
                     self.strkey_dict_temps.add(result)
+                if result and raw_items:
+                    # DICT_KEY_TYPE_V1: only a single key kind is typed;
+                    # a mixed-key dict stays untyped and fails closed.
+                    kinds = {"str" if isinstance(key, str) and not key.startswith("%")
+                             else self.types.get(key, "int") for key, _ in raw_items}
+                    if len(kinds) == 1:
+                        key_kind = next(iter(kinds))
+                        # The Windows dict stores keys as piton_value (int
+                        # auto-encoded) or a tracked string constant. Any other
+                        # key kind (e.g. float) is NOT supported by the runtime,
+                        # so it stays untyped and iteration fails closed
+                        # instead of yielding a mis-encoded key.
+                        if key_kind in {"int", "bool", "str"}:
+                            self._dict_key_types[result] = key_kind
                 if result:
                     # P14 mapping: resolve %(name)s statically for inline
                     # literals with literal str keys. dict_put only accepts
