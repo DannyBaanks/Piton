@@ -130,7 +130,9 @@ INT_BUILTINS = [
     ("lista", [("(1, 2)",), ("'ab'",), ("rango(3)",), ("()",)]),
     ("tupla", [("[1, 2]",), ("'ab'",)]),
     ("diccionario", [("()",), ("([(1, 2)])",), ("([('a', 1)])",)]),
-    ("conjunto", [("[1, 2, 2]",), ("['a', 'b']",), ("rango(3)",)]),
+    # sets of STRS are order-unstable across CPython processes (hash seed):
+    # printing one is not byte-comparable, so only int/range inputs stay here
+    ("conjunto", [("[1, 2, 2]",), ("rango(3)",)]),
     ("sum", [("[1, 2, 3]",), ("rango(4)",), ("('a', 'b')",)]),
     ("min", [("[3, 1, 2]",), ("'abc'",), ("[1.5, 2]",), ("[[1], [2]]",)]),
     ("max", [("[3, 1, 2]",), ("'abc'",), ("[1.5, 2]",)]),

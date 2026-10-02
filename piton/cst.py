@@ -58,6 +58,7 @@ class CSTNodeType(Enum):
     SLICE = "slice"
     LIST = "list"
     TUPLE = "tuple"
+    STARRED = "starred"
     SET = "set"
     DICT = "dict"
     LIST_COMP = "list_comp"
@@ -448,6 +449,13 @@ class Tuple(CSTNode):
     elts: List[CSTNode] = field(default_factory=list)
     ctx: str = "Load"
     type: CSTNodeType = CSTNodeType.TUPLE
+
+
+@dataclass(slots=True)
+class Starred(CSTNode):
+    value: CSTNode | None = None
+    ctx: str = "Load"
+    type: CSTNodeType = CSTNodeType.STARRED
 
 
 @dataclass(slots=True)

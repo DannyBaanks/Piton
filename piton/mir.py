@@ -6,10 +6,10 @@ import json
 import operator
 from typing import Any, Dict, List, Optional, Sequence
 
-from piton.hir import BoolOp, ExceptHandler, HIRKind, HIRNode, Keyword, With
+from piton.hir import BoolOp, Call, ExceptHandler, HIRKind, HIRNode, Keyword, With
 
 
-_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError"}
+_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError", "KeyError", "IndexError", "AttributeError", "NameError", "ZeroDivisionError", "OverflowError", "NotImplementedError"}
 
 
 def _os_name_const() -> str:
@@ -169,6 +169,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     # PURE
     "const": "PURE", "load": "PURE", "store": "PURE", "global_decl": "PURE",
     "jump": "PURE", "branch": "PURE", "return": "PURE",
+    "branch_exc": "OPAQUE",
     "binary": "PURE", "unary": "PURE", "compare": "PURE",
     "math_sqrt": "PURE",
     "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE",
@@ -185,7 +186,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     # WRITE
     "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
     "set_add": "WRITE",
-    "try_push": "WRITE", "try_pop": "WRITE",
+    "try_push": "WRITE", "try_pop": "WRITE", "subscript_store": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
     "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE",
     "task_new": "WRITE", "task_cancel": "WRITE", "gather_add": "WRITE",
@@ -371,6 +372,10 @@ class MIRLowerer:
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
+        elif target.kind == HIRKind.SUBSCR:
+            obj = self._lower_expr(builder, target.value)
+            idx = self._lower_expr(builder, target.slice)
+            builder.emit("subscript_store", obj, idx, value)
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -435,6 +440,10 @@ class MIRLowerer:
         self.module_meta = module_meta or {}
         self.function_params: dict[str, list[str]] = {}
         self.function_defaults: dict[str, dict[str, Any]] = {}
+        # LAMBDA_DEFAULT_V1: (scope, var) -> (params, defaults) for a variable
+        # holding a lambda with defaults, so short calls can fill them like
+        # named-function calls do via function_defaults.
+        self.lambda_var_defaults: dict[tuple[str, str], tuple[list[str], dict[str, Any]]] = {}
         self.function_varargs: dict[str, str | None] = {}
         self.function_kwargs: dict[str, str | None] = {}
         self.function_posonly: dict[str, list[str]] = {}
@@ -1250,26 +1259,28 @@ class MIRLowerer:
             builder.emit("store", node.name, current)
         elif kind == HIRKind.ASSIGN:
             value = self._lower_expr(builder, node.value)
+            if (
+                node.value.kind in {HIRKind.FUNC_DEF, HIRKind.LAMBDA}
+                and len(node.targets) == 1
+                and node.targets[0].kind == HIRKind.STORE
+            ):
+                _fargs = getattr(node.value, "args", None)
+                _raw = list(getattr(_fargs, "defaults", []) or [])
+                if _raw:
+                    _params = list(getattr(_fargs, "args", []) or [])
+                    _pnames = [p.name if hasattr(p, "name") else str(p) for p in _params]
+                    _dmap: dict[str, Any] = {}
+                    for _pn, _dn in zip(_pnames[-len(_raw):] if _raw else [], _raw):
+                        if _dn.kind != HIRKind.CONST:
+                            raise MIRLoweringError("native lambda defaults currently support constant values only")
+                        _dmap[_pn] = _dn.value
+                    self.lambda_var_defaults[(builder.function.name, node.targets[0].name)] = (_pnames, _dmap)
             for target in node.targets:
                 if target.kind == HIRKind.TUPLE:
                     # PARITY_P2_V1: tuple-target assignment unpacks
-                    # element-wise (CPython: a, b = pair). Value is evaluated
-                    # once; each target pulls its slot with get_item.
-                    # UNPACK_ARITY_V1: verify the element count first
-                    # (CPython raises ValueError on mismatch instead of
-                    # silently slicing) — the handler rides along so
-                    # intentar/excepto ValueError routes.
-                    builder.emit("unpack_check", value, len(target.elts), _active_handler(builder))
-                    for index, element in enumerate(target.elts):
-                        if element.kind not in (HIRKind.STORE, HIRKind.ATTR):
-                            raise MIRLoweringError(
-                                "desempaquetado solo soporta nombres y atributos (tuplas anidadas/*, pendientes)"
-                            )
-                        index_temp = builder.temp()
-                        builder.emit("const", index, result=index_temp)
-                        element_value = builder.temp()
-                        builder.emit("get_item", value, index_temp, result=element_value)
-                        self._store(builder, element, element_value)
+                    # element-wise (CPython: a, b = pair), now with starred
+                    # support (`a, *resto = ...`). See _store_tuple_target.
+                    self._store_tuple_target(builder, target, value)
                 else:
                     self._store(builder, target, value)
         elif kind == HIRKind.ANN_ASSIGN:
@@ -1382,6 +1393,8 @@ class MIRLowerer:
                 owner = self._lower_expr(builder, target.value)
                 builder.emit("del_attr", owner, target.attr)
         else:
+            if kind == HIRKind.PASS:
+                return
             if kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
                 self._lower_expr(builder, node)
 
@@ -1438,6 +1451,82 @@ class MIRLowerer:
             self._lower_statements(builder, node.orelse)
             builder.emit("jump", after_else.label)
             builder.current = after_else
+
+    def _store_tuple_target(self, builder: _Builder, tuple_node: HIRNode, value: str) -> None:
+        """Unpack `value` into a Tuple target, plain and starred elements.
+
+        Plain elements keep the historical path (unpack_check for the exact
+        count, then get_item per slot). A single starred element takes the
+        middle slice: fixed head/tail elements index from the ends, and the
+        slice between them becomes a list. Too few values raise ValueError
+        (catchable via the active handler), exactly like CPython — get_item
+        alone would have answered IndexError instead.
+        """
+        elts = tuple_node.elts
+        starred = [i for i, e in enumerate(elts) if e.kind == HIRKind.STARRED]
+        if len(starred) > 1:
+            raise MIRLoweringError("native unpacking allows at most one starred target")
+        if not starred:
+            builder.emit("unpack_check", value, len(elts), _active_handler(builder))
+            for index, element in enumerate(elts):
+                if element.kind not in (HIRKind.STORE, HIRKind.ATTR):
+                    raise MIRLoweringError(
+                        "desempaquetado solo soporta nombres y atributos (tuplas anidadas pendientes)"
+                    )
+                index_temp = builder.temp()
+                builder.emit("const", index, result=index_temp)
+                element_value = builder.temp()
+                builder.emit("get_item", value, index_temp, result=element_value)
+                self._store(builder, element, element_value)
+            return
+        si = starred[0]
+        before, after = elts[:si], elts[si + 1 :]
+        minimum = len(before) + len(after)
+        length = builder.temp()
+        builder.emit("collection_len", value, result=length)
+        minimum_temp = builder.temp()
+        builder.emit("const", minimum, result=minimum_temp)
+        cond = self._compare(builder, "<", length, minimum_temp)
+        fail_block = builder.new_block()
+        ok_block = builder.new_block()
+        builder.emit("branch", cond, fail_block.label, ok_block.label)
+        builder.current = fail_block
+        builder.emit("raise_typed", "ValueError", None, _active_handler(builder))
+        builder.current = ok_block
+        for index, element in enumerate(before):
+            self._store_indexed_element(builder, element, value, index)
+        # the starred middle: slice from len(before) to len-n_after (None when
+        # the star is last), always a fresh list
+        lower = builder.temp()
+        builder.emit("const", len(before), result=lower)
+        if after:
+            n_after = builder.temp()
+            builder.emit("const", len(after), result=n_after)
+            upper = builder.temp()
+            builder.emit("binary", "-", length, n_after, result=upper)
+        else:
+            upper = None
+        middle = builder.temp()
+        if upper is None:
+            builder.emit("get_slice", value, lower, None, result=middle)
+        else:
+            builder.emit("get_slice", value, lower, upper, result=middle)
+        self._store(builder, elts[si].value, middle)
+        total = len(elts) - 1
+        for offset, element in enumerate(after):
+            self._store_indexed_element(builder, element, value, offset - len(after))
+
+    def _store_indexed_element(self, builder: _Builder, element: HIRNode, value: str, index: int) -> None:
+        """Store one unpacked element fetched by (possibly negative) position."""
+        if element.kind not in (HIRKind.STORE, HIRKind.ATTR):
+            raise MIRLoweringError(
+                "desempaquetado solo soporta nombres y atributos (tuplas anidadas pendientes)"
+            )
+        index_temp = builder.temp()
+        builder.emit("const", index, result=index_temp)
+        element_value = builder.temp()
+        builder.emit("get_item", value, index_temp, result=element_value)
+        self._store(builder, element, element_value)
 
     def _lower_for(self, builder: _Builder, node: HIRNode) -> None:
         if node.is_async:
@@ -1501,9 +1590,15 @@ class MIRLowerer:
         builder.current = body_block
         item = builder.temp()
         builder.emit("get_item", generator, index, result=item)
-        if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
+        if node.target.kind == HIRKind.TUPLE:
+            # FOR_TUPLE_TARGET_V1: `para k, v en ...` unpacks each yielded
+            # item exactly like a tuple-target assignment does (arity checked,
+            # starred middle sliced, ValueError catchable).
+            self._store_tuple_target(builder, node.target, item)
+        elif node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
             raise MIRLoweringError("native generator loop target must be a name")
-        self._store_loop_target(builder, node.target.name, item)
+        if node.target.kind != HIRKind.TUPLE:
+            self._store_loop_target(builder, node.target.name, item)
         self._lower_statements(builder, node.body)
         builder.emit("jump", increment_block.label)
         builder.current = increment_block
@@ -1571,9 +1666,15 @@ class MIRLowerer:
         cond = self._compare(builder, "<", index, stop) if self._is_positive_step(builder, step) else self._compare(builder, ">", index, stop)
         builder.emit("branch", cond, body_block.label, end_block.label)
         builder.current = body_block
-        if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
+        if node.target.kind == HIRKind.TUPLE:
+            # FOR_TUPLE_TARGET_V1: `para k, v en ...` unpacks each yielded
+            # item exactly like a tuple-target assignment does (arity checked,
+            # starred middle sliced, ValueError catchable).
+            self._store_tuple_target(builder, node.target, item)
+        elif node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
             raise MIRLoweringError("native generator loop target must be a name")
-        self._store_loop_target(builder, node.target.name, index)
+        if node.target.kind != HIRKind.TUPLE:
+            self._store_loop_target(builder, node.target.name, index)
         self._lower_statements(builder, node.body)
         builder.emit("jump", increment_block.label)
         builder.current = increment_block
@@ -1623,9 +1724,15 @@ class MIRLowerer:
         builder.current = condition_block
         item = builder.temp()
         builder.emit("iter_next", iterator, end_block.label, result=item)
-        if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
+        if node.target.kind == HIRKind.TUPLE:
+            # FOR_TUPLE_TARGET_V1: `para k, v en ...` unpacks each yielded
+            # item exactly like a tuple-target assignment does (arity checked,
+            # starred middle sliced, ValueError catchable).
+            self._store_tuple_target(builder, node.target, item)
+        elif node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
             raise MIRLoweringError("native generator loop target must be a name")
-        self._store_loop_target(builder, node.target.name, item)
+        if node.target.kind != HIRKind.TUPLE:
+            self._store_loop_target(builder, node.target.name, item)
         self._lower_statements(builder, node.body)
         builder.emit("jump", increment_block.label)
         builder.current = increment_block
@@ -1683,9 +1790,12 @@ class MIRLowerer:
         builder.emit("agen_done", agen, result=done)
         builder.emit("branch", done, end_block.label, body_block.label)
         builder.current = body_block
-        if node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
+        if node.target.kind == HIRKind.TUPLE:
+            self._store_tuple_target(builder, node.target, value)
+        elif node.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
             raise MIRLoweringError("native async generator loop target must be a name")
-        self._store_loop_target(builder, node.target.name, value)
+        if node.target.kind != HIRKind.TUPLE:
+            self._store_loop_target(builder, node.target.name, value)
         self._lower_statements(builder, node.body)
         builder.emit("jump", condition_block.label)
         builder.current = end_block
@@ -1740,8 +1850,14 @@ class MIRLowerer:
         builder.current = try_body_block
         if handler_block:
             builder.exception_handlers.append((handler_block.label, accepted))
+        elif finally_body:
+            # FINALBODY_UNWIND_V1: an exception escaping the try still runs
+            # the finally block first, instead of skipping it.
+            builder.exception_handlers.append((finally_block.label, None))
         self._lower_statements(builder, node.body)
         if handler_block:
+            builder.exception_handlers.pop()
+        elif finally_body:
             builder.exception_handlers.pop()
         builder.emit("try_pop")
         if else_block is not None:
@@ -1789,7 +1905,10 @@ class MIRLowerer:
         if finally_body:
             builder.current = finally_block
             self._lower_statements(builder, finally_body)
-            builder.emit("jump", end_block.label)
+            # FINALBODY_UNWIND_V1: the finally may have been reached by an
+            # active exception (the live flag survives it) — if so, keep
+            # propagating instead of falling through to normal flow.
+            builder.emit("branch_exc", end_block.label)
 
         builder.current = end_block
 
@@ -1950,6 +2069,8 @@ class MIRLowerer:
         if node.exc is None:
             self._lower_reraise(builder)
             return
+        if node.exc.kind == HIRKind.LOAD and (node.exc.name in _BUILTIN_EXCEPTIONS or node.exc.name in self.classes):
+            node = replace(node, exc=Call(kind=HIRKind.CALL, func=node.exc, args=[], keywords=[]))
         if node.exc.kind != HIRKind.CALL or node.exc.func.kind != HIRKind.LOAD:
             raise MIRLoweringError("native raise requires a call to an exception constructor")
         exception_type = node.exc.func.name
@@ -2144,6 +2265,22 @@ class MIRLowerer:
             builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), result=result)
             return result
         if kind == HIRKind.CALL:
+            # GENEXP_ARG_V1: `sum(x para x en ...)` — a bare generator
+            # expression as a consuming builtin's argument desugars to a list
+            # comprehension (fully consumed either way, so eagerness is
+            # unobservable; infinite genexprs hang in both forms). This runs
+            # before every call branch so `sum`, `lista`, `ordenar`, `min`,
+            # `max` all accept genexprs.
+            if (
+                node.func.kind == HIRKind.LOAD
+                and node.func.name in {"sum", "lista", "list", "tupla", "tuple", "conjunto", "set", "ordenar", "sorted", "min", "max"}
+                and len(node.args) == 1
+                and not node.keywords
+                and node.args[0].kind == HIRKind.GEN_EXPR
+            ):
+                gen = node.args[0]
+                from piton.hir import ListComp as _HIRListComp
+                node.args = (_HIRListComp(elt=gen.elt, generators=gen.generators, kind=HIRKind.LIST_COMP),)
             if self._call_has_dynamic_unpack(node):
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
@@ -2487,6 +2624,23 @@ class MIRLowerer:
                 if node.keywords:
                     raise MIRLoweringError("native closure calls do not support keyword arguments yet")
                 lifted_name, capture_names, _ = closure
+                # LAMBDA_DEFAULT_V1: fill missing args from recorded lambda
+                # defaults, mirroring named-function calls.
+                if node.func.kind == HIRKind.LOAD:
+                    _crec = self.lambda_var_defaults.get((builder.function.name, node.func.name))
+                    if _crec is not None:
+                        _cparams, _cdmap = _crec
+                        _cmissing = len(_cparams) - len(node.args)
+                        if 0 < _cmissing <= len(_cdmap):
+                            from piton.hir import Const as _HIRConst2
+                            _cfill = []
+                            for _cpn in _cparams[len(node.args):]:
+                                if _cpn not in _cdmap:
+                                    _cfill = []
+                                    break
+                                _cfill.append(_HIRConst2(value=_cdmap[_cpn], kind=HIRKind.CONST))
+                            if _cfill:
+                                node.args = (*node.args, *_cfill)
                 function = builder.temp()
                 builder.emit("load", lifted_name, result=function)
                 captures = []
@@ -2514,8 +2668,36 @@ class MIRLowerer:
             else:
                 if node.keywords:
                     raise MIRLoweringError("native keyword args require a known function")
+                # LAMBDA_DEFAULT_V1: fill missing args from recorded lambda
+                # defaults (variable-held or inline), mirroring named functions.
+                _extra_args: list = []
+                _params = None
+                _dmap = None
+                if node.func.kind == HIRKind.LOAD:
+                    _rec = self.lambda_var_defaults.get((builder.function.name, node.func.name))
+                    if _rec is not None:
+                        _params, _dmap = _rec
+                elif node.func.kind in {HIRKind.LAMBDA, HIRKind.FUNC_DEF}:
+                    _fargs = getattr(node.func, "args", None)
+                    _raw = list(getattr(_fargs, "defaults", []) or [])
+                    if _raw:
+                        _plist = getattr(_fargs, "args", []) or []
+                        _params = [pn.name if hasattr(pn, "name") else str(pn) for pn in _plist]
+                        _dmap = {}
+                        for _pn, _dn in zip(_params[-len(_raw):], _raw):
+                            if _dn.kind != HIRKind.CONST:
+                                raise MIRLoweringError("native lambda defaults currently support constant values only")
+                            _dmap[_pn] = _dn.value
+                if _params is not None and _dmap:
+                    _missing = len(_params) - len(node.args)
+                    if 0 < _missing <= len(_dmap):
+                        from piton.hir import Const as _HIRConst
+                        for _pn in _params[len(node.args):]:
+                            if _pn not in _dmap:
+                                raise MIRLoweringError(f"native lambda call missing argument '{_pn}' with no default")
+                            _extra_args.append(_HIRConst(value=_dmap[_pn], kind=HIRKind.CONST))
                 function = self._lower_expr(builder, node.func)
-                args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))
             result = builder.temp()
             if node.func.kind == HIRKind.LOAD and self.function_frame_abi.get(node.func.name, False):
                 builder.emit("frame_call", function, args, result=result)
@@ -2524,6 +2706,10 @@ class MIRLowerer:
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
+        elif target.kind == HIRKind.SUBSCR:
+            obj = self._lower_expr(builder, target.value)
+            idx = self._lower_expr(builder, target.slice)
+            builder.emit("subscript_store", obj, idx, value)
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -2749,6 +2935,22 @@ class MIRLowerer:
             builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0, result=result)
             return result
         if kind == HIRKind.CALL:
+            # GENEXP_ARG_V1: `sum(x para x en ...)` — a bare generator
+            # expression as a consuming builtin's argument desugars to a list
+            # comprehension (fully consumed either way, so eagerness is
+            # unobservable; infinite genexprs hang in both forms). This runs
+            # before every call branch so `sum`, `lista`, `ordenar`, `min`,
+            # `max` all accept genexprs.
+            if (
+                node.func.kind == HIRKind.LOAD
+                and node.func.name in {"sum", "lista", "list", "tupla", "tuple", "conjunto", "set", "ordenar", "sorted", "min", "max"}
+                and len(node.args) == 1
+                and not node.keywords
+                and node.args[0].kind == HIRKind.GEN_EXPR
+            ):
+                gen = node.args[0]
+                from piton.hir import ListComp as _HIRListComp
+                node.args = (_HIRListComp(elt=gen.elt, generators=gen.generators, kind=HIRKind.LIST_COMP),)
             if self._call_has_dynamic_unpack(node):
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
@@ -3115,6 +3317,23 @@ class MIRLowerer:
                 if node.keywords:
                     raise MIRLoweringError("native closure calls do not support keyword arguments yet")
                 lifted_name, capture_names, _ = closure
+                # LAMBDA_DEFAULT_V1: fill missing args from recorded lambda
+                # defaults, mirroring named-function calls.
+                if node.func.kind == HIRKind.LOAD:
+                    _crec = self.lambda_var_defaults.get((builder.function.name, node.func.name))
+                    if _crec is not None:
+                        _cparams, _cdmap = _crec
+                        _cmissing = len(_cparams) - len(node.args)
+                        if 0 < _cmissing <= len(_cdmap):
+                            from piton.hir import Const as _HIRConst2
+                            _cfill = []
+                            for _cpn in _cparams[len(node.args):]:
+                                if _cpn not in _cdmap:
+                                    _cfill = []
+                                    break
+                                _cfill.append(_HIRConst2(value=_cdmap[_cpn], kind=HIRKind.CONST))
+                            if _cfill:
+                                node.args = (*node.args, *_cfill)
                 function = builder.temp()
                 builder.emit("load", lifted_name, result=function)
                 captures = []
@@ -3142,8 +3361,36 @@ class MIRLowerer:
             else:
                 if node.keywords:
                     raise MIRLoweringError("native keyword args require a known function")
+                # LAMBDA_DEFAULT_V1: fill missing args from recorded lambda
+                # defaults (variable-held or inline), mirroring named functions.
+                _extra_args: list = []
+                _params = None
+                _dmap = None
+                if node.func.kind == HIRKind.LOAD:
+                    _rec = self.lambda_var_defaults.get((builder.function.name, node.func.name))
+                    if _rec is not None:
+                        _params, _dmap = _rec
+                elif node.func.kind in {HIRKind.LAMBDA, HIRKind.FUNC_DEF}:
+                    _fargs = getattr(node.func, "args", None)
+                    _raw = list(getattr(_fargs, "defaults", []) or [])
+                    if _raw:
+                        _plist = getattr(_fargs, "args", []) or []
+                        _params = [pn.name if hasattr(pn, "name") else str(pn) for pn in _plist]
+                        _dmap = {}
+                        for _pn, _dn in zip(_params[-len(_raw):], _raw):
+                            if _dn.kind != HIRKind.CONST:
+                                raise MIRLoweringError("native lambda defaults currently support constant values only")
+                            _dmap[_pn] = _dn.value
+                if _params is not None and _dmap:
+                    _missing = len(_params) - len(node.args)
+                    if 0 < _missing <= len(_dmap):
+                        from piton.hir import Const as _HIRConst
+                        for _pn in _params[len(node.args):]:
+                            if _pn not in _dmap:
+                                raise MIRLoweringError(f"native lambda call missing argument '{_pn}' with no default")
+                            _extra_args.append(_HIRConst(value=_dmap[_pn], kind=HIRKind.CONST))
                 function = self._lower_expr(builder, node.func)
-                args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))
             result = builder.temp()
             if node.func.kind == HIRKind.LOAD and self.function_frame_abi.get(node.func.name, False):
                 builder.emit("frame_call", function, args, result=result)
@@ -3330,9 +3577,14 @@ class MIRLowerer:
         builder.current = body_block
         item = builder.temp()
         builder.emit("get_item", iter_val, index, result=item)
-        if gen.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
+        if gen.target.kind == HIRKind.TUPLE:
+            # COMP_TUPLE_TARGET_V1: `[x for a, b in xs]` unpacks each item,
+            # same rule as the for-loop and the tuple-target assignment.
+            self._store_tuple_target(builder, gen.target, item)
+        elif gen.target.kind not in {HIRKind.LOAD, HIRKind.STORE}:
             raise MIRLoweringError("native comprehension target must be a name")
-        builder.emit("store", gen.target.name, item)
+        else:
+            builder.emit("store", gen.target.name, item)
         rest_fn = lambda b: self._lower_comp_generators(b, generators[1:], body_fn)
         self._lower_comp_ifs(builder, gen.ifs, rest_fn)
         builder.emit("jump", increment_block.label)

@@ -177,13 +177,13 @@ class CollMethodsV1(unittest.TestCase):
     def test_dict_get_default(self):
         _assert_matches(self, "imprimir({'a': 1}.get('z', 7))\n")
 
-    def test_dict_get_missing_key_fails_loud(self):
-        # the untagged model cannot print an int-or-None union: single-arg
-        # get on a missing key raises KeyError (consistent with d[k] here)
-        # instead of a silent wrong value.
+    def test_dict_get_missing_key_prints_none(self):
+        # DICT_VAL_TYPE_V1 moved: the backend now keeps the result as a
+        # tagged slot, so a miss prints None like CPython (was fail-loud
+        # KeyError before the tagged-slot get landed).
         result = compare_native_to_cpython("d = {'a': 1}\nimprimir(d.get('z'))\n")
-        self.assertEqual(result.native.returncode, 1)
-        self.assertIn(b"KeyError", result.native.stderr)
+        self.assertEqual(result.native.returncode, 0)
+        self.assertEqual(result.native.stdout, b"None\n")
 
     def test_set_add(self):
         _assert_matches(self, "s = {1}\ns.add(2)\ns.add(1)\nimprimir(s)\n")

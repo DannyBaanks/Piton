@@ -1017,5 +1017,123 @@ class DivergentCluster29V1(unittest.TestCase):
         _assert_matches(self, "imprimir(sum([1, 2, 3]))\n")
 
 
+class ExceptionPropagationV1(unittest.TestCase):
+    """CALL_PROPAGATE_V1: `lanzar` cruza los limites de llamada.
+
+    Un `raise` sin handler en SU funcion hacia exit directo, asi que la
+    excepcion nunca llegaba al `intentar` del llamador. Ahora el raise retorna
+    con el flag puesto y cada sitio de llamada lo enruta (al handler o mas
+    arriba); solo el nivel superior y los generadores salen terminalmente.
+    """
+
+    def test_raise_in_function_caught_by_caller(self):
+        _assert_matches(
+            self,
+            "funcion f():\n    lanzar ValueError('in func')\n"
+            "intentar:\n    f()\nexcepto ValueError:\n    imprimir('ok')\n",
+        )
+
+    def test_raise_propagates_through_nested_calls(self):
+        _assert_matches(
+            self,
+            "funcion g():\n    lanzar ValueError('deep')\n"
+            "funcion f():\n    g()\n"
+            "intentar:\n    f()\nexcepto ValueError:\n    imprimir('ok')\n",
+        )
+
+    def test_raise_with_message_across_calls(self):
+        _assert_matches(
+            self,
+            "funcion f():\n    lanzar ValueError('detail')\n"
+            "intentar:\n    f()\nexcepto ValueError como e:\n    imprimir(e)\n",
+        )
+
+    def test_uncaught_raise_still_exits(self):
+        for source in (
+            "funcion f():\n    lanzar ValueError('x')\nf()\n",
+            "funcion g():\n    lanzar ValueError('x')\nfuncion f():\n    g()\nf()\n",
+        ):
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1)
+            self.assertEqual(result.oracle.returncode, 1)
+
+    def test_mid_chain_catch(self):
+        _assert_matches(
+            self,
+            "funcion g():\n    lanzar ValueError('x')\n"
+            "funcion f():\n    intentar:\n        g()\n"
+            "    excepto ValueError:\n        devolver 99\n"
+            "imprimir(f())\n",
+        )
+
+
+class SuperAndDunderV1(unittest.TestCase):
+    """METHODTYPE_V1 + DUNDER_ARITH_V1: super() y dunders aritmeticos.
+
+    `P() + 1` hacia una suma entera del PUNTERO del objeto. `super().f()`
+    devolvia basura porque la inferencia no tipaba el resultado del metodo
+    llamado (todo method_call/binary caia a int).
+    """
+
+    def test_super_dispatch(self):
+        _assert_matches(
+            self,
+            "clase A:\n    funcion f(self):\n        devolver 'A'\n"
+            "clase B(A):\n    funcion f(self):\n        devolver 'B' + super().f()\n"
+            "imprimir(B().f())\n",
+        )
+
+    def test_dunder_arithmetic(self):
+        for source in (
+            "clase P:\n    funcion __add__(self, o):\n        devolver 99\nimprimir(P() + 1)\n",
+            "clase P:\n    funcion __radd__(self, o):\n        devolver 7\nimprimir(1 + P())\n",
+            "clase P:\n    funcion __sub__(self, o):\n        devolver 3\nimprimir(P() - 1)\n",
+            "clase P:\n    funcion __mul__(self, o):\n        devolver 4\nimprimir(P() * 2)\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_missing_dunder_fails_closed(self):
+        try:
+            compare_native_to_cpython("clase P:\n    pasar\nimprimir(P() + 1)\n")
+        except NativeBuildError:
+            pass
+        else:
+            self.fail("arithmetic without dunder not closed")
+
+
+class ChrNulV1(unittest.TestCase):
+    """CHR_NUL_V1: chr() results carry their encoded length.
+
+    strlen stops at NUL, so `chr(0)` printed empty and measured length 0.
+    Every chr() result is exactly one character; print writes its encoded
+    bytes and len() answers 1. Equality of two chr() results via strcmp is
+    already correct (distinct single chars differ in the first byte).
+    """
+
+    def test_chr_nul_prints_and_measures_one(self):
+        for source in (
+            "imprimir(chr(0))\n",
+            "imprimir(longitud(chr(0)))\n",
+            "x = chr(0)\nimprimir(x)\nimprimir(longitud(x))\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_chr_multibyte_roundtrips(self):
+        for source in (
+            "imprimir(chr(65))\n",
+            "imprimir(chr(233))\n",
+            "imprimir(chr(20013))\n",
+            "imprimir(chr(1114111))\n",
+            "imprimir(longitud(chr(1114111)))\n",
+        ):
+            _assert_matches(self, source)
+
+    def test_chr_out_of_range_raises(self):
+        for source in ("imprimir(chr(1114112))\n", "imprimir(chr(-1))\n"):
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1)
+            self.assertEqual(result.oracle.returncode, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

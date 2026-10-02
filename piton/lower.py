@@ -11,7 +11,7 @@ from piton.hir import (
     Load, Store, Delete, Global, Nonlocal,
     Assign as HIRAssign, AnnAssign as HIRAnnAssign, AugAssign as HIRAugAssign,
     Const, BinOp, UnOp, Compare, BoolOp, Call, Keyword,
-    Attr, Subscr, List, Tuple, Set, Dict,
+    Attr, Subscr, List, Tuple, Starred, Set, Dict,
     ListComp, SetComp, DictComp, GenExpr, CompFor, IfExpr, Await,
     Import, ImportFrom, Alias,
     HIRKind,
@@ -32,7 +32,7 @@ from piton.cst import (
     UnaryOp as CSTUnaryOp, Compare as CSTCompare, BoolOp as CSTBoolOp,
     Call as CSTCall, Keyword as CSTKeyword, Attribute as CSTAttribute,
     Subscript as CSTSubscript, Slice as CSTSlice,
-    List as CSTList, Tuple as CSTTuple, Set as CSTSet, Dict as CSTDict,
+    List as CSTList, Tuple as CSTTuple, Set as CSTSet, Dict as CSTDict, Starred as CSTStarred,
     ListComp as CSTListComp, SetComp as CSTSetComp, DictComp as CSTDictComp,
     GenExpr as CSTGenExpr, CompFor as CSTCompFor, IfExpr as CSTIfExpr,
     FString as CSTFString, FStringPart as CSTFStringPart, FStringExpr as CSTFStringExpr,
@@ -310,11 +310,20 @@ class Lowerer:
             if isinstance(part, CSTFStringPart):
                 template_parts.append(part.value)
             elif isinstance(part, CSTFStringExpr):
-                if part.format_spec is not None or part.conversion != -1:
+                if part.conversion not in (-1, ord('s')):
                     raise LoweringError(
-                        "f-string with conversion (!r !s !a) or format spec is not supported"
+                        "f-string conversion must be !s or omitted here"
                     )
-                template_parts.append("{}")
+                placeholder = "{}"
+                if part.format_spec is not None:
+                    if (
+                        type(part.format_spec).__name__ == "Constant"
+                        and isinstance(part.format_spec.value, str)
+                    ):
+                        placeholder = "{:" + part.format_spec.value + "}"
+                    else:
+                        raise LoweringError("f-string format_spec dynamic expressions are unsupported")
+                template_parts.append(placeholder)
                 args.append(self.lower(part.value))
             else:
                 raise LoweringError(
@@ -367,6 +376,9 @@ class Lowerer:
     def _lower_tuple(self, cst: CSTTuple):
         elts = [self.lower(e) for e in cst.elts]
         return Tuple(kind=HIRKind.TUPLE, elts=elts, ctx=cst.ctx)
+
+    def _lower_starred(self, cst: CSTStarred):
+        return Starred(kind=HIRKind.STARRED, value=self.lower(cst.value), ctx=cst.ctx)
 
     def _lower_set(self, cst: CSTSet):
         elts = [self.lower(e) for e in cst.elts]

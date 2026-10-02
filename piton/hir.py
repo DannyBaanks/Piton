@@ -53,6 +53,7 @@ class HIRKind(Enum):
     SUBSCR = auto()
     LIST = auto()
     TUPLE = auto()
+    STARRED = auto()
     SET = auto()
     DICT = auto()
     LIST_COMP = auto()
@@ -369,6 +370,13 @@ class Tuple(HIRNode):
     elts: List[HIRNode] = field(default_factory=list)
     ctx: str = "Load"
     kind: HIRKind = HIRKind.TUPLE
+
+
+@dataclass(slots=True)
+class Starred(HIRNode):
+    value: HIRNode | None = None
+    ctx: str = "Load"
+    kind: HIRKind = HIRKind.STARRED
 
 
 @dataclass(slots=True)
