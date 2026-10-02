@@ -206,11 +206,18 @@ static void piton_object_free(void*raw){piton_collection_free(raw);}
 static PitonSlot piton_slot(long bits,int kind){PitonSlot v={bits,kind};return v;}
 static long piton_double_bits(double d){union{double d;unsigned long u;}v={d};return(long)v.u;}
 static double piton_bits_double(long bits){union{double d;unsigned long u;}v;v.u=(unsigned long)bits;return v.d;}
+static double piton_round_h(double x){return __builtin_floor(x + (x < 0.0 ? -0.5 : 0.5));}
 static long piton_float_add(long a,long b){return piton_double_bits(piton_bits_double(a)+piton_bits_double(b));}
 static long piton_float_sub(long a,long b){return piton_double_bits(piton_bits_double(a)-piton_bits_double(b));}
 static long piton_float_mul(long a,long b){return piton_double_bits(piton_bits_double(a)*piton_bits_double(b));}
 static long piton_float_neg(long a){return(long)((unsigned long)a^(1UL<<63));}
 static long piton_float_sqrt(long a){double x=piton_bits_double(a),r;__asm__ volatile("sqrtsd %1,%0":"=x"(r):"x"(x));return piton_double_bits(r);}
+static double piton_pow10(int p){static const double t[]={1.0,10.0,100.0,1000.0,10000.0,100000.0,1000000.0,10000000.0,100000000.0,1000000000.0,10000000000.0,100000000000.0,1000000000000.0,10000000000000.0,100000000000000.0,1000000000000000.0};int i=p<0?0:(p>15?15:p);return t[i];}
+static int piton_frac_digits(long whole_scaled,int width,char*out){long w=whole_scaled;char rev[64];int rn=0;if(w==0)rev[rn++]='0';while(w){rev[rn++]=(char)('0'+w%10);w/=10;}for(int i=0;i<rn;++i)out[i]=rev[rn-1-i];out[rn]=0;return rn;}
+static long piton_float_fmt_fixed(long bits,int prec){double x=piton_bits_double(bits);int p=prec>=0?prec:6;int neg=x<0;if(neg)x=-x;double scaled=piton_round_h(x*piton_pow10(p));char digits[80];int rn=piton_frac_digits((long)scaled,p+2,digits);char*out=piton_alloc(128);int o=0;if(neg)out[o++]='-';if(rn>p){for(int i=0;i<rn-p;++i)out[o++]=digits[i];if(p>0){out[o++]='.';for(int i=rn-p;i<rn;++i)out[o++]=digits[i];}}else{out[o++]='0';if(p>0){out[o++]='.';for(int i=0;i<p-rn;++i)out[o++]='0';for(int i=0;i<rn;++i)out[o++]=digits[i];}}out[o]=0;return(long)out;}
+static long piton_float_fmt_pct(long bits,int prec){double x=piton_bits_double(bits)*100.0;long s=piton_float_fmt_fixed(piton_double_bits(x),prec>=0?prec:6);char*p=(char*)s;usize n=piton_strlen(p);char*r=piton_alloc(n+2);piton_memcpy(r,p,n+1);r[n]='%';r[n+1]=0;return(long)r;}
+static long piton_float_fmt_exp(long bits,int prec,int upper){double x=piton_bits_double(bits);int p=prec>=0?prec:6;int neg=x<0;if(neg)x=-x;int exp=0;double m=x;while(m>=10.0){m/=10.0;++exp;}while(m<1.0&&m>0.0){m*=10.0;--exp;}double scaled=piton_round_h(m*piton_pow10(p));char digits[80];int rn=piton_frac_digits((long)scaled,p+2,digits);char*out=piton_alloc(64);int o=0;if(neg)out[o++]='-';if(rn>p+1){out[o++]='1';if(p>0){out[o++]='.';for(int i=0;i<p;++i)out[o++]=digits[1+i];}++exp;}else{out[o++]=rn>0?digits[0]:'0';if(p>0){out[o++]='.';for(int i=1;i<=p;++i)out[o++]=i<rn?digits[i]:'0';}}out[o++]=upper?'E':'e';out[o++]=exp<0?'-':'+';int ae=exp<0?-exp:exp;if(ae<10){out[o++]='0';out[o++]=(char)('0'+ae);}else{out[o++]=(char)('0'+ae/10);out[o++]=(char)('0'+ae%10);}out[o]=0;return(long)out;}
+static long piton_float_fmt_g(long bits,int upper){double x=piton_bits_double(bits);if(x==0.0){char*z=piton_alloc(2);z[0]='0';z[1]=0;return(long)z;}int neg=x<0;if(neg)x=-x;int exp=0;double m=x;while(m>=10.0){m/=10.0;++exp;}while(m<1.0){m*=10.0;--exp;}if(exp<-4||exp>=6){char*s=(char*)piton_float_fmt_exp(bits,5,upper);/* trim zeros */char*d=s+1;while(d<s+50&&*d&&*d!='e'&&*d!='E')++d;char*e=d;while(e>s&&*(e-1)=='0')--e;if(e>s&&*(e-1)=='.')--e;for(char*q=d;*q;++q)e++[0]=q[0];return(long)s;}int p2=6-1-exp;if(p2<0)p2=0;char*s=(char*)piton_float_fmt_fixed(bits,p2);char*d=s;while(*d&&*d!='.')++d;if(*d=='.'){char*q=d+piton_strlen(d)-1;while(q>d&&*q=='0')--q;if(*q=='.')*q++=0;else *(q+1)=0;}else {}return(long)s;}
 static long piton_float_floor(long a){double x=piton_bits_double(a);if(x!=x){piton_write(2,"ValueError: cannot convert float NaN to integer\n",48);piton_exit(1);}double f=__builtin_floor(x);if(f>9.2233720368547758e18||f<-9.2233720368547758e18){piton_write(2,"OverflowError: cannot convert float infinity to integer\n",56);piton_exit(1);}return(long)f;}
 static long piton_float_ceil(long a){double x=piton_bits_double(a);if(x!=x){piton_write(2,"ValueError: cannot convert float NaN to integer\n",48);piton_exit(1);}double f=__builtin_ceil(x);if(f>9.2233720368547758e18||f<-9.2233720368547758e18){piton_write(2,"OverflowError: cannot convert float infinity to integer\n",56);piton_exit(1);}return(long)f;}
 /* ── freestanding math: PITON's own sin/cos/log (no libm, -nostdlib) ──────
@@ -258,6 +265,22 @@ static long piton_str_find(const char*s,const char*n){usize hl=piton_strlen(s),n
 static long piton_str_startswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[i]!=p[i])return 0;return 1;}
 static long piton_str_endswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[hl-nl+i]!=p[i])return 0;return 1;}
 static long piton_str_replace(const char*s,const char*a,const char*b){usize sl=piton_strlen(s),al=piton_strlen(a),bl=piton_strlen(b);usize count=0;if(al==0){count=sl+1;}else{for(usize i=0;i+al<=sl;){usize k=0;while(k<al&&s[i+k]==a[k])++k;if(k==al){++count;i+=al;}else++i;}}usize total=sl+count*bl-(al==0?0:count*al);char*p=piton_alloc(total+1);usize o=0;if(al==0){for(usize i=0;i<sl;++i){piton_memcpy(p+o,b,bl);o+=bl;p[o++]=s[i];}piton_memcpy(p+o,b,bl);o+=bl;}else{for(usize i=0;i<sl;){usize k=0;while(k<al&&i+k<sl&&s[i+k]==a[k])++k;if(k==al){piton_memcpy(p+o,b,bl);o+=bl;i+=al;}else p[o++]=s[i++];}}p[o]=0;return(long)p;}
+static int piton_chrinstr(const char*set,char c){if(!set)return piton_ws((unsigned char)c);for(usize i=0;set[i];++i)if(set[i]==c)return 1;return 0;}
+static long piton_str_strip_chrs(const char*s,const char*chrs,int mode){usize n=piton_strlen(s),a=0,b=n;if(mode!=2){while(a<n&&piton_chrinstr(chrs,s[a]))++a;}if(mode!=1){while(b>a&&piton_chrinstr(chrs,s[b-1]))--b;}char*p=piton_alloc(b-a+1);piton_memcpy(p,s+a,b-a);p[b-a]=0;return(long)p;}
+static long piton_str_capitalize(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(!i){if(c>='a'&&c<='z')c-=32;}else{if(c>='A'&&c<='Z')c+=32;}p[i]=(char)c;}p[n]=0;return(long)p;}
+static long piton_str_title(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);int wordbreak=1;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];int letter=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(letter){if(wordbreak&&c>='a'&&c<='z')c-=32;else if(!wordbreak&&c>='A'&&c<='Z')c+=32;wordbreak=0;}else wordbreak=1;p[i]=(char)c;}p[n]=0;return(long)p;}
+static long piton_str_swapcase(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c>='a'&&c<='z')p[i]=(char)(c-32);else if(c>='A'&&c<='Z')p[i]=(char)(c+32);else p[i]=(char)c;}p[n]=0;return(long)p;}
+static long piton_str_zfill(const char*s,long width){usize n=piton_strlen(s);usize sign=(n&&(s[0]=='+'||s[0]=='-'))?1:0;if((long)n>=width){char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}usize pad=(usize)width-n;char*p=piton_alloc((usize)width+1);usize o=0;if(sign){p[o++]=s[0];}for(usize i=0;i<pad;++i)p[o++]='0';piton_memcpy(p+o,s+sign,n-sign+1);return(long)p;}
+static long piton_str_padw(const char*s,long width,int left){usize n=piton_strlen(s);if((long)n>=width){char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}usize pad=(usize)width-n;char*p=piton_alloc((usize)width+1);usize o=0;if(!left){piton_memcpy(p+o,s,n+1);for(usize i=0;i<pad;++i)p[o+n+i]=' ';p[width]=0;}else{for(usize i=0;i<pad;++i)p[o++]=' ';piton_memcpy(p+pad,s,n+1);}return(long)p;}
+static long piton_str_center(const char*s,long width){usize n=piton_strlen(s);if((long)n>=width){char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}usize pad=(usize)width-n,left=pad/2;char*p=piton_alloc((usize)width+1);for(usize i=0;i<left;++i)p[i]=' ';piton_memcpy(p+left,s,n+1);for(usize i=left+n;i<(usize)width;++i)p[i]=' ';p[width]=0;return(long)p;}
+static long piton_str_count(const char*s,const char*sub){usize n=piton_strlen(s),m=piton_strlen(sub);long cnt=0;if(m==0)return (long)(n+1);for(usize i=0;i+m<=n;){usize k=0;while(k<m&&s[i+k]==sub[k])++k;if(k==m){++cnt;i+=m;}else ++i;}return cnt;}
+static long piton_str_rfind(const char*s,const char*sub){usize n=piton_strlen(s),m=piton_strlen(sub);if(m==0)return(long)n;if(m>n)return -1;for(long i=(long)(n-m);i>=0;--i){usize k=0;while(k<m&&s[i+k]==sub[k])++k;if(k==m)return i;}return -1;}
+static void piton_str_index_err(void){piton_raise_set("ValueError","substring not found");}
+static long piton_str_index_f(const char*s,const char*sub){long v=piton_str_find(s,sub);if(v<0)piton_str_index_err();return v;}
+static long piton_str_rindex_f(const char*s,const char*sub){long v=piton_str_rfind(s,sub);if(v<0)piton_str_index_err();return v;}
+static int piton_str_islapha_impl(const char*s,int mode){usize n=piton_strlen(s);if(n==0)return 0;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];int letter=(c>='a'&&c<='z')||(c>='A'&&c<='Z');int digit=(c>='0'&&c<='9');switch(mode){case 0:if(!letter)return 0;break;case 1:if(!digit)return 0;break;case 2:if(!letter&&!digit)return 0;break;case 3:if(c!=' '&&c!='\t'&&c!='\n'&&c!='\v'&&c!='\f'&&c!='\r')return 0;break;}}return 1;}
+static int piton_str_isupper_impl(const char*s,int upper){usize n=piton_strlen(s);int hascase=0;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(upper){if(c>='a'&&c<='z')return 0;if(c>='A'&&c<='Z')hascase=1;}else{if(c>='A'&&c<='Z')return 0;if(c>='a'&&c<='z')hascase=1;}}return hascase;}
+static int piton_str_istitle_impl(const char*s){usize n=piton_strlen(s);int hascase=0,newword=1;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];int letter=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(letter){hascase=1;if(newword){if(!(c>='A'&&c<='Z'))return 0;newword=0;}else{if(!(c>='a'&&c<='z'))return 0;}}else newword=1;}return hascase;}
 static long piton_str_from_int_base(long v,int base,int upper){char*p=piton_alloc(70);usize o=0;unsigned long u;if(v<0){p[o++]='-';u=(unsigned long)(-(v+1))+1;}else u=(unsigned long)v;const char*digits=upper?"0123456789ABCDEF":"0123456789abcdef";char tmp[64];long n=0;do{tmp[n++]=digits[u%(unsigned)base];u/=(unsigned)base;}while(u);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static usize piton_utf8_chars(const char*s,usize maxbytes){usize i=0;long cc=0;while(s[i]&&(usize)cc<maxbytes){unsigned char c=(unsigned char)s[i];usize adv=1;if(c>=0x80){if((c&0xE0)==0xC0)adv=2;else if((c&0xF0)==0xE0)adv=3;else if((c&0xF8)==0xF0)adv=4;}i+=adv;++cc;}return i;}
 static char* piton_str_apply_spec(const char*s,const char*spec){
@@ -1162,7 +1185,7 @@ class LinuxCEmitter:
                     out.append("%")
                     i += 1
                     continue
-                if c2 in "srdc":
+                if c2 in "srdcfeFGgE":
                     fields.append((name, c2, flags, width, prec))
                     out.append("{}")
                     i += 1
@@ -1327,7 +1350,7 @@ class LinuxCEmitter:
         if not spec:
             return ""
         t = spec[-1]
-        if t in "dxXobfeG%":
+        if t in "dxXobfeEgGFgn%":
             return spec[:-1]
         return spec
 
@@ -1586,10 +1609,81 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=piton_str_split((const char*){operand},{sep});")
             types[result] = "list"
         elif method in {"strip", "lstrip", "rstrip"}:
-            require_count(0, "no arguments")
+            if len(call_args) not in {0, 1}:
+                raise NativeBuildError(f"Linux str.{method}() requires no or one argument")
             mode = {"strip": 0, "lstrip": 1, "rstrip": 2}[method]
-            out.append(f"    {_name(result)}=(long)piton_str_strip((const char*){operand},{mode});")
+            if call_args and types.get(call_args[0]) == "str":
+                out.append(f"    {_name(result)}=(long)piton_str_strip_chrs((const char*){operand},{self._value(call_args[0])},{mode});")
+            else:
+                require_count(0, "no arguments")
+                out.append(f"    {_name(result)}=(long)piton_str_strip((const char*){operand},{mode});")
             types[result] = "str"
+        elif method == "capitalize":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=(long)piton_str_capitalize((const char*){operand});")
+            types[result] = "str"
+        elif method == "title":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=(long)piton_str_title((const char*){operand});")
+            types[result] = "str"
+        elif method == "swapcase":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=(long)piton_str_swapcase((const char*){operand});")
+            types[result] = "str"
+        elif method == "zfill":
+            require_count(1, "exactly one int argument")
+            if types.get(call_args[0]) not in {"int", "bool"}:
+                raise NativeBuildError("Linux str.zfill() requires an int")
+            out.append(f"    {_name(result)}=(long)piton_str_zfill((const char*){operand},{self._value(call_args[0])});")
+            types[result] = "str"
+        elif method == "ljust":
+            require_count(1, "exactly one int argument")
+            if types.get(call_args[0]) not in {"int", "bool"}:
+                raise NativeBuildError("Linux str.ljust() requires an int")
+            out.append(f"    {_name(result)}=(long)piton_str_padw((const char*){operand},{self._value(call_args[0])},0);")
+            types[result] = "str"
+        elif method == "rjust":
+            require_count(1, "exactly one int argument")
+            if types.get(call_args[0]) not in {"int", "bool"}:
+                raise NativeBuildError("Linux str.rjust() requires an int")
+            out.append(f"    {_name(result)}=(long)piton_str_padw((const char*){operand},{self._value(call_args[0])},1);")
+            types[result] = "str"
+        elif method == "center":
+            require_count(1, "exactly one int argument")
+            if types.get(call_args[0]) not in {"int", "bool"}:
+                raise NativeBuildError("Linux str.center() requires an int")
+            out.append(f"    {_name(result)}=(long)piton_str_center((const char*){operand},{self._value(call_args[0])});")
+            types[result] = "str"
+        elif method in {"isalpha", "isdigit", "isalnum", "isspace"}:
+            require_count(0, "no arguments")
+            helper = {"isalpha": 0, "isdigit": 1, "isalnum": 2, "isspace": 3}[method]
+            out.append(f"    {_name(result)}=piton_str_islapha_impl((const char*){operand},{helper});")
+            types[result] = "bool"
+        elif method in {"isupper", "islower"}:
+            require_count(0, "no arguments")
+            helper = 1 if method == "isupper" else 0
+            out.append(f"    {_name(result)}=piton_str_isupper_impl((const char*){operand},{helper});")
+            types[result] = "bool"
+        elif method == "istitle":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=piton_str_istitle_impl((const char*){operand});")
+            types[result] = "bool"
+        elif method == "count":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_count((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "int"
+        elif method == "index":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_index_f((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "int"
+        elif method == "rfind":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_rfind((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "int"
+        elif method == "rindex":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_rindex_f((const char*){operand},{require_str(0, 'a str argument')});")
+            types[result] = "int"
         elif method == "join":
             require_count(1, "exactly one list or tuple argument")
             if types.get(call_args[0]) not in {"list", "tuple"}:
@@ -1659,7 +1753,11 @@ class LinuxCEmitter:
                 by_index[arg_idx] = (call_args[arg_idx], spec)
             pieces = []
             for index in range(len(call_args)):
-                value, spec = by_index[index]
+                value = call_args[index]
+                if index in by_index:
+                    spec = by_index[index][1]
+                else:
+                    spec = ""
                 arg_type = types.get(value, "int")
                 type_char = self._format_spec_type(spec)
                 pres = self._format_spec_presentation(spec)
@@ -1682,34 +1780,30 @@ class LinuxCEmitter:
                         converted = f"piton_str_from_int((long)piton_bits_double({self._value(value)}))"
                     else:
                         raise NativeBuildError(f"Linux str.format() %d requires a real number, not {arg_type}")
-                elif type_char in {"f", "e", "G", "F", "E", "n"}:
-                    # FLOAT_PRESENT_V1: fixed/scientific/general float specs
-                    # need correctly-rounded decimal conversion; repr output
-                    # diverges from CPython ({:.2f} gave "3.") and {:.2g}
-                    # even crashed (rc=-11), so they fail closed at build.
-                    raise NativeBuildError(
-                        f"Linux str.format() %{type_char} is not supported yet (needs rounded decimal conversion)"
-                    )
-                    # Extract precision from the presentation spec
+                elif type_char in {"f", "e", "E", "g", "G"}:
+                    # FMT_FLOAT_V1: real decimal-based rounding for float specs.
                     prec = 6
                     if "." in pres:
                         try:
                             prec = int(pres.split(".")[1])
                         except ValueError:
                             prec = 6
-                    # Format the float with the given precision
-                    # For now, use a simple approach: format with %.{prec}f
-                    # and strip trailing zeros for 'g' type
-                    if type_char == "f":
-                        converted = f"piton_str_from_float({self._value(value)})"  # TODO: proper precision
-                    elif type_char == "e":
-                        converted = f"piton_str_from_float({self._value(value)})"  # TODO: scientific
+                    _foldv = f"({self._value(value)})" if arg_type == "float" else f"piton_double_bits((double){self._value(value)})"
+                    if type_char in {"f"}:
+                        converted = f"piton_float_fmt_fixed({_foldv},{prec})"
+                    elif type_char in {"e", "E"}:
+                        converted = f"piton_float_fmt_exp({_foldv},{prec},{1 if type_char == 'E' else 0})"
                     else:
-                        converted = f"piton_str_from_float({self._value(value)})"  # TODO: general
+                        converted = f"piton_float_fmt_g({_foldv},{1 if type_char == 'G' else 0})"
                 elif type_char == "%":
-                    raise NativeBuildError(
-                        "Linux str.format() %% is not supported yet (needs rounded percentage conversion)"
-                    )
+                    _foldv = f"({self._value(value)})" if arg_type == "float" else f"piton_double_bits((double){self._value(value)})"
+                    prec = 6
+                    if "." in pres:
+                        try:
+                            prec = int(pres.split(".")[1])
+                        except ValueError:
+                            prec = 6
+                    converted = f"piton_float_fmt_pct({_foldv},{prec})"
                 else:
                     # no type char: use the natural string conversion
                     if arg_type == "int":
@@ -1726,7 +1820,11 @@ class LinuxCEmitter:
                         raise NativeBuildError(f"Linux str.format() does not support {arg_type} arguments")
                 # apply presentation spec
                 if pres:
-                    pieces.append(f"const char*_pf{index}=(const char*)piton_str_apply_spec((const char*){converted},{json.dumps(pres)});")
+                    _presented = pres.split(".", 1)[0] if type_char in {"f", "e", "E", "g", "G", "%"} else pres
+                    if _presented:
+                        pieces.append(f"const char*_pf{index}=(const char*)piton_str_apply_spec((const char*){converted},{json.dumps(_presented)});")
+                    else:
+                        pieces.append(f"const char*_pf{index}=(const char*){converted};")
                 else:
                     pieces.append(f"const char*_pf{index}=(const char*){converted};")
             if not call_args:
@@ -2787,6 +2885,18 @@ class LinuxCEmitter:
                                 base = f"piton_str_from_int((long)piton_bits_double({operand}))"
                             else:
                                 raise NativeBuildError(f"Linux str %d requires a real number, not {arg_type}")
+                        elif spec in {"f", "F", "e", "E", "g", "G"}:
+                            precv = prec if prec >= 0 else 6
+                            if arg_type not in {"float", "int", "bool"}:
+                                raise NativeBuildError(f"Linux %{spec} requires int or float, not {arg_type}")
+                            _foldv = f"({operand})" if arg_type == "float" else f"piton_double_bits((double){operand})"
+                            if spec in {"f", "F"}:
+                                base = f"piton_float_fmt_fixed({_foldv},{precv})"
+                            elif spec in {"e", "E"}:
+                                base = f"piton_float_fmt_exp({_foldv},{precv},{1 if spec in {'E', } else 0})"
+                            else:
+                                base = f"piton_float_fmt_g({_foldv},{1 if spec == 'G' else 0})"
+                            isnum = 0
                         elif spec == "r":
                             if arg_type == "str":
                                 base = f"piton_str_quote((const char*){operand})"
@@ -2818,8 +2928,8 @@ class LinuxCEmitter:
                             raise NativeBuildError(f"Linux str %{spec} is not supported")
                         bases.append(f"const char*_pb{index}=(const char*){base};")
                         if width >= 0 or prec >= 0:
-                            isnum = 1 if spec in {"d", "x", "X", "o"} else 0
-                            pads.append((width, prec, flags, isnum))
+                            isnum = 1 if spec in {"d", "x", "X", "o", "f", "F", "e", "E", "g", "G"} else 0
+                            pads.append((width, prec if spec in {"d", "x", "X", "o", "s"} else -1, flags, isnum))
                         else:
                             pads.append(None)
                     names = ",".join(f"_pp{index}" for index in range(len(operands))) or "_pp0"

@@ -36,9 +36,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 116,
+      "FAIL_CLOSED": 81,
       "RAISE_EQ": 0,
-      "EQUIV": 1107
+      "EQUIV": 1142
     },
     "by_area": {
       "literals": {
@@ -117,17 +117,17 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 21,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 21
+        "EQUIV": 42
       },
       "formatting": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 17,
+        "FAIL_CLOSED": 3,
         "RAISE_EQ": 0,
-        "EQUIV": 32
+        "EQUIV": 46
       },
       "slices": {
         "DIVERGENT_CRASH": 0,
@@ -218,7 +218,7 @@
         "EQUIV": 8
       }
     },
-    "pct_equiv": 90.5,
+    "pct_equiv": 93.4,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -5049,15 +5049,19 @@
       "area": "strings",
       "name": "lstrip",
       "src": "imprimir('xxay'.lstrip('x'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.lstrip() requires no arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "rstrip",
       "src": "imprimir('ayxx'.rstrip('x'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.rstrip() requires no arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
@@ -5126,134 +5130,172 @@
       "area": "strings",
       "name": "rfind",
       "src": "imprimir('abcabc'.rfind('bc'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.rfind() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "count",
       "src": "imprimir('aaa'.count('a'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.count() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "index",
       "src": "imprimir('abc'.index('b'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.index() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "rindex",
       "src": "imprimir('abcb'.rindex('b'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.rindex() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "capitalize",
       "src": "imprimir('hola MUNDO'.capitalize())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.capitalize() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "title",
       "src": "imprimir('hola mundo'.title())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.title() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "swapcase",
       "src": "imprimir('Hola 123'.swapcase())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.swapcase() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "isalpha",
       "src": "imprimir('abc'.isalpha())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.isalpha() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "isalpha-digit",
       "src": "imprimir('ab1'.isalpha())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.isalpha() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "isdigit",
       "src": "imprimir('123'.isdigit())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.isdigit() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "isalnum",
       "src": "imprimir('ab1'.isalnum())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.isalnum() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "isspace",
       "src": "imprimir('  '.isspace())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.isspace() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "istitle",
       "src": "imprimir('Hola Mundo'.istitle())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.istitle() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "isupper",
       "src": "imprimir('ABC'.isupper())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.isupper() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "islower",
       "src": "imprimir('abc'.islower())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.islower() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "zfill",
       "src": "imprimir('42'.zfill(5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.zfill() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "ljust",
       "src": "imprimir('x'.ljust(4))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.ljust() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "rjust",
       "src": "imprimir('x'.rjust(4))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.rjust() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
       "name": "center",
       "src": "imprimir('x'.center(5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.center() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "strings",
@@ -5421,29 +5463,37 @@
       "area": "formatting",
       "name": "fmt'{:.3f}'",
       "src": "imprimir('{:.3f}'.format(42))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.format() %f is not supported yet (needs rounded decimal conversion)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
       "name": "fmt'{:e}'",
       "src": "imprimir('{:e}'.format(42))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.format() %e is not supported yet (needs rounded decimal conversion)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
       "name": "fmt'{:g}'",
       "src": "imprimir('{:g}'.format(42))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: str.format(): unsupported format spec 'g'"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
       "name": "fmt'{:%}'",
       "src": "imprimir('{:%}'.format(42))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.format() %% is not supported yet (needs rounded percentage conversion)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
@@ -5485,8 +5535,10 @@
       "area": "formatting",
       "name": "fmt'{:08.2f}'",
       "src": "imprimir('{:08.2f}'.format(42))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.format() %f is not supported yet (needs rounded decimal conversion)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
@@ -5519,8 +5571,10 @@
       "area": "formatting",
       "name": "fmt'{{}}'",
       "src": "imprimir('{{}}'.format(42))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: KeyError: 0"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
@@ -5571,29 +5625,37 @@
       "area": "formatting",
       "name": "pct%f",
       "src": "imprimir('%f' % (1.5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: str % conversion %f is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
       "name": "pct%e",
       "src": "imprimir('%e' % (1.5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: str % conversion %e is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
       "name": "pct%g",
       "src": "imprimir('%g' % (1.5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: str % conversion %g is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
       "name": "pct%G",
       "src": "imprimir('%G' % (1.5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: str % conversion %G is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
@@ -5678,15 +5740,19 @@
       "area": "formatting",
       "name": "pct%.2f",
       "src": "imprimir('%.2f' % (1.567))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: str % conversion %f is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
       "name": "pct%08.3f",
       "src": "imprimir('%08.3f' % (1.5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: str % conversion %f is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
@@ -5719,15 +5785,19 @@
       "area": "formatting",
       "name": "fstring-spec-d",
       "src": "imprimir(f'{42:5d}')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: f-string with conversion (!r !s !a) or format spec is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
       "name": "fstring-spec-f",
       "src": "imprimir(f'{1.5:.2f}')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: f-string with conversion (!r !s !a) or format spec is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
@@ -10310,7 +10380,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-yt7apjf5/program.c: In function ‘f’:\n/tmp/piton-linux-yt7apjf5/program.c:1138:8: error: ‘suma’ undeclared (first use in this function)\n 1138 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-yt7apjf5/program.c:1138:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-5vxwzi8j/program.c: In function ‘f’:\n/tmp/piton-linux-5vxwzi8j/program.c:1161:8: error: ‘suma’ undeclared (first use in this function)\n 1161 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-5vxwzi8j/program.c:1161:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10326,7 +10396,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-6_nci5y3/program.c: In function ‘f’:\n/tmp/piton-linux-6_nci5y3/program.c:1142:8: error: ‘suma’ undeclared (first use in this function)\n 1142 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-6_nci5y3/program.c:1142:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-syl_w_ry/program.c: In function ‘f’:\n/tmp/piton-linux-syl_w_ry/program.c:1165:8: error: ‘suma’ undeclared (first use in this function)\n 1165 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-syl_w_ry/program.c:1165:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10414,21 +10484,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-etoym6h1/program.c: In function ‘piton_main’:\n/tmp/piton-linux-etoym6h1/program.c:1046:9: error: too many arguments to function ‘f’\n 1046 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-etoym6h1/program.c:1019:13: note: declared here\n 1019 | static long f(long a);\n      |             ^\n/tmp/piton-linux-etoym6h1/program.c: At top level:\n/tmp/piton-linux-etoym6h1/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-qwhvcfte/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qwhvcfte/program.c:1069:9: error: too many arguments to function ‘f’\n 1069 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-qwhvcfte/program.c:1042:13: note: declared here\n 1042 | static long f(long a);\n      |             ^\n/tmp/piton-linux-qwhvcfte/program.c: At top level:\n/tmp/piton-linux-qwhvcfte/program.c:971:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  971 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-fml37mbi/program.c: In function ‘piton_main’:\n/tmp/piton-linux-fml37mbi/program.c:1045:9: error: too few arguments to function ‘f’\n 1045 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-fml37mbi/program.c:1019:13: note: declared here\n 1019 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-fml37mbi/program.c: At top level:\n/tmp/piton-linux-fml37mbi/program.c:948:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  948 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-uyp96nbd/program.c: In function ‘piton_main’:\n/tmp/piton-linux-uyp96nbd/program.c:1068:9: error: too few arguments to function ‘f’\n 1068 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-uyp96nbd/program.c:1042:13: note: declared here\n 1042 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-uyp96nbd/program.c: At top level:\n/tmp/piton-linux-uyp96nbd/program.c:971:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  971 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-8xr0llq3/program.c: In function ‘piton_main’:\n/tmp/piton-linux-8xr0llq3/program.c:1113:9: error: ‘no_existe’ undeclared (first use in this function)\n 1113 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-8xr0llq3/program.c:1113:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-bmmvsw4r/program.c: In function ‘piton_main’:\n/tmp/piton-linux-bmmvsw4r/program.c:1136:9: error: ‘no_existe’ undeclared (first use in this function)\n 1136 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-bmmvsw4r/program.c:1136:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10792,7 +10862,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-0to_v3gl/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0to_v3gl/program.c:1116:9: error: too few arguments to function ‘P____init__’\n 1116 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-0to_v3gl/program.c:1090:13: note: declared here\n 1090 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-0d4pbh08/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0d4pbh08/program.c:1139:9: error: too few arguments to function ‘P____init__’\n 1139 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-0d4pbh08/program.c:1113:13: note: declared here\n 1113 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
