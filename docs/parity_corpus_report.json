@@ -34,11 +34,11 @@
     "total": 1224,
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
-      "DIVERGENT_MISMATCH": 6,
+      "DIVERGENT_MISMATCH": 2,
       "TIMEOUT": 0,
       "FAIL_CLOSED": 165,
       "RAISE_EQ": 1,
-      "EQUIV": 1052
+      "EQUIV": 1056
     },
     "by_area": {
       "literals": {
@@ -107,11 +107,11 @@
       },
       "builtins": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 2,
+        "DIVERGENT_MISMATCH": 1,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 21,
         "RAISE_EQ": 0,
-        "EQUIV": 63
+        "EQUIV": 64
       },
       "strings": {
         "DIVERGENT_CRASH": 0,
@@ -187,19 +187,19 @@
       },
       "exceptions": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 2,
         "RAISE_EQ": 1,
-        "EQUIV": 17
+        "EQUIV": 18
       },
       "classes": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 2,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 7,
         "RAISE_EQ": 0,
-        "EQUIV": 12
+        "EQUIV": 14
       },
       "generators": {
         "DIVERGENT_CRASH": 0,
@@ -218,9 +218,9 @@
         "EQUIV": 2
       }
     },
-    "pct_equiv": 85.9,
-    "pct_honest": 99.5,
-    "pct_divergent": 0.5
+    "pct_equiv": 86.3,
+    "pct_honest": 99.8,
+    "pct_divergent": 0.2
   },
   "records": [
     {
@@ -4418,8 +4418,8 @@
       "area": "builtins",
       "name": "chr1",
       "src": "imprimir(chr(0))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out= err= || oracle rc=0 out=\u0000 err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -10239,7 +10239,7 @@
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-wn48m1jn/program.c: In function ‘f’:\n/tmp/piton-linux-wn48m1jn/program.c:1085:8: error: ‘suma’ undeclared (first use in this function)\n 1085 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-wn48m1jn/program.c:1085:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-x646rc59/program.c: In function ‘f’:\n/tmp/piton-linux-x646rc59/program.c:1094:8: error: ‘suma’ undeclared (first use in this function)\n 1094 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-x646rc59/program.c:1094:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10255,7 +10255,7 @@
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-8wkuqbbb/program.c: In function ‘f’:\n/tmp/piton-linux-8wkuqbbb/program.c:1089:8: error: ‘suma’ undeclared (first use in this function)\n 1089 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-8wkuqbbb/program.c:1089:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-kkj143pu/program.c: In function ‘f’:\n/tmp/piton-linux-kkj143pu/program.c:1098:8: error: ‘suma’ undeclared (first use in this function)\n 1098 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-kkj143pu/program.c:1098:8: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10341,21 +10341,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-qqmpxxzk/program.c: In function ‘piton_main’:\n/tmp/piton-linux-qqmpxxzk/program.c:996:9: error: too many arguments to function ‘f’\n  996 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-qqmpxxzk/program.c:969:13: note: declared here\n  969 | static long f(long a);\n      |             ^\n/tmp/piton-linux-qqmpxxzk/program.c: At top level:\n/tmp/piton-linux-qqmpxxzk/program.c:915:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  915 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-k600i0td/program.c: In function ‘piton_main’:\n/tmp/piton-linux-k600i0td/program.c:1002:9: error: too many arguments to function ‘f’\n 1002 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-k600i0td/program.c:975:13: note: declared here\n  975 | static long f(long a);\n      |             ^\n/tmp/piton-linux-k600i0td/program.c: At top level:\n/tmp/piton-linux-k600i0td/program.c:921:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  921 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-kdb945ux/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kdb945ux/program.c:995:9: error: too few arguments to function ‘f’\n  995 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-kdb945ux/program.c:969:13: note: declared here\n  969 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-kdb945ux/program.c: At top level:\n/tmp/piton-linux-kdb945ux/program.c:915:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  915 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-5fis6cg1/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5fis6cg1/program.c:1001:9: error: too few arguments to function ‘f’\n 1001 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-5fis6cg1/program.c:975:13: note: declared here\n  975 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-5fis6cg1/program.c: At top level:\n/tmp/piton-linux-5fis6cg1/program.c:921:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  921 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-kw5kik5o/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kw5kik5o/program.c:1063:9: error: ‘no_existe’ undeclared (first use in this function)\n 1063 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-kw5kik5o/program.c:1063:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-5cawy3b9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5cawy3b9/program.c:1069:9: error: ‘no_existe’ undeclared (first use in this function)\n 1069 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-5cawy3b9/program.c:1069:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10555,9 +10555,9 @@
       "area": "exceptions",
       "name": "exc-in-func",
       "src": "funcion f():\n    lanzar ValueError('in func')\nintentar:\n    f()\nexcepto ValueError:\n    imprimir('ok')\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=1 out= err=ValueError: in func || oracle rc=0 out=ok err=",
-      "native_rc": 1,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
@@ -10650,8 +10650,8 @@
       "area": "classes",
       "name": "super",
       "src": "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    funcion f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=16789664 err= || oracle rc=0 out=BA err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -10717,14 +10717,14 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-jz8rlgmg/program.c: In function ‘piton_main’:\n/tmp/piton-linux-jz8rlgmg/program.c:1066:9: error: too few arguments to function ‘P____init__’\n 1066 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-jz8rlgmg/program.c:1040:13: note: declared here\n 1040 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-e9mcp38z/program.c: In function ‘piton_main’:\n/tmp/piton-linux-e9mcp38z/program.c:1072:9: error: too few arguments to function ‘P____init__’\n 1072 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-e9mcp38z/program.c:1046:13: note: declared here\n 1046 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
       "name": "dunder-add",
       "src": "clase P:\n    funcion __add__(self, o):\n        devolver 99\nimprimir(P() + 1)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=8402833 err= || oracle rc=0 out=99 err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -10833,7 +10833,7 @@
       "name": "divmod",
       "src": "imprimir(divmod(7, 2))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-leoq307z/program.c: In function ‘piton_main’:\n/tmp/piton-linux-leoq307z/program.c:1063:9: error: ‘divmod’ undeclared (first use in this function)\n 1063 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-leoq307z/program.c:1063:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-kcoehnhh/program.c: In function ‘piton_main’:\n/tmp/piton-linux-kcoehnhh/program.c:1069:9: error: ‘divmod’ undeclared (first use in this function)\n 1069 |     _10=divmod;\n      |         ^~~~~~\n/tmp/piton-linux-kcoehnhh/program.c:1069:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "controls_closed",

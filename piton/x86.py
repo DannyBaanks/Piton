@@ -261,6 +261,7 @@ class Win64NasmEmitter:
             "extern piton_str_slice_step", "extern piton_seq_slice_step",
             "extern piton_str_iterator_new", "extern piton_str_iterator_next",
             "extern piton_str_len", "extern piton_str_repeat", "extern piton_str_cmp",
+            "extern piton_chr_len", "extern piton_print_chr_raw",
             "extern piton_seq_pop", "extern piton_seq_reverse", "extern piton_seq_insert",
             "extern piton_seq_count", "extern piton_seq_sort",
             "extern piton_dict_get_d", "extern piton_dict_get_1",
@@ -328,6 +329,7 @@ class Win64NasmEmitter:
         self.bigint_slots = []
         self.constants = {}
         self._boolh_types: dict[str, str] = {}
+        self._chr_results: set[str] = set()
         if function.vararg:
             self.types[function.vararg] = "tuple"
         if function.kwarg:
@@ -443,6 +445,7 @@ class Win64NasmEmitter:
         self.bigint_slots = []
         self.constants = {}
         self._boolh_types: dict[str, str] = {}
+        self._chr_results: set[str] = set()
         if function.vararg:
             self.types[function.vararg] = "tuple"
         if function.kwarg:
@@ -1280,6 +1283,41 @@ class Win64NasmEmitter:
                         self.bigint_slots.append(result)
                         self.types[result] = "bigint"
                     return
+            if operator in {"+", "-", "*"} and (left_type.startswith("object:") or right_type.startswith("object:")):
+                # DUNDER_ARITH_V1: mirror the Linux backend — arithmetic on a
+                # class instance dispatches to the dunder (MRO), reflected
+                # fallback included. Without this the emitter added raw
+                # pointers and printed an address.
+                _dunder, _rdunder = {"+": ("__add__", "__radd__"), "-": ("__sub__", "__rsub__"), "*": ("__mul__", "__rmul__")}[operator]
+                _hit_target, _hit_args = None, None
+                for _otype, _meth, _swap in (
+                    (left_type, _dunder, False),
+                    (right_type, _rdunder, True),
+                ):
+                    if not _otype.startswith("object:"):
+                        continue
+                    _cls = _otype.split(":", 1)[1]
+                    for _cand in self.mir_module_class_mro.get(_cls, []):
+                        if _meth in self.mir_module_classes.get(_cand, set()):
+                            _hit_target = f"{_cand}__{_meth}"
+                            _hit_args = (right, left) if _swap else (left, right)
+                            break
+                    if _hit_target is None and _meth in self.mir_module_classes.get(_cls, set()):
+                        _hit_target = f"{_cls}__{_meth}"
+                        _hit_args = (right, left) if _swap else (left, right)
+                    if _hit_target is not None:
+                        break
+                if _hit_target is None:
+                    raise NativeBuildError(
+                        f"native '{operator}' between '{left_type}' and '{right_type}' is not supported "
+                        f"(no {_dunder}/{_rdunder} found on the class)"
+                    )
+                for _reg, _val in zip(("rcx", "rdx"), _hit_args):
+                    self._load_operand(_val, _reg)
+                self.lines.append(f"    call {_hit_target}")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = self.function_return_types.get(_hit_target, "int")
+                return
             self._load_operand(left, "rax")
             self._load_operand(right, "rcx")
             if operator == "+":
@@ -2394,9 +2432,10 @@ class Win64NasmEmitter:
                 target = labels.get(handler_label, handler_label)
                 self.lines.append(f"    jne {target}")
             else:
-                # handler=None per MIR: the runtime stack is empty here, so
-                # piton_raise_chain falls through to the unhandled printer.
+                # CALL_PROPAGATE_V1: piton_raise_chain only records; without a
+                # handler here the exception must propagate (or exit at top).
                 self.lines.append("    call piton_raise_chain")
+                self._emit_propagate_or_exit()
         elif op == "raise_typed":
             exception_type, payload, handler_label = args
             self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
@@ -2419,8 +2458,10 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_raise")
                     self.lines.append(f"    jmp {labels['__exit']}")
                 else:
-                    # No statically-matching handler: report and exit (no stack search)
-                    self.lines.append("    call piton_raise_unhandled")
+                    # Set the flag first (piton_raise only records; it does not
+                    # exit), then propagate out of plain functions or exit.
+                    self.lines.append("    call piton_raise")
+                    self._emit_propagate_or_exit()
         elif op == "try_push":
             self.lines.append("    call piton_try_push")
             if result:
@@ -2480,7 +2521,9 @@ class Win64NasmEmitter:
                 target = labels.get(handler_label, handler_label)
                 self.lines.append(f"    jne {target}")
             else:
-                self.lines.append("    call piton_reraise_unhandled")
+                # CALL_PROPAGATE_V1: propagate out of plain functions.
+                self.lines.append("    call piton_reraise")
+                self._emit_propagate_or_exit()
         elif op == "raise_active_dynamic":
             # Dynamic re-raise: type comes from the saved reraise globals
             # (piton_reraise), label is the statically-chosen handler.
@@ -2492,7 +2535,9 @@ class Win64NasmEmitter:
                 target = labels.get(handler_label, handler_label)
                 self.lines.append(f"    jne {target}")
             else:
-                self.lines.append("    call piton_reraise_unhandled")
+                # CALL_PROPAGATE_V1: propagate out of plain functions.
+                self.lines.append("    call piton_reraise")
+                self._emit_propagate_or_exit()
         elif op == "branch":
             condition, yes, no = args
             self._emit_truth_test(condition)
@@ -2595,6 +2640,11 @@ class Win64NasmEmitter:
                         self._load_operand(value, "rcx")
                         self.lines.append("    call piton_print_value_raw")
                         continue
+                    elif value in self._chr_results:
+                        # CHR_NUL_V1: written with its encoded length.
+                        self._load_operand(value, "rcx")
+                        self.lines.append("    call piton_print_chr_raw")
+                        continue
                     else:
                         self._load_operand(value, "rdx")
                         fmt = "fmt_str_raw" if value_type == "str" else "fmt_int_raw"
@@ -2623,6 +2673,11 @@ class Win64NasmEmitter:
                             self.lines.append(f"    mov {self._address(result)}, rax")
                             self.types[result] = "int"
                             return
+                if len(values) == 1 and values[0] in self._chr_results:
+                    # CHR_NUL_V1: len() counts characters; a chr() is one.
+                    self.lines.append(f"    mov qword {self._address(result)}, 1")
+                    self.types[result] = "int"
+                    return
                 if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "dict", "set", "str", "range"}:
                     raise NativeBuildError("native len currently requires one collection")
                 self._load_operand(values[0], "rcx")
@@ -2713,6 +2768,8 @@ class Win64NasmEmitter:
                 helper = f"piton_{function_name}"
                 self._load_operand(values[0], "rcx")
                 self.lines.append(f"    call {helper}")
+                if function_name == "chr":
+                    self._chr_results.add(result)
                 if call_handler is not None:
                     self.lines.append("    call piton_catch_flag")
                     self.lines.append("    test rax, rax")
@@ -3059,6 +3116,23 @@ class Win64NasmEmitter:
                                 "    call piton_closure_call_frame",
                                 f"    add rsp, {frame_size}",
                             ])
+            # CALL_PROPAGATE_V1: every user-code call above is a potential raise
+            # site. Route the flag to the handler, or propagate/exit when the
+            # MIR attached none. piton_catch_flag CLOBBERS rax, so the call
+            # result is stashed across the check (without this, every call
+            # result became the flag value: `sum([1,2,3])` answered 0).
+            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+            self.lines.append("    call piton_catch_flag")
+            self.lines.append("    test rax, rax")
+            if call_handler:
+                self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                self.lines.append(f"    mov rax, {self._address('@scratch0')}")
+            else:
+                _ok = self._internal_label("call_noexc")
+                self.lines.append(f"    jz {_ok}")
+                self._emit_propagate_or_exit()
+                self.lines.append(f"{_ok}:")
+                self.lines.append(f"    mov rax, {self._address('@scratch0')}")
             if result:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 if not self.types.get(result):
@@ -3519,6 +3593,27 @@ class Win64NasmEmitter:
                         return next(iter(kinds))
                     return None
 
+                def operand_type(operand):
+                    if operand is None or operand == "None":
+                        return "none"
+                    if isinstance(operand, str) and not operand.startswith("%"):
+                        return single(operand)
+                    if isinstance(operand, str):
+                        origin = origins.get(operand)
+                        if origin is None:
+                            return None
+                        if origin[0] == "literal":
+                            return literal_type(origin[1])
+                        if origin[0] in {"kind", "object"}:
+                            return origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
+                        if origin[0] == "var":
+                            return single(origin[1])
+                        if origin[0] == "call":
+                            return infer(origin[1])
+                        return None
+                    return literal_type(operand)
+
+
                 changed = True
                 while changed:
                     changed = False
@@ -3539,6 +3634,26 @@ class Win64NasmEmitter:
                                 callee = load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
                                 if isinstance(callee, str) and callee in by_name and callee not in function.params:
                                     origins[result] = ("call", callee)
+                                else:
+                                    origins[result] = ("opaque", None)
+                            elif op == "method_call" and result:
+                                # METHODTYPE_V1: resolve to the defining method
+                                # (MRO) so its return type flows to the caller.
+                                _cls, _meth = iargs[0], iargs[1]
+                                _target = None
+                                if isinstance(_cls, str):
+                                    for _cand in self.mir_module_class_mro.get(_cls, []):
+                                        if _meth in self.mir_module_classes.get(_cand, set()):
+                                            _target = f"{_cand}__{_meth}"
+                                            break
+                                    if _target is None and _meth in self.mir_module_classes.get(_cls, set()):
+                                        _target = f"{_cls}__{_meth}"
+                                origins[result] = ("call", _target) if _target and _target in by_name else ("opaque", None)
+                            elif op == "binary" and result:
+                                # METHODTYPE_V1: `'B' + <str>` stays str.
+                                _bop, _l, _r = iargs[0], iargs[1], iargs[2]
+                                if _bop == "+" and operand_type(_l) == "str" and operand_type(_r) == "str":
+                                    origins[result] = ("kind", "str")
                                 else:
                                     origins[result] = ("opaque", None)
                             elif op in {"store", "cell_store"} and result is None and iargs:
@@ -3577,26 +3692,6 @@ class Win64NasmEmitter:
                     if function.kwarg and function.kwarg not in seeded:
                         seeded.add(function.kwarg)
                         changed = note_var(function.kwarg, "dict") or changed
-
-                def operand_type(operand):
-                    if operand is None or operand == "None":
-                        return "none"
-                    if isinstance(operand, str) and not operand.startswith("%"):
-                        return single(operand)
-                    if isinstance(operand, str):
-                        origin = origins.get(operand)
-                        if origin is None:
-                            return None
-                        if origin[0] == "literal":
-                            return literal_type(origin[1])
-                        if origin[0] in {"kind", "object"}:
-                            return origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
-                        if origin[0] == "var":
-                            return single(origin[1])
-                        if origin[0] == "call":
-                            return infer(origin[1])
-                        return None
-                    return literal_type(operand)
 
                 if not returns:
                     inferred = "none"
@@ -3995,6 +4090,32 @@ class Win64NasmEmitter:
             self.lines.append("    test rax, rax")
             target = labels.get(handler_label, handler_label)
             self.lines.append(f"    jne {target}")
+
+    def _emit_propagate_or_exit(self) -> None:
+        """CALL_PROPAGATE_V1 (Windows): a raise with no handler in THIS function
+        must RETURN with the exception flag set, not exit: the CALLER owns the
+        handler. Only the module top level and generators/coroutines (which
+        cannot propagate across their driver) report and exit terminally.
+        The frame is cleaned up exactly like a normal return so propagated
+        frames do not leak their owned slots."""
+        fn = self.function
+        plain = (
+            getattr(fn, "name", "<module>") != "<module>"
+            and not getattr(fn, "is_generator", False)
+            and not getattr(fn, "is_coroutine", False)
+            and not getattr(fn, "is_async_generator", False)
+        )
+        if plain:
+            self.lines.append("    xor eax, eax")
+            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+            self._emit_cleanup()
+            self.lines.extend([
+                f"    mov rax, {self._address('@scratch0')}",
+                "    leave",
+                "    ret",
+            ])
+        else:
+            self.lines.append("    call piton_raise_unhandled")
 
     def _emit_contains(self, result: Any, left: Any, right: Any, negate: bool) -> None:
         """CONTAINS_V1: CPython membership (`in` / `no en`) via the

@@ -303,6 +303,12 @@ static long piton_str_split_ws(const char*s){PitonSeq*r=piton_seq_new(PK_LIST,0)
 static long piton_str_split(const char*s,const char*sep){if(!sep)return piton_str_split_ws(s);PitonSeq*r=piton_seq_new(PK_LIST,0);usize sl=piton_strlen(s),nl=piton_strlen(sep);if(nl==0){for(usize k=0;k<=sl;++k){char*q=piton_alloc(2);q[0]=k<sl?s[k]:0;q[1]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});}return(long)r;}usize i=0;while(1){usize j=i;while(j+nl<=sl){usize k=0;while(k<nl&&s[j+k]==sep[k])++k;if(k==nl)break;++j;}usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});if(j+nl>sl)break;i=j+nl;}return(long)r;}
 static long piton_str_strip(const char*s,int mode){usize n=piton_strlen(s),a=0,b=n;if(mode!=2){while(a<n&&piton_ws((unsigned char)s[a]))++a;}if(mode!=1){while(b>a&&piton_ws((unsigned char)s[b-1]))--b;}char*p=piton_alloc(b-a+1);piton_memcpy(p,s+a,b-a);p[b-a]=0;return(long)p;}
 static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(sep);usize total=0;long cnt=items?items->length:0;for(long i=0;i<cnt;++i){if(items->items[i].kind!=PK_STR){piton_write(2,"TypeError: sequence item is not a string\n",41);piton_exit(1);}total+=piton_strlen((const char*)items->items[i].bits);}total+=sl*(usize)(cnt>0?cnt-1:0);char*p=piton_alloc(total+1);usize o=0;for(long i=0;i<cnt;++i){if(i){piton_memcpy(p+o,sep,sl);o+=sl;}usize el=piton_strlen((const char*)items->items[i].bits);piton_memcpy(p+o,(const char*)items->items[i].bits,el);o+=el;}p[o]=0;return(long)p;}
+/* CHR_NUL_V1: encoded length of a chr() result. strlen stops at NUL, so
+ * `chr(0)` measured 0. A chr() result is always exactly one character; the
+ * leading byte determines its UTF-8 width, and a leading NUL means chr(0)
+ * itself (width 1). */
+static long piton_chr_len(const char*s){unsigned char c=(unsigned char)s[0];
+  if(c==0)return 1;if(c<0x80)return 1;if(c<0xE0)return 2;if(c<0xF0)return 3;return 4;}
 static long piton_str_index(const char*s,long i){long n=(long)piton_strlen(s);if(i<0)i+=n;if(i<0||i>=n){piton_write(2,"IndexError\n",11);piton_exit(1);}char*p=piton_alloc(2);p[0]=s[i];p[1]=0;return(long)p;}
 static long piton_str_slice(const char*s,long lo,long hi){long n=(long)piton_strlen(s);if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;char*p=piton_alloc((usize)(hi-lo)+1);for(long i=0;i<hi-lo;++i)p[i]=s[lo+i];p[hi-lo]=0;return(long)p;}
 static PitonSlot piton_seq_pop(PitonSeq*s,long i){if(!s||s->length<=0){piton_write(2,"IndexError: pop from empty list\n",32);piton_exit(1);}if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError: pop index out of range\n",35);piton_exit(1);}PitonSlot v=s->items[i];for(long j=i;j+1<s->length;++j)s->items[j]=s->items[j+1];--s->length;return v;}
@@ -635,6 +641,25 @@ def _float_c_literal(value: float) -> str:
     return value.hex()
 
 
+def _raise_or_propagate(out, function):
+    """CALL_PROPAGATE_V1: a `raise` with no handler in THIS function must RETURN
+    with the exception flag set, not exit: the CALLER owns the handler and
+    routes via its exc check. Exiting here made `lanzar` inside a function
+    invisible to the caller's `intentar`. Only the module top level and
+    generators/coroutines (which cannot propagate across their driver) keep the
+    terminal report-and-exit."""
+    in_plain_function = (
+        function.name != "<module>"
+        and not getattr(function, "is_generator", False)
+        and not getattr(function, "is_coroutine", False)
+        and not getattr(function, "is_async_generator", False)
+    )
+    if in_plain_function:
+        out.append("    return 0;")
+    else:
+        out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
+
+
 class LinuxCEmitter:
     def __init__(self) -> None:
         self.function_names: set[str] = set()
@@ -785,6 +810,7 @@ class LinuxCEmitter:
         self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
         self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
         self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if not k.startswith('%')}
+        self._chr_results = {k for k in getattr(self, '_chr_results', set()) if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         if function.vararg:
             types[function.vararg] = "tuple"
@@ -842,6 +868,7 @@ class LinuxCEmitter:
         self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
         self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
         self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if not k.startswith('%')}
+        self._chr_results = {k for k in getattr(self, '_chr_results', set()) if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
@@ -902,6 +929,7 @@ class LinuxCEmitter:
         self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
         self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
         self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if not k.startswith('%')}
+        self._chr_results = {k for k in getattr(self, '_chr_results', set()) if not k.startswith('%')}
         self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
         bigint_slots: list[str] = []
         for slot, index in ordered:
@@ -1575,10 +1603,20 @@ class LinuxCEmitter:
 
     def _emit_exc_check(self, out: list[str], function: MIRFunction, handler_label: Any) -> None:
         """Route a live native exception (piton_raise_set from a helper) to
-        the enclosing try handler, or report and exit when unhandled."""
+        the enclosing try handler. With no handler in THIS function, RETURN
+        with the flag set so the CALLER routes it (multi-frame propagation);
+        only the module top level (and generators/coroutines, which cannot
+        propagate across their driver) report and exit terminally."""
         out.append("    if(piton_exc_flag){")
         if handler_label:
             out.append(f"        goto {_name(function.name + '_' + handler_label)};")
+        elif (
+            function.name != "<module>"
+            and not getattr(function, "is_generator", False)
+            and not getattr(function, "is_coroutine", False)
+            and not getattr(function, "is_async_generator", False)
+        ):
+            out.append("    return 0;")
         else:
             out.append("        piton_report_unhandled();piton_exit(1);")
         out.append("    }")
@@ -1905,6 +1943,27 @@ class LinuxCEmitter:
                         return next(iter(kinds))
                     return None
 
+                def operand_type(operand: Any) -> str | None:
+                    if operand is None or operand == "None":
+                        return "none"
+                    if isinstance(operand, str) and not operand.startswith("%"):
+                        return single(operand)
+                    if isinstance(operand, str):
+                        origin = origins.get(operand)
+                        if origin is None:
+                            return None
+                        if origin[0] == "literal":
+                            return literal_type(origin[1])
+                        if origin[0] in {"kind", "object"}:
+                            return origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
+                        if origin[0] == "var":
+                            return single(origin[1])
+                        if origin[0] == "call":
+                            return infer(origin[1])
+                        return None
+                    return literal_type(operand)
+
+
                 changed = True
                 while changed:
                     changed = False
@@ -1925,6 +1984,35 @@ class LinuxCEmitter:
                                 callee = load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
                                 if isinstance(callee, str) and callee in by_name and callee not in function.params:
                                     origins[result] = ("call", callee)
+                                else:
+                                    origins[result] = ("opaque", None)
+                            elif op == "method_call" and result:
+                                # METHODTYPE_V1: a method call resolves to the
+                                # defining method (MRO) so its inferred return
+                                # type flows to the caller. Without this,
+                                # `B.f` returning `'B' + super().f()` inferred
+                                # int, and the string result printed as an
+                                # address. Unresolvable receivers stay opaque.
+                                cls_name, method = iargs[0], iargs[1]
+                                target = None
+                                if isinstance(cls_name, str):
+                                    try:
+                                        hit = self._resolve_method(cls_name, method)
+                                    except Exception:
+                                        hit = None
+                                    if hit is not None and f"{hit}__{method}" in by_name:
+                                        target = f"{hit}__{method}"
+                                    elif f"{cls_name}__{method}" in by_name:
+                                        target = f"{cls_name}__{method}"
+                                origins[result] = ("call", target) if target else ("opaque", None)
+                            elif op == "binary" and result:
+                                # METHODTYPE_V1: `'B' + <str>` must stay str.
+                                # Only the unambiguous string-concat shape is
+                                # typed; everything else keeps the historical
+                                # int default.
+                                _bop, _l, _r = iargs[0], iargs[1], iargs[2]
+                                if _bop == "+" and operand_type(_l) == "str" and operand_type(_r) == "str":
+                                    origins[result] = ("kind", "str")
                                 else:
                                     origins[result] = ("opaque", None)
                             elif op == "store" and result is None and iargs:
@@ -1964,26 +2052,6 @@ class LinuxCEmitter:
                     if function.kwarg and function.kwarg not in seeded:
                         seeded.add(function.kwarg)
                         changed = note_var(function.kwarg, "dict") or changed
-
-                def operand_type(operand: Any) -> str | None:
-                    if operand is None or operand == "None":
-                        return "none"
-                    if isinstance(operand, str) and not operand.startswith("%"):
-                        return single(operand)
-                    if isinstance(operand, str):
-                        origin = origins.get(operand)
-                        if origin is None:
-                            return None
-                        if origin[0] == "literal":
-                            return literal_type(origin[1])
-                        if origin[0] in {"kind", "object"}:
-                            return origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
-                        if origin[0] == "var":
-                            return single(origin[1])
-                        if origin[0] == "call":
-                            return infer(origin[1])
-                        return None
-                    return literal_type(operand)
 
                 if not returns:
                     inferred: str | None = "none"
@@ -2174,6 +2242,8 @@ class LinuxCEmitter:
                 self._dict_key_types[result] = self._dict_key_types[source]
             if source in self._coll_elems:
                 self._coll_elems[result] = self._coll_elems[source]
+            if source in self._chr_results:
+                self._chr_results.add(result)
             if source in self._dict_val_types:
                 self._dict_val_types[result] = self._dict_val_types[source]
             if source in self.function_names:
@@ -2273,6 +2343,8 @@ class LinuxCEmitter:
                 self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
             if args[1] in self._coll_elems:
                 self._coll_elems[args[0]] = self._coll_elems[args[1]]
+            if args[1] in self._chr_results:
+                self._chr_results.add(args[0])
             if args[1] in self._dict_val_types:
                 self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
             if isinstance(args[0], str) and args[0].startswith("@boolh_"):
@@ -2738,6 +2810,40 @@ class LinuxCEmitter:
                 bigint_slots.append(result)
                 return out
             if operator in {"+", "-", "*"}:
+                # DUNDER_ARITH_V1: `P() + 1` used to emit a raw integer add of
+                # the object POINTER, printing an address. Like `==` dispatches
+                # to `__eq__`, arithmetic dispatches to the dunder (MRO
+                # resolved), with the reflected method as fallback.
+                dunder, rdunder = {"+": ("__add__", "__radd__"), "-": ("__sub__", "__rsub__"), "*": ("__mul__", "__rmul__")}[operator]
+                for _side, _cls, _meth, _swap in (
+                    (left_type, left_type.split(":", 1)[1] if left_type.startswith("object:") else None, dunder, False),
+                    (right_type, right_type.split(":", 1)[1] if right_type.startswith("object:") else None, rdunder, True),
+                ):
+                    if _cls is None:
+                        continue
+                    hit = None
+                    for candidate in self.class_mro.get(_cls, []):
+                        if _meth in self.classes.get(candidate, set()):
+                            hit = candidate
+                            break
+                    if hit is None and _meth in self.classes.get(_cls, set()):
+                        hit = _cls
+                    if hit is None:
+                        continue
+                    target = _name(hit + "__" + _meth)
+                    ordered = (right, left) if _swap else (left, right)
+                    frame_args = ",".join(self._value(v) for v in ordered)
+                    if self.function_frame_abi.get(hit + "__" + _meth, False):
+                        out.append(f'    {{long _ee_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},2,_ee_args);}}')
+                    else:
+                        out.append(f"    {_name(result)}={target}({frame_args});")
+                    types[result] = self.function_return_types.get(target, "int")
+                    return out
+                if left_type.startswith("object:") or right_type.startswith("object:"):
+                    raise NativeBuildError(
+                        f"Linux '{operator}' between '{left_type}' and '{right_type}' is not supported "
+                        f"(no {dunder}/{rdunder} found on the class)"
+                    )
                 # INTOVF_GUARD_V1: CPython promotes to arbitrary precision on
                 # overflow; the untagged i64 subset used to wrap silently.
                 # Constant operands fold exactly (Python bignum IS the oracle)
@@ -2865,7 +2971,7 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=({left_value} {operator} {right_value});")
                 types[result] = "bool"
                 return out
-            if types.get(left) == types.get(right) == "str":
+            elif types.get(left) == types.get(right) == "str":
                 expression = f"(piton_strcmp((char*){self._value(left)},(char*){self._value(right)}) {operator} 0)"
             else:
                 if operator in {"<", ">", "<=", ">="} and not self._ordering_pair_ok(left_type, right_type):
@@ -2934,7 +3040,10 @@ class LinuxCEmitter:
                                 f"Linux native print of a '{cls_name}' instance without __str__ is not supported "
                                 "(can never match CPython object repr)"
                             )
-                        if value_type == "str":
+                        if value in self._chr_results:
+                            # CHR_NUL_V1: written with its encoded length.
+                            out.append(f'    piton_write(1,(const char*){self._value(value)},piton_chr_len((const char*){self._value(value)}));')
+                        elif value_type == "str":
                             out.append(f'    piton_print_str_raw((char*){self._value(value)});')
                         elif value_type == "bool":
                             out.append(f'    piton_print_str_raw({self._value(value)}?"True":"False");')
@@ -2974,6 +3083,12 @@ class LinuxCEmitter:
                             out.append(f'    {_name(result)}={_name(len_cls+"__"+"__len__")}({self._value(values[0])});')
                             types[result] = "int"
                             return out
+                if len(values) == 1 and values[0] in self._chr_results:
+                    # CHR_NUL_V1: len() counts CHARACTERS; a chr() result is
+                    # always exactly one (print uses the byte length).
+                    out.append(f"    {_name(result)}=1;")
+                    types[result] = "int"
+                    return out
                 if len(values) == 1 and types.get(values[0]) == "str":
                     # STR_LEN_V1: len('hola') is the C string length.
                     out.append(f"    {_name(result)}=(long)piton_strlen((const char*){self._value(values[0])});")
@@ -3053,6 +3168,8 @@ class LinuxCEmitter:
                 else:
                     out.append(f"    {_name(result)}={helper}({self._value(values[0])});")
                     types[result] = "str"
+                    if function_name == "chr":
+                        self._chr_results.add(result)
                 if call_handler is not None:
                     out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + call_handler)};}}")
                 else:
@@ -3318,6 +3435,11 @@ class LinuxCEmitter:
                 if function_name in self.function_names:
                     encoded_values = ",".join(self._value(value) for value in values)
                     out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
+                    # CALL_PROPAGATE_V1: a call is a potential raise site. The
+                    # callee signals via the exception flag; without routing it
+                    # here, `lanzar` inside a function never reached the
+                    # caller's `intentar` (it fell through to exit).
+                    self._emit_exc_check(out, function, call_handler)
                     # RETURNTYPE_V1: statically-known user functions propagate
                     # their inferred return type so downstream consumers print
                     # collections/str/float correctly instead of a raw pointer.
@@ -3344,6 +3466,8 @@ class LinuxCEmitter:
                         else:
                             encoded_values = ",".join(self._value(v) for v in call_values)
                             out.append(f"    {_name(result)}={target}({encoded_values});")
+                        # CALL_PROPAGATE_V1: route a raise from the callee.
+                        self._emit_exc_check(out, function, call_handler)
                     else:
                         argc = len(values)
                         arg_values = ",".join(self._value(value) for value in values)
@@ -3352,6 +3476,8 @@ class LinuxCEmitter:
                             f"    {_name(result)}=piton_closure_call_frame({self._value(args[0])},{argc},_frame_args);"
                         )
                         out.append("    }")
+                        # CALL_PROPAGATE_V1: route a raise from the callee.
+                        self._emit_exc_check(out, function, call_handler)
                     types[result] = "int"
         elif op == "return":
             if getattr(function, "is_coroutine", False):
@@ -3590,7 +3716,7 @@ class LinuxCEmitter:
             if handler_label:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:
-                out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
+                _raise_or_propagate(out, function)
         elif op == "raise_typed":
             exc_type, payload, handler_label = args
             message = f"(const char*){self._value(payload)}" if payload is not None else '""'
@@ -3601,7 +3727,7 @@ class LinuxCEmitter:
                 if exc_type == "StopIteration":
                     out.append(f"    goto {_name(function.name + '___exit')};")
                 else:
-                    out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
+                    _raise_or_propagate(out, function)
         elif op == "try_push":
             pass  # no-op in static flag-based model
         elif op == "try_pop":
@@ -3628,7 +3754,7 @@ class LinuxCEmitter:
             if handler_label:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:
-                out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
+                _raise_or_propagate(out, function)
         elif op == "raise_active_dynamic":
             # Dynamic re-raise: read the reraise slots (the handler may have
             # already cleared the live exception state via catch_clear).
@@ -3637,7 +3763,7 @@ class LinuxCEmitter:
             if handler_label:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:
-                out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
+                _raise_or_propagate(out, function)
         elif op == "sys_exit":
             # STDLIB_TIER1_V1: sys.exit([code]) terminates the process.
             # None -> 0, int/bool -> that code. A string argument is CPython's

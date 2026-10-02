@@ -3676,6 +3676,23 @@ int64_t piton_ord(const char *s) {
     return cp;
 }
 
+/* CHR_NUL_V1: encoded length of a chr() result. strlen stops at NUL, so
+ * `chr(0)` measured 0. A chr() result is always exactly one character; the
+ * leading byte determines its UTF-8 width, and a leading NUL means chr(0)
+ * itself (width 1). */
+
+int64_t piton_chr_len(const char *s) {
+    unsigned char ch = s ? (unsigned char)s[0] : 0;
+    if (ch == 0) return 1;
+    if (ch < 0x80) return 1;
+    if (ch < 0xE0) return 2;
+    if (ch < 0xF0) return 3;
+    return 4;
+}
+void piton_print_chr_raw(const char *s) {
+    fwrite(s, 1, (size_t)piton_chr_len(s), stdout);
+}
+
 int64_t piton_chr(int64_t cp) {
     if (cp < 0 || cp > 0x10FFFF) {
         piton_raise("ValueError", "chr() arg not in range(0x110000)");
