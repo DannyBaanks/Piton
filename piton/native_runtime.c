@@ -259,6 +259,226 @@ void *piton_range_to_list(PitonRange *r) {
     return out;
 }
 
+/* Forward declarations for the CONV helpers below (definitions live later). */
+void *piton_dict_new(int64_t capacity);
+void *piton_set_new(int64_t capacity);
+static int piton_value_eq_raw(int64_t a, int64_t b);
+static void piton_value_deep_free(int64_t v);
+static void piton_value_print_inner(int64_t v, int recursing);
+
+/* ── CONV builtins (lista/tupla/conjunto/diccionario as VALUES) ──────────
+ * Mirrors Linux piton_conv_*: collections copy tagged items verbatim (with
+ * OBJECT refcount bumps like seq_concat); strings explode to 1-char BOXED
+ * PitonStr values so print/eq/iteration dispatch by tag. dict/set only
+ * accept the int/bool/str kinds the Windows subset models; anything else
+ * fails closed with the CPython TypeError instead of mis-encoding. */
+static void piton_conv_incref(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_OBJECT) {
+        PitonHeader *h = (PitonHeader *)pv_payload(v);
+        if (h) h->refcount++;
+    }
+}
+
+void *piton_str_box(const char *s) {
+    if (!s) s = "";
+    return piton_str_new(s, (int64_t)strlen(s));
+}
+
+int64_t piton_slot(int64_t raw, int64_t is_str) {
+    if (is_str) {
+        void *boxed = piton_str_box((const char *)raw);
+        return pv_encode(PITON_TAG_OBJECT, (int64_t)boxed);
+    }
+    return pv_int(raw);
+}
+
+int64_t piton_slot_truthy(int64_t v) {
+    switch (pv_tag(v)) {
+    case PITON_TAG_NONE: return 0;
+    case PITON_TAG_BOOL: return pv_payload(v) ? 1 : 0;
+    case PITON_TAG_INT: return pv_payload_signed(v) != 0;
+    case PITON_TAG_FLOAT: {
+        double d = *(double *)pv_payload(v);
+        return d != 0.0;
+    }
+    case PITON_TAG_OBJECT: {
+        PitonHeader *h = (PitonHeader *)pv_payload(v);
+        if (!h) return 0;
+        switch (h->sub_tag) {
+        case SUB_TAG_STR: return ((PitonStr *)h)->len > 0;
+        case SUB_TAG_LIST: case SUB_TAG_TUPLE:
+            return ((PitonCollection *)h)->length > 0;
+        case SUB_TAG_DICT: return ((PitonDict *)h)->length > 0;
+        case SUB_TAG_SET: return ((PitonSet *)h)->length > 0;
+        case SUB_TAG_RANGE: return piton_range_len((PitonRange *)h) > 0;
+        default: return 1;
+        }
+    }
+    default: return v != 0;
+    }
+}
+
+void piton_slot_print_raw(int64_t v) {
+    piton_value_print_inner(v, 0);
+}
+
+/* Print a BOXED string (tagged OBJECT/PitonStr) without quotes. Used for
+ * temporaries the emitter statically types "str-boxed": items of
+ * str-built collections and their loop variables. */
+void piton_boxed_str_print_raw(int64_t v) {
+    if (pv_tag(v) != PITON_TAG_OBJECT) {
+        piton_value_print_inner(v, 0);
+        return;
+    }
+    PitonStr *s = (PitonStr *)pv_payload(v);
+    if (!s || ((PitonHeader *)s)->sub_tag != SUB_TAG_STR) {
+        piton_value_print_inner(v, 0);
+        return;
+    }
+    fwrite(s->data, 1, (size_t)s->len, stdout);
+}
+
+void *piton_seq_from_coll(int64_t kind, void *raw) {
+    PitonCollection *out = NULL;
+    PitonHeader *h = raw ? (PitonHeader *)raw : NULL;
+    if (!h) piton_raise_unhandled("TypeError", "object is not iterable");
+    int64_t sub = h->sub_tag;
+    if (sub != SUB_TAG_LIST && sub != SUB_TAG_TUPLE && sub != SUB_TAG_DICT
+        && sub != SUB_TAG_SET && sub != SUB_TAG_RANGE)
+        piton_raise_unhandled("TypeError", "object is not iterable");
+    if (sub == SUB_TAG_RANGE) {
+        PitonRange *rr = raw;
+        int64_t n = piton_range_len(rr);
+        out = piton_collection_new(kind, n);
+        for (int64_t i = 0; i < n; ++i) {
+            int64_t v = rr->start + i * rr->step;
+            out->items[i] = pv_encode(PITON_TAG_INT, (uint64_t)v);
+        }
+        out->length = n;
+        return out;
+    }
+    int64_t n = 0;
+    if (sub == SUB_TAG_LIST || sub == SUB_TAG_TUPLE) n = ((PitonCollection *)raw)->length;
+    else if (sub == SUB_TAG_DICT) n = ((PitonDict *)raw)->length;
+    else n = ((PitonSet *)raw)->length;
+    out = piton_collection_new(kind, n);
+    for (int64_t i = 0; i < n; ++i) {
+        int64_t v;
+        if (sub == SUB_TAG_LIST || sub == SUB_TAG_TUPLE)
+            v = ((PitonCollection *)raw)->items[i];
+        else if (sub == SUB_TAG_DICT)
+            v = ((PitonDict *)raw)->entries[i].key;
+        else
+            v = ((PitonSet *)raw)->items[i];
+        piton_conv_incref(v);
+        out->items[i] = v;
+    }
+    out->length = n;
+    return out;
+}
+
+void *piton_seq_from_str(int64_t kind, const char *s) {
+    if (!s) piton_raise_unhandled("TypeError", "'NoneType' object is not iterable");
+    int64_t n = (int64_t)strlen(s);
+    PitonCollection *out = piton_collection_new(kind, n);
+    for (int64_t i = 0; i < n; ++i) {
+        char buf[2] = { s[i], 0 };
+        void *boxed = piton_str_new(buf, 1);
+        out->items[i] = pv_encode(PITON_TAG_OBJECT, (int64_t)boxed);
+    }
+    out->length = n;
+    return out;
+}
+
+void *piton_set_from_coll(void *raw) {
+    PitonHeader *h = raw ? (PitonHeader *)raw : NULL;
+    if (!h) piton_raise_unhandled("TypeError", "object is not iterable");
+    int64_t sub = h->sub_tag;
+    if (sub != SUB_TAG_LIST && sub != SUB_TAG_TUPLE && sub != SUB_TAG_SET)
+        piton_raise_unhandled("TypeError", "object is not iterable");
+    PitonSet *out = piton_set_new(4);
+    int64_t n = (sub == SUB_TAG_SET)
+        ? ((PitonSet *)raw)->length : ((PitonCollection *)raw)->length;
+    for (int64_t i = 0; i < n; ++i) {
+        int64_t v = (sub == SUB_TAG_SET)
+            ? ((PitonSet *)raw)->items[i] : ((PitonCollection *)raw)->items[i];
+        int64_t j;
+        for (j = 0; j < out->length; ++j)
+            if (piton_value_eq_raw(out->items[j], v)) break;
+        if (j < out->length) continue;
+        if (out->length >= out->capacity) {
+            int64_t nc = out->capacity ? out->capacity * 2 : 4;
+            out->items = realloc(out->items, (size_t)nc * sizeof(int64_t));
+            out->capacity = nc;
+        }
+        piton_conv_incref(v);
+        out->items[out->length++] = v;
+    }
+    return out;
+}
+
+void *piton_set_from_str(const char *s) {
+    if (!s) piton_raise_unhandled("TypeError", "'NoneType' object is not iterable");
+    PitonSet *out = piton_set_new(4);
+    for (int64_t i = 0; s[i]; ++i) {
+        char buf[2] = { s[i], 0 };
+        int64_t v = pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_new(buf, 1));
+        int64_t j;
+        for (j = 0; j < out->length; ++j)
+            if (piton_value_eq_raw(out->items[j], v)) break;
+        if (j == out->length) {
+            if (out->length >= out->capacity) {
+                int64_t nc = out->capacity ? out->capacity * 2 : 4;
+                out->items = realloc(out->items, (size_t)nc * sizeof(int64_t));
+                out->capacity = nc;
+            }
+            out->items[out->length++] = v;
+        } else {
+            piton_value_deep_free(v);
+        }
+    }
+    return out;
+}
+
+void *piton_dict_from_pairs(void *raw) {
+    PitonHeader *h = raw ? (PitonHeader *)raw : NULL;
+    if (!h || (h->sub_tag != SUB_TAG_LIST && h->sub_tag != SUB_TAG_TUPLE))
+        piton_raise_unhandled("TypeError", "dict() argument must be a sequence of pairs");
+    PitonCollection *src = raw;
+    PitonDict *out = piton_dict_new(src->length > 0 ? src->length : 4);
+    for (int64_t i = 0; i < src->length; ++i) {
+        int64_t pair = src->items[i];
+        PitonCollection *pc = NULL;
+        if (pv_tag(pair) == PITON_TAG_OBJECT) {
+            PitonHeader *ph = (PitonHeader *)pv_payload(pair);
+            if (ph && (ph->sub_tag == SUB_TAG_LIST || ph->sub_tag == SUB_TAG_TUPLE))
+                pc = (PitonCollection *)ph;
+        }
+        if (!pc || pc->length != 2)
+            piton_raise_unhandled("ValueError", "dict() pairs must be 2-sequences");
+        int64_t k = pc->items[0], val = pc->items[1];
+        int64_t j;
+        for (j = 0; j < out->length; ++j)
+            if (piton_value_eq_raw(out->entries[j].key, k)) break;
+        piton_conv_incref(k);
+        piton_conv_incref(val);
+        if (j < out->length) {
+            piton_value_deep_free(out->entries[j].value);
+            out->entries[j].value = val;
+        } else {
+            if (out->length >= out->capacity) {
+                int64_t nc = out->capacity ? out->capacity * 2 : 4;
+                out->entries = realloc(out->entries, (size_t)nc * sizeof(PitonDictEntry));
+                out->capacity = nc;
+            }
+            out->entries[out->length].key = k;
+            out->entries[out->length].value = val;
+            ++out->length;
+        }
+    }
+    return out;
+}
+
 void *piton_iterator_new_any(void *raw) {
     if (!raw) { fprintf(stderr, "TypeError: object is not iterable\n"); exit(1); }
     int64_t sub_tag = ((PitonHeader *)raw)->sub_tag;

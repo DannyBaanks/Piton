@@ -401,7 +401,9 @@ class BuiltinMarkerV1(unittest.TestCase):
         ):
             with self.subTest(fuente=source):
                 result = compare_native_to_cpython(source)
-                self.assertEqual(result.native.stdout.decode(), esperado)
+                # CRLF_NORMALIZE_V1: en Windows el runtime emite \r\n
+                # (msvcrt text mode); la expectativa canonica es \n.
+                self.assertEqual(result.native.stdout.decode().replace("\r\n", "\n"), esperado)
                 self.assertEqual(result.native.stdout, result.oracle.stdout)
 
     def test_range_len_iter_index_contains(self):
