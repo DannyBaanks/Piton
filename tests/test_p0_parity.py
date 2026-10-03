@@ -458,7 +458,8 @@ class BuiltinMarkerV1(unittest.TestCase):
         ):
             with self.subTest(fuente=source):
                 result = compare_native_to_cpython(source)
-                self.assertEqual(result.native.stdout.decode(), esperado)
+                # CRLF_NORMALIZE_V1: ver test_range_as_value.
+                self.assertEqual(result.native.stdout.decode().replace("\r\n", "\n"), esperado)
                 self.assertEqual(result.native.stdout, result.oracle.stdout)
 
     def test_converted_collection_keeps_element_type(self):
