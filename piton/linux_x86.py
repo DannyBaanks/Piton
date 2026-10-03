@@ -605,6 +605,7 @@ static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=t
 static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;}
 static void piton_seq_set(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0||i>=s->length){piton_raise_set("IndexError","seq index out of range");return;}s->items[i]=v;}
 static void piton_dict_set(PitonDict*d,PitonSlot k,PitonSlot v){if(!d)return;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){d->items[i].value=v;return;}piton_dict_append(d,k,v);}
+static void piton_dict_update(PitonDict*d,PitonDict*src){if(!d||!src)return;for(long i=0;i<src->length;++i)piton_dict_set(d,src->items[i].key,src->items[i].value);}
 static void piton_dict_del(PitonDict*d,PitonSlot k){for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){for(long j=i;j+1<d->length;++j)d->items[j]=d->items[j+1];--d->length;return;}piton_raise_set("KeyError","");}
 static void piton_seq_remove(PitonSeq*s,PitonSlot v){if(!s)return;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v)){for(long j=i;j<s->length-1;++j)s->items[j]=s->items[j+1];--s->length;return;}piton_raise_set("ValueError","list.remove(x): x not in list");}
 static void piton_seq_extend(PitonSeq*s,PitonSeq*o){if(!s||!o)return;for(long i=0;i<o->length;++i)piton_seq_append(s,o->items[i]);}
@@ -1582,6 +1583,14 @@ class LinuxCEmitter:
                         f"unioned with values of type '{val_type}' in the untagged model"
                     )
                 types[result] = val_type
+            elif method == "update":
+                # DICT_UPDATE_V1: merge otro dict (V1: solo dict -> dict);
+                # CPython args iterable/kwargs quedan fuera.
+                require_count((1,), "one argument (a dict)")
+                if types.get(call_args[0], "") != "dict":
+                    raise NativeBuildError("Linux dict.update() requires a dict argument")
+                out.append(f"    piton_dict_update((PitonDict*){operand},(PitonDict*){self._value(call_args[0])});")
+                types[result] = "none"
             elif method in {"keys", "values", "items"}:
                 require_count((0,), "no arguments")
                 helper = {"keys": "piton_dict_keys", "values": "piton_dict_values", "items": "piton_dict_items"}[method]
