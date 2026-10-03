@@ -521,6 +521,20 @@ void piton_dict_put_tagged(void *raw, int64_t key, int64_t value) {
     ++d->length;
 }
 
+int64_t piton_dict_get_tagged_int(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key)) {
+                int64_t v = d->entries[i].value;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                piton_raise_unhandled("TypeError", "dict value is not an int");
+            }
+    piton_raise_unhandled("KeyError", "key not found");
+    return 0;
+}
+
 int64_t piton_dict_get_tagged(void *raw, int64_t key) {
     PitonDict *d = raw;
     if (d)
@@ -613,6 +627,16 @@ int64_t piton_iterator_next_any_raw(void *raw) {
         return pv_encode(PITON_TAG_INT, (uint64_t)v);
     }
     return ((PitonSet *)iterator->raw)->items[iterator->index++];
+}
+
+/* Unbox an INT/BOOL slot to its raw value for arithmetic. Anything else
+ * (str, collections, ...) is a silent-approximation risk, so it raises the
+ * CPython TypeError instead. */
+int64_t piton_slot_num(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    piton_raise_unhandled("TypeError", "unsupported operand type(s)");
+    return 0;
 }
 
 int64_t piton_box_float(int64_t bits) {

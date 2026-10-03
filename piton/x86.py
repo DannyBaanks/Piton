@@ -177,6 +177,7 @@ class Win64NasmEmitter:
         self._mixed_elem_iters: set[str] = set()
         self._tagged_dicts: set[str] = set()
         self._tagged_dict_iters: set[str] = set()
+        self._tagged_dict_iter_kinds: dict[str, str | None] = {}
         # DICT_KEY_TYPE_V1: static type of a dict's KEYS, so iterating a dict
         # yields the right static type. The iterator used to hardcode "str",
         # which made `para k en {1: 'a'}` print the int key as a string pointer.
@@ -212,11 +213,13 @@ class Win64NasmEmitter:
             "extern piton_dict_from_pairs",
             "extern piton_dict_put_tagged", "extern piton_dict_get_tagged",
             "extern piton_dict_get_tagged_d", "extern piton_dict_get_tagged_1",
+            "extern piton_dict_get_tagged_int",
             "extern piton_dict_contains_tagged", "extern piton_box_float",
             "extern piton_dict_nth_key", "extern piton_set_nth",
             "extern piton_slot_bool", "extern piton_iterator_next_any_raw",
             "extern piton_collection_put_verbatim", "extern piton_list_append_tagged",
             "extern piton_box_str_tagged",
+            "extern piton_slot_num",
             "extern piton_float_fmt_fixed", "extern piton_float_fmt_pct",
             "extern piton_float_fmt_exp", "extern piton_float_fmt_g",
             "extern piton_collection_get_raw",
@@ -732,6 +735,8 @@ class Win64NasmEmitter:
                 self.types[result] = f"iterator:{source_type or 'unknown'}"
                 if source in self._tagged_dicts or self.aliases.get(source, source) in self._tagged_dicts:
                     self._tagged_dict_iters.add(result)
+                    _src = source if source in self._dict_key_types else self.aliases.get(source, source)
+                    self._tagged_dict_iter_kinds[result] = self._dict_key_types.get(_src)
                 if source in self._str_elem_colls:
                     self._str_elem_iters.add(result)
                 if source in self._mixed_elem_colls:
@@ -850,9 +855,10 @@ class Win64NasmEmitter:
             # DICT_KEY_TYPE_V1: a dict iterator yields its KEYS; the static type
             # comes from the dict, and an unknown key type fails closed
             # instead of printing a pointer as a string.
-            if iterator in self._tagged_dict_iters:
-                # TAGGED_DICT_V1: las keys salen verbatim taggeadas
-                # (el next normal decodificaria INT/BOOL a raw).
+            if iterator in self._tagged_dict_iters and self._tagged_dict_iter_kinds.get(iterator) not in {"int", "bool"}:
+                # TAGGED_DICT_V1: keys no-int salen verbatim taggeadas
+                # (el next normal decodificaria INT/BOOL a raw); las keys
+                # int/bool conservan el camino decodificado (aritmetica).
                 assert self.lines[-1].strip().startswith("mov "), self.lines[-1]
                 assert "piton_iterator_next_any" in self.lines[-2], self.lines[-2]
                 self.lines[-2] = "    call piton_iterator_next_any_raw"
@@ -923,6 +929,10 @@ class Win64NasmEmitter:
                 self._non_int_elem_colls.add(result)
             if name in self._tagged_dicts:
                 self._tagged_dicts.add(result)
+            if name in self._dict_key_types:
+                self._dict_key_types[result] = self._dict_key_types[name]
+            if name in self._dict_val_types:
+                self._dict_val_types[result] = self._dict_val_types[name]
             if name in self._chr_results:
                 self._chr_results.add(result)
             if name in self.dict_elems:
@@ -1011,6 +1021,10 @@ class Win64NasmEmitter:
                 self._non_int_elem_colls.add(args[0])
             if isinstance(args[1], str) and args[1] in self._tagged_dicts:
                 self._tagged_dicts.add(args[0])
+            if isinstance(args[1], str) and args[1] in self._dict_key_types:
+                self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
+            if isinstance(args[1], str) and args[1] in self._dict_val_types:
+                self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
             if isinstance(args[1], str) and (args[1] in self._function_temps or args[1] in self.function_names):
                 self._function_temps.add(args[0])
             elif isinstance(args[0], str) and not args[0].startswith("%"):
@@ -1096,10 +1110,29 @@ class Win64NasmEmitter:
             # optional 4th argument on '//' and '%' so the raise below routes
             # to intentar/excepto instead of trapping the process.
             handler_label = args[3] if len(args) > 3 else None
-            if "slot" in {self.types.get(left, "int"), self.types.get(right, "int")} and operator not in {"==", "!="}:
-                raise NativeBuildError(
-                    f"native '{operator}' on a mixed-type slot value is not supported"
-                )
+            _lt = self.types.get(left, "int")
+            _rt = self.types.get(right, "int")
+            if operator not in {"==", "!="} and ("slot" in {_lt, _rt} or "str-boxed" in {_lt, _rt}):
+                # SLOT_ARITH_V1 (Windows): unbox INT/BOOL slots to raw ints
+                # so mixed-winner arithmetic works; any other kind raises
+                # TypeError at runtime (CPython agrees, except str+str
+                # concat through slots which stays fail-closed).
+                if _lt in {"slot", "str-boxed"}:
+                    _ul = f"{result}_unbox_l"
+                    self._load_operand(left, "rcx")
+                    self.lines.append("    call piton_slot_num")
+                    self.lines.append(f"    mov {self._address(_ul)}, rax")
+                    self.types[_ul] = "int"
+                    left = _ul
+                    left_type = "int"
+                if _rt in {"slot", "str-boxed"}:
+                    _ur = f"{result}_unbox_r"
+                    self._load_operand(right, "rcx")
+                    self.lines.append("    call piton_slot_num")
+                    self.lines.append(f"    mov {self._address(_ur)}, rax")
+                    self.types[_ur] = "int"
+                    right = _ur
+                    right_type = "int"
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
             if operator == "in":
@@ -2076,15 +2109,23 @@ class Win64NasmEmitter:
                     return
                 if container in self._tagged_dicts or self.aliases.get(container, container) in self._tagged_dicts:
                     # TAGGED_DICT_V1: key boxeada + get verbatim; el valor
-                    # tipa slot (print/eq/truth por tag en runtime).
+                    # tipa slot (print/eq/truth por tag en runtime), SALVO
+                    # valores int/bool probados que se decodifican (la
+                    # aritmetica sobre ellos debe seguir funcionando).
                     _kk = self.types.get(key, "int")
                     self._emit_box(key, _kk)
                     self.lines.append(f"    mov {self._address('@scratch0')}, rax")
                     self.lines.append(f"    mov rcx, {self._address(container)}")
                     self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
-                    self.lines.append("    call piton_dict_get_tagged")
-                    self.lines.append(f"    mov {self._address(result)}, rax")
-                    self.types[result] = "slot"
+                    _vk = self._tagged_dict_val_kind(container)
+                    if _vk in {"int", "bool"}:
+                        self.lines.append("    call piton_dict_get_tagged_int")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = _vk
+                    else:
+                        self.lines.append("    call piton_dict_get_tagged")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "slot"
                     return
                 self._load_operand(container, "rcx")
                 self._load_operand(key, "rdx")
@@ -5228,6 +5269,13 @@ class Win64NasmEmitter:
                 value, vtype = recorded
                 self.lines[i - 2:i + 1] = self._emit_boolh_store(holder, value, vtype)
                 return
+
+    def _tagged_dict_val_kind(self, container: Any) -> str | None:
+        """Static value kind of a tagged dict (None when mixed/unknown)."""
+        kind = self._dict_val_types.get(container)
+        if kind is None and isinstance(container, str):
+            kind = self._dict_val_types.get(self.aliases.get(container, container))
+        return kind
 
     def _emit_box(self, value: Any, vtype: str) -> None:
         """Box a raw operand as a tagged PitonValue in rax (dict keys/values)."""
