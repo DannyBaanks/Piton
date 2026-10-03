@@ -214,6 +214,7 @@ class Win64NasmEmitter:
             "extern piton_dict_get_tagged_d", "extern piton_dict_get_tagged_1",
             "extern piton_dict_contains_tagged", "extern piton_box_float",
             "extern piton_dict_nth_key", "extern piton_set_nth",
+            "extern piton_slot_bool", "extern piton_iterator_next_any_raw",
             "extern piton_collection_put_verbatim", "extern piton_list_append_tagged",
             "extern piton_box_str_tagged",
             "extern piton_float_fmt_fixed", "extern piton_float_fmt_pct",
@@ -847,7 +848,11 @@ class Win64NasmEmitter:
             # comes from the dict, and an unknown key type fails closed
             # instead of printing a pointer as a string.
             if iterator in self._tagged_dict_iters:
-                # TAGGED_DICT_V1: las keys salen verbatim taggeadas.
+                # TAGGED_DICT_V1: las keys salen verbatim taggeadas
+                # (el next normal decodificaria INT/BOOL a raw).
+                assert self.lines[-1].strip().startswith("mov "), self.lines[-1]
+                assert "piton_iterator_next_any" in self.lines[-2], self.lines[-2]
+                self.lines[-2] = "    call piton_iterator_next_any_raw"
                 self.types[result] = "slot"
             elif iterator_type == "iterator:dict":
                 key_type = self._dict_key_types.get(args[0])
@@ -5209,6 +5214,9 @@ class Win64NasmEmitter:
         elif vtype == "float":
             self._load_operand(value, "rcx")
             self.lines.append("    call piton_box_float")
+        elif vtype == "bool":
+            self._load_operand(value, "rcx")
+            self.lines.append("    call piton_slot_bool")
         elif vtype == "none":
             self.lines.append("    xor eax, eax")
         else:

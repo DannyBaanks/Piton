@@ -575,6 +575,41 @@ int64_t piton_dict_contains_tagged(void *raw, int64_t key) {
 }
 
 /* Box a raw float-bits temp as a heap double tagged FLOAT. */
+int64_t piton_slot_bool(int64_t v) {
+    return pv_encode(PITON_TAG_BOOL, v ? 1 : 0);
+}
+
+int64_t piton_iterator_next_any_raw(void *raw) {
+    PitonAnyIterator *iterator = raw;
+    if (!iterator || iterator->magic != PITON_ITERATOR_MAGIC) {
+        fprintf(stderr, "TypeError: object is not an iterator\n");
+        exit(1);
+    }
+    int64_t length = 0;
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        length = ((PitonCollection *)iterator->raw)->length;
+    else if (iterator->kind == SUB_TAG_DICT)
+        length = ((PitonDict *)iterator->raw)->length;
+    else if (iterator->kind == SUB_TAG_RANGE)
+        length = piton_range_len((PitonRange *)iterator->raw);
+    else
+        length = ((PitonSet *)iterator->raw)->length;
+    if (iterator->index >= length) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        return ((PitonCollection *)iterator->raw)->items[iterator->index++];
+    if (iterator->kind == SUB_TAG_DICT)
+        return ((PitonDict *)iterator->raw)->entries[iterator->index++].key;
+    if (iterator->kind == SUB_TAG_RANGE) {
+        PitonRange *rr = iterator->raw;
+        int64_t v = rr->start + (iterator->index++) * rr->step;
+        return pv_encode(PITON_TAG_INT, (uint64_t)v);
+    }
+    return ((PitonSet *)iterator->raw)->items[iterator->index++];
+}
+
 int64_t piton_box_float(int64_t bits) {
     double *dp = malloc(sizeof(double));
     memcpy(dp, &bits, sizeof(double));
