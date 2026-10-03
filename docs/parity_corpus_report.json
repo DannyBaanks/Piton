@@ -31,14 +31,14 @@
     "timeout": 10.0
   },
   "summary": {
-    "total": 1223,
+    "total": 1220,
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 69,
+      "FAIL_CLOSED": 56,
       "RAISE_EQ": 0,
-      "EQUIV": 1154
+      "EQUIV": 1164
     },
     "by_area": {
       "literals": {
@@ -85,9 +85,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 9,
+        "FAIL_CLOSED": 1,
         "RAISE_EQ": 0,
-        "EQUIV": 66
+        "EQUIV": 74
       },
       "ranges": {
         "DIVERGENT_CRASH": 0,
@@ -109,7 +109,7 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 13,
+        "FAIL_CLOSED": 10,
         "RAISE_EQ": 0,
         "EQUIV": 72
       },
@@ -181,9 +181,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 5,
+        "FAIL_CLOSED": 3,
         "RAISE_EQ": 0,
-        "EQUIV": 16
+        "EQUIV": 18
       },
       "exceptions": {
         "DIVERGENT_CRASH": 0,
@@ -218,7 +218,7 @@
         "EQUIV": 12
       }
     },
-    "pct_equiv": 94.4,
+    "pct_equiv": 95.4,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -2948,8 +2948,10 @@
       "area": "truthiness",
       "name": "y-cero",
       "src": "v = 0\nimprimir(0 y 'T' o 'F')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux y/o with mixed operand types (int vs str) is not supported (the winner type is not statically knowable)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
@@ -3037,14 +3039,16 @@
       "name": "y-neg",
       "src": "v = -1\nimprimir(-1 y 'T' o 'F')\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux y/o with mixed operand types (int vs str) is not supported (the winner type is not statically knowable)"
+      "detail": "build: NativeBuildError: Linux truth test does not support slot"
     },
     {
       "area": "truthiness",
       "name": "o-neg",
       "src": "v = -1\nimprimir(-1 o 'F')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux y/o with mixed operand types (int vs str) is not supported (the winner type is not statically knowable)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
@@ -3077,8 +3081,10 @@
       "area": "truthiness",
       "name": "y-fzero",
       "src": "v = 0.0\nimprimir(0.0 y 'T' o 'F')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux y/o with mixed operand types (float vs str) is not supported (the winner type is not statically knowable)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
@@ -3255,8 +3261,10 @@
       "area": "truthiness",
       "name": "y-falso",
       "src": "v = Falso\nimprimir(Falso y 'T' o 'F')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux y/o with mixed operand types (bool vs str) is not supported (the winner type is not statically knowable)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
@@ -3343,8 +3351,10 @@
       "area": "truthiness",
       "name": "y-nada",
       "src": "v = Nada\nimprimir(Nada y 'T' o 'F')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux y/o with mixed operand types (none vs str) is not supported (the winner type is not statically knowable)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
@@ -3386,8 +3396,10 @@
       "area": "truthiness",
       "name": "y-emptylist",
       "src": "v = []\nimprimir([] y 'T' o 'F')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux y/o with mixed operand types (list vs str) is not supported (the winner type is not statically knowable)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
@@ -3474,8 +3486,10 @@
       "area": "truthiness",
       "name": "y-emptytuple",
       "src": "v = ()\nimprimir(() y 'T' o 'F')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux y/o with mixed operand types (tuple vs str) is not supported (the winner type is not statically knowable)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
@@ -3517,8 +3531,10 @@
       "area": "truthiness",
       "name": "y-emptydict",
       "src": "v = {}\nimprimir({} y 'T' o 'F')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux y/o with mixed operand types (dict vs str) is not supported (the winner type is not statically knowable)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "truthiness",
@@ -4942,27 +4958,6 @@
       "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
-    },
-    {
-      "area": "builtins",
-      "name": "enumerar0",
-      "src": "imprimir(enumerar('ab'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native print of a iterator:enumerate value is not supported (can never match CPython output)"
-    },
-    {
-      "area": "builtins",
-      "name": "enumerar1",
-      "src": "imprimir(enumerar([7, 8]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native print of a iterator:enumerate value is not supported (can never match CPython output)"
-    },
-    {
-      "area": "builtins",
-      "name": "enumerar2",
-      "src": "imprimir(enumerar(rango(2)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native enumerate currently requires a list or tuple"
     },
     {
       "area": "builtins",
@@ -10389,8 +10384,10 @@
       "area": "functions",
       "name": "def-varargs",
       "src": "funcion f(*args):\n    devolver suma(args)\nimprimir(f(1, 2, 3))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-hji0l5c5/program.c: In function ‘f’:\n/tmp/piton-linux-hji0l5c5/program.c:1171:8: error: ‘suma’ undeclared (first use in this function)\n 1171 |     _0=suma;\n      |        ^~~~\n/tmp/piton-linux-hji0l5c5/program.c:1171:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
@@ -10405,8 +10402,10 @@
       "area": "functions",
       "name": "def-mixed",
       "src": "funcion f(a, *args, **kw):\n    devolver a + suma(args) + longitud(kw)\nimprimir(f(1, 2, 3, x=4))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-of30bchk/program.c: In function ‘f’:\n/tmp/piton-linux-of30bchk/program.c:1175:8: error: ‘suma’ undeclared (first use in this function)\n 1175 |     _1=suma;\n      |        ^~~~\n/tmp/piton-linux-of30bchk/program.c:1175:8: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "functions",
@@ -10494,21 +10493,21 @@
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-nn6hayl0/program.c: In function ‘piton_main’:\n/tmp/piton-linux-nn6hayl0/program.c:1079:9: error: too many arguments to function ‘f’\n 1079 |     _12=f(_10,_11);\n      |         ^\n/tmp/piton-linux-nn6hayl0/program.c:1052:13: note: declared here\n 1052 | static long f(long a);\n      |             ^\n/tmp/piton-linux-nn6hayl0/program.c: At top level:\n/tmp/piton-linux-nn6hayl0/program.c:979:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  979 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: native call to 'f' passes 2 argument(s) but the function takes 0..1"
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-jtiewcwq/program.c: In function ‘piton_main’:\n/tmp/piton-linux-jtiewcwq/program.c:1078:9: error: too few arguments to function ‘f’\n 1078 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-jtiewcwq/program.c:1052:13: note: declared here\n 1052 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-jtiewcwq/program.c: At top level:\n/tmp/piton-linux-jtiewcwq/program.c:979:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  979 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-eyyqabst/program.c: In function ‘piton_main’:\n/tmp/piton-linux-eyyqabst/program.c:1078:9: error: too few arguments to function ‘f’\n 1078 |     _11=f(_10);\n      |         ^\n/tmp/piton-linux-eyyqabst/program.c:1052:13: note: declared here\n 1052 | static long f(long a, long b);\n      |             ^\n/tmp/piton-linux-eyyqabst/program.c: At top level:\n/tmp/piton-linux-eyyqabst/program.c:979:13: warning: ‘piton_bigint_print_raw’ used but never defined\n  979 | static void piton_bigint_print_raw(void*a);\n      |             ^~~~~~~~~~~~~~~~~~~~~~\n"
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-mpiwp0ux/program.c: In function ‘piton_main’:\n/tmp/piton-linux-mpiwp0ux/program.c:1146:9: error: ‘no_existe’ undeclared (first use in this function)\n 1146 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-mpiwp0ux/program.c:1146:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-l9no9x7h/program.c: In function ‘piton_main’:\n/tmp/piton-linux-l9no9x7h/program.c:1146:9: error: ‘no_existe’ undeclared (first use in this function)\n 1146 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-l9no9x7h/program.c:1146:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10872,7 +10871,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-fzrrd2_m/program.c: In function ‘piton_main’:\n/tmp/piton-linux-fzrrd2_m/program.c:1149:9: error: too few arguments to function ‘P____init__’\n 1149 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-fzrrd2_m/program.c:1123:13: note: declared here\n 1123 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-w944cwmr/program.c: In function ‘piton_main’:\n/tmp/piton-linux-w944cwmr/program.c:1149:9: error: too few arguments to function ‘P____init__’\n 1149 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-w944cwmr/program.c:1123:13: note: declared here\n 1123 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",

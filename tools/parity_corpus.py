@@ -137,7 +137,11 @@ INT_BUILTINS = [
     ("min", [("[3, 1, 2]",), ("'abc'",), ("[1.5, 2]",), ("[[1], [2]]",)]),
     ("max", [("[3, 1, 2]",), ("'abc'",), ("[1.5, 2]",)]),
     ("ordenar", [("[3, 1, 2]",), ("'cba'",), ("rango(3)",)]),
-    ("enumerar", [("'ab'",), ("[7, 8]",), ("rango(2)",)]),
+    # enumerar(...) imprime un <enumerate object at 0x...>: la direccion
+    # cambia en cada proceso, asi que comparar stdout no significa nada
+    # (mismo motivo por el que un set de strings salio del corpus). La
+    # cobertura de enumerar se mide iterando, no imprimiendo el objeto.
+    ("enumerar", []),
     ("pow", [("(2, 10)",), ("(2, 0)",), ("(2.0, 0.5)",), ("(2, -1)",), ("(2, 1000)",)]),
     ("redondear", [("(2.567, 2)",), ("(2.5,)",), ("(3.14159, 3)",)]),
     ("pow", [("(2, 62)",)]),

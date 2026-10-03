@@ -69,6 +69,11 @@ ALIASES_BUILTIN = {
     "booleano": "bool",
     "abrir": "open",
     "ordenar": "sorted",
+    # alias que el subconjunto nativo ya soporta pero el traductor dejaba
+    # sin traducir: el oracle recibia `suma(...)` y moria con NameError,
+    # haciendo que un programa valido pareciera divergente.
+    "suma": "sum",
+    "redondear": "round",
 }
 
 _TRIVIA = {
@@ -167,6 +172,108 @@ def _es_contexto_caso(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
     if siguiente is not None and siguiente.type == token.OP and siguiente.string == "=":
         return False
     return True
+
+
+
+_ALIAS_NUNCA_OCULTABLES = frozenset({
+    "imprimir", "print", "entrada", "input", "rango", "range", "longitud", "len",
+    "enumerar", "enumerate", "lista", "list", "diccionario", "dict", "conjunto",
+    "set", "tupla", "tuple", "entero", "int", "decimal", "float", "texto", "str",
+    "booleano", "bool", "abrir", "open", "ordenar", "sorted",
+})
+
+
+def _nombres_de_star_import(tokens: list[tokenize.TokenInfo]) -> set[str]:
+    """Con `... importar *` no se sabe que nombres trae el modulo; solo se
+    bloquea el alias para los nombres que el propio archivo USA, que es donde
+    una colision es observable."""
+    hay_star = False
+    for indice, tok in enumerate(tokens):
+        anterior = _anterior_significativo(tokens, indice)
+        if (
+            tok.type == tokenize.OP and tok.string == "*"
+            and anterior is not None and anterior.type == tokenize.NAME
+            and anterior.string in {"importar", "import"}
+        ):
+            hay_star = True
+            break
+    if not hay_star:
+        return set()
+    usados: set[str] = set()
+    for indice, tok in enumerate(tokens):
+        if tok.type != tokenize.NAME or tok.string not in ALIASES_BUILTIN:
+            continue
+        # `imprimir(...)`, `longitud(...)` etc. son builtins del lenguaje y no
+        # pueden venir de un star-import: nunca se bloquean. Lo que se bloquea
+        # es un alias MAS RARO (suma, redondear) que podria venir del modulo.
+        if tok.string in _ALIAS_NUNCA_OCULTABLES:
+            continue
+        usados.add(tok.string)
+    return usados
+
+
+def _nombres_definidos_por_usuario(tokens: list[tokenize.TokenInfo]) -> set[str]:
+    """Nombres que ocultan un builtin a NIVEL DE MODULO.
+
+    Solo una definicion de nivel de modulo oculta el builtin: un metodo
+    (`clase Caja: funcion imprimir(self)`) vive en el espacio de nombres de la
+    clase y NO oculta el builtin global `imprimir`. Sin esta distincion, el
+    ejemplo `examples/07_seguridad_lexica.piton` dejaba de traducir sus
+    llamadas globales a `imprimir` y el programa moria con NameError.
+
+    SHADOW_ALIAS_V1: un alias de builtin (`suma` -> `sum`) no debe reescribir
+    el nombre del usuario. Incluye `def`/`funcion` de nivel de modulo, nombres
+    de clase y nombres importados explicitamente. Las definiciones anidadas en
+    una funcion se tratan tambien como shadowing (conservador: el alias no se
+    aplica y el nombre sobrevive intacto).
+    """
+    definidos: set[str] = set()
+    profundidad = 0
+    cuerpos_de_clase: set[int] = set()
+    pendiente_clase = False
+    en_import = False
+    anterior: tokenize.TokenInfo | None = None
+    ignorados = {tokenize.NL, tokenize.COMMENT, tokenize.ENCODING, tokenize.ENDMARKER}
+
+    for actual in tokens:
+        if actual.type == tokenize.INDENT:
+            profundidad += 1
+            if pendiente_clase:
+                cuerpos_de_clase.add(profundidad)
+            pendiente_clase = False
+            continue
+        if actual.type == tokenize.DEDENT:
+            cuerpos_de_clase.discard(profundidad)
+            profundidad = max(0, profundidad - 1)
+            continue
+        if actual.type == tokenize.NEWLINE:
+            en_import = False
+            continue
+        if actual.type in ignorados:
+            continue
+        if actual.type == tokenize.NAME:
+            if actual.string in {"clase", "class"}:
+                pendiente_clase = True
+                en_import = False
+                continue
+            if actual.string in {"importar", "import", "desde", "from"}:
+                en_import = True
+                continue
+            if en_import:
+                definidos.add(actual.string)
+            elif (
+                anterior is not None
+                and anterior.type == tokenize.NAME
+                and anterior.string in {"def", "funcion"}
+                and profundidad not in cuerpos_de_clase
+            ):
+                definidos.add(actual.string)
+        if actual.type == tokenize.OP and actual.string == "(":
+            en_import = False
+        if actual.type == tokenize.NAME or actual.type == tokenize.OP:
+            anterior = actual
+
+    return definidos
 
 
 def _es_llamada_builtin(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
@@ -343,6 +450,12 @@ def _es_carga_builtin(
     if anterior is not None and anterior.type == token.NAME and anterior.string in {"importar", "import", "desde", "from"}:
         return False
     if nombre in asignados:
+        return False
+    # ALIAS_SHADOW_V1: if the module DEFINES this name, the alias must not
+    # rewrite the user's function (`def suma(...)` is theirs, not `sum`).
+    if nombre in _nombres_definidos_por_usuario(tokens):
+        return False
+    if nombre in _nombres_de_star_import(tokens):
         return False
     return True
 

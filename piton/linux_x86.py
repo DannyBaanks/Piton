@@ -737,6 +737,12 @@ def _raise_or_propagate(out, function):
         out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
 
 
+# builtins that exist only as CALL targets: a value load of them is a real
+# program error (they have no C value), but as a NAME they must not shadow a
+# user variable of the same name (`suma = 0`).
+_FUNC_ONLY_BUILTINS = frozenset({"suma", "redondear"})
+
+
 class LinuxCEmitter:
     def __init__(self) -> None:
         self.function_names: set[str] = set()
@@ -761,6 +767,10 @@ class LinuxCEmitter:
         self._tuple_list_elems: dict[str, tuple[str, str]] = {}
         self._iter_source: dict[str, str] = {}
         self._enum_elem: dict[str, str] = {}
+        # builtins that are only ever CALLED (never a value): marking them
+        # as a builtin value broke `suma = 0` as an ordinary variable.
+        self._func_only_builtins: set[str] = set()
+        self._boolh_line: dict[str, tuple[int, str, str]] = {}
         self._iter_source_r: dict[str, str] = {}
         # DICT_VAL_TYPE_V1: static type of a dict's VALUES, so `d[k]` and
         # `d.get(k)` return a correctly typed result instead of an int
@@ -778,6 +788,7 @@ class LinuxCEmitter:
         self.class_parents = getattr(module, "class_parents", {})
         self.class_mro = getattr(module, "class_mro", {})
         self.class_properties = getattr(module, "class_properties", {})
+        self._module_funcs = list(module.functions)
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self.function_params = {function.name: list(function.params) for function in module.functions}
@@ -880,8 +891,24 @@ class LinuxCEmitter:
                     slots.add(instruction.result)
                 if instruction.op == "store":
                     slots.add(instruction.args[0])
+        self._cur_slots = slots
         locals_ = sorted((slots if function.frame_abi else slots - set(function.params)) - self._shared_globals)
         lines = [signature + " {"]
+        # the emitted lines of THIS function: a mixed-type y/o rewrites the
+        # line of its first arm, which lives here (not in the per-op buffer).
+        self._cur_lines = lines
+        if not getattr(self, "_known_names", None):
+            known: set[str] = set()
+            for _fn in self._module_funcs:
+                known.update(_fn.params)
+                for _b in _fn.blocks:
+                    for _i in _b.instructions:
+                        if _i.op == "store" and isinstance(_i.args[0], str):
+                            known.add(_i.args[0])
+                        for _a in _i.args:
+                            if isinstance(_a, str) and not _a.startswith("%") and not _a.startswith("@") and not _a.startswith("__"):
+                                known.add(_a)
+            self._known_names = known
         if locals_:
             lines.append("    long " + ", ".join(f"{_name(slot)}=0" for slot in locals_) + ";")
         aliases: dict[str, str] = {}
@@ -1379,6 +1406,41 @@ class LinuxCEmitter:
         if value is None:
             return "none"
         raise NativeBuildError("Linux str % formatting: unsupported literal argument")
+
+    def _emit_user_function_call(self, out: list[str], result: Any, function_name: str,
+                                values: list[Any], call_handler: Any,
+                                function: MIRFunction, types: dict[str, str]) -> list[str]:
+        """Call a user-defined function directly. Extracted so it can run
+        BEFORE the builtin chain: a user definition SHADOWS a builtin of the
+        same name (`funcion suma(a, b)` is not `sum`)."""
+        _gen_layout = self.generator_layouts.get(function_name)
+        if _gen_layout is not None:
+            _params = self.function_params.get(function_name, [])
+            if len(values) != len(_params):
+                raise NativeBuildError(
+                    f"native generator '{function_name}' called with wrong number of arguments"
+                )
+            if len(values) > 4:
+                raise NativeBuildError("native generator calls with more than four arguments are not supported yet")
+            out.append(f"    {_name(result)}=piton_gen_new((long)&{_name(function_name)},{len(_gen_layout)});")
+            for _arg, _param in zip(values, _params):
+                out.append(f"    ((PitonGenerator*){_name(result)})->slots[{_gen_layout[_param]}]={self._value(_arg)};")
+            types[result] = "generator"
+            return out
+        _params = self.function_params.get(function_name, [])
+        _defaults = self.function_defaults.get(function_name, [])
+        _min_args = max(0, len(_params) - len(_defaults))
+        if not (_min_args <= len(values) <= len(_params)):
+            raise NativeBuildError(
+                f"native call to '{function_name}' passes {len(values)} argument(s) "
+                f"but the function takes {_min_args}..{len(_params)}"
+            )
+        values = self._complete_call_args(function_name, list(values))
+        encoded_values = ",".join(self._value(value) for value in values)
+        out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
+        self._emit_exc_check(out, function, call_handler)
+        types[result] = self.function_return_types.get(function_name, "int")
+        return out
 
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
                                 call_args: list[Any], coll_type: str, types: dict[str, str],
@@ -2636,6 +2698,7 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"Linux backend cannot encode constant {value!r}")
         elif op == "load":
             source = args[0]
+
             aliases[result] = source
             types[result] = types.get(source, "int")
             if source in self._tuple_elems:
@@ -2655,7 +2718,7 @@ class LinuxCEmitter:
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
-            if source in _BUILTINS and source not in function.params:
+            if source in _BUILTINS and source not in function.params and source not in _FUNC_ONLY_BUILTINS:
                 # BUILTIN_MARKER_V1: this load emits NO C code — the builtin is
                 # only resolved by the call dispatch. Mark the operand so any
                 # other consumer fails closed instead of reading an
@@ -2712,6 +2775,24 @@ class LinuxCEmitter:
                 raise NativeBuildError(
                     f"Linux '{source}' is assigned at module level; declare it global to read it inside '{function.name}'"
                 )
+            # NAME_RESOLVE_V1: every resolution above declined, so this bare
+            # identifier would reach the C file undeclared (gcc naming a
+            # Spanish builtin like `suma` is not a PITON diagnostic).
+            if source in _FUNC_ONLY_BUILTINS and source not in getattr(self, "_cur_slots", set()):
+                # callable-only builtin used as a callee: a marker, no value
+                types[result] = "builtin"
+                aliases[result] = source
+                return out
+            if (
+                source not in getattr(self, "_cur_slots", set())
+                and source not in self._shared_globals
+                and source not in getattr(function, "cell_params", ())
+                and source not in getattr(function, "params", ())
+                and source not in getattr(self, "_known_names", set())
+                and source not in {"Verdadero", "Falso", "Nada", "Verdadera", "Falsa", "Ninguno"}
+                and source not in (self._func_only_builtins or _FUNC_ONLY_BUILTINS)
+            ):
+                raise NativeBuildError(f"undefined name '{source}' in native subset")
             out.append(f"    {_name(result)}={_name(source)};")
         elif op == "global_decl":
             # GLOBAL_DECL_V1: pure metadata (resolved in the pre-scan); no code.
@@ -2762,18 +2843,48 @@ class LinuxCEmitter:
             if args[1] in self._dict_empty:
                 self._dict_empty[args[0]] = True
             if isinstance(args[0], str) and args[0].startswith("@boolh_"):
-                # BOOL_SHORT_V1: both arms of y/o must share one static
-                # type — the untagged model cannot print a mixed result
-                # (CPython returns the winning operand).
+                # BOOL_SLOT_V1: CPython `y`/`o` return the OPERAND, so both
+                # arms may be different types. Same-typed arms keep the plain
+                # path (usable in arithmetic); mixed arms become a TAGGED SLOT
+                # so the printed form matches whichever side won.
                 seen = self._boolh_types.get(args[0])
                 current = types.get(args[1], "int")
+                _holder = args[0]
+                _slot_expr = self._slot(args[1], types)
+                _tag = f"/*boolh:{_holder}*/"
                 if seen is None:
-                    self._boolh_types[args[0]] = current
+                    self._boolh_types[_holder] = current
+                    self._boolh_line[_holder] = (self._value(args[1]), seen)
+                    out.append(f"    {_name(_holder)}={self._value(args[1])};{_tag}")
                 elif current != seen:
-                    raise NativeBuildError(
-                        f"Linux y/o with mixed operand types ({seen} vs {current}) "
-                        "is not supported (the winner type is not statically knowable)"
+                    # mixed arms: BOTH become tagged slots so the printed
+                    # form matches whichever side won (CPython returns the
+                    # operand). The first arm was already emitted plain, so
+                    # its line is rewritten by tag.
+                    _first = self._boolh_line.pop(_holder, None)
+                    _slot_id = abs(hash(_holder)) % 100000
+                    if _first is not None:
+                        _expr, _kind = _first
+                        _pool = list(getattr(self, "_cur_lines", []) or []) + out
+                        for _i, _line in enumerate(_pool):
+                            if _tag in _line:
+                                _repl = (
+                                    f"    {{PitonSlot*_bha{_slot_id}=piton_alloc(sizeof(PitonSlot));"
+                                    f"*_bha{_slot_id}=piton_slot({_expr},{self._kind(_kind)});"
+                                    f" {_name(_holder)}=(long)_bha{_slot_id};}}"
+                                )
+                                if _i < len(out):
+                                    out[_i] = _repl
+                                else:
+                                    self._cur_lines[_i] = _repl
+                                break
+                    out.append(
+                        f"    {{PitonSlot*_bhb{_slot_id}=piton_alloc(sizeof(PitonSlot));"
+                        f"*_bhb{_slot_id}={_slot_expr};"
+                        f" {_name(_holder)}=(long)_bhb{_slot_id};}}"
                     )
+                    types[_holder] = "slot"
+                    types[_holder] = "slot"
             if args[1] in self._tuple_elems:
                 self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
             if args[1] in self._dict_elems:
@@ -3428,6 +3539,10 @@ class LinuxCEmitter:
             function_name = aliases.get(args[0], args[0])
             values = list(args[1])
             call_handler = args[2] if len(args) > 2 else None
+            # SHADOW_BUILTIN_V1: a user definition of the same name wins over
+            # the builtin table (`funcion suma(a, b)` is not `sum`).
+            if function_name in self.function_names and function_name not in _BUILTINS:
+                return self._emit_user_function_call(out, result, function_name, values, call_handler, function, types)
             if function_name in {"imprimir", "print"}:
                 if values:
                     # PRINT_ARGS_V1: CPython print(a, b, ...) str()s every
@@ -3762,7 +3877,7 @@ class LinuxCEmitter:
                     raise NativeBuildError(
                         f"Linux min/max requires two values of the same kind, not {t0}/{t1}"
                     )
-            elif function_name == "sum":
+            elif function_name in {"sum", "suma"}:
                 if len(values) != 1:
                     raise NativeBuildError("Linux sum requires one collection")
                 value_type = types.get(values[0])
@@ -3928,34 +4043,7 @@ class LinuxCEmitter:
                         )
                 values = self._complete_call_args(function_name, list(values))
                 if function_name in self.function_names:
-                    _gen_layout = self.generator_layouts.get(function_name)
-                    if _gen_layout is not None:
-                        # GEN_CALL_V1: calling a generator function yields the
-                        # generator OBJECT (not one step of it), so
-                        # `lista(f())` materializes it like CPython.
-                        _params = self.function_params.get(function_name, [])
-                        if len(values) != len(_params):
-                            raise NativeBuildError(
-                                f"native generator '{function_name}' called with wrong number of arguments"
-                            )
-                        if len(values) > 4:
-                            raise NativeBuildError("native generator calls with more than four arguments are not supported yet")
-                        out.append(f"    {_name(result)}=piton_gen_new((long)&{_name(function_name)},{len(_gen_layout)});")
-                        for _arg, _param in zip(values, _params):
-                            out.append(f"    ((PitonGenerator*){_name(result)})->slots[{_gen_layout[_param]}]={self._value(_arg)};")
-                        types[result] = "generator"
-                        return out
-                    encoded_values = ",".join(self._value(value) for value in values)
-                    out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
-                    # CALL_PROPAGATE_V1: a call is a potential raise site. The
-                    # callee signals via the exception flag; without routing it
-                    # here, `lanzar` inside a function never reached the
-                    # caller's `intentar` (it fell through to exit).
-                    self._emit_exc_check(out, function, call_handler)
-                    # RETURNTYPE_V1: statically-known user functions propagate
-                    # their inferred return type so downstream consumers print
-                    # collections/str/float correctly instead of a raw pointer.
-                    types[result] = self.function_return_types.get(function_name, "int")
+                    return self._emit_user_function_call(out, result, function_name, values, call_handler, function, types)
                 else:
                     # CALLABLE_PROTOCOL_V1: calling a statically-typed class
                     # instance routes to <Class>__call__ if defined.

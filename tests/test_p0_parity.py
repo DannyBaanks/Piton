@@ -627,11 +627,20 @@ class BoolShortV1(unittest.TestCase):
         _assert_matches(self, "imprimir(no {})\n")
         _assert_matches(self, "imprimir(no (1,))\n")
 
-    def test_dynamic_mixed_types_fail_closed(self):
-        # a VARIABLE head is not statically foldable: the winner depends
-        # on runtime values, so the holder type cannot serve both arms.
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("x = 1\nimprimir(x y 'x')\n")
+    def test_dynamic_mixed_types(self):
+        # BOOL_SLOT_V1: a VARIABLE head is not statically foldable, so both
+        # arms become tagged slots and the printed form follows whichever
+        # side won (CPython returns the operand, not a bool).
+        for source in (
+            "x = 1\nimprimir(x y 'x')\n",
+            "x = 0\nimprimir(x y 'x')\n",
+            "x = 0\ny = 'z'\nimprimir(x y y)\n",
+        ):
+            result = compare_native_to_cpython(source)
+            self.assertTrue(
+                result.equivalent,
+                "native=" + repr(result.native) + " oracle=" + repr(result.oracle),
+            )
 
 
 class BranchTruthinessV1(unittest.TestCase):
