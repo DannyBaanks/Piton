@@ -1117,6 +1117,17 @@ class LinuxCEmitter:
             # BOOL_SLOT_V1: mixed-type operands of `y`/`o` are tagged slots;
             # their truthiness is the per-kind CPython truth table.
             return f"(piton_slot_truthy(*(PitonSlot*){raw}))"
+        if vtype.startswith("object:"):
+            # OBJ_TRUTH_V1: CPython truthiness for an instance: __bool__()
+            # first, then __len__() != 0, else the object is truthy.
+            cls_name = vtype.split(":", 1)[1]
+            for candidate in (self.class_mro.get(cls_name, []) or [cls_name]):
+                if candidate in self.classes and "__bool__" in self.classes[candidate]:
+                    return f"({_name(candidate + '__' + '__bool__')}({raw}))"
+            for candidate in (self.class_mro.get(cls_name, []) or [cls_name]):
+                if candidate in self.classes and "__len__" in self.classes[candidate]:
+                    return f"({_name(candidate + '__' + '__len__')}({raw})!=0)"
+            return f"((long)({raw})!=0)"
         if vtype in {"list", "tuple"}:
             return f"(((PitonSeq*){raw})->length>0)"
         if vtype == "dict":

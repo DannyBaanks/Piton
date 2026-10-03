@@ -36,9 +36,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 49,
+      "FAIL_CLOSED": 48,
       "RAISE_EQ": 0,
-      "EQUIV": 1171
+      "EQUIV": 1172
     },
     "by_area": {
       "literals": {
@@ -197,9 +197,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 7,
+        "FAIL_CLOSED": 6,
         "RAISE_EQ": 0,
-        "EQUIV": 14
+        "EQUIV": 15
       },
       "generators": {
         "DIVERGENT_CRASH": 0,
@@ -218,7 +218,7 @@
         "EQUIV": 12
       }
     },
-    "pct_equiv": 96.0,
+    "pct_equiv": 96.1,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -10519,7 +10519,7 @@
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-0egwdtkg/program.c: In function ‘piton_main’:\n/tmp/piton-linux-0egwdtkg/program.c:1148:9: error: ‘no_existe’ undeclared (first use in this function)\n 1148 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-0egwdtkg/program.c:1148:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-buj2rrh2/program.c: In function ‘piton_main’:\n/tmp/piton-linux-buj2rrh2/program.c:1148:9: error: ‘no_existe’ undeclared (first use in this function)\n 1148 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-buj2rrh2/program.c:1148:9: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "functions",
@@ -10885,7 +10885,7 @@
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-4pvhw850/program.c: In function ‘piton_main’:\n/tmp/piton-linux-4pvhw850/program.c:1151:9: error: too few arguments to function ‘P____init__’\n 1151 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-4pvhw850/program.c:1125:13: note: declared here\n 1125 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-jj702nnu/program.c: In function ‘piton_main’:\n/tmp/piton-linux-jj702nnu/program.c:1151:9: error: too few arguments to function ‘P____init__’\n 1151 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-jj702nnu/program.c:1125:13: note: declared here\n 1125 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
     },
     {
       "area": "classes",
@@ -10900,8 +10900,10 @@
       "area": "classes",
       "name": "bool-dunder",
       "src": "clase P:\n    funcion __bool__(self):\n        devolver Falso\nimprimir(P() o 'fallback')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux truth test does not support object:P"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
