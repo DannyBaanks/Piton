@@ -216,8 +216,11 @@ class Win64NasmEmitter:
             "extern piton_dict_nth_key", "extern piton_set_nth",
             "extern piton_collection_put_verbatim", "extern piton_list_append_tagged",
             "extern piton_box_str_tagged",
+            "extern piton_float_fmt_fixed", "extern piton_float_fmt_pct",
+            "extern piton_float_fmt_exp", "extern piton_float_fmt_g",
             "extern piton_collection_get_raw",
             "extern piton_value_eq",
+            "extern piton_raise_not_callable",
             "extern piton_boxed_str_print_raw",
             "extern piton_slot_str", "extern piton_slot_repr", "extern piton_slot_int",
             "extern piton_iterator_new_any", "extern piton_iterator_next_any",
@@ -296,6 +299,7 @@ class Win64NasmEmitter:
             "extern piton_str_count", "extern piton_str_rfind", "extern piton_str_subindex",
             "extern piton_str_subrindex",
             "extern piton_str_strip", "extern piton_str_join", "extern piton_str_format",
+            "extern piton_str_strip_chars",
             "extern piton_dict_contains", "extern piton_set_contains",
             "extern piton_closure_new8", "extern piton_closure_call6",
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
@@ -906,6 +910,8 @@ class Win64NasmEmitter:
                 self._non_int_elem_colls.add(result)
             if name in self._tagged_dicts:
                 self._tagged_dicts.add(result)
+            if name in self._chr_results:
+                self._chr_results.add(result)
             if name in self.dict_elems:
                 self.dict_elems[result] = self.dict_elems[name]
             if name in self.function_names:
@@ -961,6 +967,25 @@ class Win64NasmEmitter:
                 self._dict_val_types[result] = self._dict_val_types[name]
 
         elif op == "store":
+            if isinstance(args[0], str) and not args[0].startswith("%"):
+                # SET_HYGIENE_V1 (Windows): reassigning a VARIABLE lifts every
+                # provenance mark (chr results, tagged dicts, elem-kind
+                # colls, borrar tombstones); the add-rules below re-mark when
+                # the new value qualifies. SSA temps (%N) are assigned once
+                # and keep add-only semantics.
+                _src = args[1]
+                _src_marked = isinstance(_src, str) and (
+                    _src in self._chr_results or _src in self._tagged_dicts
+                    or _src in self._str_elem_colls or _src in self._bigint_elem_colls
+                    or _src in self._mixed_elem_colls or _src in self._non_int_elem_colls
+                )
+                if not _src_marked:
+                    self._chr_results.discard(args[0])
+                    self._tagged_dicts.discard(args[0])
+                    self._str_elem_colls.discard(args[0])
+                    self._bigint_elem_colls.discard(args[0])
+                    self._mixed_elem_colls.discard(args[0])
+                    self._non_int_elem_colls.discard(args[0])
             if isinstance(args[1], str) and args[1] in self._str_elem_colls:
                 self._str_elem_colls.add(args[0])
             if isinstance(args[1], str) and self.types.get(args[1]) == "str-boxed":
@@ -973,6 +998,8 @@ class Win64NasmEmitter:
                 self._non_int_elem_colls.add(args[0])
             if isinstance(args[1], str) and args[1] in self._tagged_dicts:
                 self._tagged_dicts.add(args[0])
+            if isinstance(args[1], str) and args[1] in self._chr_results:
+                self._chr_results.add(args[0])
             if isinstance(args[1], str) and self.types.get(args[1]) == "builtin":
                 # BUILTIN_MARKER_V1: storing a builtin marker would copy an
                 # uninitialized slot — fail closed.
@@ -3387,6 +3414,16 @@ class Win64NasmEmitter:
                         raise NativeBuildError(
                             f"native call to builtin '{function_name}' is not supported in this position"
                         )
+                    if self.types.get(function_operand, "") in {
+                        "int", "float", "str", "bool", "none", "list", "tuple",
+                        "dict", "set", "range", "bigint", "str-boxed", "slot",
+                    }:
+                        # NONCALLABLE_V1 (Windows): a statically non-callable
+                        # callee raises TypeError at runtime (exit 1) instead
+                        # of jumping through its value bits (AV on float/str).
+                        self.lines.append("    call piton_raise_not_callable")
+                        self.types[result] = "none"
+                        return
                     for value in call_args:
                         if self.types.get(value) == "builtin":
                             raise NativeBuildError(
@@ -4140,6 +4177,13 @@ class Win64NasmEmitter:
                     out.append("{}")
                     i += 1
                     continue
+                if c2 in "fFeEgG":
+                    # FLOAT_PRESENT_V1 (Windows): espejo del FMT_FLOAT_V1
+                    # de Linux (redondeo decimal real).
+                    fields.append((name, c2, flags, width, prec))
+                    out.append("{}")
+                    i += 1
+                    continue
                 raise NativeBuildError(f"str % conversion %{c2} is not supported")
             elif ch == "{" or ch == "}":
                 out.append(ch * 2)
@@ -4246,6 +4290,38 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov rdx, {16 if spec in {'x', 'X'} else 8}")
             self.lines.append(f"    mov r8, {1 if spec == 'X' else 0}")
             self.lines.append("    call piton_str_from_int_base")
+        elif spec in {"f", "F", "e", "E", "g", "G"}:
+            # FLOAT_PRESENT_V1 (Windows): %f/%e/%g con redondeo decimal.
+            # El helper recibe BITS (int64), no el double en xmm.
+            if arg_type == "float":
+                self._load_float_operand(value, "xmm0")
+                self.lines.append("    movq rcx, xmm0")
+            elif arg_type in {"int", "bool"}:
+                self._load_operand(value, "rax")
+                self.lines.append("    cvtsi2sd xmm0, rax")
+                self.lines.append("    movq rcx, xmm0")
+            else:
+                raise NativeBuildError(f"native str %{spec} requires a real number, not {arg_type}")
+            _prec = pad[1] if pad is not None and pad[1] >= 0 else -1
+            self.lines.append(f"    mov edx, {_prec}")
+            if spec in {"f", "F"}:
+                self.lines.append("    call piton_float_fmt_fixed")
+            elif spec in {"e", "E"}:
+                self.lines.append(f"    mov r8d, {1 if spec == 'E' else 0}")
+                self.lines.append("    call piton_float_fmt_exp")
+            else:
+                self.lines.append(f"    mov edx, {1 if spec == 'G' else 0}")
+                self.lines.append("    call piton_float_fmt_g")
+            # la precision ya la consumio el helper: el pad solo aplica
+            # width/flags (prec=-1 evita el truncado a N chars).
+            if pad is not None:
+                width, _p, flags = pad
+                self.lines.append("    mov rcx, rax")
+                self.lines.append(f"    mov rdx, {width}")
+                self.lines.append("    mov r8, -1")
+                self.lines.append(f"    mov r9, {flags | 4}")
+                self.lines.append("    call piton_str_pad")
+            return
         else:
             raise NativeBuildError(f"native str %{spec} is not supported")
         if pad is not None:
@@ -4620,10 +4696,18 @@ class Win64NasmEmitter:
             self.lines.append("    call piton_str_split")
             self.types[result] = "list"
         elif method in {"strip", "lstrip", "rstrip"}:
-            require_count(0, "no arguments")
             mode = {"strip": 0, "lstrip": 1, "rstrip": 2}[method]
-            self.lines.append(f"    mov edx, {mode}")
-            self.lines.append("    call piton_str_strip")
+            if len(call_args) == 0:
+                self.lines.append(f"    mov edx, {mode}")
+                self.lines.append("    call piton_str_strip")
+            elif len(call_args) == 1 and self.types.get(call_args[0], "") == "str":
+                # STRIP_CHARS_V1 (Windows): strip/lstrip/rstrip with an
+                # explicit character set (mirrors Linux/CPython).
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append(f"    mov r8d, {mode}")
+                self.lines.append("    call piton_str_strip_chars")
+            else:
+                raise NativeBuildError("native str.strip() requires zero or one str argument")
             self.types[result] = "str"
         elif method == "join":
             require_count(1, "exactly one list or tuple argument")
@@ -4796,13 +4880,37 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov rdx, {base}")
                 self.lines.append(f"    mov r8, {1 if type_char == 'X' else 0}")
                 self.lines.append("    call piton_str_from_int_base")
-            elif type_char in {"f", "e", "E", "g", "G", "F", "n"}:
-                # FLOAT_PRESENT_V1: needs correctly-rounded decimal
-                # conversion; repr diverged from CPython, so fail closed.
-                raise NativeBuildError(
-                    f"native str.format() %{type_char} is not supported yet "
-                    "(needs rounded decimal conversion)"
-                )
+            elif type_char in {"f", "F", "e", "E", "g", "G", "%"}:
+                # FLOAT_PRESENT_V1 (Windows): espejo del FMT_FLOAT_V1.
+                if arg_type != "float":
+                    raise NativeBuildError(
+                        f"native str.format() %{type_char} requires a float, not {arg_type}"
+                    )
+                _m = re.search(r"\.(\d+)", spec)
+                _prec = int(_m.group(1)) if _m else -1
+                self._load_float_operand(value, "xmm0")
+                self.lines.append("    movq rcx, xmm0")
+                self.lines.append(f"    mov edx, {_prec}")
+                if type_char in {"f", "F"}:
+                    self.lines.append("    call piton_float_fmt_fixed")
+                elif type_char == "%":
+                    self.lines.append("    call piton_float_fmt_pct")
+                elif type_char in {"e", "E"}:
+                    self.lines.append(f"    mov r8d, {1 if type_char == 'E' else 0}")
+                    self.lines.append("    call piton_float_fmt_exp")
+                else:
+                    self.lines.append(f"    mov edx, {1 if type_char == 'G' else 0}")
+                    self.lines.append("    call piton_float_fmt_g")
+                # la precision ya la consumio el helper (espejo Linux:
+                # pres sin ".prec"); solo width/align via apply_spec.
+                _presented = pres.split(".", 1)[0] if isinstance(pres, str) else ""
+                if _presented:
+                    _pres_label = self._string(_presented)
+                    self.lines.append("    mov rcx, rax")
+                    self.lines.append(f"    lea rdx, [{_pres_label}]")
+                    self.lines.append("    call piton_str_apply_spec")
+                self.lines.append(f"    mov qword [rsp+32+{index * 8}], rax")
+                continue
             elif type_char == "%":
                 raise NativeBuildError(
                     "native str.format() %% is not supported yet "

@@ -2663,6 +2663,22 @@ void *piton_str_split(const char *s, const char *sep) {
     return r;
 }
 
+static int piton_in_chars(unsigned char c, const char *chars) {
+    if (!chars) return 0;
+    for (; *chars; ++chars) if ((unsigned char)*chars == c) return 1;
+    return 0;
+}
+
+char *piton_str_strip_chars(const char *s, const char *chars, int mode) {
+    if (!s) return (char *)"";
+    size_t n = strlen(s), a = 0, b = n;
+    if (mode != 2) while (a < n && piton_in_chars((unsigned char)s[a], chars)) ++a;
+    if (mode != 1) while (b > a && piton_in_chars((unsigned char)s[b - 1], chars)) --b;
+    char *p = malloc(b - a + 1);
+    memcpy(p, s + a, b - a); p[b - a] = 0;
+    return p;
+}
+
 char *piton_str_strip(const char *s, int mode) {
     size_t n = strlen(s), a = 0, b = n;
     if (mode != 2) while (a < n && piton_ws_local((unsigned char)s[a])) ++a;
@@ -3245,7 +3261,7 @@ int64_t piton_closure_new_frame(int64_t addr, int64_t n_args,
 }
 
 static int piton_is_code_addr(int64_t p);
-static void piton_raise_not_callable(void);
+void piton_raise_not_callable(void);
 
 int64_t piton_closure_call6(int64_t callee, int64_t argc,
                             int64_t a0, int64_t a1, int64_t a2, int64_t a3) {
@@ -3318,7 +3334,7 @@ static int piton_is_code_addr(int64_t p) {
 #endif
 }
 
-static void piton_raise_not_callable(void) {
+void piton_raise_not_callable(void) {
     fprintf(stderr, "TypeError: 'X' object is not callable\n");
     exit(1);
 }
@@ -4395,6 +4411,142 @@ int64_t piton_str_from_bool(int64_t v) {
 
 int64_t piton_str_from_none(void) {
     return (int64_t)"None";
+}
+
+/* ── Float presentations (%f/%e/%g, {:.Nf}/{:.Ne}/{:.Ng}/{:.N%}) ──
+ * Port of the Linux FMT_FLOAT_V1 engine (decimal rounding via scaled
+ * integers, so 1.567 -> "%.2f" -> "1.57" exactly like CPython). */
+static double piton_fmtd_round_h(double x) { return floor(x + (x < 0.0 ? -0.5 : 0.5)); }
+static double piton_fmtd_pow10(int p) {
+    if (p < 0) p = 0;
+    if (p > 15) p = 15;
+    double r = 1.0;
+    for (int i = 0; i < p; ++i) r *= 10.0;
+    return r;
+}
+static int piton_fmtd_frac_digits(int64_t whole_scaled, char *out) {
+    int64_t w = whole_scaled < 0 ? -whole_scaled : whole_scaled;
+    char rev[64];
+    int rn = 0;
+    if (w == 0) rev[rn++] = '0';
+    while (w) { rev[rn++] = (char)('0' + w % 10); w /= 10; }
+    for (int i = 0; i < rn; ++i) out[i] = rev[rn - 1 - i];
+    out[rn] = 0;
+    return rn;
+}
+
+char *piton_float_fmt_fixed(int64_t bits, int prec) {
+    double x;
+    memcpy(&x, &bits, sizeof(double));
+    int p = prec >= 0 ? prec : 6;
+    int neg = x < 0;
+    if (neg) x = -x;
+    double scaled = piton_fmtd_round_h(x * piton_fmtd_pow10(p));
+    char digits[80];
+    int rn = piton_fmtd_frac_digits((int64_t)scaled, digits);
+    char *out = malloc(128);
+    int o = 0;
+    if (neg) out[o++] = '-';
+    if (rn > p) {
+        for (int i = 0; i < rn - p; ++i) out[o++] = digits[i];
+        if (p > 0) { out[o++] = '.'; for (int i = rn - p; i < rn; ++i) out[o++] = digits[i]; }
+    } else {
+        out[o++] = '0';
+        if (p > 0) {
+            out[o++] = '.';
+            for (int i = 0; i < p - rn; ++i) out[o++] = '0';
+            for (int i = 0; i < rn; ++i) out[o++] = digits[i];
+        }
+    }
+    out[o] = 0;
+    return out;
+}
+
+char *piton_float_fmt_pct(int64_t bits, int prec) {
+    double x;
+    memcpy(&x, &bits, sizeof(double));
+    x *= 100.0;
+    int64_t xb;
+    memcpy(&xb, &x, sizeof(double));
+    char *s = piton_float_fmt_fixed(xb, prec >= 0 ? prec : 6);
+    size_t n = strlen(s);
+    char *r = malloc(n + 2);
+    memcpy(r, s, n + 1);
+    r[n] = '%'; r[n + 1] = 0;
+    return r;
+}
+
+char *piton_float_fmt_exp(int64_t bits, int prec, int upper) {
+    double x;
+    memcpy(&x, &bits, sizeof(double));
+    int p = prec >= 0 ? prec : 6;
+    int neg = x < 0;
+    if (neg) x = -x;
+    int exp = 0;
+    double m = x;
+    if (m != 0.0) {
+        while (m >= 10.0) { m /= 10.0; ++exp; }
+        while (m < 1.0) { m *= 10.0; --exp; }
+    }
+    double scaled = piton_fmtd_round_h(m * piton_fmtd_pow10(p));
+    char digits[80];
+    int rn = piton_fmtd_frac_digits((int64_t)scaled, digits);
+    char *out = malloc(64);
+    int o = 0;
+    if (neg) out[o++] = '-';
+    if (rn > p + 1) {
+        out[o++] = '1';
+        if (p > 0) { out[o++] = '.'; for (int i = 0; i < p; ++i) out[o++] = digits[1 + i]; }
+        ++exp;
+    } else {
+        out[o++] = rn > 0 ? digits[0] : '0';
+        if (p > 0) { out[o++] = '.'; for (int i = 1; i <= p; ++i) out[o++] = i < rn ? digits[i] : '0'; }
+    }
+    out[o++] = upper ? 'E' : 'e';
+    out[o++] = exp < 0 ? '-' : '+';
+    int ae = exp < 0 ? -exp : exp;
+    if (ae < 10) { out[o++] = '0'; out[o++] = (char)('0' + ae); }
+    else { out[o++] = (char)('0' + ae / 10); out[o++] = (char)('0' + ae % 10); }
+    out[o] = 0;
+    return out;
+}
+
+char *piton_float_fmt_g(int64_t bits, int upper) {
+    double x;
+    memcpy(&x, &bits, sizeof(double));
+    if (x == 0.0) { char *z = malloc(2); z[0] = '0'; z[1] = 0; return z; }
+    int neg = x < 0;
+    if (neg) x = -x;
+    int exp = 0;
+    double m = x;
+    while (m >= 10.0) { m /= 10.0; ++exp; }
+    while (m < 1.0) { m *= 10.0; --exp; }
+    if (exp < -4 || exp >= 6) {
+        int64_t xb;
+        memcpy(&xb, &bits, sizeof(double));
+        char *s = piton_float_fmt_exp(xb, 5, upper);
+        char *d = s + 1;
+        while (d < s + 50 && *d && *d != 'e' && *d != 'E') ++d;
+        char *e = d;
+        while (e > s && *(e - 1) == '0') --e;
+        if (e > s && *(e - 1) == '.') --e;
+        for (char *q = d; *q; ++q) e++[0] = q[0];
+        return s;
+    }
+    int p2 = 6 - 1 - exp;
+    if (p2 < 0) p2 = 0;
+    int64_t xb;
+    memcpy(&xb, &bits, sizeof(double));
+    char *s = piton_float_fmt_fixed(xb, p2);
+    char *d = s;
+    while (*d && *d != '.') ++d;
+    if (*d == '.') {
+        char *q = d + strlen(d) - 1;
+        while (q > d && *q == '0') --q;
+        if (*q == '.') *q++ = 0;
+        else *(q + 1) = 0;
+    }
+    return s;
 }
 
 int64_t piton_str_from_float(double x) {
