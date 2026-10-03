@@ -880,6 +880,14 @@ class Parser:
                 return Constant(value=False).set_pos(tok)
             if val == "Nada":
                 return Constant(value=None).set_pos(tok)
+            # PARSER_BOOL_NONE_V1: native sources may interleave the English
+            # constants (the translator can introduce them); accept them too.
+            if val == "True":
+                return Constant(value=True).set_pos(tok)
+            if val == "False":
+                return Constant(value=False).set_pos(tok)
+            if val == "None":
+                return Constant(value=None).set_pos(tok)
 
             # Llamada: nombre seguido de (
             if self._check(TokenType.LPAREN):

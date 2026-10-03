@@ -605,6 +605,7 @@ static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=t
 static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;}
 static void piton_seq_set(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0||i>=s->length){piton_raise_set("IndexError","seq index out of range");return;}s->items[i]=v;}
 static void piton_dict_set(PitonDict*d,PitonSlot k,PitonSlot v){if(!d)return;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){d->items[i].value=v;return;}piton_dict_append(d,k,v);}
+static void piton_dict_del(PitonDict*d,PitonSlot k){for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){for(long j=i;j+1<d->length;++j)d->items[j]=d->items[j+1];--d->length;return;}piton_raise_set("KeyError","");}
 static void piton_seq_remove(PitonSeq*s,PitonSlot v){if(!s)return;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v)){for(long j=i;j<s->length-1;++j)s->items[j]=s->items[j+1];--s->length;return;}piton_raise_set("ValueError","list.remove(x): x not in list");}
 static void piton_seq_extend(PitonSeq*s,PitonSeq*o){if(!s||!o)return;for(long i=0;i<o->length;++i)piton_seq_append(s,o->items[i]);}
 static void piton_seq_clear(PitonSeq*s){if(s)s->length=0;}
@@ -1111,6 +1112,10 @@ class LinuxCEmitter:
             return "0"
         if vtype == "str":
             return f"(piton_strlen((const char*){raw})>0)"
+        if vtype == "slot":
+            # BOOL_SLOT_V1: mixed-type operands of `y`/`o` are tagged slots;
+            # their truthiness is the per-kind CPython truth table.
+            return f"(piton_slot_truthy(*(PitonSlot*){raw}))"
         if vtype in {"list", "tuple"}:
             return f"(((PitonSeq*){raw})->length>0)"
         if vtype == "dict":
@@ -1429,7 +1434,10 @@ class LinuxCEmitter:
             return out
         _params = self.function_params.get(function_name, [])
         _defaults = self.function_defaults.get(function_name, [])
-        _min_args = max(0, len(_params) - len(_defaults))
+        # function_defaults is a full-length list with None holes for params
+        # without a default; required = count of those holes (CPython forbids
+        # a required parameter after a defaulted one, so holes are leading).
+        _min_args = max(0, sum(1 for d in _defaults if d is None))
         if not (_min_args <= len(values) <= len(_params)):
             raise NativeBuildError(
                 f"native call to '{function_name}' passes {len(values)} argument(s) "
@@ -2019,7 +2027,42 @@ class LinuxCEmitter:
         the enclosing try handler. With no handler in THIS function, RETURN
         with the flag set so the CALLER routes it (multi-frame propagation);
         only the module top level (and generators/coroutines, which cannot
-        propagate across their driver) report and exit terminally."""
+        propagate across their driver) report and exit terminally.
+
+        MULTI_EXCEPT_V1: `handler_label` is normally a single label; when the
+        enclosing try has several `excepto` clauses it is a list of
+        (accepted, label), and we emit a static type-dispatch on the live
+        `piton_exc_type`: matching `excepto X:` catches X-and-subtypes per
+        the exception's chain (as CPython), and the fallback mirrors the
+        single-handler semantics."""
+        # MULTI_EXCEPT_V1: a multi-except enclosing try emits a list of
+        # (accepted, label). Route the LIVE exception by its type:
+        # if(piton_exc_flag){
+        #   if(exc_type matches accepted1) goto h1;
+        #   ...
+        #   if(acceptedN is catch-all) goto hN;
+        #   <propagate-unhandled, since none of this try's clauses match>
+        # }
+        if isinstance(handler_label, list):
+            out.append("    if(piton_exc_flag){")
+            specific: list[tuple[str | None, str]] = []
+            catch_all: tuple[str, str] | None = None
+            for accepted, label in handler_label:
+                if accepted is None or accepted in {"Exception", "BaseException"}:
+                    catch_all = (accepted, label)
+                else:
+                    specific.append((accepted, label))
+            for accepted, label in specific:
+                out.append(
+                    f"        if(!piton_strcmp(piton_exc_type, {json.dumps(accepted)})) "
+                    f"goto {_name(function.name + '_' + label)};"
+                )
+            if catch_all is not None:
+                out.append(f"        goto {_name(function.name + '_' + catch_all[1])};")
+            else:
+                _raise_or_propagate(out, function)  # flag stays set
+            out.append("    }")
+            return
         out.append("    if(piton_exc_flag){")
         if handler_label:
             out.append(f"        goto {_name(function.name + '_' + handler_label)};")
@@ -2222,6 +2265,7 @@ class LinuxCEmitter:
         over the module binding, like CPython) and the module-level value
         types for constant initializers."""
         self._func_globals = {}
+        self._deleted_names = set()
         self._func_stores = {}
         self._module_stored = set()
         self._module_types = {}
@@ -2698,6 +2742,9 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"Linux backend cannot encode constant {value!r}")
         elif op == "load":
             source = args[0]
+            if source in self._deleted_names:
+                # DEL_NAME_V1: borrado estatico -> NameError en build modelado
+                raise NativeBuildError(f"NameError: name '{source}' is not defined")
 
             aliases[result] = source
             types[result] = types.get(source, "int")
@@ -2849,6 +2896,16 @@ class LinuxCEmitter:
                 # so the printed form matches whichever side won.
                 seen = self._boolh_types.get(args[0])
                 current = types.get(args[1], "int")
+                _arm_type = types.get(args[1], "int")
+                if _arm_type == "slot":
+                    # BOOL_SLOT_V1: in a chained `y/o` the left arm is already
+                    # a tagged slot (the holder of the previous op). Copying
+                    # its pointer PRESERVES the winning kind; re-tagging would
+                    # wrap the pointer itself as PK_INT and corrupt it.
+                    types[args[0]] = "slot"
+                    self._boolh_types[args[0]] = "slot"
+                    return out
+                
                 _holder = args[0]
                 _slot_expr = self._slot(args[1], types)
                 _tag = f"/*boolh:{_holder}*/"
@@ -4014,12 +4071,15 @@ class LinuxCEmitter:
                     types[result] = "list"
                     self._coll_elems[result] = "str"
                     return out
-                if len(values) != 1 or types.get(values[0]) not in {"list", "tuple", "range"}:
+                if len(values) not in {1, 2} or types.get(values[0]) not in {"list", "tuple", "range"}:
                     raise NativeBuildError("native sorted currently requires one list, tuple or range")
                 if types.get(values[0]) == "range":
                     out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_conv_seq(PK_LIST,{self._slot(values[0], types)}));")
                 else:
                     out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(values[0])});")
+                if len(values) == 2:
+                    # SORT_KW_V1: reverse flag (`reversa=`/`reverse=`).
+                    out.append(f"    if({self._value(values[1])})piton_seq_reverse((PitonSeq*){_name(result)});")
                 types[result] = "list"
                 ek = self._coll_elems.get(values[0]) or self._coll_elems.get(aliases.get(values[0], values[0]))
                 if ek is not None:
@@ -4284,6 +4344,36 @@ class LinuxCEmitter:
                     raise NativeBuildError(
                         f"native del on '{attr}' is not a property of a natively-typed object"
                     )
+        elif op == "del_item":
+            # DEL_ITEM_V1: build-time check on the container type.
+            obj, index = args
+            owner_type = types.get(obj, "")
+            if owner_type == "tuple":
+                raise NativeBuildError("'tuple' object does not support item deletion")
+            if owner_type in {"list"}:
+                out.append(f"    piton_seq_pop((PitonSeq*){self._value(obj)},{self._value(index)});")
+            elif owner_type == "dict":
+                out.append(f"    piton_dict_del((PitonDict*){self._value(obj)},{self._slot(index, types)});")
+            elif owner_type == "set":
+                out.append(f"    piton_set_discard((PitonSet*){self._value(obj)},{self._slot(index, types)});")
+            else:
+                raise NativeBuildError(f"native del item target of type '{owner_type}' is not supported")
+            return out
+        elif op == "del_name":
+            # DEL_NAME_V1: the local slot is removed. Any later load of the
+            # same name sees no type and fails closed with a PITON-shaped
+            # error instead of a raw C symbol error. This is a build-time
+            # model of CPython's NameError: branches that only conditionally
+            # delete a variable are conservatively handled by the static type
+            # map (scope documented in the PITON contract).
+            if isinstance(args[0], str):
+                types.pop(args[0], None)
+                self._deleted_names.add(args[0])
+            else:
+                for name in args:
+                    types.pop(name, None)
+                    self._deleted_names.add(name)
+            return out
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
             call_args = args[3] if len(args) > 3 else ()
@@ -4368,10 +4458,31 @@ class LinuxCEmitter:
                 _raise_or_propagate(out, function)
         elif op == "raise_active_dynamic":
             # Dynamic re-raise: read the reraise slots (the handler may have
-            # already cleared the live exception state via catch_clear).
+            # already cleared the live exception state via catch_clear). With
+            # a multi-except enclosing try, dispatch by the live reraise type.
             (handler_label,) = args
             out.append("    piton_reraise_set(piton_reraise_type);")
-            if handler_label:
+            if isinstance(handler_label, list):
+                emitted = False
+                for accepted, label in handler_label:
+                    if accepted is None or accepted in {"Exception", "BaseException"}:
+                        out.append(f"    goto {_name(function.name + '_' + label)};")
+                        emitted = True
+                        break
+                    prefix = (
+                        "if(!piton_strcmp(piton_exc_type, "
+                        if not emitted else
+                        "else if(!piton_strcmp(piton_exc_type, "
+                    )
+                    head = "if(" if not emitted else "else if("
+                    out.append(
+                        f"    {head}!piton_strcmp(piton_exc_type, {json.dumps(accepted)})) "
+                        f"goto {_name(function.name + '_' + label)};"
+                    )
+                    emitted = True
+                if not emitted:
+                    _raise_or_propagate(out, function)
+            elif handler_label:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:
                 _raise_or_propagate(out, function)

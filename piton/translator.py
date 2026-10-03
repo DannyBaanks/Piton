@@ -569,6 +569,14 @@ def analizar_tokens(
             anterior = _anterior_significativo(tokens, indice)
             es_atributo = anterior is not None and anterior.type == token.OP and anterior.string == "."
 
+            if actual.string == "reversa" and not es_atributo:
+                # REVERSE_KW_V1: `reversa=` es el nombre del argumento en
+                # PITON; en CPython's firma es `reverse=`.
+                siguiente = _siguiente_significativo(tokens, indice)
+                if siguiente is not None and siguiente.type == token.OP and siguiente.string == "=":
+                    salida.append(actual._replace(string="reverse"))
+                    continue
+
             if actual.string in HARD_KEYWORDS:
                 # Hard keywords translate everywhere, including after a dot so
                 # `desde . importar x` becomes `from . import x`; a hard keyword
