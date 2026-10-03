@@ -24,6 +24,15 @@ feature-gap conocido / **REGRESIÓN candidata** (a investigar).
 - `SumElementTypeV1::test_non_int_elements_fail_closed` — exige rechazo explícito
 - `NativeSubsetEvidenceTests::test_cli_writes_passing_native_subset_receipt` — build evidence en PE roto
 
+## P42–P44: resuelto en CI (2026-10-03)
+Verificado en run CI Windows: 43 -> 31 -> **22 failed** (839 passed).
+- Conversiones `lista/tupla/conjunto/diccionario` como valores (CONV_*_V1).
+- `y/o` mixto via slots taggeados (BOOL_SLOT_V1 Windows).
+- Literales con str boxeados (STR_BOXED_V1) + `sum` no-int rechazado en build.
+- `join` con boxeados + `%s/%d/%r` con slots.
+- CRLF normalizado en expectativas hardcodeadas (range_as_value, conversion).
+- Queda `test_join_literal_raises_on_windows` ELIMINADO (el join ahora funciona).
+
 ## REGRESIÓN candidata introducida por P36–P41 (investigar)
 - `BuiltinMarkerV1::test_conversion_builtins_as_values` (~13 subtests) y `test_converted_collection_keeps_element_type` (~3): `piton/x86.py` no ramifica antes del chequeo `BUILTIN_MARKER_V1`, así que `lista/tupla/conjunto/diccionario/rango` en posición de valor muere.
 - `BoolShortV1::test_dynamic_mixed_types`: `y/o` con operandos mixtos — P41 cubre Linux, falta portarlo al branch Windows.
