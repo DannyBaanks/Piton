@@ -2074,6 +2074,12 @@ class MIRLowerer:
         builder.emit("catch_type", result=exc_type)
         exc_msg = builder.temp()
         builder.emit("catch_message", result=exc_msg)
+        # WITH_CLEAR_V1: the type/message already live in temps; clear the
+        # live flag BEFORE invoking __exit__ so calls inside it (imprimir,
+        # user code) do not misread the still-set flag as a fresh raise
+        # from themselves and bail out early (mirrors except handlers).
+        # Re-raise uses the reraise slots, which survive the clear.
+        builder.emit("catch_clear")
         none2 = builder.temp()
         builder.emit("const", None, result=none2)
         exit_rc = await_context_method(exit_cls, exit_name, (exc_type, exc_msg, none2))

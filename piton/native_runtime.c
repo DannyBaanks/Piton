@@ -15,7 +15,12 @@
 #include "float_repr.h"
 
 void piton_raise_unhandled(const char *type, const char *message);
-/* Defined further down; declared here because the float printers need it. */
+void piton_reraise_unhandled(void);
+/* Reraise snapshot globals (defined further down with the handler stack). */
+extern const char *piton_reraise_type;
+extern const char *piton_reraise_message;
+extern const char *piton_reraise_cause_type;
+extern const char *piton_reraise_cause_message;
 static inline int64_t piton_double_bits(double d);
 
 /* ── PitonValue: tagged 64-bit value (wire format) ────────────────────── */
@@ -3935,6 +3940,12 @@ void piton_try_set_accepted(const char *type) {
 
 /* Raise an exception. If a matching handler exists, set the flag. Otherwise exit. */
 void piton_raise(const char *type, const char *message) {
+    /* A new raise invalidates any reraise snapshot: a later bare `lanzar`
+     * must not report the older exception (RERAISE_STALE_V1). */
+    piton_reraise_type = NULL;
+    piton_reraise_message = NULL;
+    piton_reraise_cause_type = NULL;
+    piton_reraise_cause_message = NULL;
     /* Search handler stack in reverse (most recent first) */
     for (int i = handler_sp - 1; i >= 0; --i) {
         PitonHandler *h = &handler_stack[i];
@@ -3956,10 +3967,10 @@ static const char *piton_exception_cause_type = NULL;
 static const char *piton_exception_cause_msg = NULL;
 
 /* Reraise state (snapshot before handler clears catch state) */
-static const char *piton_reraise_type = NULL;
-static const char *piton_reraise_message = NULL;
-static const char *piton_reraise_cause_type = NULL;
-static const char *piton_reraise_cause_message = NULL;
+const char *piton_reraise_type = NULL;
+const char *piton_reraise_message = NULL;
+const char *piton_reraise_cause_type = NULL;
+const char *piton_reraise_cause_message = NULL;
 
 /* Exception context (__context__) for implicit chaining */
 static const char *piton_exc_context_type = NULL;
@@ -4102,8 +4113,8 @@ void piton_set_context_from_reraise(void) {
 
 /* Re-raise the handler's caught exception; falls through to print+exit when unhandled. */
 void piton_reraise(void) {
-    const char *type = piton_reraise_type;
-    const char *message = piton_reraise_message;
+    const char *type = piton_reraise_type ? piton_reraise_type : piton_exception_type;
+    const char *message = piton_reraise_type ? piton_reraise_message : piton_exception_message;
     for (int i = handler_sp - 1; i >= 0; --i) {
         PitonHandler *h = &handler_stack[i];
         if (h->accepted == NULL ||
@@ -4118,6 +4129,16 @@ void piton_reraise(void) {
         }
     }
     piton_raise_unhandled(type, message);
+}
+
+/* Module-level propagate: report the reraise snapshot when one is live,
+ * else the live exception state. Replaces the bare piton_raise_unhandled
+ * call whose missing arguments read garbage registers (AV on Windows). */
+void piton_propagate_or_exit(void) {
+    if (piton_reraise_type || piton_reraise_message)
+        piton_reraise_unhandled();
+    else
+        piton_raise_unhandled(piton_exception_type, piton_exception_message);
 }
 
 /* Re-raise when no statically-matching handler exists (no stack search). */

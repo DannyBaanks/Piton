@@ -245,6 +245,7 @@ class Win64NasmEmitter:
             "extern piton_set_free", "extern piton_set_live_count",
             "extern piton_raise",
             "extern piton_raise_unhandled",
+            "extern piton_propagate_or_exit",
             "extern piton_exit",
             "extern piton_argv_new",
             "extern piton_try_push", "extern piton_try_pop", "extern piton_try_set_accepted",
@@ -4556,7 +4557,7 @@ class Win64NasmEmitter:
                 "    ret",
             ])
         else:
-            self.lines.append("    call piton_raise_unhandled")
+            self.lines.append("    call piton_propagate_or_exit")
 
     def _emit_contains(self, result: Any, left: Any, right: Any, negate: bool) -> None:
         """CONTAINS_V1: CPython membership (`in` / `no en`) via the
