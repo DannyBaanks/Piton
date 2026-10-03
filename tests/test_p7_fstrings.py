@@ -58,9 +58,10 @@ class FStringsV1(unittest.TestCase):
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("x = 1\nimprimir(f'{x!r}')\n")
 
-    def test_format_spec_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("x = 1.5\nimprimir(f'{x:.2f}')\n")
+    def test_format_spec(self):
+        # P36: f-string format_spec lowers to the .format() placeholder.
+        _assert_matches(self, "x = 1.5\nimprimir(f'{x:.2f}')\n")
+        _assert_matches(self, "imprimir(f'{42:5d}')\n")
 
 
 if __name__ == "__main__":

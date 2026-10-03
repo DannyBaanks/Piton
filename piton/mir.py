@@ -185,6 +185,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "catch_type": "READ", "catch_message": "READ", "catch_flag": "READ",
     # WRITE
     "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
+    "del_item": "WRITE", "del_name": "PURE",
     "set_add": "WRITE",
     "try_push": "WRITE", "try_pop": "WRITE", "subscript_store": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
@@ -299,7 +300,7 @@ class _Builder:
         self.current = self.new_block("entry")
         self.closures: dict[str, tuple[str, tuple[str, ...]]] = {}
         self.cell_params: set[str] = set()
-        self.exception_handlers: list[tuple[str, str | None]] = []
+        self.exception_handlers: list[list[tuple[str | None, str]]] = []
         self.in_except_handler = False
         self.reraise_type: str | None = None
         self.loop_counter = 0
@@ -336,7 +337,12 @@ def _active_handler(builder: "_Builder") -> str | None:
     route to user ``intentar/excepto`` handlers on both backends instead of
     always aborting the process.
     """
-    return builder.exception_handlers[-1][0] if builder.exception_handlers else None
+    if not builder.exception_handlers:
+        return None
+    group = builder.exception_handlers[-1]
+    if len(group) == 1:
+        return group[0][1]
+    return list(group)
 
 
 class MIRLowerer:
@@ -560,10 +566,26 @@ class MIRLowerer:
                     else:
                         self.class_properties.setdefault(node.name, {}).setdefault(prop_name, {})[role] = symbol
             for node in module_body:
-                if node.kind == HIRKind.FUNC_DEF and any(
-                    item.kind in {HIRKind.YIELD, HIRKind.YIELD_FROM}
-                    for item in node.body
-                ):
+                # YIELD_SCAN_V1: a `producir` nested inside a loop/if counts —
+                # the old top-level-only scan missed `para x en xs: producir x`
+                # and the function degraded into a plain function returning None.
+                # Nested function/class bodies are their own scope: not walked.
+                def _has_yield(items, _depth=0):
+                    for item in items or []:
+                        if getattr(item, "kind", None) in {HIRKind.YIELD, HIRKind.YIELD_FROM}:
+                            return True
+                        if getattr(item, "kind", None) in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF, HIRKind.LAMBDA}:
+                            continue
+                        for attr in ("body", "finalbody", "orelse"):
+                            sub = getattr(item, attr, None)
+                            if isinstance(sub, list) and _has_yield(sub, _depth + 1):
+                                return True
+                        for handler in (getattr(item, "handlers", None) or []):
+                            if _has_yield(getattr(handler, "body", None), _depth + 1):
+                                return True
+                    return False
+
+                if node.kind == HIRKind.FUNC_DEF and _has_yield(node.body):
                     args = getattr(node, "args", None)
                     params = list(getattr(args, "args", []) or []) if args else []
                     if not params and node.body and all(
@@ -1388,10 +1410,19 @@ class MIRLowerer:
             self._lower_expr(builder, node)
         elif kind == HIRKind.DELETE:
             for target in node.targets:
-                if target.kind != HIRKind.ATTR:
-                    raise MIRLoweringError("native del currently supports only attribute deletion (del obj.attr)")
-                owner = self._lower_expr(builder, target.value)
-                builder.emit("del_attr", owner, target.attr)
+                if target.kind == HIRKind.ATTR:
+                    owner = self._lower_expr(builder, target.value)
+                    builder.emit("del_attr", owner, target.attr)
+                elif target.kind == HIRKind.SUBSCR:
+                    # DEL_ITEM_V1: `borrar d['k']` / `del l[i]`
+                    obj = self._lower_expr(builder, target.value)
+                    index = self._lower_expr(builder, target.slice)
+                    builder.emit("del_item", obj, index)
+                elif target.kind == HIRKind.LOAD:
+                    # DEL_NAME_V1: `borrar var` — modelled at build time
+                    builder.emit("del_name", target.name)
+                else:
+                    raise MIRLoweringError(f"native del does not support target kind {target.kind}")
         else:
             if kind == HIRKind.PASS:
                 return
@@ -1815,8 +1846,6 @@ class MIRLowerer:
             builder.current = after_else
 
     def _lower_try(self, builder: _Builder, node: HIRNode) -> None:
-        if len(node.handlers) > 1:
-            raise MIRLoweringError("native try supports at most one except handler")
         finally_body = list(getattr(node, "finalbody", []) or [])
         orelse_body = list(getattr(node, "orelse", []) or [])
 
@@ -1831,16 +1860,19 @@ class MIRLowerer:
         else_block = builder.new_block() if orelse_body else None
 
         if node.handlers:
-            handler = node.handlers[0]
-            if not hasattr(handler, "body") or handler.is_star:
-                raise MIRLoweringError("native except does not support except* yet")
-            handler_block = builder.new_block()
-            handler_bind_name = handler.name
-            accepted = None
-            if handler.type_ is not None:
-                if handler.type_.kind != HIRKind.LOAD:
-                    raise MIRLoweringError("native except type must be a builtin exception name")
-                accepted = handler.type_.name
+            handlers = []
+            for handler in node.handlers:
+                if not hasattr(handler, "body") or handler.is_star:
+                    raise MIRLoweringError("native except does not support except* yet")
+                h_accepted = None
+                if handler.type_ is not None:
+                    if handler.type_.kind != HIRKind.LOAD:
+                        raise MIRLoweringError("native except type must be a builtin exception name")
+                    h_accepted = handler.type_.name
+                handlers.append((handler, h_accepted, builder.new_block(), handler.name))
+            handlers_meta = handlers
+        else:
+            handlers_meta = []
 
         # try_push
         builder.emit("try_push")
@@ -1848,16 +1880,16 @@ class MIRLowerer:
 
         # try body block
         builder.current = try_body_block
-        if handler_block:
-            builder.exception_handlers.append((handler_block.label, accepted))
+        handler_block = handlers_meta[0][2] if handlers_meta else None
+        accepted = handlers_meta[0][1] if handlers_meta else None
+        if handlers_meta:
+            builder.exception_handlers.append([(acc, block.label) for _, acc, block, _ in handlers_meta])
         elif finally_body:
             # FINALBODY_UNWIND_V1: an exception escaping the try still runs
             # the finally block first, instead of skipping it.
-            builder.exception_handlers.append((finally_block.label, None))
+            builder.exception_handlers.append([(None, finally_block.label)])
         self._lower_statements(builder, node.body)
-        if handler_block:
-            builder.exception_handlers.pop()
-        elif finally_body:
+        if handlers_meta or finally_body:
             builder.exception_handlers.pop()
         builder.emit("try_pop")
         if else_block is not None:
@@ -1876,8 +1908,8 @@ class MIRLowerer:
             else:
                 builder.emit("jump", end_block.label)
 
-        # handler block (reached via raise_typed's catch_flag check)
-        if handler_block:
+        # handler blocks (reached via raise_typed's catch_flag check)
+        for current_handler, handler_accepted, handler_block, handler_bind_name in handlers_meta:
             builder.current = handler_block
             builder.emit("reraise_save")
             # EXCEPTION_BINDING_V1: bind the caught exception message BEFORE
@@ -1886,13 +1918,13 @@ class MIRLowerer:
             if bind_name:
                 bound = builder.temp()
                 builder.emit("catch_bind", bind_name, result=bound)
-                builder.emit("store", bind_name, bound)
+                builder.emit("store", bind_name, bound)  # same as before
             builder.emit("catch_clear")
             previous_reraise_type = builder.reraise_type
             previous_in_handler = builder.in_except_handler
-            builder.reraise_type = accepted
+            builder.reraise_type = handler_accepted
             builder.in_except_handler = True
-            self._lower_statements(builder, handler.body)
+            self._lower_statements(builder, current_handler.body)
             builder.reraise_type = previous_reraise_type
             builder.in_except_handler = previous_in_handler
             builder.emit("try_pop")
@@ -1930,13 +1962,14 @@ class MIRLowerer:
         enclosing handler exists — the with-body exception becomes an
         unhandled exit there, which is runtime-correct.
         """
-        for _, accepted in reversed(builder.exception_handlers):
-            if accepted is None or accepted == "Exception":
-                raise MIRLoweringError(
-                    "native with-body exception propagation inside a catch-all "
-                    "(excepto Exception / bare excepto) region is not supported yet"
-                )
-            return accepted
+        for entries in reversed(builder.exception_handlers):
+            for accepted, _ in entries:
+                if accepted is None or accepted == "Exception":
+                    raise MIRLoweringError(
+                        "native with-body exception propagation inside a catch-all "
+                        "(excepto Exception / bare excepto) region is not supported yet"
+                    )
+                return accepted
         return None
 
     def _lower_with(self, builder: _Builder, node: HIRNode) -> None:
@@ -2023,7 +2056,7 @@ class MIRLowerer:
         builder.emit("try_push")
         builder.emit("jump", body_block.label)
         builder.current = body_block
-        builder.exception_handlers.append((handler_block.label, None))
+        builder.exception_handlers.append([(None, handler_block.label)])
         self._lower_statements(builder, node.body)
         builder.exception_handlers.pop()
         builder.emit("try_pop")
@@ -2060,8 +2093,13 @@ class MIRLowerer:
         # RERAISE_COMPLETE_V1: raise_active_dynamic accepts ANY enclosing
         # handler (including catch-alls and nested withs), because the route
         # only needs a label, not a static type. None → unhandled exit.
-        handler_label = builder.exception_handlers[-1][0] if builder.exception_handlers else None
-        builder.emit("raise_active_dynamic", handler_label)
+        # OUTER handler spec: a single label (one-entry group) or a list of
+        # (accepted, label) for a multi-handler enclosing try. The emitter
+        # dispatches by the dynamic exception type in the list case.
+        handler_spec = builder.exception_handlers[-1] if builder.exception_handlers else None
+        if handler_spec is not None and len(handler_spec) == 1:
+            handler_spec = handler_spec[0][1]
+        builder.emit("raise_active_dynamic", handler_spec)
 
         builder.current = end_block
 
@@ -2118,8 +2156,12 @@ class MIRLowerer:
         # route one frame out, unhandled exit if there is none.
         if builder.reraise_type in (None, "Exception", "BaseException"):
             # exception_handlers already popped the current handler before its
-            # body is lowered, so [-1] IS the enclosing one.
-            outer = builder.exception_handlers[-1][0] if builder.exception_handlers else None
+            # body is lowered, so [-1] IS the enclosing ONE-entry group.
+            if not builder.exception_handlers:
+                outer = None
+            else:
+                outer_group = builder.exception_handlers[-1]
+                outer = outer_group[0][1] if len(outer_group) == 1 else list(outer_group)
             builder.emit("raise_active_dynamic", outer)
             return
         handler_label = self._find_exception_handler(builder, builder.reraise_type)
@@ -2152,9 +2194,10 @@ class MIRLowerer:
         self, builder: _Builder, exception_type: str
     ) -> str | None:
         chain = self._exception_chain(exception_type)
-        for label, accepted in reversed(builder.exception_handlers):
-            if accepted is None or accepted in {"Exception", "BaseException"} or accepted in chain:
-                return label
+        for entries in reversed(builder.exception_handlers):
+            for accepted, label in entries:
+                if accepted is None or accepted in {"Exception", "BaseException"} or accepted in chain:
+                    return label
         return None
 
     def _lower_super_call(self, builder: _Builder, attr: str, user_args: tuple) -> str:
@@ -3889,6 +3932,17 @@ class MIRLowerer:
         positional: Sequence[HIRNode], keywords: Sequence[HIRNode],
     ) -> tuple[str, ...]:
         params = self.function_params.get(func_name)
+        if params is None and func_name in {"sorted", "ordenar"}:
+            # SORT_KW_V1: builtin keyword calls have a fixed schema. The
+            # reverse flag accepts CPython's `reverse` and PITON's `reversa`.
+            if len(positional) > 2:
+                raise MIRLoweringError(f"too many positional arguments to {func_name}")
+            values = [self._lower_expr(builder, arg) for arg in positional]
+            for kw in keywords or ():
+                if kw.arg is None or kw.arg not in {"reverse", "reversa"}:
+                    raise MIRLoweringError(f"unexpected keyword argument: {kw.arg}")
+                values.append(self._lower_expr(builder, kw.value))
+            return tuple(values)
         if params is None:
             raise MIRLoweringError(f"native keyword call requires known function: {func_name}")
         defaults = self.function_defaults.get(func_name, {})
