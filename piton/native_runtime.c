@@ -284,6 +284,11 @@ void *piton_str_box(const char *s) {
     return piton_str_new(s, (int64_t)strlen(s));
 }
 
+/* Boxed string already tagged (for dict keys and slot stores). */
+int64_t piton_box_str_tagged(const char *s) {
+    return pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_box(s));
+}
+
 int64_t piton_slot(int64_t raw, int64_t is_str) {
     if (is_str) {
         void *boxed = piton_str_box((const char *)raw);
@@ -481,6 +486,99 @@ void *piton_set_from_str(const char *s) {
         }
     }
     return out;
+}
+
+/* ── Tagged dicts (str/float keys and values) ────────────────────────
+ * The legacy dict_put/get auto-encode via pv_int (int-only). Dicts with a
+ * non-int key or value use the tagged path: keys AND values are stored
+ * verbatim as tagged PitonValues and compared with eq_raw (content match
+ * for strings). Reads yield verbatim tags; the emitter types them "slot"
+ * so print/eq/truth dispatch by tag at runtime. */
+void piton_dict_put_tagged(void *raw, int64_t key, int64_t value) {
+    PitonDict *d = raw;
+    if (!d) return;
+    for (int64_t i = 0; i < d->length; ++i)
+        if (piton_value_eq_raw(d->entries[i].key, key)) {
+            piton_value_deep_free(d->entries[i].value);
+            piton_conv_incref(value);
+            d->entries[i].value = value;
+            return;
+        }
+    if (d->length >= d->capacity) {
+        int64_t nc = d->capacity ? d->capacity * 2 : 4;
+        d->entries = realloc(d->entries, (size_t)nc * sizeof(PitonDictEntry));
+        d->capacity = nc;
+    }
+    piton_conv_incref(key);
+    piton_conv_incref(value);
+    d->entries[d->length].key = key;
+    d->entries[d->length].value = value;
+    ++d->length;
+}
+
+int64_t piton_dict_get_tagged(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key))
+                return d->entries[i].value;
+    piton_raise_unhandled("KeyError", "key not found");
+    return pv_none();
+}
+
+int64_t piton_dict_get_tagged_d(void *raw, int64_t key, int64_t dflt) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key))
+                return d->entries[i].value;
+    return dflt;
+}
+
+/* Positional access for comprehensions lowered as index loops
+ * (COMP_DICT_ITER_V1, mirrors the Linux backend): the @comp_index_N temp
+ * counts 0..len-1, so d[i] is the i-th KEY and s[i] the i-th set item. */
+int64_t piton_dict_nth_key(void *raw, int64_t i) {
+    PitonDict *d = raw;
+    if (!d || i < 0 || i >= d->length) {
+        piton_raise_unhandled("IndexError", "dict index out of range");
+        return pv_none();
+    }
+    return d->entries[i].key;
+}
+
+int64_t piton_set_nth(void *raw, int64_t i) {
+    PitonSet *s = raw;
+    if (!s || i < 0 || i >= s->length) {
+        piton_raise_unhandled("IndexError", "set index out of range");
+        return pv_none();
+    }
+    return s->items[i];
+}
+
+int64_t piton_dict_get_tagged_1(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key))
+                return d->entries[i].value;
+    return pv_none();
+}
+
+int64_t piton_dict_contains_tagged(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key))
+                return 1;
+    return 0;
+}
+
+/* Box a raw float-bits temp as a heap double tagged FLOAT. */
+int64_t piton_box_float(int64_t bits) {
+    double *dp = malloc(sizeof(double));
+    memcpy(dp, &bits, sizeof(double));
+    return pv_encode(PITON_TAG_FLOAT, (int64_t)dp);
 }
 
 void *piton_dict_from_pairs(void *raw) {
@@ -1194,6 +1292,30 @@ void piton_collection_put_tagged(void *raw, int64_t index, int64_t value) {
     if (h) h->refcount++;
     c->items[index] = pv_encode(PITON_TAG_OBJECT, value);
     if (index >= c->length) c->length = index + 1;
+}
+
+/* Verbatim stores for ALREADY-TAGGED values (slot model): no re-tag,
+ * no reinterpretation. OBJECT payloads get their refcount bumped. */
+void piton_collection_put_verbatim(void *raw, int64_t index, int64_t value) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    if (index < 0 || index >= c->capacity) return;
+    piton_conv_incref(value);
+    c->items[index] = value;
+    if (index >= c->length) c->length = index + 1;
+}
+
+void piton_list_append_tagged(void *raw, int64_t value) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    if (c->header.sub_tag != SUB_TAG_LIST) return;
+    if (c->length >= c->capacity) {
+        int64_t new_cap = c->capacity ? c->capacity * 2 : 4;
+        c->items = realloc(c->items, (size_t)new_cap * sizeof(int64_t));
+        c->capacity = new_cap;
+    }
+    piton_conv_incref(value);
+    c->items[c->length++] = value;
 }
 
 void piton_list_append(void *raw, int64_t value, int64_t type_tag) {
