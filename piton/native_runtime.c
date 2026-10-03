@@ -322,6 +322,49 @@ void piton_slot_print_raw(int64_t v) {
     piton_value_print_inner(v, 0);
 }
 
+/* Slot conversions for %-formatting (Windows): %s/%r need C strings,
+ * %d needs the raw int. Anything outside int/bool/none/str raises the
+ * CPython TypeError instead of formatting tag bits. */
+int64_t piton_str_from_int(int64_t v);
+char *piton_str_quote(const char *s);
+
+const char *piton_slot_str(int64_t v) {
+    switch (pv_tag(v)) {
+    case PITON_TAG_NONE: return "None";
+    case PITON_TAG_BOOL: return pv_payload(v) ? "True" : "False";
+    case PITON_TAG_INT: return (const char *)piton_str_from_int(pv_payload_signed(v));
+    case PITON_TAG_OBJECT: {
+        PitonHeader *h = (PitonHeader *)pv_payload(v);
+        if (h && h->sub_tag == SUB_TAG_STR) {
+            PitonStr *s = (PitonStr *)h;
+            return s->data ? s->data : "";
+        }
+        break;
+    }
+    default: break;
+    }
+    piton_raise_unhandled("TypeError", "not all arguments converted during string formatting");
+    return "";
+}
+
+const char *piton_slot_repr(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_OBJECT) {
+        PitonHeader *h = (PitonHeader *)pv_payload(v);
+        if (h && h->sub_tag == SUB_TAG_STR) {
+            PitonStr *s = (PitonStr *)h;
+            return (const char *)piton_str_quote(s->data ? s->data : "");
+        }
+    }
+    return piton_slot_str(v);
+}
+
+int64_t piton_slot_int(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    piton_raise_unhandled("TypeError", "not all arguments converted during string formatting");
+    return 0;
+}
+
 /* Print a BOXED string (tagged OBJECT/PitonStr) without quotes. Used for
  * temporaries the emitter statically types "str-boxed": items of
  * str-built collections and their loop variables. */
@@ -2507,27 +2550,37 @@ char *piton_str_strip(const char *s, int mode) {
     return p;
 }
 
+/* Boxed string item access: the OBJECT payload is a PitonStr*, NOT
+ * plain C text — read data/len through the struct. Returns NULL when the
+ * item is not a boxed string. */
+static const char *piton_boxed_str_data(int64_t item, size_t *out_len) {
+    if (pv_tag(item) != PITON_TAG_OBJECT) return NULL;
+    PitonHeader *h = (PitonHeader *)pv_payload(item);
+    if (!h || h->sub_tag != SUB_TAG_STR) return NULL;
+    PitonStr *s = (PitonStr *)h;
+    if (out_len) *out_len = (size_t)s->len;
+    return s->data ? s->data : "";
+}
+
 char *piton_str_join(const char *sep, void *raw) {
     PitonCollection *items = raw;
     size_t sl = strlen(sep);
     size_t total = 0;
     int64_t cnt = items ? items->length : 0;
     for (int64_t i = 0; i < cnt; ++i) {
-        if (pv_tag(items->items[i]) == PITON_TAG_OBJECT) {
-            PitonHeader *h = (PitonHeader *)pv_payload(items->items[i]);
-            if (h && h->sub_tag == SUB_TAG_STR) { total += strlen((const char *)pv_payload(items->items[i])); continue; }
-        }
-        piton_raise_unhandled("TypeError", "sequence item is not a string");
+        size_t el = 0;
+        if (!piton_boxed_str_data(items->items[i], &el))
+            piton_raise_unhandled("TypeError", "sequence item is not a string");
+        total += el;
     }
     total += sl * (size_t)(cnt > 0 ? cnt - 1 : 0);
     char *p = malloc(total + 1);
     size_t o = 0;
     for (int64_t i = 0; i < cnt; ++i) {
         if (i) { memcpy(p + o, sep, sl); o += sl; }
-        /* item is a tagged SUB_TAG_STR object (checked above); its payload
-           points at plain C text (PitonStr data layout guarantee) */
-        size_t el = strlen((const char *)pv_payload(items->items[i]));
-        memcpy(p + o, (const char *)pv_payload(items->items[i]), el); o += el;
+        size_t el = 0;
+        const char *data = piton_boxed_str_data(items->items[i], &el);
+        memcpy(p + o, data, el); o += el;
     }
     p[o] = 0;
     return p;

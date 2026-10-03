@@ -211,6 +211,7 @@ class Win64NasmEmitter:
             "extern piton_collection_get_raw",
             "extern piton_value_eq",
             "extern piton_boxed_str_print_raw",
+            "extern piton_slot_str", "extern piton_slot_repr", "extern piton_slot_int",
             "extern piton_iterator_new_any", "extern piton_iterator_next_any",
             "extern piton_calliter_new", "extern piton_calliter_next",
             "extern piton_enumerate_new", "extern piton_enumerate_next",
@@ -1130,9 +1131,14 @@ class Win64NasmEmitter:
                             tmp = f"{right}_e{index}"
                             self._load_operand(right, "rcx")
                             self.lines.append(f"    mov rdx, {index}")
-                            self.lines.append("    call piton_collection_get")
+                            if right in self._mixed_elem_colls or self.aliases.get(right, right) in self._mixed_elem_colls:
+                                # PCT_MIXED_V1 (Windows): items verbatim con tag.
+                                self.lines.append("    call piton_collection_get_raw")
+                                self.types[tmp] = "slot"
+                            else:
+                                self.lines.append("    call piton_collection_get")
+                                self.types[tmp] = etype
                             self.lines.append(f"    mov {self._address(tmp)}, rax")
-                            self.types[tmp] = etype
                             arg_values.append(tmp)
                             arg_etypes.append(None)
                     else:
@@ -4079,7 +4085,11 @@ class Win64NasmEmitter:
         frozen literals whose type the table cannot know)."""
         arg_type = etype if etype is not None else self.types.get(value, "int")
         if spec == "s":
-            if arg_type == "int":
+            if arg_type == "slot":
+                # PCT_SLOT_V1 (Windows): despacha por tag en runtime.
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_slot_str")
+            elif arg_type == "int":
                 self._load_operand(value, "rcx")
                 self.lines.append("    call piton_str_from_int")
             elif arg_type == "float":
@@ -4105,7 +4115,13 @@ class Win64NasmEmitter:
             else:
                 raise NativeBuildError(f"native str %s does not support {arg_type} arguments")
         elif spec == "d":
-            if arg_type in {"int", "bool"}:
+            if arg_type == "slot":
+                # PCT_SLOT_V1 (Windows): unbox int/bool o TypeError.
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_slot_int")
+                self.lines.append("    mov rcx, rax")
+                self.lines.append("    call piton_str_from_int")
+            elif arg_type in {"int", "bool"}:
                 self._load_operand(value, "rcx")
                 self.lines.append("    call piton_str_from_int")
             elif arg_type == "float":
@@ -4116,7 +4132,10 @@ class Win64NasmEmitter:
             else:
                 raise NativeBuildError(f"native str %d requires a real number, not {arg_type}")
         elif spec == "r":
-            if arg_type == "str":
+            if arg_type == "slot":
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_slot_repr")
+            elif arg_type == "str":
                 self._load_operand(value, "rcx")
                 self.lines.append("    call piton_str_quote")
             elif arg_type in {"int", "bool", "float", "none"}:

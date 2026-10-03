@@ -136,30 +136,13 @@ class StripV1(unittest.TestCase):
 
 
 class JoinV1(unittest.TestCase):
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "Windows backend: literal str elements are untagged, so the join "
-        "type check raises TypeError at runtime (asserted in the Windows gate below)",
-    )
     def test_join_list(self):
+        # STR_BOXED_V1 (Windows P43): los literales str se boxean, asi
+        # que el join ya no distingue backends.
         _assert_matches(self, "imprimir(','.join(['a', 'b']), '-'.join([]))\n")
 
-    @unittest.skipIf(
-        sys.platform.startswith("win32"),
-        "Windows backend: literal str elements are untagged (TypeError gate below)",
-    )
     def test_join_tuple(self):
         _assert_matches(self, "imprimir('+'.join(('a', 'b')))\n")
-
-    @unittest.skipIf(
-        not sys.platform.startswith("win32"),
-        "Linux backend prints the joined string; only the Windows untagged "
-        "elements raise here",
-    )
-    def test_join_literal_raises_on_windows(self):
-        result = compare_native_to_cpython("imprimir(','.join(['a', 'b']))\n")
-        self.assertEqual(result.native.returncode, 1)
-        self.assertIn(b"TypeError", result.native.stderr)
 
     def test_join_non_str_element_fails_at_runtime(self):
         result = compare_native_to_cpython("imprimir(','.join([1]))\n")
