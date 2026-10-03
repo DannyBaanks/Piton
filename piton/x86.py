@@ -172,6 +172,9 @@ class Win64NasmEmitter:
         self._str_elem_colls: set[str] = set()
         self._str_elem_iters: set[str] = set()
         self._bigint_elem_colls: set[str] = set()
+        self._mixed_elem_colls: set[str] = set()
+        self._non_int_elem_colls: set[str] = set()
+        self._mixed_elem_iters: set[str] = set()
         # DICT_KEY_TYPE_V1: static type of a dict's KEYS, so iterating a dict
         # yields the right static type. The iterator used to hardcode "str",
         # which made `para k en {1: 'a'}` print the int key as a string pointer.
@@ -205,6 +208,7 @@ class Win64NasmEmitter:
             "extern piton_seq_from_coll", "extern piton_seq_from_str",
             "extern piton_set_from_coll", "extern piton_set_from_str",
             "extern piton_dict_from_pairs",
+            "extern piton_collection_get_raw",
             "extern piton_value_eq",
             "extern piton_boxed_str_print_raw",
             "extern piton_iterator_new_any", "extern piton_iterator_next_any",
@@ -711,6 +715,8 @@ class Win64NasmEmitter:
                 self.types[result] = f"iterator:{source_type or 'unknown'}"
                 if source in self._str_elem_colls:
                     self._str_elem_iters.add(result)
+                if source in self._mixed_elem_colls:
+                    self._mixed_elem_iters.add(result)
                 # DICT_KEY_TYPE_V1: carry the key type onto the iterator.
                 if result and source_type == 'dict' and source in self._dict_key_types:
                     self._dict_key_types[result] = self._dict_key_types[source]
@@ -820,6 +826,8 @@ class Win64NasmEmitter:
             _str_iter = iterator in self._str_elem_iters
             if _str_iter:
                 self.types[result] = "str-boxed"
+            elif iterator in self._mixed_elem_iters:
+                self.types[result] = "slot"
             # DICT_KEY_TYPE_V1: a dict iterator yields its KEYS; the static type
             # comes from the dict, and an unknown key type fails closed
             # instead of printing a pointer as a string.
@@ -831,7 +839,7 @@ class Win64NasmEmitter:
                         "(CPython iterates keys of any type)"
                     )
                 self.types[result] = key_type
-            elif not _str_iter:
+            elif not _str_iter and iterator not in self._mixed_elem_iters:
                 self.types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:str" else "int"
             self.lines.append("    call piton_catch_flag")
             self.lines.append("    test rax, rax")
@@ -878,6 +886,10 @@ class Win64NasmEmitter:
                 self.types[result] = "str-boxed"
             if name in self._bigint_elem_colls:
                 self._bigint_elem_colls.add(result)
+            if name in self._mixed_elem_colls:
+                self._mixed_elem_colls.add(result)
+            if name in self._non_int_elem_colls:
+                self._non_int_elem_colls.add(result)
             if name in self.dict_elems:
                 self.dict_elems[result] = self.dict_elems[name]
             if name in self.function_names:
@@ -939,6 +951,10 @@ class Win64NasmEmitter:
                 self.types[args[0]] = "str-boxed"
             if isinstance(args[1], str) and args[1] in self._bigint_elem_colls:
                 self._bigint_elem_colls.add(args[0])
+            if isinstance(args[1], str) and args[1] in self._mixed_elem_colls:
+                self._mixed_elem_colls.add(args[0])
+            if isinstance(args[1], str) and args[1] in self._non_int_elem_colls:
+                self._non_int_elem_colls.add(args[0])
             if isinstance(args[1], str) and self.types.get(args[1]) == "builtin":
                 # BUILTIN_MARKER_V1: storing a builtin marker would copy an
                 # uninitialized slot — fail closed.
@@ -1018,6 +1034,10 @@ class Win64NasmEmitter:
             # optional 4th argument on '//' and '%' so the raise below routes
             # to intentar/excepto instead of trapping the process.
             handler_label = args[3] if len(args) > 3 else None
+            if "slot" in {self.types.get(left, "int"), self.types.get(right, "int")} and operator not in {"==", "!="}:
+                raise NativeBuildError(
+                    f"native '{operator}' on a mixed-type slot value is not supported"
+                )
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
             if operator == "in":
@@ -1808,6 +1828,21 @@ class Win64NasmEmitter:
                     if item_type in {"list", "tuple", "dict", "set", "range", "bigint"} or item_type.startswith("object:"):
                         self._load_operand(item, "r8")
                         self.lines.append("    call piton_collection_put_tagged")
+                    elif item_type == "str":
+                        # STR_BOXED_V1 (Windows): string items are BOXED
+                        # PitonStr (tagged OBJECT), self-describing for
+                        # print/eq/iteration like the Linux PK_STR slots.
+                        # The container is marked mixed: item access yields
+                        # "slot" and dispatches by tag at runtime.
+                        self._load_operand(item, "rcx")
+                        self.lines.append("    call piton_str_box")
+                        self.lines.extend([
+                            f"    mov rcx, {self._address(result)}",
+                            f"    mov rdx, {index}",
+                            "    mov r8, rax",
+                            "    call piton_collection_put_tagged",
+                        ])
+                        self._mixed_elem_colls.add(result)
                     else:
                         self._load_operand(item, "r8")
                         self._load_operand(item, "r9")
@@ -1822,6 +1857,13 @@ class Win64NasmEmitter:
                     _kinds.add(self.types.get(_it, "int") if isinstance(_it, str) else "int")
                 if _kinds == {"bigint"}:
                     self._bigint_elem_colls.add(result)
+                elif _kinds <= {"int", "bool"}:
+                    pass
+                else:
+                    # cualquier mix no-int puro (bigint mezclado, float,
+                    # listas anidadas...): sum() debe rechazar en vez de
+                    # saltar elementos en silencio.
+                    self._non_int_elem_colls.add(result)
         elif op == "unpack_check":
             # UNPACK_ARITY_V1: CPython verifies the element count on
             # unpacking (ValueError: too many / not enough values).
@@ -1924,6 +1966,15 @@ class Win64NasmEmitter:
                 # backend has the fix, Windows keeps the historical int until
                 # its collection value representation is consistent.
                 self.types[result] = "object:module" if container_type == "dict:module" else "int"
+            elif container in self._mixed_elem_colls:
+                # MIXED_SLOT_V1 (Windows): verbatim tagged item for the
+                # slot model (decoding would erase INT/BOOL tags).
+                self._load_operand(container, "rcx")
+                self._load_operand(key, "rdx")
+                self.lines.append("    call piton_collection_get_raw")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "slot"
+                return
             else:
                 self._load_operand(container, "rcx")
                 self._load_operand(key, "rdx")
@@ -1940,6 +1991,8 @@ class Win64NasmEmitter:
                     self.types[result] = "str-boxed"
                 elif container in self._bigint_elem_colls:
                     self.types[result] = "bigint"
+                elif container in self._mixed_elem_colls:
+                    self.types[result] = "slot"
                 else:
                     self.types[result] = "int"
         elif op == "get_slice":
@@ -3072,6 +3125,14 @@ class Win64NasmEmitter:
             elif function_name == "sum":
                 if len(values) != 1:
                     raise NativeBuildError("native sum requires one collection")
+                if isinstance(values[0], str) and values[0] in (
+                    self._bigint_elem_colls | self._mixed_elem_colls
+                    | self._str_elem_colls
+                    | self._non_int_elem_colls
+                ):
+                    raise NativeBuildError(
+                        "native sum() requires int elements (CPython sums them)"
+                    )
                 ctype = self.types.get(values[0])
                 if ctype == "dict":
                     self._load_operand(values[0], "rcx")

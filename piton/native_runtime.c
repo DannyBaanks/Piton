@@ -1190,6 +1190,17 @@ int64_t piton_collection_get(void *raw, int64_t key) {
     return v;  /* OBJECT/FLOAT: return as-is (pointer) */
 }
 
+/* Verbatim item access for mixed-kind containers: the caller keeps the
+ * tag (slot model) instead of decoding INT/BOOL to raw values. */
+int64_t piton_collection_get_raw(void *raw, int64_t key) {
+    PitonCollection *c = raw;
+    if (!c) return pv_none();
+    int64_t idx = pv_payload_signed(key);
+    if (idx < 0) idx += c->length;
+    if (idx < 0 || idx >= c->length) return pv_none();
+    return c->items[idx];
+}
+
 typedef struct {
     PitonCollection *source;
     int64_t index;
