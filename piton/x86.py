@@ -362,6 +362,7 @@ class Win64NasmEmitter:
         self.bigint_slots = []
         self.constants = {}
         self._boolh_types: dict[str, str] = {}
+        self._function_temps: set[str] = set()
         self._boolh_first: dict[str, tuple] = {}
         self._chr_results: set[str] = set()
         if function.vararg:
@@ -479,6 +480,7 @@ class Win64NasmEmitter:
         self.bigint_slots = []
         self.constants = {}
         self._boolh_types: dict[str, str] = {}
+        self._function_temps: set[str] = set()
         self._boolh_first: dict[str, tuple] = {}
         self._chr_results: set[str] = set()
         if function.vararg:
@@ -904,6 +906,11 @@ class Win64NasmEmitter:
                 self.constants[result] = self.constants[name]
             if name in self.tuple_etypes:
                 self.tuple_etypes[result] = self.tuple_etypes[name]
+            if name in self.function_names or name in self._function_temps:
+                # FUNCTION_TEMP_V1 (Windows): los valores-funcion viajan
+                # tipados int por defecto; marcarlos evita que el gate
+                # NONCALLABLE los confunda con escalares.
+                self._function_temps.add(result)
             if name in self._str_elem_colls:
                 self._str_elem_colls.add(result)
             if self.types.get(name) == "str-boxed":
@@ -1004,6 +1011,10 @@ class Win64NasmEmitter:
                 self._non_int_elem_colls.add(args[0])
             if isinstance(args[1], str) and args[1] in self._tagged_dicts:
                 self._tagged_dicts.add(args[0])
+            if isinstance(args[1], str) and (args[1] in self._function_temps or args[1] in self.function_names):
+                self._function_temps.add(args[0])
+            elif isinstance(args[0], str) and not args[0].startswith("%"):
+                self._function_temps.discard(args[0])
             if isinstance(args[1], str) and args[1] in self._chr_results:
                 self._chr_results.add(args[0])
             if isinstance(args[1], str) and self.types.get(args[1]) == "builtin":
@@ -3420,10 +3431,23 @@ class Win64NasmEmitter:
                         raise NativeBuildError(
                             f"native call to builtin '{function_name}' is not supported in this position"
                         )
-                    if self.types.get(function_operand, "") in {
-                        "int", "float", "str", "bool", "none", "list", "tuple",
-                        "dict", "set", "range", "bigint", "str-boxed", "slot",
-                    }:
+                    _callee_root = function_operand
+                    _seen_alias = set()
+                    while (isinstance(_callee_root, str) and _callee_root in self.aliases
+                           and _callee_root not in _seen_alias):
+                        _seen_alias.add(_callee_root)
+                        _callee_root = self.aliases[_callee_root]
+                    _is_param = _callee_root in getattr(self.function, "params", ())
+                    _is_func = (
+                        function_name in self.function_names
+                        or (isinstance(function_operand, str) and function_operand in self._function_temps)
+                        or (isinstance(function_operand, str) and function_operand in self.function_names)
+                    )
+                    if (not _is_param and not _is_func
+                        and self.types.get(function_operand, "") in {
+                            "int", "float", "str", "bool", "none", "list", "tuple",
+                            "dict", "set", "range", "bigint", "str-boxed", "slot",
+                        }):
                         # NONCALLABLE_V1 (Windows): a statically non-callable
                         # callee raises TypeError at runtime (exit 1) instead
                         # of jumping through its value bits (AV on float/str).
