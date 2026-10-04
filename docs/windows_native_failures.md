@@ -24,6 +24,19 @@ feature-gap conocido / **REGRESIÓN candidata** (a investigar).
 - `SumElementTypeV1::test_non_int_elements_fail_closed` — exige rechazo explícito
 - `NativeSubsetEvidenceTests::test_cli_writes_passing_native_subset_receipt` — build evidence en PE roto
 
+## P45–P50: resuelto en CI/local (2026-10-03)
+Verificado PE real via Wine+mingw local (oraculo CI):
+- Dicts taggeados punta a punta (subscript/get/in/iter/comp-index/store
+  unificado plain/tagged) + unbox aritmetico de slots (SLOT_ARITH_V1).
+- NONCALLABLE por trazado a const + FUNCTION_TEMP_V1 (escalares -> TypeError
+  rc 1; funciones/closures/params al runtime; AV 3221225477 cerrado).
+- WITH_CLEAR_V1 (mir compartido) + RERAISE_STALE_V1: with-handler x3 y
+  bare-reraise verificados byte a byte.
+- %f/%e/%g + :.Nf/:.Ne/:.Ng/:.N% con redondeo decimal real.
+- chr(0) via variable (SET_HYGIENE_V1), oracle UTF-8 (ORACLE_UTF8_V1).
+- Quedan fuera (buckets heredados OK en CI, divergencia solo-Wine en
+  celdas nonlocal y multifile-CWD: no tocar lo que CI acepta).
+
 ## P42–P44: resuelto en CI (2026-10-03)
 Verificado en run CI Windows: 43 -> 31 -> **22 failed** (839 passed).
 - Conversiones `lista/tupla/conjunto/diccionario` como valores (CONV_*_V1).
