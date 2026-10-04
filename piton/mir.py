@@ -2040,7 +2040,10 @@ class MIRLowerer:
         ):
             # WITH_ABRIR_V1: `con abrir(...)` is treated as a regular builtin call;
             # the emitter raises FileNotFoundError at runtime if the file doesn't exist.
-            if expr.func.name in {"abrir", "open"} and expr.kind == HIRKind.CALL:
+            # El kind va PRIMERO: si expr es un Load (con xobj), expr.func no
+            # existe y el orden invertido lanzaba AttributeError en vez del
+            # MIRLoweringError "direct call".
+            if expr.kind == HIRKind.CALL and expr.func.name in {"abrir", "open"}:
                 var = item.optional_vars
                 if getattr(expr, "args", None):
                     file_expr = self._lower_expr(builder, expr.args[0])

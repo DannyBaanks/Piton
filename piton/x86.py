@@ -775,6 +775,17 @@ class Win64NasmEmitter:
                 self._load_operand(item, "r9")
                 self.lines.append("    call piton_collection_put")
 
+    def _runtime_type_error(self, message: str) -> None:
+        """RT_TYPE_ERROR_V1 (mirror Windows del helper Linux de P52): CPython
+        levanta TypeError en RUNTIME; emitimos el TypeError no manejado
+        (stderr + exit 1) en vez de fallar en BUILD (FAIL_CLOSED -> RAISE_EQ).
+        Terminal, identico al helper Linux: piton_raise_unhandled reporta y sale."""
+        t = self._string("TypeError")
+        m = self._string(message)
+        self.lines.append(f"    lea rcx, [{t}]")
+        self.lines.append(f"    lea rdx, [{m}]")
+        self.lines.append("    call piton_raise_unhandled")
+
     def _emit_instruction(self, instruction: MIRInstruction, labels: dict[str, str]) -> None:
         op, args, result = instruction.op, instruction.args, instruction.result
         if op == "iter_new":
@@ -1378,9 +1389,11 @@ class Win64NasmEmitter:
                     self.lines.append(f"    mov {self._address(result)}, rax")
                     self.types[result] = "tuple"
                     return
-                raise NativeBuildError(
-                    f"native collection binary operator not supported: {operator} on {left_type}/{right_type}"
+                self._runtime_type_error(
+                    f"unsupported operand type(s) for {operator}: '{left_type}' and '{right_type}'"
                 )
+                self.types[result] = "int"
+                return
             if "none" in {left_type, right_type}:
                 # WRETURNTYPE_V1: None-typed operands (e.g. a call result
                 # of a bare function) used to fall through to raw pointer
@@ -1886,9 +1899,11 @@ class Win64NasmEmitter:
                 pass
             elif mixed_non_numeric:
                 if operator not in {"==", "!="}:
-                    raise NativeBuildError(
-                        f"native ordering not supported between {left_type} and {right_type}"
+                    self._runtime_type_error(
+                        f"'{operator}' not supported between instances of '{left_type}' and '{right_type}'"
                     )
+                    self.types[result] = "bool"
+                    return
                 self.lines.append(f"    mov eax, {int(operator == '!=')}")
             elif left_type == right_type == "str":
                 self._load_operand(left, "rcx")
@@ -1900,11 +1915,11 @@ class Win64NasmEmitter:
                 # compared two zero slots and answered False. `==`/`!=` stay
                 # legal across types, as in Python.
                 if operator in {"<", ">", "<=", ">="} and not _ordering_pair_ok(left_type, right_type):
-                    raise NativeBuildError(
-                        f"native ordering comparison '{operator}' between '{left_type}' and "
-                        f"'{right_type}' is not supported (CPython raises TypeError: "
-                        f"'{operator}' not supported between instances of these types)"
+                    self._runtime_type_error(
+                        f"'{operator}' not supported between instances of '{left_type}' and '{right_type}'"
                     )
+                    self.types[result] = "bool"
+                    return
                 if operator in {"<", ">", "<=", ">="} and left_type == right_type and left_type in {"list", "tuple"}:
                     self._load_operand(left, "rcx")
                     self._load_operand(right, "rdx")
@@ -3165,6 +3180,34 @@ class Win64NasmEmitter:
                 else:
                     self.lines.append("    call piton_collection_len")
                 self.types[result] = "int"
+            elif function_name in {"abrir", "open"}:
+                # WITH_ABRIR_V1 (Windows, mirror del backend Linux): el subset
+                # nativo no puede abrir ficheros. Solo es honesto para rutas
+                # literales PROBADAS inexistentes (emite el FileNotFoundError
+                # de CPython); un fichero existente o una ruta no literal
+                # falla en build: afirmar FileNotFoundError ahi seria mentir.
+                if len(values) != 1:
+                    raise NativeBuildError(f"native {function_name} requires one argument (filename)")
+                path_type = self.types.get(values[0], "int")
+                if path_type != "str":
+                    raise NativeBuildError(f"native {function_name} requires a str filename, not {path_type}")
+                literal = self._literal_str_operand(values[0])
+                if not isinstance(literal, str):
+                    raise NativeBuildError(
+                        f"native {function_name} cannot open files in the native subset "
+                        "(path is not a static literal)"
+                    )
+                if Path(literal).exists():
+                    raise NativeBuildError(
+                        f"native {function_name} cannot open files in the native subset"
+                    )
+                t = self._string("FileNotFoundError")
+                m = self._string("[Errno 2] No such file or directory")
+                self.lines.append(f"    lea rcx, [{t}]")
+                self.lines.append(f"    lea rdx, [{m}]")
+                self.lines.append("    call piton_raise_unhandled")
+                self.types[result] = "int"
+                return
             elif function_name == "abs":
                 if len(values) != 1:
                     raise NativeBuildError("native abs requires one argument")
@@ -3173,10 +3216,9 @@ class Win64NasmEmitter:
                 # CPython; the else branch read a string/collection POINTER as a
                 # scalar, so `abs('a')` returned an address and `abs(Nada)` 0.
                 if vtype not in {"int", "bool", "float"}:
-                    raise NativeBuildError(
-                        f"native abs of '{vtype}' is not supported "
-                        "(CPython raises TypeError: bad operand type for abs())"
-                    )
+                    self._runtime_type_error(f"bad operand type for abs(): '{vtype}'")
+                    self.types[result] = "int"
+                    return
                 if vtype == "float":
                     self._load_operand(values[0], "rcx")
                     self.lines.extend(["    movq xmm0, rcx", "    call piton_abs_float"])
@@ -3425,9 +3467,11 @@ class Win64NasmEmitter:
                     | self._str_elem_colls
                     | self._non_int_elem_colls
                 ):
-                    raise NativeBuildError(
-                        "native sum() requires int elements (CPython sums them)"
+                    self._runtime_type_error(
+                        "unsupported operand type(s) for +: non-int elements"
                     )
+                    self.types[result] = "int"
+                    return
                 ctype = self.types.get(values[0])
                 if ctype == "dict":
                     self._load_operand(values[0], "rcx")
@@ -4530,9 +4574,10 @@ class Win64NasmEmitter:
         a stack array (width/precision applied per field), call
         piton_str_format."""
         if len(fields) != len(arg_values):
-            raise NativeBuildError(
-                f"native str % formatting: {len(fields)} conversion(s) but {len(arg_values)} argument(s)"
-            )
+            # PCT_COUNT_V1 (mirror Linux P52): CPython TypeError en runtime.
+            self._runtime_type_error("not all arguments converted during string formatting")
+            self.types[result] = "str"
+            return
         frame_size = ((len(arg_values) * 8 + 32 + 15) // 16) * 16
         if frame_size:
             self.lines.append(f"    sub rsp, {frame_size}")
