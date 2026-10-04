@@ -35,10 +35,10 @@
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
-      "TIMEOUT": 0,
-      "FAIL_CLOSED": 11,
+      "TIMEOUT": 1,
+      "FAIL_CLOSED": 0,
       "RAISE_EQ": 0,
-      "EQUIV": 1209
+      "EQUIV": 1219
     },
     "by_area": {
       "literals": {
@@ -173,9 +173,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 19
+        "EQUIV": 20
       },
       "functions": {
         "DIVERGENT_CRASH": 0,
@@ -197,29 +197,29 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 18
+        "EQUIV": 21
       },
       "generators": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
-        "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "TIMEOUT": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 5
+        "EQUIV": 7
       },
       "controls_closed": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 4,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 12
+        "EQUIV": 16
       }
     },
-    "pct_equiv": 99.1,
-    "pct_honest": 100.0,
+    "pct_equiv": 99.9,
+    "pct_honest": 99.9,
     "pct_divergent": 0.0
   },
   "records": [
@@ -10388,8 +10388,10 @@
       "area": "control_flow",
       "name": "walrus",
       "src": "si (n := 5) > 1:\n    imprimir(n)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba RPAREN:  en 1:7"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
@@ -10863,8 +10865,10 @@
       "area": "classes",
       "name": "iter-dunder",
       "src": "clase P:\n    funcion __iter__(self):\n        devolver iter([1, 2])\npara x en P():\n    imprimir(x)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native method not found: P.__next__"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -10906,15 +10910,19 @@
       "area": "classes",
       "name": "class-attr",
       "src": "clase P:\n    v = 5\nimprimir(P.v)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native classes currently require methods only, no keywords or class-level decorators"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "instance-shared",
       "src": "clase P:\n    v = 5\nimprimir(P().v)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native classes currently require methods only, no keywords or class-level decorators"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -11010,8 +11018,10 @@
       "area": "generators",
       "name": "yield-varargs",
       "src": "funcion f(*args):\n    para a en args:\n        producir a * 2\nimprimir(lista(f(1, 2)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native generator 'f' with *args/**kwargs is not supported yet"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
@@ -11035,29 +11045,35 @@
       "area": "generators",
       "name": "class-generator",
       "src": "clase G:\n    funcion __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'object:G' value"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
       "name": "class-iter-self",
       "src": "clase G:\n    funcion __iter__(self):\n        devolver self\n    funcion __next__(self):\n        devolver 1\nimprimir(lista(G()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'object:G' value"
+      "bucket": "TIMEOUT",
+      "detail": "oracle did not terminate (case is a bad corpus entry)"
     },
     {
       "area": "controls_closed",
       "name": "walrus",
       "src": "si (n := 5) > 1:\n    imprimir(n)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba RPAREN:  en 1:7"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
       "name": "match",
       "src": "x = 1\nsegun x:\n    caso 1:\n        imprimir('uno')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: runtime operation not supported in Linux native subset: unsupported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
@@ -11117,8 +11133,10 @@
       "area": "controls_closed",
       "name": "with",
       "src": "con abrir('x') como f:\n    imprimir(f)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native with context must be a direct call to a native class constructor"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "controls_closed",
@@ -11178,8 +11196,10 @@
       "area": "controls_closed",
       "name": "type-pattern-match",
       "src": "funcion f(x):\n    segun x:\n        caso int:\n            devolver 1\nimprimir(f(1))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: runtime operation not supported in Linux native subset: unsupported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     }
   ]
 }

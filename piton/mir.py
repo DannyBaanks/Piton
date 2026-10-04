@@ -532,10 +532,10 @@ class MIRLowerer:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
                 if node.keywords or node.decorators or any(
-                    item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS}
+                    item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS, HIRKind.ASSIGN, HIRKind.ANN_ASSIGN}
                     for item in node.body
                 ):
-                    raise MIRLoweringError("native classes currently require methods only, no keywords or class-level decorators")
+                    raise MIRLoweringError("native classes currently support methods and class-level assignments only")
                 bases = [base.name for base in node.bases if getattr(base, "name", None)]
                 for base in bases:
                     if base not in self.classes and base not in _BUILTIN_EXCEPTIONS:
@@ -547,6 +547,17 @@ class MIRLowerer:
                 used_symbols: set[str] = set()
                 for method in node.body:
                     if method.kind == HIRKind.PASS:
+                        continue
+                    if method.kind == HIRKind.ASSIGN:
+                        # CLASS_ATTR_V1: record class-level assignments; they
+                        # become module-level object_new + set_attr at class emit.
+                        for target in method.targets:
+                            if target.kind in (HIRKind.STORE, HIRKind.LOAD):
+                                if not hasattr(self, "class_attrs"):
+                                    self.class_attrs = {}
+                                self.class_attrs.setdefault(node.name, {})[target.name] = method.value
+                        continue
+                    if method.kind == HIRKind.ANN_ASSIGN:
                         continue
                     symbol, role, prop_name = self._class_method_symbol(node.name, method, property_methods)
                     if used_symbols and symbol in used_symbols:
@@ -644,6 +655,19 @@ class MIRLowerer:
             module = module_builder
             module.module_aliases = dict(self.module_aliases)
             module.from_import_aliases = dict(self.from_import_aliases)
+            # CLASS_ATTR_V1: for classes with class-level assignments, emit a class
+            # namespace object at module level so that load('ClassName') works and
+            # class-level attributes are accessible as ClassName.attr.
+            for cls_name, attrs in (self.class_attrs if hasattr(self, "class_attrs") else {}).items():
+                cls_obj = module_builder.temp()
+                module_builder.emit("object_new", cls_name, None, result=cls_obj)
+                for attr_name, value_node in attrs.items():
+                    val = self._lower_expr(module_builder, value_node)
+                    module_builder.emit("set_attr", cls_obj, attr_name, val)
+                    if not hasattr(self, "_class_attr_temps"):
+                        self._class_attr_temps = {}
+                    self._class_attr_temps.setdefault(cls_name, {})[attr_name] = val
+                module_builder.emit("store", cls_name, cls_obj)
             self._lower_module_metadata(module, entry_file, module_meta)
             self._lower_statements(module, [
                 node for node in module_body
@@ -2014,6 +2038,18 @@ class MIRLowerer:
             or expr.func.kind != HIRKind.LOAD
             or expr.func.name not in self.classes
         ):
+            # WITH_ABRIR_V1: `con abrir(...)` is treated as a regular builtin call;
+            # the emitter raises FileNotFoundError at runtime if the file doesn't exist.
+            if expr.func.name in {"abrir", "open"} and expr.kind == HIRKind.CALL:
+                var = item.optional_vars
+                if getattr(expr, "args", None):
+                    file_expr = self._lower_expr(builder, expr.args[0])
+                    file_result = builder.temp()
+                    builder.emit("call", "abrir", (file_expr,), None, result=file_result)
+                    if var is not None and var.kind == HIRKind.LOAD:
+                        builder.emit("store", var.name, file_result)
+                self._lower_statements(builder, node.body)
+                return
             raise MIRLoweringError(
                 "native with context must be a direct call to a native class constructor"
             )
@@ -2582,6 +2618,9 @@ class MIRLowerer:
                 result = builder.temp()
                 parent_name = self.class_parents.get(node.func.name)
                 builder.emit("object_new", node.func.name, parent_name, result=result)
+                # CLASS_ATTR_V1: instances get class-level defaults at creation
+                for _attr_name, _val_temp in getattr(self, "_class_attr_temps", {}).get(node.func.name, {}).items():
+                    builder.emit("set_attr", result, _attr_name, _val_temp)
                 mro = self._mro_memo.get(node.func.name) or self._compute_mro(node.func.name)
                 init_class = None
                 for cls in (mro or ()):
@@ -3283,6 +3322,9 @@ class MIRLowerer:
                 result = builder.temp()
                 parent_name = self.class_parents.get(node.func.name)
                 builder.emit("object_new", node.func.name, parent_name, result=result)
+                # CLASS_ATTR_V1: instances get class-level defaults at creation
+                for _attr_name, _val_temp in getattr(self, "_class_attr_temps", {}).get(node.func.name, {}).items():
+                    builder.emit("set_attr", result, _attr_name, _val_temp)
                 mro = self._mro_memo.get(node.func.name) or self._compute_mro(node.func.name)
                 init_class = None
                 for cls in (mro or ()):

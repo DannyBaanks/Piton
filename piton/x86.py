@@ -87,8 +87,7 @@ def generator_slot_layout(function: MIRFunction) -> dict[str, int]:
         raise NativeBuildError(f"native generator '{function.name}' with frame ABI is not supported yet")
     if function.cell_vars:
         raise NativeBuildError(f"native generator '{function.name}' with closures is not supported yet")
-    if function.vararg or function.kwarg:
-        raise NativeBuildError(f"native generator '{function.name}' with *args/**kwargs is not supported yet")
+    # V1: vararg/kwarg allowed as persisted slots; emitter packs them into tuples.
     order: list[str] = []
     seen: set[str] = set()
 
@@ -103,6 +102,10 @@ def generator_slot_layout(function: MIRFunction) -> dict[str, int]:
 
     for param in function.params:
         add(param)
+    if function.vararg:
+        add(function.vararg)
+    if function.kwarg:
+        add(function.kwarg)
     for block in function.blocks:
         for instruction in block.instructions:
             add(instruction.result)
@@ -699,6 +702,78 @@ class Win64NasmEmitter:
         else:
             label = self._string(str(operand))
             self.lines.append(f"    lea {register}, [{label}]")
+
+    def _emit_seq_new(self, kind: str, raw_items: list, result: str) -> None:
+        """Emit a list/tuple construction into an already-reserved slot.
+
+        GEN_VARARG_V1 (Windows): shared by build_collection and the
+        generator *args pack (which builds into @scratch0 and then moves
+        the pointer into the generator slot; the scratch is nulled right
+        after so a later free cannot release the owned tuple).
+        """
+        kind_id = {"list": 1, "tuple": 2}[kind]
+        if kind == "tuple" and result:
+            # PCT_FORMAT_V1: record tuple elements (direct temps,
+            # valid same-function) and element types (valid
+            # cross-function: types outlive SSA temps).
+            _pairs = []
+            for item in raw_items:
+                if isinstance(item, str) and item.startswith("%"):
+                    _pairs.append((item, self.types.get(item, "int")))
+                else:
+                    _pairs.append((item, self._percent_literal_type(item)))
+            self.tuple_etypes[result] = tuple(_pairs)
+        self.lines.extend([
+            f"    mov rcx, {self._address(result)}",
+            "    call piton_collection_free",
+            f"    mov rcx, {kind_id}",
+            f"    mov rdx, {len(raw_items)}",
+            "    call piton_collection_new",
+            f"    mov {self._address(result)}, rax",
+        ])
+        for index, item in enumerate(raw_items):
+            self.lines.extend([
+                f"    mov rcx, {self._address(result)}",
+                f"    mov rdx, {index}",
+            ])
+            item_type = self.types.get(item, "int")
+            # RANGE_VALUE_V1: a range element is a heap object like the
+            # collections, so it takes the tagged path (which bumps the
+            # refcount and encodes OBJECT); the int path would have
+            # stored the raw pointer and printed an address.
+            if item_type in {"list", "tuple", "dict", "set", "range", "bigint"} or item_type.startswith("object:"):
+                self._load_operand(item, "r8")
+                self.lines.append("    call piton_collection_put_tagged")
+            elif item_type in {"slot", "str-boxed"}:
+                # VERBATIM_SLOT_V1 (Windows): el item ya viene
+                # taggeado (slot de y/o, str boxeado); re-taggearlo
+                # trataria los bits del tag como puntero (AV).
+                self.lines.extend([
+                    f"    mov rcx, {self._address(result)}",
+                    f"    mov rdx, {index}",
+                ])
+                self._load_operand(item, "r8")
+                self.lines.append("    call piton_collection_put_verbatim")
+                self._mixed_elem_colls.add(result)
+            elif item_type == "str":
+                # STR_BOXED_V1 (Windows): string items are BOXED
+                # PitonStr (tagged OBJECT), self-describing for
+                # print/eq/iteration like the Linux PK_STR slots.
+                # The container is marked mixed: item access yields
+                # "slot" and dispatches by tag at runtime.
+                self._load_operand(item, "rcx")
+                self.lines.append("    call piton_str_box")
+                self.lines.extend([
+                    f"    mov rcx, {self._address(result)}",
+                    f"    mov rdx, {index}",
+                    "    mov r8, rax",
+                    "    call piton_collection_put_tagged",
+                ])
+                self._mixed_elem_colls.add(result)
+            else:
+                self._load_operand(item, "r8")
+                self._load_operand(item, "r9")
+                self.lines.append("    call piton_collection_put")
 
     def _emit_instruction(self, instruction: MIRInstruction, labels: dict[str, str]) -> None:
         op, args, result = instruction.op, instruction.args, instruction.result
@@ -1962,69 +2037,7 @@ class Win64NasmEmitter:
                         self._load_operand(item, "rdx")
                         self.lines.append("    call piton_set_add")
             else:
-                kind_id = {"list": 1, "tuple": 2}[kind]
-                if kind == "tuple" and result:
-                    # PCT_FORMAT_V1: record tuple elements (direct temps,
-                    # valid same-function) and element types (valid
-                    # cross-function: types outlive SSA temps).
-                    _pairs = []
-                    for item in raw_items:
-                        if isinstance(item, str) and item.startswith("%"):
-                            _pairs.append((item, self.types.get(item, "int")))
-                        else:
-                            _pairs.append((item, self._percent_literal_type(item)))
-                    self.tuple_etypes[result] = tuple(_pairs)
-                self.lines.extend([
-                    f"    mov rcx, {self._address(result)}",
-                    "    call piton_collection_free",
-                    f"    mov rcx, {kind_id}",
-                    f"    mov rdx, {len(raw_items)}",
-                    "    call piton_collection_new",
-                    f"    mov {self._address(result)}, rax",
-                ])
-                for index, item in enumerate(raw_items):
-                    self.lines.extend([
-                        f"    mov rcx, {self._address(result)}",
-                        f"    mov rdx, {index}",
-                    ])
-                    item_type = self.types.get(item, "int")
-                    # RANGE_VALUE_V1: a range element is a heap object like the
-                    # collections, so it takes the tagged path (which bumps the
-                    # refcount and encodes OBJECT); the int path would have
-                    # stored the raw pointer and printed an address.
-                    if item_type in {"list", "tuple", "dict", "set", "range", "bigint"} or item_type.startswith("object:"):
-                        self._load_operand(item, "r8")
-                        self.lines.append("    call piton_collection_put_tagged")
-                    elif item_type in {"slot", "str-boxed"}:
-                        # VERBATIM_SLOT_V1 (Windows): el item ya viene
-                        # taggeado (slot de y/o, str boxeado); re-taggearlo
-                        # trataria los bits del tag como puntero (AV).
-                        self.lines.extend([
-                            f"    mov rcx, {self._address(result)}",
-                            f"    mov rdx, {index}",
-                        ])
-                        self._load_operand(item, "r8")
-                        self.lines.append("    call piton_collection_put_verbatim")
-                        self._mixed_elem_colls.add(result)
-                    elif item_type == "str":
-                        # STR_BOXED_V1 (Windows): string items are BOXED
-                        # PitonStr (tagged OBJECT), self-describing for
-                        # print/eq/iteration like the Linux PK_STR slots.
-                        # The container is marked mixed: item access yields
-                        # "slot" and dispatches by tag at runtime.
-                        self._load_operand(item, "rcx")
-                        self.lines.append("    call piton_str_box")
-                        self.lines.extend([
-                            f"    mov rcx, {self._address(result)}",
-                            f"    mov rdx, {index}",
-                            "    mov r8, rax",
-                            "    call piton_collection_put_tagged",
-                        ])
-                        self._mixed_elem_colls.add(result)
-                    else:
-                        self._load_operand(item, "r8")
-                        self._load_operand(item, "r9")
-                        self.lines.append("    call piton_collection_put")
+                self._emit_seq_new(kind, raw_items, result)
             self.types[result] = kind
             if kind in {"list", "tuple"} and raw_items:
                 # BIGINT_ELEM_V1 (Windows): una lista/tupla literal de solo
@@ -2340,26 +2353,55 @@ class Win64NasmEmitter:
             layout = self.generator_layouts.get(func_name)
             if layout is None:
                 raise NativeBuildError(f"native generator '{func_name}' has no persisted-slot layout")
-            params = next(
-                (function.params for function in self.mir_module.functions if function.name == func_name),
-                [],
+            mir_func = next(
+                (function for function in self.mir_module.functions if function.name == func_name),
+                None,
             )
-            if len(gen_args) != len(params):
+            params = list(mir_func.params) if mir_func is not None else []
+            vararg = mir_func.vararg if mir_func is not None else None
+            if mir_func is not None and mir_func.kwarg:
                 raise NativeBuildError(
-                    f"native generator '{func_name}' called with wrong number of arguments "
-                    "(defaults not supported yet)"
+                    f"native generator '{func_name}' with **kwargs is not supported yet"
                 )
-            if len(gen_args) > 4:
-                raise NativeBuildError("native generator calls with more than four arguments are not supported yet")
+            # GEN_VARARG_V1: el MIR incluye el nombre *args en params ADEMAS
+            # de vararg; el fill nominal lo excluye y el resto se empaqueta
+            # en tupla via el helper compartido (scratch nulado despues).
+            named = [param for param in params if param != vararg]
+            if vararg is None:
+                if len(gen_args) != len(named):
+                    raise NativeBuildError(
+                        f"native generator '{func_name}' called with wrong number of arguments "
+                        "(defaults not supported yet)"
+                    )
+                if len(gen_args) > 4:
+                    raise NativeBuildError("native generator calls with more than four arguments are not supported yet")
+            else:
+                if len(gen_args) < len(named):
+                    raise NativeBuildError(
+                        f"native generator '{func_name}' called with wrong number of arguments "
+                        "(defaults not supported yet)"
+                    )
+                if vararg not in layout:
+                    raise NativeBuildError(
+                        f"native generator '{func_name}' *args slot is missing from the persisted layout"
+                    )
             self.lines.append(f"    lea rcx, [{func_name}]")
             self.lines.append(f"    mov rdx, {len(layout)}")
             self.lines.append("    call piton_gen_new")
             self.lines.append(f"    mov {self._address(result)}, rax")
-            for arg, param in zip(gen_args, params):
+            for arg, param in zip(gen_args[:len(named)], named):
                 index = layout[param]
                 self._load_operand(arg, "rax")
                 self.lines.append(f"    mov rcx, {self._address(result)}")
                 self.lines.append(f"    mov [rcx+{PITON_GEN_LOCAL_BASE + index * 8}], rax")
+            if vararg is not None:
+                rest = list(gen_args[len(named):])
+                self._emit_seq_new("tuple", rest, "@scratch0")
+                index = layout[vararg]
+                self.lines.append(f"    mov rax, {self._address('@scratch0')}")
+                self.lines.append(f"    mov rcx, {self._address(result)}")
+                self.lines.append(f"    mov [rcx+{PITON_GEN_LOCAL_BASE + index * 8}], rax")
+                self.lines.append(f"    mov qword {self._address('@scratch0')}, 0")
             self.types[result] = "generator"
         elif op == "gen_collect":
             gen_ref = args[0]
@@ -3485,7 +3527,13 @@ class Win64NasmEmitter:
                     raise NativeBuildError(f"native {function_name} requires exactly one argument")
                 kind_id = 1 if function_name in {"lista", "list"} else 2
                 source_type = self.types.get(values[0], "")
-                if source_type == "str":
+                if source_type == "generator" and kind_id == 1:
+                    # CONV_GEN_V1 (Windows): espejo de Linux; materializa el
+                    # generador en el runtime (tupla(gen) sigue fail-closed).
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_gen_collect")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                elif source_type == "str":
                     self.lines.append(f"    mov rcx, {kind_id}")
                     self._load_operand(values[0], "rdx")
                     self.lines.append("    call piton_seq_from_str")

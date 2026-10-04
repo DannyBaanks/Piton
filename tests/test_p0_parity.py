@@ -481,8 +481,20 @@ class BuiltinMarkerV1(unittest.TestCase):
             compare_native_to_cpython("imprimir(reversed([1, 2]))\n")
 
     def test_abrir_fail_closed(self):
+        # An EXISTING file still fails closed: the native subset cannot
+        # open files (only a provably-missing literal path gets an
+        # honest runtime FileNotFoundError).
         with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("abrir('x')\n")
+            compare_native_to_cpython("abrir('tests/test_p0_parity.py')\n")
+
+    def test_abrir_missing_is_runtime_error(self):
+        # A provably-missing literal path is an honest runtime
+        # FileNotFoundError (rc 1 on both sides), not a build rejection.
+        result = compare_native_to_cpython("abrir('x_no_existe_piton_xyz')\n")
+        assert result.native.returncode == 1
+        assert b"FileNotFoundError" in result.native.stderr
+        assert result.oracle.returncode == 1
+        assert b"FileNotFoundError" in result.oracle.stderr
 
     def test_store_builtin_fail_closed(self):
         with pytest.raises(NativeBuildError):

@@ -2,7 +2,7 @@
 
 - backend medido: **linux_x86 (Linux native)** (instrumento: `tools/parity_corpus.py`)
 - oracle: CPython 3.12.3
-- casos: **1220** | EQUIV **99.1%** | comportamiento honesto (EQUIV+RAISE_EQ+FAIL_CLOSED) **100.0%** | DIVERGENT **0.0%**
+- casos: **1220** | EQUIV **99.9%** | comportamiento honesto (EQUIV+RAISE_EQ+FAIL_CLOSED) **99.9%** | DIVERGENT **0.0%**
 
 Este reporte NO es un gate. Mide el subconjecto declarado en `NATIVE_COMPATIBILITY.md` mediante matrices enumeradas, no casos elegidos a mano.
 
@@ -12,10 +12,10 @@ Este reporte NO es un gate. Mide el subconjecto declarado en `NATIVE_COMPATIBILI
 |---|---|
 | DIVERGENT_CRASH | 0 |
 | DIVERGENT_MISMATCH | 0 |
-| TIMEOUT | 0 |
-| FAIL_CLOSED | 11 |
+| TIMEOUT | 1 |
+| FAIL_CLOSED | 0 |
 | RAISE_EQ | 0 |
-| EQUIV | 1209 |
+| EQUIV | 1219 |
 
 ## Por area
 
@@ -37,16 +37,26 @@ Este reporte NO es un gate. Mide el subconjecto declarado en `NATIVE_COMPATIBILI
 | dicts | 20 | 0 | 0 | 0 | 0 |
 | sets | 9 | 0 | 0 | 0 | 0 |
 | comprehensions | 27 | 0 | 0 | 0 | 0 |
-| control_flow | 19 | 0 | 1 | 0 | 0 |
+| control_flow | 20 | 0 | 0 | 0 | 0 |
 | functions | 21 | 0 | 0 | 0 | 0 |
 | exceptions | 21 | 0 | 0 | 0 | 0 |
-| classes | 18 | 0 | 3 | 0 | 0 |
-| generators | 5 | 0 | 3 | 0 | 0 |
-| controls_closed | 12 | 0 | 4 | 0 | 0 |
+| classes | 21 | 0 | 0 | 0 | 0 |
+| generators | 7 | 0 | 0 | 0 | 1 |
+| controls_closed | 16 | 0 | 0 | 0 | 0 |
 
-## Divergencias y timeouts (0)
+## Divergencias y timeouts (1)
 
-Ninguna: no hay codigo nativo que corra y discrepe del oracle en este corpus.
+| area | caso | native rc | oracle rc | detalle |
+|---|---|---|---|---|
+| generators | class-iter-self | - | - | oracle did not terminate (case is a bad corpus entry) |
 
 ## Casos DIVERGENT (fuente)
 
+```piton
+clase G:
+    funcion __iter__(self):
+        devolver self
+    funcion __next__(self):
+        devolver 1
+imprimir(lista(G()))
+```

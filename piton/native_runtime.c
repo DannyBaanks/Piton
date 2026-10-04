@@ -2072,7 +2072,9 @@ void *piton_gen_collect(void *raw) {
         return NULL;
     }
     /* Run the generator body and collect yields into a list */
-    PitonCollection *list = piton_collection_new(0, 16);  /* 0 = LIST */
+    /* GEN_COLLECT_KIND_V1: kind 1 = LIST (0 births a TUPLE: piton_collection_new
+       maps kind==1 to SUB_TAG_LIST, anything else to SUB_TAG_TUPLE). */
+    PitonCollection *list = piton_collection_new(1, 16);  /* 1 = LIST */
     while (!gen->finished) {
         int64_t val = gen->func(raw);
         if (gen->finished) break;
