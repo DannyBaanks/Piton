@@ -169,6 +169,16 @@ class Win64NasmEmitter:
         # CALL_UNPACKING_DYNAMIC4_V1: temp/local names of dicts proven to be
         # built from constant-string keys (the only **-unpackable dicts).
         self.strkey_dict_temps: set[str] = set()
+        self._str_elem_colls: set[str] = set()
+        self._str_elem_iters: set[str] = set()
+        self._bigint_elem_colls: set[str] = set()
+        self._mixed_elem_colls: set[str] = set()
+        self._non_int_elem_colls: set[str] = set()
+        self._mixed_elem_iters: set[str] = set()
+        self._tagged_dicts: set[str] = set()
+        self._tagged_dict_iters: set[str] = set()
+        self._plain_int_dicts: set[str] = set()
+        self._tagged_dict_iter_kinds: dict[str, str | None] = {}
         # DICT_KEY_TYPE_V1: static type of a dict's KEYS, so iterating a dict
         # yields the right static type. The iterator used to hardcode "str",
         # which made `para k en {1: 'a'}` print the int key as a string pointer.
@@ -197,6 +207,28 @@ class Win64NasmEmitter:
             "extern piton_event_run", "extern piton_task_new", "extern piton_task_cancel", "extern piton_sleep0", "extern piton_gather_new", "extern piton_gather_add",
             "extern piton_raise_chain",
             "extern piton_sorted_new",
+            "extern piton_str_box", "extern piton_slot", "extern piton_slot_truthy",
+            "extern piton_slot_print_raw",
+            "extern piton_seq_from_coll", "extern piton_seq_from_str",
+            "extern piton_set_from_coll", "extern piton_set_from_str",
+            "extern piton_dict_from_pairs",
+            "extern piton_dict_put_tagged", "extern piton_dict_get_tagged",
+            "extern piton_dict_get_tagged_d", "extern piton_dict_get_tagged_1",
+            "extern piton_dict_get_tagged_int",
+            "extern piton_dict_contains_tagged", "extern piton_box_float",
+            "extern piton_dict_nth_key", "extern piton_set_nth",
+            "extern piton_slot_bool", "extern piton_iterator_next_any_raw",
+            "extern piton_slot_callable_check",
+            "extern piton_collection_put_verbatim", "extern piton_list_append_tagged",
+            "extern piton_box_str_tagged",
+            "extern piton_slot_num",
+            "extern piton_float_fmt_fixed", "extern piton_float_fmt_pct",
+            "extern piton_float_fmt_exp", "extern piton_float_fmt_g",
+            "extern piton_collection_get_raw",
+            "extern piton_value_eq",
+            "extern piton_raise_not_callable",
+            "extern piton_boxed_str_print_raw",
+            "extern piton_slot_str", "extern piton_slot_repr", "extern piton_slot_int",
             "extern piton_iterator_new_any", "extern piton_iterator_next_any",
             "extern piton_calliter_new", "extern piton_calliter_next",
             "extern piton_enumerate_new", "extern piton_enumerate_next",
@@ -218,6 +250,7 @@ class Win64NasmEmitter:
             "extern piton_set_free", "extern piton_set_live_count",
             "extern piton_raise",
             "extern piton_raise_unhandled",
+            "extern piton_propagate_or_exit",
             "extern piton_exit",
             "extern piton_argv_new",
             "extern piton_try_push", "extern piton_try_pop", "extern piton_try_set_accepted",
@@ -273,7 +306,10 @@ class Win64NasmEmitter:
             "extern piton_str_count", "extern piton_str_rfind", "extern piton_str_subindex",
             "extern piton_str_subrindex",
             "extern piton_str_strip", "extern piton_str_join", "extern piton_str_format",
+            "extern piton_str_strip_chars",
             "extern piton_dict_contains", "extern piton_set_contains",
+            "extern piton_set_contains_tagged", "extern piton_seq_cmp_tagged",
+            "extern piton_set_add_str",
             "extern piton_closure_new8", "extern piton_closure_call6",
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
             "extern piton_frame_call",
@@ -333,6 +369,9 @@ class Win64NasmEmitter:
         self.bigint_slots = []
         self.constants = {}
         self._boolh_types: dict[str, str] = {}
+        self._function_temps: set[str] = set()
+        self._store_source: dict[str, Any] = {}
+        self._boolh_first: dict[str, tuple] = {}
         self._chr_results: set[str] = set()
         if function.vararg:
             self.types[function.vararg] = "tuple"
@@ -449,6 +488,9 @@ class Win64NasmEmitter:
         self.bigint_slots = []
         self.constants = {}
         self._boolh_types: dict[str, str] = {}
+        self._function_temps: set[str] = set()
+        self._store_source: dict[str, Any] = {}
+        self._boolh_first: dict[str, tuple] = {}
         self._chr_results: set[str] = set()
         if function.vararg:
             self.types[function.vararg] = "tuple"
@@ -697,6 +739,14 @@ class Win64NasmEmitter:
                 self._load_operand(source, "rcx")
                 self.lines.append("    call piton_iterator_new_any")
                 self.types[result] = f"iterator:{source_type or 'unknown'}"
+                if source_type == "dict" and not self._dict_is_plain(source):
+                    self._tagged_dict_iters.add(result)
+                    _src = source if source in self._dict_key_types else self.aliases.get(source, source)
+                    self._tagged_dict_iter_kinds[result] = self._dict_key_types.get(_src)
+                if source in self._str_elem_colls:
+                    self._str_elem_iters.add(result)
+                if source in self._mixed_elem_colls:
+                    self._mixed_elem_iters.add(result)
                 # DICT_KEY_TYPE_V1: carry the key type onto the iterator.
                 if result and source_type == 'dict' and source in self._dict_key_types:
                     self._dict_key_types[result] = self._dict_key_types[source]
@@ -801,10 +851,25 @@ class Win64NasmEmitter:
                 else:
                     self.lines.append("    call piton_iterator_next_any")
             self.lines.append(f"    mov {self._address(result)}, rax")
+            # CONV_SEQ_V1: iterators over str-built containers yield BOXED
+            # strings; typing them int would print the tag bits.
+            _str_iter = iterator in self._str_elem_iters
+            if _str_iter:
+                self.types[result] = "str-boxed"
+            elif iterator in self._mixed_elem_iters:
+                self.types[result] = "slot"
             # DICT_KEY_TYPE_V1: a dict iterator yields its KEYS; the static type
             # comes from the dict, and an unknown key type fails closed
             # instead of printing a pointer as a string.
-            if iterator_type == "iterator:dict":
+            if iterator in self._tagged_dict_iters and self._tagged_dict_iter_kinds.get(iterator) not in {"int", "bool"}:
+                # TAGGED_DICT_V1: keys no-int salen verbatim taggeadas
+                # (el next normal decodificaria INT/BOOL a raw); las keys
+                # int/bool conservan el camino decodificado (aritmetica).
+                assert self.lines[-1].strip().startswith("mov "), self.lines[-1]
+                assert "piton_iterator_next_any" in self.lines[-2], self.lines[-2]
+                self.lines[-2] = "    call piton_iterator_next_any_raw"
+                self.types[result] = "slot"
+            elif iterator_type == "iterator:dict":
                 key_type = self._dict_key_types.get(args[0])
                 if key_type is None:
                     raise NativeBuildError(
@@ -812,7 +877,7 @@ class Win64NasmEmitter:
                         "(CPython iterates keys of any type)"
                     )
                 self.types[result] = key_type
-            else:
+            elif not _str_iter and iterator not in self._mixed_elem_iters:
                 self.types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:str" else "int"
             self.lines.append("    call piton_catch_flag")
             self.lines.append("    test rax, rax")
@@ -853,6 +918,40 @@ class Win64NasmEmitter:
                 self.constants[result] = self.constants[name]
             if name in self.tuple_etypes:
                 self.tuple_etypes[result] = self.tuple_etypes[name]
+            if name in self.function_names or name in self._function_temps:
+                # FUNCTION_TEMP_V1 (Windows): los valores-funcion viajan
+                # tipados int por defecto; marcarlos evita que el gate
+                # NONCALLABLE los confunda con escalares.
+                self._function_temps.add(result)
+            if name in self._str_elem_colls:
+                self._str_elem_colls.add(result)
+            if self.types.get(name) == "str-boxed":
+                self.types[result] = "str-boxed"
+            if name in self._bigint_elem_colls:
+                self._bigint_elem_colls.add(result)
+            if name in self._mixed_elem_colls:
+                self._mixed_elem_colls.add(result)
+            if name in self._non_int_elem_colls:
+                self._non_int_elem_colls.add(result)
+            if name in self._tagged_dicts:
+                self._tagged_dicts.add(result)
+            for _iset, _iname in (
+                (self._tagged_dict_iters, "_tagged_dict_iters"),
+                (self._str_elem_iters, "_str_elem_iters"),
+                (self._mixed_elem_iters, "_mixed_elem_iters"),
+            ):
+                if name in _iset:
+                    _iset.add(result)
+                    if _iname == "_tagged_dict_iters" and name in self._tagged_dict_iter_kinds:
+                        self._tagged_dict_iter_kinds[result] = self._tagged_dict_iter_kinds[name]
+            if name in self._plain_int_dicts:
+                self._plain_int_dicts.add(result)
+            if name in self._dict_key_types:
+                self._dict_key_types[result] = self._dict_key_types[name]
+            if name in self._dict_val_types:
+                self._dict_val_types[result] = self._dict_val_types[name]
+            if name in self._chr_results:
+                self._chr_results.add(result)
             if name in self.dict_elems:
                 self.dict_elems[result] = self.dict_elems[name]
             if name in self.function_names:
@@ -908,6 +1007,60 @@ class Win64NasmEmitter:
                 self._dict_val_types[result] = self._dict_val_types[name]
 
         elif op == "store":
+            if isinstance(args[0], str) and isinstance(args[1], str):
+                self._store_source[args[0]] = args[1]
+            if isinstance(args[0], str) and not args[0].startswith("%"):
+                # SET_HYGIENE_V1 (Windows): reassigning a VARIABLE lifts every
+                # provenance mark (chr results, tagged dicts, elem-kind
+                # colls, borrar tombstones); the add-rules below re-mark when
+                # the new value qualifies. SSA temps (%N) are assigned once
+                # and keep add-only semantics.
+                _src = args[1]
+                _src_marked = isinstance(_src, str) and (
+                    _src in self._chr_results or _src in self._tagged_dicts
+                    or _src in self._str_elem_colls or _src in self._bigint_elem_colls
+                    or _src in self._mixed_elem_colls or _src in self._non_int_elem_colls
+                )
+                if not _src_marked:
+                    self._chr_results.discard(args[0])
+                    self._tagged_dicts.discard(args[0])
+                    self._str_elem_colls.discard(args[0])
+                    self._bigint_elem_colls.discard(args[0])
+                    self._mixed_elem_colls.discard(args[0])
+                    self._non_int_elem_colls.discard(args[0])
+            if isinstance(args[1], str) and args[1] in self._str_elem_colls:
+                self._str_elem_colls.add(args[0])
+            if isinstance(args[1], str) and self.types.get(args[1]) == "str-boxed":
+                self.types[args[0]] = "str-boxed"
+            if isinstance(args[1], str) and args[1] in self._bigint_elem_colls:
+                self._bigint_elem_colls.add(args[0])
+            if isinstance(args[1], str) and args[1] in self._mixed_elem_colls:
+                self._mixed_elem_colls.add(args[0])
+            if isinstance(args[1], str) and args[1] in self._non_int_elem_colls:
+                self._non_int_elem_colls.add(args[0])
+            if isinstance(args[1], str) and args[1] in self._tagged_dicts:
+                self._tagged_dicts.add(args[0])
+            for _iset, _iname in (
+                (self._tagged_dict_iters, "_tagged_dict_iters"),
+                (self._str_elem_iters, "_str_elem_iters"),
+                (self._mixed_elem_iters, "_mixed_elem_iters"),
+            ):
+                if isinstance(args[1], str) and args[1] in _iset:
+                    _iset.add(args[0])
+                    if _iname == "_tagged_dict_iters" and args[1] in self._tagged_dict_iter_kinds:
+                        self._tagged_dict_iter_kinds[args[0]] = self._tagged_dict_iter_kinds[args[1]]
+            if isinstance(args[1], str) and args[1] in self._plain_int_dicts:
+                self._plain_int_dicts.add(args[0])
+            if isinstance(args[1], str) and args[1] in self._dict_key_types:
+                self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
+            if isinstance(args[1], str) and args[1] in self._dict_val_types:
+                self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
+            if isinstance(args[1], str) and (args[1] in self._function_temps or args[1] in self.function_names):
+                self._function_temps.add(args[0])
+            elif isinstance(args[0], str) and not args[0].startswith("%"):
+                self._function_temps.discard(args[0])
+            if isinstance(args[1], str) and args[1] in self._chr_results:
+                self._chr_results.add(args[0])
             if isinstance(args[1], str) and self.types.get(args[1]) == "builtin":
                 # BUILTIN_MARKER_V1: storing a builtin marker would copy an
                 # uninitialized slot — fail closed.
@@ -949,11 +1102,26 @@ class Win64NasmEmitter:
                     current = "int"
                 if seen is None:
                     self._boolh_types[args[0]] = current
+                    self._boolh_first[args[0]] = (args[1], current)
+                    self.lines.append(f"    ; boolh-first:{args[0]}")
                 elif current != seen:
-                    raise NativeBuildError(
-                        f"native y/o with mixed operand types ({seen} vs {current}) "
-                        "is not supported (the winner type is not statically knowable)"
-                    )
+                    if {seen, current} <= {"int", "bool", "str", "none", "slot"}:
+                        # BOOL_SLOT_V1 (Windows): mixed arms become TAGGED
+                        # slots so the printed form matches whichever side
+                        # won (CPython returns the operand, not a bool).
+                        self._retag_boolh_first(args[0])
+                        # the current arm's plain store is the last 2 lines
+                        del self.lines[-2:]
+                        self.lines.extend(self._emit_boolh_store(args[0], args[1], current))
+                        self._boolh_types[args[0]] = "slot"
+                        self.types[args[0]] = "slot"
+                    else:
+                        raise NativeBuildError(
+                            f"native y/o with mixed operand types ({seen} vs {current}) "
+                            "is not supported (the winner type is not statically knowable)"
+                        )
+            if self.types.get(args[0]) == "slot":
+                return
             if isinstance(args[1], str):
                 self.types[args[0]] = self.types.get(args[1], "int")
                 if args[1] in self.tuple_etypes:
@@ -972,6 +1140,29 @@ class Win64NasmEmitter:
             # optional 4th argument on '//' and '%' so the raise below routes
             # to intentar/excepto instead of trapping the process.
             handler_label = args[3] if len(args) > 3 else None
+            _lt = self.types.get(left, "int")
+            _rt = self.types.get(right, "int")
+            if operator not in {"==", "!="} and ("slot" in {_lt, _rt} or "str-boxed" in {_lt, _rt}):
+                # SLOT_ARITH_V1 (Windows): unbox INT/BOOL slots to raw ints
+                # so mixed-winner arithmetic works; any other kind raises
+                # TypeError at runtime (CPython agrees, except str+str
+                # concat through slots which stays fail-closed).
+                if _lt in {"slot", "str-boxed"}:
+                    _ul = f"{result}_unbox_l"
+                    self._load_operand(left, "rcx")
+                    self.lines.append("    call piton_slot_num")
+                    self.lines.append(f"    mov {self._address(_ul)}, rax")
+                    self.types[_ul] = "int"
+                    left = _ul
+                    left_type = "int"
+                if _rt in {"slot", "str-boxed"}:
+                    _ur = f"{result}_unbox_r"
+                    self._load_operand(right, "rcx")
+                    self.lines.append("    call piton_slot_num")
+                    self.lines.append(f"    mov {self._address(_ur)}, rax")
+                    self.types[_ur] = "int"
+                    right = _ur
+                    right_type = "int"
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
             if operator == "in":
@@ -1064,9 +1255,14 @@ class Win64NasmEmitter:
                             tmp = f"{right}_e{index}"
                             self._load_operand(right, "rcx")
                             self.lines.append(f"    mov rdx, {index}")
-                            self.lines.append("    call piton_collection_get")
+                            if right in self._mixed_elem_colls or self.aliases.get(right, right) in self._mixed_elem_colls:
+                                # PCT_MIXED_V1 (Windows): items verbatim con tag.
+                                self.lines.append("    call piton_collection_get_raw")
+                                self.types[tmp] = "slot"
+                            else:
+                                self.lines.append("    call piton_collection_get")
+                                self.types[tmp] = etype
                             self.lines.append(f"    mov {self._address(tmp)}, rax")
-                            self.types[tmp] = etype
                             arg_values.append(tmp)
                             arg_etypes.append(None)
                     else:
@@ -1535,6 +1731,46 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "bool"
                 return
+            if "slot" in {left_type, right_type} and operator in {"==", "!="}:
+                # SLOT_EQ_V1 (Windows): compare tagged values by tag+payload
+                # (piton_value_eq_raw). A raw int/str/none side is boxed
+                # first so the tags line up; ordering on slots fails closed.
+                if left_type == "slot":
+                    self._load_operand(left, "rcx")
+                    self.lines.append("    push rcx")
+                elif left_type == "str":
+                    self._load_operand(left, "rcx")
+                    self.lines.append("    call piton_str_box")
+                    self.lines.append("    push rax")
+                elif left_type == "none":
+                    self.lines.append("    xor ecx, ecx")
+                    self.lines.append("    push rcx")
+                else:
+                    self._load_operand(left, "rcx")
+                    self.lines.append("    xor edx, edx")
+                    self.lines.append("    call piton_slot")
+                    self.lines.append("    push rax")
+                if right_type == "slot":
+                    self._load_operand(right, "rdx")
+                elif right_type == "str":
+                    self._load_operand(right, "rcx")
+                    self.lines.append("    call piton_str_box")
+                    self.lines.append("    mov rdx, rax")
+                elif right_type == "none":
+                    self.lines.append("    xor edx, edx")
+                else:
+                    self._load_operand(right, "rcx")
+                    self.lines.append("    xor edx, edx")
+                    self.lines.append("    call piton_slot")
+                    self.lines.append("    mov rdx, rax")
+                self.lines.append("    pop rcx")
+                self.lines.append("    call piton_value_eq")
+                self.lines.append("    test eax, eax")
+                self.lines.append(f"    set{'ne' if operator == '!=' else 'e'} al")
+                self.lines.append("    movzx rax, al")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+                return
             numeric_types = {"int", "bool"}
             if left_type == right_type == "range":
                 # RANGE_VALUE_V1: exact (len, start, step) equality with the
@@ -1594,9 +1830,15 @@ class Win64NasmEmitter:
                         f"'{right_type}' is not supported (CPython raises TypeError: "
                         f"'{operator}' not supported between instances of these types)"
                     )
-                self._load_operand(left, "rax")
-                self._load_operand(right, "rcx")
-                self.lines.append("    cmp rax, rcx")
+                if operator in {"<", ">", "<=", ">="} and left_type == right_type and left_type in {"list", "tuple"}:
+                    self._load_operand(left, "rcx")
+                    self._load_operand(right, "rdx")
+                    self.lines.append("    call piton_seq_cmp_tagged")
+                    self.lines.append("    cmp rax, 0")
+                else:
+                    self._load_operand(left, "rax")
+                    self._load_operand(right, "rcx")
+                    self.lines.append("    cmp rax, rcx")
             if not mixed_non_numeric and not float_compare:
                 condition = {"==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge"}[operator]
                 self.lines.append(f"    set{condition} al")
@@ -1613,14 +1855,41 @@ class Win64NasmEmitter:
                     "    call piton_dict_new",
                     f"    mov {self._address(result)}, rax",
                 ])
+                _kv_kinds = set()
+                for _k, _v in raw_items:
+                    _kk = "str" if isinstance(_k, str) and not _k.startswith("%") else self.types.get(_k, "int")
+                    _vk = "str" if isinstance(_v, str) and not _v.startswith("%") else self.types.get(_v, "int")
+                    _kv_kinds.add((_kk, _vk))
+                _tagged = any(k not in {"int", "bool"} or v not in {"int", "bool"} for k, v in _kv_kinds)
                 for index, item in enumerate(raw_items):
                     key, value = item
                     self.lines.extend([
                         f"    mov rcx, {self._address(result)}",
                     ])
-                    self._load_operand(key, "rdx")
-                    self._load_operand(value, "r8")
-                    self.lines.append("    call piton_dict_put")
+                    if _tagged:
+                        # TAGGED_DICT_V1 (Windows): keys y valores verbatim
+                        # taggeados (box str/float via helpers). El boxeo
+                        # usa rcx como scratch: re-cargar el dict al final.
+                        _kk = "str" if isinstance(key, str) and not key.startswith("%") else self.types.get(key, "int")
+                        _vk = "str" if isinstance(value, str) and not value.startswith("%") else self.types.get(value, "int")
+                        self._emit_box(key, _kk)
+                        self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                        self._emit_box(value, _vk)
+                        self.lines.append("    mov r8, rax")
+                        self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                        self.lines.append(f"    mov rcx, {self._address(result)}")
+                        self.lines.append("    call piton_dict_put_tagged")
+                    else:
+                        self._load_operand(key, "rdx")
+                        self._load_operand(value, "r8")
+                        self.lines.append("    call piton_dict_put")
+                if _tagged:
+                    self._tagged_dicts.add(result)
+                else:
+                    # PLAIN_DICT_V1 (Windows): keys y valores int/bool usan
+                    # el camino historico byte-identico (incluido el miss
+                    # fail-loud); el resto va taggeado.
+                    self._plain_int_dicts.add(result)
                 if all(self.types.get(key) == "str" for key, _ in raw_items):
                     self.strkey_dict_temps.add(result)
                 if result and raw_items:
@@ -1686,8 +1955,12 @@ class Win64NasmEmitter:
                     self.lines.extend([
                         f"    mov rcx, {self._address(result)}",
                     ])
-                    self._load_operand(item, "rdx")
-                    self.lines.append("    call piton_set_add")
+                    if self.types.get(item, "int") == "str":
+                        self._load_operand(item, "rdx")
+                        self.lines.append("    call piton_set_add_str")
+                    else:
+                        self._load_operand(item, "rdx")
+                        self.lines.append("    call piton_set_add")
             else:
                 kind_id = {"list": 1, "tuple": 2}[kind]
                 if kind == "tuple" and result:
@@ -1719,14 +1992,56 @@ class Win64NasmEmitter:
                     # collections, so it takes the tagged path (which bumps the
                     # refcount and encodes OBJECT); the int path would have
                     # stored the raw pointer and printed an address.
-                    if item_type in {"list", "tuple", "dict", "set", "range"} or item_type.startswith("object:"):
+                    if item_type in {"list", "tuple", "dict", "set", "range", "bigint"} or item_type.startswith("object:"):
                         self._load_operand(item, "r8")
                         self.lines.append("    call piton_collection_put_tagged")
+                    elif item_type in {"slot", "str-boxed"}:
+                        # VERBATIM_SLOT_V1 (Windows): el item ya viene
+                        # taggeado (slot de y/o, str boxeado); re-taggearlo
+                        # trataria los bits del tag como puntero (AV).
+                        self.lines.extend([
+                            f"    mov rcx, {self._address(result)}",
+                            f"    mov rdx, {index}",
+                        ])
+                        self._load_operand(item, "r8")
+                        self.lines.append("    call piton_collection_put_verbatim")
+                        self._mixed_elem_colls.add(result)
+                    elif item_type == "str":
+                        # STR_BOXED_V1 (Windows): string items are BOXED
+                        # PitonStr (tagged OBJECT), self-describing for
+                        # print/eq/iteration like the Linux PK_STR slots.
+                        # The container is marked mixed: item access yields
+                        # "slot" and dispatches by tag at runtime.
+                        self._load_operand(item, "rcx")
+                        self.lines.append("    call piton_str_box")
+                        self.lines.extend([
+                            f"    mov rcx, {self._address(result)}",
+                            f"    mov rdx, {index}",
+                            "    mov r8, rax",
+                            "    call piton_collection_put_tagged",
+                        ])
+                        self._mixed_elem_colls.add(result)
                     else:
                         self._load_operand(item, "r8")
                         self._load_operand(item, "r9")
                         self.lines.append("    call piton_collection_put")
             self.types[result] = kind
+            if kind in {"list", "tuple"} and raw_items:
+                # BIGINT_ELEM_V1 (Windows): una lista/tupla literal de solo
+                # bigints guarda punteros taggeados; get_item/iter deben
+                # tipar bigint para no imprimir los bits del tag.
+                _kinds = set()
+                for _it in raw_items:
+                    _kinds.add(self.types.get(_it, "int") if isinstance(_it, str) else "int")
+                if _kinds == {"bigint"}:
+                    self._bigint_elem_colls.add(result)
+                elif _kinds <= {"int", "bool"}:
+                    pass
+                else:
+                    # cualquier mix no-int puro (bigint mezclado, float,
+                    # listas anidadas...): sum() debe rechazar en vez de
+                    # saltar elementos en silencio.
+                    self._non_int_elem_colls.add(result)
         elif op == "unpack_check":
             # UNPACK_ARITY_V1: CPython verifies the element count on
             # unpacking (ValueError: too many / not enough values).
@@ -1816,9 +2131,78 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
                 return
+            if container_type == "set" and self.aliases.get(key, key).startswith("@comp_index"):
+                # COMP_DICT_ITER_V1 (Windows): s[i] is the i-th set item.
+                self._load_operand(container, "rcx")
+                self._load_operand(key, "rdx")
+                self.lines.append("    call piton_set_nth")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                _st = self._set_elem_kind(container) if hasattr(self, "_set_elem_kind") else "slot"
+                self.types[result] = "slot"
+                return
             if container_type not in {"list", "tuple", "dict", "dict:module"}:
                 raise NativeBuildError(f"native subscription not supported for {container_type}")
             if container_type in {"dict", "dict:module"}:
+                if self.aliases.get(key, key).startswith("@comp_index"):
+                    # COMP_DICT_ITER_V1 (Windows): comprehensions lower to an
+                    # index loop; d[i] is the i-th KEY (mirrors Linux).
+                    self._load_operand(container, "rcx")
+                    self._load_operand(key, "rdx")
+                    self.lines.append("    call piton_dict_nth_key")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
+                    return
+                if container_type == "dict:module":
+                    # MODULE_METADATA_V1: las keys son strings taggeadas y los
+                    # valores son INT-tag de puntero a modulo; el get historico
+                    # comparaba INT vs OBJECT y devolvia None.
+                    _kk = self.types.get(key, "str")
+                    self._emit_box(key, _kk)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    self.lines.append(f"    mov rcx, {self._address(container)}")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    self.lines.append("    call piton_dict_get_tagged_int")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "object:module"
+                    return
+                if container in self._tagged_dicts or self.aliases.get(container, container) in self._tagged_dicts:
+                    # TAGGED_DICT_V1: key boxeada + get verbatim; el valor
+                    # tipa slot (print/eq/truth por tag en runtime), SALVO
+                    # valores int/bool probados que se decodifican (la
+                    # aritmetica sobre ellos debe seguir funcionando).
+                    _kk = self.types.get(key, "int")
+                    self._emit_box(key, _kk)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    self.lines.append(f"    mov rcx, {self._address(container)}")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    _vk = self._tagged_dict_val_kind(container)
+                    if _vk in {"int", "bool"}:
+                        self.lines.append("    call piton_dict_get_tagged_int")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = _vk
+                    else:
+                        self.lines.append("    call piton_dict_get_tagged")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "slot"
+                    return
+                if container_type == "dict" and not self._dict_is_plain(container):
+                    # TAGGED_DICT_V1 (generalizado): todo dict no-plain se
+                    # lee taggeado (los encodings int son identicos).
+                    _kk = self.types.get(key, "int")
+                    self._emit_box(key, _kk)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    self.lines.append(f"    mov rcx, {self._address(container)}")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    _vk = self._tagged_dict_val_kind(container)
+                    if _vk in {"int", "bool"}:
+                        self.lines.append("    call piton_dict_get_tagged_int")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = _vk
+                    else:
+                        self.lines.append("    call piton_dict_get_tagged")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "slot"
+                    return
                 self._load_operand(container, "rcx")
                 self._load_operand(key, "rdx")
                 self.lines.append("    call piton_dict_get")
@@ -1829,12 +2213,35 @@ class Win64NasmEmitter:
                 # backend has the fix, Windows keeps the historical int until
                 # its collection value representation is consistent.
                 self.types[result] = "object:module" if container_type == "dict:module" else "int"
+            elif container in self._mixed_elem_colls:
+                # MIXED_SLOT_V1 (Windows): verbatim tagged item for the
+                # slot model (decoding would erase INT/BOOL tags).
+                self._load_operand(container, "rcx")
+                self._load_operand(key, "rdx")
+                self.lines.append("    call piton_collection_get_raw")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "slot"
+                return
             else:
                 self._load_operand(container, "rcx")
                 self._load_operand(key, "rdx")
                 self.lines.append("    call piton_collection_get")
+                if container in self._bigint_elem_colls:
+                    # BIGINT_ELEM_V1: items are OBJECT-tagged bigint
+                    # pointers; strip the 3 tag bits to the raw pointer.
+                    self.lines.extend(["    shl rax, 3", "    shr rax, 3"])
                 self.lines.append(f"    mov {self._address(result)}, rax")
-                self.types[result] = "int"
+                # CONV_SEQ_V1: containers built from a str hold BOXED strings
+                # (tagged OBJECT/PitonStr); typing them int would print the
+                # tag bits. str-boxed prints through the payload.
+                if container in self._str_elem_colls:
+                    self.types[result] = "str-boxed"
+                elif container in self._bigint_elem_colls:
+                    self.types[result] = "bigint"
+                elif container in self._mixed_elem_colls:
+                    self.types[result] = "slot"
+                else:
+                    self.types[result] = "int"
         elif op == "get_slice":
             # PARITY_P2_V1: [a:b] slices. Missing bounds arrive as None; the
             # emitter substitutes 0 / INT64_MAX and the runtime helpers
@@ -1908,6 +2315,12 @@ class Win64NasmEmitter:
             if ctype != "list":
                 raise NativeBuildError("native list_append requires a list")
             vtype = self.types.get(value, "int")
+            if vtype in {"slot", "str-boxed"}:
+                # VERBATIM_SLOT_V1: append verbatim del valor taggeado.
+                self._load_operand(collection, "rcx")
+                self._load_operand(value, "rdx")
+                self.lines.append("    call piton_list_append_tagged")
+                return
             type_tag = 0 if vtype == "int" else 1
             self._load_operand(collection, "rcx")
             self._load_operand(value, "rdx")
@@ -2604,6 +3017,17 @@ class Win64NasmEmitter:
                         self._load_operand(value, "rcx")
                         self.lines.append("    call piton_range_print_raw")
                         continue
+                    if value_type == "slot":
+                        # BOOL_SLOT_V1 (Windows): tagged value dispatches by
+                        # tag at runtime (mirrors Linux print-slot).
+                        self._load_operand(value, "rcx")
+                        self.lines.append("    call piton_slot_print_raw")
+                        continue
+                    if value_type == "str-boxed":
+                        # CONV_SEQ_V1: tagged OBJECT/PitonStr payload prints raw.
+                        self._load_operand(value, "rcx")
+                        self.lines.append("    call piton_boxed_str_print_raw")
+                        continue
                     if value_type in {"list", "tuple", "dict", "set"}:
                         self._load_operand(value, "rcx")
                         if value_type == "dict":
@@ -2954,6 +3378,14 @@ class Win64NasmEmitter:
             elif function_name == "sum":
                 if len(values) != 1:
                     raise NativeBuildError("native sum requires one collection")
+                if isinstance(values[0], str) and values[0] in (
+                    self._bigint_elem_colls | self._mixed_elem_colls
+                    | self._str_elem_colls
+                    | self._non_int_elem_colls
+                ):
+                    raise NativeBuildError(
+                        "native sum() requires int elements (CPython sums them)"
+                    )
                 ctype = self.types.get(values[0])
                 if ctype == "dict":
                     self._load_operand(values[0], "rcx")
@@ -3044,6 +3476,63 @@ class Win64NasmEmitter:
                 self._load_operand(values[0], "rcx")
                 self.lines.append("    call piton_sorted_new")
                 self.types[result] = "list"
+            elif function_name in {"lista", "list", "tupla", "tuple"}:
+                # CONV_SEQ_V1 (Windows): espejo del piton_conv_seq de Linux.
+                # Fuentes lista/tupla/dict/set/rango se copian por tag;
+                # str explota en PitonStr boxeados (trackeados para print).
+                # Cualquier otra fuente falla cerrada (honesto).
+                if len(values) != 1:
+                    raise NativeBuildError(f"native {function_name} requires exactly one argument")
+                kind_id = 1 if function_name in {"lista", "list"} else 2
+                source_type = self.types.get(values[0], "")
+                if source_type == "str":
+                    self.lines.append(f"    mov rcx, {kind_id}")
+                    self._load_operand(values[0], "rdx")
+                    self.lines.append("    call piton_seq_from_str")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self._str_elem_colls.add(result)
+                elif source_type in {"list", "tuple", "dict", "set", "range"}:
+                    self.lines.append(f"    mov rcx, {kind_id}")
+                    self._load_operand(values[0], "rdx")
+                    self.lines.append("    call piton_seq_from_coll")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                else:
+                    raise NativeBuildError(
+                        f"native {function_name}() requires a list, tuple, dict, set, range or str, not {source_type}"
+                    )
+                self.types[result] = "list" if kind_id == 1 else "tuple"
+            elif function_name in {"conjunto", "set"}:
+                # CONV_SET_V1 (Windows): deduplica por tag (eq_raw).
+                if len(values) != 1:
+                    raise NativeBuildError(f"native {function_name} requires exactly one argument")
+                source_type = self.types.get(values[0], "")
+                if source_type == "str":
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_set_from_str")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self._str_elem_colls.add(result)
+                elif source_type in {"list", "tuple", "set"}:
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_set_from_coll")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                else:
+                    raise NativeBuildError(
+                        f"native {function_name}() requires a list, tuple, set or str, not {source_type}"
+                    )
+                self.types[result] = "set"
+            elif function_name in {"diccionario", "dict"}:
+                # CONV_DICT_V1 (Windows): 0 args -> {}; 1 arg lista/tupla de pares.
+                if len(values) == 0:
+                    self.lines.append("    mov rcx, 4")
+                    self.lines.append("    call piton_dict_new")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                elif len(values) == 1 and self.types.get(values[0], "") in {"list", "tuple"}:
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_dict_from_pairs")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                else:
+                    raise NativeBuildError("native dict() requires zero arguments or one list/tuple of pairs")
+                self.types[result] = "dict"
             else:
                 if function_operand and isinstance(function_operand, str) and "." in function_operand:
                     parts = function_operand.split(".", 1)
@@ -3059,6 +3548,24 @@ class Win64NasmEmitter:
                         raise NativeBuildError(
                             f"native call to builtin '{function_name}' is not supported in this position"
                         )
+                    _callee_scalar = self._callee_proven_scalar(function_operand)
+                    _callee_slot = self.types.get(function_operand, "") == "slot"
+                    if _callee_slot:
+                        # NONCALLABLE_V1 (Windows): un slot INT/BOOL como
+                        # callee es TypeError seguro; otros tags siguen el
+                        # camino dinamico (una funcion guardada en dict
+                        # llega como OBJECT y debe seguir callable).
+                        self._load_operand(function_operand, "rcx")
+                        self.lines.append("    call piton_slot_callable_check")
+                    elif _callee_scalar:
+                        # NONCALLABLE_V1 (Windows): un escalar probado por
+                        # trazado a const hace TypeError en runtime (exit 1)
+                        # en vez de saltar por sus bits (AV en float/str).
+                        # Funciones, closures, params y valores desconocidos
+                        # siguen el camino dinamico (magic check del runtime).
+                        self.lines.append("    call piton_raise_not_callable")
+                        self.types[result] = "none"
+                        return
                     for value in call_args:
                         if self.types.get(value) == "builtin":
                             raise NativeBuildError(
@@ -3148,7 +3655,11 @@ class Win64NasmEmitter:
             # (CPython bool()). Reuses the collection len helpers.
             value = args[0]
             vtype = self.types.get(value, "int")
-            if vtype == "str":
+            if vtype == "slot":
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_slot_truthy")
+                self.lines.extend(["    test rax, rax", "    setne al", "    movzx rax, al"])
+            elif vtype == "str":
                 self._load_operand(value, "rcx")
                 self.lines.append("    call piton_str_len")
                 self.lines.extend(["    test rax, rax", "    setne al", "    movzx rax, al"])
@@ -3808,6 +4319,13 @@ class Win64NasmEmitter:
                     out.append("{}")
                     i += 1
                     continue
+                if c2 in "fFeEgG":
+                    # FLOAT_PRESENT_V1 (Windows): espejo del FMT_FLOAT_V1
+                    # de Linux (redondeo decimal real).
+                    fields.append((name, c2, flags, width, prec))
+                    out.append("{}")
+                    i += 1
+                    continue
                 raise NativeBuildError(f"str % conversion %{c2} is not supported")
             elif ch == "{" or ch == "}":
                 out.append(ch * 2)
@@ -3839,7 +4357,11 @@ class Win64NasmEmitter:
         frozen literals whose type the table cannot know)."""
         arg_type = etype if etype is not None else self.types.get(value, "int")
         if spec == "s":
-            if arg_type == "int":
+            if arg_type == "slot":
+                # PCT_SLOT_V1 (Windows): despacha por tag en runtime.
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_slot_str")
+            elif arg_type == "int":
                 self._load_operand(value, "rcx")
                 self.lines.append("    call piton_str_from_int")
             elif arg_type == "float":
@@ -3865,7 +4387,13 @@ class Win64NasmEmitter:
             else:
                 raise NativeBuildError(f"native str %s does not support {arg_type} arguments")
         elif spec == "d":
-            if arg_type in {"int", "bool"}:
+            if arg_type == "slot":
+                # PCT_SLOT_V1 (Windows): unbox int/bool o TypeError.
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_slot_int")
+                self.lines.append("    mov rcx, rax")
+                self.lines.append("    call piton_str_from_int")
+            elif arg_type in {"int", "bool"}:
                 self._load_operand(value, "rcx")
                 self.lines.append("    call piton_str_from_int")
             elif arg_type == "float":
@@ -3876,7 +4404,10 @@ class Win64NasmEmitter:
             else:
                 raise NativeBuildError(f"native str %d requires a real number, not {arg_type}")
         elif spec == "r":
-            if arg_type == "str":
+            if arg_type == "slot":
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_slot_repr")
+            elif arg_type == "str":
                 self._load_operand(value, "rcx")
                 self.lines.append("    call piton_str_quote")
             elif arg_type in {"int", "bool", "float", "none"}:
@@ -3901,6 +4432,38 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov rdx, {16 if spec in {'x', 'X'} else 8}")
             self.lines.append(f"    mov r8, {1 if spec == 'X' else 0}")
             self.lines.append("    call piton_str_from_int_base")
+        elif spec in {"f", "F", "e", "E", "g", "G"}:
+            # FLOAT_PRESENT_V1 (Windows): %f/%e/%g con redondeo decimal.
+            # El helper recibe BITS (int64), no el double en xmm.
+            if arg_type == "float":
+                self._load_float_operand(value, "xmm0")
+                self.lines.append("    movq rcx, xmm0")
+            elif arg_type in {"int", "bool"}:
+                self._load_operand(value, "rax")
+                self.lines.append("    cvtsi2sd xmm0, rax")
+                self.lines.append("    movq rcx, xmm0")
+            else:
+                raise NativeBuildError(f"native str %{spec} requires a real number, not {arg_type}")
+            _prec = pad[1] if pad is not None and pad[1] >= 0 else -1
+            self.lines.append(f"    mov edx, {_prec}")
+            if spec in {"f", "F"}:
+                self.lines.append("    call piton_float_fmt_fixed")
+            elif spec in {"e", "E"}:
+                self.lines.append(f"    mov r8d, {1 if spec == 'E' else 0}")
+                self.lines.append("    call piton_float_fmt_exp")
+            else:
+                self.lines.append(f"    mov edx, {1 if spec == 'G' else 0}")
+                self.lines.append("    call piton_float_fmt_g")
+            # la precision ya la consumio el helper: el pad solo aplica
+            # width/flags (prec=-1 evita el truncado a N chars).
+            if pad is not None:
+                width, _p, flags = pad
+                self.lines.append("    mov rcx, rax")
+                self.lines.append(f"    mov rdx, {width}")
+                self.lines.append("    mov r8, -1")
+                self.lines.append(f"    mov r9, {flags | 4}")
+                self.lines.append("    call piton_str_pad")
+            return
         else:
             raise NativeBuildError(f"native str %{spec} is not supported")
         if pad is not None:
@@ -4130,7 +4693,7 @@ class Win64NasmEmitter:
                 "    ret",
             ])
         else:
-            self.lines.append("    call piton_raise_unhandled")
+            self.lines.append("    call piton_propagate_or_exit")
 
     def _emit_contains(self, result: Any, left: Any, right: Any, negate: bool) -> None:
         """CONTAINS_V1: CPython membership (`in` / `no en`) via the
@@ -4152,6 +4715,29 @@ class Win64NasmEmitter:
             self._load_operand(left, "rdx")
             self.lines.append("    call piton_str_contains")
         elif haystack_type in {"list", "tuple", "dict", "set"}:
+            if haystack_type == "dict" and not self._dict_is_plain(right):
+                # TAGGED_DICT_V1: needle boxeado + match por contenido.
+                self._emit_box(left, needle_type)
+                self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                self.lines.append(f"    mov rcx, {self._address(right)}")
+                self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                self.lines.append("    call piton_dict_contains_tagged")
+                if negate:
+                    self.lines.append("    xor eax, 1")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+                return
+            if haystack_type == "set" and needle_type == "str":
+                self._emit_box(left, needle_type)
+                self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                self.lines.append(f"    mov rcx, {self._address(right)}")
+                self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                self.lines.append("    call piton_set_contains_tagged")
+                if negate:
+                    self.lines.append("    xor eax, 1")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+                return
             if needle_type not in {"int", "bool"}:
                 raise NativeBuildError(
                     f"native 'in' on {haystack_type} requires an int/bool needle, not {needle_type} "
@@ -4261,10 +4847,18 @@ class Win64NasmEmitter:
             self.lines.append("    call piton_str_split")
             self.types[result] = "list"
         elif method in {"strip", "lstrip", "rstrip"}:
-            require_count(0, "no arguments")
             mode = {"strip": 0, "lstrip": 1, "rstrip": 2}[method]
-            self.lines.append(f"    mov edx, {mode}")
-            self.lines.append("    call piton_str_strip")
+            if len(call_args) == 0:
+                self.lines.append(f"    mov edx, {mode}")
+                self.lines.append("    call piton_str_strip")
+            elif len(call_args) == 1 and self.types.get(call_args[0], "") == "str":
+                # STRIP_CHARS_V1 (Windows): strip/lstrip/rstrip with an
+                # explicit character set (mirrors Linux/CPython).
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append(f"    mov r8d, {mode}")
+                self.lines.append("    call piton_str_strip_chars")
+            else:
+                raise NativeBuildError("native str.strip() requires zero or one str argument")
             self.types[result] = "str"
         elif method == "join":
             require_count(1, "exactly one list or tuple argument")
@@ -4437,13 +5031,37 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov rdx, {base}")
                 self.lines.append(f"    mov r8, {1 if type_char == 'X' else 0}")
                 self.lines.append("    call piton_str_from_int_base")
-            elif type_char in {"f", "e", "E", "g", "G", "F", "n"}:
-                # FLOAT_PRESENT_V1: needs correctly-rounded decimal
-                # conversion; repr diverged from CPython, so fail closed.
-                raise NativeBuildError(
-                    f"native str.format() %{type_char} is not supported yet "
-                    "(needs rounded decimal conversion)"
-                )
+            elif type_char in {"f", "F", "e", "E", "g", "G", "%"}:
+                # FLOAT_PRESENT_V1 (Windows): espejo del FMT_FLOAT_V1.
+                if arg_type != "float":
+                    raise NativeBuildError(
+                        f"native str.format() %{type_char} requires a float, not {arg_type}"
+                    )
+                _m = re.search(r"\.(\d+)", spec)
+                _prec = int(_m.group(1)) if _m else -1
+                self._load_float_operand(value, "xmm0")
+                self.lines.append("    movq rcx, xmm0")
+                self.lines.append(f"    mov edx, {_prec}")
+                if type_char in {"f", "F"}:
+                    self.lines.append("    call piton_float_fmt_fixed")
+                elif type_char == "%":
+                    self.lines.append("    call piton_float_fmt_pct")
+                elif type_char in {"e", "E"}:
+                    self.lines.append(f"    mov r8d, {1 if type_char == 'E' else 0}")
+                    self.lines.append("    call piton_float_fmt_exp")
+                else:
+                    self.lines.append(f"    mov edx, {1 if type_char == 'G' else 0}")
+                    self.lines.append("    call piton_float_fmt_g")
+                # la precision ya la consumio el helper (espejo Linux:
+                # pres sin ".prec"); solo width/align via apply_spec.
+                _presented = pres.split(".", 1)[0] if isinstance(pres, str) else ""
+                if _presented:
+                    _pres_label = self._string(_presented)
+                    self.lines.append("    mov rcx, rax")
+                    self.lines.append(f"    lea rdx, [{_pres_label}]")
+                    self.lines.append("    call piton_str_apply_spec")
+                self.lines.append(f"    mov qword [rsp+32+{index * 8}], rax")
+                continue
             elif type_char == "%":
                 raise NativeBuildError(
                     "native str.format() %% is not supported yet "
@@ -4569,6 +5187,27 @@ class Win64NasmEmitter:
         elif coll_type == "dict":
             if method == "get":
                 require_count((1, 2), "one or two arguments (key[, default])")
+                _tagged = owner in self._tagged_dicts or self.aliases.get(owner, owner) in self._tagged_dicts
+                if _tagged:
+                    # TAGGED_DICT_V1: miss -> None (1 arg) o default boxeado;
+                    # el resultado tipa slot como en Linux.
+                    _kk = self.types.get(call_args[0], "int")
+                    self._emit_box(call_args[0], _kk)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    if len(call_args) == 2:
+                        _dk = self.types.get(call_args[1], "int")
+                        self._emit_box(call_args[1], _dk)
+                        self.lines.append("    mov r8, rax")
+                        self.lines.append(f"    mov rcx, {self._address(owner)}")
+                        self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                        self.lines.append("    call piton_dict_get_tagged_d")
+                    else:
+                        self.lines.append(f"    mov rcx, {self._address(owner)}")
+                        self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                        self.lines.append("    call piton_dict_get_tagged_1")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
+                    return
                 if len(call_args) == 2 and self.types.get(call_args[1]) not in {"int", "bool"}:
                     raise NativeBuildError("native dict.get() default must be an int in this subset")
                 self._load_operand(call_args[0], "rdx")
@@ -4678,8 +5317,106 @@ class Win64NasmEmitter:
             or getattr(function, "is_async_generator", False)
         )
 
+    def _boolh_value_expr(self, value: Any) -> str:
+        """Operand expression for a bool-arm value (temp slot or immediate)."""
+        if isinstance(value, str) and value.startswith("%"):
+            return self._address(value)
+        return self._immediate(value)
+
+    def _emit_boolh_store(self, holder: str, value: Any, vtype: str) -> list[str]:
+        """Store one y/o arm into the holder as a TAGGED slot value."""
+        addr = self._address(holder)
+        if vtype == "slot":
+            # chained y/o: the arm is already tagged, copy it through
+            # (re-tagging would wrap the pointer as an int).
+            return [f"    mov rax, {self._boolh_value_expr(value)}", f"    mov {addr}, rax"]
+        if vtype == "none":
+            return ["    xor eax, eax", f"    mov {addr}, rax"]
+        is_str = "1" if vtype == "str" else "0"
+        return [
+            f"    mov rcx, {self._boolh_value_expr(value)}",
+            f"    mov edx, {is_str}",
+            "    call piton_slot",
+            f"    mov {addr}, rax",
+        ]
+
+    def _retag_boolh_first(self, holder: str) -> None:
+        """Rewrite the first arm's plain store (marked) as a tagged store."""
+        marker = f"; boolh-first:{holder}"
+        recorded = self._boolh_first.pop(holder, None)
+        for i, line in enumerate(self.lines):
+            if line.strip() == marker and recorded is not None:
+                value, vtype = recorded
+                self.lines[i - 2:i + 1] = self._emit_boolh_store(holder, value, vtype)
+                return
+
+    def _dict_is_plain(self, container: Any) -> bool:
+        """True si el dict es provablemente all-int (camino historico
+        byte-identico, incluido el miss fail-loud). Todo lo demas
+        (incluidos dicts sin tracking, p.ej. retornos de funcion) va
+        por el camino taggeado."""
+        if isinstance(container, str):
+            if container in self._plain_int_dicts:
+                return True
+            if self.aliases.get(container, container) in self._plain_int_dicts:
+                return True
+        return False
+
+    def _tagged_dict_val_kind(self, container: Any) -> str | None:
+        """Static value kind of a tagged dict (None when mixed/unknown)."""
+        kind = self._dict_val_types.get(container)
+        if kind is None and isinstance(container, str):
+            kind = self._dict_val_types.get(self.aliases.get(container, container))
+        return kind
+
+    def _callee_proven_scalar(self, operand: Any) -> bool:
+        """True si el callee es provablemente un escalar no-callable:
+        una constante int/float/str/bool/None rastreada por stores/loads/
+        aliases, o un temp con tipo escalar estatico que no es funcion,
+        param ni slot (los slots van por check de runtime)."""
+        if self.types.get(operand, "") == "slot":
+            return False
+        cur = operand
+        seen: set[str] = set()
+        while isinstance(cur, str) and cur not in seen:
+            seen.add(cur)
+            if cur in self.constants:
+                return isinstance(self.constants[cur], (int, float, bool, str)) or self.constants[cur] is None
+            if cur in self.aliases:
+                cur = self.aliases[cur]
+                continue
+            if cur in self._store_source:
+                cur = self._store_source[cur]
+                continue
+            break
+        return False
+
+    def _emit_box(self, value: Any, vtype: str) -> None:
+        """Box a raw operand as a tagged PitonValue in rax (dict keys/values)."""
+        if vtype == "slot":
+            self._load_operand(value, "rax")
+        elif vtype == "str":
+            self._load_operand(value, "rcx")
+            self.lines.append("    call piton_box_str_tagged")
+        elif vtype == "float":
+            self._load_operand(value, "rcx")
+            self.lines.append("    call piton_box_float")
+        elif vtype == "bool":
+            self._load_operand(value, "rcx")
+            self.lines.append("    call piton_slot_bool")
+        elif vtype == "none":
+            self.lines.append("    xor eax, eax")
+        else:
+            self._load_operand(value, "rcx")
+            self.lines.append("    xor edx, edx")
+            self.lines.append("    call piton_slot")
+        # NOTE: piton_slot/piton_str_box/piton_box_float return via rax.
+
     def _emit_truth_test(self, operand: Any) -> None:
-        if self.types.get(operand, "int") == "str":
+        if self.types.get(operand, "int") == "slot":
+            self._load_operand(operand, "rcx")
+            self.lines.extend(["    call piton_slot_truthy", "    test rax, rax"])
+        elif self.types.get(operand, "int") == "str":
             self._load_operand(operand, "rcx")
             self.lines.extend(["    call strlen", "    test rax, rax"])
         elif self.types.get(operand) == "none":

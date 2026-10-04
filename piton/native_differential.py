@@ -5,6 +5,7 @@ nativo producido no carga ni ejecuta Python.
 """
 from __future__ import annotations
 
+import os
 import platform
 import subprocess
 import sys
@@ -46,8 +47,15 @@ def compare_native_to_cpython(source: str) -> DifferentialResult:
     with tempfile.TemporaryDirectory(prefix="piton-native-diff-") as directory:
         executable = _compile_native(source, Path(directory) / "program.exe")
         native_run = subprocess.run([str(executable)], capture_output=True, check=False)
+        oracle_env = dict(os.environ)
+        # ORACLE_UTF8_V1: el oracle debe emitir UTF-8 determinista en todas
+        # las plataformas; en Windows heredaria el codepage de consola y los
+        # bytes no-ASCII divergirian del nativo (que siempre es UTF-8).
+        oracle_env["PYTHONIOENCODING"] = "utf-8"
+        oracle_env["PYTHONUTF8"] = "1"
         oracle_run = subprocess.run(
-            [sys.executable, "-c", translated], capture_output=True, check=False
+            [sys.executable, "-c", translated], capture_output=True, check=False,
+            env=oracle_env,
         )
     return DifferentialResult(
         native=Observation(native_run.returncode, native_run.stdout, native_run.stderr),

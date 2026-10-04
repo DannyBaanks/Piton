@@ -183,7 +183,7 @@ class CollMethodsV1(unittest.TestCase):
         # KeyError before the tagged-slot get landed).
         result = compare_native_to_cpython("d = {'a': 1}\nimprimir(d.get('z'))\n")
         self.assertEqual(result.native.returncode, 0)
-        self.assertEqual(result.native.stdout, b"None\n")
+        self.assertEqual(result.native.stdout.replace(b"\r\n", b"\n"), b"None\n")
 
     def test_set_add(self):
         _assert_matches(self, "s = {1}\ns.add(2)\ns.add(1)\nimprimir(s)\n")

@@ -15,7 +15,12 @@
 #include "float_repr.h"
 
 void piton_raise_unhandled(const char *type, const char *message);
-/* Defined further down; declared here because the float printers need it. */
+void piton_reraise_unhandled(void);
+/* Reraise snapshot globals (defined further down with the handler stack). */
+extern const char *piton_reraise_type;
+extern const char *piton_reraise_message;
+extern const char *piton_reraise_cause_type;
+extern const char *piton_reraise_cause_message;
 static inline int64_t piton_double_bits(double d);
 
 /* ── PitonValue: tagged 64-bit value (wire format) ────────────────────── */
@@ -255,6 +260,436 @@ void *piton_range_to_list(PitonRange *r) {
         int64_t v = r->start + i * r->step;
         piton_collection_put(out, out->length, 0,
                              pv_encode(PITON_TAG_INT, (uint64_t)v));
+    }
+    return out;
+}
+
+/* Forward declarations for the CONV helpers below (definitions live later). */
+void *piton_dict_new(int64_t capacity);
+void *piton_set_new(int64_t capacity);
+static int piton_value_eq_raw(int64_t a, int64_t b);
+static void piton_value_deep_free(int64_t v);
+static void piton_value_print_inner(int64_t v, int recursing);
+
+/* ── CONV builtins (lista/tupla/conjunto/diccionario as VALUES) ──────────
+ * Mirrors Linux piton_conv_*: collections copy tagged items verbatim (with
+ * OBJECT refcount bumps like seq_concat); strings explode to 1-char BOXED
+ * PitonStr values so print/eq/iteration dispatch by tag. dict/set only
+ * accept the int/bool/str kinds the Windows subset models; anything else
+ * fails closed with the CPython TypeError instead of mis-encoding. */
+static void piton_conv_incref(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_OBJECT) {
+        PitonHeader *h = (PitonHeader *)pv_payload(v);
+        if (h) h->refcount++;
+    }
+}
+
+void *piton_str_box(const char *s) {
+    if (!s) s = "";
+    return piton_str_new(s, (int64_t)strlen(s));
+}
+
+/* Boxed string already tagged (for dict keys and slot stores). */
+int64_t piton_box_str_tagged(const char *s) {
+    return pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_box(s));
+}
+
+int64_t piton_slot(int64_t raw, int64_t is_str) {
+    if (is_str) {
+        void *boxed = piton_str_box((const char *)raw);
+        return pv_encode(PITON_TAG_OBJECT, (int64_t)boxed);
+    }
+    return pv_int(raw);
+}
+
+int64_t piton_slot_truthy(int64_t v) {
+    switch (pv_tag(v)) {
+    case PITON_TAG_NONE: return 0;
+    case PITON_TAG_BOOL: return pv_payload(v) ? 1 : 0;
+    case PITON_TAG_INT: return pv_payload_signed(v) != 0;
+    case PITON_TAG_FLOAT: {
+        double d = *(double *)pv_payload(v);
+        return d != 0.0;
+    }
+    case PITON_TAG_OBJECT: {
+        PitonHeader *h = (PitonHeader *)pv_payload(v);
+        if (!h) return 0;
+        switch (h->sub_tag) {
+        case SUB_TAG_STR: return ((PitonStr *)h)->len > 0;
+        case SUB_TAG_LIST: case SUB_TAG_TUPLE:
+            return ((PitonCollection *)h)->length > 0;
+        case SUB_TAG_DICT: return ((PitonDict *)h)->length > 0;
+        case SUB_TAG_SET: return ((PitonSet *)h)->length > 0;
+        case SUB_TAG_RANGE: return piton_range_len((PitonRange *)h) > 0;
+        default: return 1;
+        }
+    }
+    default: return v != 0;
+    }
+}
+
+void piton_slot_print_raw(int64_t v) {
+    piton_value_print_inner(v, 0);
+}
+
+/* Slot conversions for %-formatting (Windows): %s/%r need C strings,
+ * %d needs the raw int. Anything outside int/bool/none/str raises the
+ * CPython TypeError instead of formatting tag bits. */
+int64_t piton_str_from_int(int64_t v);
+char *piton_str_quote(const char *s);
+
+const char *piton_slot_str(int64_t v) {
+    switch (pv_tag(v)) {
+    case PITON_TAG_NONE: return "None";
+    case PITON_TAG_BOOL: return pv_payload(v) ? "True" : "False";
+    case PITON_TAG_INT: return (const char *)piton_str_from_int(pv_payload_signed(v));
+    case PITON_TAG_OBJECT: {
+        PitonHeader *h = (PitonHeader *)pv_payload(v);
+        if (h && h->sub_tag == SUB_TAG_STR) {
+            PitonStr *s = (PitonStr *)h;
+            return s->data ? s->data : "";
+        }
+        break;
+    }
+    default: break;
+    }
+    piton_raise_unhandled("TypeError", "not all arguments converted during string formatting");
+    return "";
+}
+
+const char *piton_slot_repr(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_OBJECT) {
+        PitonHeader *h = (PitonHeader *)pv_payload(v);
+        if (h && h->sub_tag == SUB_TAG_STR) {
+            PitonStr *s = (PitonStr *)h;
+            return (const char *)piton_str_quote(s->data ? s->data : "");
+        }
+    }
+    return piton_slot_str(v);
+}
+
+int64_t piton_slot_int(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    piton_raise_unhandled("TypeError", "not all arguments converted during string formatting");
+    return 0;
+}
+
+/* Print a BOXED string (tagged OBJECT/PitonStr) without quotes. Used for
+ * temporaries the emitter statically types "str-boxed": items of
+ * str-built collections and their loop variables. */
+void piton_boxed_str_print_raw(int64_t v) {
+    if (pv_tag(v) != PITON_TAG_OBJECT) {
+        piton_value_print_inner(v, 0);
+        return;
+    }
+    PitonStr *s = (PitonStr *)pv_payload(v);
+    if (!s || ((PitonHeader *)s)->sub_tag != SUB_TAG_STR) {
+        piton_value_print_inner(v, 0);
+        return;
+    }
+    fwrite(s->data, 1, (size_t)s->len, stdout);
+}
+
+void *piton_seq_from_coll(int64_t kind, void *raw) {
+    PitonCollection *out = NULL;
+    PitonHeader *h = raw ? (PitonHeader *)raw : NULL;
+    if (!h) piton_raise_unhandled("TypeError", "object is not iterable");
+    int64_t sub = h->sub_tag;
+    if (sub != SUB_TAG_LIST && sub != SUB_TAG_TUPLE && sub != SUB_TAG_DICT
+        && sub != SUB_TAG_SET && sub != SUB_TAG_RANGE)
+        piton_raise_unhandled("TypeError", "object is not iterable");
+    if (sub == SUB_TAG_RANGE) {
+        PitonRange *rr = raw;
+        int64_t n = piton_range_len(rr);
+        out = piton_collection_new(kind, n);
+        for (int64_t i = 0; i < n; ++i) {
+            int64_t v = rr->start + i * rr->step;
+            out->items[i] = pv_encode(PITON_TAG_INT, (uint64_t)v);
+        }
+        out->length = n;
+        return out;
+    }
+    int64_t n = 0;
+    if (sub == SUB_TAG_LIST || sub == SUB_TAG_TUPLE) n = ((PitonCollection *)raw)->length;
+    else if (sub == SUB_TAG_DICT) n = ((PitonDict *)raw)->length;
+    else n = ((PitonSet *)raw)->length;
+    out = piton_collection_new(kind, n);
+    for (int64_t i = 0; i < n; ++i) {
+        int64_t v;
+        if (sub == SUB_TAG_LIST || sub == SUB_TAG_TUPLE)
+            v = ((PitonCollection *)raw)->items[i];
+        else if (sub == SUB_TAG_DICT)
+            v = ((PitonDict *)raw)->entries[i].key;
+        else
+            v = ((PitonSet *)raw)->items[i];
+        piton_conv_incref(v);
+        out->items[i] = v;
+    }
+    out->length = n;
+    return out;
+}
+
+void *piton_seq_from_str(int64_t kind, const char *s) {
+    if (!s) piton_raise_unhandled("TypeError", "'NoneType' object is not iterable");
+    int64_t n = (int64_t)strlen(s);
+    PitonCollection *out = piton_collection_new(kind, n);
+    for (int64_t i = 0; i < n; ++i) {
+        char buf[2] = { s[i], 0 };
+        void *boxed = piton_str_new(buf, 1);
+        out->items[i] = pv_encode(PITON_TAG_OBJECT, (int64_t)boxed);
+    }
+    out->length = n;
+    return out;
+}
+
+void *piton_set_from_coll(void *raw) {
+    PitonHeader *h = raw ? (PitonHeader *)raw : NULL;
+    if (!h) piton_raise_unhandled("TypeError", "object is not iterable");
+    int64_t sub = h->sub_tag;
+    if (sub != SUB_TAG_LIST && sub != SUB_TAG_TUPLE && sub != SUB_TAG_SET)
+        piton_raise_unhandled("TypeError", "object is not iterable");
+    PitonSet *out = piton_set_new(4);
+    int64_t n = (sub == SUB_TAG_SET)
+        ? ((PitonSet *)raw)->length : ((PitonCollection *)raw)->length;
+    for (int64_t i = 0; i < n; ++i) {
+        int64_t v = (sub == SUB_TAG_SET)
+            ? ((PitonSet *)raw)->items[i] : ((PitonCollection *)raw)->items[i];
+        int64_t j;
+        for (j = 0; j < out->length; ++j)
+            if (piton_value_eq_raw(out->items[j], v)) break;
+        if (j < out->length) continue;
+        if (out->length >= out->capacity) {
+            int64_t nc = out->capacity ? out->capacity * 2 : 4;
+            out->items = realloc(out->items, (size_t)nc * sizeof(int64_t));
+            out->capacity = nc;
+        }
+        piton_conv_incref(v);
+        out->items[out->length++] = v;
+    }
+    return out;
+}
+
+void *piton_set_from_str(const char *s) {
+    if (!s) piton_raise_unhandled("TypeError", "'NoneType' object is not iterable");
+    PitonSet *out = piton_set_new(4);
+    for (int64_t i = 0; s[i]; ++i) {
+        char buf[2] = { s[i], 0 };
+        int64_t v = pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_new(buf, 1));
+        int64_t j;
+        for (j = 0; j < out->length; ++j)
+            if (piton_value_eq_raw(out->items[j], v)) break;
+        if (j == out->length) {
+            if (out->length >= out->capacity) {
+                int64_t nc = out->capacity ? out->capacity * 2 : 4;
+                out->items = realloc(out->items, (size_t)nc * sizeof(int64_t));
+                out->capacity = nc;
+            }
+            out->items[out->length++] = v;
+        } else {
+            piton_value_deep_free(v);
+        }
+    }
+    return out;
+}
+
+/* ── Tagged dicts (str/float keys and values) ────────────────────────
+ * The legacy dict_put/get auto-encode via pv_int (int-only). Dicts with a
+ * non-int key or value use the tagged path: keys AND values are stored
+ * verbatim as tagged PitonValues and compared with eq_raw (content match
+ * for strings). Reads yield verbatim tags; the emitter types them "slot"
+ * so print/eq/truth dispatch by tag at runtime. */
+void piton_dict_put_tagged(void *raw, int64_t key, int64_t value) {
+    PitonDict *d = raw;
+    if (!d) return;
+    for (int64_t i = 0; i < d->length; ++i)
+        if (piton_value_eq_raw(d->entries[i].key, key)) {
+            piton_value_deep_free(d->entries[i].value);
+            piton_conv_incref(value);
+            d->entries[i].value = value;
+            return;
+        }
+    if (d->length >= d->capacity) {
+        int64_t nc = d->capacity ? d->capacity * 2 : 4;
+        d->entries = realloc(d->entries, (size_t)nc * sizeof(PitonDictEntry));
+        d->capacity = nc;
+    }
+    piton_conv_incref(key);
+    piton_conv_incref(value);
+    d->entries[d->length].key = key;
+    d->entries[d->length].value = value;
+    ++d->length;
+}
+
+int64_t piton_dict_get_tagged_int(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key)) {
+                int64_t v = d->entries[i].value;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                piton_raise_unhandled("TypeError", "dict value is not an int");
+            }
+    piton_raise_unhandled("KeyError", "key not found");
+    return 0;
+}
+
+int64_t piton_dict_get_tagged(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key))
+                return d->entries[i].value;
+    piton_raise_unhandled("KeyError", "key not found");
+    return pv_none();
+}
+
+int64_t piton_dict_get_tagged_d(void *raw, int64_t key, int64_t dflt) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key))
+                return d->entries[i].value;
+    return dflt;
+}
+
+/* Positional access for comprehensions lowered as index loops
+ * (COMP_DICT_ITER_V1, mirrors the Linux backend): the @comp_index_N temp
+ * counts 0..len-1, so d[i] is the i-th KEY and s[i] the i-th set item. */
+int64_t piton_dict_nth_key(void *raw, int64_t i) {
+    PitonDict *d = raw;
+    if (!d || i < 0 || i >= d->length) {
+        piton_raise_unhandled("IndexError", "dict index out of range");
+        return pv_none();
+    }
+    return d->entries[i].key;
+}
+
+int64_t piton_set_nth(void *raw, int64_t i) {
+    PitonSet *s = raw;
+    if (!s || i < 0 || i >= s->length) {
+        piton_raise_unhandled("IndexError", "set index out of range");
+        return pv_none();
+    }
+    return s->items[i];
+}
+
+int64_t piton_dict_get_tagged_1(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key))
+                return d->entries[i].value;
+    return pv_none();
+}
+
+int64_t piton_dict_contains_tagged(void *raw, int64_t key) {
+    PitonDict *d = raw;
+    if (d)
+        for (int64_t i = 0; i < d->length; ++i)
+            if (piton_value_eq_raw(d->entries[i].key, key))
+                return 1;
+    return 0;
+}
+
+/* Box a raw float-bits temp as a heap double tagged FLOAT. */
+/* A slot used as a callee: INT/BOOL tags can never be callable code
+ * (their payload is a value, not a pointer); anything else goes through
+ * the runtime magic check, which safely rejects heap doubles/objects. */
+void piton_raise_not_callable(void);
+
+void piton_slot_callable_check(int64_t v) {
+    int t = pv_tag(v);
+    if (t == PITON_TAG_INT || t == PITON_TAG_BOOL) piton_raise_not_callable();
+}
+
+int64_t piton_slot_bool(int64_t v) {
+    return pv_encode(PITON_TAG_BOOL, v ? 1 : 0);
+}
+
+int64_t piton_iterator_next_any_raw(void *raw) {
+    PitonAnyIterator *iterator = raw;
+    if (!iterator || iterator->magic != PITON_ITERATOR_MAGIC) {
+        fprintf(stderr, "TypeError: object is not an iterator\n");
+        exit(1);
+    }
+    int64_t length = 0;
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        length = ((PitonCollection *)iterator->raw)->length;
+    else if (iterator->kind == SUB_TAG_DICT)
+        length = ((PitonDict *)iterator->raw)->length;
+    else if (iterator->kind == SUB_TAG_RANGE)
+        length = piton_range_len((PitonRange *)iterator->raw);
+    else
+        length = ((PitonSet *)iterator->raw)->length;
+    if (iterator->index >= length) {
+        piton_raise("StopIteration", "");
+        return 0;
+    }
+    if (iterator->kind == SUB_TAG_LIST || iterator->kind == SUB_TAG_TUPLE)
+        return ((PitonCollection *)iterator->raw)->items[iterator->index++];
+    if (iterator->kind == SUB_TAG_DICT)
+        return ((PitonDict *)iterator->raw)->entries[iterator->index++].key;
+    if (iterator->kind == SUB_TAG_RANGE) {
+        PitonRange *rr = iterator->raw;
+        int64_t v = rr->start + (iterator->index++) * rr->step;
+        return pv_encode(PITON_TAG_INT, (uint64_t)v);
+    }
+    return ((PitonSet *)iterator->raw)->items[iterator->index++];
+}
+
+/* Unbox an INT/BOOL slot to its raw value for arithmetic. Anything else
+ * (str, collections, ...) is a silent-approximation risk, so it raises the
+ * CPython TypeError instead. */
+int64_t piton_slot_num(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    piton_raise_unhandled("TypeError", "unsupported operand type(s)");
+    return 0;
+}
+
+int64_t piton_box_float(int64_t bits) {
+    double *dp = malloc(sizeof(double));
+    memcpy(dp, &bits, sizeof(double));
+    return pv_encode(PITON_TAG_FLOAT, (int64_t)dp);
+}
+
+void *piton_dict_from_pairs(void *raw) {
+    PitonHeader *h = raw ? (PitonHeader *)raw : NULL;
+    if (!h || (h->sub_tag != SUB_TAG_LIST && h->sub_tag != SUB_TAG_TUPLE))
+        piton_raise_unhandled("TypeError", "dict() argument must be a sequence of pairs");
+    PitonCollection *src = raw;
+    PitonDict *out = piton_dict_new(src->length > 0 ? src->length : 4);
+    for (int64_t i = 0; i < src->length; ++i) {
+        int64_t pair = src->items[i];
+        PitonCollection *pc = NULL;
+        if (pv_tag(pair) == PITON_TAG_OBJECT) {
+            PitonHeader *ph = (PitonHeader *)pv_payload(pair);
+            if (ph && (ph->sub_tag == SUB_TAG_LIST || ph->sub_tag == SUB_TAG_TUPLE))
+                pc = (PitonCollection *)ph;
+        }
+        if (!pc || pc->length != 2)
+            piton_raise_unhandled("ValueError", "dict() pairs must be 2-sequences");
+        int64_t k = pc->items[0], val = pc->items[1];
+        int64_t j;
+        for (j = 0; j < out->length; ++j)
+            if (piton_value_eq_raw(out->entries[j].key, k)) break;
+        piton_conv_incref(k);
+        piton_conv_incref(val);
+        if (j < out->length) {
+            piton_value_deep_free(out->entries[j].value);
+            out->entries[j].value = val;
+        } else {
+            if (out->length >= out->capacity) {
+                int64_t nc = out->capacity ? out->capacity * 2 : 4;
+                out->entries = realloc(out->entries, (size_t)nc * sizeof(PitonDictEntry));
+                out->capacity = nc;
+            }
+            out->entries[out->length].key = k;
+            out->entries[out->length].value = val;
+            ++out->length;
+        }
     }
     return out;
 }
@@ -723,6 +1158,71 @@ static int piton_value_eq_raw(int64_t a, int64_t b) {
     }
 }
 
+/* ORDER_SEQ_V1: three-way compare for list/tuple ordering (CPython compares
+ * element-wise, then by length). INT/BOOL compare as signed payloads, FLOAT
+ * as doubles, STR by content; anything else fails closed with the CPython
+ * TypeError instead of silently comparing pointers. */
+static int64_t piton_value_cmp_raw(int64_t a, int64_t b) {
+    if (a == b) return 0;
+    int ta = pv_tag(a), tb = pv_tag(b);
+    if (ta != tb) {
+        piton_raise_unhandled("TypeError",
+            "'<' not supported between instances of these types");
+        return 2;
+    }
+    int64_t pa = pv_payload(a), pb = pv_payload(b);
+    switch (ta) {
+    case PITON_TAG_INT:
+    case PITON_TAG_BOOL: {
+        int64_t va = pv_payload_signed(a), vb = pv_payload_signed(b);
+        return va < vb ? -1 : va > vb ? 1 : 0;
+    }
+    case PITON_TAG_FLOAT: {
+        double da = *(double *)pa, db = *(double *)pb;
+        return da < db ? -1 : da > db ? 1 : 0;
+    }
+    case PITON_TAG_OBJECT: {
+        PitonHeader *ha = (PitonHeader *)pa, *hb = (PitonHeader *)pb;
+        if (ha->sub_tag != hb->sub_tag) {
+            piton_raise_unhandled("TypeError",
+                "'<' not supported between instances of these types");
+            return 2;
+        }
+        if (ha->sub_tag == SUB_TAG_STR) {
+            PitonStr *sa = (PitonStr *)pa, *sb = (PitonStr *)pb;
+            int64_t n = sa->len < sb->len ? sa->len : sb->len;
+            int c = n ? memcmp(sa->data, sb->data, (size_t)n) : 0;
+            if (c) return c < 0 ? -1 : 1;
+            return sa->len < sb->len ? -1 : sa->len > sb->len ? 1 : 0;
+        }
+        piton_raise_unhandled("TypeError",
+            "'<' not supported between instances of these types");
+        return 2;
+    }
+    default:
+        piton_raise_unhandled("TypeError",
+            "'<' not supported between instances of these types");
+        return 2;
+    }
+}
+
+int64_t piton_seq_cmp_tagged(void *raw_a, void *raw_b) {
+    PitonCollection *a = raw_a, *b = raw_b;
+    if (!a || !b ||
+        (a->header.sub_tag != SUB_TAG_LIST && a->header.sub_tag != SUB_TAG_TUPLE) ||
+        (b->header.sub_tag != SUB_TAG_LIST && b->header.sub_tag != SUB_TAG_TUPLE)) {
+        piton_raise_unhandled("TypeError",
+            "'<' not supported between instances of these types");
+        return 2;
+    }
+    int64_t n = a->length < b->length ? a->length : b->length;
+    for (int64_t i = 0; i < n; ++i) {
+        int c = piton_value_cmp_raw(a->items[i], b->items[i]);
+        if (c) return c;
+    }
+    return a->length < b->length ? -1 : a->length > b->length ? 1 : 0;
+}
+
 int piton_value_eq(int64_t a, int64_t b) { return piton_value_eq_raw(a, b); }
 
 /* ── Deep free ─────────────────────────────────────────────────────────── */
@@ -933,6 +1433,30 @@ void piton_collection_put_tagged(void *raw, int64_t index, int64_t value) {
     if (index >= c->length) c->length = index + 1;
 }
 
+/* Verbatim stores for ALREADY-TAGGED values (slot model): no re-tag,
+ * no reinterpretation. OBJECT payloads get their refcount bumped. */
+void piton_collection_put_verbatim(void *raw, int64_t index, int64_t value) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    if (index < 0 || index >= c->capacity) return;
+    piton_conv_incref(value);
+    c->items[index] = value;
+    if (index >= c->length) c->length = index + 1;
+}
+
+void piton_list_append_tagged(void *raw, int64_t value) {
+    PitonCollection *c = raw;
+    if (!c) return;
+    if (c->header.sub_tag != SUB_TAG_LIST) return;
+    if (c->length >= c->capacity) {
+        int64_t new_cap = c->capacity ? c->capacity * 2 : 4;
+        c->items = realloc(c->items, (size_t)new_cap * sizeof(int64_t));
+        c->capacity = new_cap;
+    }
+    piton_conv_incref(value);
+    c->items[c->length++] = value;
+}
+
 void piton_list_append(void *raw, int64_t value, int64_t type_tag) {
     PitonCollection *c = raw;
     if (!c) return;
@@ -968,6 +1492,17 @@ int64_t piton_collection_get(void *raw, int64_t key) {
     if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
     if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
     return v;  /* OBJECT/FLOAT: return as-is (pointer) */
+}
+
+/* Verbatim item access for mixed-kind containers: the caller keeps the
+ * tag (slot model) instead of decoding INT/BOOL to raw values. */
+int64_t piton_collection_get_raw(void *raw, int64_t key) {
+    PitonCollection *c = raw;
+    if (!c) return pv_none();
+    int64_t idx = pv_payload_signed(key);
+    if (idx < 0) idx += c->length;
+    if (idx < 0 || idx >= c->length) return pv_none();
+    return c->items[idx];
 }
 
 typedef struct {
@@ -2267,6 +2802,22 @@ void *piton_str_split(const char *s, const char *sep) {
     return r;
 }
 
+static int piton_in_chars(unsigned char c, const char *chars) {
+    if (!chars) return 0;
+    for (; *chars; ++chars) if ((unsigned char)*chars == c) return 1;
+    return 0;
+}
+
+char *piton_str_strip_chars(const char *s, const char *chars, int mode) {
+    if (!s) return (char *)"";
+    size_t n = strlen(s), a = 0, b = n;
+    if (mode != 2) while (a < n && piton_in_chars((unsigned char)s[a], chars)) ++a;
+    if (mode != 1) while (b > a && piton_in_chars((unsigned char)s[b - 1], chars)) --b;
+    char *p = malloc(b - a + 1);
+    memcpy(p, s + a, b - a); p[b - a] = 0;
+    return p;
+}
+
 char *piton_str_strip(const char *s, int mode) {
     size_t n = strlen(s), a = 0, b = n;
     if (mode != 2) while (a < n && piton_ws_local((unsigned char)s[a])) ++a;
@@ -2276,27 +2827,37 @@ char *piton_str_strip(const char *s, int mode) {
     return p;
 }
 
+/* Boxed string item access: the OBJECT payload is a PitonStr*, NOT
+ * plain C text — read data/len through the struct. Returns NULL when the
+ * item is not a boxed string. */
+static const char *piton_boxed_str_data(int64_t item, size_t *out_len) {
+    if (pv_tag(item) != PITON_TAG_OBJECT) return NULL;
+    PitonHeader *h = (PitonHeader *)pv_payload(item);
+    if (!h || h->sub_tag != SUB_TAG_STR) return NULL;
+    PitonStr *s = (PitonStr *)h;
+    if (out_len) *out_len = (size_t)s->len;
+    return s->data ? s->data : "";
+}
+
 char *piton_str_join(const char *sep, void *raw) {
     PitonCollection *items = raw;
     size_t sl = strlen(sep);
     size_t total = 0;
     int64_t cnt = items ? items->length : 0;
     for (int64_t i = 0; i < cnt; ++i) {
-        if (pv_tag(items->items[i]) == PITON_TAG_OBJECT) {
-            PitonHeader *h = (PitonHeader *)pv_payload(items->items[i]);
-            if (h && h->sub_tag == SUB_TAG_STR) { total += strlen((const char *)pv_payload(items->items[i])); continue; }
-        }
-        piton_raise_unhandled("TypeError", "sequence item is not a string");
+        size_t el = 0;
+        if (!piton_boxed_str_data(items->items[i], &el))
+            piton_raise_unhandled("TypeError", "sequence item is not a string");
+        total += el;
     }
     total += sl * (size_t)(cnt > 0 ? cnt - 1 : 0);
     char *p = malloc(total + 1);
     size_t o = 0;
     for (int64_t i = 0; i < cnt; ++i) {
         if (i) { memcpy(p + o, sep, sl); o += sl; }
-        /* item is a tagged SUB_TAG_STR object (checked above); its payload
-           points at plain C text (PitonStr data layout guarantee) */
-        size_t el = strlen((const char *)pv_payload(items->items[i]));
-        memcpy(p + o, (const char *)pv_payload(items->items[i]), el); o += el;
+        size_t el = 0;
+        const char *data = piton_boxed_str_data(items->items[i], &el);
+        memcpy(p + o, data, el); o += el;
     }
     p[o] = 0;
     return p;
@@ -2586,6 +3147,14 @@ int piton_set_contains(void *raw, int64_t value, int64_t type_tag) {
     return 0;
 }
 
+int64_t piton_set_contains_tagged(void *raw, int64_t needle) {
+    PitonSet *s = raw;
+    if (!s) return 0;
+    for (int64_t i = 0; i < s->length; ++i)
+        if (piton_value_eq_raw(s->items[i], needle)) return 1;
+    return 0;
+}
+
 void piton_collection_free(void *raw) {
     if (!raw) return;
     piton_value_deep_free(pv_encode(PITON_TAG_OBJECT, (int64_t)raw));
@@ -2763,6 +3332,21 @@ void piton_set_add(void *raw, int64_t value) {
     s->items[s->length++] = ev;
 }
 
+void piton_set_add_str(void *raw, const char *value) {
+    PitonSet *s = raw;
+    if (!s) return;
+    int64_t ev = piton_box_str_tagged(value);
+    for (int64_t i = 0; i < s->length; ++i)
+        if (piton_value_eq_raw(s->items[i], ev)) return;
+    if (s->length >= s->capacity) {
+        int64_t new_cap = s->capacity ? s->capacity * 2 : 4;
+        s->items = realloc(s->items, (size_t)new_cap * sizeof(int64_t));
+        memset(s->items + s->capacity, 0, (size_t)(new_cap - s->capacity) * sizeof(int64_t));
+        s->capacity = new_cap;
+    }
+    s->items[s->length++] = ev;
+}
+
 int64_t piton_set_len(void *raw) {
     PitonSet *s = raw;
     return s ? s->length : 0;
@@ -2839,7 +3423,7 @@ int64_t piton_closure_new_frame(int64_t addr, int64_t n_args,
 }
 
 static int piton_is_code_addr(int64_t p);
-static void piton_raise_not_callable(void);
+void piton_raise_not_callable(void);
 
 int64_t piton_closure_call6(int64_t callee, int64_t argc,
                             int64_t a0, int64_t a1, int64_t a2, int64_t a3) {
@@ -2912,7 +3496,7 @@ static int piton_is_code_addr(int64_t p) {
 #endif
 }
 
-static void piton_raise_not_callable(void) {
+void piton_raise_not_callable(void) {
     fprintf(stderr, "TypeError: 'X' object is not callable\n");
     exit(1);
 }
@@ -3478,6 +4062,12 @@ void piton_try_set_accepted(const char *type) {
 
 /* Raise an exception. If a matching handler exists, set the flag. Otherwise exit. */
 void piton_raise(const char *type, const char *message) {
+    /* A new raise invalidates any reraise snapshot: a later bare `lanzar`
+     * must not report the older exception (RERAISE_STALE_V1). */
+    piton_reraise_type = NULL;
+    piton_reraise_message = NULL;
+    piton_reraise_cause_type = NULL;
+    piton_reraise_cause_message = NULL;
     /* Search handler stack in reverse (most recent first) */
     for (int i = handler_sp - 1; i >= 0; --i) {
         PitonHandler *h = &handler_stack[i];
@@ -3499,10 +4089,10 @@ static const char *piton_exception_cause_type = NULL;
 static const char *piton_exception_cause_msg = NULL;
 
 /* Reraise state (snapshot before handler clears catch state) */
-static const char *piton_reraise_type = NULL;
-static const char *piton_reraise_message = NULL;
-static const char *piton_reraise_cause_type = NULL;
-static const char *piton_reraise_cause_message = NULL;
+const char *piton_reraise_type = NULL;
+const char *piton_reraise_message = NULL;
+const char *piton_reraise_cause_type = NULL;
+const char *piton_reraise_cause_message = NULL;
 
 /* Exception context (__context__) for implicit chaining */
 static const char *piton_exc_context_type = NULL;
@@ -3645,8 +4235,8 @@ void piton_set_context_from_reraise(void) {
 
 /* Re-raise the handler's caught exception; falls through to print+exit when unhandled. */
 void piton_reraise(void) {
-    const char *type = piton_reraise_type;
-    const char *message = piton_reraise_message;
+    const char *type = piton_reraise_type ? piton_reraise_type : piton_exception_type;
+    const char *message = piton_reraise_type ? piton_reraise_message : piton_exception_message;
     for (int i = handler_sp - 1; i >= 0; --i) {
         PitonHandler *h = &handler_stack[i];
         if (h->accepted == NULL ||
@@ -3661,6 +4251,16 @@ void piton_reraise(void) {
         }
     }
     piton_raise_unhandled(type, message);
+}
+
+/* Module-level propagate: report the reraise snapshot when one is live,
+ * else the live exception state. Replaces the bare piton_raise_unhandled
+ * call whose missing arguments read garbage registers (AV on Windows). */
+void piton_propagate_or_exit(void) {
+    if (piton_reraise_type || piton_reraise_message)
+        piton_reraise_unhandled();
+    else
+        piton_raise_unhandled(piton_exception_type, piton_exception_message);
 }
 
 /* Re-raise when no statically-matching handler exists (no stack search). */
@@ -3989,6 +4589,142 @@ int64_t piton_str_from_bool(int64_t v) {
 
 int64_t piton_str_from_none(void) {
     return (int64_t)"None";
+}
+
+/* ── Float presentations (%f/%e/%g, {:.Nf}/{:.Ne}/{:.Ng}/{:.N%}) ──
+ * Port of the Linux FMT_FLOAT_V1 engine (decimal rounding via scaled
+ * integers, so 1.567 -> "%.2f" -> "1.57" exactly like CPython). */
+static double piton_fmtd_round_h(double x) { return floor(x + (x < 0.0 ? -0.5 : 0.5)); }
+static double piton_fmtd_pow10(int p) {
+    if (p < 0) p = 0;
+    if (p > 15) p = 15;
+    double r = 1.0;
+    for (int i = 0; i < p; ++i) r *= 10.0;
+    return r;
+}
+static int piton_fmtd_frac_digits(int64_t whole_scaled, char *out) {
+    int64_t w = whole_scaled < 0 ? -whole_scaled : whole_scaled;
+    char rev[64];
+    int rn = 0;
+    if (w == 0) rev[rn++] = '0';
+    while (w) { rev[rn++] = (char)('0' + w % 10); w /= 10; }
+    for (int i = 0; i < rn; ++i) out[i] = rev[rn - 1 - i];
+    out[rn] = 0;
+    return rn;
+}
+
+char *piton_float_fmt_fixed(int64_t bits, int prec) {
+    double x;
+    memcpy(&x, &bits, sizeof(double));
+    int p = prec >= 0 ? prec : 6;
+    int neg = x < 0;
+    if (neg) x = -x;
+    double scaled = piton_fmtd_round_h(x * piton_fmtd_pow10(p));
+    char digits[80];
+    int rn = piton_fmtd_frac_digits((int64_t)scaled, digits);
+    char *out = malloc(128);
+    int o = 0;
+    if (neg) out[o++] = '-';
+    if (rn > p) {
+        for (int i = 0; i < rn - p; ++i) out[o++] = digits[i];
+        if (p > 0) { out[o++] = '.'; for (int i = rn - p; i < rn; ++i) out[o++] = digits[i]; }
+    } else {
+        out[o++] = '0';
+        if (p > 0) {
+            out[o++] = '.';
+            for (int i = 0; i < p - rn; ++i) out[o++] = '0';
+            for (int i = 0; i < rn; ++i) out[o++] = digits[i];
+        }
+    }
+    out[o] = 0;
+    return out;
+}
+
+char *piton_float_fmt_pct(int64_t bits, int prec) {
+    double x;
+    memcpy(&x, &bits, sizeof(double));
+    x *= 100.0;
+    int64_t xb;
+    memcpy(&xb, &x, sizeof(double));
+    char *s = piton_float_fmt_fixed(xb, prec >= 0 ? prec : 6);
+    size_t n = strlen(s);
+    char *r = malloc(n + 2);
+    memcpy(r, s, n + 1);
+    r[n] = '%'; r[n + 1] = 0;
+    return r;
+}
+
+char *piton_float_fmt_exp(int64_t bits, int prec, int upper) {
+    double x;
+    memcpy(&x, &bits, sizeof(double));
+    int p = prec >= 0 ? prec : 6;
+    int neg = x < 0;
+    if (neg) x = -x;
+    int exp = 0;
+    double m = x;
+    if (m != 0.0) {
+        while (m >= 10.0) { m /= 10.0; ++exp; }
+        while (m < 1.0) { m *= 10.0; --exp; }
+    }
+    double scaled = piton_fmtd_round_h(m * piton_fmtd_pow10(p));
+    char digits[80];
+    int rn = piton_fmtd_frac_digits((int64_t)scaled, digits);
+    char *out = malloc(64);
+    int o = 0;
+    if (neg) out[o++] = '-';
+    if (rn > p + 1) {
+        out[o++] = '1';
+        if (p > 0) { out[o++] = '.'; for (int i = 0; i < p; ++i) out[o++] = digits[1 + i]; }
+        ++exp;
+    } else {
+        out[o++] = rn > 0 ? digits[0] : '0';
+        if (p > 0) { out[o++] = '.'; for (int i = 1; i <= p; ++i) out[o++] = i < rn ? digits[i] : '0'; }
+    }
+    out[o++] = upper ? 'E' : 'e';
+    out[o++] = exp < 0 ? '-' : '+';
+    int ae = exp < 0 ? -exp : exp;
+    if (ae < 10) { out[o++] = '0'; out[o++] = (char)('0' + ae); }
+    else { out[o++] = (char)('0' + ae / 10); out[o++] = (char)('0' + ae % 10); }
+    out[o] = 0;
+    return out;
+}
+
+char *piton_float_fmt_g(int64_t bits, int upper) {
+    double x;
+    memcpy(&x, &bits, sizeof(double));
+    if (x == 0.0) { char *z = malloc(2); z[0] = '0'; z[1] = 0; return z; }
+    int neg = x < 0;
+    if (neg) x = -x;
+    int exp = 0;
+    double m = x;
+    while (m >= 10.0) { m /= 10.0; ++exp; }
+    while (m < 1.0) { m *= 10.0; --exp; }
+    if (exp < -4 || exp >= 6) {
+        int64_t xb;
+        memcpy(&xb, &bits, sizeof(double));
+        char *s = piton_float_fmt_exp(xb, 5, upper);
+        char *d = s + 1;
+        while (d < s + 50 && *d && *d != 'e' && *d != 'E') ++d;
+        char *e = d;
+        while (e > s && *(e - 1) == '0') --e;
+        if (e > s && *(e - 1) == '.') --e;
+        for (char *q = d; *q; ++q) e++[0] = q[0];
+        return s;
+    }
+    int p2 = 6 - 1 - exp;
+    if (p2 < 0) p2 = 0;
+    int64_t xb;
+    memcpy(&xb, &bits, sizeof(double));
+    char *s = piton_float_fmt_fixed(xb, p2);
+    char *d = s;
+    while (*d && *d != '.') ++d;
+    if (*d == '.') {
+        char *q = d + strlen(d) - 1;
+        while (q > d && *q == '0') --q;
+        if (*q == '.') *q++ = 0;
+        else *(q + 1) = 0;
+    }
+    return s;
 }
 
 int64_t piton_str_from_float(double x) {

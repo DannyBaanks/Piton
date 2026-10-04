@@ -1,0 +1,66 @@
+# Windows native (x86.py) — fallos conocidos P36–P41
+
+Origen: correr `python -m pytest tests/ --ignore=tests/test_windows_validate.py` en CI
+Windows (PE). Recorrido 2026-10-03 sobre PR #39. La suite verde es en Linux/x86.
+
+Clasificación por bucket, sin borrar nada: cada grupo existe o NO antes de P36?
+El campo **estado** distingue: heredado antes de P36 / aceptado como fail-closed /
+feature-gap conocido / **REGRESIÓN candidata** (a investigar).
+
+## Heredado antes de P36 (ya documentado)
+- `CollMethodsV1::test_dict_get_missing_key_prints_none` (Linux ya imprime None; Windows sigue fallando)
+- `DivergentCluster29V1` (4 tests): subscript/get, keys-sorted, sum sobre bigint, raises tipados
+- `SumElementTypeV1` (3): str en sum, listas con elementos str
+- `ChrNulV1` (2): chr multibyte, chr(0)
+- `WithProtocolNativeV1` (3): propagación de excepción en `con`, supresión, unhandled
+- `Phase5Gates::test_x86_bare_reraise_from_catchall_rejected`: access violation 3221225477 (KNOWN: requiere CALL_PROPAGATE/FINALBODY_UNWIND portar a PE)
+- `OrderingMixedTypesV1::test_orderable_pairs_still_work`, `NonCallableCallV1` (crash AV), `test_dict_get_missing_key_prints_none`
+
+## Fail-closed / gap declarado
+- `DictKeyTypeV1::bool_and_float_keys` — x86 exige key iterable estática
+- `ContainsV1::contains_positive_form` — needle int/bool requerido en dict
+- `FormatSpecV1::test_float_presentations`, `PercentFormatV1::test_float_spec`, `FStringsV1::test_format_spec` — `%f` / format specs no portados
+- `StripV1::test_strip_with_chars` — strip con chars no implementado
+- `SumElementTypeV1::test_non_int_elements_fail_closed` — exige rechazo explícito
+- `NativeSubsetEvidenceTests::test_cli_writes_passing_native_subset_receipt` — build evidence en PE roto
+
+## P51: Windows CI verde (2026-10-04)
+
+Run `37186362650` (`7fa956a`): **0 failed / 855 passed / 24 skipped / 157 subtests**.
+
+- `ORDER_SEQ_V1`: list/tuple `< > <= >=` compara elemento a elemento
+  (INT/BOOL/FLOAT/STR) y luego por longitud; deja de comparar punteros.
+- `SET_STR_V1`: sets con elementos str se guardan taggeados y `x en set`
+  compara por contenido (`piton_set_add_str` / `piton_set_contains_tagged`).
+- `MODULE_METADATA_V1`: `sys.modules[...]` usa get taggeado con decode de
+  puntero a modulo; antes el get historico comparaba INT vs OBJECT y
+  devolvía `None` → `(null)` al imprimir `__name__`/`__package__`.
+- `TEST`: normalizar CRLF en `dict_get_missing_key` (Windows text mode).
+- `native_evidence` era downstream del corpus; con Phase 5 verde vuelve solo.
+
+## P45–P50: resuelto en CI/local (2026-10-03)
+Verificado PE real via Wine+mingw local (oraculo CI):
+- Dicts taggeados punta a punta (subscript/get/in/iter/comp-index/store
+  unificado plain/tagged) + unbox aritmetico de slots (SLOT_ARITH_V1).
+- NONCALLABLE por trazado a const + FUNCTION_TEMP_V1 (escalares -> TypeError
+  rc 1; funciones/closures/params al runtime; AV 3221225477 cerrado).
+- WITH_CLEAR_V1 (mir compartido) + RERAISE_STALE_V1: with-handler x3 y
+  bare-reraise verificados byte a byte.
+- %f/%e/%g + :.Nf/:.Ne/:.Ng/:.N% con redondeo decimal real.
+- chr(0) via variable (SET_HYGIENE_V1), oracle UTF-8 (ORACLE_UTF8_V1).
+- Quedan fuera (buckets heredados OK en CI, divergencia solo-Wine en
+  celdas nonlocal y multifile-CWD: no tocar lo que CI acepta).
+
+## P42–P44: resuelto en CI (2026-10-03)
+Verificado en run CI Windows: 43 -> 31 -> **22 failed** (839 passed).
+- Conversiones `lista/tupla/conjunto/diccionario` como valores (CONV_*_V1).
+- `y/o` mixto via slots taggeados (BOOL_SLOT_V1 Windows).
+- Literales con str boxeados (STR_BOXED_V1) + `sum` no-int rechazado en build.
+- `join` con boxeados + `%s/%d/%r` con slots.
+- CRLF normalizado en expectativas hardcodeadas (range_as_value, conversion).
+- Queda `test_join_literal_raises_on_windows` ELIMINADO (el join ahora funciona).
+
+## REGRESIÓN candidata introducida por P36–P41 (investigar)
+- `BuiltinMarkerV1::test_conversion_builtins_as_values` (~13 subtests) y `test_converted_collection_keeps_element_type` (~3): `piton/x86.py` no ramifica antes del chequeo `BUILTIN_MARKER_V1`, así que `lista/tupla/conjunto/diccionario/rango` en posición de valor muere.
+- `BoolShortV1::test_dynamic_mixed_types`: `y/o` con operandos mixtos — P41 cubre Linux, falta portarlo al branch Windows.
+- `BuiltinMarkerV1::test_range_as_value` (5): solo CRLF EOL (`\r\n` vs `\n`) — probablemente beda de tests y no del emitter.

@@ -85,9 +85,16 @@ class PercentFormatV1(unittest.TestCase):
         # P14 lifted the V1 width restriction.
         _assert_matches(self, "imprimir('%5d' % 3)\n")
 
-    def test_float_spec_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('%f' % 1.5)\n")
+    def test_float_spec(self):
+        # P36: %f/%e/%g/%G supported via the decimal rounding helpers.
+        for source in (
+            "imprimir('%f' % 1.5)\n",
+            "imprimir('%.2f' % 1.567)\n",
+            "imprimir('%e' % 1.5)\n",
+            "imprimir('%g' % 1.5)\n",
+            "imprimir('%08.3f' % 1.5)\n",
+        ):
+            _assert_matches(self, source)
 
     def test_mapping_now_supported(self):
         # P14 lifted the V1 mapping restriction (inline literal dicts).
@@ -209,9 +216,6 @@ class PercentSpecsP14(unittest.TestCase):
 
     def test_still_closed(self):
         for source in (
-            "imprimir('%e' % 1.5)\n",
-            "imprimir('%f' % 1.5)\n",
-            "imprimir('%g' % 1.5)\n",
             "imprimir('%+d' % 5)\n",
             "imprimir('% d' % 5)\n",
             "imprimir('%#x' % 5)\n",
