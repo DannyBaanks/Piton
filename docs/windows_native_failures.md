@@ -24,6 +24,20 @@ feature-gap conocido / **REGRESIÓN candidata** (a investigar).
 - `SumElementTypeV1::test_non_int_elements_fail_closed` — exige rechazo explícito
 - `NativeSubsetEvidenceTests::test_cli_writes_passing_native_subset_receipt` — build evidence en PE roto
 
+## P51: Windows CI verde (2026-10-04)
+
+Run `37186362650` (`7fa956a`): **0 failed / 855 passed / 24 skipped / 157 subtests**.
+
+- `ORDER_SEQ_V1`: list/tuple `< > <= >=` compara elemento a elemento
+  (INT/BOOL/FLOAT/STR) y luego por longitud; deja de comparar punteros.
+- `SET_STR_V1`: sets con elementos str se guardan taggeados y `x en set`
+  compara por contenido (`piton_set_add_str` / `piton_set_contains_tagged`).
+- `MODULE_METADATA_V1`: `sys.modules[...]` usa get taggeado con decode de
+  puntero a modulo; antes el get historico comparaba INT vs OBJECT y
+  devolvía `None` → `(null)` al imprimir `__name__`/`__package__`.
+- `TEST`: normalizar CRLF en `dict_get_missing_key` (Windows text mode).
+- `native_evidence` era downstream del corpus; con Phase 5 verde vuelve solo.
+
 ## P45–P50: resuelto en CI/local (2026-10-03)
 Verificado PE real via Wine+mingw local (oraculo CI):
 - Dicts taggeados punta a punta (subscript/get/in/iter/comp-index/store
