@@ -175,6 +175,8 @@ class Win64NasmEmitter:
         self._str_elem_colls: set[str] = set()
         self._str_elem_iters: set[str] = set()
         self._bigint_elem_colls: set[str] = set()
+        self._float_elem_colls: set[str] = set()
+        self._float_elem_iters: set[str] = set()
         self._mixed_elem_colls: set[str] = set()
         self._non_int_elem_colls: set[str] = set()
         self._mixed_elem_iters: set[str] = set()
@@ -226,6 +228,7 @@ class Win64NasmEmitter:
             "extern piton_box_str_tagged",
             "extern piton_slot_num",
             "extern piton_float_fmt_fixed", "extern piton_float_fmt_pct",
+            "extern piton_float_box", "extern piton_sum_seq_bigint", "extern piton_sum_seq_float",
             "extern piton_float_fmt_exp", "extern piton_float_fmt_g",
             "extern piton_collection_get_raw",
             "extern piton_value_eq",
@@ -770,6 +773,22 @@ class Win64NasmEmitter:
                     "    call piton_collection_put_tagged",
                 ])
                 self._mixed_elem_colls.add(result)
+            elif item_type == "float":
+                # FLOAT_BOXED_V1 (Windows): float literals must be boxed
+                # as tagged PitonValue (tag=FLOAT, payload=heap double)
+                # so that runtime sum/iteration works correctly.
+                # Use put_verbatim (not put_tagged) because the value
+                # is already tagged FLOAT, not an OBJECT pointer.
+                self._load_operand(item, "rcx")
+                self.lines.append("    call piton_float_box")
+                self.lines.extend([
+                    f"    mov rcx, {self._address(result)}",
+                    f"    mov rdx, {index}",
+                    "    mov r8, rax",
+                    "    call piton_collection_put_verbatim",
+                ])
+                # Floats are not tracked as mixed for print purposes,
+                # but they ARE tagged objects now.
             else:
                 self._load_operand(item, "r8")
                 self._load_operand(item, "r9")
@@ -1112,6 +1131,7 @@ class Win64NasmEmitter:
                     self._tagged_dicts.discard(args[0])
                     self._str_elem_colls.discard(args[0])
                     self._bigint_elem_colls.discard(args[0])
+                    self._float_elem_colls.discard(args[0])
                     self._mixed_elem_colls.discard(args[0])
                     self._non_int_elem_colls.discard(args[0])
             if isinstance(args[1], str) and args[1] in self._str_elem_colls:
@@ -1124,6 +1144,8 @@ class Win64NasmEmitter:
                 self._mixed_elem_colls.add(args[0])
             if isinstance(args[1], str) and args[1] in self._non_int_elem_colls:
                 self._non_int_elem_colls.add(args[0])
+            if isinstance(args[1], str) and args[1] in self._float_elem_colls:
+                self._float_elem_colls.add(args[0])
             if isinstance(args[1], str) and args[1] in self._tagged_dicts:
                 self._tagged_dicts.add(args[0])
             for _iset, _iname in (
@@ -1413,6 +1435,46 @@ class Win64NasmEmitter:
                 # {-2,-1,-0.5,0,0.5,1,2}; constants fold exactly in Python.
                 if operator not in {"+", "-", "*", "/", "//", "%", "**"}:
                     raise NativeBuildError(f"native float operator not supported yet: {operator}")
+                if operator == "**" and {left_type, right_type} <= {"int", "bool"}:
+                    # INT_POW_V1: int ** int va a bigint/int exacto, no a float.
+                    left_const = self.constants.get(left) if isinstance(left, str) else None
+                    right_const = self.constants.get(right) if isinstance(right, str) else None
+                    if (
+                        isinstance(left_const, int) and not isinstance(left_const, bool)
+                        and isinstance(right_const, int) and not isinstance(right_const, bool)
+                    ):
+                        if right_const < 0:
+                            if left_const == 0:
+                                raise NativeBuildError("native int ** with zero base and negative exponent is not supported")
+                            folded = left_const ** right_const
+                            self.constants[result] = folded
+                            self._load_operand(folded)
+                            self.lines.append(f"    mov {self._address(result)}, rax")
+                            self.types[result] = "float"
+                            return
+                        if right_const <= 1000000:
+                            folded = left_const ** right_const
+                            self.constants[result] = folded
+                            if -(1 << 63) <= folded < (1 << 63):
+                                self._load_operand(folded)
+                                self.lines.append(f"    mov {self._address(result)}, rax")
+                                self.types[result] = "int"
+                            else:
+                                self.lines.extend([
+                                    f"    lea rcx, [{self._string(str(folded))}]",
+                                    "    call piton_bigint_from_str",
+                                    f"    mov {self._address(result)}, rax",
+                                ])
+                                self.bigint_slots.append(result)
+                                self.types[result] = "bigint"
+                            return
+                    self._load_operand(left, "rcx")
+                    self._load_operand(right, "rdx")
+                    self.lines.append("    call piton_int_pow")
+                    self._emit_exc_routing(handler_label, labels)
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "bigint"
+                    return
                 if operator == "**":
                     left_const = self.constants.get(left) if isinstance(left, str) else None
                     right_const = self.constants.get(right) if isinstance(right, str) else None
@@ -2055,20 +2117,22 @@ class Win64NasmEmitter:
                 self._emit_seq_new(kind, raw_items, result)
             self.types[result] = kind
             if kind in {"list", "tuple"} and raw_items:
-                # BIGINT_ELEM_V1 (Windows): una lista/tupla literal de solo
-                # bigints guarda punteros taggeados; get_item/iter deben
-                # tipar bigint para no imprimir los bits del tag.
+                # SUM_ELEM_V1 (Windows): tracking preciso para sum().
+                #  - bigint-only o int/bool/bigint mixto -> piton_sum_seq_bigint
+                #  - float-only o int/bool/float mixto -> piton_sum_seq_float
+                #  - int/bool puro -> piton_sum_collection
+                #  - str u otros -> TypeError runtime
                 _kinds = set()
                 for _it in raw_items:
                     _kinds.add(self.types.get(_it, "int") if isinstance(_it, str) else "int")
-                if _kinds == {"bigint"}:
+                if _kinds <= {"int", "bool", "bigint"} and "bigint" in _kinds:
                     self._bigint_elem_colls.add(result)
+                elif _kinds <= {"int", "bool", "float"} and "float" in _kinds:
+                    self._float_elem_colls.add(result)
                 elif _kinds <= {"int", "bool"}:
-                    pass
+                    pass  # pure int/bool -> existing piton_sum_collection
                 else:
-                    # cualquier mix no-int puro (bigint mezclado, float,
-                    # listas anidadas...): sum() debe rechazar en vez de
-                    # saltar elementos en silencio.
+                    # str u otros no-numéricos -> TypeError
                     self._non_int_elem_colls.add(result)
         elif op == "unpack_check":
             # UNPACK_ARITY_V1: CPython verifies the element count on
@@ -3462,29 +3526,43 @@ class Win64NasmEmitter:
             elif function_name == "sum":
                 if len(values) != 1:
                     raise NativeBuildError("native sum requires one collection")
-                if isinstance(values[0], str) and values[0] in (
-                    self._bigint_elem_colls | self._mixed_elem_colls
-                    | self._str_elem_colls
-                    | self._non_int_elem_colls
-                ):
+                val = values[0]
+                if isinstance(val, str) and val in self._non_int_elem_colls:
+                    # non-numeric elements (str, etc.) -> TypeError runtime
                     self._runtime_type_error(
                         "unsupported operand type(s) for +: non-int elements"
                     )
                     self.types[result] = "int"
                     return
-                ctype = self.types.get(values[0])
+                if isinstance(val, str) and val in self._bigint_elem_colls:
+                    # bigint elements -> piton_sum_seq_bigint (returns bigint)
+                    self._load_operand(val, "rcx")
+                    self.lines.append("    call piton_sum_seq_bigint")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "bigint"
+                    return
+                if isinstance(val, str) and val in self._float_elem_colls:
+                    # float elements -> piton_sum_seq_float (returns double in xmm0)
+                    self._load_operand(val, "rcx")
+                    self.lines.append("    call piton_sum_seq_float")
+                    self.lines.append("    movq rax, xmm0")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "float"
+                    return
+                ctype = self.types.get(val)
                 if ctype == "dict":
-                    self._load_operand(values[0], "rcx")
+                    self._load_operand(val, "rcx")
                     self.lines.append("    call piton_sum_dict")
                 elif ctype == "set":
-                    self._load_operand(values[0], "rcx")
+                    self._load_operand(val, "rcx")
                     self.lines.append("    call piton_sum_set")
                 elif ctype == "range":
                     # RANGE_VALUE_V1: exact, never materialized.
-                    self._load_operand(values[0], "rcx")
+                    self._load_operand(val, "rcx")
                     self.lines.append("    call piton_sum_range")
                 else:
-                    self._load_operand(values[0], "rcx")
+                    # list/tuple with pure int/bool elements
+                    self._load_operand(val, "rcx")
                     self.lines.append("    call piton_sum_collection")
                 self.types[result] = "int"
             elif function_name in {"range", "rango"}:
