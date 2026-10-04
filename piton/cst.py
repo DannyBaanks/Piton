@@ -68,6 +68,7 @@ class CSTNodeType(Enum):
     IF_EXPR = "if_expr"  # a si cond sino b
     LAMBDA = "lambda"
     AWAIT = "await"
+    NAMED_EXPR = "named_expr"
     FSTRING = "fstring"
     FSTRING_PART = "fstring_part"
     FSTRING_EXPR = "fstring_expr"
@@ -537,6 +538,13 @@ class Await(CSTNode):
 
 
 @dataclass(slots=True)
+class NamedExpr(CSTNode):
+    target: Optional[CSTNode] = None
+    value: Optional[CSTNode] = None
+    type: CSTNodeType = CSTNodeType.NAMED_EXPR
+
+
+@dataclass(slots=True)
 class FString(CSTNode):
     parts: List[CSTNode] = field(default_factory=list)  # FStringPart y FStringExpr
     type: CSTNodeType = CSTNodeType.FSTRING
@@ -676,7 +684,7 @@ CSTExpr = Union[
     Name, Constant, BinOp, UnaryOp, Compare, BoolOp, Call,
     Attribute, Subscript, Slice, List, Tuple, Set, Dict,
     ListComp, SetComp, DictComp, GenExpr, IfExpr, Lambda,
-    Await, FString, FStringPart, FStringExpr,
+    Await, NamedExpr, FString, FStringPart, FStringExpr,
     MatchValue, MatchSingleton, MatchSequence, MatchMapping,
     MatchClass, MatchStar, MatchAs, MatchOr,
 ]

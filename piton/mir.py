@@ -1400,6 +1400,8 @@ class MIRLowerer:
             self._lower_try(builder, node)
         elif kind == HIRKind.WITH:
             self._lower_with(builder, node)
+        elif kind == HIRKind.MATCH:
+            self._lower_match(builder, node)
         elif kind == HIRKind.RAISE:
             self._lower_raise(builder, node)
         elif kind == HIRKind.IMPORT:
@@ -2109,6 +2111,83 @@ class MIRLowerer:
 
         builder.current = end_block
 
+    def _lower_match(self, builder: _Builder, node: HIRNode) -> None:
+        """MATCH_V1: lower `segun x: caso pattern: body` to an if/elif chain.
+
+        Supports literal patterns (compare ==), type patterns (`caso int:`
+        -> tipo(x) == int) and the wildcard `_` (always true).
+        """
+        subject = self._lower_expr(builder, node.subject)
+        end_block = builder.new_block()
+
+        for index, case_block in enumerate(node.cases):
+            pattern = case_block.pattern
+            body = case_block.body
+            next_block = builder.new_block()
+            body_block = builder.new_block()
+
+            # Build the condition for this case
+            if pattern is None:
+                cond = builder.temp()
+                builder.emit("const", 1, result=cond)
+            elif pattern.kind == HIRKind.CONST:
+                lit = builder.temp()
+                builder.emit("const", pattern.value, result=lit)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, lit, result=cond)
+            elif pattern.kind == HIRKind.LOAD and pattern.name == "_":
+                cond = builder.temp()
+                builder.emit("const", 1, result=cond)
+            elif pattern.kind == HIRKind.LOAD and pattern.name in {
+                "int", "entero", "str", "texto", "float", "decimal",
+                "bool", "booleano", "list", "lista", "tuple", "tupla",
+                "dict", "diccionario", "set", "conjunto",
+            }:
+                type_map = {
+                    "int": "int", "entero": "int",
+                    "str": "str", "texto": "str",
+                    "float": "float", "decimal": "float",
+                    "bool": "bool", "booleano": "bool",
+                    "list": "list", "lista": "list",
+                    "tuple": "tuple", "tupla": "tuple",
+                    "dict": "dict", "diccionario": "dict",
+                    "set": "set", "conjunto": "set",
+                }
+                type_name = type_map[pattern.name]
+                tipo_result = builder.temp()
+                builder.emit("call", "tipo", (subject,), None, result=tipo_result)
+                type_str = builder.temp()
+                builder.emit("const", f"<class '{type_name}'>", result=type_str)
+                cond = builder.temp()
+                builder.emit("compare", "==", tipo_result, type_str, result=cond)
+            else:
+                pattern_val = self._lower_expr(builder, pattern)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, pattern_val, result=cond)
+
+            # Guard: `caso X si guard:`
+            if case_block.guard is not None:
+                guard_val = self._lower_expr(builder, case_block.guard)
+                both = builder.temp()
+                builder.emit("binary", "y", cond, guard_val, result=both)
+                cond = both
+
+            # Branch: if cond -> body, else -> next case
+            builder.emit("branch", cond, body_block.label, next_block.label)
+
+            # Lower the body
+            builder.current = body_block
+            for stmt in body:
+                self._lower_statement(builder, stmt)
+            builder.emit("jump", end_block.label)
+
+            # Continue with the next case (or fall to end)
+            builder.current = next_block
+
+        builder.current = next_block
+        builder.emit("jump", end_block.label)
+        builder.current = end_block
+
     def _lower_raise(self, builder: _Builder, node: HIRNode) -> None:
         if node.exc is None:
             self._lower_reraise(builder)
@@ -2250,6 +2329,14 @@ class MIRLowerer:
             result = builder.temp()
             builder.emit("const", node.value, result=result)
             return result
+        if kind == HIRKind.NAMED_EXPR:
+            # WALRUS_V1: `(n := 5)` asigna y evalúa al valor asignado.
+            value = self._lower_expr(builder, node.value)
+            target_name = node.target.name if node.target.kind in (HIRKind.LOAD, HIRKind.STORE) else None
+            if target_name is None:
+                raise MIRLoweringError("native walrus target must be a plain name")
+            builder.emit("store", target_name, value)
+            return value
         if kind == HIRKind.LOAD:
             if node.name in builder.closures:
                 lifted_name, _, n_args = builder.closures[node.name]
@@ -2819,6 +2906,14 @@ class MIRLowerer:
             result = builder.temp()
             builder.emit("const", node.value, result=result)
             return result
+        if kind == HIRKind.NAMED_EXPR:
+            # WALRUS_V1: `(n := 5)` asigna y evalúa al valor asignado.
+            value = self._lower_expr(builder, node.value)
+            target_name = node.target.name if node.target.kind in (HIRKind.LOAD, HIRKind.STORE) else None
+            if target_name is None:
+                raise MIRLoweringError("native walrus target must be a plain name")
+            builder.emit("store", target_name, value)
+            return value
         if kind == HIRKind.LOAD:
             if node.name in builder.closures:
                 lifted_name, _, n_args = builder.closures[node.name]

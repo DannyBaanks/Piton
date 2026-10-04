@@ -70,6 +70,7 @@ class TokenType(Enum):
 
     COMMA = auto()
     COLON = auto()
+    COLONEQUAL = auto()
     SEMI = auto()
     DOT = auto()
     DOT_DOT_DOT = auto()
@@ -177,6 +178,7 @@ SIMPLE_PATTERNS = [
     (TokenType.TILDE, r"~"),
     (TokenType.LT, r"<"),
     (TokenType.GT, r">"),
+    (TokenType.COLONEQUAL, r":="),
     (TokenType.EQUAL, r"="),
     (TokenType.LPAREN, r"\("),
     (TokenType.RPAREN, r"\)"),

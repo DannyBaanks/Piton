@@ -12,7 +12,7 @@ from piton.hir import (
     Assign as HIRAssign, AnnAssign as HIRAnnAssign, AugAssign as HIRAugAssign,
     Const, BinOp, UnOp, Compare, BoolOp, Call, Keyword,
     Attr, Subscr, List, Tuple, Starred, Set, Dict,
-    ListComp, SetComp, DictComp, GenExpr, CompFor, IfExpr, Await,
+    ListComp, SetComp, DictComp, GenExpr, CompFor, IfExpr, Await, NamedExpr,
     Import, ImportFrom, Alias,
     HIRKind,
 )
@@ -425,6 +425,11 @@ class Lowerer:
     def _lower_await(self, cst: CWAwait):
         value = self.lower(cst.value)
         return Await(kind=HIRKind.AWAIT, value=value)
+
+    def _lower_namedexpr(self, cst):
+        target = self.lower(cst.target)
+        value = self.lower(cst.value)
+        return NamedExpr(kind=HIRKind.NAMED_EXPR, target=target, value=value)
 
     def _lower_decorator(self, cst: "Decorator"):
         return self.lower(cst.func) if cst.func else HIRNode(kind=HIRKind.MODULE)
