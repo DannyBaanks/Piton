@@ -1158,6 +1158,71 @@ static int piton_value_eq_raw(int64_t a, int64_t b) {
     }
 }
 
+/* ORDER_SEQ_V1: three-way compare for list/tuple ordering (CPython compares
+ * element-wise, then by length). INT/BOOL compare as signed payloads, FLOAT
+ * as doubles, STR by content; anything else fails closed with the CPython
+ * TypeError instead of silently comparing pointers. */
+static int64_t piton_value_cmp_raw(int64_t a, int64_t b) {
+    if (a == b) return 0;
+    int ta = pv_tag(a), tb = pv_tag(b);
+    if (ta != tb) {
+        piton_raise_unhandled("TypeError",
+            "'<' not supported between instances of these types");
+        return 2;
+    }
+    int64_t pa = pv_payload(a), pb = pv_payload(b);
+    switch (ta) {
+    case PITON_TAG_INT:
+    case PITON_TAG_BOOL: {
+        int64_t va = pv_payload_signed(a), vb = pv_payload_signed(b);
+        return va < vb ? -1 : va > vb ? 1 : 0;
+    }
+    case PITON_TAG_FLOAT: {
+        double da = *(double *)pa, db = *(double *)pb;
+        return da < db ? -1 : da > db ? 1 : 0;
+    }
+    case PITON_TAG_OBJECT: {
+        PitonHeader *ha = (PitonHeader *)pa, *hb = (PitonHeader *)pb;
+        if (ha->sub_tag != hb->sub_tag) {
+            piton_raise_unhandled("TypeError",
+                "'<' not supported between instances of these types");
+            return 2;
+        }
+        if (ha->sub_tag == SUB_TAG_STR) {
+            PitonStr *sa = (PitonStr *)pa, *sb = (PitonStr *)pb;
+            int64_t n = sa->len < sb->len ? sa->len : sb->len;
+            int c = n ? memcmp(sa->data, sb->data, (size_t)n) : 0;
+            if (c) return c < 0 ? -1 : 1;
+            return sa->len < sb->len ? -1 : sa->len > sb->len ? 1 : 0;
+        }
+        piton_raise_unhandled("TypeError",
+            "'<' not supported between instances of these types");
+        return 2;
+    }
+    default:
+        piton_raise_unhandled("TypeError",
+            "'<' not supported between instances of these types");
+        return 2;
+    }
+}
+
+int64_t piton_seq_cmp_tagged(void *raw_a, void *raw_b) {
+    PitonCollection *a = raw_a, *b = raw_b;
+    if (!a || !b ||
+        (a->header.sub_tag != SUB_TAG_LIST && a->header.sub_tag != SUB_TAG_TUPLE) ||
+        (b->header.sub_tag != SUB_TAG_LIST && b->header.sub_tag != SUB_TAG_TUPLE)) {
+        piton_raise_unhandled("TypeError",
+            "'<' not supported between instances of these types");
+        return 2;
+    }
+    int64_t n = a->length < b->length ? a->length : b->length;
+    for (int64_t i = 0; i < n; ++i) {
+        int c = piton_value_cmp_raw(a->items[i], b->items[i]);
+        if (c) return c;
+    }
+    return a->length < b->length ? -1 : a->length > b->length ? 1 : 0;
+}
+
 int piton_value_eq(int64_t a, int64_t b) { return piton_value_eq_raw(a, b); }
 
 /* ── Deep free ─────────────────────────────────────────────────────────── */
@@ -3082,6 +3147,14 @@ int piton_set_contains(void *raw, int64_t value, int64_t type_tag) {
     return 0;
 }
 
+int64_t piton_set_contains_tagged(void *raw, int64_t needle) {
+    PitonSet *s = raw;
+    if (!s) return 0;
+    for (int64_t i = 0; i < s->length; ++i)
+        if (piton_value_eq_raw(s->items[i], needle)) return 1;
+    return 0;
+}
+
 void piton_collection_free(void *raw) {
     if (!raw) return;
     piton_value_deep_free(pv_encode(PITON_TAG_OBJECT, (int64_t)raw));
@@ -3248,6 +3321,21 @@ void piton_set_add(void *raw, int64_t value) {
     PitonSet *s = raw;
     if (!s) return;
     int64_t ev = pv_int(value);  /* auto-encode */
+    for (int64_t i = 0; i < s->length; ++i)
+        if (piton_value_eq_raw(s->items[i], ev)) return;
+    if (s->length >= s->capacity) {
+        int64_t new_cap = s->capacity ? s->capacity * 2 : 4;
+        s->items = realloc(s->items, (size_t)new_cap * sizeof(int64_t));
+        memset(s->items + s->capacity, 0, (size_t)(new_cap - s->capacity) * sizeof(int64_t));
+        s->capacity = new_cap;
+    }
+    s->items[s->length++] = ev;
+}
+
+void piton_set_add_str(void *raw, const char *value) {
+    PitonSet *s = raw;
+    if (!s) return;
+    int64_t ev = piton_box_str_tagged(value);
     for (int64_t i = 0; i < s->length; ++i)
         if (piton_value_eq_raw(s->items[i], ev)) return;
     if (s->length >= s->capacity) {

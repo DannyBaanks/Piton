@@ -308,6 +308,8 @@ class Win64NasmEmitter:
             "extern piton_str_strip", "extern piton_str_join", "extern piton_str_format",
             "extern piton_str_strip_chars",
             "extern piton_dict_contains", "extern piton_set_contains",
+            "extern piton_set_contains_tagged", "extern piton_seq_cmp_tagged",
+            "extern piton_set_add_str",
             "extern piton_closure_new8", "extern piton_closure_call6",
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
             "extern piton_frame_call",
@@ -1828,9 +1830,15 @@ class Win64NasmEmitter:
                         f"'{right_type}' is not supported (CPython raises TypeError: "
                         f"'{operator}' not supported between instances of these types)"
                     )
-                self._load_operand(left, "rax")
-                self._load_operand(right, "rcx")
-                self.lines.append("    cmp rax, rcx")
+                if operator in {"<", ">", "<=", ">="} and left_type == right_type and left_type in {"list", "tuple"}:
+                    self._load_operand(left, "rcx")
+                    self._load_operand(right, "rdx")
+                    self.lines.append("    call piton_seq_cmp_tagged")
+                    self.lines.append("    cmp rax, 0")
+                else:
+                    self._load_operand(left, "rax")
+                    self._load_operand(right, "rcx")
+                    self.lines.append("    cmp rax, rcx")
             if not mixed_non_numeric and not float_compare:
                 condition = {"==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge"}[operator]
                 self.lines.append(f"    set{condition} al")
@@ -1947,8 +1955,12 @@ class Win64NasmEmitter:
                     self.lines.extend([
                         f"    mov rcx, {self._address(result)}",
                     ])
-                    self._load_operand(item, "rdx")
-                    self.lines.append("    call piton_set_add")
+                    if self.types.get(item, "int") == "str":
+                        self._load_operand(item, "rdx")
+                        self.lines.append("    call piton_set_add_str")
+                    else:
+                        self._load_operand(item, "rdx")
+                        self.lines.append("    call piton_set_add")
             else:
                 kind_id = {"list": 1, "tuple": 2}[kind]
                 if kind == "tuple" and result:
@@ -2139,6 +2151,19 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_dict_nth_key")
                     self.lines.append(f"    mov {self._address(result)}, rax")
                     self.types[result] = "slot"
+                    return
+                if container_type == "dict:module":
+                    # MODULE_METADATA_V1: las keys son strings taggeadas y los
+                    # valores son INT-tag de puntero a modulo; el get historico
+                    # comparaba INT vs OBJECT y devolvia None.
+                    _kk = self.types.get(key, "str")
+                    self._emit_box(key, _kk)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    self.lines.append(f"    mov rcx, {self._address(container)}")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    self.lines.append("    call piton_dict_get_tagged_int")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "object:module"
                     return
                 if container in self._tagged_dicts or self.aliases.get(container, container) in self._tagged_dicts:
                     # TAGGED_DICT_V1: key boxeada + get verbatim; el valor
@@ -4697,6 +4722,17 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov rcx, {self._address(right)}")
                 self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
                 self.lines.append("    call piton_dict_contains_tagged")
+                if negate:
+                    self.lines.append("    xor eax, 1")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+                return
+            if haystack_type == "set" and needle_type == "str":
+                self._emit_box(left, needle_type)
+                self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                self.lines.append(f"    mov rcx, {self._address(right)}")
+                self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                self.lines.append("    call piton_set_contains_tagged")
                 if negate:
                     self.lines.append("    xor eax, 1")
                 self.lines.append(f"    mov {self._address(result)}, rax")
