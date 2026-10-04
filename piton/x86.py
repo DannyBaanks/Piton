@@ -177,6 +177,7 @@ class Win64NasmEmitter:
         self._mixed_elem_iters: set[str] = set()
         self._tagged_dicts: set[str] = set()
         self._tagged_dict_iters: set[str] = set()
+        self._plain_int_dicts: set[str] = set()
         self._tagged_dict_iter_kinds: dict[str, str | None] = {}
         # DICT_KEY_TYPE_V1: static type of a dict's KEYS, so iterating a dict
         # yields the right static type. The iterator used to hardcode "str",
@@ -217,6 +218,7 @@ class Win64NasmEmitter:
             "extern piton_dict_contains_tagged", "extern piton_box_float",
             "extern piton_dict_nth_key", "extern piton_set_nth",
             "extern piton_slot_bool", "extern piton_iterator_next_any_raw",
+            "extern piton_slot_callable_check",
             "extern piton_collection_put_verbatim", "extern piton_list_append_tagged",
             "extern piton_box_str_tagged",
             "extern piton_slot_num",
@@ -366,6 +368,7 @@ class Win64NasmEmitter:
         self.constants = {}
         self._boolh_types: dict[str, str] = {}
         self._function_temps: set[str] = set()
+        self._store_source: dict[str, Any] = {}
         self._boolh_first: dict[str, tuple] = {}
         self._chr_results: set[str] = set()
         if function.vararg:
@@ -484,6 +487,7 @@ class Win64NasmEmitter:
         self.constants = {}
         self._boolh_types: dict[str, str] = {}
         self._function_temps: set[str] = set()
+        self._store_source: dict[str, Any] = {}
         self._boolh_first: dict[str, tuple] = {}
         self._chr_results: set[str] = set()
         if function.vararg:
@@ -733,7 +737,7 @@ class Win64NasmEmitter:
                 self._load_operand(source, "rcx")
                 self.lines.append("    call piton_iterator_new_any")
                 self.types[result] = f"iterator:{source_type or 'unknown'}"
-                if source in self._tagged_dicts or self.aliases.get(source, source) in self._tagged_dicts:
+                if source_type == "dict" and not self._dict_is_plain(source):
                     self._tagged_dict_iters.add(result)
                     _src = source if source in self._dict_key_types else self.aliases.get(source, source)
                     self._tagged_dict_iter_kinds[result] = self._dict_key_types.get(_src)
@@ -929,6 +933,17 @@ class Win64NasmEmitter:
                 self._non_int_elem_colls.add(result)
             if name in self._tagged_dicts:
                 self._tagged_dicts.add(result)
+            for _iset, _iname in (
+                (self._tagged_dict_iters, "_tagged_dict_iters"),
+                (self._str_elem_iters, "_str_elem_iters"),
+                (self._mixed_elem_iters, "_mixed_elem_iters"),
+            ):
+                if name in _iset:
+                    _iset.add(result)
+                    if _iname == "_tagged_dict_iters" and name in self._tagged_dict_iter_kinds:
+                        self._tagged_dict_iter_kinds[result] = self._tagged_dict_iter_kinds[name]
+            if name in self._plain_int_dicts:
+                self._plain_int_dicts.add(result)
             if name in self._dict_key_types:
                 self._dict_key_types[result] = self._dict_key_types[name]
             if name in self._dict_val_types:
@@ -990,6 +1005,8 @@ class Win64NasmEmitter:
                 self._dict_val_types[result] = self._dict_val_types[name]
 
         elif op == "store":
+            if isinstance(args[0], str) and isinstance(args[1], str):
+                self._store_source[args[0]] = args[1]
             if isinstance(args[0], str) and not args[0].startswith("%"):
                 # SET_HYGIENE_V1 (Windows): reassigning a VARIABLE lifts every
                 # provenance mark (chr results, tagged dicts, elem-kind
@@ -1021,6 +1038,17 @@ class Win64NasmEmitter:
                 self._non_int_elem_colls.add(args[0])
             if isinstance(args[1], str) and args[1] in self._tagged_dicts:
                 self._tagged_dicts.add(args[0])
+            for _iset, _iname in (
+                (self._tagged_dict_iters, "_tagged_dict_iters"),
+                (self._str_elem_iters, "_str_elem_iters"),
+                (self._mixed_elem_iters, "_mixed_elem_iters"),
+            ):
+                if isinstance(args[1], str) and args[1] in _iset:
+                    _iset.add(args[0])
+                    if _iname == "_tagged_dict_iters" and args[1] in self._tagged_dict_iter_kinds:
+                        self._tagged_dict_iter_kinds[args[0]] = self._tagged_dict_iter_kinds[args[1]]
+            if isinstance(args[1], str) and args[1] in self._plain_int_dicts:
+                self._plain_int_dicts.add(args[0])
             if isinstance(args[1], str) and args[1] in self._dict_key_types:
                 self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
             if isinstance(args[1], str) and args[1] in self._dict_val_types:
@@ -1849,6 +1877,11 @@ class Win64NasmEmitter:
                         self.lines.append("    call piton_dict_put")
                 if _tagged:
                     self._tagged_dicts.add(result)
+                else:
+                    # PLAIN_DICT_V1 (Windows): keys y valores int/bool usan
+                    # el camino historico byte-identico (incluido el miss
+                    # fail-loud); el resto va taggeado.
+                    self._plain_int_dicts.add(result)
                 if all(self.types.get(key) == "str" for key, _ in raw_items):
                     self.strkey_dict_temps.add(result)
                 if result and raw_items:
@@ -2112,6 +2145,24 @@ class Win64NasmEmitter:
                     # tipa slot (print/eq/truth por tag en runtime), SALVO
                     # valores int/bool probados que se decodifican (la
                     # aritmetica sobre ellos debe seguir funcionando).
+                    _kk = self.types.get(key, "int")
+                    self._emit_box(key, _kk)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    self.lines.append(f"    mov rcx, {self._address(container)}")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    _vk = self._tagged_dict_val_kind(container)
+                    if _vk in {"int", "bool"}:
+                        self.lines.append("    call piton_dict_get_tagged_int")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = _vk
+                    else:
+                        self.lines.append("    call piton_dict_get_tagged")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "slot"
+                    return
+                if container_type == "dict" and not self._dict_is_plain(container):
+                    # TAGGED_DICT_V1 (generalizado): todo dict no-plain se
+                    # lee taggeado (los encodings int son identicos).
                     _kk = self.types.get(key, "int")
                     self._emit_box(key, _kk)
                     self.lines.append(f"    mov {self._address('@scratch0')}, rax")
@@ -3472,26 +3523,21 @@ class Win64NasmEmitter:
                         raise NativeBuildError(
                             f"native call to builtin '{function_name}' is not supported in this position"
                         )
-                    _callee_root = function_operand
-                    _seen_alias = set()
-                    while (isinstance(_callee_root, str) and _callee_root in self.aliases
-                           and _callee_root not in _seen_alias):
-                        _seen_alias.add(_callee_root)
-                        _callee_root = self.aliases[_callee_root]
-                    _is_param = _callee_root in getattr(self.function, "params", ())
-                    _is_func = (
-                        function_name in self.function_names
-                        or (isinstance(function_operand, str) and function_operand in self._function_temps)
-                        or (isinstance(function_operand, str) and function_operand in self.function_names)
-                    )
-                    if (not _is_param and not _is_func
-                        and self.types.get(function_operand, "") in {
-                            "int", "float", "str", "bool", "none", "list", "tuple",
-                            "dict", "set", "range", "bigint", "str-boxed", "slot",
-                        }):
-                        # NONCALLABLE_V1 (Windows): a statically non-callable
-                        # callee raises TypeError at runtime (exit 1) instead
-                        # of jumping through its value bits (AV on float/str).
+                    _callee_scalar = self._callee_proven_scalar(function_operand)
+                    _callee_slot = self.types.get(function_operand, "") == "slot"
+                    if _callee_slot:
+                        # NONCALLABLE_V1 (Windows): un slot INT/BOOL como
+                        # callee es TypeError seguro; otros tags siguen el
+                        # camino dinamico (una funcion guardada en dict
+                        # llega como OBJECT y debe seguir callable).
+                        self._load_operand(function_operand, "rcx")
+                        self.lines.append("    call piton_slot_callable_check")
+                    elif _callee_scalar:
+                        # NONCALLABLE_V1 (Windows): un escalar probado por
+                        # trazado a const hace TypeError en runtime (exit 1)
+                        # en vez de saltar por sus bits (AV en float/str).
+                        # Funciones, closures, params y valores desconocidos
+                        # siguen el camino dinamico (magic check del runtime).
                         self.lines.append("    call piton_raise_not_callable")
                         self.types[result] = "none"
                         return
@@ -4644,9 +4690,7 @@ class Win64NasmEmitter:
             self._load_operand(left, "rdx")
             self.lines.append("    call piton_str_contains")
         elif haystack_type in {"list", "tuple", "dict", "set"}:
-            if haystack_type == "dict" and (
-                right in self._tagged_dicts or self.aliases.get(right, right) in self._tagged_dicts
-            ):
+            if haystack_type == "dict" and not self._dict_is_plain(right):
                 # TAGGED_DICT_V1: needle boxeado + match por contenido.
                 self._emit_box(left, needle_type)
                 self.lines.append(f"    mov {self._address('@scratch0')}, rax")
@@ -5270,12 +5314,46 @@ class Win64NasmEmitter:
                 self.lines[i - 2:i + 1] = self._emit_boolh_store(holder, value, vtype)
                 return
 
+    def _dict_is_plain(self, container: Any) -> bool:
+        """True si el dict es provablemente all-int (camino historico
+        byte-identico, incluido el miss fail-loud). Todo lo demas
+        (incluidos dicts sin tracking, p.ej. retornos de funcion) va
+        por el camino taggeado."""
+        if isinstance(container, str):
+            if container in self._plain_int_dicts:
+                return True
+            if self.aliases.get(container, container) in self._plain_int_dicts:
+                return True
+        return False
+
     def _tagged_dict_val_kind(self, container: Any) -> str | None:
         """Static value kind of a tagged dict (None when mixed/unknown)."""
         kind = self._dict_val_types.get(container)
         if kind is None and isinstance(container, str):
             kind = self._dict_val_types.get(self.aliases.get(container, container))
         return kind
+
+    def _callee_proven_scalar(self, operand: Any) -> bool:
+        """True si el callee es provablemente un escalar no-callable:
+        una constante int/float/str/bool/None rastreada por stores/loads/
+        aliases, o un temp con tipo escalar estatico que no es funcion,
+        param ni slot (los slots van por check de runtime)."""
+        if self.types.get(operand, "") == "slot":
+            return False
+        cur = operand
+        seen: set[str] = set()
+        while isinstance(cur, str) and cur not in seen:
+            seen.add(cur)
+            if cur in self.constants:
+                return isinstance(self.constants[cur], (int, float, bool, str)) or self.constants[cur] is None
+            if cur in self.aliases:
+                cur = self.aliases[cur]
+                continue
+            if cur in self._store_source:
+                cur = self._store_source[cur]
+                continue
+            break
+        return False
 
     def _emit_box(self, value: Any, vtype: str) -> None:
         """Box a raw operand as a tagged PitonValue in rax (dict keys/values)."""
