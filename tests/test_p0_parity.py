@@ -93,12 +93,14 @@ class SeqConcatV1(unittest.TestCase):
         _assert_matches(self, "imprimir((1, 2) + (3,))\n")
 
     def test_list_plus_tuple_fail_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir([1] + (2,))\n")
+        result = compare_native_to_cpython("imprimir([1] + (2,))\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
 
     def test_dict_plus_dict_fail_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir({'a': 1} + {'b': 2})\n")
+        result = compare_native_to_cpython("imprimir({'a': 1} + {'b': 2})\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
 
 
 class SeqReprQuotesV1(unittest.TestCase):
@@ -879,12 +881,9 @@ class OrderingMixedTypesV1(unittest.TestCase):
             "imprimir(Nada >= Nada)\n",
             "imprimir([1] < 'a')\n",
         ):
-            try:
-                compare_native_to_cpython(source)
-            except NativeBuildError:
-                pass
-            else:
-                self.fail(f"ordering between incomparable types not closed: {source}")
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1, source)
+            self.assertIn(b"TypeError", result.native.stderr, source)
 
     def test_orderable_pairs_still_work(self):
         for source in (
@@ -928,19 +927,13 @@ class SumElementTypeV1(unittest.TestCase):
             _assert_matches(self, source)
 
     def test_non_int_elements_fail_closed(self):
-        for source in (
-            "imprimir(sum([10 ** 20]))\n",
-            "imprimir(sum(['a', 'b']))\n",
-            "imprimir(sum([1.5, 2.5]))\n",
-        ):
-            try:
-                result = compare_native_to_cpython(source)
-            except NativeBuildError:
-                continue
-            self.fail(
-                f"sum over non-int elements produced {result.native.stdout!r} "
-                "instead of refusing (CPython sums them)"
-            )
+        # SUM_ELEM_V1: bigint y float ya suman como CPython; solo los
+        # elementos no numericos siguen siendo un TypeError en runtime.
+        _assert_matches(self, "imprimir(sum([10 ** 20]))\n")
+        _assert_matches(self, "imprimir(sum([1.5, 2.5]))\n")
+        result = compare_native_to_cpython("imprimir(sum(['a', 'b']))\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
 
     def test_list_printing_unaffected(self):
         _assert_matches(self, "imprimir([1, 2])\n")
@@ -999,12 +992,9 @@ class DivergentCluster29V1(unittest.TestCase):
 
     def test_abs_rejects_non_numeric(self):
         for source in ("imprimir(abs(Nada))\n", "imprimir(abs('a'))\n", "imprimir(abs([1]))\n"):
-            try:
-                compare_native_to_cpython(source)
-            except NativeBuildError:
-                pass
-            else:
-                self.fail(f"abs of non-numeric not closed: {source}")
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1, source)
+            self.assertIn(b"TypeError", result.native.stderr, source)
         for source in ("imprimir(abs(-3))\n", "imprimir(abs(-2.5))\n"):
             _assert_matches(self, source)
 
@@ -1015,17 +1005,13 @@ class DivergentCluster29V1(unittest.TestCase):
         _assert_matches(self, "imprimir(Nada es Nada)\n")
 
     def test_sum_over_bigint_or_mixed_refuses(self):
-        for source in (
-            "imprimir(sum([10 ** 20, 1]))\n",
-            "imprimir(sum([10 ** 20]))\n",
-            "imprimir(sum([1, 'a']))\n",
-        ):
-            try:
-                compare_native_to_cpython(source)
-            except NativeBuildError:
-                pass
-            else:
-                self.fail(f"sum over unsupported element kinds not closed: {source}")
+        # SUM_ELEM_V1: bigint ya suma; solo la mezcla con str sigue siendo
+        # un TypeError en runtime.
+        _assert_matches(self, "imprimir(sum([10 ** 20, 1]))\n")
+        _assert_matches(self, "imprimir(sum([10 ** 20]))\n")
+        result = compare_native_to_cpython("imprimir(sum([1, 'a']))\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
         _assert_matches(self, "imprimir(sum([1, 2, 3]))\n")
 
 

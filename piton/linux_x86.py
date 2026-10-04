@@ -659,6 +659,8 @@ static void*piton_bigint_pow_small(long base,long exp){void*acc=piton_bigint_fro
 static long bi_cmp_magnitude(PitonBigInt*a,PitonBigInt*b){long ac=a->count,bc=b->count;while(ac>0&&a->limbs[ac-1]==0)ac--;while(bc>0&&b->limbs[bc-1]==0)bc--;if(ac!=bc)return ac>bc?1:-1;for(long i=ac-1;i>=0;--i){if(a->limbs[i]!=b->limbs[i])return a->limbs[i]>b->limbs[i]?1:-1;}return 0;}
 static void bi_div_mod_internal(PitonBigInt*quot,PitonBigInt*rem,PitonBigInt*dividend,PitonBigInt*divisor){long dc=dividend->count;long dvc=divisor->count;bi_ensure(quot,dc);for(long i=0;i<dc;++i)quot->limbs[i]=0;quot->count=dc;bi_ensure(rem,dvc);for(long i=0;i<dvc;++i)rem->limbs[i]=0;rem->count=0;for(long i=dc-1;i>=0;--i){for(int b=63;b>=0;--b){rem->count=(i+1>rem->count)?i+1:rem->count;for(long j=rem->count-1;j>0;--j)rem->limbs[j]=((rem->limbs[j]<<1)|((rem->limbs[j-1]>>63)&1));rem->limbs[0]=(rem->limbs[0]<<1)|((dividend->limbs[i]>>b)&1);if(bi_cmp_magnitude(rem,divisor)>=0){bi_sub_mag(rem,rem,divisor);quot->limbs[i]|=(1UL<<b);}}}bi_trim(quot);bi_trim(rem);}
 static void*piton_bigint_floor_div(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*q=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));q->sign=0;q->count=0;q->capacity=0;q->limbs=0;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=0;r->count=0;r->capacity=0;r->limbs=0;bi_div_mod_internal(q,r,x,y);q->sign=x->sign^y->sign;bi_trim(q);return q;}
+static long piton_sum_seq_bigint(PitonSeq*s){void*acc=piton_bigint_from_i64(0);if(!s)return (long)acc;for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_BIGINT)acc=piton_bigint_add(acc,(void*)v.bits);else if(v.kind==PK_INT||v.kind==PK_BOOL)acc=piton_bigint_add(acc,piton_bigint_from_i64(v.bits));else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'str' and 'int'");return 0;}}return (long)acc;}
+static long piton_sum_seq_float(PitonSeq*s){double r=0.0;if(!s)return piton_double_bits(r);for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_FLOAT)r+=piton_bits_double(v.bits);else if(v.kind==PK_INT||v.kind==PK_BOOL)r+=(double)v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'str' and 'int'");return 0;}}return piton_double_bits(r);}
 static void*piton_bigint_mod(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*q=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));q->sign=0;q->count=0;q->capacity=0;q->limbs=0;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=0;r->count=0;r->capacity=0;r->limbs=0;bi_div_mod_internal(q,r,x,y);if(r->count!=0&&r->sign!=0){PitonBigInt*ys=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));ys->sign=y->sign^1;ys->count=y->count;ys->capacity=y->capacity;ys->limbs=y->limbs;r= piton_bigint_add(r,ys);}bi_trim(r);return r;}
 static void*bi_shl_u64(unsigned long v,long k){PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=1;r->count=0;r->capacity=0;r->limbs=0;if(!v||k<0)return r;long word=k/64;int bits=(int)(k%64);if(bits==0){bi_ensure(r,word+1);r->limbs[word]=v;r->count=word+1;}else{bi_ensure(r,word+2);r->limbs[word]=(v<<bits);r->limbs[word+1]=(v>>(64-bits));r->count=word+2;}bi_trim(r);return r;}
 static int piton_bi_bit(void*a,long p){PitonBigInt*x=(PitonBigInt*)a;if(p<0)return 0;long i=p/64;int b=(int)(p%64);if(i>=x->count)return 0;return(int)((x->limbs[i]>>b)&1UL);}
@@ -966,67 +968,9 @@ class LinuxCEmitter:
         layout = self.generator_layouts.get(function.name)
         if layout is None:
             raise NativeBuildError(f"native generator '{function.name}' has no persisted-slot layout")
-        ordered = sorted(layout.items(), key=lambda item: item[1])
-        lines = [f"static long {_name(function.name)}(PitonGenerator *piton_gen) {{"]
-        if ordered:
-            lines.append("    long " + ", ".join(f"{_name(slot)}=0" for slot, _ in ordered) + ";")
-        lines.append("    long __sent = 0;")
-        aliases: dict[str, str] = {}
-        types: dict[str, str] = {}
-        self._fn_consts = {}
-        self._boolh_types: dict[str, str] = {}
-        self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
-        self._dict_key_types = {k: v for k, v in self._dict_key_types.items() if not k.startswith('%')}
-        self._coll_elems = {k: v for k, v in self._coll_elems.items() if not k.startswith('%')}
-        self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if not k.startswith('%')}
-        self._chr_results = {k for k in getattr(self, '_chr_results', set()) if not k.startswith('%')}
-        self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
-        bigint_slots: list[str] = []
-        for slot, index in ordered:
-            lines.append(f"    {_name(slot)}=piton_gen->slots[{index}];")
-        yield_count = sum(
-            1 for block in function.blocks for instruction in block.instructions if instruction.op in {"gen_yield", "agen_emit"}
-        )
-        resumes = [_name(f"{function.name}_genresume_{i}") for i in range(1, yield_count + 1)]
-        if yield_count:
-            for resume_id, resume in enumerate(resumes, start=1):
-                lines.append(f"    if(piton_gen->state=={resume_id}) goto {resume};")
-            lines.append(f"    if(piton_gen->state!=0) goto {_name(function.name + '___exit')};")
-        self._gen_layout = layout
-        self._gen_resumes = resumes
-        self._gen_function_name = function.name
-        self._gen_counter = 0
-        try:
-            for block in function.blocks:
-                lines.append(f"{_name(function.name + '_' + block.label)}:")
-                for instruction in block.instructions:
-                    lines.extend(self._emit_instruction(instruction, function, aliases, types, bigint_slots))
-                if not block.instructions or block.instructions[-1].op not in {"jump", "branch", "return"}:
-                    lines.append(f"    goto {_name(function.name + '___exit')};")
-        finally:
-            self._gen_layout = {}
-            self._gen_resumes = []
-            self._gen_function_name = None
-            self._gen_counter = 0
-        for slot in bigint_slots:
-            lines.append(f"    piton_bigint_free((void*){_name(slot)});")
-            lines.append(f"    {_name(slot)}=0;")
-        lines.append(f"{_name(function.name + '___exit')}:")
-        lines.append("    piton_gen->finished=1;")
-        lines.append("    return 0;")
-        lines.append("}")
-        return lines
-
-    def _emit_generator_function(self, function: MIRFunction) -> list[str]:
-        """Emit a suspendible generator body: ``state`` dispatch over heap slots.
-
-        Same logical ABI as the Win64 backend: ``PitonGenerator*`` in,
-        yielded value out, ``state`` selects the resume point, ``finished``
-        marks completion. All mutable slots are mirrored into ``piton_gen->slots``.
-        """
-        layout = self.generator_layouts.get(function.name)
-        if layout is None:
-            raise NativeBuildError(f"native generator '{function.name}' has no persisted-slot layout")
+        # GEN_SLOTS_V1: el body usa los mismos nombres que el layout, asi que
+        # el chequeo de nombres no debe tratarlos como undefined.
+        self._cur_slots = set(layout) | set(function.params)
         ordered = sorted(layout.items(), key=lambda item: item[1])
         lines = [f"static long {_name(function.name)}(PitonGenerator *piton_gen) {{"]
         if ordered:
@@ -1287,7 +1231,7 @@ class LinuxCEmitter:
         braces ({{ }}) are left intact for the format engine, which
         renders them as single literal braces."""
         out: list[str] = []
-        fields: list[tuple[int, str, str]] = []
+        fields: list[tuple[int, str, str, tuple | None]] = []
         i, n = 0, len(template)
         auto_idx = 0
         saw_manual = saw_auto = False
@@ -1308,22 +1252,32 @@ class LinuxCEmitter:
                 else:
                     idx_str, spec = content, ""
                 explicit = idx_str != ""
+                accessor: tuple | None = None
                 if idx_str == "":
                     idx = auto_idx
                     auto_idx += 1
                     token = "{}"
                 else:
-                    try:
-                        idx = int(idx_str)
-                    except ValueError:
-                        raise NativeBuildError(
-                            f"str.format(): named placeholders not supported: {{{content}}}"
-                        )
+                    m_index = re.match(r"^(\d+)\[(-?\d+)\]$", idx_str)
+                    m_attr = re.match(r"^(\d+)\.([A-Za-z_]\w*)$", idx_str)
+                    if m_index:
+                        idx = int(m_index.group(1))
+                        accessor = ("index", int(m_index.group(2)))
+                    elif m_attr:
+                        idx = int(m_attr.group(1))
+                        accessor = ("attr", m_attr.group(2))
+                    else:
+                        try:
+                            idx = int(idx_str)
+                        except ValueError:
+                            raise NativeBuildError(
+                                f"str.format(): named placeholders not supported: {{{content}}}"
+                            )
                     if idx < 0:
                         raise NativeBuildError(
                             f"str.format(): negative field index {idx} is not supported"
                         )
-                    token = "{" + idx_str + "}"
+                    token = "{" + str(idx) + "}"
                 # CPython refuses to mix automatic and manual numbering
                 # ("cannot switch from automatic field numbering to manual
                 # field specification"); the {} engine would silently accept
@@ -1338,7 +1292,7 @@ class LinuxCEmitter:
                     )
                 saw_manual = saw_manual or explicit
                 saw_auto = saw_auto or not explicit
-                fields.append((idx, spec, token))
+                fields.append((idx, spec, token, accessor))
                 out.append(token)
             elif ch == "}":
                 if i + 1 < n and template[i + 1] == "}":
@@ -1451,10 +1405,9 @@ class LinuxCEmitter:
         # a required parameter after a defaulted one, so holes are leading).
         _min_args = max(0, sum(1 for d in _defaults if d is None))
         if not (_min_args <= len(values) <= len(_params)):
-            raise NativeBuildError(
-                f"native call to '{function_name}' passes {len(values)} argument(s) "
-                f"but the function takes {_min_args}..{len(_params)}"
-            )
+            self._runtime_type_error(out, f"{function_name}() takes " + (str(len(_params)) if _min_args == len(_params) else (str(_min_args) + " to " + str(len(_params)))) + " positional arguments but " + str(len(values)) + " were given")
+            types[result] = "int"
+            return out
         values = self._complete_call_args(function_name, list(values))
         encoded_values = ",".join(self._value(value) for value in values)
         out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
@@ -1594,6 +1547,8 @@ class LinuxCEmitter:
                         f"unioned with values of type '{val_type}' in the untagged model"
                     )
                 types[result] = val_type
+                if val_type == "builtin" and aliases is not None:
+                    aliases[result] = aliases.get(call_args[1], call_args[1])
             elif method == "update":
                 # DICT_UPDATE_V1: merge otro dict (V1: solo dict -> dict);
                 # CPython args iterable/kwargs quedan fuera.
@@ -1883,11 +1838,19 @@ class LinuxCEmitter:
                 raise NativeBuildError(
                     f"Linux str.format(): {len(fields)} placeholder(s) but {len(call_args)} argument(s)"
                 )
-            # the _pfN array is indexed by CALL position (the simplified
-            # template keeps explicit {N} tokens), so each call index is
-            # converted once with the spec of the field that references it.
-            by_index: dict[int, tuple[Any, str]] = {}
-            for arg_idx, spec, _token in fields:
+            # FMT_ACCESS_V1: {0[1]} / {0.real} resuelven a un temporal C antes
+            # de entrar al engine; el template queda como {0}.
+            accessors: dict[int, tuple] = {}
+            for arg_idx, _spec, _token, accessor in fields:
+                if accessor is None:
+                    continue
+                if arg_idx in accessors and accessors[arg_idx] != accessor:
+                    raise NativeBuildError(
+                        f"str.format(): conflicting accessors for field index {arg_idx}"
+                    )
+                accessors[arg_idx] = accessor
+            by_index: dict[int, str] = {}
+            for arg_idx, spec, _token, _accessor in fields:
                 if arg_idx in by_index:
                     continue
                 if arg_idx < 0 or arg_idx >= len(call_args):
@@ -1895,15 +1858,38 @@ class LinuxCEmitter:
                         f"str.format(): field index {arg_idx} out of range "
                         f"for {len(call_args)} argument(s)"
                     )
-                by_index[arg_idx] = (call_args[arg_idx], spec)
+                by_index[arg_idx] = spec
+            pre_lines: list[str] = []
             pieces = []
             for index in range(len(call_args)):
                 value = call_args[index]
-                if index in by_index:
-                    spec = by_index[index][1]
-                else:
-                    spec = ""
+                spec = by_index.get(index, "")
                 arg_type = types.get(value, "int")
+                expr = self._value(value)
+                resolved_type = arg_type
+                accessor = accessors.get(index)
+                if accessor is not None:
+                    if accessor[0] == "index":
+                        if arg_type not in {"list", "tuple"}:
+                            raise NativeBuildError(
+                                f"str.format(): subscript field requires a list or tuple, not {arg_type}"
+                            )
+                        expr = f"_fi{index}"
+                        pre_lines.append(
+                            f"    long {expr}=piton_seq_get((PitonSeq*){self._value(value)},{accessor[1]}).bits;"
+                        )
+                        elem = self._coll_elems.get(value) or self._tuple_elems.get(value) or "int"
+                        resolved_type = elem
+                    elif accessor[0] == "attr" and accessor[1] == "real":
+                        if arg_type not in {"int", "float"}:
+                            raise NativeBuildError(
+                                f"str.format(): .real requires a numeric argument, not {arg_type}"
+                            )
+                        resolved_type = arg_type
+                    else:
+                        raise NativeBuildError(
+                            f"str.format(): unsupported accessor {accessor!r}"
+                        )
                 type_char = self._format_spec_type(spec)
                 pres = self._format_spec_presentation(spec)
                 self._validate_presentation_spec(pres)
@@ -1912,19 +1898,19 @@ class LinuxCEmitter:
                     base = {"x": 16, "X": 16, "o": 8}[type_char]
                     if arg_type not in {"int", "bool"}:
                         raise NativeBuildError(f"Linux str.format() %{type_char} requires an int, not {arg_type}")
-                    converted = f"piton_str_from_int_base({self._value(value)},{base},{1 if type_char == 'X' else 0})"
+                    converted = f"piton_str_from_int_base({expr},{base},{1 if type_char == 'X' else 0})"
                 elif type_char == "b":
                     if arg_type not in {"int", "bool"}:
                         raise NativeBuildError(f"Linux str.format() %b requires an int, not {arg_type}")
                     # binary without "0b" prefix (CPython {:b} is bare digits)
-                    converted = f"piton_str_from_int_base({self._value(value)},2,0)"
+                    converted = f"piton_str_from_int_base({expr},2,0)"
                 elif type_char == "d":
-                    if arg_type in {"int", "bool"}:
-                        converted = f"piton_str_from_int({self._value(value)})"
-                    elif arg_type == "float":
-                        converted = f"piton_str_from_int((long)piton_bits_double({self._value(value)}))"
+                    if resolved_type in {"int", "bool"}:
+                        converted = f"piton_str_from_int({expr})"
+                    elif resolved_type == "float":
+                        converted = f"piton_str_from_int((long)piton_bits_double({expr}))"
                     else:
-                        raise NativeBuildError(f"Linux str.format() %d requires a real number, not {arg_type}")
+                        raise NativeBuildError(f"Linux str.format() %d requires a real number, not {resolved_type}")
                 elif type_char in {"f", "e", "E", "g", "G"}:
                     # FMT_FLOAT_V1: real decimal-based rounding for float specs.
                     prec = 6
@@ -1933,7 +1919,7 @@ class LinuxCEmitter:
                             prec = int(pres.split(".")[1])
                         except ValueError:
                             prec = 6
-                    _foldv = f"({self._value(value)})" if arg_type == "float" else f"piton_double_bits((double){self._value(value)})"
+                    _foldv = f"({expr})" if resolved_type == "float" else f"piton_double_bits((double){expr})"
                     if type_char in {"f"}:
                         converted = f"piton_float_fmt_fixed({_foldv},{prec})"
                     elif type_char in {"e", "E"}:
@@ -1941,7 +1927,7 @@ class LinuxCEmitter:
                     else:
                         converted = f"piton_float_fmt_g({_foldv},{1 if type_char == 'G' else 0})"
                 elif type_char == "%":
-                    _foldv = f"({self._value(value)})" if arg_type == "float" else f"piton_double_bits((double){self._value(value)})"
+                    _foldv = f"({expr})" if resolved_type == "float" else f"piton_double_bits((double){expr})"
                     prec = 6
                     if "." in pres:
                         try:
@@ -1951,18 +1937,18 @@ class LinuxCEmitter:
                     converted = f"piton_float_fmt_pct({_foldv},{prec})"
                 else:
                     # no type char: use the natural string conversion
-                    if arg_type == "int":
-                        converted = f"piton_str_from_int({self._value(value)})"
-                    elif arg_type == "float":
-                        converted = f"piton_str_from_float({self._value(value)})"
-                    elif arg_type == "bool":
-                        converted = f'{self._value(value)}?"True":"False"'
-                    elif arg_type == "none":
+                    if resolved_type == "int":
+                        converted = f"piton_str_from_int({expr})"
+                    elif resolved_type == "float":
+                        converted = f"piton_str_from_float({expr})"
+                    elif resolved_type == "bool":
+                        converted = f'{expr}?"True":"False"'
+                    elif resolved_type == "none":
                         converted = '"None"'
-                    elif arg_type == "str":
-                        converted = f"(const char*){self._value(value)}"
+                    elif resolved_type == "str":
+                        converted = f"(const char*){expr}"
                     else:
-                        raise NativeBuildError(f"Linux str.format() does not support {arg_type} arguments")
+                        raise NativeBuildError(f"Linux str.format() does not support {resolved_type} arguments")
                 # apply presentation spec
                 if pres:
                     _presented = pres.split(".", 1)[0] if type_char in {"f", "e", "E", "g", "G", "%"} else pres
@@ -1972,6 +1958,7 @@ class LinuxCEmitter:
                         pieces.append(f"const char*_pf{index}=(const char*){converted};")
                 else:
                     pieces.append(f"const char*_pf{index}=(const char*){converted};")
+            out.extend(pre_lines)
             if not call_args:
                 # no placeholders: pass a one-element dummy array (the
                 # engine never indexes it; n=0) so the C declaration is valid
@@ -2041,6 +2028,19 @@ class LinuxCEmitter:
             types[result] = "int"
         else:
             raise NativeBuildError(f"Linux str.{method}() is not supported")
+
+    def _runtime_type_error(self, out: list[str], message: str) -> None:
+        """ORDER_MIXED_TYPES_V1 & friends: CPython raises TypeError at
+        runtime; emit the same unhandled TypeError instead of failing at
+        build time (FAIL_CLOSED -> RAISE_EQ)."""
+        out.append(f"    piton_raise_set(\"TypeError\", {json.dumps(message)});")
+        out.append("    piton_report_unhandled();")
+        out.append("    piton_exit(1);")
+
+    def _runtime_name_error(self, out: list[str], name: str) -> None:
+        out.append(f"    piton_raise_set(\"NameError\", {json.dumps('name ' + name + ' is not defined')});")
+        out.append("    piton_report_unhandled();")
+        out.append("    piton_exit(1);")
 
     def _emit_exc_check(self, out: list[str], function: MIRFunction, handler_label: Any) -> None:
         """Route a live native exception (piton_raise_set from a helper) to
@@ -2855,11 +2855,12 @@ class LinuxCEmitter:
                 and source not in self._shared_globals
                 and source not in getattr(function, "cell_params", ())
                 and source not in getattr(function, "params", ())
-                and source not in getattr(self, "_known_names", set())
                 and source not in {"Verdadero", "Falso", "Nada", "Verdadera", "Falsa", "Ninguno"}
                 and source not in (self._func_only_builtins or _FUNC_ONLY_BUILTINS)
             ):
-                raise NativeBuildError(f"undefined name '{source}' in native subset")
+                self._runtime_name_error(out, source)
+                types[result] = "int"
+                return out
             out.append(f"    {_name(result)}={_name(source)};")
         elif op == "global_decl":
             # GLOBAL_DECL_V1: pure metadata (resolved in the pre-scan); no code.
@@ -3139,9 +3140,9 @@ class LinuxCEmitter:
                         operands = [self._value(right)]
                         etypes = [types.get(right, "int")]
                     if len(fields) != len(operands):
-                        raise NativeBuildError(
-                            f"Linux str % formatting: {len(fields)} conversion(s) but {len(operands)} argument(s)"
-                        )
+                        self._runtime_type_error(out, "not all arguments converted during string formatting")
+                        types[result] = "str"
+                        return out
                     bases = []
                     pads: list[tuple | None] = []
                     for index, (field, operand, arg_type) in enumerate(zip(fields, operands, etypes)):
@@ -3242,7 +3243,9 @@ class LinuxCEmitter:
                     out.append("    }")
                     types[result] = "str"
                     return out
-                raise NativeBuildError(f"Linux string binary operator not supported: {operator}")
+                self._runtime_type_error(out, "unsupported operand type(s) for " + f"{operator}" + ": '" + f"{left_type}" + "' and '" + f"{right_type}" + "'")
+                types[result] = "int"
+                return out
             if {left_type, right_type} & {"list", "tuple", "dict", "set"}:
                 # SEQ_CONCAT_V1: list+list / tuple+tuple concatenate; any other
                 # collection arithmetic is a CPython TypeError — fail closed at
@@ -3264,7 +3267,9 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(long)piton_seq_repeat_n((PitonSeq*){self._value(seq_side)},{self._value(times)});")
                     types[result] = "tuple"
                     return out
-                raise NativeBuildError(f"Linux collection binary operator not supported: {operator} on {left_type}/{right_type}")
+                self._runtime_type_error(out, "unsupported operand type(s) for " + f"{operator}" + ": '" + f"{left_type}" + "' and '" + f"{right_type}" + "'")
+                types[result] = "int"
+                return out
             if "none" in {left_type, right_type}:
                 # WRETURNTYPE_V1 (mirrors the Windows guard): None in
                 # arithmetic is a CPython TypeError, not pointer math.
@@ -3542,11 +3547,9 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}={1 if operator == '!=' else 0};")
                     types[result] = "bool"
                     return out
-                raise NativeBuildError(
-                    f"Linux ordering comparison '{operator}' between '{left_type}' and "
-                    f"'{right_type}' is not supported (CPython raises TypeError: "
-                    f"'{operator}' not supported between instances of 'range' and ...)"
-                )
+                self._runtime_type_error(out, f"'{operator}' not supported between instances of 'range' and '{right_type}'")
+                types[result] = "bool"
+                return out
             if operator == "==" and (left_type.startswith("object:") or right_type.startswith("object:")):
                 owner_side = left_type if left_type.startswith("object:") else right_type
                 cls_name = owner_side.split(":", 1)[1]
@@ -3591,11 +3594,9 @@ class LinuxCEmitter:
                 if operator in {"<", ">", "<=", ">="} and not self._ordering_pair_ok(left_type, right_type):
                     # ORDER_MIXED_TYPES_V1: refuse instead of comparing the raw
                     # representations of two incomparable operands.
-                    raise NativeBuildError(
-                        f"Linux ordering comparison '{operator}' between '{left_type}' and "
-                        f"'{right_type}' is not supported (CPython raises TypeError: "
-                        f"'{operator}' not supported between instances of these types)"
-                    )
+                    self._runtime_type_error(out, f"'{operator}' not supported between instances of '{left_type}' and '{right_type}'")
+                    types[result] = "bool"
+                    return out
                 expression = f"({self._value(left)} {operator} {self._value(right)})"
             out.append(f"    {_name(result)}={expression};")
             types[result] = "bool"
@@ -3634,6 +3635,25 @@ class LinuxCEmitter:
                         # module markers and builtin markers can never match
                         # CPython (addresses / uninitialized C values) — fail
                         # closed instead of printing garbage.
+                        if value_type == "builtin":
+                            # BUILTIN_TYPE_REPR_V1: los constructores de tipo
+                            # imprimen su <class '...'> estable; el resto sigue
+                            # fail-closed (direcciones / marcadores sin valor).
+                            _bname = aliases.get(value, value)
+                            _bkind = {
+                                "lista": "PK_LIST", "list": "PK_LIST",
+                                "tupla": "PK_TUPLE", "tuple": "PK_TUPLE",
+                                "diccionario": "PK_DICT", "dict": "PK_DICT",
+                                "conjunto": "PK_SET", "set": "PK_SET",
+                                "rango": "PK_RANGE", "range": "PK_RANGE",
+                                "texto": "PK_STR", "str": "PK_STR",
+                                "entero": "PK_INT", "int": "PK_INT",
+                                "decimal": "PK_FLOAT", "float": "PK_FLOAT",
+                                "booleano": "PK_BOOL", "bool": "PK_BOOL",
+                            }.get(_bname)
+                            if _bkind is not None:
+                                out.append(f'    piton_print_str_raw(piton_type_repr({_bkind}));')
+                                continue
                         if (
                             str(value_type).startswith("iterator:")
                             or value_type in {"generator", "genexpr", "builtin", "closure", "module", "cell"}
@@ -3645,17 +3665,27 @@ class LinuxCEmitter:
                         if str(value_type).startswith("object:"):
                             cls_name = value_type.split(":", 1)[1]
                             str_cls = None
+                            repr_cls = None
                             for candidate in self.class_mro.get(cls_name, []):
                                 if "__str__" in self.classes.get(candidate, set()):
                                     str_cls = candidate
                                     break
+                                if repr_cls is None and "__repr__" in self.classes.get(candidate, set()):
+                                    repr_cls = candidate
                             if str_cls is None and "__str__" in self.classes.get(cls_name, set()):
                                 str_cls = cls_name
+                            if repr_cls is None and "__repr__" in self.classes.get(cls_name, set()):
+                                repr_cls = cls_name
                             if str_cls is not None:
                                 out.append(f'    piton_print_str_raw((const char*){_name(str_cls+"__"+"__str__")}({self._value(value)}));')
                                 continue
+                            if repr_cls is not None:
+                                # REPR_FALLBACK_V1: CPython usa __repr__ cuando
+                                # no hay __str__; mismo contrato de retorno str.
+                                out.append(f'    piton_print_str_raw((const char*){_name(repr_cls+"__"+"__repr__")}({self._value(value)}));')
+                                continue
                             raise NativeBuildError(
-                                f"Linux native print of a '{cls_name}' instance without __str__ is not supported "
+                                f"Linux native print of a '{cls_name}' instance without __str__/__repr__ is not supported "
                                 "(can never match CPython object repr)"
                             )
                         if value in self._chr_results:
@@ -3742,10 +3772,9 @@ class LinuxCEmitter:
                 # and read a string/collection POINTER as a long, so
                 # `abs('a')` printed an address and `abs(Nada)` answered 0.
                 if arg_type not in {"int", "bool", "float"}:
-                    raise NativeBuildError(
-                        f"Linux abs of '{arg_type}' is not supported "
-                        "(CPython raises TypeError: bad operand type for abs())"
-                    )
+                    self._runtime_type_error(out, "bad operand type for abs(): '" + f"{arg_type}" + "'")
+                    types[result] = "int"
+                    return out
                 if arg_type == "float":
                     out.append(f"    {_name(result)}={self._value(values[0])}&0x7fffffffffffffffUL;")
                     types[result] = "float"
@@ -3768,7 +3797,9 @@ class LinuxCEmitter:
                 self._coll_elems[result] = "int"
             elif function_name == "pow":
                 if len(values) != 2:
-                    raise NativeBuildError("Linux pow requires exactly two arguments (M14 v1)")
+                    self._runtime_type_error(out, "pow expected at least 2 arguments, got " + str(len(values)))
+                    types[result] = "int"
+                    return out
                 base_type = types.get(values[0])
                 if base_type == "float":
                     if types.get(values[1]) not in {"int", "bool"}:
@@ -3779,7 +3810,9 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=piton_pow_int({self._value(values[0])},{self._value(values[1])});")
                     types[result] = "int"
                 else:
-                    raise NativeBuildError("Linux pow requires int or float base (M14 v1)")
+                    self._runtime_type_error(out, "unsupported operand type(s) for pow(): '" + f"{base_type}" + "'")
+                    types[result] = "int"
+                    return out
                 if call_handler is not None:
                     out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + call_handler)};}}")
                 else:
@@ -3814,7 +3847,9 @@ class LinuxCEmitter:
                 elif arg_type in {"int", "bool"}:
                     out.append(f"    {_name(result)}={self._value(values[0])};")
                 else:
-                    raise NativeBuildError("Linux round requires int or float")
+                    self._runtime_type_error(out, "round() argument must be int or float, not '" + f"{arg_type}" + "'")
+                    types[result] = "int"
+                    return out
                 types[result] = "int"
                 if call_handler is not None:
                     out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + call_handler)};}}")
@@ -3980,12 +4015,28 @@ class LinuxCEmitter:
                 # element type is not int instead of accumulating garbage.
                 elem_type = self._coll_elems.get(values[0], "int")
                 kinds = set(elem_type.split("|")) if elem_type else {"int"}
+                if "float" in kinds and kinds <= {"int", "bool", "float"}:
+                    if value_type not in {"list", "tuple"}:
+                        self._runtime_type_error(out, "unsupported operand type(s) for +: '" + f"{elem_type}" + "'")
+                        types[result] = "int"
+                        return out
+                    out.append(f"    {_name(result)}=piton_sum_seq_float((PitonSeq*){self._value(values[0])});")
+                    types[result] = "float"
+                    return out
+                if "bigint" in kinds and kinds <= {"int", "bool", "bigint"}:
+                    if value_type not in {"list", "tuple"}:
+                        self._runtime_type_error(out, "unsupported operand type(s) for +: '" + f"{elem_type}" + "'")
+                        types[result] = "int"
+                        return out
+                    out.append(f"    {_name(result)}=piton_sum_seq_bigint((PitonSeq*){self._value(values[0])});")
+                    types[result] = "bigint"
+                    bigint_slots.append(result)
+                    return out
                 if kinds != {"int"}:
                     elem_type = "|".join(sorted(kinds))
-                    raise NativeBuildError(
-                        f"Linux sum over '{elem_type}' elements is not supported "
-                        "(CPython sums them; the native helper only adds int bits)"
-                    )
+                    self._runtime_type_error(out, "unsupported operand type(s) for +: '" + f"{elem_type}" + "'")
+                    types[result] = "int"
+                    return out
                 out.append(f"    {_name(result)}={helper_map[value_type]}(({struct_map[value_type]}*){self._value(values[0])});")
                 types[result] = "int"
             elif function_name in {"range", "rango"}:
@@ -4410,18 +4461,37 @@ class LinuxCEmitter:
                     # statically here, mirroring the str table.
                     self._emit_collection_method(out, result, method, obj, list(call_args), coll_type, types, aliases)
                     return out
+                unbound_class = None
                 if not owner_type.startswith("object:"):
-                    raise NativeBuildError("Linux method receiver class is not statically known")
+                    _obj_name = aliases.get(obj, obj) if aliases else obj
+                    if isinstance(_obj_name, str) and _obj_name in self.classes:
+                        # UNBOUND_CLASS_METHOD_V1: `P.f(P())` llama a la
+                        # funcion de clase con la instancia como primer arg.
+                        unbound_class = _obj_name
+                    else:
+                        raise NativeBuildError("Linux method receiver class is not statically known")
+                if unbound_class is not None:
+                    cls_name = unbound_class
+                    all_values = self._complete_call_args(f"{cls_name}__{method}", list(call_args))
+                    target = f"{cls_name}__{method}"
+                    if self.function_frame_abi.get(target, False):
+                        args_c = ",".join(self._value(v) for v in all_values)
+                        out.append(f'    {{long _method_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_values)},_method_args);}}')
+                    else:
+                        args_c = ",".join(self._value(v) for v in all_values)
+                        out.append(f"    {_name(result)}={_name(target)}({args_c});")
+                    types[result] = self.function_return_types.get(target, "int")
+                    return out
                 cls_name = owner_type.split(":", 1)[1]
                 if self._resolve_property_class(owner_type, method) is not None:
                     raise NativeBuildError(
                         f"native property '{method}' of '{cls_name}' object is not a method (calling a property is unsupported)"
                     )
             cls_name = self._resolve_method(cls_name, method)
-            values = ",".join(self._value(v) for v in ([obj] + list(call_args)))
             target = f"{cls_name}__{method}"
+            all_values = self._complete_call_args(target, [obj, *call_args])
+            values = ",".join(self._value(v) for v in all_values)
             if self.function_frame_abi.get(target, False):
-                all_values = [obj, *call_args]
                 args_c = ",".join(self._value(v) for v in all_values)
                 out.append(f'    {{long _method_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_values)},_method_args);}}')
             else:

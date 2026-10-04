@@ -554,7 +554,7 @@ def area_classes() -> list[Case]:
         _c("classes", "repr-dunder", "clase P:\n    funcion __repr__(self):\n        devolver '<P>'\nimprimir(P())"),
         _c("classes", "eq-dunder", "clase P:\n    funcion __init__(self, x):\n        self.x = x\n    funcion __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))"),
         _c("classes", "len-dunder", "clase P:\n    funcion __len__(self):\n        devolver 3\nimprimir(longitud(P()))"),
-        _c("classes", "iter-dunder", "clase P:\n    funcion __iter__(self):\n    devolver iter([1, 2])\npara x en P():\n    imprimir(x)"),
+        _c("classes", "iter-dunder", "clase P:\n    funcion __iter__(self):\n        devolver iter([1, 2])\npara x en P():\n    imprimir(x)"),
         _c("classes", "inheritance", "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    pasar\nimprimir(B().f())"),
         _c("classes", "override", "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    funcion f(self):\n        devolver 'B'\nimprimir(B().f())"),
         _c("classes", "super", "clase A:\n    funcion f(self):\n        devolver 'A'\nclase B(A):\n    funcion f(self):\n        devolver 'B' + super().f()\nimprimir(B().f())"),
@@ -580,7 +580,7 @@ def area_generators() -> list[Case]:
         _c("generators", "yield-sum", "funcion f():\n    producir 1\n    producir 2\nimprimir(sum(f()))"),
         _c("generators", "gen-in-comprehension", "imprimir(sum(x para x en rango(4)))"),
         _c("generators", "class-generator", "clase G:\n    funcion __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))"),
-        _c("generators", "class-iter-self", "clase G:\n    funcion __iter__(self):\n    devolver self\n    funcion __next__(self):\n        devolver 1\nimprimir(lista(G()))"),
+        _c("generators", "class-iter-self", "clase G:\n    funcion __iter__(self):\n        devolver self\n    funcion __next__(self):\n        devolver 1\nimprimir(lista(G()))"),
     ]
 
 

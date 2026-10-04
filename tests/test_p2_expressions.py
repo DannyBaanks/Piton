@@ -362,12 +362,9 @@ class CollRepeatV1(unittest.TestCase):
             "imprimir([1] * [2])\n",
             "imprimir([1] * 2.5)\n",
         ):
-            try:
-                compare_native_to_cpython(source)
-            except NativeBuildError:
-                pass
-            else:
-                self.fail(f"not closed: {source}")
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1, source)
+            self.assertIn(b"TypeError", result.native.stderr, source)
 
 
 if __name__ == "__main__":
