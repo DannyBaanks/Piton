@@ -597,6 +597,8 @@ int64_t piton_dict_contains_tagged(void *raw, int64_t key) {
 /* A slot used as a callee: INT/BOOL tags can never be callable code
  * (their payload is a value, not a pointer); anything else goes through
  * the runtime magic check, which safely rejects heap doubles/objects. */
+void piton_raise_not_callable(void);
+
 void piton_slot_callable_check(int64_t v) {
     int t = pv_tag(v);
     if (t == PITON_TAG_INT || t == PITON_TAG_BOOL) piton_raise_not_callable();
