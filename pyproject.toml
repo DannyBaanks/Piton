@@ -16,6 +16,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [project.scripts]
 piton = "piton.cli:main"
 pitn = "piton.cli:main"

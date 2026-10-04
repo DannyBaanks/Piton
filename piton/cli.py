@@ -49,6 +49,21 @@ def _parser() -> argparse.ArgumentParser:
     compilar.add_argument("-o", "--output", "--salida", dest="salida", type=Path)
     compilar.add_argument("--evidencia", type=Path, help="escribe un recibo JSON verificable (backend x86)")
 
+    test = subcomandos.add_parser("test", help="corre la suite de tests (pytest)")
+    test.add_argument("rutas", nargs="*", default=["tests/"], help="rutas de tests (default: tests/)")
+    test.add_argument("-v", "--verbose", action="store_true", help="salida verbosa")
+    test.add_argument("--tb", default="short", help="traceback style (short|long|line|native)")
+    test.add_argument("--ignore", action="append", default=[], help="ignora una ruta (repeatable)")
+
+    corpus = subcomandos.add_parser("corpus", help="corre el corpus diferencial de paridad (tools/parity_corpus.py)")
+    corpus.add_argument("--areas", default="", help="areas separadas por coma (default: todas)")
+    corpus.add_argument("--jobs", type=int, default=12, help="workers paralelos")
+    corpus.add_argument("--timeout", type=float, default=10.0, help="timeout por caso (segundos)")
+    corpus.add_argument("--out", type=Path, default=Path("docs/parity_corpus_report.json"), help="reporte JSON")
+    corpus.add_argument("--markdown", type=Path, default=Path("docs/parity_corpus_report.md"), help="reporte markdown")
+
+    version = subcomandos.add_parser("version", help="muestra la versión de Piton")
+
     return parser
 
 
@@ -93,6 +108,33 @@ def main(argv: list[str] | None = None) -> int:
             traducido = traducir_fuente(fuente, str(args.archivo), estricto=estricto)
             arbol = ast.parse(traducido)
             print(ast.dump(arbol, indent=2))
+        elif args.comando == "test":
+            import pytest
+            pytest_args = list(args.rutas) or ["tests/"]
+            if args.verbose:
+                pytest_args.insert(0, "-v")
+            pytest_args.extend(["--tb", args.tb])
+            for ruta in args.ignore:
+                pytest_args.extend(["--ignore", ruta])
+            raise SystemExit(pytest.main(pytest_args))
+        elif args.comando == "corpus":
+            import subprocess
+            from pathlib import Path as _P
+            repo = _P(__file__).resolve().parents[1]
+            corpus_script = repo / "tools" / "parity_corpus.py"
+            corpus_argv = [sys.executable, str(corpus_script)]
+            if args.areas:
+                corpus_argv.extend(["--areas", args.areas])
+            corpus_argv.extend([
+                "--jobs", str(args.jobs),
+                "--timeout", str(args.timeout),
+                "--out", str(args.out),
+                "--markdown", str(args.markdown),
+            ])
+            raise SystemExit(subprocess.call(corpus_argv))
+        elif args.comando == "version":
+            from . import __version__
+            print(f"Piton {__version__}")
         elif args.comando == "compilar":
             salida = args.salida
             if salida is None:
