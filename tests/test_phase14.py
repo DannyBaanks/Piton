@@ -27,8 +27,8 @@ class Phase14Dashboard(unittest.TestCase):
         self.assertIn("NATIVE_OBJECT_PROTOCOL", markdown)
         self.assertEqual(states["NATIVE_STDLIB_DECLARED_SCOPE"], "PASS")
         self.assertEqual(states["MATH_TIER1_V1"], "PASS")
-        self.assertEqual(states["FULL_PARITY"], "PASS")
-        self.assertTrue(dashboard["full_parity"])
+        self.assertEqual(states["PITON_NATIVE_SUBSET_PARITY"], "PASS")
+        self.assertTrue(dashboard["native_subset_parity"])
         self.assertTrue(dashboard["release_ready"])
 
     def test_native_subset_milestone_requires_a_passing_receipt(self):

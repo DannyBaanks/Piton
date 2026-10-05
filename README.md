@@ -351,7 +351,7 @@ Gates activos:
 | NATIVE_STDLIB_DECLARED_SCOPE | PASS |
 | CPYTHON_EXECUTION_DEPENDENCY | PASS |
 | DYNAMIC_RUNTIME_V1 | PASS |
-| FULL_PARITY | PASS |
+| PITON_NATIVE_SUBSET_PARITY | PASS |
 
 `PARTIAL` significa que el subconjunto demostrado pasa; el alcance completo
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
