@@ -18,6 +18,53 @@ código .piton
     -> ejecución sin CPython
 ```
 
+## Qué NO es Pitón (congelado 2026-10-04)
+
+> **Congelado en el commit `ce9aa11`.** Estas afirmaciones describen el
+> alcance del proyecto y no cambian con cada gate. Para modificarlas se
+> requiere evidencia nueva (corpus diferencial, receipt, CI) o una decisión
+> explícita de Danny. El resto del README (checklist nativo, gates,
+> comandos) sigue vivo y se actualiza con la evidencia.
+
+Pitón **no es**:
+
+- Un producto oficial de Python ni de la Python Software Foundation: es un
+  proyecto personal/esolang.
+- Una máquina ni una semántica nueva: la semántica observable es la de
+  CPython (oracle congelado: `ORACLE.md` y `docs/PARITY_DEFINITION.md`); el
+  español de México es solo la superficie (keywords + aliases de builtins).
+- Un compilador de todo Python: el backend nativo cubre un **subconjunto
+  demostrado y declarado** (`docs/FEATURE_STATUS_MATRIX.md`). Lo que no está
+  demostrado se rechaza en compilación; nunca se emite una aproximación.
+- Un reemplazo de CPython: el PE/ELF nativo solo ejecuta programas dentro del
+  subconjunto demostrado. No trae la stdlib de CPython, no expone su C API y
+  no es binariamente compatible con `PyObject`, bytecode ni `.pyc` (NO-goals
+  de `docs/PARITY_DEFINITION.md` §5).
+- Una promesa de "paridad completa": el término `FULL_PARITY` está retirado.
+  La paridad se mide por superficies con gates de alcance explícito; pasar el
+  corpus diferencial ≠ semántica completa.
+- Un proyecto de rendimiento: no hay claims de velocidad frente a CPython;
+  el objetivo es correcto, no rápido.
+- Self-hosted: el compilador está escrito en Python, no en Pitón.
+
+## Qué SÍ hace (estado verificado 2026-10-04, commit `ce9aa11`)
+
+- **Traduce superficie español → Python ordinario** (source-to-source,
+  líneas 1:1) y lo ejecuta con CPython: `piton ejecutar`, `piton traducir`,
+  `piton verificar`, `piton repl` e import hook de `.piton`.
+- **Compila un subconjunto demostrado a x86-64 nativo** — PE Windows
+  (NASM + MinGW) y ELF estático Linux (GCC freestanding) — que corre **sin
+  CPython** en el runtime. Lista cerrada: sección «Qué puede compilar
+  nativamente».
+- **Produce evidencia diferencial contra el oracle CPython**: corpus de 1220
+  casos → 1219 EQUIV (99.9%), FAIL_CLOSED 0, DIVERGENT 0, TIMEOUT 1 (entrada
+  documentada donde el oracle tampoco termina) —
+  `docs/parity_corpus_report.md`.
+- **CI verde en ambas plataformas** en el commit `ce9aa11`: test-linux,
+  test-windows y verify-oracle (run 37245148477).
+- **Falla cerrado** (regla de oro): compatibilidad demostrada o error de
+  compilación; nunca semántica aproximada silenciosa.
+
 ## Arranque rápido
 
 Requiere CPython 3.12 o posterior. Fue probado con CPython 3.12.4 en Windows.
