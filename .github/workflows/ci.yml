@@ -23,17 +23,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -e .
-        python -m pip install pytest
+        python -m pip install -e .[dev]
 
     - name: Run tests (Linux)
       run: |
-        python -m pytest tests/ -v --tb=short --ignore=tests/test_windows_validate.py
-
-    - name: Known-blocker corpus (informational, non-blocking)
-      continue-on-error: true
-      run: |
-        python -m pytest tests/test_windows_validate.py -v --tb=short || true
+        pi test tests/ -v --tb=short --ignore=tests/test_windows_validate.py
 
     - name: Verify CPython oracle
       run: |
@@ -60,17 +54,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -e .
-        python -m pip install pytest
+        python -m pip install -e .[dev]
 
     - name: Run tests (Windows)
       run: |
-        python -m pytest tests/ -v --tb=short --ignore=tests/test_windows_validate.py
-
-    - name: Known-blocker corpus (informational, non-blocking)
-      continue-on-error: true
-      run: |
-        python -m pytest tests/test_windows_validate.py -v --tb=short
+        pi test tests/ -v --tb=short --ignore=tests/test_windows_validate.py
 
     - name: Verify CPython oracle
       run: |
@@ -91,8 +79,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -e .
-        python -m pip install pytest
+        python -m pip install -e .[dev]
 
     - name: Verify differential oracle
       run: |

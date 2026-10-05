@@ -62,6 +62,7 @@ class HIRKind(Enum):
     GEN_EXPR = auto()
     IF_EXPR = auto()
     AWAIT = auto()
+    NAMED_EXPR = auto()
 
     # Imports
     IMPORT = auto()
@@ -442,6 +443,13 @@ class IfExpr(HIRNode):
 class Await(HIRNode):
     value: Optional[HIRNode] = None
     kind: HIRKind = HIRKind.AWAIT
+
+
+@dataclass(slots=True)
+class NamedExpr(HIRNode):
+    target: Optional[HIRNode] = None
+    value: Optional[HIRNode] = None
+    kind: HIRKind = HIRKind.NAMED_EXPR
 
 
 @dataclass(slots=True)

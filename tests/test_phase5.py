@@ -112,9 +112,12 @@ class Phase5Gates(unittest.TestCase):
         self.assertTrue(result.equivalent, result)
 
     def test_x86_rejects_incompatible_ordering(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "ordering not supported"):
-                compile_native('imprimir("a" < 1)\n', Path(directory) / "program.exe")
+        # ORDER_MIXED_TYPES_V1 (Windows): espejo de P52 Linux — ordering
+        # entre tipos incompatibles es TypeError en RUNTIME (rc=1), no
+        # excepción en BUILD. CPython: TypeError: '<' not supported...
+        result = compare_native_to_cpython('imprimir("a" < 1)\n')
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
 
     def test_x86_supports_more_than_four_arguments_via_frame_abi(self):
         result = compare_native_to_cpython(
@@ -2466,9 +2469,12 @@ class Phase5Gates(unittest.TestCase):
         self.assertTrue(result.equivalent, result)
 
     def test_x86_rejects_incompatible_ordering(self):
-        with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "ordering not supported"):
-                compile_native('imprimir("a" < 1)\n', Path(directory) / "program.exe")
+        # ORDER_MIXED_TYPES_V1 (Windows): espejo de P52 Linux — ordering
+        # entre tipos incompatibles es TypeError en RUNTIME (rc=1), no
+        # excepción en BUILD. CPython: TypeError: '<' not supported...
+        result = compare_native_to_cpython('imprimir("a" < 1)\n')
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
 
     def test_x86_supports_more_than_four_arguments_via_frame_abi(self):
         result = compare_native_to_cpython(

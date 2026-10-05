@@ -289,6 +289,16 @@ void *piton_str_box(const char *s) {
     return piton_str_new(s, (int64_t)strlen(s));
 }
 
+/* Box a raw double (passed as int64_t bits) into a tagged PitonValue
+ * float (tag=FLOAT, payload=heap double). Used for float literals
+ * in collections so that runtime sum/iteration sees proper tags. */
+int64_t piton_float_box(int64_t raw_double) {
+    double *heap_double = malloc(sizeof(double));
+    if (!heap_double) return 0;
+    *heap_double = *(double *)&raw_double;
+    return pv_encode(PITON_TAG_FLOAT, (int64_t)heap_double);
+}
+
 /* Boxed string already tagged (for dict keys and slot stores). */
 int64_t piton_box_str_tagged(const char *s) {
     return pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_box(s));
@@ -2072,7 +2082,9 @@ void *piton_gen_collect(void *raw) {
         return NULL;
     }
     /* Run the generator body and collect yields into a list */
-    PitonCollection *list = piton_collection_new(0, 16);  /* 0 = LIST */
+    /* GEN_COLLECT_KIND_V1: kind 1 = LIST (0 births a TUPLE: piton_collection_new
+       maps kind==1 to SUB_TAG_LIST, anything else to SUB_TAG_TUPLE). */
+    PitonCollection *list = piton_collection_new(1, 16);  /* 1 = LIST */
     while (!gen->finished) {
         int64_t val = gen->func(raw);
         if (gen->finished) break;
@@ -4356,6 +4368,60 @@ int64_t piton_sum_set(void *raw) {
         int64_t v = s->items[i];
         if (pv_tag(v) == PITON_TAG_INT)
             total += pv_payload_signed(v);
+    }
+    return total;
+}
+
+/* SUM_ELEM_V1 (Windows): helpers for bigint/float element sums.
+ * Mirror Linux's piton_sum_seq_bigint / piton_sum_seq_float. */
+
+void *piton_sum_seq_bigint(void *raw) {
+    PitonCollection *seq = raw;
+    if (!seq) return piton_bigint_from_i64(0);
+    PitonBigInt *total = piton_bigint_from_i64(0);
+    for (int64_t i = 0; i < seq->length; ++i) {
+        int64_t v = seq->items[i];
+        int tag = pv_tag(v);
+        if (tag == PITON_TAG_INT) {
+            void *bi = piton_bigint_from_i64(pv_payload_signed(v));
+            void *r = piton_bigint_add(total, bi);
+            piton_bigint_free(total);
+            total = r;
+            piton_bigint_free(bi);
+        } else if (tag == PITON_TAG_OBJECT) {
+            PitonHeader *h = (PitonHeader *)pv_payload(v);
+            if (h && h->sub_tag == SUB_TAG_BIGINT) {
+                PitonBigInt *bi = (PitonBigInt *)pv_payload(v);
+                void *r = piton_bigint_add(total, bi);
+                piton_bigint_free(total);
+                total = r;
+            }
+        } else if (tag == PITON_TAG_FLOAT) {
+            double *fp = (double *)(uintptr_t)pv_payload(v);
+            int64_t i64 = (int64_t)*fp;
+            void *bi = piton_bigint_from_i64(i64);
+            void *r = piton_bigint_add(total, bi);
+            piton_bigint_free(total);
+            total = r;
+            piton_bigint_free(bi);
+        }
+    }
+    return total;
+}
+
+double piton_sum_seq_float(void *raw) {
+    PitonCollection *seq = raw;
+    double total = 0.0;
+    if (!seq) return 0.0;
+    for (int64_t i = 0; i < seq->length; ++i) {
+        int64_t v = seq->items[i];
+        int tag = pv_tag(v);
+        if (tag == PITON_TAG_INT) {
+            total += (double)pv_payload_signed(v);
+        } else if (tag == PITON_TAG_FLOAT) {
+            double *fp = (double *)(uintptr_t)pv_payload(v);
+            if (fp) total += *fp;
+        }
     }
     return total;
 }

@@ -78,8 +78,9 @@ class PercentFormatV1(unittest.TestCase):
         _assert_matches(self, "t = (1, 'a')\nimprimir('%d-%s' % t)\n")
 
     def test_count_mismatch_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('%s %s' % (1,))\n")
+        result = compare_native_to_cpython("imprimir('%s %s' % (1,))\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
 
     def test_width_now_supported(self):
         # P14 lifted the V1 width restriction.

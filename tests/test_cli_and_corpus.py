@@ -163,12 +163,13 @@ class CliAndCorpusTests(unittest.TestCase):
 
     def test_compilar_reporta_error_nativo(self) -> None:
         # TRUEDIV_V1 lifted `imprimir(7 / 2)`, INT_POW_V1 lifted integer
-        # power and FLOAT_POW_V1 lifted float power: all native now. The
-        # fail-closed gate itself stays, pinned on str*str (a TypeError in
-        # CPython, statically out of the native subset).
+        # power, FLOAT_POW_V1 lifted float power and SUM_ELEM_V1 lifted
+        # str*str to a runtime TypeError: all native now. The fail-closed
+        # gate itself stays, pinned on float-shift (statically out of the
+        # native subset and not a runtime TypeError).
         with tempfile.TemporaryDirectory(prefix="piton-cli-") as temporal:
             fuente = Path(temporal) / "fuera_de_alcance.piton"
-            fuente.write_text("imprimir('a' * 'b')\n", encoding="utf-8")
+            fuente.write_text("imprimir(1 << 2.5)\n", encoding="utf-8")
             resultado = correr("compilar", str(fuente), "--backend=x86")
             self.assertEqual(resultado.returncode, 1)
             self.assertIn("PITON_NATIVE_BUILD_ERROR", resultado.stderr)

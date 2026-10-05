@@ -14,7 +14,7 @@ from piton.cst import (
     Name, Constant, BinOp, UnaryOp, Compare, BoolOp, Call, Keyword,
     Attribute, Subscript, Slice, List, Tuple, Set, Dict,
     ListComp, SetComp, DictComp, GenExpr, CompFor, IfExpr, Lambda, Starred,
-    Await, FString, FStringPart, FStringExpr,
+    Await, NamedExpr, FString, FStringPart, FStringExpr,
     MatchValue, MatchSingleton, MatchSequence, MatchMapping,
     MatchClass, MatchStar, MatchAs, MatchOr,
     TypeParams, TypeVar, ParamSpec, TypeVarTuple,
@@ -81,6 +81,10 @@ class Parser:
         return module
 
     # ---- Utilidades ----
+
+    def _peek_ahead(self, offset: int = 1) -> Token:
+        idx = min(self.pos + offset, len(self.tokens) - 1)
+        return self.tokens[idx]
 
     def _peek(self) -> Token:
         if self.pos < len(self.tokens):
@@ -415,12 +419,19 @@ class Parser:
         self._match(TokenType.INDENT)
         cases = []
         while True:
-            self._skip_nl()
+            # MATCH_DEDENT_V1: NO usar _skip_nl() aqui — se come DEDENT tokens
+            # que el match y el bloque contenedor necesitan ver por separado.
+            while self._check(TokenType.NEWLINE, TokenType.NL):
+                self._advance()
             if self._check(TokenType.DEDENT) or self._at_end():
                 break
             if not self._check(TokenType.NAME) or self._peek().value != "caso":
                 break
             cases.append(self._parse_case())
+        # MATCH_DEDENT_V1: el match consume su propio DEDENT; sin esto, el
+        # DEDENT del cuerpo de la funcion que lo contiene se come el del
+        # match y el modulo pierde su propio DEDENT (bloques se fusionan).
+        self._match(TokenType.DEDENT)
         return MatchStmt(subject=subject, cases=cases).set_pos(tok)
 
     def _parse_case(self) -> CaseBlock:
@@ -902,6 +913,20 @@ class Parser:
             if self._check(TokenType.RPAREN):
                 self._advance()
                 return self._parse_postfix(Tuple(elts=[], ctx="Load").set_pos(tok))
+            # WALRUS_V1: `(n := 5)` asigna y evalúa a 5 (PEP 572)
+            if (
+                self._check(TokenType.NAME)
+                and self._peek_ahead(1).type == TokenType.COLONEQUAL
+            ):
+                name_tok = self._advance()
+                self._advance()  # :=
+                value = self._parse_expression(0)
+                self._consume(TokenType.RPAREN)
+                walrus = NamedExpr(
+                    target=Name(id=name_tok.value, ctx="Store").set_pos(name_tok),
+                    value=value,
+                ).set_pos(tok)
+                return self._parse_postfix(walrus)
             expr = self._parse_expression(0)
             if self._check(TokenType.NAME) and self._peek().value == "para":
                 generators = self._parse_comp_generators()

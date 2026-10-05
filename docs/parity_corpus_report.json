@@ -35,10 +35,10 @@
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
-      "TIMEOUT": 0,
-      "FAIL_CLOSED": 48,
+      "TIMEOUT": 1,
+      "FAIL_CLOSED": 0,
       "RAISE_EQ": 0,
-      "EQUIV": 1172
+      "EQUIV": 1219
     },
     "by_area": {
       "literals": {
@@ -77,9 +77,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 12,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 99
+        "EQUIV": 111
       },
       "truthiness": {
         "DIVERGENT_CRASH": 0,
@@ -93,25 +93,25 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 43
+        "EQUIV": 44
       },
       "bigint": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 32
+        "EQUIV": 33
       },
       "builtins": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 10,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 72
+        "EQUIV": 82
       },
       "strings": {
         "DIVERGENT_CRASH": 0,
@@ -125,9 +125,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 46
+        "EQUIV": 49
       },
       "slices": {
         "DIVERGENT_CRASH": 0,
@@ -149,9 +149,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 19
+        "EQUIV": 20
       },
       "sets": {
         "DIVERGENT_CRASH": 0,
@@ -165,25 +165,25 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 24
+        "EQUIV": 27
       },
       "control_flow": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 19
+        "EQUIV": 20
       },
       "functions": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 18
+        "EQUIV": 21
       },
       "exceptions": {
         "DIVERGENT_CRASH": 0,
@@ -197,29 +197,29 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 6,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 15
+        "EQUIV": 21
       },
       "generators": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
-        "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "TIMEOUT": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 5
+        "EQUIV": 7
       },
       "controls_closed": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 4,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 12
+        "EQUIV": 16
       }
     },
-    "pct_equiv": 96.1,
-    "pct_honest": 100.0,
+    "pct_equiv": 99.9,
+    "pct_honest": 99.9,
     "pct_divergent": 0.0
   },
   "records": [
@@ -2153,8 +2153,10 @@
       "area": "comparisons",
       "name": "<1",
       "src": "imprimir(1 < '1')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '<' between 'int' and 'str' is not supported (CPython raises TypeError: '<' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
@@ -2214,15 +2216,19 @@
       "area": "comparisons",
       "name": "<8",
       "src": "imprimir(Nada < Nada)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '<' between 'none' and 'none' is not supported (CPython raises TypeError: '<' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
       "name": "<9",
       "src": "imprimir('1' < 1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '<' between 'str' and 'int' is not supported (CPython raises TypeError: '<' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
@@ -2237,8 +2243,10 @@
       "area": "comparisons",
       "name": ">1",
       "src": "imprimir(1 > '1')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '>' between 'int' and 'str' is not supported (CPython raises TypeError: '>' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
@@ -2298,15 +2306,19 @@
       "area": "comparisons",
       "name": ">8",
       "src": "imprimir(Nada > Nada)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '>' between 'none' and 'none' is not supported (CPython raises TypeError: '>' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
       "name": ">9",
       "src": "imprimir('1' > 1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '>' between 'str' and 'int' is not supported (CPython raises TypeError: '>' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
@@ -2321,8 +2333,10 @@
       "area": "comparisons",
       "name": "<=1",
       "src": "imprimir(1 <= '1')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '<=' between 'int' and 'str' is not supported (CPython raises TypeError: '<=' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
@@ -2382,15 +2396,19 @@
       "area": "comparisons",
       "name": "<=8",
       "src": "imprimir(Nada <= Nada)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '<=' between 'none' and 'none' is not supported (CPython raises TypeError: '<=' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
       "name": "<=9",
       "src": "imprimir('1' <= 1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '<=' between 'str' and 'int' is not supported (CPython raises TypeError: '<=' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
@@ -2405,8 +2423,10 @@
       "area": "comparisons",
       "name": ">=1",
       "src": "imprimir(1 >= '1')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '>=' between 'int' and 'str' is not supported (CPython raises TypeError: '>=' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
@@ -2466,15 +2486,19 @@
       "area": "comparisons",
       "name": ">=8",
       "src": "imprimir(Nada >= Nada)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '>=' between 'none' and 'none' is not supported (CPython raises TypeError: '>=' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
       "name": ">=9",
       "src": "imprimir('1' >= 1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '>=' between 'str' and 'int' is not supported (CPython raises TypeError: '>=' not supported between instances of these types)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comparisons",
@@ -3893,8 +3917,10 @@
       "area": "ranges",
       "name": "lt-closed",
       "src": "imprimir(rango(0, 3) < rango(0, 4))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux ordering comparison '<' between 'range' and 'range' is not supported (CPython raises TypeError: '<' not supported between instances of 'range' and ...)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "ranges",
@@ -4269,8 +4295,10 @@
       "area": "bigint",
       "name": "sum-small",
       "src": "imprimir(sum([10 ** 20, 1]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux sum over 'bigint|int' elements is not supported (CPython sums them; the native helper only adds int bits)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "bigint",
@@ -4321,8 +4349,10 @@
       "area": "builtins",
       "name": "abs2",
       "src": "imprimir(abs(Nada))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux abs of 'none' is not supported (CPython raises TypeError: bad operand type for abs())"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "builtins",
@@ -4868,8 +4898,10 @@
       "area": "builtins",
       "name": "sum2",
       "src": "imprimir(sum(('a', 'b')))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux sum over 'str' elements is not supported (CPython sums them; the native helper only adds int bits)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "builtins",
@@ -4965,57 +4997,73 @@
       "area": "builtins",
       "name": "pow0",
       "src": "imprimir(pow((2, 10)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux pow requires exactly two arguments (M14 v1)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "builtins",
       "name": "pow1",
       "src": "imprimir(pow((2, 0)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux pow requires exactly two arguments (M14 v1)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "builtins",
       "name": "pow2",
       "src": "imprimir(pow((2.0, 0.5)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux pow requires exactly two arguments (M14 v1)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "builtins",
       "name": "pow3",
       "src": "imprimir(pow((2, -1)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux pow requires exactly two arguments (M14 v1)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "builtins",
       "name": "pow4",
       "src": "imprimir(pow((2, 1000)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux pow requires exactly two arguments (M14 v1)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "builtins",
       "name": "redondear0",
       "src": "imprimir(redondear((2.567, 2)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux round requires int or float"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "builtins",
       "name": "redondear1",
       "src": "imprimir(redondear((2.5,)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux round requires int or float"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "builtins",
       "name": "redondear2",
       "src": "imprimir(redondear((3.14159, 3)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux round requires int or float"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "strings",
@@ -5696,8 +5744,10 @@
       "area": "formatting",
       "name": "pct%%",
       "src": "imprimir('%%' % (0))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str % formatting: 0 conversion(s) but 1 argument(s)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "formatting",
@@ -5820,15 +5870,19 @@
       "area": "formatting",
       "name": "format-nested",
       "src": "imprimir('{0[1]}'.format([9, 8]))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: str.format(): named placeholders not supported: {0[1]}"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "formatting",
       "name": "format-attr",
       "src": "imprimir('{0.real}'.format(1.5))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: str.format(): named placeholders not supported: {0.real}"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slices",
@@ -9731,8 +9785,10 @@
       "area": "dicts",
       "name": "get-callable-default",
       "src": "d = {}\nimprimir(d.get('a', list))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native print of a builtin value is not supported (can never match CPython output)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dicts",
@@ -10008,8 +10064,10 @@
       "area": "comprehensions",
       "name": "listexpr-cadena",
       "src": "imprimir([x + 1 para x en 'ab'])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux string binary operator not supported: +"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comprehensions",
@@ -10033,8 +10091,10 @@
       "area": "comprehensions",
       "name": "listexpr-diccionario",
       "src": "imprimir([x + 1 para x en {'a': 1}])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux string binary operator not supported: +"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comprehensions",
@@ -10058,8 +10118,10 @@
       "area": "comprehensions",
       "name": "listexpr-enumerado",
       "src": "imprimir([x + 1 para x en enumerar(['x', 'y'])])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux collection binary operator not supported: + on tuple/int"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "comprehensions",
@@ -10326,8 +10388,10 @@
       "area": "control_flow",
       "name": "walrus",
       "src": "si (n := 5) > 1:\n    imprimir(n)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba RPAREN:  en 1:7"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "control_flow",
@@ -10504,22 +10568,28 @@
       "area": "functions",
       "name": "too-many-args",
       "src": "funcion f(a):\n    devolver a\nf(1, 2)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native call to 'f' passes 2 argument(s) but the function takes 1..1"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "functions",
       "name": "too-few-args",
       "src": "funcion f(a, b):\n    devolver a\nf(1)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native call to 'f' passes 1 argument(s) but the function takes 2..2"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "functions",
       "name": "undefined-name",
       "src": "imprimir(no_existe)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-buj2rrh2/program.c: In function ‘piton_main’:\n/tmp/piton-linux-buj2rrh2/program.c:1148:9: error: ‘no_existe’ undeclared (first use in this function)\n 1148 |     _10=no_existe;\n      |         ^~~~~~~~~\n/tmp/piton-linux-buj2rrh2/program.c:1148:9: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "functions",
@@ -10768,8 +10838,10 @@
       "area": "classes",
       "name": "repr-dunder",
       "src": "clase P:\n    funcion __repr__(self):\n        devolver '<P>'\nimprimir(P())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native print of a 'P' instance without __str__ is not supported (can never match CPython object repr)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -10792,9 +10864,11 @@
     {
       "area": "classes",
       "name": "iter-dunder",
-      "src": "clase P:\n    funcion __iter__(self):\n    devolver iter([1, 2])\npara x en P():\n    imprimir(x)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 3\ncolumna: 5\n\nPython rechazó la traducción:\nexpected an indented block after function definition on line 2\n\n    return iter([1, 2])"
+      "src": "clase P:\n    funcion __iter__(self):\n        devolver iter([1, 2])\npara x en P():\n    imprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -10836,15 +10910,19 @@
       "area": "classes",
       "name": "class-attr",
       "src": "clase P:\n    v = 5\nimprimir(P.v)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native classes currently require methods only, no keywords or class-level decorators"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
       "name": "instance-shared",
       "src": "clase P:\n    v = 5\nimprimir(P().v)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native classes currently require methods only, no keywords or class-level decorators"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -10868,8 +10946,10 @@
       "area": "classes",
       "name": "method-as-value",
       "src": "clase P:\n    funcion f(self):\n        devolver 1\nimprimir(P.f(P()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -10884,8 +10964,10 @@
       "area": "classes",
       "name": "constructor-args",
       "src": "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-jj702nnu/program.c: In function ‘piton_main’:\n/tmp/piton-linux-jj702nnu/program.c:1151:9: error: too few arguments to function ‘P____init__’\n 1151 |     _13=P____init__(_11,_12);\n      |         ^~~~~~~~~~~\n/tmp/piton-linux-jj702nnu/program.c:1125:13: note: declared here\n 1125 | static long P____init__(long self, long a, long b);\n      |             ^~~~~~~~~~~\n"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "classes",
@@ -10936,8 +11018,10 @@
       "area": "generators",
       "name": "yield-varargs",
       "src": "funcion f(*args):\n    para a en args:\n        producir a * 2\nimprimir(lista(f(1, 2)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native generator 'f' with *args/**kwargs is not supported yet"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
@@ -10961,29 +11045,35 @@
       "area": "generators",
       "name": "class-generator",
       "src": "clase G:\n    funcion __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'object:G' value"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "generators",
       "name": "class-iter-self",
-      "src": "clase G:\n    funcion __iter__(self):\n    devolver self\n    funcion __next__(self):\n        devolver 1\nimprimir(lista(G()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus>\nlinea: 3\ncolumna: 5\n\nPython rechazó la traducción:\nexpected an indented block after function definition on line 2\n\n    return self"
+      "src": "clase G:\n    funcion __iter__(self):\n        devolver self\n    funcion __next__(self):\n        devolver 1\nimprimir(lista(G()))\n",
+      "bucket": "TIMEOUT",
+      "detail": "oracle did not terminate (case is a bad corpus entry)"
     },
     {
       "area": "controls_closed",
       "name": "walrus",
       "src": "si (n := 5) > 1:\n    imprimir(n)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: ParseError: Se esperaba RPAREN:  en 1:7"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
       "name": "match",
       "src": "x = 1\nsegun x:\n    caso 1:\n        imprimir('uno')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: runtime operation not supported in Linux native subset: unsupported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "controls_closed",
@@ -11043,8 +11133,10 @@
       "area": "controls_closed",
       "name": "with",
       "src": "con abrir('x') como f:\n    imprimir(f)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native with context must be a direct call to a native class constructor"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
     },
     {
       "area": "controls_closed",
@@ -11104,8 +11196,10 @@
       "area": "controls_closed",
       "name": "type-pattern-match",
       "src": "funcion f(x):\n    segun x:\n        caso int:\n            devolver 1\nimprimir(f(1))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: runtime operation not supported in Linux native subset: unsupported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     }
   ]
 }

@@ -532,10 +532,10 @@ class MIRLowerer:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
                 if node.keywords or node.decorators or any(
-                    item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS}
+                    item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS, HIRKind.ASSIGN, HIRKind.ANN_ASSIGN}
                     for item in node.body
                 ):
-                    raise MIRLoweringError("native classes currently require methods only, no keywords or class-level decorators")
+                    raise MIRLoweringError("native classes currently support methods and class-level assignments only")
                 bases = [base.name for base in node.bases if getattr(base, "name", None)]
                 for base in bases:
                     if base not in self.classes and base not in _BUILTIN_EXCEPTIONS:
@@ -547,6 +547,17 @@ class MIRLowerer:
                 used_symbols: set[str] = set()
                 for method in node.body:
                     if method.kind == HIRKind.PASS:
+                        continue
+                    if method.kind == HIRKind.ASSIGN:
+                        # CLASS_ATTR_V1: record class-level assignments; they
+                        # become module-level object_new + set_attr at class emit.
+                        for target in method.targets:
+                            if target.kind in (HIRKind.STORE, HIRKind.LOAD):
+                                if not hasattr(self, "class_attrs"):
+                                    self.class_attrs = {}
+                                self.class_attrs.setdefault(node.name, {})[target.name] = method.value
+                        continue
+                    if method.kind == HIRKind.ANN_ASSIGN:
                         continue
                     symbol, role, prop_name = self._class_method_symbol(node.name, method, property_methods)
                     if used_symbols and symbol in used_symbols:
@@ -644,6 +655,19 @@ class MIRLowerer:
             module = module_builder
             module.module_aliases = dict(self.module_aliases)
             module.from_import_aliases = dict(self.from_import_aliases)
+            # CLASS_ATTR_V1: for classes with class-level assignments, emit a class
+            # namespace object at module level so that load('ClassName') works and
+            # class-level attributes are accessible as ClassName.attr.
+            for cls_name, attrs in (self.class_attrs if hasattr(self, "class_attrs") else {}).items():
+                cls_obj = module_builder.temp()
+                module_builder.emit("object_new", cls_name, None, result=cls_obj)
+                for attr_name, value_node in attrs.items():
+                    val = self._lower_expr(module_builder, value_node)
+                    module_builder.emit("set_attr", cls_obj, attr_name, val)
+                    if not hasattr(self, "_class_attr_temps"):
+                        self._class_attr_temps = {}
+                    self._class_attr_temps.setdefault(cls_name, {})[attr_name] = val
+                module_builder.emit("store", cls_name, cls_obj)
             self._lower_module_metadata(module, entry_file, module_meta)
             self._lower_statements(module, [
                 node for node in module_body
@@ -1400,6 +1424,8 @@ class MIRLowerer:
             self._lower_try(builder, node)
         elif kind == HIRKind.WITH:
             self._lower_with(builder, node)
+        elif kind == HIRKind.MATCH:
+            self._lower_match(builder, node)
         elif kind == HIRKind.RAISE:
             self._lower_raise(builder, node)
         elif kind == HIRKind.IMPORT:
@@ -2012,6 +2038,21 @@ class MIRLowerer:
             or expr.func.kind != HIRKind.LOAD
             or expr.func.name not in self.classes
         ):
+            # WITH_ABRIR_V1: `con abrir(...)` is treated as a regular builtin call;
+            # the emitter raises FileNotFoundError at runtime if the file doesn't exist.
+            # El kind va PRIMERO: si expr es un Load (con xobj), expr.func no
+            # existe y el orden invertido lanzaba AttributeError en vez del
+            # MIRLoweringError "direct call".
+            if expr.kind == HIRKind.CALL and expr.func.name in {"abrir", "open"}:
+                var = item.optional_vars
+                if getattr(expr, "args", None):
+                    file_expr = self._lower_expr(builder, expr.args[0])
+                    file_result = builder.temp()
+                    builder.emit("call", "abrir", (file_expr,), None, result=file_result)
+                    if var is not None and var.kind == HIRKind.LOAD:
+                        builder.emit("store", var.name, file_result)
+                self._lower_statements(builder, node.body)
+                return
             raise MIRLoweringError(
                 "native with context must be a direct call to a native class constructor"
             )
@@ -2107,6 +2148,83 @@ class MIRLowerer:
             handler_spec = handler_spec[0][1]
         builder.emit("raise_active_dynamic", handler_spec)
 
+        builder.current = end_block
+
+    def _lower_match(self, builder: _Builder, node: HIRNode) -> None:
+        """MATCH_V1: lower `segun x: caso pattern: body` to an if/elif chain.
+
+        Supports literal patterns (compare ==), type patterns (`caso int:`
+        -> tipo(x) == int) and the wildcard `_` (always true).
+        """
+        subject = self._lower_expr(builder, node.subject)
+        end_block = builder.new_block()
+
+        for index, case_block in enumerate(node.cases):
+            pattern = case_block.pattern
+            body = case_block.body
+            next_block = builder.new_block()
+            body_block = builder.new_block()
+
+            # Build the condition for this case
+            if pattern is None:
+                cond = builder.temp()
+                builder.emit("const", 1, result=cond)
+            elif pattern.kind == HIRKind.CONST:
+                lit = builder.temp()
+                builder.emit("const", pattern.value, result=lit)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, lit, result=cond)
+            elif pattern.kind == HIRKind.LOAD and pattern.name == "_":
+                cond = builder.temp()
+                builder.emit("const", 1, result=cond)
+            elif pattern.kind == HIRKind.LOAD and pattern.name in {
+                "int", "entero", "str", "texto", "float", "decimal",
+                "bool", "booleano", "list", "lista", "tuple", "tupla",
+                "dict", "diccionario", "set", "conjunto",
+            }:
+                type_map = {
+                    "int": "int", "entero": "int",
+                    "str": "str", "texto": "str",
+                    "float": "float", "decimal": "float",
+                    "bool": "bool", "booleano": "bool",
+                    "list": "list", "lista": "list",
+                    "tuple": "tuple", "tupla": "tuple",
+                    "dict": "dict", "diccionario": "dict",
+                    "set": "set", "conjunto": "set",
+                }
+                type_name = type_map[pattern.name]
+                tipo_result = builder.temp()
+                builder.emit("call", "tipo", (subject,), None, result=tipo_result)
+                type_str = builder.temp()
+                builder.emit("const", f"<class '{type_name}'>", result=type_str)
+                cond = builder.temp()
+                builder.emit("compare", "==", tipo_result, type_str, result=cond)
+            else:
+                pattern_val = self._lower_expr(builder, pattern)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, pattern_val, result=cond)
+
+            # Guard: `caso X si guard:`
+            if case_block.guard is not None:
+                guard_val = self._lower_expr(builder, case_block.guard)
+                both = builder.temp()
+                builder.emit("binary", "y", cond, guard_val, result=both)
+                cond = both
+
+            # Branch: if cond -> body, else -> next case
+            builder.emit("branch", cond, body_block.label, next_block.label)
+
+            # Lower the body
+            builder.current = body_block
+            for stmt in body:
+                self._lower_statement(builder, stmt)
+            builder.emit("jump", end_block.label)
+
+            # Continue with the next case (or fall to end)
+            builder.current = next_block
+
+        builder.current = next_block
+        builder.emit("jump", end_block.label)
         builder.current = end_block
 
     def _lower_raise(self, builder: _Builder, node: HIRNode) -> None:
@@ -2250,6 +2368,14 @@ class MIRLowerer:
             result = builder.temp()
             builder.emit("const", node.value, result=result)
             return result
+        if kind == HIRKind.NAMED_EXPR:
+            # WALRUS_V1: `(n := 5)` asigna y evalúa al valor asignado.
+            value = self._lower_expr(builder, node.value)
+            target_name = node.target.name if node.target.kind in (HIRKind.LOAD, HIRKind.STORE) else None
+            if target_name is None:
+                raise MIRLoweringError("native walrus target must be a plain name")
+            builder.emit("store", target_name, value)
+            return value
         if kind == HIRKind.LOAD:
             if node.name in builder.closures:
                 lifted_name, _, n_args = builder.closures[node.name]
@@ -2495,6 +2621,9 @@ class MIRLowerer:
                 result = builder.temp()
                 parent_name = self.class_parents.get(node.func.name)
                 builder.emit("object_new", node.func.name, parent_name, result=result)
+                # CLASS_ATTR_V1: instances get class-level defaults at creation
+                for _attr_name, _val_temp in getattr(self, "_class_attr_temps", {}).get(node.func.name, {}).items():
+                    builder.emit("set_attr", result, _attr_name, _val_temp)
                 mro = self._mro_memo.get(node.func.name) or self._compute_mro(node.func.name)
                 init_class = None
                 for cls in (mro or ()):
@@ -2819,6 +2948,14 @@ class MIRLowerer:
             result = builder.temp()
             builder.emit("const", node.value, result=result)
             return result
+        if kind == HIRKind.NAMED_EXPR:
+            # WALRUS_V1: `(n := 5)` asigna y evalúa al valor asignado.
+            value = self._lower_expr(builder, node.value)
+            target_name = node.target.name if node.target.kind in (HIRKind.LOAD, HIRKind.STORE) else None
+            if target_name is None:
+                raise MIRLoweringError("native walrus target must be a plain name")
+            builder.emit("store", target_name, value)
+            return value
         if kind == HIRKind.LOAD:
             if node.name in builder.closures:
                 lifted_name, _, n_args = builder.closures[node.name]
@@ -3188,6 +3325,9 @@ class MIRLowerer:
                 result = builder.temp()
                 parent_name = self.class_parents.get(node.func.name)
                 builder.emit("object_new", node.func.name, parent_name, result=result)
+                # CLASS_ATTR_V1: instances get class-level defaults at creation
+                for _attr_name, _val_temp in getattr(self, "_class_attr_temps", {}).get(node.func.name, {}).items():
+                    builder.emit("set_attr", result, _attr_name, _val_temp)
                 mro = self._mro_memo.get(node.func.name) or self._compute_mro(node.func.name)
                 init_class = None
                 for cls in (mro or ()):
