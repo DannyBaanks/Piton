@@ -66,9 +66,14 @@ class PitonConsole(code.InteractiveConsole):
 
 def ejecutar_repl() -> None:
     """Launch the Pitón interactive REPL."""
+    import platform
+
+    from . import __version__
+
     console = PitonConsole()
     banner = (
-        "Pitón REPL — Python hablando español\n"
+        f"Pitón {__version__}\n"
+        f"engine: CPython {platform.python_version()} (REPL interactivo, fuente .piton)\n"
         "Escribe código en Pitón y presiona Enter.\n"
         "Ctrl+D (Unix) o Ctrl+Z+Enter (Windows) para salir.\n"
     )

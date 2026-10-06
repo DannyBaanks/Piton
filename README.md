@@ -192,15 +192,30 @@ Python escrita directamente está en
 
 ## CLI
 
-```powershell
-piton ejecutar examples\01_hola.piton       # traduce y ejecuta
-piton traducir examples\01_hola.piton       # muestra Python generado
-piton traducir examples\01_hola.piton -o h.py  # guarda a archivo
-piton verificar examples\programa_completo.piton  # valida sin ejecutar
-piton tokens examples\01_hola.piton         # muestra tokens y cambios
-piton ast examples\01_hola.piton            # muestra AST de Python generado
-piton repl                                  # REPL interactivo
+Entry points: `pi` (recomendado), `piton`, `pitn` o `python -m piton`.
+
+```text
+pi --help                                   # descubre toda la superficie
+pi run hola.piton                           # ejecuta con CPython
+pi run hola.piton --engine native           # compila a nativo y ejecuta
+pi check hola.piton                         # sintaxis + lowering a MIR, sin emitir
+pi build hola.piton                         # nativo para el host (PE Windows / ELF Linux)
+pi build hola.piton --target linux-x86_64 -o hola
+pi emit python hola.piton                   # Python generado (stdout, pipelineable)
+pi emit ast hola.piton                      # AST del Python generado
+pi emit tokens hola.piton                   # tokens y transformaciones
+pi emit mir hola.piton                      # MIR JSON determinista
+pi targets                                  # targets y toolchain real del host
+pi doctor                                   # diagnostica el entorno del compilador
+pi evidence --format summary                # evidencia verificada del compilador
+pi test tests/test_phase14.py -q            # pruebas
+pi corpus --areas literals --limit 4        # corpus diferencial focalizado
+pi version / pi --version / pi -V           # la misma fuente: piton.__version__
 ```
+
+Los aliases históricos siguen funcionando sin warning: `ejecutar`,
+`traducir`, `verificar`, `tokens`, `ast`, `compilar`. El contrato completo
+de la superficie vive en `docs/CLI_CONTRACT.md`.
 
 ## Compilación nativa x86-64
 
@@ -261,6 +276,10 @@ py -m piton compilar examples\01_hola.piton --backend=x86 --output hola.exe
 
 # ELF Linux x86-64 mediante WSL
 py -m piton compilar examples\01_hola.piton --backend=linux --output hola-linux
+
+# Forma canónica equivalente (CLI 1.x):
+pi build examples\01_hola.piton --target windows-x86_64 -o hola.exe
+pi build examples\01_hola.piton --target linux-x86_64 -o hola-linux
 ```
 
 Para producir un recibo con hashes, imports PE, ejecución con entorno vacío y
