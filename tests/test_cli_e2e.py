@@ -35,6 +35,28 @@ def correr(*argumentos: str, cwd: Path = ROOT, timeout: int = 120,
     )
 
 
+def _linux_target_runnable() -> bool:
+    """True si este host puede construir --target linux-x86_64.
+
+    En host Linux: requiere gcc. En Windows: requiere WSL *con al menos una
+    distro instalada* (el CLI Windows solo puede delegar la cadena freestanding
+    a `wsl.exe`; si no hay distros, el build falla con mensaje accionable).
+    """
+    if sys.platform != "win32":
+        return shutil.which("gcc") is not None
+    wsl = shutil.which("wsl")
+    if not wsl:
+        return False
+    try:
+        r = subprocess.run([wsl, "--list", "--quiet"], capture_output=True, timeout=15, check=False)
+        if r.returncode != 0:
+            return False
+        texto = r.stdout.decode("utf-16-le", errors="replace") if b"\x00" in r.stdout[:64] else r.stdout.decode("utf-8", errors="replace")
+        return texto.strip().strip("\x00").strip() != ""
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 class CliE2E(unittest.TestCase):
     def test_help(self):
         r = correr("--help")
@@ -69,8 +91,8 @@ class CliE2E(unittest.TestCase):
         self.assertIn("PITON_CHECK = PASS", r.stdout)
 
     def test_build_linux_native_y_ejecuta(self):
-        if sys.platform == "win32" and not shutil.which("wsl"):
-            self.skipTest("requiere WSL para el target linux-x86_64")
+        if not _linux_target_runnable():
+            self.skipTest("target linux-x86_64 no construible en este host (sin gcc / sin distro WSL)")
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / ("hola.exe" if sys.platform == "win32" else "hola")
             r = correr("build", str(HOLA), "--target", "linux-x86_64", "-o", str(out), timeout=180)
@@ -197,8 +219,8 @@ class CliE2E(unittest.TestCase):
         self.assertIn("Module(", r.stdout)
 
     def test_legacy_compilar_linux(self):
-        if sys.platform == "win32" and not shutil.which("wsl"):
-            self.skipTest("requiere WSL para el target linux-x86_64")
+        if not _linux_target_runnable():
+            self.skipTest("target linux-x86_64 no construible en este host (sin gcc / sin distro WSL)")
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "hola_legacy"
             r = correr("compilar", str(HOLA), "--backend", "linux", "-o", str(out), timeout=180)
