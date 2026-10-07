@@ -102,7 +102,7 @@ FINAL_GATES = (
     Gate("X86_64_LINUX", "PASS", "32 tests: static ELF scalar+rich differential vs CPython (floats, lists, dicts, sets, tuples, objects, methods, inheritance, multilevel inheritance, exceptions, stdlib abs/min/max/sum/type/len, math.sqrt, augmented assign, nested while, ternary, multifunction), empty env, chroot, QEMU sole userspace, no-python-marker"),
     Gate("CLEAN_MACHINE_EXECUTION", "PASS", "static ELF boots as /init and sole userspace in a QEMU VM"),
     Gate("DYNAMIC_RUNTIME_V1", "PASS", "PitonValue tagged union, refcounted heap strings, heterogeneous collections, dicts, sets, recursive print"),
-    Gate("FULL_PARITY", "PASS", "declared native subset parity demonstrated on both backends: Windows x86-64 PE and Linux x86-64 ELF both compile+execute the rich subset (objects, inheritance, exceptions, collections, floats, stdlib, math.sqrt, from-import subset) byte-identical vs CPython, with no CPython/libc in the executables"),
+    Gate("PITON_NATIVE_SUBSET_PARITY", "PASS", "declared native subset parity demonstrated on both backends: Windows x86-64 PE and Linux x86-64 ELF both compile+execute the rich subset (objects, inheritance, exceptions, collections, floats, stdlib, math.sqrt, from-import subset) byte-identical vs CPython, with no CPython/libc in the executables. Gate renamed from the retired term FULL_PARITY per docs/PARITY_DEFINITION.md (2026-10-05)"),
     Gate("EFFECT_CLASSIFICATION_V1", "PASS", "ME: every MIR op classified PURE/READ/WRITE/IO/OPAQUE at the end of lowering (piton/mir.py MIR_OP_EFFECTS, 61 ops); unknown/invalid op fails closed with MIRLoweringError; tests/test_effect_lattice.py"),
     Gate("EFFECT_TOKEN_CHAIN_V1", "PASS", "ME: effect token chained in block-list order through every non-PURE instruction; verify_effect_chain recomputes and fails on tamper or unclassified nodes (tests/test_effect_lattice.py)"),
     Gate("EFFECT_NEUTRALITY_V1", "PASS", "ME is a pure annotator: differential corpus unchanged (test_effect_lattice.py small battery + full test_phase5.py and test_phase10_linux.py regressions identical pre/post)"),
@@ -136,7 +136,7 @@ def _native_subset_milestone(evidence: VerifiedWindowsEvidence | None) -> Gate:
 def build_dashboard(native_subset_receipt: VerifiedWindowsEvidence | None = None) -> dict[str, Any]:
     milestone = _native_subset_milestone(native_subset_receipt)
     release_ready = all(gate.state == "PASS" for gate in FINAL_GATES)
-    full_parity = any(gate.name == "FULL_PARITY" and gate.state == "PASS" for gate in FINAL_GATES)
+    native_subset_parity = any(gate.name == "PITON_NATIVE_SUBSET_PARITY" and gate.state == "PASS" for gate in FINAL_GATES)
     return {
         "schema": "piton-phase14-dashboard-v1",
         "phase": 14,
@@ -145,7 +145,7 @@ def build_dashboard(native_subset_receipt: VerifiedWindowsEvidence | None = None
         "milestones": [asdict(milestone)],
         "native_subset_ready": milestone.state == "PASS",
         "release_ready": release_ready,
-        "full_parity": full_parity,
+        "native_subset_parity": native_subset_parity,
         "verdict": "PASS" if release_ready else "PARTIAL",
     }
 
@@ -170,8 +170,8 @@ def render_markdown(dashboard: dict[str, Any]) -> str:
 
 def render_summary(dashboard: dict[str, Any]) -> str:
     subset = "PASS" if dashboard["native_subset_ready"] else "NOT_DEMONSTRATED"
-    parity = "PASS" if dashboard["release_ready"] else "NOT_READY"
-    return f"NATIVE_SUBSET_1_0 = {subset}\nFULL_PARITY = {parity}\n"
+    parity = "PASS" if dashboard["native_subset_parity"] else "NOT_READY"
+    return f"NATIVE_SUBSET_1_0 = {subset}\nPITON_NATIVE_SUBSET_PARITY = {parity}\n"
 
 
 def main() -> int:

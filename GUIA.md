@@ -50,6 +50,20 @@ FULL_PARITY = NOT_READY
 `PASS` y `NOT READY` juntos son correctos: el primero es el subconjunto; el
 segundo conserva abiertos runtime, objetos, excepciones, async y stdlib amplios.
 
+> **Corrección 2026-10-05:** el gate se renombró de `FULL_PARITY` a
+> `PITON_NATIVE_SUBSET_PARITY` (el término `FULL_PARITY` está retirado; ver
+> `docs/PARITY_DEFINITION.md`). El bloque anterior es salida histórica
+> (2026-09-08) y se conserva como evidencia. Salida real actual sin receipt
+> (host Linux, `python3 -m piton.final_dashboard --format summary`, exit 0):
+>
+> ```text
+> NATIVE_SUBSET_1_0 = NOT_DEMONSTRATED
+> PITON_NATIVE_SUBSET_PARITY = PASS
+> ```
+>
+> `NOT_DEMONSTRATED` en la primera línea es correcto sin receipt: el
+> milestone solo pasa con `--native-receipt receipt.json` verificado.
+
 ## Verificación Linux y máquina limpia
 
 ```powershell

@@ -11,8 +11,9 @@ Estados: `PASS`, `PARTIAL`, `NOT_DEMONSTRATED`, `BLOCKED`, `FUTURE`.
 - **418 tests collected** (247 Windows + 171 Linux), suites principales pasan.
 - Ambos backends ejecutan el subset rico byte-idéntico vs CPython 3.12.4.
 - Ejecutables PE/ELF sin CPython ni libc (freestanding Linux).
-- **53 gates `PASS`** en `piton.final_dashboard` (incl. `FULL_PARITY`, que este
-  roadmap retira como término; ver `PARITY_DEFINITION.md`).
+- **53 gates `PASS`** en `piton.final_dashboard` (incl.
+  `PITON_NATIVE_SUBSET_PARITY`; el antiguo rótulo `FULL_PARITY` está retirado
+  como término — ver `PARITY_DEFINITION.md`).
 
 ## 2. Matriz de features
 

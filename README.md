@@ -18,6 +18,53 @@ código .piton
     -> ejecución sin CPython
 ```
 
+## Qué NO es Pitón (congelado 2026-10-04)
+
+> **Congelado en el commit `ce9aa11`.** Estas afirmaciones describen el
+> alcance del proyecto y no cambian con cada gate. Para modificarlas se
+> requiere evidencia nueva (corpus diferencial, receipt, CI) o una decisión
+> explícita de Danny. El resto del README (checklist nativo, gates,
+> comandos) sigue vivo y se actualiza con la evidencia.
+
+Pitón **no es**:
+
+- Un producto oficial de Python ni de la Python Software Foundation: es un
+  proyecto personal/esolang.
+- Una máquina ni una semántica nueva: la semántica observable es la de
+  CPython (oracle congelado: `ORACLE.md` y `docs/PARITY_DEFINITION.md`); el
+  español de México es solo la superficie (keywords + aliases de builtins).
+- Un compilador de todo Python: el backend nativo cubre un **subconjunto
+  demostrado y declarado** (`docs/FEATURE_STATUS_MATRIX.md`). Lo que no está
+  demostrado se rechaza en compilación; nunca se emite una aproximación.
+- Un reemplazo de CPython: el PE/ELF nativo solo ejecuta programas dentro del
+  subconjunto demostrado. No trae la stdlib de CPython, no expone su C API y
+  no es binariamente compatible con `PyObject`, bytecode ni `.pyc` (NO-goals
+  de `docs/PARITY_DEFINITION.md` §5).
+- Una promesa de "paridad completa": el término `FULL_PARITY` está retirado.
+  La paridad se mide por superficies con gates de alcance explícito; pasar el
+  corpus diferencial ≠ semántica completa.
+- Un proyecto de rendimiento: no hay claims de velocidad frente a CPython;
+  el objetivo es correcto, no rápido.
+- Self-hosted: el compilador está escrito en Python, no en Pitón.
+
+## Qué SÍ hace (estado verificado 2026-10-04, commit `ce9aa11`)
+
+- **Traduce superficie español → Python ordinario** (source-to-source,
+  líneas 1:1) y lo ejecuta con CPython: `piton ejecutar`, `piton traducir`,
+  `piton verificar`, `piton repl` e import hook de `.piton`.
+- **Compila un subconjunto demostrado a x86-64 nativo** — PE Windows
+  (NASM + MinGW) y ELF estático Linux (GCC freestanding) — que corre **sin
+  CPython** en el runtime. Lista cerrada: sección «Qué puede compilar
+  nativamente».
+- **Produce evidencia diferencial contra el oracle CPython**: corpus de 1220
+  casos → 1219 EQUIV (99.9%), FAIL_CLOSED 0, DIVERGENT 0, TIMEOUT 1 (entrada
+  documentada donde el oracle tampoco termina) —
+  `docs/parity_corpus_report.md`.
+- **CI verde en ambas plataformas** en el commit `ce9aa11`: test-linux,
+  test-windows y verify-oracle (run 37245148477).
+- **Falla cerrado** (regla de oro): compatibilidad demostrada o error de
+  compilación; nunca semántica aproximada silenciosa.
+
 ## Arranque rápido
 
 Requiere CPython 3.12 o posterior. Fue probado con CPython 3.12.4 en Windows.
@@ -145,15 +192,30 @@ Python escrita directamente está en
 
 ## CLI
 
-```powershell
-piton ejecutar examples\01_hola.piton       # traduce y ejecuta
-piton traducir examples\01_hola.piton       # muestra Python generado
-piton traducir examples\01_hola.piton -o h.py  # guarda a archivo
-piton verificar examples\programa_completo.piton  # valida sin ejecutar
-piton tokens examples\01_hola.piton         # muestra tokens y cambios
-piton ast examples\01_hola.piton            # muestra AST de Python generado
-piton repl                                  # REPL interactivo
+Entry points: `pi` (recomendado), `piton`, `pitn` o `python -m piton`.
+
+```text
+pi --help                                   # descubre toda la superficie
+pi run hola.piton                           # ejecuta con CPython
+pi run hola.piton --engine native           # compila a nativo y ejecuta
+pi check hola.piton                         # sintaxis + lowering a MIR, sin emitir
+pi build hola.piton                         # nativo para el host (PE Windows / ELF Linux)
+pi build hola.piton --target linux-x86_64 -o hola
+pi emit python hola.piton                   # Python generado (stdout, pipelineable)
+pi emit ast hola.piton                      # AST del Python generado
+pi emit tokens hola.piton                   # tokens y transformaciones
+pi emit mir hola.piton                      # MIR JSON determinista
+pi targets                                  # targets y toolchain real del host
+pi doctor                                   # diagnostica el entorno del compilador
+pi evidence --format summary                # evidencia verificada del compilador
+pi test tests/test_phase14.py -q            # pruebas
+pi corpus --areas literals --limit 4        # corpus diferencial focalizado
+pi version / pi --version / pi -V           # la misma fuente: piton.__version__
 ```
+
+Los aliases históricos siguen funcionando sin warning: `ejecutar`,
+`traducir`, `verificar`, `tokens`, `ast`, `compilar`. El contrato completo
+de la superficie vive en `docs/CLI_CONTRACT.md`.
 
 ## Compilación nativa x86-64
 
@@ -200,6 +262,10 @@ dependen de CPython**. Hay dos backends:
 [x] With múltiple: con A() como a, B() como b (nested lowering)
 [x] math.sqrt nativo: SSE sqrtsd
 [x] División entera/piso: coincide con Python
+[x] yield from (`producir desde sub()`) con send forwarding y valor de retorno
+[x] Builtins tier 1: all/any/bin/chr/ord/pow/round; int/float/str/bool/texto; math.sqrt/floor/ceil/trunc/fabs/gcd
+[x] `__del__` exactamente una vez por objeto; GC de ciclos en Windows; freelist+refcount en Linux
+[x] MIR con clasificación de efectos (PURE/READ/WRITE/IO/OPAQUE) y verificador de cadena
 ```
 
 ### Compilar desde la CLI
@@ -210,6 +276,10 @@ py -m piton compilar examples\01_hola.piton --backend=x86 --output hola.exe
 
 # ELF Linux x86-64 mediante WSL
 py -m piton compilar examples\01_hola.piton --backend=linux --output hola-linux
+
+# Forma canónica equivalente (CLI 1.x):
+pi build examples\01_hola.piton --target windows-x86_64 -o hola.exe
+pi build examples\01_hola.piton --target linux-x86_64 -o hola-linux
 ```
 
 Para producir un recibo con hashes, imports PE, ejecución con entorno vacío y
@@ -225,21 +295,27 @@ El contrato exacto vive en `NATIVE_SUBSET_1_0.md`.
 
 ```text
 [ ] Metaclasses
-[ ] yield from (producir desde) — fail-closed en MIR
 [ ] Decoradores sobre métodos/clases/generadores
-[ ] Stdlib amplia (solo math.sqrt demostrado)
+[ ] Stdlib amplia (demostrado tier 1: abs/min/max/sum/type/len/print,
+    int/float/str/bool, all/any/bin/chr/ord/pow/round,
+    math.sqrt/floor/ceil/trunc/fabs/gcd)
 [ ] FFI nativo / ctypes
+[ ] GC Linux de ciclos dict/set y `gc.collect()` público
+[ ] Interleaving concurrente durante `asyncio.sleep(n>0)` (documentado divergente)
 ```
 
 > **Actualización posterior al contrato NATIVE_SUBSET_1_0** (no reescrito: es un
-> snapshot histórico de ese recibo). Desde entonces el proyecto pasó a Fase 14 y
-> cerró los milestones **M2** (frames/llamadas: unpacking dinámico, bound methods,
-> decoradores, frame ABI >4 params) y **M9** (async completo: `asincrono con`,
-> excepciones en coroutines y timers reales) — véase
-> `piton/final_dashboard.py` (38 gates) y `docs/FEATURE_STATUS_MATRIX.md` para
-> el estado CURRENT. Siguen pendientes: metaclasses, `yield from`,
-> decoradores generalizados, divergencia documentada: `asyncio.sleep(n>0)`
-> bloquea dentro del paso del scheduler (sin interleaving concurrente).
+> snapshot histórico de ese recibo). Desde entonces el proyecto avanzó mucho
+> más allá: cerró los milestones **M2**–**M7**, **M9**, **M10** (with),
+> **M13** (finalización: `con`, `__del__` una vez, GC de ciclos en Windows),
+> **M14** (builtins tier 1) y la clasificación de efectos del MIR (EFFECT_*_V1
+> + MIR_HASH_REBASELINE_V1). El corpus diferencial de paridad cerró en
+> **P54** (2026-10-04, tras P53/P52): **1220 casos, 1219 EQUIV (99.9% del
+> corpus declarado — no el 99.9% de todo Python), 0 FAIL_CLOSED, 0 DIVERGENT,
+> 1 TIMEOUT no terminante también en el oracle** (`docs/parity_corpus_report.md`,
+> `docs/parity_corpus_report.json`). Estado vivo:
+> `piton/final_dashboard.py` (53 gates, todos PASS) y
+> `docs/FEATURE_STATUS_MATRIX.md`.
 
 ### Regla de oro
 
@@ -283,62 +359,77 @@ Salida verificada: 37 tests OK del backend PE y su corpus diferencial.
 py -m piton.final_dashboard --format summary --native-receipt build\native-subset-1\receipt.json
 ```
 
-Gates activos:
+Gates actuales: **53 PASS** (derivado de `piton/final_dashboard.py` al HEAD del
+2026-10-05; el dashboard embebe la declaración de cada gate). Lista completa y
+verificable:
+
+```powershell
+python3 -m piton.final_dashboard --format markdown
+```
+
+Subconjunto representativo:
 
 | Gate | Estado |
 |---|---|
-| NATIVE_SUBSET_1_0 | PASS |
 | GRAMMAR_PARITY | PASS |
 | SEMANTIC_DIFFERENTIAL_CORPUS | PASS |
-| CLEAN_MACHINE_EXECUTION | PASS |
-| X86_64_LINUX | PASS |
 | X86_64_WINDOWS | PASS |
+| X86_64_LINUX | PASS |
+| CLEAN_MACHINE_EXECUTION | PASS |
 | NATIVE_RUNTIME | PASS |
 | NATIVE_EXCEPTION_MODEL | PASS |
 | NATIVE_IMPORT_SYSTEM | PASS |
 | NATIVE_OBJECT_PROTOCOL | PASS |
 | NATIVE_ASYNC | PASS |
-| ASYNC_WITH_V1 | PASS |
-| ASYNC_EXCEPTION_V1 | PASS |
-| TASK_SCHEDULER_V2 | PASS |
-| NATIVE_STDLIB_DECLARED_SCOPE | PASS |
-| CPYTHON_EXECUTION_DEPENDENCY | PASS |
 | DYNAMIC_RUNTIME_V1 | PASS |
-| FULL_PARITY | PASS |
+| MATH_TIER1_V1 | PASS |
+| GC_CYCLES_V1 | PASS |
+| PITON_NATIVE_SUBSET_PARITY | PASS |
 
 `PARTIAL` significa que el subconjunto demostrado pasa; el alcance completo
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-09-19)
+### Estado nativo verificado (2026-10-05)
 
 ```text
-300/300 tests pass (test_phase5.py, Windows PE)
-220/220 tests pass (test_phase10_linux.py, Linux ELF)
-520/520 backend tests pass (Win + Linux, incluyendo M14)
-M2 (frames/llamadas): PASS — unpacking dinámico, bound methods, decoradores, frame ABI >4
-M3 (closures): PASS — variadic closures (pack de *resto en runtime dispatch)
-M4 (iteradores): PASS — iter(callable, sentinel), next(it, default)
-M5 (generadores): PASS — yield from, devolver v almacenado
-M6 (modelo de objetos): PASS — __getattr__/__setattr__/__delattr__, __call__, __eq__/__len__/__str__ por MRO, identidad `es`
-M7 (excepciones): PASS — raise from, BaseException, reraise desde catch-all
-M9 (async completo): PASS — async with, excepciones en coroutines, timers reales
-M10 (with): PASS — con A(), B() multi-item anidado
-M14 (builtins tier 1): PASS — BUILTINS_CORE_V2 + TYPE_CONVERSION_V1 + MATH_TIER1_V1
-      (all/any/bin/chr/ord/pow/round; int/float/str/bool; sqrt/floor/ceil/trunc/fabs/gcd,
-      pi/e; UTF-8 completo, round half-even, excepciones capturables; divergencias:
-      pow(int, neg), any/all solo list|tuple, round sin ndigits)
-3/3 Linux ELF gates (empty env, chroot, QEMU)
+Suite completa Linux: 811 passed / 26 skipped / 133 subtests
+  (python3 -m pytest tests/ -q --ignore=tests/test_windows_validate.py)
+CI verde: test-linux + test-windows + verify-oracle (run 37245148477, ce9aa11)
+Corpus diferencial enumerativo: 1220 casos
+  → 1219 EQUIV (99.9% del corpus declarado), 0 FAIL_CLOSED, 0 DIVERGENT,
+    1 TIMEOUT no terminante también en el oracle
+    (class-iter-self: entrada mala del corpus, no divergencia)
+Dashboard: 53/53 gates PASS
+  (python3 -m piton.final_dashboard --format summary)
+test_phase10_linux.py: 246 passed / 12 skipped
+  (ELF estático en QEMU, chroot y entorno vacío incluidos)
+Milestones cerrados: M2 frames/llamadas, M3 closures, M4 iteradores,
+  M5 generadores (incl. yield from, send/throw/close), M6 objetos/MRO,
+  M7 excepciones, M9 async completo, M10 with múltiple,
+  M13 finalización (__del__ + GC de ciclos Windows), M14 builtins tier 1,
+  ME efectos MIR (EFFECT_*_V1 + MIR_HASH_REBASELINE_V1)
+  M14 = BUILTINS_CORE_V2 + TYPE_CONVERSION_V1 + MATH_TIER1_V1:
+      all/any/bin/chr/ord/pow/round; int/float/str/bool;
+      sqrt/floor/ceil/trunc/fabs/gcd, pi/e; UTF-8 completo; round half-even;
+      excepciones capturables; divergencias: pow(int, neg),
+      any/all solo list|tuple, round sin ndigits
 ```
 
-Nota de regresión: las suites backend están verificadas 520/520. Algunas pruebas
-CLI/evidence compilan artefactos externos y pueden superar el timeout del host
-(WSL/toolchain); no se cuentan como PASS hasta completar esa ejecución.
+> Los números 300/300, 220/220 y 520/520 de backend del 2026-09-19 se
+> conservan como evidencia histórica (git log + `validation/windows/`); no
+> describen el estado CURRENT. La nota de WSL/timeout del 2026-09-12 fue
+> latencia de infraestructura, no lógica, y hoy la suite corre en host Linux
+> nativo.
 
-Nota de infraestructura: los tests Linux usan WSL; un arranque frío de la VM
-puede superar el timeout de 10 s por ejecución, así que la suite completa
-requiere WSL caliente (los 3 fallos del 2026-09-12 eran latencia de WSL, no
-lógica — re-ejecutados pasan aislados).
+**Pendientes reales (honesto):** metaclasses; decoradores sobre
+métodos/clases/generadores; stdlib amplia fuera del tier demostrado; FFI
+nativo/ctypes; GC de ciclos dict/set en Linux con `gc.collect()` público; e
+interleaving concurrente durante `asyncio.sleep(n>0)` (documentado
+divergente). PITÓN está "terminado" en el sentido del alcance nativo actual
+declarado: corpus enumerativo sin divergencias observadas, Windows y Linux, y
+fail-closed fuera del subconjunto. No es una reimplementación completa de
+CPython 3.12 — ver «Qué NO es Pitón».
 
 ## Por qué no usa `replace()`
 

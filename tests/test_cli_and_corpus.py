@@ -170,7 +170,11 @@ class CliAndCorpusTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="piton-cli-") as temporal:
             fuente = Path(temporal) / "fuera_de_alcance.piton"
             fuente.write_text("imprimir(1 << 2.5)\n", encoding="utf-8")
-            resultado = correr("compilar", str(fuente), "--backend=x86")
+            # backend host-nativo: windows-x86_64 solo compica PE en host Windows,
+            # linux-x86_64 solo ELF en host Linux/WSL. El gate fail-closed es el
+            # mismo en ambos.
+            backend = "x86" if sys.platform == "win32" else "linux"
+            resultado = correr("compilar", str(fuente), f"--backend={backend}")
             self.assertEqual(resultado.returncode, 1)
             self.assertIn("PITON_NATIVE_BUILD_ERROR", resultado.stderr)
             self.assertTrue(
