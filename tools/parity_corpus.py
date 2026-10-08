@@ -584,6 +584,9 @@ def area_generators() -> list[Case]:
         _c("generators", "gen-in-comprehension", "imprimir(sum(x para x en rango(4)))"),
         _c("generators", "class-generator", "clase G:\n    funcion __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))"),
         _c("generators", "class-iter-self", "clase G:\n    funcion __iter__(self):\n        devolver self\n    funcion __next__(self):\n        devolver 1\nimprimir(lista(G()))"),
+        _c("generators", "yield-from-sub", "funcion sub():\n    producir 10\n    producir 20\nfuncion g():\n    producir 1\n    producir desde sub()\n    producir 2\nimprimir(lista(g()))"),
+        _c("generators", "yield-from-list", "funcion g():\n    producir desde [1, 2, 3]\nimprimir(lista(g()))"),
+        _c("generators", "yield-from-tuple", "funcion g():\n    producir desde (4, 5)\nimprimir(lista(g()))"),
     ]
 
 

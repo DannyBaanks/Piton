@@ -1382,30 +1382,46 @@ class MIRLowerer:
                 and source_node.func.kind == HIRKind.LOAD
                 and source_node.func.name in self.generators
             )
-            if not is_gen_call:
-                raise MIRLoweringError(
-                    "native yield from over non-generator values (lists, dicts) is not supported yet; use producir desde gen(...) with a generator"
-                )
-            sub = self._lower_expr(builder, node.value)
-            done = builder.new_block()
-            loop = builder.new_block()
-            v0 = builder.temp()
-            builder.emit("try_push")
-            builder.emit("iter_next", sub, done.label, result=v0)
-            builder.emit("jump", loop.label)
-            builder.current = loop
-            sent = builder.temp()
-            builder.emit("gen_yield", v0, result=sent)
-            nxt = builder.temp()
-            builder.emit("gen_send", sub, sent, done.label, result=nxt)
-            builder.emit("store", v0, nxt)
-            builder.emit("jump", loop.label)
-            builder.current = done
-            builder.emit("catch_clear")
-            builder.emit("try_pop")
-            retv = builder.temp()
-            builder.emit("gen_retval", sub, result=retv)
-            return
+            if is_gen_call:
+                sub = self._lower_expr(builder, node.value)
+                done = builder.new_block()
+                loop = builder.new_block()
+                v0 = builder.temp()
+                builder.emit("try_push")
+                builder.emit("iter_next", sub, done.label, result=v0)
+                builder.emit("jump", loop.label)
+                builder.current = loop
+                sent = builder.temp()
+                builder.emit("gen_yield", v0, result=sent)
+                nxt = builder.temp()
+                builder.emit("gen_send", sub, sent, done.label, result=nxt)
+                builder.emit("store", v0, nxt)
+                builder.emit("jump", loop.label)
+                builder.current = done
+                builder.emit("catch_clear")
+                builder.emit("try_pop")
+                retv = builder.temp()
+                builder.emit("gen_retval", sub, result=retv)
+                return
+            else:
+                source = self._lower_expr(builder, node.value)
+                iterator = builder.temp()
+                builder.emit("iter_new", source, result=iterator)
+                condition_block = builder.new_block()
+                loop = builder.new_block()
+                done = builder.new_block()
+                builder.emit("jump", condition_block.label)
+                builder.current = condition_block
+                item = builder.temp()
+                builder.emit("iter_next", iterator, done.label, result=item)
+                builder.emit("jump", loop.label)
+                builder.current = loop
+                sent = builder.temp()
+                builder.emit("gen_yield", item, result=sent)
+                builder.emit("jump", condition_block.label)
+                builder.current = done
+                builder.emit("catch_clear")
+                return
         elif kind == HIRKind.NONLOCAL:
             return
         elif kind == HIRKind.GLOBAL:
@@ -1607,8 +1623,6 @@ class MIRLowerer:
                 builder.emit("build_collection", "tuple", values, result=generator)
                 self._lower_for_index_based(builder, node, generator)
                 return
-            else:
-                raise MIRLoweringError("native generators with parameters in for-loops require next() or iter()")
         if (
             node.iter.kind == HIRKind.CALL
             and node.iter.func.kind == HIRKind.LOAD

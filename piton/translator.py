@@ -262,9 +262,13 @@ def _nombres_definidos_por_usuario(tokens: list[tokenize.TokenInfo]) -> set[str]
                 pendiente_clase = True
                 en_import = False
                 continue
-            if actual.string in {"importar", "import", "desde", "from"}:
+            if actual.string in {"importar", "import"}:
                 en_import = True
                 continue
+            if actual.string in {"desde", "from"}:
+                if anterior is None or anterior.string not in {"producir", "yield"}:
+                    en_import = True
+                    continue
             if en_import:
                 definidos.add(actual.string)
             elif (
@@ -453,8 +457,12 @@ def _es_carga_builtin(
         return False
     if anterior is not None and anterior.type == token.NAME and anterior.string in {"def", "funcion", "class", "clase"}:
         return False
-    if anterior is not None and anterior.type == token.NAME and anterior.string in {"importar", "import", "desde", "from"}:
+    if anterior is not None and anterior.type == token.NAME and anterior.string in {"importar", "import"}:
         return False
+    if anterior is not None and anterior.type == token.NAME and anterior.string in {"desde", "from"}:
+        ant2 = _anterior_significativo(tokens, tokens.index(anterior))
+        if ant2 is None or ant2.string not in {"producir", "yield"}:
+            return False
     if nombre in asignados:
         return False
     # ALIAS_SHADOW_V1: if the module DEFINES this name, the alias must not
