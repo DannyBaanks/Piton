@@ -568,6 +568,9 @@ def area_classes() -> list[Case]:
         _c("classes", "constructor-args", "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)"),
         _c("classes", "dunder-add", "clase P:\n    funcion __add__(self, o):\n        devolver 99\nimprimir(P() + 1)"),
         _c("classes", "bool-dunder", "clase P:\n    funcion __bool__(self):\n        devolver Falso\nimprimir(P() o 'fallback')"),
+        _c("classes", "with-enter-exit", "clase CM:\n    funcion __enter__(self):\n        imprimir('enter')\n        devolver 10\n    funcion __exit__(self, t, v, tb):\n        imprimir('exit')\n        devolver Falso\ncon CM() como x:\n    imprimir('body', x)"),
+        _c("classes", "with-suppress", "clase CM:\n    funcion __enter__(self):\n        devolver 1\n    funcion __exit__(self, t, v, tb):\n        imprimir('suppressed')\n        devolver Verdadero\ncon CM():\n    lanzar ValueError('err')\nimprimir('fin')"),
+        _c("classes", "with-multiple", "clase A:\n    funcion __enter__(self):\n        devolver 1\n    funcion __exit__(self, t, v, tb):\n        imprimir('exitA')\n        devolver Falso\nclase B:\n    funcion __enter__(self):\n        devolver 2\n    funcion __exit__(self, t, v, tb):\n        imprimir('exitB')\n        devolver Falso\ncon A() como a, B() como b:\n    imprimir('body', a + b)"),
     ]
 
 
