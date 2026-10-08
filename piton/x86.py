@@ -5254,6 +5254,13 @@ class Win64NasmEmitter:
             self._load_operand(call_args[0], "rdx")
             self.lines.append("    call piton_str_subindex")
             self.types[result] = "int"
+        elif method in {"removeprefix", "removesuffix"}:
+            require_count(1, "exactly one str argument")
+            require_str(0, "a str argument")
+            helper = "piton_str_removeprefix" if method == "removeprefix" else "piton_str_removesuffix"
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append(f"    call {helper}")
+            self.types[result] = "str"
         else:
             raise NativeBuildError(f"native str.{method}() is not supported")
         self.lines.append(f"    mov {self._address(result)}, rax")
@@ -5488,6 +5495,22 @@ class Win64NasmEmitter:
                 require_count((0,), "no arguments")
                 self.lines.append("    call piton_seq_sort")
                 self.types[result] = "none"
+            elif method == "index":
+                require_count((1,), "exactly one argument")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    xor r8d, r8d")
+                self.lines.append("    call piton_seq_index")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "clear":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_seq_clear")
+                self.types[result] = "none"
+            elif method == "copy":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_seq_copy")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "list"
             else:
                 raise NativeBuildError(f"native list.{method}() is not supported")
         elif coll_type == "tuple":
@@ -5496,6 +5519,13 @@ class Win64NasmEmitter:
                 self._load_operand(call_args[0], "rdx")
                 self.lines.append("    xor r8d, r8d")
                 self.lines.append("    call piton_seq_count")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "index":
+                require_count((1,), "exactly one argument")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    xor r8d, r8d")
+                self.lines.append("    call piton_seq_index")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
             else:
@@ -5534,6 +5564,37 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_dict_get_1")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
+            elif method == "pop":
+                require_count((1, 2), "one or two arguments (key[, default])")
+                self._load_operand(call_args[0], "rdx")
+                if len(call_args) == 2:
+                    self.lines.append("    mov r8, 1")
+                    self._load_operand(call_args[1], "r9")
+                else:
+                    self.lines.append("    mov r8, 0")
+                    self.lines.append("    xor r9, r9")
+                self.lines.append("    call piton_dict_pop")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "setdefault":
+                require_count((1, 2), "one or two arguments (key[, default])")
+                self._load_operand(call_args[0], "rdx")
+                if len(call_args) == 2:
+                    self._load_operand(call_args[1], "r8")
+                else:
+                    self.lines.append("    xor r8, r8")
+                self.lines.append("    call piton_dict_setdefault")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "clear":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_dict_clear")
+                self.types[result] = "none"
+            elif method == "copy":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_dict_copy")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "dict"
             else:
                 raise NativeBuildError(f"native dict.{method}() is not supported")
         elif coll_type == "set":
@@ -5541,6 +5602,67 @@ class Win64NasmEmitter:
                 require_count((1,), "exactly one argument")
                 self._load_operand(call_args[0], "rdx")
                 self.lines.append("    call piton_set_add")
+                self.types[result] = "none"
+            elif method == "clear":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_set_clear")
+                self.types[result] = "none"
+            elif method == "copy":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_set_copy")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "pop":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_set_pop")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "union":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_union")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "intersection":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_intersection")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "difference":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_difference")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "symmetric_difference":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_sym_diff")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "issubset":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_issubset")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+            elif method == "issuperset":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_issuperset")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+            elif method == "isdisjoint":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_isdisjoint")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+            elif method == "update":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_update")
                 self.types[result] = "none"
             else:
                 raise NativeBuildError(f"native set.{method}() is not supported")

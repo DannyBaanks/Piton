@@ -32,6 +32,7 @@ static unsigned char piton_arena[8*1024*1024];
 static usize piton_arena_used=0;
 static void piton_memzero(void*p,usize n){unsigned char*b=p;for(usize i=0;i<n;++i)b[i]=0;}
 static void piton_memcpy(void*d,const void*s,usize n){unsigned char*dd=d;const unsigned char*ss=s;for(usize i=0;i<n;++i)dd[i]=ss[i];}
+static int piton_memcmp(const void*a,const void*b,usize n){const unsigned char*p=(const unsigned char*)a,*q=(const unsigned char*)b;for(usize i=0;i<n;++i){if(p[i]!=q[i])return p[i]<q[i]?-1:1;}return 0;}
 static void*piton_alloc(usize n){usize p=(piton_arena_used+15)&~15UL;if(n>sizeof(piton_arena)-p){piton_write(2,"MemoryError\n",12);piton_exit(1);}void*r=piton_arena+p;piton_arena_used=p+n;piton_memzero(r,n);return r;}
 /* ── Freelist heap for refcounted objects (GC_CYCLES_V1) ────────────── */
 static unsigned char piton_heap[4*1024*1024];
@@ -619,6 +620,25 @@ static long piton_seq_copy(PitonSeq*s){if(!s)return 0;PitonSeq*r=piton_seq_new((
 static int piton_set_index_of(PitonSet*s,PitonSlot v){for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return (int)i;return -1;}
 static void piton_set_discard(PitonSet*s,PitonSlot v){int i=s?piton_set_index_of(s,v):-1;if(i>=0){for(long j=i;j<s->length-1;++j)s->items[j]=s->items[j+1];--s->length;}}
 static void piton_set_remove(PitonSet*s,PitonSlot v){int i=s?piton_set_index_of(s,v):-1;if(i<0){piton_raise_set("KeyError","");return;}for(long j=i;j<s->length-1;++j)s->items[j]=s->items[j+1];--s->length;}
+static long piton_seq_index(PitonSeq*s,PitonSlot v){if(s){for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return i;}piton_raise_set("ValueError","sequence.index(x): x not in sequence");return 0;}
+static void piton_dict_clear(PitonDict*d){if(d)d->length=0;}
+static long piton_dict_copy(PitonDict*d){if(!d)return 0;PitonDict*r=piton_dict_new(d->length);r->length=d->length;for(long i=0;i<d->length;++i)r->items[i]=d->items[i];return(long)r;}
+static PitonSlot piton_dict_pop(PitonDict*d,PitonSlot k,int has_def,PitonSlot def_val){if(d){for(long i=0;i<d->length;++i){if(piton_slot_eq(d->items[i].key,k)){PitonSlot val=d->items[i].value;for(long j=i;j+1<d->length;++j)d->items[j]=d->items[j+1];--d->length;return val;}}}if(has_def)return def_val;piton_raise_set("KeyError","");return(PitonSlot){0,PK_NONE};}
+static PitonSlot piton_dict_setdefault(PitonDict*d,PitonSlot k,PitonSlot def_val){if(d){for(long i=0;i<d->length;++i){if(piton_slot_eq(d->items[i].key,k))return d->items[i].value;}piton_dict_append(d,k,def_val);}return def_val;}
+static long piton_dict_popitem(PitonDict*d){if(!d||d->length<=0){piton_raise_set("KeyError","popitem(): dictionary is empty");return 0;}PitonDictEntry entry=d->items[--d->length];PitonSeq*p=piton_seq_new(PK_TUPLE,2);p->items[0]=entry.key;p->items[1]=entry.value;return(long)p;}
+static void piton_set_clear(PitonSet*s){if(s)s->length=0;}
+static long piton_set_copy(PitonSet*s){if(!s)return 0;PitonSet*r=piton_set_new(s->length);r->length=s->length;for(long i=0;i<s->length;++i)r->items[i]=s->items[i];return(long)r;}
+static PitonSlot piton_set_pop(PitonSet*s){if(!s||s->length<=0){piton_raise_set("KeyError","pop from an empty set");return(PitonSlot){0,PK_NONE};}return s->items[--s->length];}
+static long piton_set_union(PitonSet*a,PitonSet*b){PitonSet*r=piton_set_new((a?a->length:0)+(b?b->length:0));if(a)for(long i=0;i<a->length;++i)piton_set_add(r,a->items[i]);if(b)for(long i=0;i<b->length;++i)piton_set_add(r,b->items[i]);return(long)r;}
+static long piton_set_intersection(PitonSet*a,PitonSet*b){PitonSet*r=piton_set_new(a?a->length:0);if(a&&b){for(long i=0;i<a->length;++i)if(piton_set_contains(b,a->items[i]))piton_set_add(r,a->items[i]);}return(long)r;}
+static long piton_set_difference(PitonSet*a,PitonSet*b){PitonSet*r=piton_set_new(a?a->length:0);if(a){for(long i=0;i<a->length;++i)if(!b||!piton_set_contains(b,a->items[i]))piton_set_add(r,a->items[i]);}return(long)r;}
+static long piton_set_sym_diff(PitonSet*a,PitonSet*b){PitonSet*r=piton_set_new((a?a->length:0)+(b?b->length:0));if(a){for(long i=0;i<a->length;++i)if(!b||!piton_set_contains(b,a->items[i]))piton_set_add(r,a->items[i]);}if(b){for(long i=0;i<b->length;++i)if(!a||!piton_set_contains(a,b->items[i]))piton_set_add(r,b->items[i]);}return(long)r;}
+static long piton_set_issubset(PitonSet*a,PitonSet*b){if(!a)return 1;if(!b)return a->length==0;for(long i=0;i<a->length;++i)if(!piton_set_contains(b,a->items[i]))return 0;return 1;}
+static long piton_set_issuperset(PitonSet*a,PitonSet*b){return piton_set_issubset(b,a);}
+static long piton_set_isdisjoint(PitonSet*a,PitonSet*b){if(!a||!b)return 1;for(long i=0;i<a->length;++i)if(piton_set_contains(b,a->items[i]))return 0;return 1;}
+static void piton_set_update(PitonSet*a,PitonSet*b){if(a&&b)for(long i=0;i<b->length;++i)piton_set_add(a,b->items[i]);}
+static long piton_str_removeprefix(const char*s,const char*prefix){if(!s||!prefix)return(long)s;usize pl=piton_strlen(prefix),sl=piton_strlen(s);if(sl>=pl&&piton_memcmp(s,prefix,pl)==0){usize rem=sl-pl;char*r=piton_alloc(rem+1);piton_memcpy(r,s+pl,rem);r[rem]=0;return(long)r;}char*r=piton_alloc(sl+1);piton_memcpy(r,s,sl);r[sl]=0;return(long)r;}
+static long piton_str_removesuffix(const char*s,const char*suffix){if(!s||!suffix)return(long)s;usize sufl=piton_strlen(suffix),sl=piton_strlen(s);if(sl>=sufl&&piton_memcmp(s+(sl-sufl),suffix,sufl)==0){usize rem=sl-sufl;char*r=piton_alloc(rem+1);piton_memcpy(r,s,rem);r[rem]=0;return(long)r;}char*r=piton_alloc(sl+1);piton_memcpy(r,s,sl);r[sl]=0;return(long)r;}
 static long piton_dict_keys(PitonDict*d){PitonSeq*s=piton_seq_new(PK_LIST,d?d->length:0);if(d)for(long i=0;i<d->length;++i)s->items[i]=d->items[i].key;return(long)s;}
 static long piton_dict_values(PitonDict*d){PitonSeq*s=piton_seq_new(PK_LIST,d?d->length:0);if(d)for(long i=0;i<d->length;++i)s->items[i]=d->items[i].value;return(long)s;}
 static long piton_dict_items(PitonDict*d){PitonSeq*s=piton_seq_new(PK_LIST,d?d->length:0);if(d)for(long i=0;i<d->length;++i){PitonSeq*p=piton_seq_new(PK_TUPLE,2);p->items[0]=d->items[i].key;p->items[1]=d->items[i].value;s->items[i]=(PitonSlot){(long)p,PK_TUPLE};}return(long)s;}
@@ -1533,6 +1553,10 @@ class LinuxCEmitter:
                 require_count((0,), "no arguments")
                 out.append(f"    piton_seq_clear((PitonSeq*){operand});")
                 types[result] = "none"
+            elif method == "index":
+                require_count((1,), "exactly one argument")
+                out.append(f"    {_name(result)}=piton_seq_index((PitonSeq*){operand},{self._slot(call_args[0], types)});")
+                types[result] = "int"
             elif method == "copy":
                 require_count((0,), "no arguments")
                 out.append(f"    {_name(result)}=piton_seq_copy((PitonSeq*){operand});")
@@ -1546,6 +1570,10 @@ class LinuxCEmitter:
             if method == "count":
                 require_count((1,), "exactly one argument")
                 out.append(f"    {_name(result)}=piton_seq_count((PitonSeq*){operand},{self._slot(call_args[0], types)});")
+                types[result] = "int"
+            elif method == "index":
+                require_count((1,), "exactly one argument")
+                out.append(f"    {_name(result)}=piton_seq_index((PitonSeq*){operand},{self._slot(call_args[0], types)});")
                 types[result] = "int"
             else:
                 raise NativeBuildError(f"Linux tuple.{method}() is not supported")
@@ -1603,6 +1631,33 @@ class LinuxCEmitter:
                 types[result] = val_type
                 if val_type == "builtin" and aliases is not None:
                     aliases[result] = aliases.get(call_args[1], call_args[1])
+            elif method == "pop":
+                require_count((1, 2), "one or two arguments (key[, default])")
+                has_def = 1 if len(call_args) == 2 else 0
+                def_slot = self._slot(call_args[1], types) if has_def else "(PitonSlot){0,PK_NONE}"
+                out.append(f"    {_name(result)}=piton_dict_pop((PitonDict*){operand},{self._slot(call_args[0], types)},{has_def},{def_slot}).bits;")
+                types[result] = "int"
+            elif method == "setdefault":
+                require_count((1, 2), "one or two arguments (key[, default])")
+                def_slot = self._slot(call_args[1], types) if len(call_args) == 2 else "(PitonSlot){0,PK_NONE}"
+                out.append(f"    {_name(result)}=piton_dict_setdefault((PitonDict*){operand},{self._slot(call_args[0], types)},{def_slot}).bits;")
+                types[result] = "int"
+            elif method == "popitem":
+                require_count((0,), "no arguments")
+                out.append(f"    {_name(result)}=piton_dict_popitem((PitonDict*){operand});")
+                types[result] = "tuple"
+            elif method == "clear":
+                require_count((0,), "no arguments")
+                out.append(f"    piton_dict_clear((PitonDict*){operand});")
+                types[result] = "none"
+            elif method == "copy":
+                require_count((0,), "no arguments")
+                out.append(f"    {_name(result)}=piton_dict_copy((PitonDict*){operand});")
+                types[result] = "dict"
+                if obj in self._dict_key_types:
+                    self._dict_key_types[result] = self._dict_key_types[obj]
+                if obj in self._dict_val_types:
+                    self._dict_val_types[result] = self._dict_val_types[obj]
             elif method == "update":
                 # DICT_UPDATE_V1: merge otro dict (V1: solo dict -> dict);
                 # CPython args iterable/kwargs quedan fuera.
@@ -1665,6 +1720,50 @@ class LinuxCEmitter:
                 require_count((1,), "exactly one argument")
                 out.append(f"    piton_set_remove((PitonSet*){operand},{self._slot(call_args[0], types)});")
                 types[result] = "none"
+            elif method == "clear":
+                require_count((0,), "no arguments")
+                out.append(f"    piton_set_clear((PitonSet*){operand});")
+                types[result] = "none"
+            elif method == "copy":
+                require_count((0,), "no arguments")
+                out.append(f"    {_name(result)}=piton_set_copy((PitonSet*){operand});")
+                types[result] = "set"
+            elif method == "pop":
+                require_count((0,), "no arguments")
+                out.append(f"    {_name(result)}=piton_set_pop((PitonSet*){operand}).bits;")
+                types[result] = "int"
+            elif method == "union":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    {_name(result)}=piton_set_union((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "set"
+            elif method == "intersection":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    {_name(result)}=piton_set_intersection((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "set"
+            elif method == "difference":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    {_name(result)}=piton_set_difference((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "set"
+            elif method == "symmetric_difference":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    {_name(result)}=piton_set_sym_diff((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "set"
+            elif method == "issubset":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    {_name(result)}=piton_set_issubset((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "bool"
+            elif method == "issuperset":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    {_name(result)}=piton_set_issuperset((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "bool"
+            elif method == "isdisjoint":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    {_name(result)}=piton_set_isdisjoint((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "bool"
+            elif method == "update":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    piton_set_update((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "none"
             else:
                 raise NativeBuildError(f"Linux set.{method}() is not supported")
 
@@ -1703,6 +1802,11 @@ class LinuxCEmitter:
             helper = "piton_str_startswith" if method == "startswith" else "piton_str_endswith"
             out.append(f"    {_name(result)}={helper}((const char*){operand},{require_str(0, 'a str argument')});")
             types[result] = "bool"
+        elif method in {"removeprefix", "removesuffix"}:
+            require_count(1, "exactly one str argument")
+            helper = "piton_str_removeprefix" if method == "removeprefix" else "piton_str_removesuffix"
+            out.append(f"    {_name(result)}=(long){helper}((const char*){operand},(const char*){require_str(0, 'a str argument')});")
+            types[result] = "str"
         elif method == "replace":
             require_count(2, "exactly two str arguments")
             out.append(
