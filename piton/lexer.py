@@ -121,7 +121,9 @@ BUILTIN_ALIASES = {
     "imprimir", "entrada", "rango", "longitud", "enumerar",
     "lista", "diccionario", "conjunto", "tupla",
     "entero", "decimal", "texto", "booleano",
-    "abrir", "ordenar",
+    "abrir", "ordenar", "suma", "redondear",
+    "es_instancia", "es_subclase", "tiene_atr", "obtener_atr",
+    "fijar_atr", "establecer_atr",
 }
 
 

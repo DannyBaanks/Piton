@@ -3694,6 +3694,45 @@ int64_t piton_object_lookup(void *raw, const char *name, int64_t fallback) {
     return ((int64_t (*)(int64_t, const char *))fallback)((int64_t)o, name);
 }
 
+int64_t piton_hasattr(void *raw, const char *name) {
+    if (!raw || !name) return 0;
+    PitonObject *o = raw;
+    for (int64_t i = 0; i < o->length; ++i) {
+        if (strcmp(o->attributes[i].name, name) == 0) return 1;
+    }
+    return 0;
+}
+
+int64_t piton_getattr(void *raw, const char *name, int has_default, int64_t def_val) {
+    if (raw && name) {
+        PitonObject *o = raw;
+        for (int64_t i = 0; i < o->length; ++i) {
+            if (strcmp(o->attributes[i].name, name) == 0) {
+                int64_t v = o->attributes[i].value;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                return v;
+            }
+        }
+    }
+    if (has_default) return def_val;
+    piton_raise_unhandled("AttributeError", "object has no attribute");
+    return 0;
+}
+
+void piton_setattr(void *raw, const char *name, int64_t value) {
+    if (!raw) { piton_raise_unhandled("AttributeError", "null object"); return; }
+    piton_object_set(raw, name, value);
+}
+
+int64_t piton_isinstance_class(void *raw, const char *target_name) {
+    if (!raw || !target_name) return 0;
+    PitonObject *o = raw;
+    if (o->class_name && strcmp(o->class_name, target_name) == 0) return 1;
+    if (o->parent_class_name && strcmp(o->parent_class_name, target_name) == 0) return 1;
+    return 0;
+}
+
 void piton_object_free(void *raw) {
     if (!raw) return;
     piton_value_deep_free(pv_encode(PITON_TAG_OBJECT, (int64_t)raw));

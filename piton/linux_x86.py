@@ -526,6 +526,10 @@ static void piton_finalize_objects(void){PitonObject*o=piton_all_objects;while(o
 static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].value=v;return;}if(o->length>=32){piton_write(2,"AttributeError\n",15);piton_exit(1);}o->attrs[o->length].name=name;o->attrs[o->length++].value=v;}
 static PitonSlot piton_object_get(PitonObject*o,const char*name){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;piton_write(2,"AttributeError\n",15);piton_exit(1);}
 static long piton_object_lookup(PitonObject*o,const char*name,long fallback){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;return ((long(*)(long,long))fallback)((long)o,(long)name);}
+static long piton_hasattr(long raw,const char*name){if(!raw||!name)return 0;PitonObject*o=(PitonObject*)raw;if(o->kind==PK_OBJECT){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return 1;}return 0;}
+static long piton_getattr(long raw,const char*name,int has_def,long def_val){if(raw&&name){PitonObject*o=(PitonObject*)raw;if(o->kind==PK_OBJECT){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;}}if(has_def)return def_val;piton_raise_set("AttributeError","object has no attribute");return 0;}
+static void piton_setattr(long raw,const char*name,PitonSlot val){if(!raw){piton_raise_set("AttributeError","null object");return;}PitonObject*o=(PitonObject*)raw;if(o->kind!=PK_OBJECT){piton_raise_set("TypeError","can't set attributes of built-in type");return;}piton_object_set(o,name,val);}
+static long piton_isinstance_class(long raw,const char*target_name){if(!raw||!target_name)return 0;PitonObject*o=(PitonObject*)raw;if(o->kind!=PK_OBJECT)return 0;if(o->class_name&&piton_strcmp(o->class_name,target_name)==0)return 1;if(o->parent_name&&piton_strcmp(o->parent_name,target_name)==0)return 1;return 0;}
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
 #define PITON_BOUND_METHOD_MAGIC 0x5049544E424D4554LL
 typedef struct{long magic;long addr;long n_args;long n_cells;long*cells;long has_vararg;}PitonClosure;
@@ -2208,6 +2212,91 @@ class LinuxCEmitter:
                 return candidate
         return None
 
+    def _type_match_c_expr(self, obj_val: str, target_name: str, types: dict, aliases: dict) -> str:
+        target_clean = aliases.get(target_name, target_name)
+        slot = self._slot(obj_val, types)
+        if target_clean in {"int", "entero"}:
+            return f"({slot}.kind==PK_INT||{slot}.kind==PK_BOOL)"
+        elif target_clean in {"bool", "booleano"}:
+            return f"({slot}.kind==PK_BOOL)"
+        elif target_clean in {"float", "decimal", "flotante"}:
+            return f"({slot}.kind==PK_FLOAT)"
+        elif target_clean in {"str", "texto"}:
+            return f"({slot}.kind==PK_STR)"
+        elif target_clean in {"list", "lista"}:
+            return f"({slot}.kind==PK_LIST)"
+        elif target_clean in {"tuple", "tupla"}:
+            return f"({slot}.kind==PK_TUPLE)"
+        elif target_clean in {"dict", "diccionario"}:
+            return f"({slot}.kind==PK_DICT)"
+        elif target_clean in {"set", "conjunto"}:
+            return f"({slot}.kind==PK_SET)"
+        elif target_clean in {"range", "rango"}:
+            return f"({slot}.kind==PK_RANGE)"
+        elif target_clean in {"object", "objeto"}:
+            return "1"
+        elif target_clean in self.classes:
+            obj_t = types.get(obj_val, "")
+            if obj_t.startswith("object:"):
+                cname = obj_t.split(":", 1)[1]
+                mro = self.class_mro.get(cname, [cname])
+                if target_clean in mro:
+                    return "1"
+                else:
+                    return "0"
+            return f'piton_isinstance_class({self._value(obj_val)},"{target_clean}")'
+        return "0"
+
+    def _build_isinstance_expr(self, obj_val: str, target_arg: str, types: dict, aliases: dict) -> str:
+        t_items = self._tuple_elems.get(target_arg) or self._tuple_elems.get(aliases.get(target_arg, target_arg))
+        if t_items is not None:
+            sub_exprs = []
+            for item in t_items:
+                iname = item[0] if isinstance(item, tuple) else item
+                sub_exprs.append(self._build_isinstance_expr(obj_val, iname, types, aliases))
+            if sub_exprs:
+                return f"({' || '.join(sub_exprs)})"
+            return "0"
+        target_name = aliases.get(target_arg, target_arg)
+        return self._type_match_c_expr(obj_val, target_name, types, aliases)
+
+    def _build_issubclass_expr(self, cls1_arg: str, cls2_arg: str, aliases: dict) -> str:
+        c1 = aliases.get(cls1_arg, cls1_arg)
+        t_items = self._tuple_elems.get(cls2_arg) or self._tuple_elems.get(aliases.get(cls2_arg, cls2_arg))
+        if t_items is not None:
+            sub_exprs = []
+            for item in t_items:
+                iname = item[0] if isinstance(item, tuple) else item
+                sub_exprs.append(self._build_issubclass_expr(cls1_arg, iname, aliases))
+            if sub_exprs:
+                return f"({' || '.join(sub_exprs)})"
+            return "0"
+        c2 = aliases.get(cls2_arg, cls2_arg)
+        type_norm = {
+            "int": "int", "entero": "int",
+            "bool": "bool", "booleano": "bool",
+            "float": "float", "flotante": "float", "decimal": "float",
+            "str": "str", "texto": "str",
+            "list": "list", "lista": "list",
+            "tuple": "tuple", "tupla": "tuple",
+            "dict": "dict", "diccionario": "dict",
+            "set": "set", "conjunto": "set",
+            "range": "range", "rango": "range",
+            "object": "object", "objeto": "object",
+        }
+        c1_norm = type_norm.get(c1, c1)
+        c2_norm = type_norm.get(c2, c2)
+        if c2_norm == "object" or c1_norm == c2_norm:
+            return "1"
+        if c1_norm == "bool" and c2_norm == "int":
+            return "1"
+        if c1 in self.classes and c2 in self.classes:
+            mro = self.class_mro.get(c1, [c1])
+            if c2 in mro:
+                return "1"
+            return "0"
+        return "0"
+
     def _complete_call_args(self, function_name: str, values: list[Any]) -> list[Any]:
         defaults = self.function_defaults.get(function_name)
         if not defaults:
@@ -2851,6 +2940,11 @@ class LinuxCEmitter:
                 self._dict_val_types[result] = self._dict_val_types[source]
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
+                return out
+            if source in self.classes or source in {"object", "objeto"}:
+                types[result] = f"class:{source}" if source in self.classes else "class:object"
+                aliases[result] = source
+                out.append(f"    {_name(result)}=0;")
                 return out
             if source in _BUILTINS and source not in function.params and source not in _FUNC_ONLY_BUILTINS:
                 # BUILTIN_MARKER_V1: this load emits NO C code — the builtin is
@@ -4274,6 +4368,66 @@ class LinuxCEmitter:
                 tx = self._tuple_list_elems.get(values[0]) or self._tuple_list_elems.get(aliases.get(values[0], values[0]))
                 if tx is not None:
                     self._tuple_list_elems[result] = tx
+            elif function_name in {"hasattr", "tiene_atr"}:
+                if len(values) != 2:
+                    raise NativeBuildError("hasattr requires 2 arguments (object, name)")
+                obj_val = values[0]
+                name_val = values[1]
+                obj_type = types.get(obj_val, "")
+                name_alias = aliases.get(name_val, name_val)
+                name_str = None
+                if isinstance(name_alias, str) and not name_alias.startswith("%"):
+                    name_str = name_alias
+                elif name_val in getattr(self, "_fn_consts", {}):
+                    cv = self._fn_consts[name_val]
+                    if isinstance(cv, str):
+                        name_str = cv
+                elif name_alias in getattr(self, "_fn_consts", {}):
+                    cv = self._fn_consts[name_alias]
+                    if isinstance(cv, str):
+                        name_str = cv
+                if obj_type.startswith("object:") and name_str:
+                    cls_name = obj_type.split(":", 1)[1]
+                    mro = self.class_mro.get(cls_name, [cls_name])
+                    has_meth = any(name_str in self.classes.get(c, set()) for c in mro)
+                    if has_meth:
+                        out.append(f"    {_name(result)}=1;")
+                        types[result] = "bool"
+                        return out
+                out.append(f"    {_name(result)}=piton_hasattr({self._value(obj_val)},(const char*){self._value(name_val)});")
+                types[result] = "bool"
+            elif function_name in {"getattr", "obtener_atr"}:
+                if len(values) not in {2, 3}:
+                    raise NativeBuildError("getattr requires 2 or 3 arguments (object, name [, default])")
+                obj_val = values[0]
+                name_val = values[1]
+                has_def = 1 if len(values) == 3 else 0
+                def_val = self._value(values[2]) if has_def else "0"
+                out.append(f"    {_name(result)}=piton_getattr({self._value(obj_val)},(const char*){self._value(name_val)},{has_def},{def_val});")
+                self._emit_exc_check(out, function, call_handler)
+                types[result] = "int"
+            elif function_name in {"setattr", "fijar_atr", "establecer_atr"}:
+                if len(values) != 3:
+                    raise NativeBuildError("setattr requires 3 arguments (object, name, value)")
+                obj_val = values[0]
+                name_val = values[1]
+                val_arg = values[2]
+                out.append(f"    piton_setattr({self._value(obj_val)},(const char*){self._value(name_val)},{self._slot(val_arg, types)});")
+                self._emit_exc_check(out, function, call_handler)
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
+            elif function_name in {"isinstance", "es_instancia"}:
+                if len(values) != 2:
+                    raise NativeBuildError("isinstance requires 2 arguments (object, class_or_tuple)")
+                expr = self._build_isinstance_expr(values[0], values[1], types, aliases)
+                out.append(f"    {_name(result)}={expr};")
+                types[result] = "bool"
+            elif function_name in {"issubclass", "es_subclase"}:
+                if len(values) != 2:
+                    raise NativeBuildError("issubclass requires 2 arguments (class, class_or_tuple)")
+                expr = self._build_issubclass_expr(values[0], values[1], aliases)
+                out.append(f"    {_name(result)}={expr};")
+                types[result] = "bool"
             else:
                 # BUILTIN_MARKER_V1: a builtin name that reached the generic
                 # call path has no C value (its load is a marker). Calling it

@@ -74,6 +74,12 @@ ALIASES_BUILTIN = {
     # haciendo que un programa valido pareciera divergente.
     "suma": "sum",
     "redondear": "round",
+    "es_instancia": "isinstance",
+    "es_subclase": "issubclass",
+    "tiene_atr": "hasattr",
+    "obtener_atr": "getattr",
+    "fijar_atr": "setattr",
+    "establecer_atr": "setattr",
 }
 
 _TRIVIA = {
