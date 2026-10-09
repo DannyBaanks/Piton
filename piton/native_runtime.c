@@ -2972,6 +2972,99 @@ int64_t piton_dict_get_1(void *raw, int64_t key) {
     return 0;
 }
 
+int64_t piton_seq_index(void *raw, int64_t value, int64_t type_tag) {
+    PitonCollection *c = raw;
+    if (!c) { piton_raise_unhandled("ValueError", "sequence.index(x): x not in sequence"); return 0; }
+    int64_t needle = (type_tag == 0) ? pv_int(value) : pv_encode(PITON_TAG_OBJECT, value);
+    for (int64_t i = 0; i < c->length; ++i) {
+        if (piton_value_eq_raw(c->items[i], needle)) return i;
+    }
+    piton_raise_unhandled("ValueError", "sequence.index(x): x not in sequence");
+    return 0;
+}
+
+void piton_dict_clear(void *raw) {
+    PitonDict *d = raw;
+    if (d) d->length = 0;
+}
+
+void *piton_dict_copy(void *raw) {
+    PitonDict *d = raw;
+    if (!d) return NULL;
+    PitonDict *r = piton_dict_new((int)d->length);
+    r->length = d->length;
+    for (int64_t i = 0; i < d->length; ++i) r->entries[i] = d->entries[i];
+    return r;
+}
+
+int64_t piton_dict_pop(void *raw, int64_t key, int64_t has_def, int64_t def_val) {
+    PitonDict *d = raw;
+    if (d) {
+        int64_t ek = pv_int(key);
+        for (int64_t i = 0; i < d->length; ++i) {
+            if (piton_value_eq_raw(d->entries[i].key, ek)) {
+                int64_t v = d->entries[i].value;
+                for (int64_t j = i; j + 1 < d->length; ++j) d->entries[j] = d->entries[j + 1];
+                --d->length;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                return v;
+            }
+        }
+    }
+    if (has_def) return def_val;
+    piton_raise_unhandled("KeyError", "key not found");
+    return 0;
+}
+
+void piton_dict_put(void *raw, int64_t key, int64_t value);
+int64_t piton_dict_setdefault(void *raw, int64_t key, int64_t def_val) {
+    PitonDict *d = raw;
+    if (d) {
+        int64_t ek = pv_int(key);
+        for (int64_t i = 0; i < d->length; ++i) {
+            if (piton_value_eq_raw(d->entries[i].key, ek)) {
+                int64_t v = d->entries[i].value;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                return v;
+            }
+        }
+        piton_dict_put(d, key, def_val);
+    }
+    return def_val;
+}
+
+char *piton_str_removeprefix(const char *s, const char *prefix) {
+    if (!s || !prefix) return (char *)s;
+    size_t pl = strlen(prefix), sl = strlen(s);
+    if (sl >= pl && memcmp(s, prefix, pl) == 0) {
+        size_t rem = sl - pl;
+        char *r = malloc(rem + 1);
+        memcpy(r, s + pl, rem);
+        r[rem] = 0;
+        return r;
+    }
+    char *r = malloc(sl + 1);
+    memcpy(r, s, sl + 1);
+    return r;
+}
+
+char *piton_str_removesuffix(const char *s, const char *suffix) {
+    if (!s || !suffix) return (char *)s;
+    size_t sufl = strlen(suffix), sl = strlen(s);
+    if (sl >= sufl && memcmp(s + (sl - sufl), suffix, sufl) == 0) {
+        size_t rem = sl - sufl;
+        char *r = malloc(rem + 1);
+        memcpy(r, s, rem);
+        r[rem] = 0;
+        return r;
+    }
+    char *r = malloc(sl + 1);
+    memcpy(r, s, sl + 1);
+    return r;
+}
+
 /* CPython {} / {N} positional substitution with {{ }} escapes; {name},
    format specs and keywords are out of subset (runtime error, same
    convention as the other helpers). Extra args are ignored. */
@@ -3380,6 +3473,122 @@ void piton_set_free(void *raw) {
 
 int64_t piton_set_live_count(void) { return live_sets; }
 
+void piton_set_clear(void *raw) {
+    PitonSet *s = raw;
+    if (s) s->length = 0;
+}
+
+void *piton_set_copy(void *raw) {
+    PitonSet *s = raw;
+    if (!s) return NULL;
+    PitonSet *r = piton_set_new(s->length);
+    r->length = s->length;
+    for (int64_t i = 0; i < s->length; ++i) r->items[i] = s->items[i];
+    return r;
+}
+
+int64_t piton_set_pop(void *raw) {
+    PitonSet *s = raw;
+    if (!s || s->length <= 0) {
+        piton_raise_unhandled("KeyError", "pop from an empty set");
+        return 0;
+    }
+    int64_t v = s->items[--s->length];
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    return v;
+}
+
+void *piton_set_union(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    PitonSet *r = piton_set_new((a ? a->length : 0) + (b ? b->length : 0));
+    if (a) for (int64_t i = 0; i < a->length; ++i) {
+        if (!piton_set_contains_tagged(r, a->items[i])) r->items[r->length++] = a->items[i];
+    }
+    if (b) for (int64_t i = 0; i < b->length; ++i) {
+        if (!piton_set_contains_tagged(r, b->items[i])) r->items[r->length++] = b->items[i];
+    }
+    return r;
+}
+
+void *piton_set_intersection(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    PitonSet *r = piton_set_new(a ? a->length : 0);
+    if (a && b) {
+        for (int64_t i = 0; i < a->length; ++i) {
+            if (piton_set_contains_tagged(b, a->items[i])) r->items[r->length++] = a->items[i];
+        }
+    }
+    return r;
+}
+
+void *piton_set_difference(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    PitonSet *r = piton_set_new(a ? a->length : 0);
+    if (a) {
+        for (int64_t i = 0; i < a->length; ++i) {
+            if (!b || !piton_set_contains_tagged(b, a->items[i])) r->items[r->length++] = a->items[i];
+        }
+    }
+    return r;
+}
+
+void *piton_set_sym_diff(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    PitonSet *r = piton_set_new((a ? a->length : 0) + (b ? b->length : 0));
+    if (a) {
+        for (int64_t i = 0; i < a->length; ++i) {
+            if (!b || !piton_set_contains_tagged(b, a->items[i])) r->items[r->length++] = a->items[i];
+        }
+    }
+    if (b) {
+        for (int64_t i = 0; i < b->length; ++i) {
+            if (!a || !piton_set_contains_tagged(a, b->items[i])) r->items[r->length++] = b->items[i];
+        }
+    }
+    return r;
+}
+
+int64_t piton_set_issubset(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    if (!a) return 1;
+    if (!b) return a->length == 0;
+    for (int64_t i = 0; i < a->length; ++i) {
+        if (!piton_set_contains_tagged(b, a->items[i])) return 0;
+    }
+    return 1;
+}
+
+int64_t piton_set_issuperset(void *a_raw, void *b_raw) {
+    return piton_set_issubset(b_raw, a_raw);
+}
+
+int64_t piton_set_isdisjoint(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    if (!a || !b) return 1;
+    for (int64_t i = 0; i < a->length; ++i) {
+        if (piton_set_contains_tagged(b, a->items[i])) return 0;
+    }
+    return 1;
+}
+
+void piton_set_update(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    if (a && b) {
+        for (int64_t i = 0; i < b->length; ++i) {
+            if (!piton_set_contains_tagged(a, b->items[i])) {
+                if (a->length >= a->capacity) {
+                    int64_t new_cap = a->capacity ? a->capacity * 2 : 4;
+                    a->items = realloc(a->items, (size_t)new_cap * sizeof(int64_t));
+                    memset(a->items + a->capacity, 0, (size_t)(new_cap - a->capacity) * sizeof(int64_t));
+                    a->capacity = new_cap;
+                }
+                a->items[a->length++] = b->items[i];
+            }
+        }
+    }
+}
+
 /* ── Closure escape (CLOSURES_COMPLETE_V1) ───────────────────────────── */
 
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
@@ -3692,6 +3901,45 @@ int64_t piton_object_lookup(void *raw, const char *name, int64_t fallback) {
             return v;
         }
     return ((int64_t (*)(int64_t, const char *))fallback)((int64_t)o, name);
+}
+
+int64_t piton_hasattr(void *raw, const char *name) {
+    if (!raw || !name) return 0;
+    PitonObject *o = raw;
+    for (int64_t i = 0; i < o->length; ++i) {
+        if (strcmp(o->attributes[i].name, name) == 0) return 1;
+    }
+    return 0;
+}
+
+int64_t piton_getattr(void *raw, const char *name, int has_default, int64_t def_val) {
+    if (raw && name) {
+        PitonObject *o = raw;
+        for (int64_t i = 0; i < o->length; ++i) {
+            if (strcmp(o->attributes[i].name, name) == 0) {
+                int64_t v = o->attributes[i].value;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                return v;
+            }
+        }
+    }
+    if (has_default) return def_val;
+    piton_raise_unhandled("AttributeError", "object has no attribute");
+    return 0;
+}
+
+void piton_setattr(void *raw, const char *name, int64_t value) {
+    if (!raw) { piton_raise_unhandled("AttributeError", "null object"); return; }
+    piton_object_set(raw, name, value);
+}
+
+int64_t piton_isinstance_class(void *raw, const char *target_name) {
+    if (!raw || !target_name) return 0;
+    PitonObject *o = raw;
+    if (o->class_name && strcmp(o->class_name, target_name) == 0) return 1;
+    if (o->parent_class_name && strcmp(o->parent_class_name, target_name) == 0) return 1;
+    return 0;
 }
 
 void piton_object_free(void *raw) {

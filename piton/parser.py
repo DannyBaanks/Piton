@@ -446,17 +446,16 @@ class Parser:
         return CaseBlock(pattern=pattern, guard=guard, body=body).set_pos(tok)
 
     def _parse_pattern(self) -> CSTNode:
-        # Simplificado por ahora
         if self._check(TokenType.NAME):
             val = self._peek().value
             if val == "_":
-                self._advance()
-                return MatchSingleton(value=None).set_pos(self._peek())
-            elif val in ("Verdadero", "Falso", "Nada"):
-                self._advance()
-                v = {"Verdadero": True, "Falso": False, "Nada": None}[val]
-                return MatchSingleton(value=v).set_pos(self._peek())
-        return self._parse_expression(0)
+                tok = self._advance()
+                return MatchSingleton(value=None, is_wildcard=True).set_pos(tok)
+            elif val in ("Verdadero", "Falso", "Nada", "True", "False", "None"):
+                tok = self._advance()
+                v = {"Verdadero": True, "True": True, "Falso": False, "False": False, "Nada": None, "None": None}[val]
+                return MatchSingleton(value=v, is_wildcard=False).set_pos(tok)
+        return self._parse_expression(0, allow_ternary=False)
 
     def _parse_import(self) -> ImportStmt:
         tok = self._advance()
@@ -847,7 +846,7 @@ class Parser:
         if tok.type == TokenType.STRING:
             self._advance()
             val = tok.value
-            if val.startswith(("f'", 'f"', "F'", 'F"')):
+            if val.lower().startswith(("f'", 'f"', "rf'", 'rf"', "fr'", 'fr"')):
                 return self._parse_postfix(self._parse_fstring(val, tok))
             import ast
             val = ast.literal_eval(val)

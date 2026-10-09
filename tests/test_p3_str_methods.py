@@ -184,9 +184,9 @@ class FormatV1(unittest.TestCase):
             compare_native_to_cpython("imprimir('{5}'.format(1))\n")
 
     def test_unknown_method_fails_closed(self):
-        # title (P23), partition (P36) implemented; removeprefix still outside
+        # title (P23), partition (P36), removeprefix (P38) implemented; casefold still outside
         with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('a'.removeprefix('x'))\n")
+            compare_native_to_cpython("imprimir('a'.casefold())\n")
 
 
 class StrMethodsChainedV1(unittest.TestCase):

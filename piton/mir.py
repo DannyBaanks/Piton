@@ -132,6 +132,8 @@ class MIRModule:
     class_parents: dict = field(default_factory=dict)
     class_mro: dict = field(default_factory=dict)
     class_properties: dict = field(default_factory=dict)
+    static_methods: set = field(default_factory=set)
+    class_methods: set = field(default_factory=set)
 
     def to_dict(self) -> dict[str, Any]:
         return {"functions": [function.to_dict() for function in self.functions]}
@@ -396,11 +398,17 @@ class MIRLowerer:
         """
         decorators = list(getattr(method, "decorators", None) or [])
         if len(decorators) > 1:
-            raise MIRLoweringError("native class methods support at most one @property decorator")
+            raise MIRLoweringError("native class methods support at most one decorator")
         if not decorators:
             return f"{class_name}__{method.name}", None, method.name
         decorator = decorators[0]
-        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) == "property":
+        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"staticmethod", "metodo_estatico"}:
+            self.static_methods.add(f"{class_name}__{method.name}")
+            return f"{class_name}__{method.name}", "staticmethod", method.name
+        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"classmethod", "metodo_clase"}:
+            self.class_methods.add(f"{class_name}__{method.name}")
+            return f"{class_name}__{method.name}", "classmethod", method.name
+        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"property", "propiedad"}:
             if method.name in property_methods:
                 raise MIRLoweringError(f"native duplicate @property '{method.name}' on '{class_name}'")
             property_methods[method.name] = {"getter": None, "setter": None, "deleter": None}
@@ -421,7 +429,7 @@ class MIRLowerer:
             if existing[prop] is not None:
                 raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
             return f"{class_name}__{method.name}__{prop}", prop, method.name
-        raise MIRLoweringError(f"native class methods support only @property, @<name>.setter, @<name>.deleter")
+        raise MIRLoweringError(f"native class methods support only @property, @staticmethod, @classmethod, @<name>.setter, @<name>.deleter")
 
     def lower(
         self, hir: HIRNode, modules: dict[str, HIRNode] | None = None,
@@ -437,6 +445,9 @@ class MIRLowerer:
         self.class_mro = {}
         self._mro_memo = {}
         self.class_properties = {}
+        self.static_methods = set()
+        self.class_methods = set()
+        self.decorated_classes = set()
         self.async_functions = set()
         self.async_generators = set()
         self.module_aliases = {}
@@ -531,11 +542,13 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
-                if node.keywords or node.decorators or any(
+                if node.keywords or any(
                     item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS, HIRKind.ASSIGN, HIRKind.ANN_ASSIGN}
                     for item in node.body
                 ):
                     raise MIRLoweringError("native classes currently support methods and class-level assignments only")
+                if getattr(node, "decorators", None):
+                    self.decorated_classes.add(node.name)
                 bases = [base.name for base in node.bases if getattr(base, "name", None)]
                 for base in bases:
                     if base not in self.classes and base not in _BUILTIN_EXCEPTIONS:
@@ -567,12 +580,12 @@ class MIRLowerer:
                     used_symbols.add(symbol)
                     method_params = list(getattr(getattr(method, "args", None), "args", []) or [])
                     method_params = [*list(getattr(getattr(method, "args", None), "posonlyargs", []) or []), *method_params]
-                    super_self = method_params[0] if method_params else None
+                    super_self = method_params[0] if method_params and role != "staticmethod" else None
                     self._lower_function(
                         method, symbol,
                         super_context=(node.name, super_self) if super_self else None,
                     )
-                    if role is None:
+                    if role in (None, "staticmethod", "classmethod"):
                         self.classes[node.name].add(method.name)
                     else:
                         self.class_properties.setdefault(node.name, {}).setdefault(prop_name, {})[role] = symbol
@@ -655,12 +668,16 @@ class MIRLowerer:
             module = module_builder
             module.module_aliases = dict(self.module_aliases)
             module.from_import_aliases = dict(self.from_import_aliases)
-            # CLASS_ATTR_V1: for classes with class-level assignments, emit a class
-            # namespace object at module level so that load('ClassName') works and
+            # CLASS_ATTR_V1: for classes defined in module with class attributes or decorators,
+            # emit a class namespace object at module level so that load('ClassName') works and
             # class-level attributes are accessible as ClassName.attr.
-            for cls_name, attrs in (self.class_attrs if hasattr(self, "class_attrs") else {}).items():
+            needed_classes = set(getattr(self, "class_attrs", {}).keys()) | set(getattr(self, "decorated_classes", set()))
+            for cls_node in (n for n in module_body if n.kind == HIRKind.CLASS_DEF and n.name in needed_classes):
+                cls_name = cls_node.name
+                attrs = getattr(self, "class_attrs", {}).get(cls_name, {})
                 cls_obj = module_builder.temp()
-                module_builder.emit("object_new", cls_name, None, result=cls_obj)
+                parent_name = self.class_parents.get(cls_name)
+                module_builder.emit("object_new", cls_name, parent_name, result=cls_obj)
                 for attr_name, value_node in attrs.items():
                     val = self._lower_expr(module_builder, value_node)
                     module_builder.emit("set_attr", cls_obj, attr_name, val)
@@ -671,7 +688,7 @@ class MIRLowerer:
             self._lower_module_metadata(module, entry_file, module_meta)
             self._lower_statements(module, [
                 node for node in module_body
-                if node.kind != HIRKind.FUNC_DEF or getattr(node, "decorators", None)
+                if node.kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF} or getattr(node, "decorators", None)
             ])
             self.functions.insert(0, module.function)
         else:
@@ -684,6 +701,8 @@ class MIRLowerer:
         self._finalize_mro()
         module.class_mro = dict(self.class_mro)
         module.class_properties = dict(self.class_properties)
+        module.static_methods = set(self.static_methods)
+        module.class_methods = set(self.class_methods)
         # ME — effect lattice: every emitted op is classified and chained at
         # lowering time, so a new op born without classification fails closed.
         annotate_module_effects(module)
@@ -965,8 +984,6 @@ class MIRLowerer:
         all_nested_captures: dict[str, tuple[str, tuple[str, ...]]] = {}
         available = local_names | (set(cell_vars) if cell_vars else set())
         for nested in (item for item in body if item.kind == HIRKind.FUNC_DEF):
-            if getattr(nested, "decorators", None):
-                raise MIRLoweringError("native decorators are only supported on module-level functions")
             nested_captures = tuple(name for name in sorted(self._nested_free_loads(nested)) if name in available)
             lifted_name = f"{builder.function.name}__{nested.name}"
             nested_args = getattr(nested, "args", None)
@@ -1010,8 +1027,6 @@ class MIRLowerer:
                 builder.emit("store", cap, cell_ptr)
 
         for nested in (item for item in body if item.kind == HIRKind.FUNC_DEF):
-            if getattr(nested, "decorators", None):
-                raise MIRLoweringError("native decorators are only supported on module-level functions")
             nested_captures = tuple(name for name in sorted(self._nested_free_loads(nested)) if name in available)
             lifted_name = f"{builder.function.name}__{nested.name}"
             inner_cell_vars = [c for c in nested_captures if c in captured_var_names]
@@ -1032,7 +1047,7 @@ class MIRLowerer:
                 cell_vars=inner_cell_vars, frame_abi=True,
             )
 
-        self._lower_statements(builder, [item for item in body if item.kind != HIRKind.FUNC_DEF])
+        self._lower_statements(builder, [item for item in body if item.kind != HIRKind.FUNC_DEF or getattr(item, "decorators", None)])
         if not builder.current.instructions or builder.current.instructions[-1].op not in {"return", "jump", "branch"}:
             builder.emit("return", None)
         builder.function.cell_vars = sorted(captured_var_names)
@@ -1289,18 +1304,47 @@ class MIRLowerer:
         kind = node.kind
         if kind == HIRKind.FUNC_DEF:
             decorators = list(getattr(node, "decorators", None) or [])
+            if not decorators:
+                return
+            if node.name in builder.closures:
+                lifted_name, capture_names, n_args = builder.closures[node.name]
+                capture_ops = []
+                for capture_name in capture_names:
+                    capture = builder.temp()
+                    builder.emit("load", capture_name, result=capture)
+                    capture_ops.append(capture)
+                current = builder.temp()
+                has_vararg = 1 if lifted_name in getattr(self, "variadic_functions", set()) else 0
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg, result=current)
+                for decorator in reversed(decorators):
+                    dec_val = self._lower_expr(builder, decorator)
+                    applied = builder.temp()
+                    builder.emit("call", dec_val, (current,), _active_handler(builder), result=applied)
+                    current = applied
+                builder.emit("store", node.name, current)
+                del builder.closures[node.name]
+                return
             symbol = self.decorated_symbols.get(id(node))
-            if not decorators or not symbol:
+            if not symbol:
                 return
             current = builder.temp()
             builder.emit("load", symbol, result=current)
             for decorator in reversed(decorators):
-                if decorator.kind != HIRKind.LOAD:
-                    raise MIRLoweringError("native decorators must be plain names")
-                decorator_value = builder.temp()
-                builder.emit("load", decorator.name, result=decorator_value)
+                dec_val = self._lower_expr(builder, decorator)
                 applied = builder.temp()
-                builder.emit("call", decorator_value, (current,), _active_handler(builder), result=applied)
+                builder.emit("call", dec_val, (current,), _active_handler(builder), result=applied)
+                current = applied
+            builder.emit("store", node.name, current)
+        elif kind == HIRKind.CLASS_DEF:
+            decorators = list(getattr(node, "decorators", None) or [])
+            if not decorators:
+                return
+            current = builder.temp()
+            builder.emit("load", node.name, result=current)
+            for decorator in reversed(decorators):
+                dec_val = self._lower_expr(builder, decorator)
+                applied = builder.temp()
+                builder.emit("call", dec_val, (current,), _active_handler(builder), result=applied)
                 current = applied
             builder.emit("store", node.name, current)
         elif kind == HIRKind.ASSIGN:
@@ -1382,30 +1426,46 @@ class MIRLowerer:
                 and source_node.func.kind == HIRKind.LOAD
                 and source_node.func.name in self.generators
             )
-            if not is_gen_call:
-                raise MIRLoweringError(
-                    "native yield from over non-generator values (lists, dicts) is not supported yet; use producir desde gen(...) with a generator"
-                )
-            sub = self._lower_expr(builder, node.value)
-            done = builder.new_block()
-            loop = builder.new_block()
-            v0 = builder.temp()
-            builder.emit("try_push")
-            builder.emit("iter_next", sub, done.label, result=v0)
-            builder.emit("jump", loop.label)
-            builder.current = loop
-            sent = builder.temp()
-            builder.emit("gen_yield", v0, result=sent)
-            nxt = builder.temp()
-            builder.emit("gen_send", sub, sent, done.label, result=nxt)
-            builder.emit("store", v0, nxt)
-            builder.emit("jump", loop.label)
-            builder.current = done
-            builder.emit("catch_clear")
-            builder.emit("try_pop")
-            retv = builder.temp()
-            builder.emit("gen_retval", sub, result=retv)
-            return
+            if is_gen_call:
+                sub = self._lower_expr(builder, node.value)
+                done = builder.new_block()
+                loop = builder.new_block()
+                v0 = builder.temp()
+                builder.emit("try_push")
+                builder.emit("iter_next", sub, done.label, result=v0)
+                builder.emit("jump", loop.label)
+                builder.current = loop
+                sent = builder.temp()
+                builder.emit("gen_yield", v0, result=sent)
+                nxt = builder.temp()
+                builder.emit("gen_send", sub, sent, done.label, result=nxt)
+                builder.emit("store", v0, nxt)
+                builder.emit("jump", loop.label)
+                builder.current = done
+                builder.emit("catch_clear")
+                builder.emit("try_pop")
+                retv = builder.temp()
+                builder.emit("gen_retval", sub, result=retv)
+                return
+            else:
+                source = self._lower_expr(builder, node.value)
+                iterator = builder.temp()
+                builder.emit("iter_new", source, result=iterator)
+                condition_block = builder.new_block()
+                loop = builder.new_block()
+                done = builder.new_block()
+                builder.emit("jump", condition_block.label)
+                builder.current = condition_block
+                item = builder.temp()
+                builder.emit("iter_next", iterator, done.label, result=item)
+                builder.emit("jump", loop.label)
+                builder.current = loop
+                sent = builder.temp()
+                builder.emit("gen_yield", item, result=sent)
+                builder.emit("jump", condition_block.label)
+                builder.current = done
+                builder.emit("catch_clear")
+                return
         elif kind == HIRKind.NONLOCAL:
             return
         elif kind == HIRKind.GLOBAL:
@@ -1607,8 +1667,6 @@ class MIRLowerer:
                 builder.emit("build_collection", "tuple", values, result=generator)
                 self._lower_for_index_based(builder, node, generator)
                 return
-            else:
-                raise MIRLoweringError("native generators with parameters in for-loops require next() or iter()")
         if (
             node.iter.kind == HIRKind.CALL
             and node.iter.func.kind == HIRKind.LOAD
@@ -2150,80 +2208,182 @@ class MIRLowerer:
 
         builder.current = end_block
 
-    def _lower_match(self, builder: _Builder, node: HIRNode) -> None:
-        """MATCH_V1: lower `segun x: caso pattern: body` to an if/elif chain.
+    def _lower_pattern_check(self, builder: _Builder, pattern: Optional[HIRNode], subject: Any, fail_block: _Block) -> None:
+        """Lower pattern matching tests, branching to fail_block immediately on any mismatch."""
+        if pattern is None:
+            return
 
-        Supports literal patterns (compare ==), type patterns (`caso int:`
-        -> tipo(x) == int) and the wildcard `_` (always true).
-        """
+        if pattern.kind == HIRKind.CONST:
+            lit = builder.temp()
+            builder.emit("const", pattern.value, result=lit)
+            cond = builder.temp()
+            builder.emit("compare", "==", subject, lit, result=cond)
+            ok_block = builder.new_block()
+            builder.emit("branch", cond, ok_block.label, fail_block.label)
+            builder.current = ok_block
+            return
+
+        if pattern.kind == HIRKind.LOAD:
+            if pattern.name == "_":
+                return
+            if pattern.name in ("Verdadero", "True"):
+                lit = builder.temp()
+                builder.emit("const", True, result=lit)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, lit, result=cond)
+                ok_block = builder.new_block()
+                builder.emit("branch", cond, ok_block.label, fail_block.label)
+                builder.current = ok_block
+                return
+            if pattern.name in ("Falso", "False"):
+                lit = builder.temp()
+                builder.emit("const", False, result=lit)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, lit, result=cond)
+                ok_block = builder.new_block()
+                builder.emit("branch", cond, ok_block.label, fail_block.label)
+                builder.current = ok_block
+                return
+            if pattern.name in ("Nada", "None"):
+                lit = builder.temp()
+                builder.emit("const", None, result=lit)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, lit, result=cond)
+                ok_block = builder.new_block()
+                builder.emit("branch", cond, ok_block.label, fail_block.label)
+                builder.current = ok_block
+                return
+            # Capture variable: bind subject to pattern.name
+            builder.emit("store", pattern.name, subject)
+            return
+
+        if pattern.kind == HIRKind.BINOP and pattern.op in ("|", "o"):
+            try_right_block = builder.new_block()
+            ok_block = builder.new_block()
+            
+            # Try left arm; on mismatch jump to try_right_block
+            self._lower_pattern_check(builder, pattern.left, subject, try_right_block)
+            builder.emit("jump", ok_block.label)
+
+            # Try right arm; on mismatch jump to fail_block
+            builder.current = try_right_block
+            self._lower_pattern_check(builder, pattern.right, subject, fail_block)
+            builder.emit("jump", ok_block.label)
+
+            builder.current = ok_block
+            return
+
+        if pattern.kind in {HIRKind.LIST, HIRKind.TUPLE}:
+            # Sequence pattern: check length first
+            sub_len = builder.temp()
+            builder.emit("collection_len", subject, result=sub_len)
+            pat_len = builder.temp()
+            builder.emit("const", len(pattern.elts), result=pat_len)
+            cond = builder.temp()
+            builder.emit("compare", "==", sub_len, pat_len, result=cond)
+            ok_len_block = builder.new_block()
+            builder.emit("branch", cond, ok_len_block.label, fail_block.label)
+            builder.current = ok_len_block
+
+            # Then check each element safely
+            for i, elt in enumerate(pattern.elts):
+                idx = builder.temp()
+                builder.emit("const", i, result=idx)
+                elem_val = builder.temp()
+                builder.emit("get_item", subject, idx, result=elem_val)
+                self._lower_pattern_check(builder, elt, elem_val, fail_block)
+            return
+
+        if pattern.kind == HIRKind.DICT:
+            # Mapping pattern: for each key, verify key in subject, then match value
+            for k_node, v_node in zip(pattern.keys, pattern.values):
+                if k_node is None:
+                    continue
+                k_val = self._lower_expr(builder, k_node)
+                has_key = builder.temp()
+                builder.emit("compare", "en", k_val, subject, result=has_key)
+                has_key_block = builder.new_block()
+                builder.emit("branch", has_key, has_key_block.label, fail_block.label)
+                builder.current = has_key_block
+
+                val_elem = builder.temp()
+                builder.emit("get_item", subject, k_val, result=val_elem)
+                self._lower_pattern_check(builder, v_node, val_elem, fail_block)
+            return
+
+        if pattern.kind == HIRKind.CALL and pattern.func.kind == HIRKind.LOAD:
+            func_name = pattern.func.name
+            type_map = {
+                "int": "int", "entero": "int",
+                "str": "str", "texto": "str",
+                "float": "float", "decimal": "float",
+                "bool": "bool", "booleano": "bool",
+                "list": "list", "lista": "list",
+                "tuple": "tuple", "tupla": "tuple",
+                "dict": "dict", "diccionario": "dict",
+                "set": "set", "conjunto": "set",
+            }
+            if func_name in type_map:
+                is_inst = builder.temp()
+                builder.emit("call", "isinstance", (subject, func_name), None, result=is_inst)
+                ok_type_block = builder.new_block()
+                builder.emit("branch", is_inst, ok_type_block.label, fail_block.label)
+                builder.current = ok_type_block
+                return
+            if func_name in self.classes:
+                cls_val = builder.temp()
+                builder.emit("load", func_name, result=cls_val)
+                is_inst = builder.temp()
+                builder.emit("call", "isinstance", (subject, cls_val), None, result=is_inst)
+                ok_cls_block = builder.new_block()
+                builder.emit("branch", is_inst, ok_cls_block.label, fail_block.label)
+                builder.current = ok_cls_block
+
+                for kw in getattr(pattern, "keywords", []) or []:
+                    attr_val = builder.temp()
+                    builder.emit("get_attr", subject, kw.arg, result=attr_val)
+                    self._lower_pattern_check(builder, kw.value, attr_val, fail_block)
+                return
+
+        # Fallback to expression equality
+        pattern_val = self._lower_expr(builder, pattern)
+        cond = builder.temp()
+        builder.emit("compare", "==", subject, pattern_val, result=cond)
+        ok_block = builder.new_block()
+        builder.emit("branch", cond, ok_block.label, fail_block.label)
+        builder.current = ok_block
+
+    def _lower_match(self, builder: _Builder, node: HIRNode) -> None:
+        """MATCH_V2: lower `segun x: caso pattern [si guard]: body`."""
         subject = self._lower_expr(builder, node.subject)
         end_block = builder.new_block()
 
         for index, case_block in enumerate(node.cases):
             pattern = case_block.pattern
             body = case_block.body
-            next_block = builder.new_block()
+            next_case_block = builder.new_block()
             body_block = builder.new_block()
 
-            # Build the condition for this case
-            if pattern is None:
-                cond = builder.temp()
-                builder.emit("const", 1, result=cond)
-            elif pattern.kind == HIRKind.CONST:
-                lit = builder.temp()
-                builder.emit("const", pattern.value, result=lit)
-                cond = builder.temp()
-                builder.emit("compare", "==", subject, lit, result=cond)
-            elif pattern.kind == HIRKind.LOAD and pattern.name == "_":
-                cond = builder.temp()
-                builder.emit("const", 1, result=cond)
-            elif pattern.kind == HIRKind.LOAD and pattern.name in {
-                "int", "entero", "str", "texto", "float", "decimal",
-                "bool", "booleano", "list", "lista", "tuple", "tupla",
-                "dict", "diccionario", "set", "conjunto",
-            }:
-                type_map = {
-                    "int": "int", "entero": "int",
-                    "str": "str", "texto": "str",
-                    "float": "float", "decimal": "float",
-                    "bool": "bool", "booleano": "bool",
-                    "list": "list", "lista": "list",
-                    "tuple": "tuple", "tupla": "tuple",
-                    "dict": "dict", "diccionario": "dict",
-                    "set": "set", "conjunto": "set",
-                }
-                type_name = type_map[pattern.name]
-                tipo_result = builder.temp()
-                builder.emit("call", "tipo", (subject,), None, result=tipo_result)
-                type_str = builder.temp()
-                builder.emit("const", f"<class '{type_name}'>", result=type_str)
-                cond = builder.temp()
-                builder.emit("compare", "==", tipo_result, type_str, result=cond)
-            else:
-                pattern_val = self._lower_expr(builder, pattern)
-                cond = builder.temp()
-                builder.emit("compare", "==", subject, pattern_val, result=cond)
+            # Emit pattern checks branching to next_case_block on mismatch
+            self._lower_pattern_check(builder, pattern, subject, next_case_block)
 
             # Guard: `caso X si guard:`
             if case_block.guard is not None:
                 guard_val = self._lower_expr(builder, case_block.guard)
-                both = builder.temp()
-                builder.emit("binary", "y", cond, guard_val, result=both)
-                cond = both
-
-            # Branch: if cond -> body, else -> next case
-            builder.emit("branch", cond, body_block.label, next_block.label)
+                builder.emit("branch", guard_val, body_block.label, next_case_block.label)
+                builder.current = body_block
+            else:
+                builder.emit("jump", body_block.label)
+                builder.current = body_block
 
             # Lower the body
-            builder.current = body_block
             for stmt in body:
                 self._lower_statement(builder, stmt)
             builder.emit("jump", end_block.label)
 
             # Continue with the next case (or fall to end)
-            builder.current = next_block
+            builder.current = next_case_block
 
-        builder.current = next_block
         builder.emit("jump", end_block.label)
         builder.current = end_block
 
@@ -2615,7 +2775,7 @@ class MIRLowerer:
                         else:
                             builder.emit(op, value, handler, result=result)
                     return result
-            if node.func.kind == HIRKind.LOAD and node.func.name in self.classes:
+            if node.func.kind == HIRKind.LOAD and node.func.name in self.classes and node.func.name not in getattr(self, "decorated_classes", set()):
                 if node.keywords:
                     raise MIRLoweringError("native class constructors do not support keyword arguments yet")
                 result = builder.temp()
@@ -3319,7 +3479,7 @@ class MIRLowerer:
                         else:
                             builder.emit(op, value, handler, result=result)
                     return result
-            if node.func.kind == HIRKind.LOAD and node.func.name in self.classes:
+            if node.func.kind == HIRKind.LOAD and node.func.name in self.classes and node.func.name not in getattr(self, "decorated_classes", set()):
                 if node.keywords:
                     raise MIRLoweringError("native class constructors do not support keyword arguments yet")
                 result = builder.temp()

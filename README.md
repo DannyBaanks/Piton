@@ -154,7 +154,8 @@ Aliases de builtins (se traducen como calls Y como loads):
 | `tupla` | `tuple` | `entero` | `int` |
 | `decimal` | `float` | `texto` | `str` |
 | `booleano` | `bool` | `abrir` | `open` |
-| `ordenar` | `sorted` | | |
+| `ordenar` | `sorted` | `octetos` | `bytes` |
+| `arreglo_bytes` | `bytearray` | | |
 
 ## Lado a lado
 
@@ -242,7 +243,8 @@ dependen de CPython**. Hay dos backends:
 [x] Concatenación de strings (malloc + memcpy)
 [x] Comparación de strings (strcmp)
 [x] BigInt arbitrary-precision integers (Win64 + Linux, 14/14 + 13/13 differential tests)
-[x] Colecciones: listas, tuplas, diccionarios, conjuntos
+[x] Colecciones: listas, tuplas, diccionarios, conjuntos, bytes (octetos), bytearray (arreglo_bytes)
+[x] Operaciones de bytes/bytearray: literales (b'', b""), constructores, indexado, asignación por subíndice mutable, slicing con/sin paso, concatenación (+), repetición (*), métodos (decode, hex, fromhex, count, find, rfind, index, rindex, startswith, endswith, append, extend)
 [x] Acceso a elementos: get_item, collection_len
 [x] Heap objects: object_new, set_attr, get_attr, method_call
 [x] Bound methods: m = objeto.metodo; m(...); __self__; resolución por MRO

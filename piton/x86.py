@@ -30,7 +30,7 @@ class NativeBuildError(RuntimeError):
 _KIND_TAGS = {
     "none": 1, "bool": 2, "int": 3, "float": 4, "str": 5,
     "list": 6, "tuple": 7, "dict": 8, "set": 9, "bigint": 10,
-    "range": 12,
+    "range": 12, "bytes": 13, "bytearray": 14,
 }
 
 
@@ -49,12 +49,14 @@ def _ordering_pair_ok(left_type: str, right_type: str) -> bool:
     numeric = {"int", "bool", "float", "bigint"}
     if left_type in numeric and right_type in numeric:
         return True
+    if left_type in {"bytes", "bytearray"} and right_type in {"bytes", "bytearray"}:
+        return True
     if left_type in {"list", "tuple", "dict", "set"} and left_type == right_type:
         return True
     return left_type == right_type and left_type not in {"none", ""}
 
 
-_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear"}
+_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes"}
 
 _math_fn_map = {
     "math_sqrt": "piton_float_sqrt",
@@ -163,6 +165,10 @@ class Win64NasmEmitter:
         self.mir_module_classes = getattr(module, 'classes', {})
         self.mir_module_class_mro = getattr(module, 'class_mro', {})
         self.mir_module_class_properties = getattr(module, 'class_properties', {})
+        # Introspection paths use these short names; bind them to the
+        # module metadata before any function can be emitted.
+        self.classes = self.mir_module_classes
+        self.class_mro = self.mir_module_class_mro
         self.function_names = {function.name for function in module.functions}
         self.function_return_types = self._infer_return_types(module)
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
@@ -1062,6 +1068,11 @@ class Win64NasmEmitter:
             if name in self.function_names:
                 self.lines.append(f"    lea rax, [{name}]")
                 self.lines.append(f"    mov {self._address(result)}, rax")
+                return
+            if name in self.classes or name in {"object", "objeto"}:
+                self.aliases[result] = name
+                self.types[result] = f"class:{name}" if name in self.classes else "class:object"
+                self.lines.append(f"    mov qword ptr {self._address(result)}, 0")
                 return
             if name in _BUILTINS and name not in self.slots:
                 # BUILTIN_MARKER_V1: no code is emitted — the builtin is only
@@ -3703,6 +3714,146 @@ class Win64NasmEmitter:
                 else:
                     raise NativeBuildError("native dict() requires zero arguments or one list/tuple of pairs")
                 self.types[result] = "dict"
+            elif function_name in {"hasattr", "tiene_atr"}:
+                if len(values) != 2:
+                    raise NativeBuildError("hasattr requires 2 arguments")
+                obj_val = values[0]
+                name_val = values[1]
+                obj_type = self.types.get(obj_val, "")
+                name_str = None
+                if isinstance(name_val, str) and not name_val.startswith("%"):
+                    name_str = name_val
+                elif name_val in self.constants:
+                    cv = self.constants[name_val]
+                    if isinstance(cv, str):
+                        name_str = cv
+                if obj_type.startswith("object:") and name_str:
+                    cls_name = obj_type.split(":", 1)[1]
+                    mro = self.class_mro.get(cls_name, [cls_name])
+                    if any(name_str in self.classes.get(c, set()) for c in mro):
+                        self.lines.append("    mov rax, 1")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "bool"
+                        return
+                self._load_operand(obj_val, "rcx")
+                self._load_operand(name_val, "rdx")
+                self.lines.append("    call piton_hasattr")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+            elif function_name in {"getattr", "obtener_atr"}:
+                if len(values) not in {2, 3}:
+                    raise NativeBuildError("getattr requires 2 or 3 arguments")
+                self._load_operand(values[0], "rcx")
+                self._load_operand(values[1], "rdx")
+                if len(values) == 3:
+                    self.lines.append("    mov r8, 1")
+                    self._load_operand(values[2], "r9")
+                else:
+                    self.lines.append("    mov r8, 0")
+                    self.lines.append("    xor r9, r9")
+                self.lines.append("    call piton_getattr")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif function_name in {"setattr", "fijar_atr", "establecer_atr"}:
+                if len(values) != 3:
+                    raise NativeBuildError("setattr requires 3 arguments")
+                self._load_operand(values[0], "rcx")
+                self._load_operand(values[1], "rdx")
+                self._load_operand(values[2], "r8")
+                self.lines.append("    call piton_setattr")
+                self.lines.append(f"    mov qword ptr {self._address(result)}, 0")
+                self.types[result] = "none"
+            elif function_name in {"isinstance", "es_instancia"}:
+                if len(values) != 2:
+                    raise NativeBuildError("isinstance requires 2 arguments")
+                obj_val = values[0]
+                target_val = values[1]
+                target_name = self.aliases.get(target_val, target_val)
+                obj_type = self.types.get(obj_val, "int")
+                t_items = self._tuple_elems.get(target_val) or self._tuple_elems.get(self.aliases.get(target_val, target_val))
+                target_names = [item[0] if isinstance(item, tuple) else item for item in t_items] if t_items is not None else [target_name]
+                matched = False
+                for tname in target_names:
+                    tclean = self.aliases.get(tname, tname)
+                    if tclean in {"object", "objeto"}:
+                        matched = True
+                        break
+                    elif tclean in {"int", "entero"} and obj_type in {"int", "bool"}:
+                        matched = True
+                        break
+                    elif tclean in {"bool", "booleano"} and obj_type == "bool":
+                        matched = True
+                        break
+                    elif tclean in {"float", "decimal", "flotante"} and obj_type == "float":
+                        matched = True
+                        break
+                    elif tclean in {"str", "texto"} and obj_type == "str":
+                        matched = True
+                        break
+                    elif tclean in {"list", "lista"} and obj_type == "list":
+                        matched = True
+                        break
+                    elif tclean in {"tuple", "tupla"} and obj_type == "tuple":
+                        matched = True
+                        break
+                    elif tclean in {"dict", "diccionario"} and obj_type == "dict":
+                        matched = True
+                        break
+                    elif tclean in {"set", "conjunto"} and obj_type == "set":
+                        matched = True
+                        break
+                    elif tclean in self.classes and obj_type.startswith("object:"):
+                        cls_name = obj_type.split(":", 1)[1]
+                        mro = self.class_mro.get(cls_name, [cls_name])
+                        if tclean in mro:
+                            matched = True
+                            break
+                if matched:
+                    self.lines.append("    mov rax, 1")
+                else:
+                    self.lines.append("    xor rax, rax")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+            elif function_name in {"issubclass", "es_subclase"}:
+                if len(values) != 2:
+                    raise NativeBuildError("issubclass requires 2 arguments")
+                c1 = self.aliases.get(values[0], values[0])
+                t_items = self._tuple_elems.get(values[1]) or self._tuple_elems.get(self.aliases.get(values[1], values[1]))
+                target_names = [item[0] if isinstance(item, tuple) else item for item in t_items] if t_items is not None else [self.aliases.get(values[1], values[1])]
+                type_norm = {
+                    "int": "int", "entero": "int",
+                    "bool": "bool", "booleano": "bool",
+                    "float": "float", "flotante": "float", "decimal": "float",
+                    "str": "str", "texto": "str",
+                    "list": "list", "lista": "list",
+                    "tuple": "tuple", "tupla": "tuple",
+                    "dict": "dict", "diccionario": "dict",
+                    "set": "set", "conjunto": "set",
+                    "range": "range", "rango": "range",
+                    "object": "object", "objeto": "object",
+                }
+                c1_norm = type_norm.get(c1, c1)
+                matched = False
+                for c2 in target_names:
+                    c2_clean = self.aliases.get(c2, c2)
+                    c2_norm = type_norm.get(c2_clean, c2_clean)
+                    if c2_norm == "object" or c1_norm == c2_norm:
+                        matched = True
+                        break
+                    if c1_norm == "bool" and c2_norm == "int":
+                        matched = True
+                        break
+                    if c1 in self.classes and c2_clean in self.classes:
+                        mro = self.class_mro.get(c1, [c1])
+                        if c2_clean in mro:
+                            matched = True
+                            break
+                if matched:
+                    self.lines.append("    mov rax, 1")
+                else:
+                    self.lines.append("    xor rax, rax")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
             else:
                 if function_operand and isinstance(function_operand, str) and "." in function_operand:
                     parts = function_operand.split(".", 1)
@@ -5109,6 +5260,13 @@ class Win64NasmEmitter:
             self._load_operand(call_args[0], "rdx")
             self.lines.append("    call piton_str_subindex")
             self.types[result] = "int"
+        elif method in {"removeprefix", "removesuffix"}:
+            require_count(1, "exactly one str argument")
+            require_str(0, "a str argument")
+            helper = "piton_str_removeprefix" if method == "removeprefix" else "piton_str_removesuffix"
+            self._load_operand(call_args[0], "rdx")
+            self.lines.append(f"    call {helper}")
+            self.types[result] = "str"
         else:
             raise NativeBuildError(f"native str.{method}() is not supported")
         self.lines.append(f"    mov {self._address(result)}, rax")
@@ -5343,6 +5501,22 @@ class Win64NasmEmitter:
                 require_count((0,), "no arguments")
                 self.lines.append("    call piton_seq_sort")
                 self.types[result] = "none"
+            elif method == "index":
+                require_count((1,), "exactly one argument")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    xor r8d, r8d")
+                self.lines.append("    call piton_seq_index")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "clear":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_seq_clear")
+                self.types[result] = "none"
+            elif method == "copy":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_seq_copy")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "list"
             else:
                 raise NativeBuildError(f"native list.{method}() is not supported")
         elif coll_type == "tuple":
@@ -5351,6 +5525,13 @@ class Win64NasmEmitter:
                 self._load_operand(call_args[0], "rdx")
                 self.lines.append("    xor r8d, r8d")
                 self.lines.append("    call piton_seq_count")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "index":
+                require_count((1,), "exactly one argument")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    xor r8d, r8d")
+                self.lines.append("    call piton_seq_index")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
             else:
@@ -5389,6 +5570,37 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_dict_get_1")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
+            elif method == "pop":
+                require_count((1, 2), "one or two arguments (key[, default])")
+                self._load_operand(call_args[0], "rdx")
+                if len(call_args) == 2:
+                    self.lines.append("    mov r8, 1")
+                    self._load_operand(call_args[1], "r9")
+                else:
+                    self.lines.append("    mov r8, 0")
+                    self.lines.append("    xor r9, r9")
+                self.lines.append("    call piton_dict_pop")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "setdefault":
+                require_count((1, 2), "one or two arguments (key[, default])")
+                self._load_operand(call_args[0], "rdx")
+                if len(call_args) == 2:
+                    self._load_operand(call_args[1], "r8")
+                else:
+                    self.lines.append("    xor r8, r8")
+                self.lines.append("    call piton_dict_setdefault")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "clear":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_dict_clear")
+                self.types[result] = "none"
+            elif method == "copy":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_dict_copy")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "dict"
             else:
                 raise NativeBuildError(f"native dict.{method}() is not supported")
         elif coll_type == "set":
@@ -5396,6 +5608,67 @@ class Win64NasmEmitter:
                 require_count((1,), "exactly one argument")
                 self._load_operand(call_args[0], "rdx")
                 self.lines.append("    call piton_set_add")
+                self.types[result] = "none"
+            elif method == "clear":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_set_clear")
+                self.types[result] = "none"
+            elif method == "copy":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_set_copy")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "pop":
+                require_count((0,), "no arguments")
+                self.lines.append("    call piton_set_pop")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+            elif method == "union":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_union")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "intersection":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_intersection")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "difference":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_difference")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "symmetric_difference":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_sym_diff")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "set"
+            elif method == "issubset":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_issubset")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+            elif method == "issuperset":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_issuperset")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+            elif method == "isdisjoint":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_isdisjoint")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "bool"
+            elif method == "update":
+                require_count((1,), "one argument (a set)")
+                self._load_operand(call_args[0], "rdx")
+                self.lines.append("    call piton_set_update")
                 self.types[result] = "none"
             else:
                 raise NativeBuildError(f"native set.{method}() is not supported")
