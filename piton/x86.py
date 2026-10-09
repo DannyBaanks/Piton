@@ -165,6 +165,10 @@ class Win64NasmEmitter:
         self.mir_module_classes = getattr(module, 'classes', {})
         self.mir_module_class_mro = getattr(module, 'class_mro', {})
         self.mir_module_class_properties = getattr(module, 'class_properties', {})
+        # Introspection paths use these short names; bind them to the
+        # module metadata before any function can be emitted.
+        self.classes = self.mir_module_classes
+        self.class_mro = self.mir_module_class_mro
         self.function_names = {function.name for function in module.functions}
         self.function_return_types = self._infer_return_types(module)
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
