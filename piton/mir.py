@@ -2164,80 +2164,182 @@ class MIRLowerer:
 
         builder.current = end_block
 
-    def _lower_match(self, builder: _Builder, node: HIRNode) -> None:
-        """MATCH_V1: lower `segun x: caso pattern: body` to an if/elif chain.
+    def _lower_pattern_check(self, builder: _Builder, pattern: Optional[HIRNode], subject: Any, fail_block: _Block) -> None:
+        """Lower pattern matching tests, branching to fail_block immediately on any mismatch."""
+        if pattern is None:
+            return
 
-        Supports literal patterns (compare ==), type patterns (`caso int:`
-        -> tipo(x) == int) and the wildcard `_` (always true).
-        """
+        if pattern.kind == HIRKind.CONST:
+            lit = builder.temp()
+            builder.emit("const", pattern.value, result=lit)
+            cond = builder.temp()
+            builder.emit("compare", "==", subject, lit, result=cond)
+            ok_block = builder.new_block()
+            builder.emit("branch", cond, ok_block.label, fail_block.label)
+            builder.current = ok_block
+            return
+
+        if pattern.kind == HIRKind.LOAD:
+            if pattern.name == "_":
+                return
+            if pattern.name in ("Verdadero", "True"):
+                lit = builder.temp()
+                builder.emit("const", True, result=lit)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, lit, result=cond)
+                ok_block = builder.new_block()
+                builder.emit("branch", cond, ok_block.label, fail_block.label)
+                builder.current = ok_block
+                return
+            if pattern.name in ("Falso", "False"):
+                lit = builder.temp()
+                builder.emit("const", False, result=lit)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, lit, result=cond)
+                ok_block = builder.new_block()
+                builder.emit("branch", cond, ok_block.label, fail_block.label)
+                builder.current = ok_block
+                return
+            if pattern.name in ("Nada", "None"):
+                lit = builder.temp()
+                builder.emit("const", None, result=lit)
+                cond = builder.temp()
+                builder.emit("compare", "==", subject, lit, result=cond)
+                ok_block = builder.new_block()
+                builder.emit("branch", cond, ok_block.label, fail_block.label)
+                builder.current = ok_block
+                return
+            # Capture variable: bind subject to pattern.name
+            builder.emit("store", pattern.name, subject)
+            return
+
+        if pattern.kind == HIRKind.BINOP and pattern.op in ("|", "o"):
+            try_right_block = builder.new_block()
+            ok_block = builder.new_block()
+            
+            # Try left arm; on mismatch jump to try_right_block
+            self._lower_pattern_check(builder, pattern.left, subject, try_right_block)
+            builder.emit("jump", ok_block.label)
+
+            # Try right arm; on mismatch jump to fail_block
+            builder.current = try_right_block
+            self._lower_pattern_check(builder, pattern.right, subject, fail_block)
+            builder.emit("jump", ok_block.label)
+
+            builder.current = ok_block
+            return
+
+        if pattern.kind in {HIRKind.LIST, HIRKind.TUPLE}:
+            # Sequence pattern: check length first
+            sub_len = builder.temp()
+            builder.emit("collection_len", subject, result=sub_len)
+            pat_len = builder.temp()
+            builder.emit("const", len(pattern.elts), result=pat_len)
+            cond = builder.temp()
+            builder.emit("compare", "==", sub_len, pat_len, result=cond)
+            ok_len_block = builder.new_block()
+            builder.emit("branch", cond, ok_len_block.label, fail_block.label)
+            builder.current = ok_len_block
+
+            # Then check each element safely
+            for i, elt in enumerate(pattern.elts):
+                idx = builder.temp()
+                builder.emit("const", i, result=idx)
+                elem_val = builder.temp()
+                builder.emit("get_item", subject, idx, result=elem_val)
+                self._lower_pattern_check(builder, elt, elem_val, fail_block)
+            return
+
+        if pattern.kind == HIRKind.DICT:
+            # Mapping pattern: for each key, verify key in subject, then match value
+            for k_node, v_node in zip(pattern.keys, pattern.values):
+                if k_node is None:
+                    continue
+                k_val = self._lower_expr(builder, k_node)
+                has_key = builder.temp()
+                builder.emit("compare", "en", k_val, subject, result=has_key)
+                has_key_block = builder.new_block()
+                builder.emit("branch", has_key, has_key_block.label, fail_block.label)
+                builder.current = has_key_block
+
+                val_elem = builder.temp()
+                builder.emit("get_item", subject, k_val, result=val_elem)
+                self._lower_pattern_check(builder, v_node, val_elem, fail_block)
+            return
+
+        if pattern.kind == HIRKind.CALL and pattern.func.kind == HIRKind.LOAD:
+            func_name = pattern.func.name
+            type_map = {
+                "int": "int", "entero": "int",
+                "str": "str", "texto": "str",
+                "float": "float", "decimal": "float",
+                "bool": "bool", "booleano": "bool",
+                "list": "list", "lista": "list",
+                "tuple": "tuple", "tupla": "tuple",
+                "dict": "dict", "diccionario": "dict",
+                "set": "set", "conjunto": "set",
+            }
+            if func_name in type_map:
+                is_inst = builder.temp()
+                builder.emit("call", "isinstance", (subject, func_name), None, result=is_inst)
+                ok_type_block = builder.new_block()
+                builder.emit("branch", is_inst, ok_type_block.label, fail_block.label)
+                builder.current = ok_type_block
+                return
+            if func_name in self.classes:
+                cls_val = builder.temp()
+                builder.emit("load", func_name, result=cls_val)
+                is_inst = builder.temp()
+                builder.emit("call", "isinstance", (subject, cls_val), None, result=is_inst)
+                ok_cls_block = builder.new_block()
+                builder.emit("branch", is_inst, ok_cls_block.label, fail_block.label)
+                builder.current = ok_cls_block
+
+                for kw in getattr(pattern, "keywords", []) or []:
+                    attr_val = builder.temp()
+                    builder.emit("get_attr", subject, kw.arg, result=attr_val)
+                    self._lower_pattern_check(builder, kw.value, attr_val, fail_block)
+                return
+
+        # Fallback to expression equality
+        pattern_val = self._lower_expr(builder, pattern)
+        cond = builder.temp()
+        builder.emit("compare", "==", subject, pattern_val, result=cond)
+        ok_block = builder.new_block()
+        builder.emit("branch", cond, ok_block.label, fail_block.label)
+        builder.current = ok_block
+
+    def _lower_match(self, builder: _Builder, node: HIRNode) -> None:
+        """MATCH_V2: lower `segun x: caso pattern [si guard]: body`."""
         subject = self._lower_expr(builder, node.subject)
         end_block = builder.new_block()
 
         for index, case_block in enumerate(node.cases):
             pattern = case_block.pattern
             body = case_block.body
-            next_block = builder.new_block()
+            next_case_block = builder.new_block()
             body_block = builder.new_block()
 
-            # Build the condition for this case
-            if pattern is None:
-                cond = builder.temp()
-                builder.emit("const", 1, result=cond)
-            elif pattern.kind == HIRKind.CONST:
-                lit = builder.temp()
-                builder.emit("const", pattern.value, result=lit)
-                cond = builder.temp()
-                builder.emit("compare", "==", subject, lit, result=cond)
-            elif pattern.kind == HIRKind.LOAD and pattern.name == "_":
-                cond = builder.temp()
-                builder.emit("const", 1, result=cond)
-            elif pattern.kind == HIRKind.LOAD and pattern.name in {
-                "int", "entero", "str", "texto", "float", "decimal",
-                "bool", "booleano", "list", "lista", "tuple", "tupla",
-                "dict", "diccionario", "set", "conjunto",
-            }:
-                type_map = {
-                    "int": "int", "entero": "int",
-                    "str": "str", "texto": "str",
-                    "float": "float", "decimal": "float",
-                    "bool": "bool", "booleano": "bool",
-                    "list": "list", "lista": "list",
-                    "tuple": "tuple", "tupla": "tuple",
-                    "dict": "dict", "diccionario": "dict",
-                    "set": "set", "conjunto": "set",
-                }
-                type_name = type_map[pattern.name]
-                tipo_result = builder.temp()
-                builder.emit("call", "tipo", (subject,), None, result=tipo_result)
-                type_str = builder.temp()
-                builder.emit("const", f"<class '{type_name}'>", result=type_str)
-                cond = builder.temp()
-                builder.emit("compare", "==", tipo_result, type_str, result=cond)
-            else:
-                pattern_val = self._lower_expr(builder, pattern)
-                cond = builder.temp()
-                builder.emit("compare", "==", subject, pattern_val, result=cond)
+            # Emit pattern checks branching to next_case_block on mismatch
+            self._lower_pattern_check(builder, pattern, subject, next_case_block)
 
             # Guard: `caso X si guard:`
             if case_block.guard is not None:
                 guard_val = self._lower_expr(builder, case_block.guard)
-                both = builder.temp()
-                builder.emit("binary", "y", cond, guard_val, result=both)
-                cond = both
-
-            # Branch: if cond -> body, else -> next case
-            builder.emit("branch", cond, body_block.label, next_block.label)
+                builder.emit("branch", guard_val, body_block.label, next_case_block.label)
+                builder.current = body_block
+            else:
+                builder.emit("jump", body_block.label)
+                builder.current = body_block
 
             # Lower the body
-            builder.current = body_block
             for stmt in body:
                 self._lower_statement(builder, stmt)
             builder.emit("jump", end_block.label)
 
             # Continue with the next case (or fall to end)
-            builder.current = next_block
+            builder.current = next_case_block
 
-        builder.current = next_block
         builder.emit("jump", end_block.label)
         builder.current = end_block
 

@@ -574,6 +574,7 @@ class MatchValue(CSTNode):
 @dataclass(slots=True)
 class MatchSingleton(CSTNode):
     value: Any = None  # True, False, None
+    is_wildcard: bool = False
     type: CSTNodeType = CSTNodeType.MATCH_SINGLETON
 
 

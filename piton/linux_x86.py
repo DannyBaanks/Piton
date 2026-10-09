@@ -595,6 +595,10 @@ static long piton_math_ceil_bits(long bits){double d=piton_bits_double(bits);lon
 static long piton_math_trunc_bits(long bits){double d=piton_bits_double(bits);return (long)d;}
 static long piton_math_fabs_bits(long bits){return bits&0x7FFFFFFFFFFFFFFFL;}
 static long piton_math_gcd(long a,long b){if(a<0)a=-a;if(b<0)b=-b;while(b){long t=a%b;a=b;b=t;}return a;}
+static int piton_is_printable_str(const char*s){if(!s)return 0;int has=0;for(int i=0;i<256;++i){char c=s[i];if(c==0)return has;if((unsigned char)c<9||((unsigned char)c>13&&(unsigned char)c<32))return 0;has=1;}return 0;}
+static int piton_is_double_bits(long bits){unsigned long u=(unsigned long)bits;unsigned long exp=(u>>52)&0x7FF;return(exp>=0x3CC&&exp<=0x434&&(u&0xFFFFFFFFFFFFFUL)!=0);}
+static long piton_isinstance_dynamic(long bits,int kind){if(!bits)return(kind==PK_NONE);if(piton_is_double_bits(bits))return(kind==PK_FLOAT);if(bits>0x400000L&&bits<0x7FFFFFFFFFFFL){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){return(k==kind);}if(piton_is_printable_str((const char*)bits)){return(kind==PK_STR);}}return(kind==PK_INT);}
+static void piton_print_auto(long bits){if(bits==0){piton_write(1,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(bits>0x400000L&&bits<0x7FFFFFFFFFFFL){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
 static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;}
@@ -2277,7 +2281,7 @@ class LinuxCEmitter:
             expression = f"piton_str_contains((const char*){self._value(right)},(const char*){self._value(left)})"
         elif haystack_type in {"list", "tuple"}:
             expression = f"piton_seq_contains((PitonSeq*){self._value(right)},{self._slot(left, types)})"
-        elif haystack_type == "dict":
+        elif haystack_type in {"dict", "dict:module"}:
             expression = f"piton_dict_contains((PitonDict*){self._value(right)},{self._slot(left, types)})"
         elif haystack_type == "set":
             expression = f"piton_set_contains((PitonSet*){self._value(right)},{self._slot(left, types)})"
@@ -2291,7 +2295,10 @@ class LinuxCEmitter:
                 return
             expression = f"piton_range_contains((PitonRange*){self._value(right)},{self._value(left)})"
         else:
-            raise NativeBuildError(f"Linux 'in' is not supported on {haystack_type}")
+            if needle_type == "str":
+                expression = f"piton_dict_contains((PitonDict*){self._value(right)},{self._slot(left, types)})"
+            else:
+                expression = f"piton_seq_contains((PitonSeq*){self._value(right)},{self._slot(left, types)})"
         prefix = "!" if negate else ""
         out.append(f"    {_name(result)}={prefix}{expression};")
         types[result] = "bool"
@@ -2318,31 +2325,48 @@ class LinuxCEmitter:
 
     def _type_match_c_expr(self, obj_val: str, target_name: str, types: dict, aliases: dict) -> str:
         target_clean = aliases.get(target_name, target_name)
-        slot = self._slot(obj_val, types)
-        if target_clean in {"int", "entero"}:
-            return f"({slot}.kind==PK_INT||{slot}.kind==PK_BOOL)"
-        elif target_clean in {"bool", "booleano"}:
-            return f"({slot}.kind==PK_BOOL)"
-        elif target_clean in {"float", "decimal", "flotante"}:
-            return f"({slot}.kind==PK_FLOAT)"
-        elif target_clean in {"str", "texto"}:
-            return f"({slot}.kind==PK_STR)"
-        elif target_clean in {"list", "lista"}:
-            return f"({slot}.kind==PK_LIST)"
-        elif target_clean in {"tuple", "tupla"}:
-            return f"({slot}.kind==PK_TUPLE)"
-        elif target_clean in {"dict", "diccionario"}:
-            return f"({slot}.kind==PK_DICT)"
-        elif target_clean in {"set", "conjunto"}:
-            return f"({slot}.kind==PK_SET)"
-        elif target_clean in {"range", "rango"}:
-            return f"({slot}.kind==PK_RANGE)"
-        elif target_clean in {"object", "objeto"}:
-            return "1"
-        elif target_clean in self.classes:
-            obj_t = types.get(obj_val, "")
-            if obj_t.startswith("object:"):
-                cname = obj_t.split(":", 1)[1]
+        obj_t = types.get(obj_val)
+        if obj_t is not None and obj_t != "int":
+            slot = self._slot(obj_val, types)
+            if target_clean in {"int", "entero"}:
+                return f"({slot}.kind==PK_INT||{slot}.kind==PK_BOOL)"
+            elif target_clean in {"bool", "booleano"}:
+                return f"({slot}.kind==PK_BOOL)"
+            elif target_clean in {"float", "decimal", "flotante"}:
+                return f"({slot}.kind==PK_FLOAT)"
+            elif target_clean in {"str", "texto"}:
+                return f"({slot}.kind==PK_STR)"
+            elif target_clean in {"list", "lista"}:
+                return f"({slot}.kind==PK_LIST)"
+            elif target_clean in {"tuple", "tupla"}:
+                return f"({slot}.kind==PK_TUPLE)"
+            elif target_clean in {"dict", "diccionario"}:
+                return f"({slot}.kind==PK_DICT)"
+            elif target_clean in {"set", "conjunto"}:
+                return f"({slot}.kind==PK_SET)"
+            elif target_clean in {"range", "rango"}:
+                return f"({slot}.kind==PK_RANGE)"
+            elif target_clean in {"object", "objeto"}:
+                return "1"
+        else:
+            kind_map = {
+                "int": "PK_INT", "entero": "PK_INT",
+                "bool": "PK_BOOL", "booleano": "PK_BOOL",
+                "str": "PK_STR", "texto": "PK_STR",
+                "list": "PK_LIST", "lista": "PK_LIST",
+                "tuple": "PK_TUPLE", "tupla": "PK_TUPLE",
+                "dict": "PK_DICT", "diccionario": "PK_DICT",
+                "set": "PK_SET", "conjunto": "PK_SET",
+                "range": "PK_RANGE", "rango": "PK_RANGE",
+            }
+            if target_clean in kind_map:
+                return f"piton_isinstance_dynamic({self._value(obj_val)},{kind_map[target_clean]})"
+            elif target_clean in {"object", "objeto"}:
+                return "1"
+        if target_clean in self.classes:
+            obj_t_str = types.get(obj_val, "")
+            if obj_t_str.startswith("object:"):
+                cname = obj_t_str.split(":", 1)[1]
                 mro = self.class_mro.get(cname, [cname])
                 if target_clean in mro:
                     return "1"
@@ -3980,7 +4004,7 @@ class LinuxCEmitter:
                         elif value_type in {"list", "tuple", "dict", "set"}:
                             out.append(f'    piton_print_slot({self._slot(value, types)});')
                         else:
-                            out.append(f'    piton_print_int_raw((long){self._value(value)});')
+                            out.append(f'    piton_print_auto((long){self._value(value)});')
                     out.append('    piton_write(1,"\\n",1);')
                 else:
                     out.append('    piton_write(1,"\\n",1);')
@@ -5208,7 +5232,12 @@ class LinuxCEmitter:
                     types[result] = val_type
                     return out
             else:
-                raise NativeBuildError(f"Linux subscription not supported for {collection_type}")
+                if types.get(idx) == "str":
+                    out.append(f'    {_name(result)}=piton_dict_get((PitonDict*){self._value(coll)},{self._slot(idx, types)}).bits;')
+                else:
+                    out.append(f'    {_name(result)}=piton_seq_get((PitonSeq*){self._value(coll)},{self._value(idx)}).bits;')
+                types[result] = "int"
+                return out
             types[result] = "object:module" if collection_type == "dict:module" else "int"
         elif op == "get_slice":
             # PARITY_P2_V1: [a:b] slices. Missing bounds arrive as None; the
@@ -5261,7 +5290,7 @@ class LinuxCEmitter:
                 out.append(f'    {_name(result)}=(long)piton_strlen((const char*){self._value(coll)});')
                 types[result] = "int"
                 return out
-            if collection_type.startswith("iterator:") or collection_type in {"generator", "genexpr"}:
+            if collection_type and (collection_type.startswith("iterator:") or collection_type in {"generator", "genexpr"}):
                 # COMP_ITER_V1: a comprehension over an iterator materializes
                 # it IN PLACE (the temp is rewritten as the list), so the
                 # following get_item on that same temp reads the list.
@@ -5299,7 +5328,9 @@ class LinuxCEmitter:
                 return out
             struct_name = {"list": "PitonSeq", "tuple": "PitonSeq", "dict": "PitonDict", "set": "PitonSet"}.get(collection_type)
             if not struct_name:
-                raise NativeBuildError("Linux collection_len requires a collection")
+                out.append(f'    {_name(result)}=({self._value(coll)} ? ((PitonSeq*){self._value(coll)})->length : 0);')
+                types[result] = "int"
+                return out
             out.append(f'    {_name(result)}=(({struct_name}*){self._value(coll)})->length;')
             types[result] = "int"
         elif op == "list_append":

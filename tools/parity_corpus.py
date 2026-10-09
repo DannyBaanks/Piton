@@ -490,6 +490,10 @@ def area_control_flow() -> list[Case]:
         _c("control_flow", "ternary", "imprimir('si' si 1 < 2 sino 'no')"),
         _c("control_flow", "del-local", "a = [1, 2]\nborrar a[0]\nimprimir(a)"),
         _c("control_flow", "del-var", "a = 1\nborrar a\nimprimir('ok')"),
+        _c("control_flow", "match-literal", "x = 2\nsegun x:\n    caso 1:\n        imprimir('uno')\n    caso 2:\n        imprimir('dos')\n    caso _:\n        imprimir('otro')"),
+        _c("control_flow", "match-guard", "x = 15\nsegun x:\n    caso n si n > 10:\n        imprimir('grande', n)\n    caso _:\n        imprimir('chico')"),
+        _c("control_flow", "match-or", "x = 3\nsegun x:\n    caso 1 | 2 | 3:\n        imprimir('123')\n    caso _:\n        imprimir('otro')"),
+        _c("control_flow", "match-seq", "cmd = ['mover', 10, 20]\nsegun cmd:\n    caso ['mover', x, y]:\n        imprimir('pos', x, y)\n    caso _:\n        imprimir('desconocido')"),
     ]
 
 

@@ -220,6 +220,37 @@ class Lowerer:
         body = [self.lower(s) for s in cst.body]
         return CaseBlock(kind=HIRKind.MATCH, pattern=pattern, guard=guard, body=body)
 
+    def _lower_matchsingleton(self, cst):
+        from .hir import Const, Load
+        if cst.value is None and getattr(cst, "is_wildcard", False):
+            return Load(kind=HIRKind.LOAD, name="_")
+        return Const(kind=HIRKind.CONST, value=cst.value)
+
+    def _lower_matchvalue(self, cst):
+        return self.lower(cst.value)
+
+    def _lower_matchsequence(self, cst):
+        from .hir import List as HIRList
+        elts = [self.lower(p) for p in getattr(cst, "patterns", [])]
+        return HIRList(kind=HIRKind.LIST, elts=elts)
+
+    def _lower_matchmapping(self, cst):
+        from .hir import Dict as HIRDict
+        keys = [self.lower(k) for k in getattr(cst, "keys", [])]
+        values = [self.lower(p) for p in getattr(cst, "patterns", [])]
+        return HIRDict(kind=HIRKind.DICT, keys=keys, values=values)
+
+    def _lower_matchor(self, cst):
+        from .hir import Binary as HIRBinary
+        patterns = getattr(cst, "patterns", [])
+        if not patterns:
+            from .hir import Load
+            return Load(kind=HIRKind.LOAD, name="_")
+        node = self.lower(patterns[0])
+        for p in patterns[1:]:
+            node = HIRBinary(kind=HIRKind.BINARY, op="|", left=node, right=self.lower(p))
+        return node
+
     def _lower_importstmt(self, cst: CSTImportStmt):
         names = [self.lower(a) for a in cst.names]
         return Import(kind=HIRKind.IMPORT, names=names)
