@@ -83,6 +83,8 @@ ALIASES_BUILTIN = {
     "metodo_estatico": "staticmethod",
     "metodo_clase": "classmethod",
     "propiedad": "property",
+    "octetos": "bytes",
+    "arreglo_bytes": "bytearray",
 }
 
 _TRIVIA = {

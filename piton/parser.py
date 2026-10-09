@@ -846,7 +846,7 @@ class Parser:
         if tok.type == TokenType.STRING:
             self._advance()
             val = tok.value
-            if val.startswith(("f'", 'f"', "F'", 'F"')):
+            if val.lower().startswith(("f'", 'f"', "rf'", 'rf"', "fr'", 'fr"')):
                 return self._parse_postfix(self._parse_fstring(val, tok))
             import ast
             val = ast.literal_eval(val)

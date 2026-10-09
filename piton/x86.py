@@ -30,7 +30,7 @@ class NativeBuildError(RuntimeError):
 _KIND_TAGS = {
     "none": 1, "bool": 2, "int": 3, "float": 4, "str": 5,
     "list": 6, "tuple": 7, "dict": 8, "set": 9, "bigint": 10,
-    "range": 12,
+    "range": 12, "bytes": 13, "bytearray": 14,
 }
 
 
@@ -49,12 +49,14 @@ def _ordering_pair_ok(left_type: str, right_type: str) -> bool:
     numeric = {"int", "bool", "float", "bigint"}
     if left_type in numeric and right_type in numeric:
         return True
+    if left_type in {"bytes", "bytearray"} and right_type in {"bytes", "bytearray"}:
+        return True
     if left_type in {"list", "tuple", "dict", "set"} and left_type == right_type:
         return True
     return left_type == right_type and left_type not in {"none", ""}
 
 
-_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object"}
+_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes"}
 
 _math_fn_map = {
     "math_sqrt": "piton_float_sqrt",

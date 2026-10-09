@@ -124,6 +124,7 @@ BUILTIN_ALIASES = {
     "abrir", "ordenar", "suma", "redondear",
     "es_instancia", "es_subclase", "tiene_atr", "obtener_atr",
     "fijar_atr", "establecer_atr",
+    "octetos", "arreglo_bytes",
 }
 
 
@@ -294,18 +295,31 @@ class Lexer:
                     return tok
                 continue
 
-            # STRING / F-STRING
+            # STRING / F-STRING / BYTES / RAW
+            # 2-char prefixes: rb, br, rf, fr (case-insensitive)
+            if (
+                self.pos + 2 < len(self.source)
+                and self.source[self.pos : self.pos + 2].lower() in {"rb", "br", "rf", "fr"}
+                and self.source[self.pos + 2] in "\"'"
+            ):
+                return self._read_string(prefix_len=2)
+
+            # 1-char prefixes: f, b, r, u (case-insensitive)
+            if (
+                self.pos + 1 < len(self.source)
+                and self.source[self.pos].lower() in {"f", "b", "r", "u"}
+                and self.source[self.pos + 1] in "\"'"
+            ):
+                return self._read_string(prefix_len=1)
+
             if ch in "\"'":
-                return self._read_string()
+                return self._read_string(prefix_len=0)
 
             # NÚMERO  (un '.' seguido de cifra es 0.5, no un punto)
             if ch in NUMBER_START or (ch == "." and self._peek(2).isdigit()):
                 return self._read_number()
 
             # IDENTIFICADOR / KEYWORD
-            if ch in "fF" and self._peek(2) in "\"'":
-                self._advance()
-                return self._read_string()
             if ch.isalpha() or ch == "_":
                 return self._read_identifier()
 
@@ -428,49 +442,41 @@ class Lexer:
             return tok.with_type(TokenType.NAME)  # Parser decide
         return tok
 
-    def _read_string(self) -> Token:
+    def _read_string(self, prefix_len: int = 0) -> Token:
+        start_pos = self.pos
+        start_line = self.line
+        start_col = self.col
+        if prefix_len:
+            self._advance(prefix_len)
+
         quote = self._peek()
         is_triple = self.source.startswith(quote * 3, self.pos)
         delimiter = quote * 3 if is_triple else quote
-        is_fstring = False
-
-        # Check for f-string prefix
-        if self.pos > 0 and self.source[self.pos - 1].lower() == "f":
-            # Need to check if it's actually a prefix (not part of identifier)
-            prefix_pos = self.pos - 1
-            while prefix_pos > 0 and self.source[prefix_pos - 1].isalpha():
-                prefix_pos -= 1
-            if prefix_pos == self.pos - 1 or self.source[prefix_pos - 1] in " \t\n\r\f\v([{,;:+-*/%=&|^~<>!@":
-                is_fstring = True
-
-        start = self.pos
         self._advance(len(delimiter))
 
         content_start = self.pos
-        while True:
+        while self.pos < len(self.source):
             ch = self._peek()
             if ch == "\0":
                 break
-            if is_triple:
-                if self.source.startswith(delimiter, self.pos):
+            bs = 0
+            p = self.pos - 1
+            while p >= content_start and self.source[p] == "\\":
+                bs += 1
+                p -= 1
+            if bs % 2 == 0:
+                if is_triple and self.source.startswith(delimiter, self.pos):
                     self._advance(len(delimiter))
                     break
-            else:
-                if ch == "\n":
+                elif not is_triple and ch == quote:
+                    self._advance(1)
                     break
-                if ch == quote and (self.pos == content_start or self.source[self.pos - 1] != "\\"):
-                    self._advance()
-                    break
-            self._advance()
+            if not is_triple and ch == "\n":
+                break
+            self._advance(1)
 
-        value = self.source[start:self.pos]
-
-        if is_fstring:
-            # Para f-strings, tokenizar como STRING simple
-            # El parser manejará la interpolación
-            return self._make_token(TokenType.STRING, "f" + value)
-
-        return self._make_token(TokenType.STRING, value)
+        value = self.source[start_pos:self.pos]
+        return Token(TokenType.STRING, value, start_line, start_col, start_pos, self.pos)
 
 
 def tokenize(source: str, filename: str = "<source>") -> list[Token]:
