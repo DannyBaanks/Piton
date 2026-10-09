@@ -575,6 +575,9 @@ def area_classes() -> list[Case]:
         _c("classes", "with-enter-exit", "clase CM:\n    funcion __enter__(self):\n        imprimir('enter')\n        devolver 10\n    funcion __exit__(self, t, v, tb):\n        imprimir('exit')\n        devolver Falso\ncon CM() como x:\n    imprimir('body', x)"),
         _c("classes", "with-suppress", "clase CM:\n    funcion __enter__(self):\n        devolver 1\n    funcion __exit__(self, t, v, tb):\n        imprimir('suppressed')\n        devolver Verdadero\ncon CM():\n    lanzar ValueError('err')\nimprimir('fin')"),
         _c("classes", "with-multiple", "clase A:\n    funcion __enter__(self):\n        devolver 1\n    funcion __exit__(self, t, v, tb):\n        imprimir('exitA')\n        devolver Falso\nclase B:\n    funcion __enter__(self):\n        devolver 2\n    funcion __exit__(self, t, v, tb):\n        imprimir('exitB')\n        devolver Falso\ncon A() como a, B() como b:\n    imprimir('body', a + b)"),
+        _c("classes", "staticmethod-call", "clase M:\n    @staticmethod\n    funcion add(a, b):\n        devolver a + b\nimprimir(M.add(3, 4))\nimprimir(M().add(5, 6))"),
+        _c("classes", "classmethod-call", "clase C:\n    v = 10\n    @classmethod\n    funcion get_v(cls):\n        devolver cls.v\nimprimir(C.get_v())\nimprimir(C().get_v())"),
+        _c("classes", "class-decorator", "funcion add_tag(cls):\n    cls.tag = 'TAG'\n    devolver cls\n@add_tag\nclase T:\n    pasar\nimprimir(T.tag)"),
     ]
 
 

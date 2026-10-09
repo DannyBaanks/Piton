@@ -80,6 +80,9 @@ ALIASES_BUILTIN = {
     "obtener_atr": "getattr",
     "fijar_atr": "setattr",
     "establecer_atr": "setattr",
+    "metodo_estatico": "staticmethod",
+    "metodo_clase": "classmethod",
+    "propiedad": "property",
 }
 
 _TRIVIA = {

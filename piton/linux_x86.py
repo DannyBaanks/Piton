@@ -554,7 +554,7 @@ static int piton_callable_value(long callee){return piton_in_arena(callee)||pito
 static void piton_raise_not_callable(void){piton_write(2,"TypeError: 'X' object is not callable\n",35);piton_exit(1);}
 static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){if(!callee||((long*)callee)[0]!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee))piton_raise_not_callable();return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);}PitonClosure*c=(PitonClosure*)callee;if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;if(total>4){piton_write(2,"TypeError: closure cell count plus arguments exceeds four\n",59);piton_exit(2);}long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);}
 static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells,long has_vararg){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=has_vararg;c->cells=piton_alloc((usize)(n_cells?n_cells:1)*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];return(long)c;}
-static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
+static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[1]==PK_OBJECT){PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);for(long i=0;i<co->length;++i){piton_object_set(inst,co->attrs[i].name,co->attrs[i].value);}return(long)inst;}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
 static long piton_callback_invoke(long callback,long value){long args[1]={value};return piton_closure_call_frame(callback,1,args);}
 static long piton_frame_call(long addr,long argc,long*args){long*frame=piton_alloc((usize)argc*sizeof(long));for(long i=0;i<argc;++i)frame[i]=args[i];return((long(*)(long*))addr)(frame);}
 static void piton_bigint_print_raw(void*a);
@@ -733,8 +733,19 @@ static void piton_bigint_free(void*a){(void)a;}
 """
 
 
+_C_RESERVED_KEYWORDS = {
+    "auto", "break", "case", "char", "const", "continue", "default", "do",
+    "double", "else", "enum", "extern", "float", "for", "goto", "if",
+    "inline", "int", "long", "register", "restrict", "return", "short",
+    "signed", "sizeof", "static", "struct", "switch", "typedef", "union",
+    "unsigned", "void", "volatile", "while",
+}
+
+
 def _name(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9_]", "_", value)
+    if cleaned in _C_RESERVED_KEYWORDS:
+        return f"p_{cleaned}"
     return f"piton_{cleaned}" if cleaned and cleaned[0].isdigit() else cleaned
 
 
@@ -823,6 +834,8 @@ class LinuxCEmitter:
         self.class_parents = getattr(module, "class_parents", {})
         self.class_mro = getattr(module, "class_mro", {})
         self.class_properties = getattr(module, "class_properties", {})
+        self.static_methods = getattr(module, "static_methods", set())
+        self.class_methods = getattr(module, "class_methods", set())
         self._module_funcs = list(module.functions)
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
@@ -884,7 +897,7 @@ class LinuxCEmitter:
             "static i64 piton_floor_div(i64 a,i64 b){i64 q=a/b,r=a%b;if(r&&((r<0)!=(b<0)))--q;return q;}",
             "static i64 piton_mod(i64 a,i64 b){i64 r=a%b;if(r&&((r<0)!=(b<0)))r+=b;return r;}",
             "static char piton_concat_buf[65536];static char*piton_concat_ptr=0;",
-            "static long piton_str_concat(const char*a,const char*b){if(!piton_concat_ptr)piton_concat_ptr=piton_concat_buf;usize la=piton_strlen(a),lb=piton_strlen(b);char*r=piton_concat_ptr;for(usize i=0;i<la;++i)r[i]=a[i];for(usize i=0;i<lb;++i)r[la+i]=b[i];r[la+lb]=0;piton_concat_ptr+=la+lb;return(long)r;}",
+            "static long piton_str_concat(const char*a,const char*b){if(!piton_concat_ptr)piton_concat_ptr=piton_concat_buf;usize la=piton_strlen(a),lb=piton_strlen(b);char*r=piton_concat_ptr;for(usize i=0;i<la;++i)r[i]=a[i];for(usize i=0;i<lb;++i)r[la+i]=b[i];r[la+lb]=0;piton_concat_ptr+=la+lb+1;return(long)r;}",
         ]
         if self._has_rich_runtime:
             lines.append(_FLOAT_REPR_C)
@@ -1126,7 +1139,7 @@ class LinuxCEmitter:
         return f"({raw})"
 
     def _value(self, value: Any) -> str:
-        if isinstance(value, str) and value.startswith("%"):
+        if isinstance(value, str) and (value.startswith("%") or value in self.classes):
             return _name(value)
         if isinstance(value, str):
             return f"(long){json.dumps(value)}"
@@ -3069,8 +3082,16 @@ class LinuxCEmitter:
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
-            if source in self.classes or source in {"object", "objeto"}:
-                types[result] = f"class:{source}" if source in self.classes else "class:object"
+            if source in self.classes:
+                types[result] = f"class:{source}"
+                aliases[result] = source
+                if function.name == "<module>" and source in self._module_stored:
+                    out.append(f"    {_name(result)}={_name(source)};")
+                else:
+                    out.append(f"    {_name(result)}=0;")
+                return out
+            if source in {"object", "objeto"}:
+                types[result] = "class:object"
                 aliases[result] = source
                 out.append(f"    {_name(result)}=0;")
                 return out
@@ -3339,8 +3360,8 @@ class LinuxCEmitter:
                 self._emit_contains(out, result, left, right, types, negate=False)
                 return out
             if "str" in {left_type, right_type}:
-                if operator == "+" and left_type == right_type == "str":
-                    out.append(f"    {_name(result)}=(long)piton_str_concat((const char*){_name(left)},(const char*){_name(right)});")
+                if operator == "+":
+                    out.append(f"    {_name(result)}=(long)piton_str_concat((const char*){self._value(left)},(const char*){self._value(right)});")
                     types[result] = "str"
                     return out
                 if operator == "*":
@@ -4767,7 +4788,16 @@ class LinuxCEmitter:
                     if not params:
                         raise NativeBuildError(f"bound method '{attr}' has no native signature")
                     target = f"{resolved_method}__{attr}"
-                    if self.function_frame_abi.get(target, False):
+                    if target in self.static_methods:
+                        out.append(f'    {_name(result)}=(long)&{_name(target)};')
+                        types[result] = "closure"
+                        return out
+                    elif target in self.class_methods:
+                        cls_val = f"(long)&{_name(resolved_method)}" if resolved_method in self.function_names else f"(long){_name(resolved_method)}"
+                        out.append(f'    {_name(result)}=piton_bound_method_new((long)&{_name(target)},{len(params)-1},{cls_val});')
+                        types[result] = "closure"
+                        return out
+                    elif self.function_frame_abi.get(target, False):
                         out.append(f'    {_name(result)}=piton_closure_new_frame((long)&{_name(target)},{len(params)-1},1,(long[]){{(long){self._value(obj)}}},0);')
                     else:
                         out.append(f'    {_name(result)}=piton_bound_method_new((long)&{_name(target)},{len(params)-1},(long){self._value(obj)});')
@@ -4872,11 +4902,34 @@ class LinuxCEmitter:
                         # funcion de clase con la instancia como primer arg.
                         unbound_class = _obj_name
                     else:
-                        raise NativeBuildError("Linux method receiver class is not statically known")
+                        candidates = [c for c in self.classes if method in self.classes[c]]
+                        if candidates:
+                            out.append(f"    {{PitonObject* _d_obj=(PitonObject*){self._value(obj)};")
+                            for idx, c in enumerate(candidates):
+                                target = f"{c}__{method}"
+                                all_vals = self._complete_call_args(target, [obj, *call_args])
+                                vals_c = ",".join(self._value(v) for v in all_vals)
+                                branch = "if" if idx == 0 else "else if"
+                                out.append(f'    {branch}(_d_obj&&_d_obj->class_name&&piton_strcmp(_d_obj->class_name,"{c}")==0){{')
+                                if self.function_frame_abi.get(target, False):
+                                    out.append(f'        long _d_args[]={{{vals_c}}}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_vals)},_d_args);')
+                                else:
+                                    out.append(f"        {_name(result)}={_name(target)}({vals_c});")
+                                out.append("    }")
+                            out.append("    }")
+                            types[result] = "int"
+                            return out
+                        else:
+                            raise NativeBuildError("Linux method receiver class is not statically known")
                 if unbound_class is not None:
                     cls_name = unbound_class
-                    all_values = self._complete_call_args(f"{cls_name}__{method}", list(call_args))
                     target = f"{cls_name}__{method}"
+                    if target in self.static_methods:
+                        all_values = self._complete_call_args(target, list(call_args))
+                    elif target in self.class_methods:
+                        all_values = self._complete_call_args(target, [unbound_class, *call_args])
+                    else:
+                        all_values = self._complete_call_args(target, list(call_args))
                     if self.function_frame_abi.get(target, False):
                         args_c = ",".join(self._value(v) for v in all_values)
                         out.append(f'    {{long _method_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_values)},_method_args);}}')
@@ -4892,7 +4945,12 @@ class LinuxCEmitter:
                     )
             cls_name = self._resolve_method(cls_name, method)
             target = f"{cls_name}__{method}"
-            all_values = self._complete_call_args(target, [obj, *call_args])
+            if target in self.static_methods:
+                all_values = self._complete_call_args(target, list(call_args))
+            elif target in self.class_methods:
+                all_values = self._complete_call_args(target, [cls_name, *call_args])
+            else:
+                all_values = self._complete_call_args(target, [obj, *call_args])
             values = ",".join(self._value(v) for v in all_values)
             if self.function_frame_abi.get(target, False):
                 args_c = ",".join(self._value(v) for v in all_values)
