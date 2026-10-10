@@ -1,0 +1,2037 @@
+{
+  "meta": {
+    "backend": "linux_x86 (Linux native)",
+    "oracle": "3.12.3",
+    "instrument": "tools/parity_corpus_v2.py",
+    "areas": [
+      "complex",
+      "bytes_bytearray",
+      "call_unpacking",
+      "async_coroutines",
+      "yield_from",
+      "context_managers",
+      "pattern_matching_full",
+      "object_model_advanced",
+      "advanced_decorators",
+      "advanced_exceptions",
+      "import_system",
+      "stdlib_tier1"
+    ],
+    "jobs": 12,
+    "timeout": 10.0
+  },
+  "summary": {
+    "total": 218,
+    "by_bucket": {
+      "DIVERGENT_CRASH": 0,
+      "DIVERGENT_MISMATCH": 4,
+      "TIMEOUT": 0,
+      "FAIL_CLOSED": 31,
+      "RAISE_EQ": 0,
+      "EQUIV": 183
+    },
+    "by_area": {
+      "complex": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 68
+      },
+      "bytes_bytearray": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 8,
+        "RAISE_EQ": 0,
+        "EQUIV": 63
+      },
+      "call_unpacking": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 4,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 2,
+        "RAISE_EQ": 0,
+        "EQUIV": 6
+      },
+      "async_coroutines": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 10,
+        "RAISE_EQ": 0,
+        "EQUIV": 0
+      },
+      "yield_from": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 1,
+        "RAISE_EQ": 0,
+        "EQUIV": 3
+      },
+      "context_managers": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 4
+      },
+      "pattern_matching_full": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 1,
+        "RAISE_EQ": 0,
+        "EQUIV": 5
+      },
+      "object_model_advanced": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 1,
+        "RAISE_EQ": 0,
+        "EQUIV": 6
+      },
+      "advanced_decorators": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 1,
+        "RAISE_EQ": 0,
+        "EQUIV": 4
+      },
+      "advanced_exceptions": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 1,
+        "RAISE_EQ": 0,
+        "EQUIV": 4
+      },
+      "import_system": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 4,
+        "RAISE_EQ": 0,
+        "EQUIV": 4
+      },
+      "stdlib_tier1": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 2,
+        "RAISE_EQ": 0,
+        "EQUIV": 16
+      }
+    },
+    "pct_equiv": 83.9,
+    "pct_honest": 98.2,
+    "pct_divergent": 1.8
+  },
+  "records": [
+    {
+      "area": "complex",
+      "name": "lit-1j",
+      "src": "imprimir(1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "lit-2.5j",
+      "src": "imprimir(2.5j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "lit--1j",
+      "src": "imprimir(-1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "lit-0j",
+      "src": "imprimir(0j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "lit-1e3j",
+      "src": "imprimir(1e3j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "lit-2+3j",
+      "src": "imprimir(2+3j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "lit-1-2j",
+      "src": "imprimir(1-2j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "lit--1-2j",
+      "src": "imprimir(-1-2j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "lit-0.5+1.5j",
+      "src": "imprimir(0.5+1.5j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc+0",
+      "src": "imprimir(1+2j + 3-1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc-0",
+      "src": "imprimir(1+2j - 3-1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc*0",
+      "src": "imprimir(1+2j * 3-1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc/0",
+      "src": "imprimir(1+2j / 3-1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc+1",
+      "src": "imprimir(2j + 1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc-1",
+      "src": "imprimir(2j - 1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc*1",
+      "src": "imprimir(2j * 1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc/1",
+      "src": "imprimir(2j / 1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc+2",
+      "src": "imprimir(1+2j + 2+3j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc-2",
+      "src": "imprimir(1+2j - 2+3j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc*2",
+      "src": "imprimir(1+2j * 2+3j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc/2",
+      "src": "imprimir(1+2j / 2+3j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc+3",
+      "src": "imprimir(-1-2j + 1+1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc-3",
+      "src": "imprimir(-1-2j - 1+1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc*3",
+      "src": "imprimir(-1-2j * 1+1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc/3",
+      "src": "imprimir(-1-2j / 1+1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc+4",
+      "src": "imprimir(0j + 1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc-4",
+      "src": "imprimir(0j - 1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc*4",
+      "src": "imprimir(0j * 1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cc/4",
+      "src": "imprimir(0j / 1j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx+0",
+      "src": "imprimir(1+2j + 3)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx-0",
+      "src": "imprimir(1+2j - 3)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx*0",
+      "src": "imprimir(1+2j * 3)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx/0",
+      "src": "imprimir(1+2j / 3)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx+1",
+      "src": "imprimir(2j + 2)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx-1",
+      "src": "imprimir(2j - 2)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx*1",
+      "src": "imprimir(2j * 2)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx/1",
+      "src": "imprimir(2j / 2)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx+2",
+      "src": "imprimir(1+2j + 1.5)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx-2",
+      "src": "imprimir(1+2j - 1.5)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx*2",
+      "src": "imprimir(1+2j * 1.5)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx/2",
+      "src": "imprimir(1+2j / 1.5)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx+3",
+      "src": "imprimir(2.5j + 0.5)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx-3",
+      "src": "imprimir(2.5j - 0.5)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx*3",
+      "src": "imprimir(2.5j * 0.5)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cx/3",
+      "src": "imprimir(2.5j / 0.5)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "un--(1+2j)",
+      "src": "imprimir(-(1+2j))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "un-+(1+2j)",
+      "src": "imprimir(+(1+2j))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "un-no (1+2j)",
+      "src": "imprimir(no (1+2j))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "un-no 0j",
+      "src": "imprimir(no 0j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cmp==0",
+      "src": "imprimir(1+2j == 1+2j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cmp!=0",
+      "src": "imprimir(1+2j != 1+2j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cmp==1",
+      "src": "imprimir(1+2j == 1+3j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cmp!=1",
+      "src": "imprimir(1+2j != 1+3j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cmp==2",
+      "src": "imprimir(1+0j == 1)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cmp!=2",
+      "src": "imprimir(1+0j != 1)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cmp==3",
+      "src": "imprimir(1j == 2j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "cmp!=3",
+      "src": "imprimir(1j != 2j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "misc-abs(3+4j)",
+      "src": "imprimir(abs(3+4j))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "misc-(2+3j).real",
+      "src": "imprimir((2+3j).real)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "misc-(2+3j).imag",
+      "src": "imprimir((2+3j).imag)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "misc-complejo(2,3)",
+      "src": "imprimir(complejo(2,3))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "misc-complejo(1.5,2.5)",
+      "src": "imprimir(complejo(1.5,2.5))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "misc-complejo()",
+      "src": "imprimir(complejo())",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "fmt-f'{1+2j}'",
+      "src": "imprimir(f'{1+2j}')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "fmt-'%s' % (1+2j)",
+      "src": "imprimir('%s' % (1+2j))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "fmt-'%r' % (1+2j)",
+      "src": "imprimir('%r' % (1+2j))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "fmt-'v={}'.format(1+2j)",
+      "src": "imprimir('v={}'.format(1+2j))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex",
+      "name": "ord-err",
+      "src": "imprimir(1j < 2j)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "lit-b'abc'",
+      "src": "imprimir(b'abc')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "lit-b\"\"",
+      "src": "imprimir(b\"\")",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "lit-b'a\\x00b'",
+      "src": "imprimir(b'a\\x00b')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "lit-bytearray(b'xyz')",
+      "src": "imprimir(bytearray(b'xyz'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "lit-bytearray(b'')",
+      "src": "imprimir(bytearray(b''))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "ctor-bytes(3)",
+      "src": "imprimir(bytes(3))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "ctor-bytes([65,66,67])",
+      "src": "imprimir(bytes([65,66,67]))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "ctor-bytes(range(4))",
+      "src": "imprimir(bytes(range(4)))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "ctor-bytearray(2)",
+      "src": "imprimir(bytearray(2))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "ctor-bytearray([1,2,3])",
+      "src": "imprimir(bytearray([1,2,3]))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "ctor-bytearray(b'abc')",
+      "src": "imprimir(bytearray(b'abc'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "idx-b'abcdef'[1]",
+      "src": "imprimir(b'abcdef'[1])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "idx-b'abcdef'[-1]",
+      "src": "imprimir(b'abcdef'[-1])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "idx-b'abc'[0]",
+      "src": "imprimir(b'abc'[0])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "idx-bytearray(b'abc')[1]",
+      "src": "imprimir(bytearray(b'abc')[1])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "slice-b'abcdef'[1:4]",
+      "src": "imprimir(b'abcdef'[1:4])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "slice-b'abcdef'[::2]",
+      "src": "imprimir(b'abcdef'[::2])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "slice-b'abcdef'[::-1]",
+      "src": "imprimir(b'abcdef'[::-1])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "slice-b'abcdef'[1:5:2]",
+      "src": "imprimir(b'abcdef'[1:5:2])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "slice-b'abcdef'[:3]",
+      "src": "imprimir(b'abcdef'[:3])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "slice-b'abcdef'[-2:]",
+      "src": "imprimir(b'abcdef'[-2:])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "slice-bytearray(b'abcdef')[1:4]",
+      "src": "imprimir(bytearray(b'abcdef')[1:4])",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "concat-b'ab' + b'cd'",
+      "src": "imprimir(b'ab' + b'cd')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "concat-bytearray(b'ab') + bytearray(b'cd')",
+      "src": "imprimir(bytearray(b'ab') + bytearray(b'cd'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "concat-b'ab' + bytearray(b'cd')",
+      "src": "imprimir(b'ab' + bytearray(b'cd'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "repeat-b'ab' * 3",
+      "src": "imprimir(b'ab' * 3)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "repeat-bytearray(b'ab') * 2",
+      "src": "imprimir(bytearray(b'ab') * 2)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "repeat-b'ab' * 0",
+      "src": "imprimir(b'ab' * 0)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "repeat-b'ab' * -1",
+      "src": "imprimir(b'ab' * -1)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "repeat-3 * b'ab'",
+      "src": "imprimir(3 * b'ab')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "len-len(b'abc')",
+      "src": "imprimir(len(b'abc'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "len-len(bytearray(b'xy'))",
+      "src": "imprimir(len(bytearray(b'xy')))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "len-len(b'')",
+      "src": "imprimir(len(b''))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "truth-bool(b'')",
+      "src": "imprimir(bool(b''))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "truth-bool(b'a')",
+      "src": "imprimir(bool(b'a'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "truth-bool(bytearray(b''))",
+      "src": "imprimir(bool(bytearray(b'')))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "eq-b'ab' == b'ab'",
+      "src": "imprimir(b'ab' == b'ab')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "eq-b'ab' == b'ac'",
+      "src": "imprimir(b'ab' == b'ac')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "eq-b'ab' == bytearray(b'ab')",
+      "src": "imprimir(b'ab' == bytearray(b'ab'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "eq-b'ab' != b'ac'",
+      "src": "imprimir(b'ab' != b'ac')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "in-b'bc' in b'abcd'",
+      "src": "imprimir(b'bc' in b'abcd')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "in-98 in b'abcd'",
+      "src": "imprimir(98 in b'abcd')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "in-120 in b'abcd'",
+      "src": "imprimir(120 in b'abcd')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "in-b'zz' not in b'abcd'",
+      "src": "imprimir(b'zz' not in b'abcd')",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: ParseError: Se esperaba RPAREN:  en 1:23"
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "iter",
+      "src": "total = 0\npara x en b'abcdef':\n    total = total + x\nimprimir(total)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-count",
+      "src": "imprimir(b'hello world hello'.count(b'b'hello''))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 1\ncolumna: 34\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(b'hello world hello'.count(b'b'hello''))"
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-find",
+      "src": "imprimir(b'hello world hello'.find(b'b'world''))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 1\ncolumna: 33\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(b'hello world hello'.find(b'b'world''))"
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-rfind",
+      "src": "imprimir(b'hello world hello'.rfind(b'b'hello''))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 1\ncolumna: 34\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(b'hello world hello'.rfind(b'b'hello''))"
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-index",
+      "src": "imprimir(b'hello world hello'.index(b'b'o''))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-rindex",
+      "src": "imprimir(b'hello world hello'.rindex(b'b'o''))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-startswith",
+      "src": "imprimir(b'hello world hello'.startswith(b'b'hello''))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 1\ncolumna: 39\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(b'hello world hello'.startswith(b'b'hello''))"
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-endswith",
+      "src": "imprimir(b'hello world hello'.endswith(b'b'hello''))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 1\ncolumna: 37\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(b'hello world hello'.endswith(b'b'hello''))"
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-decode",
+      "src": "imprimir(b'abc'.decode())",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-hex",
+      "src": "imprimir(b'abc'.hex())",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-fromhex",
+      "src": "imprimir(b'hello world hello'.fromhex(b''616263''))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 1\ncolumna: 36\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\nprint(b'hello world hello'.fromhex(b''616263''))"
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "mut-append",
+      "src": "ba = bytearray(b'abc')\nba.append(100)\nimprimir(ba)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "mut-extend",
+      "src": "ba = bytearray(b'abc')\nba.extend(b'ef')\nimprimir(ba)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "mut-index",
+      "src": "ba = bytearray(b'abc')\nba[0] = 65\nimprimir(ba)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "mut-slice",
+      "src": "ba = bytearray(b'abcdef')\nba[1:3] = b'XY'\nimprimir(ba)",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: runtime operation not supported in Linux native subset: unsupported"
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "mut-negidx",
+      "src": "ba = bytearray(b'abc')\nba[-1] = 90\nimprimir(ba)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "cmp-b'abc' < b'abd'",
+      "src": "imprimir(b'abc' < b'abd')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "cmp-b'abc' <= b'abc'",
+      "src": "imprimir(b'abc' <= b'abc')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "cmp-b'abc' > b'aaa'",
+      "src": "imprimir(b'abc' > b'aaa')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-count-args",
+      "src": "imprimir(b'hello world hello'.count(b'hello'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-find-args",
+      "src": "imprimir(b'hello world hello'.find(b'hello'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-rfind-args",
+      "src": "imprimir(b'hello world hello'.rfind(b'hello'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-index-args",
+      "src": "imprimir(b'hello world hello'.index(b'hello'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-rindex-args",
+      "src": "imprimir(b'hello world hello'.rindex(b'hello'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-startswith-args",
+      "src": "imprimir(b'hello world hello'.startswith(b'hello'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-endswith-args",
+      "src": "imprimir(b'hello world hello'.endswith(b'hello'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "bytes_bytearray",
+      "name": "method-find-miss",
+      "src": "imprimir(b'hello world hello'.find(b'zzz'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "call_unpacking",
+      "name": "star-[1, 2]",
+      "src": "funcion f(*xs): devolver suma(xs)\nimprimir(f([1, 2]))",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=[1, 2] err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 2, in <module> |   File \"<string>\", line 1, in f | TypeError: unsupported operand type(s) for +: 'i",
+      "native_rc": 0,
+      "oracle_rc": 1
+    },
+    {
+      "area": "call_unpacking",
+      "name": "star-(1, 2)",
+      "src": "funcion f(*xs): devolver suma(xs)\nimprimir(f((1, 2)))",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=(1, 2) err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 2, in <module> |   File \"<string>\", line 1, in f | TypeError: unsupported operand type(s) for +: 'i",
+      "native_rc": 0,
+      "oracle_rc": 1
+    },
+    {
+      "area": "call_unpacking",
+      "name": "star-{'a': 1}",
+      "src": "funcion f(*xs): devolver suma(xs)\nimprimir(f({'a': 1}))",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out={'a': 1} err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 2, in <module> |   File \"<string>\", line 1, in f | TypeError: unsupported operand type(s) for +: 'i",
+      "native_rc": 0,
+      "oracle_rc": 1
+    },
+    {
+      "area": "call_unpacking",
+      "name": "star-[1, 2, 3]",
+      "src": "funcion f(*xs): devolver suma(xs)\nimprimir(f([1, 2, 3]))",
+      "bucket": "DIVERGENT_MISMATCH",
+      "detail": "native rc=0 out=[1, 2, 3] err= || oracle rc=1 out= err=Traceback (most recent call last): |   File \"<string>\", line 2, in <module> |   File \"<string>\", line 1, in f | TypeError: unsupported operand type(s) for +: 'i",
+      "native_rc": 0,
+      "oracle_rc": 1
+    },
+    {
+      "area": "call_unpacking",
+      "name": "kwarg-dict",
+      "src": "funcion f(**kw): devolver longitud(kw)\nimprimir(f(**{'a': 1, 'b': 2}))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "call_unpacking",
+      "name": "mixed-1",
+      "src": "funcion f(a, *b): devolver a + suma(b)\nimprimir(f(1, *[2, 3]))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "call_unpacking",
+      "name": "mixed-2",
+      "src": "funcion f(a, **b): devolver a + longitud(b)\nimprimir(f(1, **{'b': 2}))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "call_unpacking",
+      "name": "mixed-3",
+      "src": "funcion f(*a, **b): devolver suma(a) + longitud(b)\nimprimir(f(*[1, 2], **{'c': 3}))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "call_unpacking",
+      "name": "star-var",
+      "src": "xs = [1, 2, 3]\nfuncion f(*xs): devolver suma(xs)\nimprimir(f(*xs))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: CALL_UNPACKING_DYNAMIC4_V1 does not support variadic callees yet"
+    },
+    {
+      "area": "call_unpacking",
+      "name": "kw-var",
+      "src": "kw = {'a': 1, 'b': 2}\nfuncion f(**kw): devolver longitud(kw)\nimprimir(f(**kw))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: CALL_UNPACKING_DYNAMIC4_V1 does not support variadic callees yet"
+    },
+    {
+      "area": "call_unpacking",
+      "name": "star-empty",
+      "src": "funcion f(*xs): devolver suma(xs)\nimprimir(f(*[]))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "call_unpacking",
+      "name": "kw-empty",
+      "src": "funcion f(**kw): devolver longitud(kw)\nimprimir(f(**{}))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "async_coroutines",
+      "name": "async-def",
+      "src": "asincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    x = f()\n    imprimir(x)",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native coroutine must be awaited or passed directly to asyncio.run"
+    },
+    {
+      "area": "async_coroutines",
+      "name": "await",
+      "src": "asincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    x = f()\n    imprimir(x)",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native coroutine must be awaited or passed directly to asyncio.run"
+    },
+    {
+      "area": "async_coroutines",
+      "name": "asyncio-run",
+      "src": "asincrono funcion f():\n    devolver 42\nasincrono funcion main():\n    x = f()\n    imprimir(x)\nasincrono.run(main())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 6\ncolumna: 6\n\nPython rechazó la traducción:\ninvalid syntax\n\nasync.run(main())"
+    },
+    {
+      "area": "async_coroutines",
+      "name": "async-for",
+      "src": "asincrono funcion f():\n    para i en rango(3):\n        producir i\nasincrono funcion g():\n    para x en f():\n        imprimir(x)\nasincrono.run(g())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 7\ncolumna: 6\n\nPython rechazó la traducción:\ninvalid syntax\n\nasync.run(g())"
+    },
+    {
+      "area": "async_coroutines",
+      "name": "async-gen",
+      "src": "asincrono funcion f():\n    producir 1\n    producir 2\nasincrono funcion g():\n    para x en f():\n        imprimir(x)\nasincrono.run(g())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 7\ncolumna: 6\n\nPython rechazó la traducción:\ninvalid syntax\n\nasync.run(g())"
+    },
+    {
+      "area": "async_coroutines",
+      "name": "create-task",
+      "src": "asincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    t = asincrono.create_task(f())\n    x = t\n    imprimir(x)\nasincrono.run(g())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 4\ncolumna: 9\n\nPython rechazó la traducción:\ninvalid syntax\n\n    t = async.create_task(f())"
+    },
+    {
+      "area": "async_coroutines",
+      "name": "gather",
+      "src": "asincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    x = asincrono.gather(f(), f())\n    imprimir(x)\nasincrono.run(g())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 4\ncolumna: 9\n\nPython rechazó la traducción:\ninvalid syntax\n\n    x = async.gather(f(), f())"
+    },
+    {
+      "area": "async_coroutines",
+      "name": "cancel",
+      "src": "asincrono funcion f():\n    asincrono.sleep(0)\n    devolver 1\nasincrono funcion g():\n    t = asincrono.create_task(f())\n    t.cancel()\n    imprimir('cancelled')\nasincrono.run(g())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 2\ncolumna: 10\n\nPython rechazó la traducción:\ninvalid syntax\n\n    async.sleep(0)"
+    },
+    {
+      "area": "async_coroutines",
+      "name": "sleep0",
+      "src": "asincrono funcion f():\n    asincrono.sleep(0)\n    devolver 1\nasincrono.run(f())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 2\ncolumna: 10\n\nPython rechazó la traducción:\ninvalid syntax\n\n    async.sleep(0)"
+    },
+    {
+      "area": "async_coroutines",
+      "name": "sleep1",
+      "src": "asincrono funcion f():\n    asincrono.sleep(1)\n    devolver 1\nasincrono.run(f())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "translate: PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <parity-corpus-v2>\nlinea: 2\ncolumna: 10\n\nPython rechazó la traducción:\ninvalid syntax\n\n    async.sleep(1)"
+    },
+    {
+      "area": "yield_from",
+      "name": "sub",
+      "src": "funcion sub():\n    producir 10\n    producir 20\nfuncion g():\n    producir 1\n    producir desde sub()\n    producir 2\nimprimir(lista(g()))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "yield_from",
+      "name": "list",
+      "src": "funcion g():\n    producir desde [1, 2, 3]\nimprimir(lista(g()))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "yield_from",
+      "name": "tuple",
+      "src": "funcion g():\n    producir desde (4, 5)\nimprimir(lista(g()))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "yield_from",
+      "name": "send",
+      "src": "funcion sub():\n    x = producir 1\n    producir x + 1\nfuncion g():\n    g = sub()\n    x = g.send(None)\n    x = g.send(99)\nimprimir(lista(g()))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'none' value"
+    },
+    {
+      "area": "context_managers",
+      "name": "basic",
+      "src": "clase CM:\n    funcion __enter__(self):\n        imprimir('enter')\n        devolver 10\n    funcion __exit__(self, t, v, tb):\n        imprimir('exit')\n        devolver Falso\ncon CM() como x:\n    imprimir('body', x)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "context_managers",
+      "name": "multiple",
+      "src": "clase A:\n    funcion __enter__(self):\n        devolver 1\n    funcion __exit__(self, t, v, tb):\n        imprimir('exitA')\n        devolver Falso\nclase B:\n    funcion __enter__(self):\n        devolver 2\n    funcion __exit__(self, t, v, tb):\n        imprimir('exitB')\n        devolver Falso\ncon A() como a, B() como b:\n    imprimir('body', a + b)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "context_managers",
+      "name": "suppress",
+      "src": "clase CM:\n    funcion __enter__(self):\n        devolver 1\n    funcion __exit__(self, t, v, tb):\n        imprimir('suppressed')\n        devolver Verdadero\ncon CM():\n    lanzar ValueError('err')\nimprimir('fin')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "context_managers",
+      "name": "reraise",
+      "src": "clase CM:\n    funcion __enter__(self):\n        devolver 1\n    funcion __exit__(self, t, v, tb):\n        imprimir('exit')\n        lanzar ValueError('from exit')\ncon CM():\n    lanzar ValueError('err')\nimprimir('fin')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "pattern_matching_full",
+      "name": "literal",
+      "src": "x = 1\nsegun x:\n    caso 1:\n        imprimir('uno')\n    caso _:\n        imprimir('otro')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "pattern_matching_full",
+      "name": "seq",
+      "src": "x = [1, 2]\nsegun x:\n    caso [a, b]:\n        imprimir(a, b)\n    caso _:\n        imprimir('otro')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "pattern_matching_full",
+      "name": "mapping",
+      "src": "x = {'a': 1}\nsegun x:\n    caso {'a': v}:\n        imprimir(v)\n    caso _:\n        imprimir('otro')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "pattern_matching_full",
+      "name": "class",
+      "src": "clase P:\n    funcion __init__(self, x): self.x = x\nx = P(1)\nsegun x:\n    caso P(x):\n        imprimir(x)\n    caso _:\n        imprimir('otro')",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux native print of a 'P' instance without __str__/__repr__ is not supported (can never match CPython object repr)"
+    },
+    {
+      "area": "pattern_matching_full",
+      "name": "guard",
+      "src": "x = 15\nsegun x:\n    caso n si n > 10:\n        imprimir('grande', n)\n    caso _:\n        imprimir('otro')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "pattern_matching_full",
+      "name": "or",
+      "src": "x = 3\nsegun x:\n    caso 1 | 2 | 3:\n        imprimir('123')\n    caso _:\n        imprimir('otro')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_model_advanced",
+      "name": "multi-inherit",
+      "src": "clase A:\n    funcion f(self): devolver 'A'\nclase B:\n    funcion f(self): devolver 'B'\nclase C(A, B):\n    pasar\nimprimir(C().f())",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_model_advanced",
+      "name": "super",
+      "src": "clase A:\n    funcion f(self): devolver 'A'\nclase B(A):\n    funcion f(self): devolver 'B' + super().f()\nimprimir(B().f())",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_model_advanced",
+      "name": "self-method",
+      "src": "clase P:\n    funcion f(self): devolver 1\nimprimir(P().f())",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_model_advanced",
+      "name": "getattr",
+      "src": "clase P:\n    funcion __getattr__(self, n): devolver n\nimprimir(P().x)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_model_advanced",
+      "name": "setattr",
+      "src": "clase P:\n    funcion __setattr__(self, n, v):\n        imprimir('set', n, v)\n        super().__setattr__(n, v)\np = P()\np.x = 1",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native super().__setattr__: no base class in MRO of 'P' defines '__setattr__'"
+    },
+    {
+      "area": "object_model_advanced",
+      "name": "del",
+      "src": "clase P:\n    funcion __del__(self): imprimir('del')\np = P()\nborrar p",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_model_advanced",
+      "name": "mro-3",
+      "src": "clase A:\n    funcion f(self): devolver 'A'\nclase B(A):\n    funcion f(self): devolver 'B'\nclase C(B):\n    funcion f(self): devolver 'C'\nimprimir(C().f())",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "advanced_decorators",
+      "name": "property",
+      "src": "clase P:\n    @property\n    funcion x(self): devolver 1\n    @x.setter\n    funcion x(self, v): imprimir('set', v)\n    @x.deleter\n    funcion x(self): imprimir('del')\np = P()\nimprimir(p.x)\np.x = 2\nimprimir(p.x)\nborrar p.x",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "advanced_decorators",
+      "name": "classmethod",
+      "src": "clase C:\n    v = 10\n    @classmethod\n    funcion get_v(cls): devolver cls.v\nimprimir(C.get_v())\nimprimir(C().get_v())",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "advanced_decorators",
+      "name": "staticmethod",
+      "src": "clase M:\n    @staticmethod\n    funcion add(a, b): devolver a + b\nimprimir(M.add(3, 4))\nimprimir(M().add(5, 6))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "advanced_decorators",
+      "name": "custom",
+      "src": "funcion add_tag(cls):\n    cls.tag = 'TAG'\n    devolver cls\n@add_tag\nclase T:\n    pasar\nimprimir(T.tag)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "advanced_decorators",
+      "name": "nested",
+      "src": "funcion d1(f):\n    funcion w(): imprimir('d1'); devolver f()\n    devolver w\nfuncion d2(f):\n    funcion w(): imprimir('d2'); devolver f()\n    devolver w\n@d1\n@d2\nfuncion f(): devolver 1\nimprimir(f())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: ParseError: Expresión inesperada: Token(SEMI, ';', 2:32) en 2:32"
+    },
+    {
+      "area": "advanced_exceptions",
+      "name": "from",
+      "src": "funcion f():\n    lanzar ValueError('boom')\nintentar:\n    f()\nexcepto ValueError como e:\n    lanzar RuntimeError('wrapper') desde e",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native raise supports `desde` only with an exception constructor or Nada"
+    },
+    {
+      "area": "advanced_exceptions",
+      "name": "except-as",
+      "src": "intentar:\n    lanzar ValueError('boom')\nexcepto ValueError como e:\n    imprimir(e)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "advanced_exceptions",
+      "name": "custom-hierarchy",
+      "src": "clase A(Exception): pasar\nclase B(A): pasar\nintentar:\n    lanzar B('x')\nexcepto A:\n    imprimir('A')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "advanced_exceptions",
+      "name": "reraise",
+      "src": "intentar:\n    intentar:\n        lanzar ValueError('x')\n    excepto ValueError:\n        lanzar\nexcepto ValueError:\n    imprimir('outer caught')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "advanced_exceptions",
+      "name": "custom",
+      "src": "clase E(Exception):\n    pasar\nintentar:\n    lanzar E('x')\nexcepto E:\n    imprimir('custom')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "import_system",
+      "name": "dotted",
+      "src": "importar pkg\nimprimir(pkg.fn())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native module not supplied: pkg"
+    },
+    {
+      "area": "import_system",
+      "name": "from",
+      "src": "desde pkg importar fn\nimprimir(fn())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native from-import module not supplied: pkg"
+    },
+    {
+      "area": "import_system",
+      "name": "star",
+      "src": "desde pkg importar *\nimprimir(fn())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native star import module not supplied: pkg"
+    },
+    {
+      "area": "import_system",
+      "name": "relative",
+      "src": "desde . importar x\nimprimir(x)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "import_system",
+      "name": "relative-mod",
+      "src": "desde .mod importar f\nimprimir(f())",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native from-import module not supplied: mod"
+    },
+    {
+      "area": "import_system",
+      "name": "sys-modules",
+      "src": "importar sys\nimprimir(sys.modules['sys'].__name__)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "import_system",
+      "name": "metadata",
+      "src": "importar sys\nimprimir(sys.__name__)\nimprimir(sys.__package__)\nimprimir(sys.__file__)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "import_system",
+      "name": "cyclic",
+      "src": "importar sys\nimprimir('cyclic')",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "math-floor",
+      "src": "importar math\nimprimir(math.floor(42))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "math-ceil",
+      "src": "importar math\nimprimir(math.ceil(42))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "math-trunc",
+      "src": "importar math\nimprimir(math.trunc(42))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "math-fabs",
+      "src": "importar math\nimprimir(math.fabs(42))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "math-gcd",
+      "src": "importar math\nimprimir(math.gcd(42))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: native math.gcd is not supported or requires 2 positional arguments"
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "math-sqrt",
+      "src": "importar math\nimprimir(math.sqrt(42))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "math-pi",
+      "src": "importar math\nimprimir(math.pi)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "math-e",
+      "src": "importar math\nimprimir(math.e)",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "all",
+      "src": "imprimir(all([1, 2]))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "all-empty",
+      "src": "imprimir(all([]))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "any",
+      "src": "imprimir(any([0, 1]))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "any-empty",
+      "src": "imprimir(any([]))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "bin",
+      "src": "imprimir(bin(5))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "chr",
+      "src": "imprimir(chr(65))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "ord",
+      "src": "imprimir(ord('A'))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "pow",
+      "src": "imprimir(pow(2, 10))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "round",
+      "src": "imprimir(round(2.5))",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "stdlib_tier1",
+      "name": "round-prec",
+      "src": "imprimir(round(2.567, 2))",
+      "bucket": "FAIL_CLOSED",
+      "detail": "build: NativeBuildError: Linux round requires exactly one argument (M14 v1; ndigits not supported)"
+    }
+  ]
+}
