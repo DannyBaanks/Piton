@@ -56,7 +56,7 @@ def _ordering_pair_ok(left_type: str, right_type: str) -> bool:
     return left_type == right_type and left_type not in {"none", ""}
 
 
-_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes"}
+_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes", "complex", "complejo"}
 
 _math_fn_map = {
     "math_sqrt": "piton_float_sqrt",
@@ -993,6 +993,14 @@ class Win64NasmEmitter:
         elif op == "const":
             value = args[0]
             self.constants[result] = value
+            if isinstance(value, complex):
+                # COMPLEX_V1: implementado SOLO en el backend Linux (ver
+                # piton/linux_x86.py). El backend Windows falla cerrado en
+                # build en vez de emitir un valor aproximado.
+                raise NativeBuildError(
+                    "Windows backend does not support complex yet "
+                    "(COMPLEX_V1 is Linux-only; fail closed)"
+                )
             if value is None:
                 self.types[result] = "none"
             elif isinstance(value, bool):

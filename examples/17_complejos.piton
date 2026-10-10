@@ -1,0 +1,17 @@
+z = 2 + 3j
+w = complejo(1, -2)
+
+imprimir(1j)
+imprimir(z)
+imprimir(w)
+imprimir(z + w)
+imprimir(z * w)
+imprimir(z / w)
+imprimir(z == complejo(2, 3))
+imprimir(z != w)
+imprimir(z.real)
+imprimir(z.imag)
+imprimir(abs(z))
+imprimir(bool(0j))
+imprimir(no z)
+imprimir(1j en [z, w])

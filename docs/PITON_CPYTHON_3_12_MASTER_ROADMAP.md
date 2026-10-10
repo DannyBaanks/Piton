@@ -510,6 +510,37 @@ Prioridad Tier 1: math, sys, os, time, json, collections, io.
 `C_FFI_V1` — interop con librerías nativas; separado de compatibilidad
 C-extension CPython (no-goal de lenguaje).
 
+### 22b. Valores — complejos (cerrado 2026-10-10, Linux)
+
+`COMPLEX_V1` — números complejos.
+- **CURRENT_STATUS**: **PASS Linux** (16 tests diferenciales byte-idénticos vs
+  CPython 3.12.4); **Windows NOT_DEMONSTRATED** (falla cerrado en build).
+- **IMPLEMENTATION**: lexer consume el sufijo `j`/`J` (incl. `1e3j`); el parser
+  baja `Constant(complex)`; `linux_x86.py` añade `PK_COMPLEX`, el struct
+  `PitonComplex{magic, re, im}` en la arena (sin refcount: `PK_COMPLEX` queda
+  fuera del rango que recorre `piton_slot_incref/decref`) y los helpers
+  `piton_cx_add/sub/mul/div/neg/eq/abs/str`, más el emitter: `const`,
+  `binary` (+ - * / contra int/float/complex), `unary` (- y +), `compare`
+  (`==`/`!=`; ordenar emite el TypeError espejo), `get_attr` (`.real`/`.imag` →
+  bits de double), impresión, `tipo`/`es_instancia`, `complejo()`/`complejo(r,i)`,
+  pertenencia y `texto()`/`%s`/`%r`/f-string/`format`. Windows rechaza el
+  `const` complejo con `NativeBuildError`.
+- **POR QUÉ LA DIVISIÓN NO ES LA FÓRMULA NAIVE**: `(1+2j)/(3-1j)` debe dar
+  `(0.1+0.7000000000000001j)`; la fórmula `(ac+bd)/(c²+d²)` produce `0.7` en la
+  última cifra. Se replica `_Py_c_quot` de CPython (algoritmo de Smith:
+  división por la parte de mayor magnitud) para ser bit-exacto.
+- **POR QUÉ EL REPR TIENE SUS PROPIAS REGLAS**: CPython imprime `1j`, no `1.0j`;
+  `-1j` imprime `(-0-1j)` (la negación produce real `-0.0`); el separador sale
+  del BIT DE SIGNO de la imaginaria (`complex(2,-0.0)` → `(2-0j)`); real `+0.0`
+  sin signo usa la forma imaginaria pura (`complex(0.0,-0.0)` → `-0j`). Las
+  pruebas de `-0.0` las fija `test_repr_signed_zero_rules`.
+- **KNOWN_GAP**: backend Windows, `**`, `complejo('1+2j')`, paso de complejos
+  por el ABI de llamada (fail-closed en build: los parámetros del callee se
+  tipan int y un puntero se imprimiría como número), `.conjugate()`, y la
+  memoria: los escalares complejos viven en la arena y no se reclaman.
+- **DEPENDENCIES**: ninguna (tipo escalar aditivo).
+- **COMPLEXITY**: MEDIUM → resuelto en Linux.
+
 ## 23. Optimización
 
 Capa posterior a paridad. `OPT_LEVEL_EQUIVALENCE`, `MISCOMPILATION_CORPUS=0`,

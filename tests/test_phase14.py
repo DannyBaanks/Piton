@@ -9,7 +9,7 @@ class Phase14Dashboard(unittest.TestCase):
     def test_dashboard_is_complete_and_fail_closed(self):
         dashboard = build_dashboard()
         names = {feature["name"] for feature in dashboard["features"]}
-        self.assertEqual(len(names), 18)
+        self.assertEqual(len(names), 19)
         self.assertIn("dynamic_code", names)
         self.assertIn("dynamic_runtime", names)
         self.assertIn("ffi", names)

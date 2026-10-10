@@ -23,8 +23,15 @@ from .x86 import NativeBuildError, _BUILTINS, _scan_native_modules, generator_sl
 _FLOAT_REPR_C = Path(__file__).with_name("float_repr.h").read_text(encoding="utf-8")
 
 _RICH_FREESTANDING_C = r"""
-enum{PK_NONE,PK_BOOL,PK_INT,PK_FLOAT,PK_STR,PK_LIST,PK_TUPLE,PK_DICT,PK_SET,PK_OBJECT,PK_BIGINT,PK_RANGE,PK_BYTES,PK_BYTEARRAY};
+enum{PK_NONE,PK_BOOL,PK_INT,PK_FLOAT,PK_STR,PK_LIST,PK_TUPLE,PK_DICT,PK_SET,PK_OBJECT,PK_BIGINT,PK_RANGE,PK_BYTES,PK_BYTEARRAY,PK_COMPLEX};
 typedef struct{long bits;int kind;}PitonSlot;
+/* COMPLEX_V1: número complejo (re + im j). Vive en la arena (bump allocator,
+ * sin refcount): los escalares que ocupan puntero se tratan como inmutables y
+ * nunca entran a incref/decref — PK_COMPLEX queda FUERA del rango que
+ * piton_slot_incref/decref recorren. La memoria se reclama al salir; documentado
+ * como KNOWN_GAP del gate. */
+typedef struct{long magic;double re;double im;}PitonComplex;
+typedef struct{double re;double im;}PitonComplexVal;
 typedef struct{long refcount;long kind;long start;long stop;long step;}PitonRange;
 typedef struct{long refcount;long kind;long length;unsigned char*data;}PitonBytes;
 typedef struct{long refcount;long kind;long length;long capacity;unsigned char*data;}PitonByteArray;
@@ -259,7 +266,7 @@ static void piton_write_uint_big(double d){unsigned long u;double t=d;int i,n=0,
 static void piton_print_float_bits_raw(long bits){char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)bits);piton_write(1,r,(usize)n);}
 static void piton_print_float_bits(long bits){piton_print_float_bits_raw(bits);piton_write(1,"\n",1);}
 static int piton_bytes_cmp(PitonBytes* a, PitonBytes* b);
-static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(a.kind==PK_RANGE)return piton_range_eq((PitonRange*)a.bits,(PitonRange*)b.bits);if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;if(a.kind==PK_BYTES||a.kind==PK_BYTEARRAY)return piton_bytes_cmp((PitonBytes*)a.bits,(PitonBytes*)b.bits)==0;return a.bits==b.bits;}
+static int piton_slot_eq(PitonSlot a,PitonSlot b){if(a.kind!=b.kind)return 0;if(a.kind==PK_RANGE)return piton_range_eq((PitonRange*)a.bits,(PitonRange*)b.bits);if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;if(a.kind==PK_BYTES||a.kind==PK_BYTEARRAY)return piton_bytes_cmp((PitonBytes*)a.bits,(PitonBytes*)b.bits)==0;if(a.kind==PK_COMPLEX){PitonComplex*x=(PitonComplex*)a.bits,*y=(PitonComplex*)b.bits;return x->re==y->re&&x->im==y->im;}return a.bits==b.bits;}
 static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
 static void piton_seq_put(PitonSeq*s,long i,PitonSlot v){if(i>=0&&i<s->length)s->items[i]=v;}
 static long piton_str_repeat(const char*s,long n){if(n<=0){char*p=piton_alloc(1);p[0]=0;return(long)p;}usize sl=piton_strlen(s);char*p=piton_alloc(sl*(usize)n+1);for(long i=0;i<n;++i)piton_memcpy(p+i*sl,s,sl);p[sl*(usize)n]=0;return(long)p;}
@@ -570,10 +577,13 @@ static void piton_bigint_print_raw(void*a);
 static void piton_bytes_print(PitonBytes* b);
 static void piton_bytearray_print(PitonByteArray* ba);
 static void piton_print_slot(PitonSlot v);
+static void piton_print_complex_raw(long bits);
+static long piton_cx_eq(PitonComplexVal x,PitonComplexVal y);
+static int piton_cx_truthy_bits(long bits);
 static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}if(s->kind==PK_TUPLE&&s->length==1)piton_write(1,",",1);piton_write(1,s->kind==PK_TUPLE?")":"]",1);}
 static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(d->items[i].key);piton_write(1,": ",2);piton_print_slot(d->items[i].value);}piton_write(1,"}",1);}
 static void piton_print_set(PitonSet*s){piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}piton_write(1,"}",1);}
-static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,"'",1);piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(1,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;default:piton_write(1,"<object>",8);}}
+static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,"'",1);piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(1,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;default:piton_write(1,"<object>",8);}}
 /* COMP_DICT_ITER_V1: the i-th KEY of a dict / the i-th element of a set,
  * for a comprehension's index loop. Explicit subscripts keep using
  * piton_dict_get, which raises KeyError as CPython does. */
@@ -582,9 +592,9 @@ static PitonSlot piton_set_nth(PitonSet*s,long i){if(!s||i<0||i>=s->length)piton
 static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i)r+=d->items[i].key.bits;return r;}
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
-static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";case PK_RANGE:return"<class 'range'>";case PK_BYTES:return"<class 'bytes'>";case PK_BYTEARRAY:return"<class 'bytearray'>";default:return"<class 'object'>";}}
+static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";case PK_RANGE:return"<class 'range'>";case PK_BYTES:return"<class 'bytes'>";case PK_BYTEARRAY:return"<class 'bytearray'>";case PK_COMPLEX:return"<class 'complex'>";default:return"<class 'object'>";}}
 /* M14 BUILTINS_CORE_V2 (matriz declarada; ver native_runtime.c) */
-static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;case PK_RANGE:return piton_range_len((PitonRange*)v.bits)>0;default:return v.bits!=0;}}
+static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_COMPLEX:return piton_cx_truthy_bits(v.bits);case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;case PK_RANGE:return piton_range_len((PitonRange*)v.bits)>0;default:return v.bits!=0;}}
 static long piton_all_seq(PitonSeq*s){if(!s)return 1;for(long i=0;i<s->length;++i)if(!piton_slot_truthy(s->items[i]))return 0;return 1;}
 static long piton_any_seq(PitonSeq*s){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_truthy(s->items[i]))return 1;return 0;}
 static long piton_pow_int(long b,long e){if(e<0){piton_raise_set("TypeError","pow() negative exponent unsupported (M14 v1)");return 0;}long acc=1;while(e>0){if(e&1)acc*=b;b*=b;e>>=1;}return acc;}
@@ -1302,6 +1312,82 @@ static int piton_double_isinf(long bits){unsigned long long u=(unsigned long lon
 static int piton_double_isfinite(long bits){unsigned long long u=(unsigned long long)bits;return ((u&0x7FF0000000000000ULL)!=0x7FF0000000000000ULL);}
 static long piton_float_pow_v1(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0)return piton_double_bits(1.0);int neg=(x<0.0)&&(y==-1.0||y==1.0);double ax=neg?-x:x;if(y==1.0)return a;if(y==2.0||y==-2.0){double sq=ax*ax;long sb=piton_double_bits(sq);if(piton_double_isinf(sb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}if(y==2.0)return sb;if(x==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/sq;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==-1.0){if(ax==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/ax;if(neg)r=-r;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==0.5||y==-0.5){if(x<0.0){piton_raise_set("ValueError","negative number cannot be raised to a fractional power");return 0;}if(x==0.0){if(y<0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}return piton_double_bits(0.0);}long sb=piton_float_sqrt(a);if(y==0.5)return sb;double r=1.0/piton_bits_double(sb);return piton_double_bits(r);}piton_raise_set("ValueError","float ** with non-trivial exponent is not supported in the native subset");return 0;}
 static long piton_float_mod(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float modulo");return 0;}double r=piton_fmod_core(x,y);if(r==0.0)r=(y<0.0?-0.0:0.0);else if((y<0.0)!=(r<0.0))r+=y;return piton_double_bits(r);}
+/* ── COMPLEX_V1: números complejos ────────────────────────────────────
+ * Representación: arena de 24 bytes {magic, re, im}. Escalares inmutables:
+ * sin refcount (PK_COMPLEX queda fuera del rango refcounted). El repr sigue las
+ * reglas observadas de CPython 3.12: parte real +0.0 sin signo -> forma imaginaria
+ * pura ("1j", "-0j", "-1j"); en cualquier otro caso "(re±im j)" con el signo
+ * tomado del BIT DE SIGNO de im (complex(2,-0.0) imprime "(2-0j)") y la magnitud
+ * de fabs(im). La parte real/imaginaria enteras pierden el ".0" ("1", no "1.0").
+ */
+static PitonComplex*piton_complex_new(double re,double im){PitonComplex*c=(PitonComplex*)piton_alloc(sizeof(PitonComplex));c->magic=0x5049544E1C39L;c->re=re;c->im=im;return c;}
+static double piton_cx_re(long b){return((PitonComplex*)b)->re;}
+static double piton_cx_im(long b){return((PitonComplex*)b)->im;}
+static PitonComplexVal piton_cx_of(long b){PitonComplex*c=(PitonComplex*)b;PitonComplexVal v;v.re=c->re;v.im=c->im;return v;}
+static PitonComplexVal piton_cx_from_int(long b){PitonComplexVal v;v.re=(double)b;v.im=0.0;return v;}
+static PitonComplexVal piton_cx_from_float(long b){PitonComplexVal v;v.re=piton_bits_double(b);v.im=0.0;return v;}
+static long piton_cx_wrap(PitonComplexVal v){return(long)piton_complex_new(v.re,v.im);}
+static long piton_cx_add(PitonComplexVal x,PitonComplexVal y){return(long)piton_complex_new(x.re+y.re,x.im+y.im);}
+static long piton_cx_sub(PitonComplexVal x,PitonComplexVal y){return(long)piton_complex_new(x.re-y.re,x.im-y.im);}
+static long piton_cx_mul(PitonComplexVal x,PitonComplexVal y){return(long)piton_complex_new(x.re*y.re-x.im*y.im,x.re*y.im+x.im*y.re);}
+/* COMPLEX_DIV_V1: algoritmo de Smith de CPython (_Py_c_quot), no la fórmula
+ * naive (ac+bd)/(c²+d²): los dos difieren en el último bit y el repr
+ * diferencial exige byte-identical. */
+static long piton_cx_div(PitonComplexVal a,PitonComplexVal b){
+  double abs_breal=__builtin_fabs(b.re),abs_bimag=__builtin_fabs(b.im);
+  double rr,ri;
+  if(abs_breal>=abs_bimag){
+    if(b.re==0.0){piton_raise_set("ZeroDivisionError","complex division by zero");return 0;}
+    double ratio=b.im/b.re;
+    double denom=b.re+b.im*ratio;
+    rr=(a.re+a.im*ratio)/denom;
+    ri=(a.im-a.re*ratio)/denom;
+  }else{
+    if(b.im==0.0){piton_raise_set("ZeroDivisionError","complex division by zero");return 0;}
+    double ratio=b.re/b.im;
+    double denom=b.re*ratio+b.im;
+    rr=(a.re*ratio+a.im)/denom;
+    ri=(a.im*ratio-a.re)/denom;
+  }
+  return(long)piton_complex_new(rr,ri);
+}
+static long piton_cx_neg(long b){PitonComplex*c=(PitonComplex*)b;return(long)piton_complex_new(-c->re,-c->im);}
+static long piton_cx_eq(PitonComplexVal x,PitonComplexVal y){return(x.re==y.re&&x.im==y.im)?1:0;}
+static int piton_cx_truthy_bits(long bits){PitonComplex*c=(PitonComplex*)bits;return(c->re!=0.0||c->im!=0.0)?1:0;}
+static long piton_cx_abs(long b){PitonComplex*c=(PitonComplex*)b;return piton_double_bits(__builtin_sqrt(c->re*c->re+c->im*c->im));}
+/* número formateado al estilo CPython complex_repr: sin ".0" final, conservando
+ * el signo de -0.0 ("-0") */
+static int piton_cx_fmt(char*out,double x){
+  int n=0;
+  if(__builtin_signbit(x)){out[0]='-';++out;n=1;x=-x;}
+  unsigned long long u;__builtin_memcpy(&u,&x,8);
+  int m=piton_repr_double(out,u);
+  if(m>2&&out[m-2]=='.'&&out[m-1]=='0')m-=2;
+  return n+m;
+}
+static int piton_cx_fmt_abs(char*out,double x){x=__builtin_fabs(x);unsigned long long u;__builtin_memcpy(&u,&x,8);int m=piton_repr_double(out,u);if(m>2&&out[m-2]=='.'&&out[m-1]=='0')m-=2;return m;}
+static long piton_complex_repr_len(PitonComplex*c){
+  char rb[PITON_REPR_MAX],ib[PITON_REPR_MAX];
+  int rn=piton_cx_fmt(rb,c->re);
+  if(c->re==0.0&&!__builtin_signbit(c->re)){
+    char sb[PITON_REPR_MAX];int sn=piton_cx_fmt(sb,c->im);
+    return sn+1;                                            /* "1j", "-0j", "-1j" */
+  }
+  int in_=piton_cx_fmt_abs(ib,c->im);
+  return rn+in_+4;                                          /* "(re±im j)" */
+}
+static char*piton_complex_repr_write(char*p,PitonComplex*c){
+  char rb[PITON_REPR_MAX],ib[PITON_REPR_MAX];
+  int rn=piton_cx_fmt(rb,c->re),in_=piton_cx_fmt_abs(ib,c->im);
+  if(c->re==0.0&&!__builtin_signbit(c->re)){
+    char sb[PITON_REPR_MAX];int sn=piton_cx_fmt(sb,c->im);
+    piton_memcpy(p,sb,(usize)sn);p[sn]='j';return p+sn+1;
+  }
+  p[0]='(';piton_memcpy(p+1,rb,(usize)rn);p[1+rn]=__builtin_signbit(c->im)?'-':'+';
+  piton_memcpy(p+2+rn,ib,(usize)in_);p[2+rn+in_]='j';p[3+rn+in_]=')';return p+4+rn+in_;
+}
+static const char* piton_complex_str(long bits){PitonComplex*c=(PitonComplex*)bits;long n=piton_complex_repr_len(c);char*p=(char*)piton_alloc(n+1);piton_complex_repr_write(p,c);p[n]=0;return p;}
+static void piton_print_complex_raw(long bits){PitonComplex*c=(PitonComplex*)bits;long n=piton_complex_repr_len(c);char*p=(char*)piton_alloc(n+1);piton_complex_repr_write(p,c);p[n]=0;piton_write(1,p,(usize)n);}
 /* BIGINT_CMP_MIXED_V1: compare a bigint against a plain int. piton_bigint_cmp casts BOTH operands to PitonBigInt*, so `10 ** 20 > 5` dereferenced the integer 5 as a struct pointer and died with SIGSEGV. Returns the sign of (bigint - int) exactly like piton_bigint_cmp. */
 /* Correct bit width of a bigint from its limb array.
  * bi_cmp_mag (and the mixed comparison) call bi_bit_width with a LIMB, but that
@@ -1715,6 +1801,9 @@ class LinuxCEmitter:
             return f"({raw}!=0)"
         if vtype == "float":
             return f"(piton_bits_double({raw})!=0.0)"
+        if vtype == "complex":
+            # COMPLEX_V1: 0j es falsy; cualquier parte distinta de cero, truthy.
+            return f"(piton_cx_truthy_bits({raw}))"
         if vtype == "none":
             return "0"
         if vtype == "str":
@@ -1750,6 +1839,29 @@ class LinuxCEmitter:
             raise NativeBuildError(f"Linux truth test does not support {vtype}")
         return f"({raw})"
 
+    def _reject_complex_args(self, values: Any, types: dict, ctx: str) -> None:
+        """COMPLEX_V1: el ABI de llamada tipa los parámetros del callee como int;
+        un complejo cruzando esa frontera se imprimiría como puntero (divergencia
+        silenciosa). Fail-closed en build hasta existir tipado de parámetros."""
+        for value in values:
+            if types.get(value) == "complex":
+                raise NativeBuildError(
+                    f"Linux passing a complex value into {ctx} is not supported yet (fail closed)"
+                )
+
+    def _complex_operand(self, operand: Any, otype: str) -> str | None:
+        """COMPLEX_V1: expresión C que convierte un operando de tipo estático
+        conocido a PitonComplexVal (struct por valor). Devuelve None cuando el
+        tipo no puede convertirse exactamente (el llamador falla cerrado)."""
+        raw = self._value(operand)
+        if otype == "complex":
+            return f"piton_cx_of({raw})"
+        if otype == "float":
+            return f"piton_cx_from_float({raw})"
+        if otype in {"int", "bool"}:
+            return f"piton_cx_from_int({raw})"
+        return None
+
     def _value(self, value: Any) -> str:
         if isinstance(value, str) and (value.startswith("%") or value in self.classes):
             return _name(value)
@@ -1767,6 +1879,8 @@ class LinuxCEmitter:
             return str(value)
         if isinstance(value, float):
             return f"piton_double_bits({_float_c_literal(value)})"
+        if isinstance(value, complex):
+            return f"(long)piton_complex_new({_float_c_literal(value.real)},{_float_c_literal(value.imag)})"
         raise NativeBuildError(f"Linux scalar backend cannot encode {value!r}")
 
     @staticmethod
@@ -1776,7 +1890,7 @@ class LinuxCEmitter:
             "float": "PK_FLOAT", "str": "PK_STR", "list": "PK_LIST",
             "tuple": "PK_TUPLE", "dict": "PK_DICT", "set": "PK_SET",
             "bigint": "PK_BIGINT", "range": "PK_RANGE",
-            "bytes": "PK_BYTES", "bytearray": "PK_BYTEARRAY",
+            "bytes": "PK_BYTES", "bytearray": "PK_BYTEARRAY", "complex": "PK_COMPLEX",
         }.get(value_type or "int", "PK_OBJECT")
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
@@ -2117,6 +2231,7 @@ class LinuxCEmitter:
             types[result] = "int"
             return out
         values = self._complete_call_args(function_name, list(values))
+        self._reject_complex_args(values, types, f"function '{function_name}'")
         encoded_values = ",".join(self._value(value) for value in values)
         out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
         self._emit_exc_check(out, function, call_handler)
@@ -2796,6 +2911,8 @@ class LinuxCEmitter:
                         converted = '"None"'
                     elif resolved_type == "str":
                         converted = f"(const char*){expr}"
+                    elif resolved_type == "complex":
+                        converted = f"piton_complex_str({expr})"
                     else:
                         raise NativeBuildError(f"Linux str.format() does not support {resolved_type} arguments")
                 # apply presentation spec
@@ -2959,9 +3076,9 @@ class LinuxCEmitter:
         """
         needle_type = types.get(left, "int")
         haystack_type = types.get(right, "int")
-        if needle_type not in {"int", "bool", "str", "bytes", "bytearray"}:
+        if needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex"}:
             raise NativeBuildError(
-                f"Linux 'in' requires an int/bool/str/bytes/bytearray needle, not {needle_type}"
+                f"Linux 'in' requires an int/bool/str/bytes/bytearray/complex needle, not {needle_type}"
             )
         if haystack_type in {"bytes", "bytearray"}:
             expression = f"piton_bytes_contains((void*){self._value(right)},{self._slot(left, types)})"
@@ -3032,6 +3149,8 @@ class LinuxCEmitter:
                 return f"({slot}.kind==PK_BOOL)"
             elif target_clean in {"float", "decimal", "flotante"}:
                 return f"({slot}.kind==PK_FLOAT)"
+            elif target_clean in {"complex", "complejo"}:
+                return f"({slot}.kind==PK_COMPLEX)"
             elif target_clean in {"str", "texto"}:
                 return f"({slot}.kind==PK_STR)"
             elif target_clean in {"bytes", "octetos"}:
@@ -3062,6 +3181,7 @@ class LinuxCEmitter:
                 "dict": "PK_DICT", "diccionario": "PK_DICT",
                 "set": "PK_SET", "conjunto": "PK_SET",
                 "range": "PK_RANGE", "rango": "PK_RANGE",
+                "complex": "PK_COMPLEX", "complejo": "PK_COMPLEX",
             }
             if target_clean in kind_map:
                 return f"piton_isinstance_dynamic({self._value(obj_val)},{kind_map[target_clean]})"
@@ -3361,6 +3481,8 @@ class LinuxCEmitter:
                 return "bytearray"
             if isinstance(value, float):
                 return "float"
+            if isinstance(value, complex):
+                return "complex"
             if isinstance(value, int):
                 return "bigint" if abs(value) > 9223372036854775807 else "int"
             return self._UNKNOWN
@@ -3370,6 +3492,11 @@ class LinuxCEmitter:
                 return memo[name]
             if name in resolving:
                 return None
+            if name in {"complex", "complejo"}:
+                # COMPLEX_V1: el constructor nativo devuelve complejo, así el
+                # tipo de retorno de `devolver complejo(a, a)` se propaga.
+                memo[name] = "complex"
+                return memo[name]
             function = by_name.get(name)
             if function is None:
                 return None
@@ -3440,7 +3567,9 @@ class LinuxCEmitter:
                                 origins[result] = ("var", iargs[0])
                             elif op == "call" and result:
                                 callee = load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
-                                if isinstance(callee, str) and callee in by_name and callee not in function.params:
+                                if isinstance(callee, str) and callee not in function.params and (
+                                    callee in by_name or callee in {"complex", "complejo"}
+                                ):
                                     origins[result] = ("call", callee)
                                 else:
                                     origins[result] = ("opaque", None)
@@ -3770,6 +3899,10 @@ class LinuxCEmitter:
             elif isinstance(value, float):
                 out.append(f"    {_name(result)}=piton_double_bits({_float_c_literal(value)});")
                 types[result] = "float"
+            elif isinstance(value, complex):
+                self._fn_consts[result] = value
+                out.append(f"    {_name(result)}=(long)piton_complex_new({_float_c_literal(value.real)},{_float_c_literal(value.imag)});")
+                types[result] = "complex"
             else:
                 raise NativeBuildError(f"Linux backend cannot encode constant {value!r}")
         elif op == "load":
@@ -4041,6 +4174,8 @@ class LinuxCEmitter:
                 elif vtype == "range":
                     # RANGE_VALUE_V1: `no rango(0)` is True.
                     out.append(f"    {_name(result)}=(piton_range_len((PitonRange*){self._value(operand)})==0);")
+                elif vtype == "complex":
+                    out.append(f"    {_name(result)}=(piton_cx_truthy_bits({self._value(operand)})==0);")
                 else:
                     raise NativeBuildError(f"Linux truth test does not support {vtype}")
                 types[result] = "bool"
@@ -4058,6 +4193,23 @@ class LinuxCEmitter:
                     types[result] = "float"
                     return out
                 raise NativeBuildError(f"Linux float unary operator not supported: {operator}")
+            if types.get(args[1]) == "complex":
+                # COMPLEX_V1: -(1+2j) = (-1-2j); + es identidad (~ es TypeError).
+                if operator == "-":
+                    out.append(f"    {_name(result)}=piton_cx_neg({self._value(args[1])});")
+                    types[result] = "complex"
+                    operand_const = self._fn_consts.get(args[1]) if isinstance(args[1], str) else None
+                    if isinstance(operand_const, complex):
+                        self._fn_consts[result] = -operand_const
+                    return out
+                if operator == "+":
+                    out.append(f"    {_name(result)}={self._value(args[1])};")
+                    types[result] = "complex"
+                    operand_const = self._fn_consts.get(args[1]) if isinstance(args[1], str) else None
+                    if isinstance(operand_const, complex):
+                        self._fn_consts[result] = operand_const
+                    return out
+                raise NativeBuildError(f"Linux complex unary operator not supported: {operator}")
             out.append(f"    {_name(result)}={operator}{self._value(args[1])};")
             types[result] = "bool" if operator == "!" else "int"
             # INTOVF_GUARD_V1 / FLOAT_POW_V1: record trivially-foldable
@@ -4212,6 +4364,8 @@ class LinuxCEmitter:
                         if spec == "s":
                             if arg_type == "int":
                                 base = f"piton_str_from_int({operand})"
+                            elif arg_type == "complex":
+                                base = f"piton_complex_str({operand})"
                             elif arg_type == "float":
                                 base = f"piton_str_from_float({operand})"
                             elif arg_type == "bool":
@@ -4242,7 +4396,9 @@ class LinuxCEmitter:
                                 base = f"piton_float_fmt_g({_foldv},{1 if spec == 'G' else 0})"
                             isnum = 0
                         elif spec == "r":
-                            if arg_type == "str":
+                            if arg_type == "complex":
+                                base = f"piton_complex_str({operand})"
+                            elif arg_type == "str":
                                 base = f"piton_str_quote((const char*){operand})"
                             elif arg_type == "bool":
                                 base = f'({operand}?"True":"False")'
@@ -4331,6 +4487,22 @@ class LinuxCEmitter:
                     return out
                 self._runtime_type_error(out, "unsupported operand type(s) for " + f"{operator}" + ": '" + f"{left_type}" + "' and '" + f"{right_type}" + "'")
                 types[result] = "int"
+                return out
+            if "complex" in {left_type, right_type}:
+                # COMPLEX_V1: aritmética de complejos contra int/float/complex.
+                # CPython mezcla libremente real+complejo; // % ** y los turnos
+                # bit a bit son TypeError y fallan cerrados en build.
+                if operator not in {"+", "-", "*", "/"}:
+                    raise NativeBuildError(f"Linux complex binary operator not supported: {operator}")
+                left_cx = self._complex_operand(left, left_type)
+                right_cx = self._complex_operand(right, right_type)
+                if left_cx is None or right_cx is None:
+                    raise NativeBuildError(f"Linux {operator} with a non-numeric operand is not supported")
+                helper = {"+": "piton_cx_add", "-": "piton_cx_sub", "*": "piton_cx_mul", "/": "piton_cx_div"}[operator]
+                out.append(f"    {_name(result)}={helper}({left_cx},{right_cx});")
+                if operator == "/":
+                    self._emit_exc_check(out, function, handler_label)
+                types[result] = "complex"
                 return out
             if "none" in {left_type, right_type}:
                 # WRETURNTYPE_V1 (mirrors the Windows guard): None in
@@ -4612,6 +4784,22 @@ class LinuxCEmitter:
                 self._runtime_type_error(out, f"'{operator}' not supported between instances of 'range' and '{right_type}'")
                 types[result] = "bool"
                 return out
+            if "complex" in {left_type, right_type}:
+                # COMPLEX_V1: solo == y != (CPython: ordenar complejos es
+                # TypeError). Un real contra complejo compara numéricamente
+                # (1+0j == 1 es Verdadero en CPython).
+                if operator not in {"==", "!="}:
+                    self._runtime_type_error(out, f"'{operator}' not supported between instances of 'complex' and '{right_type}'")
+                    types[result] = "bool"
+                    return out
+                left_cx = self._complex_operand(left, left_type)
+                right_cx = self._complex_operand(right, right_type)
+                if left_cx is None or right_cx is None:
+                    raise NativeBuildError(f"Linux {operator} with a non-numeric operand is not supported")
+                neg = "!" if operator == "!=" else ""
+                out.append(f"    {_name(result)}={neg}(piton_cx_eq({left_cx},{right_cx}));")
+                types[result] = "bool"
+                return out
             if operator == "==" and (left_type.startswith("object:") or right_type.startswith("object:")):
                 owner_side = left_type if left_type.startswith("object:") else right_type
                 cls_name = owner_side.split(":", 1)[1]
@@ -4774,6 +4962,8 @@ class LinuxCEmitter:
                             out.append(f'    piton_bigint_print_raw((void*){_name(value)});')
                         elif value_type == "float":
                             out.append(f'    piton_print_float_bits_raw({self._value(value)});')
+                        elif value_type == "complex":
+                            out.append(f'    piton_print_complex_raw({self._value(value)});')
                         elif value_type == "module-pkg":
                             out.append(f'    piton_print_dynamic({self._value(value)});')
                         elif value_type == "range":
@@ -4877,9 +5067,15 @@ class LinuxCEmitter:
                 # CPython; the else branch treated any non-float as an integer
                 # and read a string/collection POINTER as a long, so
                 # `abs('a')` printed an address and `abs(Nada)` answered 0.
-                if arg_type not in {"int", "bool", "float"}:
+                if arg_type not in {"int", "bool", "float", "complex"}:
                     self._runtime_type_error(out, "bad operand type for abs(): '" + f"{arg_type}" + "'")
                     types[result] = "int"
+                    return out
+                if arg_type == "complex":
+                    # COMPLEX_V1: abs(1+2j) es la magnitud (float), no un
+                    # puntero leído como entero.
+                    out.append(f"    {_name(result)}=piton_cx_abs({self._value(values[0])});")
+                    types[result] = "float"
                     return out
                 if arg_type == "float":
                     out.append(f"    {_name(result)}={self._value(values[0])}&0x7fffffffffffffffUL;")
@@ -4887,6 +5083,45 @@ class LinuxCEmitter:
                 else:
                     out.append(f"    {_name(result)}={self._value(values[0])}<0?-{self._value(values[0])}:{self._value(values[0])};")
                     types[result] = "int"
+            elif function_name in {"complex", "complejo"}:
+                # COMPLEX_V1: complejo() -> 0j; complejo(r); complejo(r, i).
+                # Argumentos string (complejo('1+2j')) fallan cerrados.
+                numeric = {"int", "float", "bool"}
+                arg_types = [types.get(v, "int") for v in values]
+                if len(values) == 0:
+                    out.append(f"    {_name(result)}=(long)piton_complex_new(0.0,0.0);")
+                elif len(values) == 1:
+                    at = arg_types[0]
+                    if at == "complex":
+                        c = values[0]
+                        out.append(f"    {_name(result)}=(long)piton_complex_new(piton_cx_re({self._value(c)}),piton_cx_im({self._value(c)}));")
+                    elif at == "float":
+                        v = values[0]
+                        out.append(f"    {_name(result)}=(long)piton_complex_new(piton_bits_double({self._value(v)}),0.0);")
+                    elif at in {"int", "bool"}:
+                        v = values[0]
+                        out.append(f"    {_name(result)}=(long)piton_complex_new((double){self._value(v)},0.0);")
+                    else:
+                        raise NativeBuildError("Linux complex() from a string or non-numeric is not supported (fail closed)")
+                elif len(values) == 2:
+                    if arg_types[0] == "complex":
+                        raise NativeBuildError("Linux complex(complex, imag) is a CPython TypeError (fail closed)")
+                    if arg_types[0] not in numeric or arg_types[1] not in numeric:
+                        raise NativeBuildError("Linux complex(re, im) requires two real numbers")
+                    re_expr = (
+                        f"piton_bits_double({self._value(values[0])})"
+                        if arg_types[0] == "float" else f"(double){self._value(values[0])}"
+                    )
+                    im_expr = (
+                        f"piton_bits_double({self._value(values[1])})"
+                        if arg_types[1] == "float" else f"(double){self._value(values[1])}"
+                    )
+                    out.append(f"    {_name(result)}=(long)piton_complex_new({re_expr},{im_expr});")
+                else:
+                    self._runtime_type_error(out, "complex() takes at most 2 arguments")
+                    types[result] = "int"
+                    return out
+                types[result] = "complex"
             elif function_name in {"all", "any"}:
                 if len(values) != 1 or types.get(values[0]) not in {"list", "tuple"}:
                     raise NativeBuildError(f"Linux {function_name} requires one list or tuple (M14 v1)")
@@ -5012,6 +5247,8 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(long)\"None\";")
                 elif arg_type == "str":
                     out.append(f"    {_name(result)}={operand};")
+                elif arg_type == "complex":
+                    out.append(f"    {_name(result)}=(long)piton_complex_str({operand});")
                 else:
                     raise NativeBuildError("Linux str() requires int/float/bool/None/str (M14 v1)")
                 types[result] = "str"
@@ -5036,6 +5273,8 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(((PitonBytes*){operand})->length>0);")
                 elif arg_type == "none":
                     out.append(f"    {_name(result)}=0;")
+                elif arg_type == "complex":
+                    out.append(f"    {_name(result)}=piton_cx_truthy_bits({operand});")
                 else:
                     raise NativeBuildError("Linux bool() requires int/float/str/collection/None (M14 v1)")
                 types[result] = "bool"
@@ -5496,6 +5735,7 @@ class LinuxCEmitter:
             types[result] = "closure"
         elif op == "frame_call":
             callee, call_args = args
+            self._reject_complex_args(call_args, types, "a lifted frame-ABI function")
             arg_values = ",".join(self._value(arg) for arg in call_args)
             out.append(f"    {{long _frame_args[]={{ {arg_values} }};")
             out.append(
@@ -5506,6 +5746,7 @@ class LinuxCEmitter:
         elif op == "closure_call":
             callee, packed = args
             argc, *call_args = packed
+            self._reject_complex_args(call_args, types, "a closure")
             if len(call_args) > 4:
                 raise NativeBuildError("Linux closure calls with more than four arguments are not supported yet")
             arg_values = [self._value(arg) for arg in call_args]
@@ -5562,6 +5803,13 @@ class LinuxCEmitter:
         elif op == "get_attr":
             obj, attr = args
             owner_type = types.get(obj, "")
+            if owner_type == "complex" and attr in {"real", "imag"}:
+                # COMPLEX_V1: (2+3j).real / .imag son floats (2.0 / 3.0). El slot
+                # de un float son los BITS del double, no el double truncado.
+                helper = "piton_cx_re" if attr == "real" else "piton_cx_im"
+                out.append(f"    {_name(result)}=piton_double_bits({helper}({self._value(obj)}));")
+                types[result] = "float"
+                return out
             prop_class = self._resolve_property_class(owner_type, attr)
             module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
             if prop_class is not None:
@@ -5892,6 +6140,26 @@ class LinuxCEmitter:
                 raise NativeBuildError("Linux math.gcd requires int arguments")
             out.append(f"    {_name(result)}=piton_math_gcd({self._value(args[0])},{self._value(args[1])});")
             types[result] = "int"
+        elif op == "terminal_init":
+            # TERMINAL_V1: initialize terminal (raw mode, no echo)
+            out.append(f"    {_name(result)}=piton_terminal_init();")
+            types[result] = "int"
+        elif op == "terminal_cleanup":
+            # TERMINAL_V1: restore terminal to normal mode
+            out.append(f"    {_name(result)}=piton_terminal_cleanup();")
+            types[result] = "int"
+        elif op == "terminal_write":
+            # TERMINAL_V1: write string to terminal
+            out.append(f"    {_name(result)}=piton_terminal_write({self._value(args[0])});")
+            types[result] = "int"
+        elif op == "terminal_read":
+            # TERMINAL_V1: read from terminal (non-blocking)
+            out.append(f"    {_name(result)}=piton_terminal_read({self._value(args[0])});")
+            types[result] = "str"
+        elif op == "terminal_size":
+            # TERMINAL_V1: get terminal size as tuple (rows, cols)
+            out.append(f"    {_name(result)}=piton_terminal_size();")
+            types[result] = "tuple"
         elif op == "build_collection":
             kind, items = args[0], args[1]
             if kind == "tuple" and result:

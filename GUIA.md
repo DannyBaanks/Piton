@@ -102,6 +102,46 @@ OK
 
 Los tres `5` finales son salida heredada de pruebas del traductor; no son fallos.
 
+## Complejos (Linux)
+
+`COMPLEX_V1` corre solo en el backend Linux (`--backend=linux`); el backend
+Windows falla cerrado con `NativeBuildError` al encontrar `1j`.
+
+```powershell
+py -m piton compilar examples\17_complejos.piton --backend=linux --output build\complejo-linux
+```
+
+Salida real verificada el 2026-10-10 (host Linux; `examples/17_complejos.piton`,
+diferencial contra CPython 3.12.4 byte-idéntica):
+
+```text
+1j
+(2+3j)
+(1-2j)
+(3+1j)
+(8-1j)
+(-0.8+1.4j)
+True
+True
+2.0
+3.0
+3.605551275463989
+False
+False
+False
+```
+
+Nota: el parser nativo aún no acepta comentarios `#` (preexistente; también
+falla `examples/07_seguridad_lexica.piton`), por eso el ejemplo no lleva ninguno.
+
+Reglas que el guía debe respetar:
+
+- `imprimir(1j)` imprime `1j`, NO `1.0j`; `-1j` imprime `(-0-1j)`; el separador
+  sale del bit de signo de la parte imaginaria.
+- `1j < 2j` es TypeError (exit 1), igual que CPython.
+- `complejo('1+2j')`, `1j ** 2`, `1j // 2` y pasar un complejo como argumento de
+  función fallan cerrados en build: no existe semántica aproximada silenciosa.
+
 ## Estados
 
 | Estado | Significado | Acción |

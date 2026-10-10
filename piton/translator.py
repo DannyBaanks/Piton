@@ -66,6 +66,7 @@ ALIASES_BUILTIN = {
     "entero": "int",
     "decimal": "float",
     "texto": "str",
+    "complejo": "complex",
     "booleano": "bool",
     "abrir": "open",
     "ordenar": "sorted",

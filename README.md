@@ -244,6 +244,7 @@ dependen de CPython**. Hay dos backends:
 [x] Comparación de strings (strcmp)
 [x] BigInt arbitrary-precision integers (Win64 + Linux, 14/14 + 13/13 differential tests)
 [x] Colecciones: listas, tuplas, diccionarios, conjuntos, bytes (octetos), bytearray (arreglo_bytes)
+[x] Números complejos (Linux): literales 1j / 2.5j / 1e3j, 2+3j, aritmética + - * / (división bit-exacta, algoritmo de Smith de CPython), == / != (ordenar es TypeError), repr byte-idéntico ((-0-1j), (2-0j), -0j), abs, .real / .imag, complejo() / complejo(r, i), pertenencia, impresión dentro de colecciones (Windows: falla cerrado en build)
 [x] Operaciones de bytes/bytearray: literales (b'', b""), constructores, indexado, asignación por subíndice mutable, slicing con/sin paso, concatenación (+), repetición (*), métodos (decode, hex, fromhex, count, find, rfind, index, rindex, startswith, endswith, append, extend)
 [x] Acceso a elementos: get_item, collection_len
 [x] Heap objects: object_new, set_attr, get_attr, method_call
@@ -297,6 +298,8 @@ El contrato exacto vive en `NATIVE_SUBSET_1_0.md`.
 
 ```text
 [ ] Metaclasses
+[ ] Complejos en el backend Windows, `complejo('1+2j')`, `complejo ** complejo`,
+    paso de complejos como argumentos de función (falla cerrado en build)
 [ ] Decoradores sobre métodos/clases/generadores
 [ ] Stdlib amplia (demostrado tier 1: abs/min/max/sum/type/len/print,
     int/float/str/bool, all/any/bin/chr/ord/pow/round,
