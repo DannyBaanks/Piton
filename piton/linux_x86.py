@@ -42,6 +42,7 @@ static unsigned char piton_arena[8*1024*1024];
 static usize piton_arena_used=0;
 static void piton_memzero(void*p,usize n){unsigned char*b=p;for(usize i=0;i<n;++i)b[i]=0;}
 static void piton_memcpy(void*d,const void*s,usize n){unsigned char*dd=d;const unsigned char*ss=s;for(usize i=0;i<n;++i)dd[i]=ss[i];}
+static void piton_memmove(void*d,const void*s,usize n){unsigned char*dd=d;const unsigned char*ss=s;if(dd==ss||n==0)return;if(dd<ss){for(usize i=0;i<n;++i)dd[i]=ss[i];}else{for(usize i=n;i>0;--i)dd[i-1]=ss[i-1];}}
 static int piton_memcmp(const void*a,const void*b,usize n){const unsigned char*p=(const unsigned char*)a,*q=(const unsigned char*)b;for(usize i=0;i<n;++i){if(p[i]!=q[i])return p[i]<q[i]?-1:1;}return 0;}
 static void*piton_alloc(usize n){usize p=(piton_arena_used+15)&~15UL;if(n>sizeof(piton_arena)-p){piton_write(2,"MemoryError\n",12);piton_exit(1);}void*r=piton_arena+p;piton_arena_used=p+n;piton_memzero(r,n);return r;}
 /* ── Freelist heap for refcounted objects (GC_CYCLES_V1) ────────────── */
@@ -589,9 +590,9 @@ static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_writ
  * piton_dict_get, which raises KeyError as CPython does. */
 static PitonSlot piton_dict_nth_key(PitonDict*d,long i){if(!d||i<0||i>=d->length)piton_write(2,"IndexError\n",10),piton_exit(1);return d->items[i].key;}
 static PitonSlot piton_set_nth(PitonSet*s,long i){if(!s||i<0||i>=s->length)piton_write(2,"IndexError\n",10),piton_exit(1);return s->items[i];}
-static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
-static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i)r+=d->items[i].key.bits;return r;}
-static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i)r+=s->items[i].bits;return r;}
+static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
+static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i){PitonSlot v=d->items[i].key;if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
+static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
 static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";case PK_RANGE:return"<class 'range'>";case PK_BYTES:return"<class 'bytes'>";case PK_BYTEARRAY:return"<class 'bytearray'>";case PK_COMPLEX:return"<class 'complex'>";default:return"<class 'object'>";}}
 /* M14 BUILTINS_CORE_V2 (matriz declarada; ver native_runtime.c) */
 static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_COMPLEX:return piton_cx_truthy_bits(v.bits);case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;case PK_RANGE:return piton_range_len((PitonRange*)v.bits)>0;default:return v.bits!=0;}}
@@ -605,6 +606,11 @@ static long piton_percent_chr(long cp){if(cp<0||cp>0x10FFFF){piton_raise_set("Ov
 static long piton_chr(long cp){if(cp<0||cp>0x10FFFF){piton_raise_set("ValueError","chr() arg not in range(0x110000)");return 0;}char*p=piton_alloc(5);if(cp<0x80){p[0]=(char)cp;p[1]=0;}else if(cp<0x800){p[0]=(char)(0xC0|(cp>>6));p[1]=(char)(0x80|(cp&0x3F));p[2]=0;}else if(cp<0x10000){p[0]=(char)(0xE0|(cp>>12));p[1]=(char)(0x80|((cp>>6)&0x3F));p[2]=(char)(0x80|(cp&0x3F));p[3]=0;}else{p[0]=(char)(0xF0|(cp>>18));p[1]=(char)(0x80|((cp>>12)&0x3F));p[2]=(char)(0x80|((cp>>6)&0x3F));p[3]=(char)(0x80|(cp&0x3F));p[4]=0;}return(long)p;}
 static long piton_bin(long v){char*p=piton_alloc(70);usize o=0;unsigned long m;if(v<0){p[o++]='-';m=(unsigned long)(-(v+1))+1;}else m=(unsigned long)v;p[o++]='0';p[o++]='b';char tmp[64];long n=0;do{tmp[n++]=(char)('0'+(m&1));m>>=1;}while(m);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static long piton_round_float(long bits){double x=piton_bits_double(bits);double ax=x<0?-x:x;if(ax>=9.0e18){piton_raise_set("OverflowError","round() float too large to convert to int");return 0;}long t=(long)ax;double frac=ax-(double)t;long r;if(frac>0.5)r=t+1;else if(frac<0.5)r=t;else r=(t&1)?t+1:t;return x<0?-r:r;}
+/* ROUND_NDIGITS_V1: round(x, n) devuelve FLOAT en CPython y redondea
+ * half-even sobre la REPRESENTACION DECIMAL exacta del double (round(2.675, 2)
+ * es 2.67, no 2.68). La ruta usa piton_float_fmt_fixed (aritmetica decimal
+ * exacta, ver float_repr.h) y reinterpreta el texto, no x*10^n/10^n. */
+
 /* M14 TYPE_CONVERSION_V1 + MATH_TIER1_V1 (matriz: ver native_runtime.c) */
 static long piton_int_from_str(const char*s){if(!s){piton_raise_set("TypeError","int() argument must be a string");return 0;}while(*s==' '||*s=='\t'||*s=='\n')++s;int neg=0;if(*s=='-'||*s=='+'){neg=*s=='-';++s;}if(!*s||*s<'0'||*s>'9'){piton_raise_set("ValueError","invalid literal for int() with base 10");return 0;}long v=0;while(*s>='0'&&*s<='9'){v=v*10+(*s-'0');++s;}while(*s==' '||*s=='\t'||*s=='\n')++s;if(*s){piton_raise_set("ValueError","invalid literal for int() with base 10");return 0;}return neg?-v:v;}
 static long piton_float_from_str(const char*s){if(!s){piton_raise_set("TypeError","float() argument must be a string");return 0;}while(*s==' '||*s=='\t'||*s=='\n')++s;int neg=0;if(*s=='-'||*s=='+'){neg=*s=='-';++s;}const char*q=s;long ip=0;int has=0;while(*q>='0'&&*q<='9'){ip=ip*10+(*q-'0');++q;has=1;}double frac=0.0;double div=1.0;if(*q=='.'){++q;while(*q>='0'&&*q<='9'){frac=frac*10+(*q-'0');div*=10;++q;has=1;}}if(!has){piton_raise_set("ValueError","could not convert string to float");return 0;}while(*q==' '||*q=='\t'||*q=='\n')++q;if(*q){piton_raise_set("ValueError","could not convert string to float");return 0;}double v=(double)ip+frac/div;if(neg)v=-v;return piton_double_bits(v);}
@@ -1096,6 +1102,52 @@ static long piton_bytes_endswith(void* raw, PitonSlot v){
     return 0;
 }
 
+/* BYTEARRAY_SLICE_ASSIGN_V1: ba[lo:hi:st] = src.
+ * CPython: con step 1 sustituye el rango por cualquier longitud (crece o
+ * encoge el buffer); con step != 1 exige longitud EXACTA. El rastreo de
+ * capacidad espeja piton_bytearray_append. */
+static long piton_bytes_len_of(long raw){long n=0;(void)piton_bytes_get_data((void*)raw,&n);return n;}
+static const unsigned char* piton_bytes_data_ptr_of(long raw){return piton_bytes_get_data((void*)raw,0);}
+static void piton_bytearray_slice_assign(PitonByteArray* ba, long lo, long hi, long st, const unsigned char* src, long slen){
+    if(!ba)return;
+    if(st==0){piton_raise_set("ValueError","slice step cannot be zero");piton_report_unhandled();piton_exit(1);return;}
+    long n=ba->length;
+    if(st>0){
+        if(lo<0)lo+=n;if(lo<0)lo=0;if(lo>n)lo=n;
+        if(hi<0)hi+=n;if(hi<0)hi=0;if(hi>n)hi=n;
+        if(hi<lo)hi=lo;
+    }else{
+        if(lo<0)lo+=n;if(lo<-1)lo=-1;if(lo>=n)lo=n-1;
+        if(hi<0)hi+=n;if(hi<-1)hi=-1;
+    }
+    if(st==1){
+        long old_len=hi-lo;
+        long delta=slen-old_len;
+        long new_len=n+delta;
+        if(delta>0&&new_len>ba->capacity){
+            long nc=ba->capacity?ba->capacity*2:8;
+            while(nc<new_len)nc*=2;
+            unsigned char* nd=(unsigned char*)piton_alloc((usize)nc+1);
+            if(ba->data)piton_memcpy(nd,ba->data,(usize)ba->length);
+            ba->data=nd;ba->capacity=nc;
+        }
+        if(delta!=0&&hi<n)piton_memmove(ba->data+hi+delta,ba->data+hi,(usize)(n-hi));
+        if(slen>0&&src)piton_memcpy(ba->data+lo,src,(usize)slen);
+        ba->length=new_len;
+        if(ba->data)ba->data[ba->length]=0;
+        return;
+    }
+    /* step != 1: longitud exacta */
+    long slots;
+    if(st>0)slots=(hi-lo+st-1)/st;
+    else slots=(lo-hi-st-1)/(-st);
+    if(slots<0)slots=0;
+    if(slen!=slots){piton_raise_set("ValueError","attempt to assign a sequence to an extended slice of different size");piton_report_unhandled();piton_exit(1);return;}
+    for(long i=0;i<slots;++i){
+        long pos=lo+(st>0?i*st:-(i*(-st)));
+        ba->data[pos]=src[i];
+    }
+}
 static void piton_bytearray_append(PitonByteArray* ba, long val){
     if(!ba)return;
     if(val<0||val>255){piton_raise_set("ValueError","byte must be in range(0, 256)");piton_report_unhandled();piton_exit(1);return;}
@@ -1299,7 +1351,30 @@ static void bi_mul_mag(PitonBigInt*r,PitonBigInt*a,PitonBigInt*b){if(a->count==0
 static void*piton_bigint_mul(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=x->sign^y->sign;r->count=0;r->capacity=0;r->limbs=0;bi_mul_mag(r,x,y);return r;}
 static void*piton_bigint_pow_small(long base,long exp){void*acc=piton_bigint_from_i64(1);void*b=piton_bigint_from_i64(base);while(exp>0){if(exp&1)acc=piton_bigint_mul(acc,b);exp>>=1;if(exp)b=piton_bigint_mul(b,b);}return acc;}
 static long bi_cmp_magnitude(PitonBigInt*a,PitonBigInt*b){long ac=a->count,bc=b->count;while(ac>0&&a->limbs[ac-1]==0)ac--;while(bc>0&&b->limbs[bc-1]==0)bc--;if(ac!=bc)return ac>bc?1:-1;for(long i=ac-1;i>=0;--i){if(a->limbs[i]!=b->limbs[i])return a->limbs[i]>b->limbs[i]?1:-1;}return 0;}
-static void bi_div_mod_internal(PitonBigInt*quot,PitonBigInt*rem,PitonBigInt*dividend,PitonBigInt*divisor){long dc=dividend->count;long dvc=divisor->count;bi_ensure(quot,dc);for(long i=0;i<dc;++i)quot->limbs[i]=0;quot->count=dc;bi_ensure(rem,dvc);for(long i=0;i<dvc;++i)rem->limbs[i]=0;rem->count=0;for(long i=dc-1;i>=0;--i){for(int b=63;b>=0;--b){rem->count=(i+1>rem->count)?i+1:rem->count;for(long j=rem->count-1;j>0;--j)rem->limbs[j]=((rem->limbs[j]<<1)|((rem->limbs[j-1]>>63)&1));rem->limbs[0]=(rem->limbs[0]<<1)|((dividend->limbs[i]>>b)&1);if(bi_cmp_magnitude(rem,divisor)>=0){bi_sub_mag(rem,rem,divisor);quot->limbs[i]|=(1UL<<b);}}}bi_trim(quot);bi_trim(rem);}
+static void bi_div_mod_internal(PitonBigInt*quot,PitonBigInt*rem,PitonBigInt*dividend,PitonBigInt*divisor){
+  /* BI_DIV_REWRITE_V1: division binaria larga estandar. La version anterior
+   * dejaba crecer rem->count hasta i+1 (la posicion del bit del dividendo):
+   * con un dividendo de mas limbs que el divisor escribia fuera del arreglo.
+   * Ahora rem solo crece cuando hay acarreo real, y queda acotado por
+   * divisor*2 (dvc+1 limbs). */
+  long dc=dividend->count;long dvc=divisor->count;
+  bi_ensure(quot,dc);for(long i=0;i<dc;++i)quot->limbs[i]=0;quot->count=dc;
+  bi_ensure(rem,dvc+2);rem->limbs[0]=0;rem->count=0;
+  for(long i=dc-1;i>=0;--i){
+    for(int b=63;b>=0;--b){
+      unsigned long bit=(unsigned long)((dividend->limbs[i]>>b)&1UL);
+      unsigned long carry=bit;
+      for(long j=0;j<rem->count;++j){
+        unsigned long nx=(rem->limbs[j]<<1)|carry;
+        carry=rem->limbs[j]>>63;
+        rem->limbs[j]=nx;
+      }
+      if(carry){rem->limbs[rem->count]=1;++rem->count;}
+      if(bi_cmp_magnitude(rem,divisor)>=0){bi_sub_mag(rem,rem,divisor);quot->limbs[i]|=(1UL<<b);}
+    }
+  }
+  bi_trim(quot);bi_trim(rem);
+}
 static void*piton_bigint_floor_div(void*a,void*b){PitonBigInt*x=(PitonBigInt*)a,*y=(PitonBigInt*)b;PitonBigInt*q=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));q->sign=0;q->count=0;q->capacity=0;q->limbs=0;PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=0;r->count=0;r->capacity=0;r->limbs=0;bi_div_mod_internal(q,r,x,y);q->sign=x->sign^y->sign;bi_trim(q);return q;}
 static long piton_sum_seq_bigint(PitonSeq*s){void*acc=piton_bigint_from_i64(0);if(!s)return (long)acc;for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_BIGINT)acc=piton_bigint_add(acc,(void*)v.bits);else if(v.kind==PK_INT||v.kind==PK_BOOL)acc=piton_bigint_add(acc,piton_bigint_from_i64(v.bits));else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'str' and 'int'");return 0;}}return (long)acc;}
 static long piton_sum_seq_float(PitonSeq*s){double r=0.0;if(!s)return piton_double_bits(r);for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_FLOAT)r+=piton_bits_double(v.bits);else if(v.kind==PK_INT||v.kind==PK_BOOL)r+=(double)v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'str' and 'int'");return 0;}}return piton_double_bits(r);}
@@ -1310,6 +1385,72 @@ static double piton_bigint_scaled_to_double(void*a,long E,int xsign){PitonBigInt
 static double piton_fmod_core(double x,double y){unsigned long long ux,uy;__builtin_memcpy(&ux,&x,8);__builtin_memcpy(&uy,&y,8);int ex=(int)((ux>>52)&0x7FFULL),ey=(int)((uy>>52)&0x7FFULL);unsigned long long mx=ux&0xFFFFFFFFFFFFFULL,my=uy&0xFFFFFFFFFFFFFULL;int sx=(int)(ux>>63);if(ex==0x7FF||(ey==0x7FF&&my!=0)||(uy&0x7FFFFFFFFFFFFFFFULL)==0)return(x*y)/(x*y);if((ux&0x7FFFFFFFFFFFFFFFULL)==0)return x;int uex,uey;if(ex==0){int s=__builtin_clzll(mx)-11;mx<<=(unsigned)s;uex=-1074-s;}else{mx|=0x10000000000000ULL;uex=ex-1075;}if(ey==0){int s=__builtin_clzll(my)-11;my<<=(unsigned)s;uey=-1074-s;}else{my|=0x10000000000000ULL;uey=ey-1075;}if(uex<uey||(uex==uey&&mx<my))return x;long E=uex<uey?uex:uey;void*Mx=bi_shl_u64(mx,(long)(uex-E));void*My=bi_shl_u64(my,(long)(uey-E));void*R=piton_bigint_mod(Mx,My);return piton_bigint_scaled_to_double(R,E,sx);}
 static int piton_double_isinf(long bits){unsigned long long u=(unsigned long long)bits;return ((u&0x7FF0000000000000ULL)==0x7FF0000000000000ULL)&&((u&0xFFFFFFFFFFFFFULL)==0);}
 static int piton_double_isfinite(long bits){unsigned long long u=(unsigned long long)bits;return ((u&0x7FF0000000000000ULL)!=0x7FF0000000000000ULL);}
+
+/* ROUND_NDIGITS_V1: round(x, n) byte-identico a CPython. CPython redondea
+ * half-even sobre la REPRESENTACION DECIMAL EXACTA del double y devuelve el
+ * double mas cercano a ese decimal (round(2.675, 2) es 2.67). No existe ruta
+ * binaria que lo logre: x*10^n/10^n falla en el ultimo bit. La implementacion
+ * usa la aritmetica bigint ya presente (exacta por construccion):
+ *   1. x = m * 2^e exacto (del patron de bits).
+ *   2. para n>=0: A = m*5^n exacto; R = round_half_even(A / 2^max(0,-e-n)).
+ *   3. v = R / 10^n como double correctamente redondeado: se calcula
+ *      Q = round_half_even((R<<64) / 10^n) y se convierte con
+ *      piton_bigint_scaled_to_double(Q, -64) (redondeo half-even con sticky).
+ *      Un double nunca cae exactamente en el punto medio entre dos doubles
+ *      para n<=52, asi que el error de 2^-64 no puede cambiar el veredicto.
+ *   4. para n<0: R = round_half_even(x / 10^-n) y el resultado es R * 10^-n
+ *      convertido exactamente (multiplicar por 10^k es exacto en bigint).
+ */
+static void* bi_round_div(void*a,void*d){
+  PitonBigInt*q=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));
+  PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));
+  q->sign=1;q->count=0;q->capacity=0;q->limbs=0;
+  r->sign=1;r->count=0;r->capacity=0;r->limbs=0;
+  bi_div_mod_internal(q,r,(PitonBigInt*)a,(PitonBigInt*)d);
+  void*r2=piton_bigint_add(r,r);
+  int cmp=bi_cmp_magnitude((PitonBigInt*)r2,(PitonBigInt*)d);
+  if(cmp>0||(cmp==0&&(q->limbs[0]&1)))q=piton_bigint_add(q,piton_bigint_from_i64(1));
+  return q;
+}
+static void* bi_pow_small(long base,long exp){
+  void*acc=piton_bigint_from_i64(1);void*b=piton_bigint_from_i64(base);
+  for(long i=0;i<exp;++i)acc=piton_bigint_mul(acc,b);
+  return acc;
+}
+static long piton_round_float_nd(long bits,long nd){
+  double x=piton_bits_double(bits);
+  if(x!=x)return bits;
+  if(piton_double_isinf(bits))return bits;
+  if(x==0.0)return bits;
+  if(nd>=18)return bits;
+  int neg=(x<0.0)||(x==0.0&&__builtin_signbit(x));
+  if(neg)x=-x;
+  unsigned long long u;__builtin_memcpy(&u,&x,8);
+  int be=(int)((u>>52)&0x7FFULL);
+  unsigned long long m=u&0xFFFFFFFFFFFFFULL;
+  int e=(be==0)?-1074:(be-1075);
+  if(be!=0)m|=0x10000000000000ULL;
+  void*R;
+  if(nd>=0){
+    void*A=piton_bigint_mul(piton_bigint_from_i64((long)m),bi_pow_small(5,nd));
+    long s=(long)e+nd;
+    if(s>=0)R=piton_bigint_mul(A,bi_pow_small(2,s));
+    else R=bi_round_div(A,bi_pow_small(2,-s));
+    if(nd==0)return piton_double_bits(piton_bigint_scaled_to_double(R,0,neg));
+    void*dividend=piton_bigint_mul(R,bi_pow_small(2,64));
+    void*Q=bi_round_div(dividend,bi_pow_small(10,nd));
+    return piton_double_bits(piton_bigint_scaled_to_double(Q,-64,neg));
+  }
+  long k=-nd;
+  long sh=(long)e-k;
+  void*A;
+  if(sh>=0)A=piton_bigint_mul(piton_bigint_from_i64((long)m),bi_pow_small(2,sh));
+  else A=piton_bigint_from_i64((long)m);
+  void*D=bi_pow_small(5,k);
+  if(sh<0)D=piton_bigint_mul(D,bi_pow_small(2,-sh));
+  R=bi_round_div(A,D);
+  return piton_double_bits(piton_bigint_scaled_to_double(piton_bigint_mul(R,bi_pow_small(10,k)),0,neg));
+}
 static long piton_float_pow_v1(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0)return piton_double_bits(1.0);int neg=(x<0.0)&&(y==-1.0||y==1.0);double ax=neg?-x:x;if(y==1.0)return a;if(y==2.0||y==-2.0){double sq=ax*ax;long sb=piton_double_bits(sq);if(piton_double_isinf(sb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}if(y==2.0)return sb;if(x==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/sq;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==-1.0){if(ax==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/ax;if(neg)r=-r;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==0.5||y==-0.5){if(x<0.0){piton_raise_set("ValueError","negative number cannot be raised to a fractional power");return 0;}if(x==0.0){if(y<0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}return piton_double_bits(0.0);}long sb=piton_float_sqrt(a);if(y==0.5)return sb;double r=1.0/piton_bits_double(sb);return piton_double_bits(r);}piton_raise_set("ValueError","float ** with non-trivial exponent is not supported in the native subset");return 0;}
 static long piton_float_mod(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float modulo");return 0;}double r=piton_fmod_core(x,y);if(r==0.0)r=(y<0.0?-0.0:0.0);else if((y<0.0)!=(r<0.0))r+=y;return piton_double_bits(r);}
 /* ── COMPLEX_V1: números complejos ────────────────────────────────────
@@ -5180,8 +5321,16 @@ class LinuxCEmitter:
                 else:
                     out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
             elif function_name in {"round", "redondear"}:
+                if len(values) == 2:
+                    if types.get(values[0]) != "float":
+                        raise NativeBuildError("Linux round(x, ndigits) requires a float first argument")
+                    if types.get(values[1]) not in {"int", "bool"}:
+                        raise NativeBuildError("Linux round(x, ndigits) requires an int ndigits")
+                    out.append(f"    {_name(result)}=piton_round_float_nd({self._value(values[0])},{self._value(values[1])});")
+                    types[result] = "float"
+                    return out
                 if len(values) != 1:
-                    raise NativeBuildError("Linux round requires exactly one argument (M14 v1; ndigits not supported)")
+                    raise NativeBuildError("Linux round requires one or two arguments")
                 arg_type = types.get(values[0])
                 if arg_type == "float":
                     out.append(f"    {_name(result)}=piton_round_float({self._value(values[0])});")
@@ -5755,6 +5904,23 @@ class LinuxCEmitter:
                 f"    {_name(result)}=piton_closure_call6({self._value(callee)},{argc},{','.join(arg_values)});"
             )
             types[result] = "int"
+        elif op == "slice_store":
+            # BYTEARRAY_SLICE_ASSIGN_V1 / LIST_SLICE_ASSIGN_V1
+            collection, lo, hi, step, value = args
+            coll_type = types.get(collection, "")
+            if coll_type == "bytearray":
+                vtype = types.get(value, "")
+                if vtype in {"bytes", "bytearray"}:
+                    length_expr = f"piton_bytes_len_of((long){self._value(value)})"
+                    data_expr = f"(const unsigned char*)piton_bytes_data_ptr_of((long){self._value(value)})"
+                    out.append(
+                        f"    piton_bytearray_slice_assign((PitonByteArray*){self._value(collection)},"
+                        f"{self._value(lo)},{self._value(hi)},{self._value(step) if step is not None else 1},"
+                        f"{data_expr},{length_expr});"
+                    )
+                    return out
+                raise NativeBuildError("Linux bytearray slice assignment requires bytes/bytearray value")
+            raise NativeBuildError(f"Linux slice assignment not supported for {coll_type}")
         elif op == "subscript_store":
             collection, index, value = args
             coll_type = types.get(collection, "")
@@ -5799,7 +5965,15 @@ class LinuxCEmitter:
                 if hook is not None and not current_is_hook:
                     out.append(f'    ((long(*)(long,long,long))(long)&{_name(hook+"__"+"__setattr__")})({self._value(obj)},(long){json.dumps(attr)},{self._value(val)});')
                 else:
-                    out.append(f'    piton_object_set((PitonObject*){self._value(obj)},"{attr}",{self._slot(val, types)});')
+                    # SET_ATTR_DYN_V1: un nombre que llega como temporizador
+                    # MIR (ej. `super().__setattr__(n, v)`) es un string en
+                    # runtime, no un literal: emitirlo entre comillas escribia
+                    # un atributo llamado "%t5".
+                    attr_expr = (
+                        f'(const char*){self._value(attr)}'
+                        if isinstance(attr, str) and attr.startswith('%') else f'"{attr}"'
+                    )
+                    out.append(f'    piton_object_set((PitonObject*){self._value(obj)},{attr_expr},{self._slot(val, types)});')
         elif op == "get_attr":
             obj, attr = args
             owner_type = types.get(obj, "")
@@ -5864,7 +6038,11 @@ class LinuxCEmitter:
                     out.append(f'    {_name(result)}=piton_object_lookup((PitonObject*){self._value(obj)},{json.dumps(attr)},(long)&{_name(getattr_class+"__"+"__getattr__")});')
                     types[result] = "int"
                     return out
-                out.append(f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},"{attr}").bits;')
+                attr_expr_g = (
+                    f'(const char*){self._value(attr)}'
+                    if isinstance(attr, str) and attr.startswith('%') else f'"{attr}"'
+                )
+                out.append(f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},{attr_expr_g}).bits;')
                 if owner_type == "object:module":
                     types[result] = module_attr_types.get(attr, "int")
                 else:
@@ -6559,6 +6737,63 @@ class LinuxCEmitter:
                 raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 supports callees with one to four parameters")
             f_defaults = self.function_defaults.get(func_name) or []
             n_params = len(f_params)
+            f_vararg = self.function_varargs.get(func_name)
+            f_kwarg = self.function_kwargs.get(func_name)
+            if f_kwarg is not None:
+                # CALL_UNPACK_VARIADIC_V1: `f(**kw)` sobre un callee **kwargs
+                # pasa el dict directamente (el parámetro ya ES un dict).
+                kwstars = [part for part in kw_parts if part[0] == "kwstar"]
+                if len(kwstars) == 1 and len(kw_parts) == 1 and not pos_parts:
+                    out.append(f"    {_name(result)}={_name(func_name)}((long){self._value(kwstars[0][2])});")
+                    self._emit_exc_check(out, function, handler_label)
+                    return out
+                raise NativeBuildError("Linux dynamic ** unpacking over a **kwargs callee supports only f(**kw)")
+            if f_vararg is not None:
+                # CALL_UNPACK_VARIADIC_V1: `f(*xs)` sobre un callee *args.
+                # Los primeros NN elementos llenan los parámetros fijos; el
+                # resto se empaqueta en la tupla del vararg (mismo ABI que la
+                # llamada directa, que también pasa un PitonSeq* PK_TUPLE).
+                named = [p for p in f_params if p != f_vararg]
+                n_named = len(named)
+                slots = max(n_named, 1)
+                site = f"unpack_{self._gen_counter}"
+                self._gen_counter += 1
+                sentinel = "0x504954554E424E44LL"
+                out.append("    {")
+                out.append(f"    long b_{site}[{slots}]; long f_{site}=0;")
+                for idx in range(n_named):
+                    if idx < len(f_defaults) and f_defaults[idx] is not None:
+                        out.append(f"    b_{site}[{idx}]={self._value(f_defaults[idx])};")
+                    else:
+                        out.append(f"    b_{site}[{idx}]={sentinel};")
+                out.append(f"    PitonSeq* x_{site}=piton_seq_new(PK_TUPLE,0);")
+                for part in pos_parts:
+                    if part[0] == "value":
+                        out.append(f"    if(f_{site}<{n_named}){{b_{site}[(int)f_{site}]=(long)({self._value(part[1])});f_{site}+=1;}}")
+                        out.append(f"    else piton_seq_append(x_{site},piton_slot((long)({self._value(part[1])}),PK_INT));")
+                    else:
+                        ptype = types.get(part[1], "")
+                        if ptype not in {"list", "tuple"}:
+                            raise NativeBuildError("CALL_UNPACK_VARIADIC_V1: * operand must be a statically-known list or tuple")
+                        out.append(f"    {{PitonSeq* s_{site}=(PitonSeq*){self._value(part[1])};")
+                        out.append(f"     long k_{site}=0;")
+                        out.append(f"     while(f_{site}<{n_named}&&k_{site}<s_{site}->length){{b_{site}[(int)f_{site}]=s_{site}->items[k_{site}].bits;f_{site}+=1;k_{site}+=1;}}")
+                        out.append(f"     for(;k_{site}<s_{site}->length;++k_{site})piton_seq_append(x_{site},s_{site}->items[k_{site}]);}}")
+                for idx in range(n_named):
+                    if not (idx < len(f_defaults) and f_defaults[idx] is not None):
+                        out.append(f"    if(b_{site}[{idx}]=={sentinel}){{piton_raise_set(\"TypeError\",\"missing required positional argument\");goto {site}_runtime_err;}}")
+                call_args = ",".join(f"b_{site}[{idx}]" for idx in range(n_named)) + (f",(long)x_{site}" if n_named else f"(long)x_{site}")
+                out.append(f"    {_name(result)}={_name(func_name)}({call_args});")
+                out.append(f"    goto {site}_done;")
+                out.append(f"    {site}_runtime_err:")
+                if handler_label:
+                    out.append(f"    goto {_name(function.name + '_' + handler_label)};")
+                else:
+                    out.append("    piton_report_unhandled();piton_exit(1);")
+                out.append(f"    {site}_done: ;")
+                out.append("    }")
+                types[result] = "int"
+                return out
             for part in pos_parts:
                 if part[0] == "star" and types.get(part[1]) not in {"list", "tuple"}:
                     raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1: * operand must be a statically-known list or tuple")

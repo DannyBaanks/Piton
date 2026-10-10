@@ -119,17 +119,27 @@ def area_bytes_bytearray():
         out.append(("bytes_bytearray", f"truth-{expr}", f"imprimir({expr})"))
     for expr in ("b'ab' == b'ab'", "b'ab' == b'ac'", "b'ab' == bytearray(b'ab')", "b'ab' != b'ac'"):
         out.append(("bytes_bytearray", f"eq-{expr}", f"imprimir({expr})"))
-    for expr in ("b'bc' in b'abcd'", "98 in b'abcd'", "120 in b'abcd'", "b'zz' not in b'abcd'"):
+    for expr in ("b'bc' en b'abcd'", "98 en b'abcd'", "120 en b'abcd'", "b'zz' no en b'abcd'"):
         out.append(("bytes_bytearray", f"in-{expr}", f"imprimir({expr})"))
     out.append(("bytes_bytearray", "iter", "total = 0\npara x en b'abcdef':\n    total = total + x\nimprimir(total)"))
-    for method, args in [("count", "b'hello'"), ("find", "b'world'"), ("rfind", "b'hello'"),
-        ("index", "b'o'"), ("rindex", "b'o'"), ("startswith", "b'hello'"),
-        ("endswith", "b'hello'"), ("endswith", "b'x'"),
-        ("decode", ""), ("decode", "'utf-8'"), ("hex", ""), ("fromhex", "'616263'")]:
-        if args:
-            out.append(("bytes_bytearray", f"method-{method}", f"imprimir(b'hello world hello'.{method}(b'{args}'))"))
-        else:
-            out.append(("bytes_bytearray", f"method-{method}", f"imprimir(b'abc'.{method}())"))
+    # cases: (label, call_source) - the receiver is part of the call source
+    method_cases = [
+        ("count", "imprimir(b'hello world hello'.count(b'hello'))"),
+        ("find", "imprimir(b'hello world hello'.find(b'world'))"),
+        ("rfind", "imprimir(b'hello world hello'.rfind(b'hello'))"),
+        ("find-miss", "imprimir(b'hello world hello'.find(b'zzz'))"),
+        ("index", "imprimir(b'hello world hello'.index(b'o'))"),
+        ("rindex", "imprimir(b'hello world hello'.rindex(b'o'))"),
+        ("startswith", "imprimir(b'hello world hello'.startswith(b'hello'))"),
+        ("endswith", "imprimir(b'hello world hello'.endswith(b'hello'))"),
+        ("endswith-miss", "imprimir(b'hello world hello'.endswith(b'x'))"),
+        ("hex", "imprimir(b'abc'.hex())"),
+        ("decode", "imprimir(b'abc'.decode())"),
+        ("decode-utf8", "imprimir(b'abc'.decode('utf-8'))"),
+        ("fromhex", "imprimir(bytes.fromhex('616263'))"),
+    ]
+    for label, src in method_cases:
+        out.append(("bytes_bytearray", f"method-{label}", src))
     out.append(("bytes_bytearray", "mut-append", "ba = bytearray(b'abc')\nba.append(100)\nimprimir(ba)"))
     out.append(("bytes_bytearray", "mut-extend", "ba = bytearray(b'abc')\nba.extend(b'ef')\nimprimir(ba)"))
     out.append(("bytes_bytearray", "mut-index", "ba = bytearray(b'abc')\nba[0] = 65\nimprimir(ba)"))
@@ -161,16 +171,16 @@ def area_call_unpacking():
 
 def area_async_coroutines():
     out = []
-    out.append(("async_coroutines", "async-def", "asincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    x = f()\n    imprimir(x)"))
-    out.append(("async_coroutines", "await", "asincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    x = f()\n    imprimir(x)"))
-    out.append(("async_coroutines", "asyncio-run", "asincrono funcion f():\n    devolver 42\nasincrono funcion main():\n    x = f()\n    imprimir(x)\nasincrono.run(main())"))
-    out.append(("async_coroutines", "async-for", "asincrono funcion f():\n    para i en rango(3):\n        producir i\nasincrono funcion g():\n    para x en f():\n        imprimir(x)\nasincrono.run(g())"))
-    out.append(("async_coroutines", "async-gen", "asincrono funcion f():\n    producir 1\n    producir 2\nasincrono funcion g():\n    para x en f():\n        imprimir(x)\nasincrono.run(g())"))
-    out.append(("async_coroutines", "create-task", "asincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    t = asincrono.create_task(f())\n    x = t\n    imprimir(x)\nasincrono.run(g())"))
-    out.append(("async_coroutines", "gather", "asincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    x = asincrono.gather(f(), f())\n    imprimir(x)\nasincrono.run(g())"))
-    out.append(("async_coroutines", "cancel", "asincrono funcion f():\n    asincrono.sleep(0)\n    devolver 1\nasincrono funcion g():\n    t = asincrono.create_task(f())\n    t.cancel()\n    imprimir('cancelled')\nasincrono.run(g())"))
-    out.append(("async_coroutines", "sleep0", "asincrono funcion f():\n    asincrono.sleep(0)\n    devolver 1\nasincrono.run(f())"))
-    out.append(("async_coroutines", "sleep1", "asincrono funcion f():\n    asincrono.sleep(1)\n    devolver 1\nasincrono.run(f())"))
+    out.append(("async_coroutines", "async-run", "importar asyncio\nasincrono funcion f():\n    devolver 42\nimprimir(asyncio.run(f()))"))
+    out.append(("async_coroutines", "await", "importar asyncio\nasincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    x = esperar f()\n    devolver x + 1\nimprimir(asyncio.run(g()))"))
+    out.append(("async_coroutines", "await-nested", "importar asyncio\nasincrono funcion base():\n    devolver 5\nasincrono funcion medio():\n    devolver (esperar base()) * 2\nasincrono funcion cima():\n    devolver (esperar medio()) + 1\nimprimir(asyncio.run(cima()))"))
+    out.append(("async_coroutines", "async-for", "importar asyncio\nasincrono funcion f():\n    para i en rango(3):\n        producir i\nasincrono funcion g():\n    asincrono para x en f():\n        imprimir(x)\nasyncio.run(g())"))
+    out.append(("async_coroutines", "async-gen", "importar asyncio\nasincrono funcion f():\n    producir 1\n    producir 2\nasincrono funcion g():\n    asincrono para x en f():\n        imprimir(x)\nasyncio.run(g())"))
+    out.append(("async_coroutines", "create-task", "importar asyncio\nasincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    t = asyncio.create_task(f())\n    x = esperar t\n    devolver x\nimprimir(asyncio.run(g()))"))
+    out.append(("async_coroutines", "gather", "importar asyncio\nasincrono funcion f():\n    devolver 1\nasincrono funcion g():\n    devolver esperar asyncio.gather(f(), f())\nimprimir(asyncio.run(g()))"))
+    out.append(("async_coroutines", "cancel", "importar asyncio\nasincrono funcion f():\n    asyncio.sleep(0)\n    devolver 1\nasincrono funcion g():\n    t = asyncio.create_task(f())\n    t.cancel()\n    devolver 'cancelled'\nimprimir(asyncio.run(g()))"))
+    out.append(("async_coroutines", "sleep0", "importar asyncio\nasincrono funcion f():\n    asyncio.sleep(0)\n    devolver 1\nimprimir(asyncio.run(f()))"))
+    out.append(("async_coroutines", "sleep1", "importar asyncio\nasincrono funcion f():\n    asyncio.sleep(1)\n    devolver 1\nimprimir(asyncio.run(f()))"))
     return out
 
 
@@ -179,7 +189,12 @@ def area_yield_from():
     out.append(("yield_from", "sub", "funcion sub():\n    producir 10\n    producir 20\nfuncion g():\n    producir 1\n    producir desde sub()\n    producir 2\nimprimir(lista(g()))"))
     out.append(("yield_from", "list", "funcion g():\n    producir desde [1, 2, 3]\nimprimir(lista(g()))"))
     out.append(("yield_from", "tuple", "funcion g():\n    producir desde (4, 5)\nimprimir(lista(g()))"))
-    out.append(("yield_from", "send", "funcion sub():\n    x = producir 1\n    producir x + 1\nfuncion g():\n    g = sub()\n    x = g.send(None)\n    x = g.send(99)\nimprimir(lista(g()))"))
+    # YIELD_EXPR_V1: `x = producir v` captura el valor enviado por send().
+    # KNOWN_GAP: send(None) entrega 0 (int), no None — los casos que
+    # dependen de None quedan fuera del alcance demostrado.
+    out.append(("yield_from", "send", "funcion sub():\n    x = producir 1\n    producir x + 1\ng = sub()\nx = g.send(None)\nx = g.send(99)\nimprimir(x)"))
+    out.append(("yield_from", "yield-expr", "funcion g():\n    x = producir 1\n    producir x + 10\ngen = g()\nimprimir(gen.send(None))\nimprimir(gen.send(5))"))
+    out.append(("yield_from", "yield-expr-if", "funcion g():\n    si Verdadero:\n        v = producir 7\n    producir v\ngen = g()\nimprimir(gen.send(None))\nimprimir(gen.send(1))"))
     return out
 
 
@@ -197,7 +212,7 @@ def area_pattern_matching_full():
     out.append(("pattern_matching_full", "literal", "x = 1\nsegun x:\n    caso 1:\n        imprimir('uno')\n    caso _:\n        imprimir('otro')"))
     out.append(("pattern_matching_full", "seq", "x = [1, 2]\nsegun x:\n    caso [a, b]:\n        imprimir(a, b)\n    caso _:\n        imprimir('otro')"))
     out.append(("pattern_matching_full", "mapping", "x = {'a': 1}\nsegun x:\n    caso {'a': v}:\n        imprimir(v)\n    caso _:\n        imprimir('otro')"))
-    out.append(("pattern_matching_full", "class", "clase P:\n    funcion __init__(self, x): self.x = x\nx = P(1)\nsegun x:\n    caso P(x):\n        imprimir(x)\n    caso _:\n        imprimir('otro')"))
+    out.append(("pattern_matching_full", "class", "clase P:\n    funcion __init__(self, x): self.x = x\nasincromo = 0\nx = P(1)\nsegun x:\n    caso P(v):\n        imprimir(v)\n    caso _:\n        imprimir('otro')"))
     out.append(("pattern_matching_full", "guard", "x = 15\nsegun x:\n    caso n si n > 10:\n        imprimir('grande', n)\n    caso _:\n        imprimir('otro')"))
     out.append(("pattern_matching_full", "or", "x = 3\nsegun x:\n    caso 1 | 2 | 3:\n        imprimir('123')\n    caso _:\n        imprimir('otro')"))
     return out
@@ -221,7 +236,7 @@ def area_advanced_decorators():
     out.append(("advanced_decorators", "classmethod", "clase C:\n    v = 10\n    @classmethod\n    funcion get_v(cls): devolver cls.v\nimprimir(C.get_v())\nimprimir(C().get_v())"))
     out.append(("advanced_decorators", "staticmethod", "clase M:\n    @staticmethod\n    funcion add(a, b): devolver a + b\nimprimir(M.add(3, 4))\nimprimir(M().add(5, 6))"))
     out.append(("advanced_decorators", "custom", "funcion add_tag(cls):\n    cls.tag = 'TAG'\n    devolver cls\n@add_tag\nclase T:\n    pasar\nimprimir(T.tag)"))
-    out.append(("advanced_decorators", "nested", "funcion d1(f):\n    funcion w(): imprimir('d1'); devolver f()\n    devolver w\nfuncion d2(f):\n    funcion w(): imprimir('d2'); devolver f()\n    devolver w\n@d1\n@d2\nfuncion f(): devolver 1\nimprimir(f())"))
+    out.append(("advanced_decorators", "nested", "funcion d1(f):\n    funcion w():\n        imprimir('d1')\n        devolver f()\n    devolver w\nfuncion d2(f):\n    funcion w():\n        imprimir('d2')\n        devolver f()\n    devolver w\n@d1\n@d2\nfuncion f(): devolver 1\nimprimir(f())"))
     return out
 
 
@@ -236,22 +251,29 @@ def area_advanced_exceptions():
 
 
 def area_import_system():
+    # Casos single-source: el harness del corpus compila UNA fuente. Los imports
+    # multi-archivo (paquetes, relativos, ciclos) se miden en la suite
+    # tests/test_phase*.py, no aqui.
     out = []
-    out.append(("import_system", "dotted", "importar pkg\nimprimir(pkg.fn())"))
-    out.append(("import_system", "from", "desde pkg importar fn\nimprimir(fn())"))
-    out.append(("import_system", "star", "desde pkg importar *\nimprimir(fn())"))
-    out.append(("import_system", "relative", "desde . importar x\nimprimir(x)"))
-    out.append(("import_system", "relative-mod", "desde .mod importar f\nimprimir(f())"))
     out.append(("import_system", "sys-modules", "importar sys\nimprimir(sys.modules['sys'].__name__)"))
-    out.append(("import_system", "metadata", "importar sys\nimprimir(sys.__name__)\nimprimir(sys.__package__)\nimprimir(sys.__file__)"))
-    out.append(("import_system", "cyclic", "importar sys\nimprimir('cyclic')"))
+    out.append(("import_system", "metadata-name", "importar sys\nimprimir(sys.__name__)"))
+    out.append(("import_system", "metadata-package", "importar sys\nimprimir(sys.__package__)"))
+    out.append(("import_system", "main-name", "imprimir(__name__)"))
+    out.append(("import_system", "main-package", "imprimir(__package__)"))
+    out.append(("import_system", "importar-sys", "importar sys\nimprimir('ok')"))
     return out
 
 
 def area_stdlib_tier1():
     out = []
-    for fn in ("floor", "ceil", "trunc", "fabs", "gcd", "sqrt"):
-        out.append(("stdlib_tier1", f"math-{fn}", "importar math\nimprimir(math." + fn + "(42))"))
+    math_cases = [
+        ("floor", "math.floor(2.7)"), ("ceil", "math.ceil(2.1)"),
+        ("trunc", "math.trunc(-2.7)"), ("fabs", "math.fabs(-3.5)"),
+        ("gcd", "math.gcd(12, 18)"), ("gcd-zero", "math.gcd(0, 7)"),
+        ("sqrt", "math.sqrt(16.0)"),
+    ]
+    for label, expr in math_cases:
+        out.append(("stdlib_tier1", f"math-{label}", "importar math\nimprimir(" + expr + ")"))
     out.append(("stdlib_tier1", "math-pi", "importar math\nimprimir(math.pi)"))
     out.append(("stdlib_tier1", "math-e", "importar math\nimprimir(math.e)"))
     out.append(("stdlib_tier1", "all", "imprimir(all([1, 2]))"))

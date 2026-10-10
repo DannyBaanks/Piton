@@ -886,6 +886,20 @@ class Parser:
 
             if val == "esperar":
                 return Await(value=self._parse_unary()).set_pos(tok)
+            if val == "producir":
+                # YIELD_EXPR_V1: `x = producir 1` — en CPython yield es una
+                # EXPRESion (el generador recibe el valor enviado por send()).
+                # El NAME 'producir' YA fue consumido por esta rama, así que
+                # se construye el nodo aquí: llamar a _parse_yield() avanzaría
+                # otra vez y se comería el valor.
+                if self._peek().type == TokenType.NAME and self._peek().value == "desde":
+                    self._advance()
+                    value = self._parse_expression(0)
+                    return self._parse_postfix(YieldFromStmt(value=value).set_pos(tok))
+                value = None
+                if not self._check(TokenType.NEWLINE, TokenType.ENDMARKER, TokenType.DEDENT):
+                    value = self._parse_expression(0)
+                return self._parse_postfix(YieldStmt(value=value).set_pos(tok))
             if val == "no":
                 # NOT_PREC_V1: el operando de `no` es una comparación en la
                 # gramática de CPython (`no 2 + 3` == `no (2 + 3)`; con

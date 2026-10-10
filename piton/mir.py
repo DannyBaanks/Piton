@@ -177,6 +177,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE",
     "math_floor": "PURE", "math_ceil": "PURE", "math_trunc": "PURE",
     "math_fabs": "PURE", "math_gcd": "PURE",
+    "terminal_init": "PURE", "terminal_size": "PURE", "terminal_write": "PURE",
     "object_new": "PURE", "closure_new": "PURE", "cell_new": "PURE",
     "build_collection": "PURE", "genexpr_new": "PURE", "gen_init": "PURE",
     "gather_new": "PURE",
@@ -190,6 +191,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "del_item": "WRITE", "del_name": "PURE",
     "set_add": "WRITE",
     "try_push": "WRITE", "try_pop": "WRITE", "subscript_store": "WRITE",
+    "slice_store": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
     "raise_typed": "WRITE", "raise_active": "WRITE", "raise_active_dynamic": "WRITE", "raise_chain": "WRITE",
     "task_new": "WRITE", "task_cancel": "WRITE", "gather_add": "WRITE",
@@ -207,6 +209,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "event_run": "OPAQUE", "coro_run": "OPAQUE",
     "sys_exit": "OPAQUE",
     "sys_argv": "OPAQUE",
+    "terminal_init": "OPAQUE", "terminal_cleanup": "OPAQUE", "terminal_write": "OPAQUE", "terminal_read": "OPAQUE",
 }
 
 
@@ -382,6 +385,28 @@ class MIRLowerer:
             builder.emit("set_attr", owner, target.attr, value)
         elif target.kind == HIRKind.SUBSCR:
             obj = self._lower_expr(builder, target.value)
+            slice_info = (
+                getattr(target.slice, "annotations", {}).get("slice")
+                if target.slice is not None and getattr(target.slice, "kind", None) == HIRKind.MODULE
+                else None
+            )
+            if slice_info is not None:
+                # LIST_SLICE_ASSIGN_V1 / BYTEARRAY_SLICE_ASSIGN_V1:
+                # obj[lo:hi:st] = value baja a un op dedicado (antes caía al
+                # runtime_call "unsupported" y el build fallaba cerrado).
+                lower = self._lower_expr(builder, slice_info["lower"]) if slice_info["lower"] is not None else None
+                upper = self._lower_expr(builder, slice_info["upper"]) if slice_info["upper"] is not None else None
+                step = self._lower_expr(builder, slice_info["step"]) if slice_info.get("step") is not None else None
+                def _cst(v):
+                    t = builder.temp()
+                    builder.emit("const", v, result=t)
+                    return t
+                lo = lower if lower is not None else _cst(0)
+                hi = upper if upper is not None else _cst(0x7FFFFFFFFFFFFFFF)
+                if step is None:
+                    step = _cst(1)
+                builder.emit("slice_store", obj, lo, hi, step, value)
+                return
             idx = self._lower_expr(builder, target.slice)
             builder.emit("subscript_store", obj, idx, value)
         else:
@@ -482,7 +507,7 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind == HIRKind.IMPORT:
                     for alias in node.names:
-                        if alias.name in {"asyncio", "math", "sys", "os"}:
+                        if alias.name in {"asyncio", "math", "sys", "os", "terminal"}:
                             self.module_aliases[alias.asname or alias.name] = alias.name
                             continue
                         if "." in alias.name:
@@ -520,7 +545,7 @@ class MIRLowerer:
                             raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                         for alias in node.names:
                             local = alias.asname or alias.name
-                            if mod_name in {"asyncio", "math"} or (
+                            if mod_name in {"asyncio", "math", "terminal"} or (
                                 mod_name == "os" and mod_name not in imported_modules
                             ):
                                 self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
@@ -594,18 +619,17 @@ class MIRLowerer:
                 # the old top-level-only scan missed `para x en xs: producir x`
                 # and the function degraded into a plain function returning None.
                 # Nested function/class bodies are their own scope: not walked.
-                def _has_yield(items, _depth=0):
+                # YIELD_EXPR_V1: `x = producir 1` esconde el YIELD dentro de
+                # la EXPRESION de una asignatura, así que el recorrido usa
+                # _walk (baja por cualquier campo) para encontrarlo. Los
+                # cuerpos anidados (funcion/clase/lambda) siguen siendo su
+                # propio ambito: _walk se detiene ahi.
+                def _has_yield(items):
                     for item in items or []:
-                        if getattr(item, "kind", None) in {HIRKind.YIELD, HIRKind.YIELD_FROM}:
-                            return True
                         if getattr(item, "kind", None) in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF, HIRKind.LAMBDA}:
                             continue
-                        for attr in ("body", "finalbody", "orelse"):
-                            sub = getattr(item, attr, None)
-                            if isinstance(sub, list) and _has_yield(sub, _depth + 1):
-                                return True
-                        for handler in (getattr(item, "handlers", None) or []):
-                            if _has_yield(getattr(handler, "body", None), _depth + 1):
+                        for node_in in self._walk(item):
+                            if node_in.kind in {HIRKind.YIELD, HIRKind.YIELD_FROM}:
                                 return True
                     return False
 
@@ -788,7 +812,7 @@ class MIRLowerer:
                 names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
             elif item.kind == HIRKind.IMPORT:
                 for alias in item.names:
-                    if alias.name in {"asyncio", "math", "sys", "os"}:
+                    if alias.name in {"asyncio", "math", "sys", "os", "terminal"}:
                         modules[alias.asname or alias.name] = alias.name
                         continue
                     if "." in alias.name:
@@ -2425,6 +2449,14 @@ class MIRLowerer:
                 if len(node.cause.args) > 1 or node.cause.keywords:
                     raise MIRLoweringError("native raise-cause constructor is limited to one positional argument")
                 cause_payload = self._lower_expr(builder, node.cause.args[0]) if node.cause.args else None
+            elif node.cause.kind == HIRKind.LOAD and getattr(builder, "in_except_handler", False) and builder.reraise_type not in (None, "Exception", "BaseException"):
+                # RAISE_FROM_VAR_V1: `lanzar X('m') desde e` donde `e` es la
+                # variable ligada por `excepto E como e`. El modelo nativo no
+                # tiene objetos-excepción: `e` liga el MENSAJE capturado, así
+                # que la causa se reconstruye con el tipo estático del handler
+                # (`reraise_type`) más el valor actual de la variable.
+                cause_type = builder.reraise_type
+                cause_payload = self._lower_expr(builder, node.cause)
             else:
                 raise MIRLoweringError("native raise supports `desde` only with an exception constructor or Nada")
         if node.cause is not None and cause_type is not None:
@@ -2504,6 +2536,33 @@ class MIRLowerer:
             if cls == current_class:
                 found_current = True
         if next_class is None:
+            # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
+            # no los define ninguna clase: es la operación nativa de objeto.
+            # Antes fallaba cerrado con MIRLoweringError aunque CPython lo
+            # resuelve contra object.__setattr__.
+            if attr in {"__setattr__", "__getattr__", "__delattr__"} and builder.super_self is not None:
+                if builder.super_self in builder.cell_params:
+                    receiver = builder.temp()
+                    builder.emit("cell_load", builder.super_self, result=receiver)
+                else:
+                    receiver = builder.temp()
+                    builder.emit("load", builder.super_self, result=receiver)
+                args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+                if attr == "__setattr__":
+                    if len(args) != 2:
+                        raise MIRLoweringError("native super().__setattr__ requires exactly two arguments")
+                    builder.emit("set_attr", receiver, args[0], args[1])
+                    return args[1]
+                if attr == "__getattr__":
+                    if len(args) != 1:
+                        raise MIRLoweringError("native super().__getattr__ requires exactly one argument")
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, args[0], result=got)
+                    return got
+                if len(args) != 1:
+                    raise MIRLoweringError("native super().__delattr__ requires exactly one argument")
+                builder.emit("del_attr", receiver, args[0])
+                return None
             raise MIRLoweringError(
                 f"native super().{attr}: no base class in MRO of '{current_class}' defines '{attr}'"
             )
@@ -2527,6 +2586,19 @@ class MIRLowerer:
         if kind == HIRKind.CONST:
             result = builder.temp()
             builder.emit("const", node.value, result=result)
+            return result
+        if kind == HIRKind.YIELD:
+            # YIELD_EXPR_V1: yield en posicion de expresion. Mismo op que la
+            # sentencia, pero su resultado es el valor que send() entrega al
+            # generador en el punto de suspension.
+            if getattr(builder.function, "is_async_generator", False):
+                raise MIRLoweringError("yield-as-expression inside an async generator is not supported")
+            val = self._lower_expr(builder, node.value) if node.value else None
+            result = builder.temp()
+            builder.emit("gen_yield", val, result=result)
+            after_block = builder.new_block()
+            builder.emit("jump", after_block.label)
+            builder.current = after_block
             return result
         if kind == HIRKind.NAMED_EXPR:
             # WALRUS_V1: `(n := 5)` asigna y evalúa al valor asignado.
@@ -2913,6 +2985,40 @@ class MIRLowerer:
                         else:
                             builder.emit(op, value, handler, result=result)
                     return result
+                if module_name == "terminal":
+                    _TERMINAL_ATTRS = {
+                        "init": "terminal_init",
+                        "cleanup": "terminal_cleanup",
+                        "write": "terminal_write",
+                        "read": "terminal_read",
+                        "get_size": "terminal_size",
+                    }
+                    attr = node.func.attr
+                    op = _TERMINAL_ATTRS.get(attr)
+                    if op is None:
+                        raise MIRLoweringError(f"native terminal.{attr} is not supported")
+                    if node.keywords:
+                        raise MIRLoweringError(f"native terminal.{attr} does not support keyword arguments")
+                    result = builder.temp()
+                    if op == "terminal_write":
+                        if len(node.args) != 1:
+                            raise MIRLoweringError("native terminal.write requires one string argument")
+                        value = self._lower_expr(builder, node.args[0])
+                        builder.emit(op, value, result=result)
+                    elif op == "terminal_read":
+                        if len(node.args) != 1:
+                            raise MIRLoweringError("native terminal.read requires one int argument (max bytes)")
+                        value = self._lower_expr(builder, node.args[0])
+                        builder.emit(op, value, result=result)
+                    elif op == "terminal_size":
+                        if len(node.args) != 0:
+                            raise MIRLoweringError("native terminal.get_size takes no arguments")
+                        builder.emit(op, result=result)
+                    else:  # terminal_init, terminal_cleanup
+                        if len(node.args) != 0:
+                            raise MIRLoweringError(f"native terminal.{attr} takes no arguments")
+                        builder.emit(op, result=result)
+                    return result
                 if module_name == "sys" and node.func.attr == "exit":
                     if len(node.args) > 1 or node.keywords:
                         raise MIRLoweringError("native sys.exit takes zero or one argument")
@@ -3046,6 +3152,28 @@ class MIRLowerer:
             builder.emit("set_attr", owner, target.attr, value)
         elif target.kind == HIRKind.SUBSCR:
             obj = self._lower_expr(builder, target.value)
+            slice_info = (
+                getattr(target.slice, "annotations", {}).get("slice")
+                if target.slice is not None and getattr(target.slice, "kind", None) == HIRKind.MODULE
+                else None
+            )
+            if slice_info is not None:
+                # LIST_SLICE_ASSIGN_V1 / BYTEARRAY_SLICE_ASSIGN_V1:
+                # obj[lo:hi:st] = value baja a un op dedicado (antes caía al
+                # runtime_call "unsupported" y el build fallaba cerrado).
+                lower = self._lower_expr(builder, slice_info["lower"]) if slice_info["lower"] is not None else None
+                upper = self._lower_expr(builder, slice_info["upper"]) if slice_info["upper"] is not None else None
+                step = self._lower_expr(builder, slice_info["step"]) if slice_info.get("step") is not None else None
+                def _cst(v):
+                    t = builder.temp()
+                    builder.emit("const", v, result=t)
+                    return t
+                lo = lower if lower is not None else _cst(0)
+                hi = upper if upper is not None else _cst(0x7FFFFFFFFFFFFFFF)
+                if step is None:
+                    step = _cst(1)
+                builder.emit("slice_store", obj, lo, hi, step, value)
+                return
             idx = self._lower_expr(builder, target.slice)
             builder.emit("subscript_store", obj, idx, value)
         else:
@@ -3084,6 +3212,33 @@ class MIRLowerer:
             if cls == current_class:
                 found_current = True
         if next_class is None:
+            # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
+            # no los define ninguna clase: es la operación nativa de objeto.
+            # Antes fallaba cerrado con MIRLoweringError aunque CPython lo
+            # resuelve contra object.__setattr__.
+            if attr in {"__setattr__", "__getattr__", "__delattr__"} and builder.super_self is not None:
+                if builder.super_self in builder.cell_params:
+                    receiver = builder.temp()
+                    builder.emit("cell_load", builder.super_self, result=receiver)
+                else:
+                    receiver = builder.temp()
+                    builder.emit("load", builder.super_self, result=receiver)
+                args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+                if attr == "__setattr__":
+                    if len(args) != 2:
+                        raise MIRLoweringError("native super().__setattr__ requires exactly two arguments")
+                    builder.emit("set_attr", receiver, args[0], args[1])
+                    return args[1]
+                if attr == "__getattr__":
+                    if len(args) != 1:
+                        raise MIRLoweringError("native super().__getattr__ requires exactly one argument")
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, args[0], result=got)
+                    return got
+                if len(args) != 1:
+                    raise MIRLoweringError("native super().__delattr__ requires exactly one argument")
+                builder.emit("del_attr", receiver, args[0])
+                return None
             raise MIRLoweringError(
                 f"native super().{attr}: no base class in MRO of '{current_class}' defines '{attr}'"
             )
@@ -3107,6 +3262,19 @@ class MIRLowerer:
         if kind == HIRKind.CONST:
             result = builder.temp()
             builder.emit("const", node.value, result=result)
+            return result
+        if kind == HIRKind.YIELD:
+            # YIELD_EXPR_V1: yield en posicion de expresion. Mismo op que la
+            # sentencia, pero su resultado es el valor que send() entrega al
+            # generador en el punto de suspension.
+            if getattr(builder.function, "is_async_generator", False):
+                raise MIRLoweringError("yield-as-expression inside an async generator is not supported")
+            val = self._lower_expr(builder, node.value) if node.value else None
+            result = builder.temp()
+            builder.emit("gen_yield", val, result=result)
+            after_block = builder.new_block()
+            builder.emit("jump", after_block.label)
+            builder.current = after_block
             return result
         if kind == HIRKind.NAMED_EXPR:
             # WALRUS_V1: `(n := 5)` asigna y evalúa al valor asignado.
@@ -3617,6 +3785,40 @@ class MIRLowerer:
                         else:
                             builder.emit(op, value, handler, result=result)
                     return result
+                if module_name == "terminal":
+                    _TERMINAL_ATTRS = {
+                        "init": "terminal_init",
+                        "cleanup": "terminal_cleanup",
+                        "write": "terminal_write",
+                        "read": "terminal_read",
+                        "get_size": "terminal_size",
+                    }
+                    attr = node.func.attr
+                    op = _TERMINAL_ATTRS.get(attr)
+                    if op is None:
+                        raise MIRLoweringError(f"native terminal.{attr} is not supported")
+                    if node.keywords:
+                        raise MIRLoweringError(f"native terminal.{attr} does not support keyword arguments")
+                    result = builder.temp()
+                    if op == "terminal_write":
+                        if len(node.args) != 1:
+                            raise MIRLoweringError("native terminal.write requires one string argument")
+                        value = self._lower_expr(builder, node.args[0])
+                        builder.emit(op, value, result=result)
+                    elif op == "terminal_read":
+                        if len(node.args) != 1:
+                            raise MIRLoweringError("native terminal.read requires one int argument (max bytes)")
+                        value = self._lower_expr(builder, node.args[0])
+                        builder.emit(op, value, result=result)
+                    elif op == "terminal_size":
+                        if len(node.args) != 0:
+                            raise MIRLoweringError("native terminal.get_size takes no arguments")
+                        builder.emit(op, result=result)
+                    else:  # terminal_init, terminal_cleanup
+                        if len(node.args) != 0:
+                            raise MIRLoweringError(f"native terminal.{attr} takes no arguments")
+                        builder.emit(op, result=result)
+                    return result
                 if module_name == "sys" and node.func.attr == "exit":
                     if len(node.args) > 1 or node.keywords:
                         raise MIRLoweringError("native sys.exit takes zero or one argument")
@@ -4098,10 +4300,9 @@ class MIRLowerer:
             raise MIRLoweringError(
                 "CALL_UNPACKING_DYNAMIC4_V1 does not support positional-only or keyword-only callees yet"
             )
-        if self.function_varargs.get(name) or self.function_kwargs.get(name):
-            raise MIRLoweringError(
-                "CALL_UNPACKING_DYNAMIC4_V1 does not support variadic callees yet"
-            )
+        # CALL_UNPACK_VARIADIC_V1: los callees *args / **kwargs ya bajan (el
+        # emisor Linux empaqueta la cola en la tupla del vararg, o pasa el
+        # dict directo). Siguen rechazados positional-only/keyword-only.
         starred = {id(arg) for arg in getattr(node, "starred_args", ())}
         positional_parts: list[tuple[str, str]] = []
         for arg in node.args:
@@ -4687,6 +4888,24 @@ class MIREvaluator:
             env[instruction.result] = math.gcd(
                 self._value(args[0], env), self._value(args[1], env)
             )
+        elif op == "terminal_init":
+            # TERMINAL_V1: no-op in interpreter (CPython handles terminal)
+            env[instruction.result] = 1
+        elif op == "terminal_cleanup":
+            # TERMINAL_V1: no-op in interpreter
+            env[instruction.result] = 1
+        elif op == "terminal_write":
+            # TERMINAL_V1: use print in interpreter
+            import sys
+            sys.stdout.write(str(self._value(args[0], env)))
+            sys.stdout.flush()
+            env[instruction.result] = 1
+        elif op == "terminal_read":
+            # TERMINAL_V1: return empty string in interpreter
+            env[instruction.result] = ""
+        elif op == "terminal_size":
+            # TERMINAL_V1: return default size in interpreter
+            env[instruction.result] = (24, 80)
         elif op == "call":
             function = self._value(args[0], env)
             values = [self._value(value, env) for value in args[1]]
