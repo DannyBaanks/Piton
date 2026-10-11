@@ -86,6 +86,9 @@ ALIASES_BUILTIN = {
     "propiedad": "property",
     "octetos": "bytes",
     "arreglo_bytes": "bytearray",
+    "conjunto_inmutable": "frozenset",
+    "vista_memoria": "memoryview",
+    "rebanada": "slice",
 }
 
 _TRIVIA = {

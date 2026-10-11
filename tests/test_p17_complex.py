@@ -69,6 +69,33 @@ imprimir(complejo(1.5e300, 2e300))
 imprimir(1e16j)
 """)
 
+    def test_power_integer_exponent(self):
+        # COMPLEX_POW_INT_V1: z ** n byte-identico (square-and-multiply,
+        # inverso para n negativo).
+        _assert_matches(self, """
+imprimir(1j ** 2)
+imprimir((1+1j) ** 2)
+imprimir((1+2j) ** 0)
+imprimir((1+1j) ** 3)
+imprimir((1+2j) ** -1)
+imprimir((3+4j) ** 10)
+""")
+
+    def test_constructor_from_string(self):
+        # COMPLEX_STR_CTOR_V1: parser acotado, sin espacios interiores.
+        _assert_matches(self, """
+imprimir(complejo('1+2j'))
+imprimir(complejo(' 1+2j '))
+imprimir(complejo('-1-2j'))
+imprimir(complejo('2.5j'))
+imprimir(complejo('j'))
+imprimir(complejo('-j'))
+imprimir(complejo('3'))
+""")
+
+    def test_conjugate(self):
+        _assert_matches(self, "imprimir((2+3j).conjugate())")
+
     def test_arithmetic(self):
         _assert_matches(self, """
 imprimir((1+2j)+(3-1j))
@@ -214,13 +241,22 @@ funcion f(x):
     imprimir(x)
 f(1+2j)
 """)
-        # piso, módulo y potencia: fuera del subconjunto (CPythonTypeError o
-        # cmath); el gate falla cerrado en vez de aproximar.
+        # piso y módulo: fuera del subconjunto (TypeError en CPython); el gate
+        # falla cerrado en vez de aproximar. `**` con exponente entero quedó
+        # IMPLEMENTADO en la ronda v3 (COMPLEX_POW_INT_V1).
         _assert_build_fails(self, "imprimir(1j // 2)")
         _assert_build_fails(self, "imprimir(1j % 2)")
-        _assert_build_fails(self, "imprimir(1j ** 2)")
-        # constructor desde string
-        _assert_build_fails(self, "imprimir(complejo('1+2j'))")
+        # dos argumentos donde el primero es complejo: TypeError en CPython,
+        # fail-closed en build.
+        _assert_build_fails(self, "imprimir(complejo(complejo(1,2), 3))")
+
+    def test_string_constructor_rejects_malformed(self):
+        # espacios INTERIORES y texto no numerico: CPython lanza ValueError.
+        # Ambos lados coinciden en rc=1 (RAISE_EQ), no en fail-closed.
+        for src in ("imprimir(complejo('1 + 2j'))", "imprimir(complejo('abc'))"):
+            diff = compare_native_to_cpython(src)
+            self.assertEqual(diff.native.returncode, diff.oracle.returncode)
+            self.assertIn(b"ValueError", diff.native.stderr)
 
 
 if __name__ == "__main__":

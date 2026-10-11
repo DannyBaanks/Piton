@@ -184,9 +184,14 @@ class FormatV1(unittest.TestCase):
             compare_native_to_cpython("imprimir('{5}'.format(1))\n")
 
     def test_unknown_method_fails_closed(self):
-        # title (P23), partition (P36), removeprefix (P38) implemented; casefold still outside
+        # title (P23), partition (P36), removeprefix (P38), casefold/isascii (v3)
+        # implemented; translate/encode/format_map/isprintable/isidentifier siguen fuera.
         with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('a'.casefold())\n")
+            compare_native_to_cpython("imprimir('a'.isprintable())\n")
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("imprimir('a'.encode())\n")
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("imprimir('a'.format_map({}))\n")
 
 
 class StrMethodsChainedV1(unittest.TestCase):

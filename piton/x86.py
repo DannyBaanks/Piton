@@ -56,7 +56,7 @@ def _ordering_pair_ok(left_type: str, right_type: str) -> bool:
     return left_type == right_type and left_type not in {"none", ""}
 
 
-_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes", "complex", "complejo"}
+_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes", "complex", "complejo", "repr", "hash", "callable", "ascii", "format", "frozenset", "memoryview", "slice"}
 
 _math_fn_map = {
     "math_sqrt": "piton_float_sqrt",
@@ -6075,10 +6075,10 @@ def compile_native(source: str, output: str | Path) -> Path:
     for statement in hir.body:
         if getattr(statement, "kind", None) == HIRKind.IMPORT_FROM:
             mod_name = getattr(statement, "module", None)
-            if mod_name and mod_name not in {"asyncio", "math", "sys"}:
+            if mod_name and mod_name not in {"asyncio", "math", "sys", "terminal"}:
                 raise NativeBuildError(f"native from-import requires multi-file compilation: {mod_name}")
             for alias in getattr(statement, "names", []):
-                if mod_name in {"asyncio", "math", "sys"}:
+                if mod_name in {"asyncio", "math", "sys", "terminal"}:
                     from_imports[(mod_name, alias.asname or alias.name)] = True
     try:
         mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
@@ -6166,7 +6166,7 @@ def _scan_native_modules(
         parts = dotted.split(".")
         for length in range(1, len(parts) + 1):
             prefix = ".".join(parts[:length])
-            if prefix in modules or prefix in {"asyncio", "math", "sys"}:
+            if prefix in modules or prefix in {"asyncio", "math", "sys", "terminal"}:
                 continue
             path = resolve_native_module(root, prefix)
             register(prefix, path, path.name == "__init__.piton")
@@ -6182,7 +6182,7 @@ def _scan_native_modules(
         for statement in hir.body:
             if statement.kind.name == "IMPORT":
                 for alias in statement.names:
-                    if alias.name in {"asyncio", "math", "sys"}:
+                    if alias.name in {"asyncio", "math", "sys", "terminal"}:
                         continue
                     register_chain(alias.name)
             elif statement.kind.name == "IMPORT_FROM":
@@ -6217,7 +6217,7 @@ def _scan_native_modules(
                     else:
                         register_chain(f"{base}.{mod_name}")
                 else:
-                    if not mod_name or mod_name in {"asyncio", "math", "sys"}:
+                    if not mod_name or mod_name in {"asyncio", "math", "sys", "terminal"}:
                         continue
                     register_chain(mod_name)
                     if not is_entry(package):
@@ -6290,7 +6290,7 @@ def _scan_native_modules(
             return
         for length in range(1, len(target.split(".")) + 1):
             simulate_execute(".".join(target.split(".")[:length]))
-        if target in {"asyncio", "math", "sys"}:
+        if target in {"asyncio", "math", "sys", "terminal"}:
             for alias in statement.names:
                 names.add(alias.asname or alias.name)
             return
@@ -6314,7 +6314,7 @@ def _scan_native_modules(
             names.add(alias.asname or alias.name)
 
     def simulate_execute(dotted: str) -> None:
-        if dotted in states or dotted in {"asyncio", "math", "sys"}:
+        if dotted in states or dotted in {"asyncio", "math", "sys", "terminal"}:
             return
         states[dotted] = "IN_PROGRESS"
         hir = modules[dotted]
@@ -6327,7 +6327,7 @@ def _scan_native_modules(
                 names.add(statement.name)
             elif kind == "IMPORT":
                 for alias in statement.names:
-                    if alias.name in {"asyncio", "math", "sys"}:
+                    if alias.name in {"asyncio", "math", "sys", "terminal"}:
                         continue
                     for length in range(1, len(alias.name.split(".")) + 1):
                         simulate_execute(".".join(alias.name.split(".")[:length]))
@@ -6342,7 +6342,7 @@ def _scan_native_modules(
     for statement in entry_hir.body:
         if statement.kind.name == "IMPORT":
             for alias in statement.names:
-                if alias.name in {"asyncio", "math", "sys"}:
+                if alias.name in {"asyncio", "math", "sys", "terminal"}:
                     continue
                 for length in range(1, len(alias.name.split(".")) + 1):
                     simulate_execute(".".join(alias.name.split(".")[:length]))

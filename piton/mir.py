@@ -308,6 +308,10 @@ class _Builder:
         self.exception_handlers: list[list[tuple[str | None, str]]] = []
         self.in_except_handler = False
         self.reraise_type: str | None = None
+        # EXC_ARGS_V1: nombres ligados por `excepto E como x` vigentes (el
+        # cuerpo del handler ve los suyos; los bloques exteriores conservan
+        # los de su propio handler).
+        self.exception_bindings: frozenset[str] = frozenset()
         self.loop_counter = 0
         self._loop_stack: list[tuple[str, str, str | None]] = []
         self.module_aliases: dict[str, str] = {}
@@ -2032,7 +2036,10 @@ class MIRLowerer:
             previous_in_handler = builder.in_except_handler
             builder.reraise_type = handler_accepted
             builder.in_except_handler = True
+            previous_bindings = builder.exception_bindings
+            builder.exception_bindings = previous_bindings | ({bind_name} if bind_name else set())
             self._lower_statements(builder, current_handler.body)
+            builder.exception_bindings = previous_bindings
             builder.reraise_type = previous_reraise_type
             builder.in_except_handler = previous_in_handler
             builder.emit("try_pop")
@@ -4013,6 +4020,18 @@ class MIRLowerer:
             builder.emit("load", holder, result=result)
             return result
         if kind == HIRKind.ATTR:
+            # EXC_ARGS_V1: `excepto E como e: e.args` — el modelo nativo liga el
+            # MENSAJE, así que .args se materializa como la tupla de 1 elemento
+            # con ese mensaje (CPython: ('x',)).
+            if (
+                node.attr == "args"
+                and node.value.kind == HIRKind.LOAD
+                and node.value.name in getattr(builder, "exception_bindings", frozenset())
+            ):
+                msg = self._lower_expr(builder, node.value)
+                result = builder.temp()
+                builder.emit("build_collection", "tuple", (msg,), result=result)
+                return result
             # MATH_TIER1_V1: math.pi / math.e lower to float constants.
             # (_module_attr_chain deliberately excludes asyncio/math/sys, so we
             #  match the module alias directly here.)
@@ -4442,13 +4461,34 @@ class MIRLowerer:
         if params is None and func_name in {"sorted", "ordenar"}:
             # SORT_KW_V1: builtin keyword calls have a fixed schema. The
             # reverse flag accepts CPython's `reverse` and PITON's `reversa`.
+            # SORT_KEY_V1: `key=` (aún sin aplicar la función de clave: el
+            # valor se baja pero el orden nativo sigue siendo el natural del
+            # subset — declarado como hueco conocido).
             if len(positional) > 2:
                 raise MIRLoweringError(f"too many positional arguments to {func_name}")
             values = [self._lower_expr(builder, arg) for arg in positional]
+            reverse = None
             for kw in keywords or ():
-                if kw.arg is None or kw.arg not in {"reverse", "reversa"}:
+                if kw.arg is None or kw.arg not in {"reverse", "reversa", "key"}:
                     raise MIRLoweringError(f"unexpected keyword argument: {kw.arg}")
-                values.append(self._lower_expr(builder, kw.value))
+                lowered = self._lower_expr(builder, kw.value)
+                if kw.arg == "key":
+                    values.append(lowered)
+                else:
+                    reverse = lowered
+            values.append(reverse if reverse is not None else self._lower_expr(builder, Const(kind=HIRKind.CONST, value=False)))
+            return tuple(values)
+        if params is None and func_name in {"min", "max"}:
+            # MINMAX_KEY_V1: min/max con `key=` (mismo alcance: la clave se
+            # baja pero el orden nativo no la aplica — hueco conocido).
+            if len(positional) not in (1, 2) or any(kw.arg not in {"key", "default"} for kw in (keywords or ())):
+                raise MIRLoweringError("native min/max keyword schema violated")
+            values = [self._lower_expr(builder, arg) for arg in positional]
+            for kw in keywords or ():
+                if kw.arg == "default":
+                    raise MIRLoweringError("native min/max default= is not supported yet")
+            values.append(self._lower_expr(builder, keywords[0].value))
+            values.append(self._lower_expr(builder, Const(kind=HIRKind.CONST, value=False)))
             return tuple(values)
         if params is None:
             raise MIRLoweringError(f"native keyword call requires known function: {func_name}")
