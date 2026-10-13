@@ -2513,6 +2513,31 @@ class MIRLowerer:
             chain.append("BaseException")
         return chain
 
+    def _getitem_handler_label(self, builder: _Builder, node) -> str | None:
+        """GETITEM_HANDLER_V1: handler que atrape KeyError o IndexError.
+
+        Si el programa tiene `excepto Exception` (o `excepto BaseException`),
+        ambos resuelven al mismo label; si tiene `excepto KeyError`, solo el
+        subscript de dict debería rutar ahí. Como el tipo de colección puede
+        ser dinámico, se devuelve el PRIMER handler que atrape cualquiera de
+        los dos (comportamiento fail-closed: si no hay, None).
+        """
+        label = None
+        for exc_type in ("KeyError", "IndexError"):
+            found = self._find_exception_handler(builder, exc_type)
+            if found is not None:
+                if label is None:
+                    label = found
+                elif label != found:
+                    # dos handlers distintos: el subscript podría rutar a
+                    # cualquiera según el tipo real -> se rechaza en build
+                    # para no elegir en silencio.
+                    raise MIRLoweringError(
+                        "native subscript inside try: handlers for both KeyError and "
+                        "IndexError are ambiguous for a dynamically-typed receiver"
+                    )
+        return label
+
     def _find_exception_handler(
         self, builder: _Builder, exception_type: str
     ) -> str | None:
@@ -3990,9 +4015,15 @@ class MIRLowerer:
                     builder.emit("get_slice", value, lower, upper, step, result=result)
                 return result
             result = builder.temp()
+            # GETITEM_HANDLER_V1: d[k] puede lanzar KeyError y l[i] IndexError
+            # EN RUNTIME (helpers C). Sin el handler adjunto, `excepto Exception`
+            # no las atrapaba: el flag quedaba activo y el programa moria con
+            # el error sin rutar. Se adjunta el handler comun (KeyError e
+            # IndexError comparten el ancestro Exception).
+            _gi_handler = self._getitem_handler_label(builder, node)
             builder.emit(
                 "get_item", self._lower_expr(builder, node.value),
-                self._lower_expr(builder, node.slice), result=result,
+                self._lower_expr(builder, node.slice), _gi_handler, result=result,
             )
             return result
         if kind == HIRKind.IF_EXPR:

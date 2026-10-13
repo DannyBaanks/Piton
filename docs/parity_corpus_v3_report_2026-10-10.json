@@ -24,11 +24,11 @@
     "total": 234,
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
-      "DIVERGENT_MISMATCH": 14,
+      "DIVERGENT_MISMATCH": 6,
       "TIMEOUT": 0,
       "FAIL_CLOSED": 59,
       "RAISE_EQ": 0,
-      "EQUIV": 161
+      "EQUIV": 169
     },
     "by_area": {
       "str_methods_more": {
@@ -41,19 +41,19 @@
       },
       "dict_ops_more": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 3,
         "RAISE_EQ": 0,
-        "EQUIV": 15
+        "EQUIV": 16
       },
       "set_ops": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 2,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 3,
         "RAISE_EQ": 0,
-        "EQUIV": 23
+        "EQUIV": 25
       },
       "frozenset": {
         "DIVERGENT_CRASH": 0,
@@ -89,19 +89,19 @@
       },
       "builtins_more": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 3,
+        "DIVERGENT_MISMATCH": 2,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 8,
         "RAISE_EQ": 0,
-        "EQUIV": 17
+        "EQUIV": 18
       },
       "exceptions_deep": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 5,
         "RAISE_EQ": 0,
-        "EQUIV": 8
+        "EQUIV": 9
       },
       "numeric_semantics": {
         "DIVERGENT_CRASH": 0,
@@ -113,11 +113,11 @@
       },
       "object_protocol3": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 5,
+        "DIVERGENT_MISMATCH": 2,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 2,
         "RAISE_EQ": 0,
-        "EQUIV": 9
+        "EQUIV": 12
       },
       "callable_protocol": {
         "DIVERGENT_CRASH": 0,
@@ -128,9 +128,9 @@
         "EQUIV": 12
       }
     },
-    "pct_equiv": 68.8,
-    "pct_honest": 94.0,
-    "pct_divergent": 6.0
+    "pct_equiv": 72.2,
+    "pct_honest": 97.4,
+    "pct_divergent": 2.6
   },
   "records": [
     {
@@ -466,8 +466,8 @@
       "area": "dict_ops_more",
       "name": "eq",
       "src": "imprimir({'a': 1} == {'a': 1})\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=False err= || oracle rc=0 out=True err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -649,8 +649,8 @@
       "area": "set_ops",
       "name": "pop",
       "src": "s = {1}\nimprimir(s.pop())\nimprimir(s)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=1 | {} err= || oracle rc=0 out=1 | set() err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -658,8 +658,8 @@
       "area": "set_ops",
       "name": "clear",
       "src": "s = {1}\ns.clear()\nimprimir(s)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out={} err= || oracle rc=0 out=set() err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -1306,8 +1306,8 @@
       "area": "builtins_more",
       "name": "hash-none-err",
       "src": "imprimir(hash(Nada))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=0 err= || oracle rc=0 out=4238894112 err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -1568,9 +1568,9 @@
       "area": "exceptions_deep",
       "name": "base-error",
       "src": "intentar:\n    d = {}\n    d['k']\nexcepto Exception:\n    imprimir('e')\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=1 out= err=KeyError || oracle rc=0 out=e err=",
-      "native_rc": 1,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
@@ -1922,8 +1922,8 @@
       "area": "object_protocol3",
       "name": "repr-str",
       "src": "clase P:\n    funcion __repr__(self):\n        devolver 'P()'\n    funcion __str__(self):\n        devolver 'soy P'\nimprimir(P())\nimprimir(repr(P()))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=soy P | <object> err= || oracle rc=0 out=soy P | P() err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -1974,8 +1974,8 @@
       "area": "object_protocol3",
       "name": "neg",
       "src": "clase P:\n    funcion __neg__(self):\n        devolver 1\nimprimir(-P())\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=-8410992 err= || oracle rc=0 out=1 err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -1992,8 +1992,8 @@
       "area": "object_protocol3",
       "name": "getitem-missing",
       "src": "clase P:\n    funcion __getitem__(self, i):\n        lanzar KeyError('k')\nintentar:\n    P()[1]\nexcepto KeyError:\n    imprimir('ok')\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out= err= || oracle rc=0 out=ok err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -2101,7 +2101,7 @@
       "name": "classmethod-ref",
       "src": "clase P:\n    @classmethod\n    funcion f(cls): devolver 9\nimprimir(P.f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-5sjn91i9/program.c: In function ‘piton_main’:\n/tmp/piton-linux-5sjn91i9/program.c:2279:14: error: ‘P’ undeclared (first use in this function)\n 2279 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-5sjn91i9/program.c:2279:14: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-mn5vgebk/program.c: In function ‘piton_main’:\n/tmp/piton-linux-mn5vgebk/program.c:2386:14: error: ‘P’ undeclared (first use in this function)\n 2386 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-mn5vgebk/program.c:2386:14: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "callable_protocol",
