@@ -165,6 +165,16 @@ class Win64NasmEmitter:
         self.mir_module_classes = getattr(module, 'classes', {})
         self.mir_module_class_mro = getattr(module, 'class_mro', {})
         self.mir_module_class_properties = getattr(module, 'class_properties', {})
+        # Class metadata under the same short names linux_x86.emit binds:
+        # the introspection dispatch (7c2509d) reads self.classes and
+        # self.class_mro here, and without this binding every PE build died
+        # with AttributeError before touching NASM.
+        self.classes = getattr(module, "classes", {})
+        self.class_parents = getattr(module, "class_parents", {})
+        self.class_mro = getattr(module, "class_mro", {})
+        self.class_properties = getattr(module, "class_properties", {})
+        self.static_methods = getattr(module, "static_methods", set())
+        self.class_methods = getattr(module, "class_methods", set())
         self.function_names = {function.name for function in module.functions}
         self.function_return_types = self._infer_return_types(module)
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
