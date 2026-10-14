@@ -362,6 +362,36 @@ static long piton_str_case(const char*s,int upper){usize n=piton_strlen(s);char*
 static long piton_str_find(const char*s,const char*n){usize hl=piton_strlen(s),nl=piton_strlen(n);if(nl==0)return 0;if(nl>hl)return -1;for(usize i=0;i+nl<=hl;++i){usize j=0;while(j<nl&&s[i+j]==n[j])++j;if(j==nl)return(long)i;}return -1;}
 static long piton_str_startswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[i]!=p[i])return 0;return 1;}
 static long piton_str_endswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[hl-nl+i]!=p[i])return 0;return 1;}
+/* STR_TRANSLATE_V1: translate(dict) — cada carácter se sustituye por el
+ * mapeo; una clave ausente deja el carácter; valor None/'' borra (V1: valor
+ * string vacío). */
+static long piton_str_translate(const char*s,PitonDict*map){
+  if(!s)return 0;
+  usize n=piton_strlen(s);
+  char*p=piton_alloc(n*4+1);usize o=0;
+  for(usize i=0;i<n;){
+    unsigned char c=(unsigned char)s[i];
+    if(c<0x80){
+      long found=0;
+      /* CPython: las claves son enteros (ord); una clave cadena de longitud 1
+       * NO sustituye (str.maketrans usa ord como clave). */
+      if(map)for(long j=0;j<map->length;++j){
+        if(map->items[j].key.kind==PK_INT&&map->items[j].key.bits==(long)c){
+          const char*v=(const char*)map->items[j].value.bits;
+          if(v){usize vl=piton_strlen(v);piton_memcpy(p+o,v,vl);o+=vl;}
+          found=1;break;
+        }
+      }
+      if(!found)p[o++]=(char)c;
+      ++i;continue;
+    }
+    /* multibyte: se copia tal cual (las claves del mapa son ASCII) */
+    int k;if((c&0xE0)==0xC0)k=2;else if((c&0xF0)==0xE0)k=3;else if((c&0xF8)==0xF0)k=4;else k=1;
+    piton_memcpy(p+o,s+i,(usize)k);o+=(usize)k;i+=(usize)k;
+  }
+  p[o]=0;
+  return(long)p;
+}
 static long piton_str_replace(const char*s,const char*a,const char*b){usize sl=piton_strlen(s),al=piton_strlen(a),bl=piton_strlen(b);usize count=0;if(al==0){count=sl+1;}else{for(usize i=0;i+al<=sl;){usize k=0;while(k<al&&s[i+k]==a[k])++k;if(k==al){++count;i+=al;}else++i;}}usize total=sl+count*bl-(al==0?0:count*al);char*p=piton_alloc(total+1);usize o=0;if(al==0){for(usize i=0;i<sl;++i){piton_memcpy(p+o,b,bl);o+=bl;p[o++]=s[i];}piton_memcpy(p+o,b,bl);o+=bl;}else{for(usize i=0;i<sl;){usize k=0;while(k<al&&i+k<sl&&s[i+k]==a[k])++k;if(k==al){piton_memcpy(p+o,b,bl);o+=bl;i+=al;}else p[o++]=s[i++];}}p[o]=0;return(long)p;}
 static int piton_chrinstr(const char*set,char c){if(!set)return piton_ws((unsigned char)c);for(usize i=0;set[i];++i)if(set[i]==c)return 1;return 0;}
 static long piton_str_strip_chrs(const char*s,const char*chrs,int mode){usize n=piton_strlen(s),a=0,b=n;if(mode!=2){while(a<n&&piton_chrinstr(chrs,s[a]))++a;}if(mode!=1){while(b>a&&piton_chrinstr(chrs,s[b-1]))--b;}char*p=piton_alloc(b-a+1);piton_memcpy(p,s+a,b-a);p[b-a]=0;return(long)p;}
@@ -600,6 +630,7 @@ static PitonRange*piton_range_new(long start,long stop,long step){
   PitonRange*r=piton_alloc(sizeof(*r));r->refcount=1;r->kind=PK_RANGE;
   r->start=start;r->stop=stop;r->step=step;return r;}
 static PitonBytes* piton_bytes_new(long len,const unsigned char*data);
+static long piton_strdup(const char*s);
 static long piton_memoryview_new(void*buf,int is_bytearray,long off,long len);
 static void piton_print_memoryview(PitonMemoryView*m);
 static long piton_slice_new(long start,long stop,long step,int hs,int hp,int ht);
@@ -610,6 +641,7 @@ static long piton_range_get(PitonRange*r,long i){long n=piton_range_len(r);
   return r->start+i*r->step;}
 
 /* SLICE_VALUE_V1: slice(a,b,c) con bounds ausentes marcados (CPython usa None). */
+static long piton_strdup(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}
 /* MEMORYVIEW_V1: constructores y operaciones sobre la vista. */
 static unsigned char* piton_mv_buf(PitonMemoryView*m){
   if(m->is_bytearray)return ((PitonByteArray*)m->buf)->data;
@@ -3611,6 +3643,13 @@ class LinuxCEmitter:
             require_count(0, "no arguments")
             out.append(f"    {_name(result)}=(long)piton_str_swapcase((const char*){operand});")
             types[result] = "str"
+        elif method == "translate":
+            # STR_TRANSLATE_V1: str.translate(dict) — mapeo str -> str/''.
+            require_count(1, "exactly one argument (a dict)")
+            if types.get(call_args[0], "") != "dict":
+                raise NativeBuildError("Linux str.translate() requires a dict argument")
+            out.append(f"    {_name(result)}=piton_str_translate((const char*){operand},(PitonDict*){self._value(call_args[0])});")
+            types[result] = "str"
         elif method == "zfill":
             require_count(1, "exactly one int argument")
             if types.get(call_args[0]) not in {"int", "bool"}:
@@ -3945,6 +3984,13 @@ class LinuxCEmitter:
         elif method == "swapcase":
             require_count(0, "no arguments")
             out.append(f"    {_name(result)}=(long)piton_str_swapcase((const char*){operand});")
+            types[result] = "str"
+        elif method == "translate":
+            # STR_TRANSLATE_V1: str.translate(dict) — mapeo str -> str/''.
+            require_count(1, "exactly one argument (a dict)")
+            if types.get(call_args[0], "") != "dict":
+                raise NativeBuildError("Linux str.translate() requires a dict argument")
+            out.append(f"    {_name(result)}=piton_str_translate((const char*){operand},(PitonDict*){self._value(call_args[0])});")
             types[result] = "str"
         elif method == "zfill":
             # STR_PADS_V1: sign-aware zero fill ('-5'.zfill(3) -> '-05').

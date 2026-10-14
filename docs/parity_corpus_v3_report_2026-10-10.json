@@ -21,23 +21,23 @@
     "timeout": 10.0
   },
   "summary": {
-    "total": 233,
+    "total": 235,
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 22,
+      "FAIL_CLOSED": 20,
       "RAISE_EQ": 0,
-      "EQUIV": 211
+      "EQUIV": 215
     },
     "by_area": {
       "str_methods_more": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "FAIL_CLOSED": 1,
         "RAISE_EQ": 0,
-        "EQUIV": 20
+        "EQUIV": 24
       },
       "dict_ops_more": {
         "DIVERGENT_CRASH": 0,
@@ -128,7 +128,7 @@
         "EQUIV": 13
       }
     },
-    "pct_equiv": 90.6,
+    "pct_equiv": 91.5,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -189,17 +189,39 @@
     },
     {
       "area": "str_methods_more",
-      "name": "maketrans",
-      "src": "t = str.maketrans('ab', 'xy')\nimprimir('abc'.translate(t))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
+      "name": "translate-ord",
+      "src": "imprimir('abc'.translate({ord('a'): 'X'}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "str_methods_more",
-      "name": "translate",
-      "src": "imprimir('abc'.translate(str.maketrans('a', 'z')))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
+      "name": "translate-str-key",
+      "src": "imprimir('abc'.translate({'a': 'X'}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "translate-multi",
+      "src": "imprimir('hola lol'.translate({ord('o'): '0', ord('l'): '1'}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "translate-empty",
+      "src": "imprimir('abc'.translate({}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "str_methods_more",
@@ -2166,7 +2188,7 @@
       "name": "classmethod-ref",
       "src": "clase P:\n    @classmethod\n    funcion f(cls): devolver 9\nimprimir(P.f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-xhg2k187/program.c: In function ‘piton_main’:\n/tmp/piton-linux-xhg2k187/program.c:2755:14: error: ‘P’ undeclared (first use in this function)\n 2755 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-xhg2k187/program.c:2755:14: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-rpfbhrpm/program.c: In function ‘piton_main’:\n/tmp/piton-linux-rpfbhrpm/program.c:2787:14: error: ‘P’ undeclared (first use in this function)\n 2787 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-rpfbhrpm/program.c:2787:14: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "callable_protocol",

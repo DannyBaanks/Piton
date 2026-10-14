@@ -68,8 +68,14 @@ def area_str_methods_more():
         ("removeprefix", "imprimir('foobar'.removeprefix('foo'))"),
         ("removesuffix", "imprimir('foobar'.removesuffix('bar'))"),
         ("expandtabs", "imprimir('a\\tb'.expandtabs(4))"),
-        ("maketrans", "t = str.maketrans('ab', 'xy')\nimprimir('abc'.translate(t))"),
-        ("translate", "imprimir('abc'.translate(str.maketrans('a', 'z')))"),
+        # NOTA: str.maketrans es un classmethod: el dispatcher de métodos del
+        # backend no lo rutea (queda fail-closed honesto). La semántica de
+        # translate SÍ está: claves int (ord) -> reemplazo; clave cadena de
+        # longitud 1 NO sustituye (comportamiento de CPython).
+        ("translate-ord", "imprimir('abc'.translate({ord('a'): 'X'}))"),
+        ("translate-str-key", "imprimir('abc'.translate({'a': 'X'}))"),
+        ("translate-multi", "imprimir('hola lol'.translate({ord('o'): '0', ord('l'): '1'}))"),
+        ("translate-empty", "imprimir('abc'.translate({}))"),
         ("encode", "imprimir('abc'.encode())"),
         ("encode-utf8", "imprimir('ñ'.encode('utf-8'))"),
         ("format-map", "imprimir('{a}'.format_map({'a': 1}))"),
