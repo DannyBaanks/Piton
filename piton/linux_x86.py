@@ -23,7 +23,7 @@ from .x86 import NativeBuildError, _BUILTINS, _scan_native_modules, generator_sl
 _FLOAT_REPR_C = Path(__file__).with_name("float_repr.h").read_text(encoding="utf-8")
 
 _RICH_FREESTANDING_C = r"""
-enum{PK_NONE,PK_BOOL,PK_INT,PK_FLOAT,PK_STR,PK_LIST,PK_TUPLE,PK_DICT,PK_SET,PK_OBJECT,PK_BIGINT,PK_RANGE,PK_BYTES,PK_BYTEARRAY,PK_COMPLEX,PK_FROZENSET};
+enum{PK_NONE,PK_BOOL,PK_INT,PK_FLOAT,PK_STR,PK_LIST,PK_TUPLE,PK_DICT,PK_SET,PK_OBJECT,PK_BIGINT,PK_RANGE,PK_BYTES,PK_BYTEARRAY,PK_COMPLEX,PK_FROZENSET,PK_SLICE};
 typedef struct{long bits;int kind;}PitonSlot;
 /* COMPLEX_V1: número complejo (re + im j). Vive en la arena (bump allocator,
  * sin refcount): los escalares que ocupan puntero se tratan como inmutables y
@@ -33,6 +33,8 @@ typedef struct{long bits;int kind;}PitonSlot;
 typedef struct{long magic;double re;double im;}PitonComplex;
 typedef struct{double re;double im;}PitonComplexVal;
 typedef struct{long refcount;long kind;long start;long stop;long step;}PitonRange;
+/* SLICE_VALUE_V1: objeto slice como valor. None (-1) significa bound ausente. */
+typedef struct{long refcount;long kind;long start;long stop;long step;int has_start;int has_stop;int has_step;}PitonSlice;
 typedef struct{long refcount;long kind;long length;unsigned char*data;}PitonBytes;
 typedef struct{long refcount;long kind;long length;long capacity;unsigned char*data;}PitonByteArray;
 typedef struct{long magic;void*bytes_obj;long index;}PitonBytesIterator;
@@ -486,6 +488,36 @@ static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(
 static long piton_chr_len(const char*s){unsigned char c=(unsigned char)s[0];
   if(c==0)return 1;if(c<0x80)return 1;if(c<0xE0)return 2;if(c<0xF0)return 3;return 4;}
 static long piton_str_index(const char*s,long i){long n=(long)piton_strlen(s);if(i<0)i+=n;if(i<0||i>=n){/* GETITEM_RAISE_V1 */piton_raise_set("IndexError","string index out of range");return 0;}char*p=piton_alloc(2);p[0]=s[i];p[1]=0;return(long)p;}
+static long piton_str_apply_slice(const char*s,PitonSlice*sl){
+  if(!sl)return 0;
+  long n=(long)piton_strlen(s);
+  long step=sl->has_step?sl->step:1;
+  if(step==0){piton_raise_set("ValueError","slice step cannot be zero");return 0;}
+  long start,stop;
+  if(step>0){start=sl->has_start?sl->start:0;stop=sl->has_stop?sl->stop:n;}
+  else{start=sl->has_start?sl->start:n-1;stop=sl->has_stop?sl->stop:-1;}
+  if(step>0){
+    if(start<0)start+=n;if(stop<0)stop+=n;
+    if(start<0)start=0;if(start>n)start=n;
+    if(stop<0)stop=0;if(stop>n)stop=n;
+  }else{
+    if(sl->has_start&&start<0)start+=n;
+    if(!sl->has_stop)stop=-1;
+    if(!sl->has_start)start=n-1;
+    if(start<-1)start=-1;if(start>=n)start=n-1;
+    if(stop<-1)stop=-1;
+  }
+  long count=0;
+  if(step>0){for(long i=start;i<stop;i+=step)++count;}
+  else{for(long i=start;i>stop;i+=step)++count;}
+  if(count<0)count=0;
+  char*p=piton_alloc((usize)count+1);
+  long k=0;
+  if(step>0){for(long i=start;i<stop&&k<count;i+=step)p[k++]=s[i];}
+  else{for(long i=start;i>stop&&k<count;i+=step)p[k++]=s[i];}
+  p[k]=0;
+  return(long)p;
+}
 static long piton_str_slice(const char*s,long lo,long hi){long n=(long)piton_strlen(s);if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;char*p=piton_alloc((usize)(hi-lo)+1);for(long i=0;i<hi-lo;++i)p[i]=s[lo+i];p[hi-lo]=0;return(long)p;}
 static PitonSlot piton_seq_pop(PitonSeq*s,long i){if(!s||s->length<=0){piton_write(2,"IndexError: pop from empty list\n",32);piton_exit(1);}if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError: pop index out of range\n",35);piton_exit(1);}PitonSlot v=s->items[i];for(long j=i;j+1<s->length;++j)s->items[j]=s->items[j+1];--s->length;return v;}
 static void piton_seq_reverse(PitonSeq*s){if(!s)return;for(long i=0,j=s->length-1;i<j;++i,--j){PitonSlot t=s->items[i];s->items[i]=s->items[j];s->items[j]=t;}}
@@ -564,9 +596,72 @@ static PitonRange*piton_range_new(long start,long stop,long step){
   if(step==0){piton_raise_set("ValueError","range() arg 3 must not be zero");return 0;}
   PitonRange*r=piton_alloc(sizeof(*r));r->refcount=1;r->kind=PK_RANGE;
   r->start=start;r->stop=stop;r->step=step;return r;}
+static long piton_slice_new(long start,long stop,long step,int hs,int hp,int ht);
+static void piton_print_slice(PitonSlice*x);
+static int piton_slice_eq(PitonSlice*a,PitonSlice*b);
 static long piton_range_get(PitonRange*r,long i){long n=piton_range_len(r);
   if(i<0)i+=n;if(i<0||i>=n){piton_write(2,"IndexError\n",11);piton_exit(1);}
   return r->start+i*r->step;}
+
+/* SLICE_VALUE_V1: slice(a,b,c) con bounds ausentes marcados (CPython usa None). */
+static long piton_slice_new(long start,long stop,long step,int hs,int hp,int ht){
+  PitonSlice*x=(PitonSlice*)piton_alloc(sizeof(PitonSlice));
+  x->refcount=1;x->kind=PK_SLICE;
+  x->start=start;x->stop=stop;x->step=step;
+  x->has_start=hs;x->has_stop=hp;x->has_step=ht;
+  return(long)x;
+}
+static void piton_print_slice(PitonSlice*x){
+  piton_write(1,"slice(",6);
+  if(x->has_start)piton_write_int(x->start);else piton_write(1,"None",4);
+  piton_write(1,", ",2);
+  if(x->has_stop)piton_write_int(x->stop);else piton_write(1,"None",4);
+  piton_write(1,", ",2);
+  if(x->has_step)piton_write_int(x->step);else piton_write(1,"None",4);
+  piton_write(1,")",1);
+}
+/* SLICE_APPLY_V1: aplicar un objeto slice a una secuencia (copia). */
+static PitonSeq* piton_seq_apply_slice(PitonSeq*src,PitonSlice*sl){
+  if(!sl)return 0;
+  long n=src->length;
+  long step=sl->has_step?sl->step:1;
+  if(step==0){piton_raise_set("ValueError","slice step cannot be zero");return 0;}
+  long start,stop;
+  if(step>0){
+    start=sl->has_start?sl->start:0;
+    stop=sl->has_stop?sl->stop:n;
+  }else{
+    start=sl->has_start?sl->start:n-1;
+    stop=sl->has_stop?sl->stop:-1;
+  }
+  /* normalización: en paso negativo, -1 es el centinela "antes del inicio";
+   * solo se ajustan los negativos que NO son el centinela. */
+  if(step>0){
+    if(start<0)start+=n;if(stop<0)stop+=n;
+    if(start<0)start=0;if(start>n)start=n;
+    if(stop<0)stop=0;if(stop>n)stop=n;
+  }else{
+    if(sl->has_start&&start<0)start+=n;
+    if(sl->has_stop&&stop>=0&&stop<0)stop+=n;
+    if(!sl->has_stop)stop=-1;
+    if(!sl->has_start)start=n-1;
+    if(start<-1)start=-1;if(start>=n)start=n-1;
+    if(stop<-1)stop=-1;
+  }
+  long count=0;
+  if(step>0){for(long i=start;i<stop;i+=step)++count;}
+  else{for(long i=start;i>stop;i+=step)++count;}
+  if(count<0)count=0;
+  PitonSeq*r=piton_seq_new(src->kind,count);
+  long k=0;
+  if(step>0){for(long i=start;i<stop&&k<count;i+=step)r->items[k++]=src->items[i];}
+  else{for(long i=start;i>stop&&k<count;i+=step)r->items[k++]=src->items[i];}
+  return r;
+}
+static int piton_slice_eq(PitonSlice*a,PitonSlice*b){
+  return a->has_start==b->has_start&&a->has_stop==b->has_stop&&a->has_step==b->has_step&&
+         (!a->has_start||a->start==b->start)&&(!a->has_stop||a->stop==b->stop)&&(!a->has_step||a->step==b->step);
+}
 static long piton_range_contains(PitonRange*r,long v){if(!r)return 0;
   long d=v-r->start;if(r->step>0){if(v<r->start||v>=r->stop)return 0;}else{if(v>r->start||v<=r->stop)return 0;}
   return d%r->step==0;}
@@ -806,7 +901,7 @@ static int piton_dict_eq(PitonDict*a,PitonDict*b){
 }
 static void piton_print_set(PitonSet*s){if(s->kind==PK_SET&&s->length==0){piton_write(1,"set()",5);return;}piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}piton_write(1,"}",1);}
 static long piton_object_repr_hook(long obj,const char*cls);
-static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,"'",1);piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(1,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(1,"frozenset()",11);break;}piton_write(1,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(1,")",1);break;case PK_OBJECT:{long _pr=piton_object_repr_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(1,"<object>",8);break;}default:piton_write(1,"<object>",8);}}
+static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,"'",1);piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(1,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(1,"frozenset()",11);break;}piton_write(1,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(1,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_repr_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(1,"<object>",8);break;}default:piton_write(1,"<object>",8);}}
 /* COMP_DICT_ITER_V1: the i-th KEY of a dict / the i-th element of a set,
  * for a comprehension's index loop. Explicit subscripts keep using
  * piton_dict_get, which raises KeyError as CPython does. */
@@ -818,7 +913,7 @@ static long piton_sum_seq_float_start(PitonSeq*s,long start){double r=piton_bits
 static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i){PitonSlot v=d->items[i].key;if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
-static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";case PK_RANGE:return"<class 'range'>";case PK_BYTES:return"<class 'bytes'>";case PK_BYTEARRAY:return"<class 'bytearray'>";case PK_COMPLEX:return"<class 'complex'>";case PK_FROZENSET:return"<class 'frozenset'>";default:return"<class 'object'>";}}
+static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";case PK_RANGE:return"<class 'range'>";case PK_BYTES:return"<class 'bytes'>";case PK_BYTEARRAY:return"<class 'bytearray'>";case PK_COMPLEX:return"<class 'complex'>";case PK_SLICE:return"<class 'slice'>";case PK_FROZENSET:return"<class 'frozenset'>";default:return"<class 'object'>";}}
 /* M14 BUILTINS_CORE_V2 (matriz declarada; ver native_runtime.c) */
 static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_COMPLEX:return piton_cx_truthy_bits(v.bits);case PK_FROZENSET:return ((PitonSet*)v.bits)->length>0;case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;case PK_RANGE:return piton_range_len((PitonRange*)v.bits)>0;default:return v.bits!=0;}}
 static long piton_all_seq(PitonSeq*s){if(!s)return 1;for(long i=0;i<s->length;++i)if(!piton_slot_truthy(s->items[i]))return 0;return 1;}
@@ -2621,7 +2716,7 @@ class LinuxCEmitter:
             "tuple": "PK_TUPLE", "dict": "PK_DICT", "set": "PK_SET",
             "bigint": "PK_BIGINT", "range": "PK_RANGE",
             "bytes": "PK_BYTES", "bytearray": "PK_BYTEARRAY", "complex": "PK_COMPLEX",
-            "set:frozen": "PK_FROZENSET",
+            "set:frozen": "PK_FROZENSET", "slice": "PK_SLICE",
         }.get(value_type or "int", "PK_OBJECT")
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
@@ -5784,6 +5879,16 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}={neg}piton_dict_eq((PitonDict*){self._value(left)},(PitonDict*){self._value(right)});")
                 types[result] = "bool"
                 return out
+            elif left_type == "slice" and right_type == "slice":
+                # SLICE_EQ_V1: slices comparan por bounds, no por puntero.
+                if operator not in {"==", "!="}:
+                    self._runtime_type_error(out, f"'{operator}' not supported between instances of 'slice' and 'slice'")
+                    types[result] = "bool"
+                    return out
+                neg = "" if operator == "==" else "!"
+                out.append(f"    {_name(result)}={neg}piton_slice_eq((PitonSlice*){self._value(left)},(PitonSlice*){self._value(right)});")
+                types[result] = "bool"
+                return out
             elif left_type in {"set", "set:frozen"} and right_type in {"set", "set:frozen"}:
                 # SET_EQ_V1: conjuntos se comparan por CONTENIDO, no por
                 # puntero ({1,2} == frozenset({2,1}) es True en CPython).
@@ -5918,6 +6023,8 @@ class LinuxCEmitter:
                             out.append(f'    piton_print_float_bits_raw({self._value(value)});')
                         elif value_type == "complex":
                             out.append(f'    piton_print_complex_raw({self._value(value)});')
+                        elif value_type == "slice":
+                            out.append(f'    piton_print_slice((PitonSlice*){self._value(value)});')
                         elif value_type == "module-pkg":
                             out.append(f'    piton_print_dynamic({self._value(value)});')
                         elif value_type == "range":
@@ -6093,6 +6200,34 @@ class LinuxCEmitter:
                 else:
                     out.append(f"    {_name(result)}={self._value(values[0])}<0?-{self._value(values[0])}:{self._value(values[0])};")
                     types[result] = "int"
+            elif function_name in {"slice", "rebanada"}:
+                # SLICE_VALUE_V1: slice(a, b, c) con bounds ausentes = None.
+                if len(values) > 3:
+                    raise NativeBuildError("Linux slice() takes at most 3 arguments")
+                if len(values) == 1:
+                    # CPython: slice(stop) — el único argumento es el STOP.
+                    vals = [None, values[0], None]
+                else:
+                    vals = list(values) + [None] * (3 - len(values))
+                exprs = []
+                for _v in vals:
+                    if _v is None:
+                        exprs.append(("0", 0))
+                        continue
+                    _t = types.get(_v, "int")
+                    if _t in {"int", "bool"}:
+                        exprs.append((self._value(_v), 1))
+                    elif _v == "None" or _t == "none":
+                        # Nada baja como LOAD, no como const: valor 0/ausente.
+                        exprs.append(("0", 0))
+                    else:
+                        raise NativeBuildError("Linux slice() bounds must be ints or None")
+                out.append(
+                    f"    {_name(result)}=piton_slice_new({exprs[0][0]},{exprs[1][0]},{exprs[2][0]},"
+                    f"{exprs[0][1]},{exprs[1][1]},{exprs[2][1]});"
+                )
+                types[result] = "slice"
+                return out
             elif function_name in {"frozenset", "conjunto_inmutable"}:
                 if len(values) > 1:
                     raise NativeBuildError("Linux frozenset() takes at most one argument")
@@ -7036,6 +7171,22 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}={_gatarget}({self._value(obj)},(long){json.dumps(attr)});")
                     types[result] = "int"
                     return out
+            if owner_type == "slice" and attr in {"start", "stop", "step"}:
+                # SLICE_ATTR_V1: s.start / s.stop / s.step — None si el bound
+                # está ausente. CPython los expone como enteros o None.
+                _fld = {"start": "has_start", "stop": "has_stop", "step": "has_step"}[attr]
+                _val = attr
+                # SLICE_ATTR_V1: bounds presentes se devuelven como int. Un
+                # bound AUSENTE (None) no es representable en el modelo sin tag:
+                # falla cerrado en build en vez de imprimir 0 (que sería una
+                # divergencia silenciosa contra CPython, que imprime None).
+                out.append(
+                    f"    if(!((PitonSlice*){self._value(obj)})->{_fld}){{"
+                    f'piton_write(2,"TypeError: slice.{attr} of a slice with an absent bound is not supported in the native subset\\n",110);piton_exit(2);}}'
+                )
+                out.append(f"    {_name(result)}=((PitonSlice*){self._value(obj)})->{_val};")
+                types[result] = "int"
+                return out
             if owner_type == "complex" and attr in {"real", "imag"}:
                 # COMPLEX_V1: (2+3j).real / .imag son floats (2.0 / 3.0). El slot
                 # de un float son los BITS del double, no el double truncado.
@@ -7577,6 +7728,17 @@ class LinuxCEmitter:
             coll, idx = args[0], args[1]
             _gi_handler = args[2] if len(args) > 2 else None
             collection_type = types.get(coll)
+            if types.get(idx, "") == "slice" and collection_type in {"list", "tuple"}:
+                # SLICE_APPLY_V1: sec[slice(...)] -> nueva secuencia.
+                out.append(f"    {{PitonSeq* _sr=piton_seq_apply_slice((PitonSeq*){self._value(coll)},(PitonSlice*){self._value(idx)});")
+                out.append(f"    {_name(result)}=(long)_sr;}}")
+                if _gi_handler:
+                    self._emit_exc_check(out, function, _gi_handler)
+                types[result] = collection_type
+                ek = self._coll_elems.get(coll)
+                if ek and "|" not in ek:
+                    self._coll_elems[result] = ek
+                return out
             if collection_type in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=piton_seq_get((PitonSeq*){self._value(coll)},{self._value(idx)}).bits;')
                 # COLL_ELEM_TYPE_V1: an index carries the element kind. Without it
@@ -7603,6 +7765,14 @@ class LinuxCEmitter:
                 out.append(f'    {_name(result)}=piton_bytes_get((PitonBytes*){self._value(coll)},{self._value(idx)});')
                 types[result] = "int"
                 self._emit_exc_check(out, function, _gi_handler)
+                return out
+            elif collection_type == "str" and types.get(idx, "") == "slice":
+                # SLICE_APPLY_STR_V1: cad[slice(...)] -> nueva cadena.
+                out.append(f"    {{long _sr=piton_str_apply_slice((const char*){self._value(coll)},(PitonSlice*){self._value(idx)});")
+                out.append(f"    {_name(result)}=_sr;}}")
+                if _gi_handler:
+                    self._emit_exc_check(out, function, _gi_handler)
+                types[result] = "str"
                 return out
             elif collection_type == "str":
                 # PARITY_P2_V1: str[s] yields the one-character string.

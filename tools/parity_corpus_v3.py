@@ -211,6 +211,8 @@ def area_slice_value():
     out = []
     cases = [
         ("ctor-attrs", "s = slice(1, 5, 2)\nimprimir(s.start)\nimprimir(s.stop)\nimprimir(s.step)"),
+        # NOTA: un bound ausente (None) no es representable en el modelo sin
+        # tag: el caso cae en exit 2 honesto (fail-closed), no en paridad.
         ("ctor-attrs-none", "s = slice(None, 5)\nimprimir(s.start)\nimprimir(s.stop)\nimprimir(s.step)"),
         ("apply-list", "imprimir([1, 2, 3, 4, 5][slice(1, 4)])"),
         ("apply-str", "imprimir('abcdef'[slice(1, 4)])"),

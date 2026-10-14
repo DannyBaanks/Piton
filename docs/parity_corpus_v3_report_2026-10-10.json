@@ -23,12 +23,12 @@
   "summary": {
     "total": 233,
     "by_bucket": {
-      "DIVERGENT_CRASH": 0,
+      "DIVERGENT_CRASH": 1,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 44,
+      "FAIL_CLOSED": 36,
       "RAISE_EQ": 0,
-      "EQUIV": 189
+      "EQUIV": 196
     },
     "by_area": {
       "str_methods_more": {
@@ -72,12 +72,12 @@
         "EQUIV": 0
       },
       "slice_value": {
-        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_CRASH": 1,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 10,
+        "FAIL_CLOSED": 2,
         "RAISE_EQ": 0,
-        "EQUIV": 0
+        "EQUIV": 7
       },
       "complex_deep": {
         "DIVERGENT_CRASH": 0,
@@ -128,9 +128,9 @@
         "EQUIV": 13
       }
     },
-    "pct_equiv": 81.1,
-    "pct_honest": 100.0,
-    "pct_divergent": 0.0
+    "pct_equiv": 84.1,
+    "pct_honest": 99.6,
+    "pct_divergent": 0.4
   },
   "records": [
     {
@@ -984,71 +984,87 @@
       "area": "slice_value",
       "name": "ctor-attrs",
       "src": "s = slice(1, 5, 2)\nimprimir(s.start)\nimprimir(s.stop)\nimprimir(s.step)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slice_value",
       "name": "ctor-attrs-none",
       "src": "s = slice(None, 5)\nimprimir(s.start)\nimprimir(s.stop)\nimprimir(s.step)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "bucket": "DIVERGENT_CRASH",
+      "detail": "native rc=2 out= err=TypeError: slice.start of a slice with an absent bound is not supported in the native subset | \u0000\u0000\u0000\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u0000\t\u0000\u0000\u0000\u0000\u0000 || oracle rc=0 out=None | 5 | None err=",
+      "native_rc": 2,
+      "oracle_rc": 0
     },
     {
       "area": "slice_value",
       "name": "apply-list",
       "src": "imprimir([1, 2, 3, 4, 5][slice(1, 4)])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slice_value",
       "name": "apply-str",
       "src": "imprimir('abcdef'[slice(1, 4)])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slice_value",
       "name": "apply-step",
       "src": "imprimir([1, 2, 3, 4, 5][slice(None, None, 2)])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slice_value",
       "name": "indices",
       "src": "s = slice(1, 8, 2)\nimprimir(s.indices(10))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
     },
     {
       "area": "slice_value",
       "name": "indices-neg",
       "src": "s = slice(-3, None)\nimprimir(s.indices(10))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
     },
     {
       "area": "slice_value",
       "name": "eq",
       "src": "imprimir(slice(1, 2) == slice(1, 2))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slice_value",
       "name": "ne",
       "src": "imprimir(slice(1, 2) != slice(1, 3))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slice_value",
       "name": "type",
       "src": "imprimir(tipo(slice(1)))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'slice' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "complex_deep",
@@ -2122,7 +2138,7 @@
       "name": "classmethod-ref",
       "src": "clase P:\n    @classmethod\n    funcion f(cls): devolver 9\nimprimir(P.f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-hj56x8cf/program.c: In function ‘piton_main’:\n/tmp/piton-linux-hj56x8cf/program.c:2592:14: error: ‘P’ undeclared (first use in this function)\n 2592 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-hj56x8cf/program.c:2592:14: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-7wi_4j7c/program.c: In function ‘piton_main’:\n/tmp/piton-linux-7wi_4j7c/program.c:2687:14: error: ‘P’ undeclared (first use in this function)\n 2687 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-7wi_4j7c/program.c:2687:14: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "callable_protocol",
