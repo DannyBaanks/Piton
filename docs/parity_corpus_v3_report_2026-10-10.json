@@ -26,9 +26,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 24,
+      "FAIL_CLOSED": 22,
       "RAISE_EQ": 0,
-      "EQUIV": 209
+      "EQUIV": 211
     },
     "by_area": {
       "str_methods_more": {
@@ -59,9 +59,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 2,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 13
+        "EQUIV": 15
       },
       "memoryview": {
         "DIVERGENT_CRASH": 0,
@@ -128,7 +128,7 @@
         "EQUIV": 13
       }
     },
-    "pct_equiv": 89.7,
+    "pct_equiv": 90.6,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -836,15 +836,19 @@
       "area": "frozenset",
       "name": "issubset",
       "src": "imprimir(frozenset([1]).issubset(frozenset([1, 2])))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "frozenset",
       "name": "isdisjoint",
       "src": "imprimir(frozenset([1]).isdisjoint(frozenset([2])))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "frozenset",
@@ -2162,7 +2166,7 @@
       "name": "classmethod-ref",
       "src": "clase P:\n    @classmethod\n    funcion f(cls): devolver 9\nimprimir(P.f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-ba2lrw90/program.c: In function ‘piton_main’:\n/tmp/piton-linux-ba2lrw90/program.c:2755:14: error: ‘P’ undeclared (first use in this function)\n 2755 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-ba2lrw90/program.c:2755:14: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-xhg2k187/program.c: In function ‘piton_main’:\n/tmp/piton-linux-xhg2k187/program.c:2755:14: error: ‘P’ undeclared (first use in this function)\n 2755 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-xhg2k187/program.c:2755:14: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "callable_protocol",

@@ -3350,8 +3350,19 @@ class LinuxCEmitter:
                     self._tuple_list_elems[result] = (_ktype if isinstance(_ktype, str) else "int", _vtype if isinstance(_vtype, str) else "int")
             else:
                 raise NativeBuildError(f"Linux dict.{method}() is not supported")
-        elif coll_type == "set":
+        elif coll_type in {"set", "set:frozen"}:
+            # SET_FROZEN_METHODS_V1: los métodos de consulta de set (issubset
+            # /issuperset/isdisjoint/union/...) aplican igual sobre frozenset;
+            # los mutadores fallan cerrado en el backend (frozenset inmutable).
+            _mv_is_frozen = coll_type == "set:frozen"
+            if _mv_is_frozen and method in {"add", "discard", "remove", "pop", "clear",
+                                            "update", "intersection_update",
+                                            "difference_update", "symmetric_difference_update"}:
+                raise NativeBuildError(f"Linux frozenset.{method}() is not supported (immutable)")
             if method == "add":
+                require_count((1,), "exactly one argument")
+                out.append(f"    piton_set_add((PitonSet*){operand},{self._slot(call_args[0], types)});")
+                types[result] = "none"
                 require_count((1,), "exactly one argument")
                 out.append(f"    piton_set_add((PitonSet*){operand},{self._slot(call_args[0], types)});")
                 types[result] = "none"
@@ -3378,19 +3389,36 @@ class LinuxCEmitter:
             elif method == "union":
                 require_count((1,), "one argument (a set)")
                 out.append(f"    {_name(result)}=piton_set_union((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
-                types[result] = "set"
+                # SET_FROZEN_METHODS_V1: frozenset.union(...) devuelve frozenset.
+                if _mv_is_frozen:
+                    out.append(f"    ((PitonSet*){_name(result)})->kind=PK_FROZENSET;")
+                    types[result] = "set:frozen"
+                else:
+                    types[result] = "set"
             elif method == "intersection":
                 require_count((1,), "one argument (a set)")
                 out.append(f"    {_name(result)}=piton_set_intersection((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
-                types[result] = "set"
+                if _mv_is_frozen:
+                    out.append(f"    ((PitonSet*){_name(result)})->kind=PK_FROZENSET;")
+                    types[result] = "set:frozen"
+                else:
+                    types[result] = "set"
             elif method == "difference":
                 require_count((1,), "one argument (a set)")
                 out.append(f"    {_name(result)}=piton_set_difference((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
-                types[result] = "set"
+                if _mv_is_frozen:
+                    out.append(f"    ((PitonSet*){_name(result)})->kind=PK_FROZENSET;")
+                    types[result] = "set:frozen"
+                else:
+                    types[result] = "set"
             elif method == "symmetric_difference":
                 require_count((1,), "one argument (a set)")
                 out.append(f"    {_name(result)}=piton_set_sym_diff((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
-                types[result] = "set"
+                if _mv_is_frozen:
+                    out.append(f"    ((PitonSet*){_name(result)})->kind=PK_FROZENSET;")
+                    types[result] = "set:frozen"
+                else:
+                    types[result] = "set"
             elif method == "issubset":
                 require_count((1,), "one argument (a set)")
                 out.append(f"    {_name(result)}=piton_set_issubset((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
@@ -7532,9 +7560,11 @@ class LinuxCEmitter:
                     out.append(f"    {{PitonComplexVal _z=piton_cx_of({self._value(obj)}); _z.im=-_z.im; {_name(result)}=piton_cx_wrap(_z);}}")
                     types[result] = "complex"
                     return out
-                if coll_type in {"list", "tuple", "dict", "set"}:
+                if coll_type in {"list", "tuple", "dict", "set", "set:frozen"}:
                     # COLL_METHODS_V1: builtin collection methods bind
                     # statically here, mirroring the str table.
+                    # SET_FROZEN_METHODS_V1: "set:frozen" usa la misma tabla de
+                    # set (los mutadores fallan cerrado dentro de la tabla).
                     self._emit_collection_method(out, result, method, obj, list(call_args), coll_type, types, aliases)
                     return out
                 unbound_class = None
