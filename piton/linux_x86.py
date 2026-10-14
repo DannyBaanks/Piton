@@ -1163,7 +1163,12 @@ static void piton_print_int_safe(long bits){
 static void piton_print_auto(long bits){if(bits==0){piton_write(1,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
-static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;}
+/* EXC_ARGS_MULTI_V1: tupla .args de la excepcion activa (0 = sin multi-arg,
+ * .args se materializa como (mensaje,) como antes). */
+static long piton_exc_args=0;
+static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;piton_exc_args=0;}
+/* EXC_ARGS_MULTI_V1: raise con 2+ argumentos -> la tupla .args completa. */
+static void piton_raise_set_args(const char*type,const char*message,long args_tuple){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;piton_exc_args=args_tuple;}
 static long piton_int_add(long a,long b){i64 r;if(__builtin_add_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static long piton_int_sub(long a,long b){i64 r;if(__builtin_sub_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static long piton_int_mul(long a,long b){i64 r;if(__builtin_mul_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
@@ -1172,10 +1177,15 @@ static long piton_float_div(long a,long b){double x=piton_bits_double(a),y=piton
 static long piton_float_floor_div(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float floor division by zero");return 0;}return piton_double_bits(__builtin_floor(x/y));}
 static void piton_raise_chain_set(const char*type,const char*message,const char*cause_type,const char*cause_msg){piton_exc_cause_type=cause_type;piton_exc_cause_msg=cause_msg;piton_raise_set(type,message);}
 static const char*piton_reraise_type=0;static const char*piton_reraise_message=0;
+/* EXC_ARGS_MULTI_V1: tupla de 1 elemento (mensaje) para .args por defecto. */
+static long piton_tuple1(const char*msg){PitonSeq*p=piton_seq_new(PK_TUPLE,1);p->items[0]=(PitonSlot){(long)msg,PK_STR};return(long)p;}
 static void piton_reraise_save(void){piton_reraise_type=piton_exc_type;piton_reraise_message=piton_exc_message;}
-static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=piton_reraise_message;}
+static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=piton_reraise_message;piton_exc_args=0;}
 static int piton_exc_flag_get(void){return piton_exc_flag;}
-static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;}
+static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;
+  /* EXC_ARGS_MULTI_V1: piton_exc_args NO se limpia aqui — el cuerpo del
+   * handler lee e.args despues del clear. Cada raise lo re-setea. */
+}
 static void piton_seq_set(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0||i>=s->length){piton_raise_set("IndexError","seq index out of range");return;}s->items[i]=v;}
 static void piton_dict_set(PitonDict*d,PitonSlot k,PitonSlot v){if(!d)return;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){d->items[i].value=v;return;}piton_dict_append(d,k,v);}
 static void piton_dict_update(PitonDict*d,PitonDict*src){if(!d||!src)return;for(long i=0;i<src->length;++i)piton_dict_set(d,src->items[i].key,src->items[i].value);}
@@ -7900,9 +7910,14 @@ class LinuxCEmitter:
             else:
                 _raise_or_propagate(out, function)
         elif op == "raise_typed":
-            exc_type, payload, handler_label = args
+            exc_type, payload, handler_label = args[0], args[1], args[2]
+            args_tuple = args[3] if len(args) > 3 else None
             message = f"(const char*){self._value(payload)}" if payload is not None else '""'
-            out.append(f'    piton_raise_set("{exc_type}",{message});')
+            if args_tuple is not None:
+                # EXC_ARGS_MULTI_V1: raise con 2+ args -> .args completo.
+                out.append(f'    piton_raise_set_args("{exc_type}",{message},{self._value(args_tuple)});')
+            else:
+                out.append(f'    piton_raise_set("{exc_type}",{message});')
             if handler_label:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:
@@ -7919,6 +7934,15 @@ class LinuxCEmitter:
             types[result] = "bool"
         elif op == "catch_clear":
             out.append('    piton_catch_clear();')
+        elif op == "load_exc_args":
+            # EXC_ARGS_MULTI_V1: `e.args` — si el raise guardo la tupla
+            # multi-arg, devolverla; si no, (mensaje,) como siempre.
+            msg_operand = args[0]
+            out.append(
+                f"    {_name(result)}=piton_exc_args?piton_exc_args:(long)piton_tuple1((const char*){self._value(msg_operand)});"
+            )
+            types[result] = "tuple"
+            return out
         elif op == "catch_bind":
             out.append(f"    {_name(result)}=(long)(piton_exc_message?piton_exc_message:\"\");")
             types[result] = "str"

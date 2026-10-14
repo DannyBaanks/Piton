@@ -186,6 +186,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "truth_test": "READ",
     "unpack_check": "READ",
     "catch_type": "READ", "catch_message": "READ", "catch_flag": "READ",
+    "load_exc_args": "READ",
     # WRITE
     "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
     "del_item": "WRITE", "del_name": "PURE",
@@ -2439,8 +2440,18 @@ class MIRLowerer:
                 )
         else:
             raise MIRLoweringError(f"unsupported native exception type '{exception_type}'")
-        if len(node.exc.args) > 1 or node.exc.keywords:
-            raise MIRLoweringError("unsupported native exception constructor")
+        if node.exc.keywords:
+            raise MIRLoweringError("exception constructors with keyword arguments are unsupported")
+        # EXC_ARGS_MULTI_V1: `lanzar ValueError('a', 'b')` — 2+ argumentos se
+        # construyen como tupla y el runtime la guarda en .args (CPython:
+        # e.args == ('a', 'b')). Antes era fail-closed.
+        args_tuple = None
+        if len(node.exc.args) != 1:
+            # 0 args -> () ; 2+ args -> la tupla completa. 1 arg se materializa
+            # en el backend como (mensaje,) (caso historico).
+            lowered_args = tuple(self._lower_expr(builder, a) for a in node.exc.args)
+            args_tuple = builder.temp()
+            builder.emit("build_collection", "tuple", lowered_args, result=args_tuple)
         payload = self._lower_expr(builder, node.exc.args[0]) if node.exc.args else None
         handler_label = self._find_exception_handler(builder, exception_type)
         if node.cause is not None:
@@ -2471,6 +2482,8 @@ class MIRLowerer:
                 raise MIRLoweringError("native raise supports `desde` only with an exception constructor or Nada")
         if node.cause is not None and cause_type is not None:
             builder.emit("raise_chain", exception_type, payload, cause_type, cause_payload, handler_label)
+        elif args_tuple is not None:
+            builder.emit("raise_typed", exception_type, payload, handler_label, args_tuple)
         else:
             builder.emit("raise_typed", exception_type, payload, handler_label)
 
@@ -4062,9 +4075,11 @@ class MIRLowerer:
                 and node.value.kind == HIRKind.LOAD
                 and node.value.name in getattr(builder, "exception_bindings", frozenset())
             ):
+                # EXC_ARGS_MULTI_V1: el backend decide — tupla multi si el
+                # raise la guardo, si no (mensaje,) como antes.
                 msg = self._lower_expr(builder, node.value)
                 result = builder.temp()
-                builder.emit("build_collection", "tuple", (msg,), result=result)
+                builder.emit("load_exc_args", msg, result=result)
                 return result
             # MATH_TIER1_V1: math.pi / math.e lower to float constants.
             # (_module_attr_chain deliberately excludes asyncio/math/sys, so we

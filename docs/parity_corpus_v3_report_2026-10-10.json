@@ -26,9 +26,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 6,
+      "FAIL_CLOSED": 4,
       "RAISE_EQ": 0,
-      "EQUIV": 229
+      "EQUIV": 231
     },
     "by_area": {
       "str_methods_more": {
@@ -99,9 +99,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 2,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 12
+        "EQUIV": 14
       },
       "numeric_semantics": {
         "DIVERGENT_CRASH": 0,
@@ -128,7 +128,7 @@
         "EQUIV": 14
       }
     },
-    "pct_equiv": 97.4,
+    "pct_equiv": 98.3,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -1569,8 +1569,10 @@
       "area": "exceptions_deep",
       "name": "args-attr",
       "src": "intentar:\n    lanzar ValueError('a', 'b')\nexcepto ValueError como e:\n    imprimir(e.args)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: unsupported native exception constructor"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "exceptions_deep",
@@ -1630,8 +1632,10 @@
       "area": "exceptions_deep",
       "name": "custom-args",
       "src": "clase E(Exception):\n    pasar\nintentar:\n    lanzar E('a', 'b')\nexcepto E como e:\n    imprimir(e.args)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: unsupported native exception constructor"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "exceptions_deep",
