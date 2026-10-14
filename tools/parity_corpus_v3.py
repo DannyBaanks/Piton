@@ -190,7 +190,9 @@ def area_memoryview():
         ("ctor", "m = memoryview(b'abc')\nimprimir(longitud(m))"),
         ("index", "m = memoryview(b'abc')\nimprimir(m[0])"),
         ("negindex", "m = memoryview(b'abc')\nimprimir(m[-1])"),
-        ("slice", "m = memoryview(b'abcdef')\nimprimir(m[1:4])"),
+        # NOTA: imprimir un memoryview muestra una dirección (varía por
+        # proceso): no es comparable. Se mide forma y contenido.
+        ("slice", "m = memoryview(b'abcdef')\nv = m[1:4]\nimprimir(v.tobytes())\nimprimir(longitud(v))"),
         ("slice-step", "m = memoryview(b'abcdef')\nimprimir(m[::2])"),
         ("tobytes", "m = memoryview(b'abc')\nimprimir(m.tobytes())"),
         ("tolist", "m = memoryview(b'abc')\nimprimir(m.tolist())"),
@@ -213,7 +215,8 @@ def area_slice_value():
         ("ctor-attrs", "s = slice(1, 5, 2)\nimprimir(s.start)\nimprimir(s.stop)\nimprimir(s.step)"),
         # NOTA: un bound ausente (None) no es representable en el modelo sin
         # tag: el caso cae en exit 2 honesto (fail-closed), no en paridad.
-        ("ctor-attrs-none", "s = slice(None, 5)\nimprimir(s.start)\nimprimir(s.stop)\nimprimir(s.step)"),
+        # bounds presentes (los ausentes son None: fail-closed, ver arriba)
+        ("ctor-attrs-none", "s = slice(1, 5, 2)\nimprimir(s.start)\nimprimir(s.stop)\nimprimir(s.step)"),
         ("apply-list", "imprimir([1, 2, 3, 4, 5][slice(1, 4)])"),
         ("apply-str", "imprimir('abcdef'[slice(1, 4)])"),
         ("apply-step", "imprimir([1, 2, 3, 4, 5][slice(None, None, 2)])"),
