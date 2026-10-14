@@ -175,6 +175,9 @@ class Win64NasmEmitter:
         self.class_properties = getattr(module, "class_properties", {})
         self.static_methods = getattr(module, "static_methods", set())
         self.class_methods = getattr(module, "class_methods", set())
+        # Windows reads _tuple_elems in the static-tuple typing paths but
+        # never populated it -> AttributeError on every tuple-typed target.
+        self._tuple_elems: dict[str, tuple] = {}
         self.function_names = {function.name for function in module.functions}
         self.function_return_types = self._infer_return_types(module)
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
@@ -2230,7 +2233,12 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_raise_unhandled")
             self.lines.append(f"{ok_label}:")
         elif op == "get_item":
-            container, key = args
+            # GETITEM_HANDLER_V1 carries an optional handler label as a 3rd
+            # arg (KeyError/IndexError routing, mirrors linux_x86). Windows
+            # consumes the two data operands and ignores the handler for now
+            # -- the unpack used to crash with too-many-values on every
+            # subscript once the lowering started attaching it.
+            container, key = args[0], args[1]
             container_type = self.types.get(container)
             if container_type == "str":
                 # PARITY_P2_V1: str[s] yields the one-character string.
@@ -3000,7 +3008,16 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_raise_chain")
                 self._emit_propagate_or_exit()
         elif op == "raise_typed":
-            exception_type, payload, handler_label = args
+            exception_type, payload, handler_label = args[0], args[1], args[2]
+            # EXC_ARGS_MULTI_V1: 4th operand is the multi-arg tuple (lanzar
+            # E('a','b')). The Windows runtime (native_runtime.c) has no
+            # piton_raise_set_args helper, so multi-arg raises fail closed
+            # here instead of silently dropping .args.
+            if len(args) > 3 and args[3] is not None:
+                raise NativeBuildError(
+                    "native multi-arg raise is Linux-only right now "
+                    "(Windows runtime lacks piton_raise_set_args); use a single message"
+                )
             self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
             if payload is None:
                 self.lines.append("    xor edx, edx")
