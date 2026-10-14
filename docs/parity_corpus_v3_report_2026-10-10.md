@@ -2,7 +2,7 @@
 
 - backend medido: **linux_x86 (Linux native)** (instrumento: `tools/parity_corpus_v3.py`)
 - oracle: CPython 3.12.3
-- casos: **235** | EQUIV **99.1%** | comportamiento honesto (EQUIV+RAISE_EQ+FAIL_CLOSED) **100.0%** | DIVERGENT **0.0%**
+- casos: **235** | EQUIV **100.0%** | comportamiento honesto (EQUIV+RAISE_EQ+FAIL_CLOSED) **100.0%** | DIVERGENT **0.0%**
 
 Este reporte NO es un gate. Mide el subconjunto declarado en `NATIVE_COMPATIBILITY.md` mediante matrices enumeradas, no casos elegidos a mano.
 
@@ -13,16 +13,16 @@ Este reporte NO es un gate. Mide el subconjunto declarado en `NATIVE_COMPATIBILI
 | DIVERGENT_CRASH | 0 |
 | DIVERGENT_MISMATCH | 0 |
 | TIMEOUT | 0 |
-| FAIL_CLOSED | 2 |
+| FAIL_CLOSED | 0 |
 | RAISE_EQ | 0 |
-| EQUIV | 233 |
+| EQUIV | 235 |
 
 ## Por area
 
 | area | EQUIV | RAISE_EQ | FAIL_CLOSED | DIVERGENT | TIMEOUT |
 |---|---|---|---|---|---|
-| str_methods_more | 24 | 0 | 1 | 0 | 0 |
-| dict_ops_more | 18 | 0 | 1 | 0 | 0 |
+| str_methods_more | 25 | 0 | 0 | 0 | 0 |
+| dict_ops_more | 19 | 0 | 0 | 0 | 0 |
 | set_ops | 28 | 0 | 0 | 0 | 0 |
 | frozenset | 15 | 0 | 0 | 0 | 0 |
 | memoryview | 14 | 0 | 0 | 0 | 0 |

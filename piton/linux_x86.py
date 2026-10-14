@@ -3137,6 +3137,46 @@ class LinuxCEmitter:
         return "".join(out), fields
 
     @staticmethod
+    def _parse_format_map_template(template: str) -> tuple[str, list[str]]:
+        """FORMAT_MAP_V1: template de format_map() con campos {nombre} -> un
+        template con campos {} (para reusar piton_str_format) y la lista de
+        nombres en orden. Escaped braces ({{ }}) intactos. Specs, conversiones
+        (!r), accessors ({0.x}) y campos vacios no estan soportados: se rechazan
+        aqui (FAIL_CLOSED honesto, CPython los acepta)."""
+        out: list[str] = []
+        names: list[str] = []
+        i, n = 0, len(template)
+        while i < n:
+            ch = template[i]
+            if ch == "{":
+                if i + 1 < n and template[i + 1] == "{":
+                    out.append("{{")
+                    i += 2
+                    continue
+                j = template.find("}", i + 1)
+                if j < 0:
+                    raise NativeBuildError("str.format_map(): unmatched '{'")
+                content = template[i + 1:j]
+                i = j + 1
+                if not re.fullmatch(r"[A-Za-z_]\w*", content):
+                    raise NativeBuildError(
+                        "Linux str.format_map() supports only simple {name} fields "
+                        "(specs, conversions and accessors are not supported yet)"
+                    )
+                names.append(content)
+                out.append("{}")
+            elif ch == "}":
+                if i + 1 < n and template[i + 1] == "}":
+                    out.append("}}")
+                    i += 2
+                    continue
+                raise NativeBuildError("str.format_map(): unmatched '}'")
+            else:
+                out.append(ch)
+                i += 1
+        return "".join(out), names
+
+    @staticmethod
     def _format_spec_type(spec: str) -> str:
         """FMT_SPEC_V1: extract the type char from a format spec (last char
         if it's a known type). Returns '' for no type."""
@@ -4152,6 +4192,88 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=piton_str_index_f((const char*){operand},{require_str(0, 'a str argument')});")
             types[result] = "int"
         else:
+            if method == "format_map":
+                # FORMAT_MAP_V1: '{a}'.format_map({'a': 1}) — template literal
+                # y mapping literal; cada campo named se resuelve (clave
+                # garantizada por el record del dict literal, asi que no puede
+                # haber KeyError) a un valor y el render reusa
+                # piton_str_format. Specs/conversiones/accessors y mappings no
+                # literales quedan fail-closed arriba.
+                require_count(1, "exactly one argument (a mapping)")
+                mapping = call_args[0]
+                if types.get(mapping, "") != "dict":
+                    raise NativeBuildError("Linux str.format_map() requires a dict mapping")
+                template = self._literal_str_operand(obj, self._fn_consts)
+                if template is None:
+                    raise NativeBuildError("Linux str.format_map() requires a literal template")
+                drec = self._dict_elems.get(mapping)
+                if drec is None:
+                    raise NativeBuildError(
+                        "Linux str.format_map() requires a literal dict mapping"
+                    )
+                simplified, field_names = self._parse_format_map_template(template)
+                lines: list[str] = []
+                for k, fname in enumerate(field_names):
+                    if fname not in drec:
+                        raise NativeBuildError(
+                            f"Linux str.format_map(): {fname!r} is not a literal key of the mapping"
+                        )
+                    value_operand, value_type = drec[fname]
+                    if value_operand in self._fn_consts:
+                        lit = self._fn_consts[value_operand]
+                        if isinstance(lit, str):
+                            lit_c = json.dumps(lit)
+                        elif isinstance(lit, bool):
+                            lit_c = '"True"' if lit else '"False"'
+                        elif isinstance(lit, int):
+                            lit_c = f"piton_str_from_int({lit}L)"
+                        elif isinstance(lit, float):
+                            # piton_str_from_float recibe BITS double (long),
+                            # no un double literal: hay que codificarlos.
+                            if lit != lit or lit in (float("inf"), float("-inf")):
+                                raise NativeBuildError(
+                                    "Linux str.format_map(): non-finite float literals are not supported"
+                                )
+                            lit_c = f"piton_str_from_float(piton_double_bits({lit!r}))"
+                        elif lit is None:
+                            lit_c = '"None"'
+                        else:
+                            raise NativeBuildError(
+                                "Linux str.format_map(): unsupported literal value"
+                            )
+                        lines.append(f"    const char*_fmv{k}=(const char*){lit_c};")
+                    else:
+                        conv = {
+                            "str": f"(const char*)_fm{k}.bits",
+                            "int": f"piton_str_from_int(_fm{k}.bits)",
+                            "float": f"piton_str_from_float(_fm{k}.bits)",
+                            "bool": f'(_fm{k}.bits?"True":"False")',
+                            "none": '"None"',
+                        }.get(value_type)
+                        if conv is None:
+                            raise NativeBuildError(
+                                f"Linux str.format_map() does not support {value_type} values"
+                            )
+                        lines.append(
+                            f"    PitonSlot _fm{k}=piton_dict_get((PitonDict*){self._value(mapping)},"
+                            f"piton_slot((long){json.dumps(fname)},PK_STR));"
+                        )
+                        lines.append(f"    const char*_fmv{k}=(const char*){conv};")
+                out.append("    {")
+                out.extend(lines)
+                if not field_names:
+                    out.append('    const char*_fmv0="";')
+                    names_c, count_c = "_fmv0", 0
+                else:
+                    names_c = ",".join(f"_fmv{k}" for k in range(len(field_names)))
+                    count_c = len(field_names)
+                out.append(
+                    f"    const char*_fma[]={{{names_c}}};"
+                    f" {_name(result)}=(long)piton_str_format((const char*){json.dumps(simplified)},{count_c},_fma);"
+                )
+                out.append("    }")
+                types[result] = "str"
+                return out
             raise NativeBuildError(f"Linux str.{method}() is not supported")
 
     def _runtime_type_error(self, out: list[str], message: str) -> None:
@@ -7770,6 +7892,34 @@ class LinuxCEmitter:
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
             call_args = args[3] if len(args) > 3 else ()
+            kw_args = args[4] if len(args) > 4 else ()
+            if kw_args:
+                # DICT_UPDATE_KW_V1: `d.update(b=2)` -> un piton_dict_append
+                # por keyword (equivalente exacto de CPython d[k] = v).
+                # El MIR solo baja kwargs para `update`; aqui se exige ademas
+                # receiver dict. Cualquier otro caso es build error ANTES de
+                # cualquier dispatch de metodo.
+                owner_type = types.get(obj, "")
+                if cls_name is not None or method != "update" or owner_type not in {"dict", "class:dict", "dict:module"}:
+                    raise NativeBuildError(
+                        "native method calls with keyword arguments are supported only for dict.update()"
+                    )
+                _opnd = self._value(obj)
+                if call_args:
+                    if len(call_args) != 1 or types.get(call_args[0], "") != "dict":
+                        raise NativeBuildError(
+                            "Linux dict.update() with keyword arguments takes no positional dict argument"
+                        )
+                    out.append(f"    piton_dict_update((PitonDict*){_opnd},(PitonDict*){self._value(call_args[0])});")
+                for _kname, _kval in kw_args:
+                    if _kname is None:
+                        raise NativeBuildError("Linux dict.update() does not accept **kwargs unpacking")
+                    out.append(
+                        f"    piton_dict_append((PitonDict*){_opnd},"
+                        f"piton_slot((long){json.dumps(_kname)},PK_STR),{self._slot(_kval, types)});"
+                    )
+                types[result] = "none"
+                return out
             if cls_name is None:
                 owner_type = types.get(obj, "")
                 if owner_type == "str":

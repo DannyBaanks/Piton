@@ -186,9 +186,9 @@ class FormatV1(unittest.TestCase):
     def test_unknown_method_fails_closed(self):
         # title (P23), partition/rpartition (P36/v6), removeprefix (P38),
         # casefold/isascii (v3), isprintable/isidentifier/encode (v6) implemented;
-        # translate/format_map siguen fuera.
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('a'.format_map({}))\n")
+        # format_map implementado en FORMAT_MAP_V1 (template + mapping
+        # literales); translate sigue fuera.
+        _assert_matches(self, "imprimir('a'.format_map({}))\n")
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("imprimir('a'.translate(None))\n")
 

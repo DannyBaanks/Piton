@@ -3081,7 +3081,11 @@ class MIRLowerer:
                 builder.emit("call", function, args, result=result)
                 return result
             if node.func.kind == HIRKind.ATTR:
-                if node.keywords:
+                # DICT_UPDATE_KW_V1: solo `d.update(k=v)` baja con keywords;
+                # cualquier otro metodo con kwargs sigue fail-closed (el
+                # backend acepta kw solo en dict.update; receiver distinto:
+                # build error, nunca semantica aproximada silenciosa).
+                if node.keywords and node.func.attr != "update":
                     raise MIRLoweringError("native method calls do not support keyword arguments yet")
                 super_call = node.func.value if node.func.value.kind == HIRKind.CALL else None
                 if (
@@ -3108,8 +3112,16 @@ class MIRLowerer:
                     return result
                 owner = self._lower_expr(builder, node.func.value)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                if node.keywords and any(k.arg is None for k in node.keywords):
+                    raise MIRLoweringError("native method calls do not support **kwargs unpacking yet")
+                kw = tuple(
+                    (k.arg, self._lower_expr(builder, k.value)) for k in (node.keywords or ())
+                )
                 result = builder.temp()
-                builder.emit("method_call", None, node.func.attr, owner, args, result=result)
+                if kw:
+                    builder.emit("method_call", None, node.func.attr, owner, args, kw, result=result)
+                else:
+                    builder.emit("method_call", None, node.func.attr, owner, args, result=result)
                 return result
             closure = builder.closures.get(node.func.name) if node.func.kind == HIRKind.LOAD else None
             if closure:
@@ -3881,7 +3893,11 @@ class MIRLowerer:
                 builder.emit("call", function, args, _active_handler(builder), result=result)
                 return result
             if node.func.kind == HIRKind.ATTR:
-                if node.keywords:
+                # DICT_UPDATE_KW_V1: solo `d.update(k=v)` baja con keywords;
+                # cualquier otro metodo con kwargs sigue fail-closed (el
+                # backend acepta kw solo en dict.update; receiver distinto:
+                # build error, nunca semantica aproximada silenciosa).
+                if node.keywords and node.func.attr != "update":
                     raise MIRLoweringError("native method calls do not support keyword arguments yet")
                 super_call = node.func.value if node.func.value.kind == HIRKind.CALL else None
                 if (
@@ -3908,8 +3924,16 @@ class MIRLowerer:
                     return result
                 owner = self._lower_expr(builder, node.func.value)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                if node.keywords and any(k.arg is None for k in node.keywords):
+                    raise MIRLoweringError("native method calls do not support **kwargs unpacking yet")
+                kw = tuple(
+                    (k.arg, self._lower_expr(builder, k.value)) for k in (node.keywords or ())
+                )
                 result = builder.temp()
-                builder.emit("method_call", None, node.func.attr, owner, args, result=result)
+                if kw:
+                    builder.emit("method_call", None, node.func.attr, owner, args, kw, result=result)
+                else:
+                    builder.emit("method_call", None, node.func.attr, owner, args, result=result)
                 return result
             closure = builder.closures.get(node.func.name) if node.func.kind == HIRKind.LOAD else None
             if closure:

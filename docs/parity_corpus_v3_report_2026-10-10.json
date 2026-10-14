@@ -26,26 +26,26 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 2,
+      "FAIL_CLOSED": 0,
       "RAISE_EQ": 0,
-      "EQUIV": 233
+      "EQUIV": 235
     },
     "by_area": {
       "str_methods_more": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 24
+        "EQUIV": 25
       },
       "dict_ops_more": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 18
+        "EQUIV": 19
       },
       "set_ops": {
         "DIVERGENT_CRASH": 0,
@@ -128,7 +128,7 @@
         "EQUIV": 14
       }
     },
-    "pct_equiv": 99.1,
+    "pct_equiv": 100.0,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -245,8 +245,10 @@
       "area": "str_methods_more",
       "name": "format-map",
       "src": "imprimir('{a}'.format_map({'a': 1}))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.format_map() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "str_methods_more",
@@ -405,8 +407,10 @@
       "area": "dict_ops_more",
       "name": "update-kwargs",
       "src": "d = {'a': 1}\nd.update(b=2)\nimprimir(d)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: native method calls do not support keyword arguments yet"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dict_ops_more",
