@@ -1407,7 +1407,10 @@ class MIRLowerer:
         elif kind == HIRKind.AUG_ASSIGN:
             left = self._lower_expr(builder, node.target)
             right = self._lower_expr(builder, node.value)
-            result = self._binary(builder, node.op.rstrip("="), left, right)
+            # IAUG_ASSIGN_V1: `p += 1` se marca 'aug' — CPython prueba
+            # __iadd__ ANTES que __add__ en augmented assignment; un
+            # binary('+') normal no debe tomar ese atajo.
+            result = self._binary(builder, node.op.rstrip("="), left, right, aug=True)
             self._store(builder, node.target, result)
         elif kind == HIRKind.RETURN:
             builder.emit("return", self._lower_expr(builder, node.value) if node.value else None)
@@ -4253,7 +4256,7 @@ class MIRLowerer:
         builder.emit("genexpr_new", values, result=result)
         return result
 
-    def _binary(self, builder: _Builder, op: str, left: Any, right: Any) -> str:
+    def _binary(self, builder: _Builder, op: str, left: Any, right: Any, aug: bool = False) -> str:
         result = builder.temp()
         if op in {"//", "%", "+", "-", "*", "/", "**", "<<", ">>"}:
             # ZDIV_GUARD_V1 / INTOVF_GUARD_V1: mirror the call op — embed the
@@ -4265,7 +4268,10 @@ class MIRLowerer:
             # because a negative shift count raises ValueError, and without the
             # handler the raise was reported as unhandled instead of reaching
             # the enclosing intentar/excepto.
-            builder.emit("binary", op, left, right, _active_handler(builder), result=result)
+            if aug:
+                builder.emit("binary", op, left, right, _active_handler(builder), "aug", result=result)
+            else:
+                builder.emit("binary", op, left, right, _active_handler(builder), result=result)
         else:
             builder.emit("binary", op, left, right, result=result)
         return result

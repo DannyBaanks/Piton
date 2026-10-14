@@ -26,9 +26,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 10,
+      "FAIL_CLOSED": 6,
       "RAISE_EQ": 0,
-      "EQUIV": 225
+      "EQUIV": 229
     },
     "by_area": {
       "str_methods_more": {
@@ -99,25 +99,25 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "FAIL_CLOSED": 2,
         "RAISE_EQ": 0,
-        "EQUIV": 11
+        "EQUIV": 12
       },
       "numeric_semantics": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 1,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 30
+        "EQUIV": 31
       },
       "object_protocol3": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 2,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 14
+        "EQUIV": 16
       },
       "callable_protocol": {
         "DIVERGENT_CRASH": 0,
@@ -128,7 +128,7 @@
         "EQUIV": 14
       }
     },
-    "pct_equiv": 95.7,
+    "pct_equiv": 97.4,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -1664,8 +1664,10 @@
       "area": "exceptions_deep",
       "name": "exc-in-generator",
       "src": "funcion g():\n    lanzar ValueError('g')\nintentar:\n    lista(g())\nexcepto ValueError:\n    imprimir('caught')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux lista() cannot convert a 'none' value"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "exceptions_deep",
@@ -1707,8 +1709,10 @@
       "area": "numeric_semantics",
       "name": "bigint-divmod",
       "src": "imprimir(divmod(10 ** 25, 7))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux divmod requires int or float arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "numeric_semantics",
@@ -2020,8 +2024,10 @@
       "area": "object_protocol3",
       "name": "bool-len",
       "src": "clase P:\n    funcion __len__(self):\n        devolver 0\nimprimir(bool(P()))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux bool() requires int/float/str/collection/None (M14 v1)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "object_protocol3",
@@ -2072,8 +2078,10 @@
       "area": "object_protocol3",
       "name": "iadd",
       "src": "clase P:\n    funcion __iadd__(self, o):\n        devolver self\np = P()\np += 1\nimprimir('ok')\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux '+' between 'object:P' and 'int' is not supported (no __add__/__radd__ found on the class)"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "object_protocol3",

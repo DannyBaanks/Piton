@@ -758,6 +758,14 @@ static PitonSeq* piton_seq_apply_slice(PitonSeq*src,PitonSlice*sl){
   else{for(long i=start;i>stop&&k<count;i+=step)r->items[k++]=src->items[i];}
   return r;
 }
+/* CONV_NONE_V1: lista(none). Propaga la excepcion pendiente o levanta
+ * TypeError como CPython. */
+static int piton_exc_flag_get(void);
+static long piton_list_from_none(void){
+  if(piton_exc_flag_get())return 0;
+  piton_raise_set("TypeError","'NoneType' object is not iterable");
+  return 0;
+}
 static void piton_dict_set(PitonDict*d,PitonSlot k,PitonSlot v);
 static long piton_dict_fromkeys(PitonSeq*keys,int has_val,int val_kind,long val){
   PitonDict*d=piton_dict_new(keys->length);
@@ -1237,6 +1245,20 @@ static long piton_divmod_float(double a,double b){
   PitonSeq*p=piton_seq_new(PK_TUPLE,2);
   p->items[0]=(PitonSlot){piton_double_bits(q),PK_FLOAT};
   p->items[1]=(PitonSlot){piton_double_bits(r),PK_FLOAT};
+  return(long)p;
+}
+/* DIVMOD_BIGINT_V1: divmod con al menos un bigint -> tupla (q, r). */
+static void*piton_bigint_from_i64(long);
+static int piton_bigint_is_zero(void*);
+static void*piton_bigint_floor_div(void*,void*);
+static void*piton_bigint_mod(void*,void*);
+static long piton_divmod_bigint(long a,long b,int a_big,int b_big){
+  void*ba=a_big?(void*)a:piton_bigint_from_i64(a);
+  void*bb=b_big?(void*)b:piton_bigint_from_i64(b);
+  if(piton_bigint_is_zero(bb)){piton_raise_set("ZeroDivisionError","integer division or modulo by zero");return 0;}
+  PitonSeq*p=piton_seq_new(PK_TUPLE,2);
+  p->items[0]=(PitonSlot){(long)piton_bigint_floor_div(ba,bb),PK_BIGINT};
+  p->items[1]=(PitonSlot){(long)piton_bigint_mod(ba,bb),PK_BIGINT};
   return(long)p;
 }
 static long piton_divmod_xy(long a,long b){if(!b){piton_raise_set("ZeroDivisionError","integer division or modulo by zero");return 0;}long q=a/b,r=a%b;if(r&&((r<0)!=(b<0))){q-=1;r+=b;}PitonSeq*p=piton_seq_new(PK_TUPLE,2);p->items[0]=(PitonSlot){q,PK_INT};p->items[1]=(PitonSlot){r,PK_INT};return(long)p;}
@@ -5411,8 +5433,30 @@ class LinuxCEmitter:
             # optional 4th argument on '//' and '%' so the raise below is
             # catchable by intentar/excepto.
             handler_label = args[3] if len(args) > 3 else None
+            # IAUG_ASSIGN_V1: el MIR marca `p += 1` con un 5to arg 'aug'.
+            is_aug = len(args) > 4 and args[4] == "aug"
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
+            if operator == "+" and is_aug and left_type.startswith("object:"):
+                # CPython prueba __iadd__ ANTES de __add__/__radd__ en
+                # augmented assignment; sin __iadd__ cae al flujo normal.
+                _ia_cls = left_type.split(":", 1)[1]
+                _ia_hit = None
+                for _cand in self.class_mro.get(_ia_cls, []):
+                    if "__iadd__" in self.classes.get(_cand, set()):
+                        _ia_hit = _cand
+                        break
+                if _ia_hit is None and "__iadd__" in self.classes.get(_ia_cls, set()):
+                    _ia_hit = _ia_cls
+                if _ia_hit is not None:
+                    _ia_target = _name(_ia_hit + "__" + "__iadd__")
+                    _ia_args = ",".join(self._value(v) for v in (left, right))
+                    if self.function_frame_abi.get(_ia_hit + "__" + "__iadd__", False):
+                        out.append(f'    {{long _ia[]={{ {_ia_args} }}; {_name(result)}=piton_frame_call((long)&{_ia_target},2,_ia);}}')
+                    else:
+                        out.append(f"    {_name(result)}={_ia_target}({_ia_args});")
+                    types[result] = self.function_return_types.get(_ia_target, "int")
+                    return out
             if operator == "in":
                 # CONTAINS_V1: membership; mir lowers `a in b` here and
                 # `a no en b` as a compare op that reuses the same helper.
@@ -6616,6 +6660,20 @@ class LinuxCEmitter:
                     types[result] = "tuple"
                     self._coll_elems[result] = "float"
                     return out
+                if t0 == "bigint" or t1 == "bigint":
+                    # DIVMOD_BIGINT_V1: divmod(bigint, int|bigint) -> tupla
+                    # (q, r) como CPython; el divisor int se promueve.
+                    if t0 not in {"int", "bool", "bigint"} or t1 not in {"int", "bool", "bigint"}:
+                        raise NativeBuildError("Linux divmod(bigint, x) requires int or bigint arguments")
+                    _b0 = 1 if t0 == "bigint" else 0
+                    _b1 = 1 if t1 == "bigint" else 0
+                    out.append(
+                        f"    {_name(result)}=piton_divmod_bigint({self._value(values[0])},{self._value(values[1])},{_b0},{_b1});"
+                    )
+                    self._emit_exc_check(out, function, call_handler)
+                    types[result] = "tuple"
+                    self._coll_elems[result] = "bigint"
+                    return out
                 if t0 not in {"int", "bool"} or t1 not in {"int", "bool"}:
                     raise NativeBuildError("Linux divmod requires int or float arguments")
                 out.append(f"    {_name(result)}=piton_divmod_xy({self._value(values[0])},{self._value(values[1])});")
@@ -6776,6 +6834,30 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=0;")
                 elif arg_type == "complex":
                     out.append(f"    {_name(result)}=piton_cx_truthy_bits({operand});")
+                elif str(arg_type).startswith("object:"):
+                    # BOOL_OBJECT_V1: bool(obj) como CPython — __bool__ si
+                    # existe, si no __len__ (!= 0), si no True. El metodo de
+                    # usuario puede lanzar, asi que se routea al handler.
+                    _bcls = arg_type.split(":", 1)[1]
+                    _b_bool = _b_len = None
+                    for _cand in self.class_mro.get(_bcls, []):
+                        if _b_bool is None and "__bool__" in self.classes.get(_cand, set()):
+                            _b_bool = _cand
+                        if _b_len is None and "__len__" in self.classes.get(_cand, set()):
+                            _b_len = _cand
+                    if _b_bool is None and "__bool__" in self.classes.get(_bcls, set()):
+                        _b_bool = _bcls
+                    if _b_len is None and "__len__" in self.classes.get(_bcls, set()):
+                        _b_len = _bcls
+                    if _b_bool is not None:
+                        out.append(f"    {_name(result)}=({_name(_b_bool + '__' + '__bool__')}({operand})!=0);")
+                    elif _b_len is not None:
+                        out.append(f"    {_name(result)}=({_name(_b_len + '__' + '__len__')}({operand})!=0);")
+                    else:
+                        out.append(f"    {_name(result)}=1;")
+                    types[result] = "bool"
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 else:
                     raise NativeBuildError("Linux bool() requires int/float/str/collection/None (M14 v1)")
                 types[result] = "bool"
@@ -7030,6 +7112,18 @@ class LinuxCEmitter:
                     types[result] = "list"
                     self._coll_elems[result] = "tuple" if source_type in {"iterator:enumerate", "iterator:zip"} else "int"
                     return out
+                if source_type == "none" and alias in {"lista", "list", "tuple", "tupla"}:
+                    # CONV_NONE_V1: lista(none) — si la llamada que produjo
+                    # `none` ya levanto excepcion, se propaga (helper lo
+                    # detecta via flag); si no, TypeError como CPython
+                    # ('NoneType' object is not iterable). Sin esto
+                    # `intentar: lista(g()) excepto ValueError` era fail-closed
+                    # en build aunque CPython captura el error de g().
+                    out.append(f"    {_name(result)}=piton_list_from_none();")
+                    types[result] = "list"
+                    self._coll_elems[result] = "int"
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 if source_type not in {"list", "tuple", "str", "set", "dict", "range"}:
                     raise NativeBuildError(f"Linux {alias}() cannot convert a '{source_type}' value")
                 # COLL_ELEM_TYPE_V1: a conversion preserves the element kind, so
@@ -7049,6 +7143,11 @@ class LinuxCEmitter:
                 else:
                     out.append(f"    {_name(result)}=(long)piton_conv_dict({slot});")
                     types[result] = "dict"
+                # CONV_EXC_CHECK_V1: una conversion que lanza en runtime
+                # (lista(None) -> TypeError, lista(g()) con g lanzando) debe
+                # routear al handler del try; sin este check la excepcion se
+                # ignoraba y el programa salia con rc 0.
+                self._emit_exc_check(out, function, call_handler)
             elif function_name in {"type", "tipo"}:
                 if len(values) != 1:
                     raise NativeBuildError("Linux type requires one argument")
