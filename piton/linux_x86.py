@@ -758,6 +758,43 @@ static PitonSeq* piton_seq_apply_slice(PitonSeq*src,PitonSlice*sl){
   else{for(long i=start;i>stop&&k<count;i+=step)r->items[k++]=src->items[i];}
   return r;
 }
+static void piton_dict_set(PitonDict*d,PitonSlot k,PitonSlot v);
+static long piton_dict_fromkeys(PitonSeq*keys,int has_val,int val_kind,long val){
+  PitonDict*d=piton_dict_new(keys->length);
+  d->length=0;
+  for(long i=0;i<keys->length;++i){
+    PitonSlot v;v.bits=val;v.kind=val_kind;
+    piton_dict_set(d,keys->items[i],has_val?v:(PitonSlot){0,PK_NONE});
+  }
+  return(long)d;
+}
+/* SLICE_INDICES_V1: (start, stop, step) normalizados a la longitud n. */
+static long piton_slice_indices(PitonSlice*sl,long n){
+  long step=sl->has_step?sl->step:1;
+  if(step==0){piton_raise_set("ValueError","slice step cannot be zero");return 0;}
+  long start,stop;
+  if(step>0){
+    start=sl->has_start?sl->start:0;
+    stop=sl->has_stop?sl->stop:n;
+    if(start<0)start+=n;if(stop<0)stop+=n;
+    if(start<0)start=0;if(start>n)start=n;
+    if(stop<0)stop=0;if(stop>n)stop=n;
+    if(stop<start)stop=start;
+  }else{
+    start=sl->has_start?sl->start:n-1;
+    stop=sl->has_stop?sl->stop:-1;
+    if(sl->has_start&&start<0)start+=n;
+    if(sl->has_stop&&stop>=0)stop+=n;
+    if(start<0)start=-1;if(start>=n)start=n-1;
+    if(stop<-1)stop=-1;
+    if(stop>start)stop=start;
+  }
+  PitonSeq*r=piton_seq_new(PK_TUPLE,3);
+  r->items[0]=(PitonSlot){start,PK_INT};
+  r->items[1]=(PitonSlot){stop,PK_INT};
+  r->items[2]=(PitonSlot){step,PK_INT};
+  return(long)r;
+}
 static int piton_slice_eq(PitonSlice*a,PitonSlice*b){
   return a->has_start==b->has_start&&a->has_stop==b->has_stop&&a->has_step==b->has_step&&
          (!a->has_start||a->start==b->start)&&(!a->has_stop||a->stop==b->stop)&&(!a->has_step||a->step==b->step);
@@ -5054,6 +5091,14 @@ class LinuxCEmitter:
                 aliases[result] = source
                 out.append(f"    {_name(result)}=0;")
                 return out
+            if source in {"dict", "diccionario", "slice", "rebanada"}:
+                # CLASS_LOAD_V1: dict.fromkeys / slice(...) necesitan el tipo
+                # de clase para rutear el classmethod.
+                _cn = "dict" if source in {"dict", "diccionario"} else "slice"
+                types[result] = f"class:{_cn}"
+                aliases[result] = source
+                out.append(f"    {_name(result)}=0;")
+                return out
             if source in _BUILTINS and source not in function.params and source not in _FUNC_ONLY_BUILTINS:
                 # BUILTIN_MARKER_V1: this load emits NO C code — the builtin is
                 # only resolved by the call dispatch. Mark the operand so any
@@ -7549,6 +7594,35 @@ class LinuxCEmitter:
                 if owner_type in {"bytes", "bytearray"}:
                     self._emit_bytes_method(out, result, method, obj, list(call_args),
                                             owner_type == "bytearray", types)
+                    return out
+                if owner_type == "class:dict" and method == "fromkeys":
+                    # DICT_FROMKEYS_V1: dict.fromkeys(iterable, value) — las
+                    # claves son los elementos; el valor es el mismo para todas.
+                    if len(call_args) not in (1, 2):
+                        raise NativeBuildError("Linux dict.fromkeys() requires one or two arguments")
+                    if types.get(call_args[0], "") not in {"list", "tuple"}:
+                        raise NativeBuildError("Linux dict.fromkeys() requires a list or tuple of keys")
+                    _has_val = 1 if len(call_args) == 2 else 0
+                    _vkind = self._kind(types.get(call_args[1], "none")) if _has_val else "PK_NONE"
+                    _vexpr = self._value(call_args[1]) if _has_val else "0"
+                    out.append(
+                        f"    {_name(result)}=(long)piton_dict_fromkeys((PitonSeq*){self._value(call_args[0])},"
+                        f"{_has_val},{_vkind},{_vexpr});"
+                    )
+                    types[result] = "dict"
+                    self._dict_val_types[result] = types.get(call_args[1], "none") if _has_val else "none"
+                    return out
+                if owner_type in {"slice", "class:slice"} and method == "indices":
+                    # SLICE_INDICES_V1: s.indices(n) -> (start, stop, step)
+                    # normalizados a la longitud n (CPython).
+                    if len(call_args) != 1 or types.get(call_args[0], "") not in {"int", "bool"}:
+                        raise NativeBuildError("Linux slice.indices() requires one int argument")
+                    _slv = values[0] if owner_type == "class:slice" else obj
+                    out.append(
+                        f"    {_name(result)}=piton_slice_indices((PitonSlice*){self._value(_slv)},{self._value(call_args[0])});"
+                    )
+                    types[result] = "tuple"
+                    self._tuple_elems[result] = (("%i", "int"), ("%j", "int"), ("%k", "int"))
                     return out
                 if owner_type in {"class:bytes", "class:bytearray"} and method == "fromhex":
                     if len(call_args) != 1 or types.get(call_args[0]) != "str":

@@ -26,9 +26,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 20,
+      "FAIL_CLOSED": 16,
       "RAISE_EQ": 0,
-      "EQUIV": 215
+      "EQUIV": 219
     },
     "by_area": {
       "str_methods_more": {
@@ -43,9 +43,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "FAIL_CLOSED": 1,
         "RAISE_EQ": 0,
-        "EQUIV": 16
+        "EQUIV": 18
       },
       "set_ops": {
         "DIVERGENT_CRASH": 0,
@@ -75,9 +75,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 2,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 8
+        "EQUIV": 10
       },
       "complex_deep": {
         "DIVERGENT_CRASH": 0,
@@ -128,7 +128,7 @@
         "EQUIV": 13
       }
     },
-    "pct_equiv": 91.5,
+    "pct_equiv": 93.2,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -412,15 +412,19 @@
       "area": "dict_ops_more",
       "name": "fromkeys",
       "src": "imprimir(dict.fromkeys(['a', 'b'], 0))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dict_ops_more",
       "name": "fromkeys-nodef",
       "src": "imprimir(dict.fromkeys(['a', 'b']))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "dict_ops_more",
@@ -1079,15 +1083,19 @@
       "area": "slice_value",
       "name": "indices",
       "src": "s = slice(1, 8, 2)\nimprimir(s.indices(10))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slice_value",
       "name": "indices-neg",
       "src": "s = slice(-3, None)\nimprimir(s.indices(10))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux method receiver class is not statically known"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "slice_value",
@@ -2188,7 +2196,7 @@
       "name": "classmethod-ref",
       "src": "clase P:\n    @classmethod\n    funcion f(cls): devolver 9\nimprimir(P.f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-rpfbhrpm/program.c: In function ‘piton_main’:\n/tmp/piton-linux-rpfbhrpm/program.c:2787:14: error: ‘P’ undeclared (first use in this function)\n 2787 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-rpfbhrpm/program.c:2787:14: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-noadevxk/program.c: In function ‘piton_main’:\n/tmp/piton-linux-noadevxk/program.c:2824:14: error: ‘P’ undeclared (first use in this function)\n 2824 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-noadevxk/program.c:2824:14: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "callable_protocol",
