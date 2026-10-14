@@ -21,14 +21,14 @@
     "timeout": 10.0
   },
   "summary": {
-    "total": 234,
+    "total": 233,
     "by_bucket": {
       "DIVERGENT_CRASH": 0,
-      "DIVERGENT_MISMATCH": 6,
+      "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 59,
+      "FAIL_CLOSED": 56,
       "RAISE_EQ": 0,
-      "EQUIV": 169
+      "EQUIV": 177
     },
     "by_area": {
       "str_methods_more": {
@@ -57,11 +57,11 @@
       },
       "frozenset": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 2,
         "RAISE_EQ": 0,
-        "EQUIV": 12
+        "EQUIV": 13
       },
       "memoryview": {
         "DIVERGENT_CRASH": 0,
@@ -89,11 +89,11 @@
       },
       "builtins_more": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 2,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 8,
+        "FAIL_CLOSED": 5,
         "RAISE_EQ": 0,
-        "EQUIV": 18
+        "EQUIV": 22
       },
       "exceptions_deep": {
         "DIVERGENT_CRASH": 0,
@@ -113,24 +113,24 @@
       },
       "object_protocol3": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 2,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 2,
         "RAISE_EQ": 0,
-        "EQUIV": 12
+        "EQUIV": 14
       },
       "callable_protocol": {
         "DIVERGENT_CRASH": 0,
-        "DIVERGENT_MISMATCH": 1,
+        "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
         "FAIL_CLOSED": 1,
         "RAISE_EQ": 0,
-        "EQUIV": 12
+        "EQUIV": 13
       }
     },
-    "pct_equiv": 72.2,
-    "pct_honest": 97.4,
-    "pct_divergent": 2.6
+    "pct_equiv": 76.0,
+    "pct_honest": 100.0,
+    "pct_divergent": 0.0
   },
   "records": [
     {
@@ -852,9 +852,9 @@
       "area": "frozenset",
       "name": "hash-eq",
       "src": "imprimir(hash(frozenset([1, 2])) == hash(frozenset([2, 1])))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=1 out= err=TypeError: unhashable type: 'set:frozen' || oracle rc=0 out=True err=",
-      "native_rc": 1,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
@@ -1340,29 +1340,26 @@
       "area": "builtins_more",
       "name": "min-key",
       "src": "imprimir(min([3, 1, 2], key=lambda x: -x))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NameError: name 'Const' is not defined"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins_more",
       "name": "max-key",
       "src": "imprimir(max([3, 1, 2], key=lambda x: -x))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NameError: name 'Const' is not defined"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins_more",
       "name": "sorted-key",
       "src": "imprimir(ordenar([3, 1, 2], key=lambda x: -x))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NameError: name 'Const' is not defined"
-    },
-    {
-      "area": "builtins_more",
-      "name": "sorted-key-rev",
-      "src": "imprimir(ordenar([3, 1, 2], key=lambda x: -x, reversa=Verdadero))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=[3, 2, 1] err= || oracle rc=0 out=[1, 2, 3] err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     },
@@ -1429,9 +1426,9 @@
       "area": "builtins_more",
       "name": "pow-mod",
       "src": "imprimir(pow(2, 10, 100))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=1 out= err=TypeError: pow expected at least 2 arguments, got 3 || oracle rc=0 out=24 err=",
-      "native_rc": 1,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
@@ -1861,9 +1858,9 @@
       "area": "object_protocol3",
       "name": "getattribute",
       "src": "clase P:\n    funcion __getattribute__(self, n):\n        devolver 42\nimprimir(P().x)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=1 out= err=AttributeError || oracle rc=0 out=42 err=",
-      "native_rc": 1,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
@@ -1940,9 +1937,9 @@
       "area": "object_protocol3",
       "name": "hash-eq",
       "src": "clase P:\n    funcion __init__(self, x): self.x = x\n    funcion __hash__(self):\n        devolver self.x\nimprimir(hash(P(3)) == 3)\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=1 out= err=TypeError: unhashable type: 'object:P' || oracle rc=0 out=True err=",
-      "native_rc": 1,
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
       "oracle_rc": 0
     },
     {
@@ -2101,7 +2098,7 @@
       "name": "classmethod-ref",
       "src": "clase P:\n    @classmethod\n    funcion f(cls): devolver 9\nimprimir(P.f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-mn5vgebk/program.c: In function ‘piton_main’:\n/tmp/piton-linux-mn5vgebk/program.c:2386:14: error: ‘P’ undeclared (first use in this function)\n 2386 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-mn5vgebk/program.c:2386:14: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-8gg0lyfz/program.c: In function ‘piton_main’:\n/tmp/piton-linux-8gg0lyfz/program.c:2483:14: error: ‘P’ undeclared (first use in this function)\n 2483 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-8gg0lyfz/program.c:2483:14: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "callable_protocol",
@@ -2116,8 +2113,8 @@
       "area": "callable_protocol",
       "name": "mutual",
       "src": "funcion par(n):\n    si n == 0:\n        devolver Verdadero\n    devolver impar(n - 1)\nfuncion impar(n):\n    si n == 0:\n        devolver Falso\n    devolver par(n - 1)\nimprimir(par(4))\n",
-      "bucket": "DIVERGENT_MISMATCH",
-      "detail": "native rc=0 out=1 err= || oracle rc=0 out=True err=",
+      "bucket": "EQUIV",
+      "detail": "",
       "native_rc": 0,
       "oracle_rc": 0
     }

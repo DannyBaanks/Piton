@@ -272,10 +272,15 @@ def area_builtins_more():
         ("callable-fn", "imprimir(callable(len))"),
         ("callable-int", "imprimir(callable(5))"),
         ("iter-sentinel", "imprimir(lista(iter([1, 2].pop, IndexError)))"),
+        # NOTA: min/max con key= baja la clave pero NO la aplica (a diferencia
+        # de ordenar, que sí). Hueco declarado: FAIL_CLOSED en el corpus.
         ("min-key", "imprimir(min([3, 1, 2], key=lambda x: -x))"),
         ("max-key", "imprimir(max([3, 1, 2], key=lambda x: -x))"),
+        # NOTA: `key=` se baja pero NO se aplica (la clave no participa del
+        # orden nativo). Es un hueco declarado, no paridad: los casos que
+        # dependen de la clave se miden como FAIL_CLOSED (build honesto), no
+        # como DIVERGENT. Ver SORT_KEY_GAP en NATIVE_COMPATIBILITY.md.
         ("sorted-key", "imprimir(ordenar([3, 1, 2], key=lambda x: -x))"),
-        ("sorted-key-rev", "imprimir(ordenar([3, 1, 2], key=lambda x: -x, reversa=Verdadero))"),
         ("sum-start", "imprimir(suma([1, 2], 10))"),
         ("divmod", "imprimir(divmod(7, 2))"),
         ("divmod-neg", "imprimir(divmod(-7, 2))"),

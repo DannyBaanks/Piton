@@ -4507,7 +4507,8 @@ class MIRLowerer:
                     values.append(lowered)
                 else:
                     reverse = lowered
-            values.append(reverse if reverse is not None else self._lower_expr(builder, Const(kind=HIRKind.CONST, value=False)))
+            from piton.hir import Const as _HIRConstFalse
+            values.append(reverse if reverse is not None else self._lower_expr(builder, _HIRConstFalse(kind=HIRKind.CONST, value=False)))
             return tuple(values)
         if params is None and func_name in {"min", "max"}:
             # MINMAX_KEY_V1: min/max con `key=` (mismo alcance: la clave se
@@ -4518,8 +4519,9 @@ class MIRLowerer:
             for kw in keywords or ():
                 if kw.arg == "default":
                     raise MIRLoweringError("native min/max default= is not supported yet")
+            from piton.hir import Const as _HIRConstFalse2
             values.append(self._lower_expr(builder, keywords[0].value))
-            values.append(self._lower_expr(builder, Const(kind=HIRKind.CONST, value=False)))
+            values.append(self._lower_expr(builder, _HIRConstFalse2(kind=HIRKind.CONST, value=False)))
             return tuple(values)
         if params is None:
             raise MIRLoweringError(f"native keyword call requires known function: {func_name}")

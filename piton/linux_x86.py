@@ -608,6 +608,67 @@ static long piton_closure_call_frame(long,long,long*);
 static long piton_calliter_new(long callback,long sentinel){PitonCallIter*i=piton_alloc(sizeof(*i));i->magic=0x50495443414C4954LL;i->callback=callback;i->sentinel=sentinel;return(long)i;}
 static long piton_calliter_next(long raw){PitonCallIter*i=(PitonCallIter*)raw;if(!i||i->magic!=0x50495443414C4954LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long v=piton_closure_call_frame(i->callback,0,(long*)0);if(v==i->sentinel){piton_raise_set("StopIteration","");return 0;}return v;}
 /* M5: slot 62 = generator return value (int subset); slot 63 reserved for async await marker */
+static int piton_exc_flag_get(void);
+#define PITON_EXC_FLAG piton_exc_flag_get()
+/* SORT_KEY_V1: sorted(iterable, key=fn) — decorar con la clave (llamada por
+ * el dispatcher de closures), ordenar por la clave estable, y devolver los
+ * elementos originales. La clave se aplica UNA vez por elemento (CPython). */
+static int piton_slot_key_less(PitonSlot a,PitonSlot b){return piton_slot_less(a,b);}
+static long piton_closure_call_frame(long,long,long*);
+static long piton_sorted_key_new(void*raw,long keyfn){
+  PitonSeq*s=(PitonSeq*)raw;
+  if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: sorted() argument is not iterable\n",46);piton_exit(1);}
+  if(!keyfn){piton_raise_set("TypeError","sorted() key must be callable");return 0;}
+  long n=s->length;
+  /* pares (clave, original) en slots planos: clave en items[i], original en
+   * el espejo. Se usa un PitonSeq de 2*n con tag en kind PK_INT para el
+   * índice: más simple y sin allocar estructuras nuevas. */
+  PitonSeq*pairs=piton_seq_new(PK_LIST,n*2);
+  for(long i=0;i<n;++i){
+    PitonSlot orig=s->items[i];
+    long k;
+    {long _ka[1];_ka[0]=orig.bits;k=piton_closure_call_frame(keyfn,1,_ka);}
+    if(PITON_EXC_FLAG)return 0;
+    pairs->items[i*2]=(PitonSlot){k,PK_INT};
+    pairs->items[i*2+1]=orig;
+  }
+  for(long i=1;i<n;++i){
+    PitonSlot kk=pairs->items[i*2],ov=pairs->items[i*2+1];
+    long j=i;
+    while(j>0){
+      int l=piton_slot_less(kk,pairs->items[(j-1)*2]);
+      if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}
+      if(l){pairs->items[j*2]=pairs->items[(j-1)*2];pairs->items[j*2+1]=pairs->items[(j-1)*2+1];--j;}else break;
+    }
+    pairs->items[j*2]=kk;pairs->items[j*2+1]=ov;
+  }
+  PitonSeq*r=piton_seq_new(PK_LIST,n);
+  for(long i=0;i<n;++i)r->items[i]=pairs->items[i*2+1];
+  return(long)r;
+}
+/* MINMAX_KEY_V1: min/max con key= — decorar con la clave, tomar el extremo
+ * de la clave, devolver el elemento ORIGINAL (no la clave). */
+static long piton_extreme_key_new(void*raw,long keyfn,int want_min){
+  PitonSeq*s=(PitonSeq*)raw;
+  if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: min()/max() argument is not iterable\n",53);piton_exit(1);}
+  if(s->length==0){piton_raise_set("ValueError","min()/max() arg is an empty sequence");return 0;}
+  if(!keyfn){piton_raise_set("TypeError","min()/max() key must be callable");return 0;}
+  long best=s->items[0].bits,bestk=0;
+  for(long i=0;i<s->length;++i){
+    long k;
+    {long _ka[1];_ka[0]=s->items[i].bits;k=piton_closure_call_frame(keyfn,1,_ka);}
+    if(PITON_EXC_FLAG)return 0;
+    if(i==0){bestk=k;best=s->items[i].bits;continue;}
+    int l=piton_slot_less((PitonSlot){k,PK_INT},(PitonSlot){bestk,PK_INT});
+    if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}
+    /* piton_slot_less devuelve 1 si la nueva clave es MENOR, -1 si los tipos
+     * no son comparables. min -> reemplaza cuando es menor; max -> cuando NO
+     * es menor (y sí comparable). */
+    if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}
+    if(want_min?(l==1):(l==0)){bestk=k;best=s->items[i].bits;}
+  }
+  return best;
+}
 static long piton_sorted_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: sorted() argument is not iterable\n",46);piton_exit(1);}PitonSeq*r=piton_seq_new(PK_LIST,s->length);for(long i=0;i<s->length;++i)r->items[i]=s->items[i];for(long i=1;i<r->length;++i){PitonSlot v=r->items[i];long j=i;while(j>0){int l=piton_slot_less(v,r->items[j-1]);if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}if(l){r->items[j]=r->items[j-1];--j;}else break;}r->items[j]=v;}return(long)r;}
 #define PITON_GEN_MAGIC 0x5049544E47654ELL
 #define PITON_GEN_MAX_SLOTS 64
@@ -723,6 +784,22 @@ static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<cl
 static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_COMPLEX:return piton_cx_truthy_bits(v.bits);case PK_FROZENSET:return ((PitonSet*)v.bits)->length>0;case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;case PK_RANGE:return piton_range_len((PitonRange*)v.bits)>0;default:return v.bits!=0;}}
 static long piton_all_seq(PitonSeq*s){if(!s)return 1;for(long i=0;i<s->length;++i)if(!piton_slot_truthy(s->items[i]))return 0;return 1;}
 static long piton_any_seq(PitonSeq*s){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_truthy(s->items[i]))return 1;return 0;}
+/* POW_MOD_V1: pow(base, exp, mod) por exponenciación binaria (i64). */
+static long piton_pow_mod(long b,long e,long m){
+  if(m==0){piton_raise_set("ZeroDivisionError","pow() 3rd argument cannot be 0");return 0;}
+  if(m<0)m=-m;
+  if(e<0){piton_raise_set("ValueError","pow() 2nd argument cannot be negative when 3rd argument specified");return 0;}
+  unsigned long base=(unsigned long)(b%m);
+  if(base>0x7FFFFFFFFFFFFFFFUL)base+=(unsigned long)(0-(long)base)+(unsigned long)2*m; /* normalizar signo */
+  unsigned long mod=(unsigned long)m;
+  unsigned long result=1UL%mod;   /* pow(x, 0, 1) == 0 en CPython */
+  while(e>0){
+    if(e&1)result=(result*base)%mod;
+    e>>=1;
+    if(e)base=(base*base)%mod;
+  }
+  return(long)result;
+}
 static long piton_pow_int(long b,long e){if(e<0){piton_raise_set("TypeError","pow() negative exponent unsupported (M14 v1)");return 0;}long acc=1;while(e>0){if(e&1)acc*=b;b*=b;e>>=1;}return acc;}
 static long piton_pow_float(long bb,long e){double b=piton_bits_double(bb);long neg=e<0;if(neg)e=-e;double acc=1.0;while(e>0){if(e&1)acc*=b;b*=b;e>>=1;}if(neg)acc=1.0/acc;return piton_double_bits(acc);}
 static long piton_ord(const char*s){if(!s||!s[0]){piton_raise_set("TypeError","ord() expected a character, but string of length 0 found");return 0;}const unsigned char*u=(const unsigned char*)s;long cp;long n;if(u[0]<0x80){cp=u[0];n=1;}else if((u[0]&0xE0)==0xC0){cp=u[0]&0x1F;n=2;}else if((u[0]&0xF0)==0xE0){cp=u[0]&0x0F;n=3;}else if((u[0]&0xF8)==0xF0){cp=u[0]&0x07;n=4;}else{piton_raise_set("TypeError","ord() received invalid UTF-8");return 0;}for(long i=1;i<n;++i)cp=(cp<<6)|(u[i]&0x3F);if(s[n]){piton_raise_set("TypeError","ord() expected a character, but string of length >1 found");return 0;}return cp;}
@@ -818,6 +895,7 @@ static void piton_raise_chain_set(const char*type,const char*message,const char*
 static const char*piton_reraise_type=0;static const char*piton_reraise_message=0;
 static void piton_reraise_save(void){piton_reraise_type=piton_exc_type;piton_reraise_message=piton_exc_message;}
 static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=piton_reraise_message;}
+static int piton_exc_flag_get(void){return piton_exc_flag;}
 static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;}
 static void piton_seq_set(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0||i>=s->length){piton_raise_set("IndexError","seq index out of range");return;}s->items[i]=v;}
 static void piton_dict_set(PitonDict*d,PitonSlot k,PitonSlot v){if(!d)return;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){d->items[i].value=v;return;}piton_dict_append(d,k,v);}
@@ -1660,6 +1738,25 @@ static long piton_hash_of_float(long bits){
   if(x==(double)(long)x&&x>-9.2e18&&x<9.2e18)return piton_hash_long((long)x);
   unsigned long u;__builtin_memcpy(&u,&x,8);
   return piton_hash_long((long)u);
+}
+static long piton_hash_str(const char*s);
+static long piton_hash_long(long v);
+static long piton_hash_of_float(long bits);
+/* HASH_FROZENSET_V1: hash del conjunto = combinación de los hashes de sus
+ * elementos (orden independiente: conjuntos iguales dan el mismo hash). */
+static long piton_hash_set(PitonSet*s){
+  /* combinación CONMUTATIVA (XOR de hash*primo): el orden de recorrido del
+   * conjunto (tabla hash) no debe cambiar el resultado. */
+  unsigned long h=0;
+  if(!s||s->length==0)return 133146708735736L; /* hash(frozenset()) estable */
+  for(long i=0;i<s->length;++i){
+    unsigned long e;
+    if(s->items[i].kind==PK_STR){e=(unsigned long)piton_hash_str((const char*)s->items[i].bits);}
+    else if(s->items[i].kind==PK_FLOAT){e=(unsigned long)piton_hash_of_float((long)s->items[i].bits);}
+    else{e=(unsigned long)piton_hash_long((long)s->items[i].bits);}
+    h^=e*0x9E3779B97F4A7C15UL;
+  }
+  return(long)h;
 }
 static long piton_hash_str(const char*s){
   if(!s)return 0;
@@ -4052,11 +4149,20 @@ class LinuxCEmitter:
                 return "bigint" if abs(value) > 9223372036854775807 else "int"
             return self._UNKNOWN
 
-        def infer(name: str) -> str | None:
+        cycle_cache: dict[str, str | None] = {}
+
+        def infer(name: str, _use_cache: bool = True) -> str | None:
+            # MUTUAL_RECURSION_V1: `memo` cachea el resultado DEFINITIVO de una
+            # función; `cycle_cache` guarda el valor provisional que se vio al
+            # topar un ciclo (par llama a impar y viceversa: sin esto, la
+            # primera pasada fijaba None y el fixpoint nunca avanzaba).
             if name in memo:
                 return memo[name]
             if name in resolving:
-                return None
+                return cycle_cache.get(name)
+            if _use_cache and name in cycle_cache and cycle_cache[name] is not None:
+                return cycle_cache[name]
+            # _use_cache=False NO consulta cycle_cache: fuerza el recálculo
             if name in {"complex", "complejo"}:
                 # COMPLEX_V1: el constructor nativo devuelve complejo, así el
                 # tipo de retorno de `devolver complejo(a, a)` se propaga.
@@ -4211,6 +4317,12 @@ class LinuxCEmitter:
                     candidates = {operand_type(operand) for operand in returns}
                     if len(candidates) == 1:
                         inferred = next(iter(candidates))
+                    elif len(candidates) > 1 and None in candidates:
+                        # MUTUAL_RECURSION_V1: un return sin resolver (llamada
+                        # mutua en ciclo) no debe descartar el tipo de los
+                        # returns SÍ resueltos: se propaga el único conocido.
+                        known = {c for c in candidates if c is not None and c != self._UNKNOWN}
+                        inferred = next(iter(known)) if len(known) == 1 else None
                     else:
                         inferred = None
                 if inferred is None or inferred == self._UNKNOWN:
@@ -4218,11 +4330,27 @@ class LinuxCEmitter:
             finally:
                 resolving.discard(name)
             memo[name] = inferred
+            if inferred is not None:
+                cycle_cache[name] = inferred
             return inferred
 
+        # MUTUAL_RECURSION_V1: `par`/`impar` se llaman entre sí. La primera
+        # pasada ve el ciclo y memo guarda None -> "int" (imprimía 1, no True).
+        # FIXPOINT: se limpia memo y se reejecuta usando cycle_cache (que solo
+        # guarda resultados no-None ya definitivos) hasta que nada cambie.
+        for _round in range(len(module.functions) + 1):
+            changed = False
+            for function in module.functions:
+                previous = memo.get(function.name)
+                memo.pop(function.name, None)
+                inferred = infer(function.name, _use_cache=False)
+                if inferred != previous:
+                    changed = True
+            if not changed:
+                break
         resolved: dict[str, str] = {}
         for function in module.functions:
-            inferred = infer(function.name)
+            inferred = memo.get(function.name)
             resolved[function.name] = inferred if inferred else "int"
         return resolved
 
@@ -5824,6 +5952,29 @@ class LinuxCEmitter:
                 if len(values) != 1:
                     raise NativeBuildError("Linux hash requires one argument")
                 vtype = types.get(values[0], "int")
+                if vtype.startswith("object:"):
+                    # HASH_DUNDER_V1: hash(obj) despacha a __hash__ por MRO.
+                    cls = vtype.split(":", 1)[1]
+                    hit = None
+                    for cand in self.class_mro.get(cls, [cls]):
+                        if "__hash__" in self.classes.get(cand, set()):
+                            hit = cand
+                            break
+                    if hit is not None:
+                        target = _name(hit + "____hash__")
+                        if self.function_frame_abi.get(hit + "____hash__", False):
+                            out.append(f'    {{long _hh[]={{ {self._value(values[0])} }}; {_name(result)}=piton_frame_call((long)&{target},1,_hh);}}')
+                        else:
+                            out.append(f"    {_name(result)}={target}({self._value(values[0])});")
+                        types[result] = "int"
+                        return out
+                if vtype in {"set", "set:frozen"}:
+                    # HASH_FROZENSET_V1: frozenset es hashable; el contrato del
+                    # corpus es que conjuntos iguales den hashes iguales (orden
+                    # de inserción estable para enteros).
+                    out.append(f"    {_name(result)}=piton_hash_set((PitonSet*){self._value(values[0])});")
+                    types[result] = "int"
+                    return out
                 if vtype in {"int", "bool", "float"}:
                     if vtype == "float":
                         # hash(float): byte-identico al hash del entero
@@ -5873,6 +6024,14 @@ class LinuxCEmitter:
                 types[result] = "tuple"
                 self._coll_elems[result] = "int"
             elif function_name == "pow":
+                if len(values) == 3:
+                    # POW_MOD_V1: pow(base, exp, mod) — los tres deben ser int.
+                    if any(types.get(v) not in {"int", "bool"} for v in values):
+                        raise NativeBuildError("Linux pow(base, exp, mod) requires three int arguments")
+                    out.append(f"    {_name(result)}=piton_pow_mod({self._value(values[0])},{self._value(values[1])},{self._value(values[2])});")
+                    self._emit_exc_check(out, function, call_handler)
+                    types[result] = "int"
+                    return out
                 if len(values) != 2:
                     self._runtime_type_error(out, "pow expected at least 2 arguments, got " + str(len(values)))
                     types[result] = "int"
@@ -6024,13 +6183,16 @@ class LinuxCEmitter:
                 types[result] = "bool"
             elif function_name in {"min", "max"}:
                 # MINMAX_KEY_V1: min/max con `key=` llegan como (coleccion,
-                # clave, reversa). La clave se baja pero NO se aplica: el
-                # orden nativo sigue siendo el natural (hueco conocido); el
-                # corpus solo mide el orden natural para no afirmar de mas.
+                # clave, reversa). La clave SÍ se aplica (extrem Node sobre la
+                # clave, devolviendo el elemento original).
                 if len(values) == 3:
-                    if types.get(values[0]) not in {"list", "tuple", "str"}:
-                        raise NativeBuildError("Linux min/max key= requires one iterable")
-                    values = [values[0]]
+                    if types.get(values[0]) not in {"list", "tuple"}:
+                        raise NativeBuildError("Linux min/max key= requires one list or tuple")
+                    out.append(f"    {_name(result)}=piton_extreme_key_new((void*){self._value(values[0])},{self._value(values[1])},{1 if function_name == 'min' else 0});")
+                    self._emit_exc_check(out, function, call_handler)
+                    _et = self._coll_elems.get(values[0], "int")
+                    types[result] = _et if _et and "|" not in _et else "int"
+                    return out
                 if len(values) == 1 and types.get(values[0]) in {"list", "tuple", "str"}:
                     # MINMAX_ITER_V1: min()/max() of a single iterable. The
                     # element type rides along so the result prints correctly;
@@ -6286,12 +6448,19 @@ class LinuxCEmitter:
                     self._coll_elems[result] = "str"
                     return out
                 # SORT_KEY_V1: con `key=` llegan 3 valores (coleccion, clave,
-                # reversa); la clave se baja pero no se aplica (hueco conocido).
+                # reversa). La clave ahora SÍ se aplica (helper C que decora,
+                # ordena por la clave y devuelve los originales).
+                _sort_key = None
                 if len(values) == 3:
+                    _sort_key = values[1]
                     values = [values[0], values[2]]
                 if len(values) not in {1, 2} or types.get(values[0]) not in {"list", "tuple", "range"}:
                     raise NativeBuildError("native sorted currently requires one list, tuple or range")
-                if types.get(values[0]) == "range":
+                if _sort_key is not None:
+                    _src = f"piton_conv_seq(PK_LIST,{self._slot(values[0], types)})" if types.get(values[0]) == "range" else self._value(values[0])
+                    out.append(f"    {_name(result)}=piton_sorted_key_new((void*){_src},{self._value(_sort_key)});")
+                    self._emit_exc_check(out, function, call_handler)
+                elif types.get(values[0]) == "range":
                     out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_conv_seq(PK_LIST,{self._slot(values[0], types)}));")
                 else:
                     out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(values[0])});")
@@ -6602,6 +6771,27 @@ class LinuxCEmitter:
         elif op == "get_attr":
             obj, attr = args
             owner_type = types.get(obj, "")
+            if owner_type.startswith("object:"):
+                # GETATTRIBUTE_V1: __getattribute__ intercepta TODO acceso a
+                # atributo (a diferencia de __getattr__, que solo corre cuando
+                # la búsqueda normal falla). CPython: obj.x -> el hook.
+                _gacls = owner_type.split(":", 1)[1]
+                _gahit = None
+                for _cand in self.class_mro.get(_gacls, [_gacls]):
+                    if "__getattribute__" in self.classes.get(_cand, set()):
+                        _gahit = _cand
+                        break
+                if _gahit is None and "__getattribute__" in self.classes.get(_gacls, set()):
+                    _gahit = _gacls
+                if _gahit is not None:
+                    _gatarget = _name(_gahit + "____getattribute__")
+                    _gaframe = self.function_frame_abi.get(_gahit + "____getattribute__", False)
+                    if _gaframe:
+                        out.append(f'    {{long _ga_args[]={{ {self._value(obj)},(long){json.dumps(attr)} }}; {_name(result)}=piton_frame_call((long)&{_gatarget},2,_ga_args);}}')
+                    else:
+                        out.append(f"    {_name(result)}={_gatarget}({self._value(obj)},(long){json.dumps(attr)});")
+                    types[result] = "int"
+                    return out
             if owner_type == "complex" and attr in {"real", "imag"}:
                 # COMPLEX_V1: (2+3j).real / .imag son floats (2.0 / 3.0). El slot
                 # de un float son los BITS del double, no el double truncado.
