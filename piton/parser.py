@@ -847,7 +847,10 @@ class Parser:
                 val = float(val)
             else:
                 val = int(val)
-            return Constant(value=val).set_pos(tok)
+            # NUMERIC_POSTFIX_V1: un literal numérico es un primary —
+            # `.attr` y `[...]` deben componerse con él (1+2j.real,
+            # 1.5.real, (era ParseError: el STRING ya lo hacía).
+            return self._parse_postfix(Constant(value=val).set_pos(tok))
 
         if tok.type == TokenType.STRING:
             self._advance()

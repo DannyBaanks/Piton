@@ -2825,6 +2825,15 @@ class LinuxCEmitter:
         return None
 
     def _value(self, value: Any) -> str:
+        if isinstance(value, str) and value in self.classes and not (
+            value in self._module_stored or value in self._shared_globals
+        ):
+            # CLASS_VALUE_REF_V1: el nombre de una clase sin variable C
+            # declarada (`clase P:` no genera store) no es un identificador
+            # válido en C — `P__f(P)` no compilaba. Se fabrica el objeto de
+            # clase en el punto de uso; si la clase SÍ tiene variable global,
+            # se usa esa (camino histórico).
+            return f'(long)piton_object_new("{value}",0)'
         if isinstance(value, str) and (value.startswith("%") or value in self.classes):
             return _name(value)
         if isinstance(value, str):
@@ -5069,12 +5078,16 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
             if source in self.classes:
+                # CLASS_OBJECT_LOAD_V1: cargar el nombre de una clase produce
+                # un objeto de clase REAL (no un alias al identificador, que
+                # no existe en C: `P.f()` emitía `P__f(P)` -> undeclared).
+                # El objeto además hace observable `cls` en classmethods y
+                # `P()` vía el path PK_OBJECT de piton_closure_call_frame.
                 types[result] = f"class:{source}"
-                aliases[result] = source
                 if function.name == "<module>" and source in self._module_stored:
                     out.append(f"    {_name(result)}={_name(source)};")
                 else:
-                    out.append(f"    {_name(result)}=0;")
+                    out.append(f'    {_name(result)}=(long)piton_object_new("{source}",0);')
                 return out
             if source in {"object", "objeto"}:
                 types[result] = "class:object"
@@ -7000,6 +7013,16 @@ class LinuxCEmitter:
                     types[result] = "list"
                     self._coll_elems[result] = "int"
                     return out
+                if source_type == "iterator:calliter" and seq_kind == "PK_LIST":
+                    # CALLITER_LIST_V1: lista(iter(f, centinela)) materializa
+                    # vía piton_calliter_next — el centinela levanta
+                    # StopIteration (fin normal) y cualquier otra excepción
+                    # del callable propaga (CPython: el excepción sale de
+                    # list()).
+                    out.append(f"    {_name(result)}=piton_collect_via_next_fn({self._value(values[0])},piton_calliter_next);")
+                    types[result] = "list"
+                    self._coll_elems[result] = "int"
+                    return out
                 if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter"} and seq_kind == "PK_LIST":
                     _which = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3}[source_type]
                     _elemkind = "PK_TUPLE" if source_type in {"iterator:enumerate", "iterator:zip"} else "PK_INT"
@@ -7441,6 +7464,18 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_double_bits({helper}({self._value(obj)}));")
                 types[result] = "float"
                 return out
+            if owner_type in {"float", "int"} and attr in {"real", "imag"}:
+                # NUMERIC_REAL_IMAG_V1: float/int .real/.imag como CPython —
+                # .real es el propio valor; .imag es 0.0 (float) / 0 (int).
+                # Sin esto, 1.5.real caia al guard scalar (AttributeError).
+                if attr == "real":
+                    out.append(f"    {_name(result)}={self._value(obj)};")
+                elif owner_type == "float":
+                    out.append(f"    {_name(result)}=piton_double_bits(0.0);")
+                else:
+                    out.append(f"    {_name(result)}=0;")
+                types[result] = owner_type
+                return out
             prop_class = self._resolve_property_class(owner_type, attr)
             module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
             if prop_class is not None:
@@ -7741,7 +7776,10 @@ class LinuxCEmitter:
             if target in self.static_methods:
                 all_values = self._complete_call_args(target, list(call_args))
             elif target in self.class_methods:
-                all_values = self._complete_call_args(target, [cls_name, *call_args])
+                # CLASSMETHOD_CLS_V1: el `cls` es el OPERANDO (objeto de
+                # clase real), no el string del nombre — `P__f(P)` no
+                # compila porque P no es un identificador C.
+                all_values = self._complete_call_args(target, [obj, *call_args])
             else:
                 all_values = self._complete_call_args(target, [obj, *call_args])
             values = ",".join(self._value(v) for v in all_values)
