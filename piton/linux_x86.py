@@ -377,6 +377,34 @@ static long piton_hash_long(long v){
  * como hueco conocido si aparece un caso no-ASCII). */
 static long piton_str_casefold(const char*s){if(!s)s="";usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c>='A'&&c<='Z')c=(unsigned char)(c+32);p[i]=(char)c;}p[n]=0;return(long)p;}
 static long piton_str_isascii(const char*s){if(!s)return 1;for(usize i=0;s[i];++i)if((unsigned char)s[i]>=0x80)return 0;return 1;}
+/* STR_ISPRINTABLE_V1 / STR_ISIDENTIFIER_V1 (ASCII + multibyte bien formado). */
+static long piton_str_isprintable(const char*s){
+  if(!s)return 1;
+  for(usize i=0;s[i];){
+    unsigned char c=(unsigned char)s[i];
+    if(c<0x80){if(c<0x20||c==0x7F)return 0;++i;continue;}
+    int n;if((c&0xE0)==0xC0)n=2;else if((c&0xF0)==0xE0)n=3;else if((c&0xF8)==0xF0)n=4;else return 0;
+    for(int k=1;k<n;++k)if(((unsigned char)s[i+k]&0xC0)!=0x80)return 0;
+    i+=(usize)n;
+  }
+  return 1;
+}
+static long piton_str_isidentifier(const char*s){
+  if(!s||!s[0])return 0;
+  for(usize i=0;s[i];){
+    unsigned char c=(unsigned char)s[i];
+    if(c<0x80){
+      int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z')||c=='_';
+      int digit=(c>='0'&&c<='9');
+      if(i==0?!alpha:!(alpha||digit))return 0;
+      ++i;continue;
+    }
+    int n;if((c&0xE0)==0xC0)n=2;else if((c&0xF0)==0xE0)n=3;else if((c&0xF8)==0xF0)n=4;else return 0;
+    for(int k=1;k<n;++k)if(((unsigned char)s[i+k]&0xC0)!=0x80)return 0;
+    i+=(usize)n;
+  }
+  return 1;
+}
 static long piton_str_title(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);int wordbreak=1;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];int letter=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(letter){if(wordbreak&&c>='a'&&c<='z')c-=32;else if(!wordbreak&&c>='A'&&c<='Z')c+=32;wordbreak=0;}else wordbreak=1;p[i]=(char)c;}p[n]=0;return(long)p;}
 static long piton_str_swapcase(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c>='a'&&c<='z')p[i]=(char)(c-32);else if(c>='A'&&c<='Z')p[i]=(char)(c+32);else p[i]=(char)c;}p[n]=0;return(long)p;}
 static long piton_str_zfill(const char*s,long width){usize n=piton_strlen(s);usize sign=(n&&(s[0]=='+'||s[0]=='-'))?1:0;if((long)n>=width){char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}usize pad=(usize)width-n;char*p=piton_alloc((usize)width+1);usize o=0;if(sign){p[o++]=s[0];}for(usize i=0;i<pad;++i)p[o++]='0';piton_memcpy(p+o,s+sign,n-sign+1);return(long)p;}
@@ -436,6 +464,14 @@ static long piton_str_single_char(const char*s){if(piton_strlen(s)!=1){piton_rai
 static long piton_str_format(const char*t,long n,const char**av){usize total=0;int auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){total+=1;i+=2;continue;}usize j=i+1;int idx=-2;int has=0;if(t[j]=='}'){idx=auto_idx++;j+=1;has=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;has=1;}if(has&&t[j]=='}'){j+=1;}else{has=0;}}if(!has){piton_write(2,"ValueError: single '{' in format string\n",40);piton_exit(1);}if(idx<0||idx>=n){piton_write(2,"IndexError: replacement index out of range\n",43);piton_exit(1);}total+=piton_strlen(av[idx]);i=j;}else if(t[i]=='}'){if(t[i+1]=='}'){total+=1;i+=2;}else{piton_write(2,"ValueError: single '}' in format string\n",40);piton_exit(1);}}else{total+=1;i+=1;}}char*p=piton_alloc(total+1);usize o=0;auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){p[o++]='{';i+=2;continue;}usize j=i+1;int idx=-2;if(t[j]=='}'){idx=auto_idx++;j+=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;}j+=1;}usize el=piton_strlen(av[idx]);piton_memcpy(p+o,av[idx],el);o+=el;i=j;}else if(t[i]=='}'){p[o++]='}';i+=2;}else{p[o++]=t[i++];}}p[o]=0;return(long)p;}
 
 static long piton_str_split_ws(const char*s){PitonSeq*r=piton_seq_new(PK_LIST,0);usize n=piton_strlen(s),i=0;while(i<n){while(i<n&&piton_ws((unsigned char)s[i]))++i;if(i>=n)break;usize j=i;while(j<n&&!piton_ws((unsigned char)s[j]))++j;usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});i=j;}return(long)r;}
+static long piton_str_rpartition(const char*s,const char*sep){usize n=piton_strlen(s),m=piton_strlen(sep);long at=-1;if(m>0&&m<=n){for(long i=(long)(n-m);i>=0;--i){usize k=0;while(k<m&&s[i+k]==sep[k])++k;if(k==m){at=i;break;}}}PitonSeq*r=piton_seq_new(PK_TUPLE,3);
+  /* sin separador: CPython devuelve ('', '', s) — el original COMPLETO al final */
+  long b=at<0?0:at,a=at<0?0:(long)(at+m);
+  char*p1=piton_alloc((usize)b+1);piton_memcpy(p1,s,(usize)b);p1[b]=0;
+  char*p2=piton_alloc(m+1);if(at<0)p2[0]=0;else piton_memcpy(p2,sep,m+1);
+  usize take=at<0?n:(n-(usize)a);
+  char*p3=piton_alloc(take+1);piton_memcpy(p3,at<0?s:(s+a),take);p3[take]=0;
+  r->items[0]=(PitonSlot){(long)p1,PK_STR};r->items[1]=(PitonSlot){(long)p2,PK_STR};r->items[2]=(PitonSlot){(long)p3,PK_STR};return(long)r;}
 static long piton_str_partition(const char*s,const char*sep){usize n=piton_strlen(s),m=piton_strlen(sep);long at=-1;for(usize i=0;i+m<=n;++i){usize k=0;while(k<m&&s[i+k]==sep[k])++k;if(k==m){at=(long)i;break;}}PitonSeq*r=piton_seq_new(PK_TUPLE,3);long b=at<0?(long)n:at,a=at<0?(long)n:(long)(at+m);char*p1=piton_alloc((usize)b+1);piton_memcpy(p1,s,(usize)b);p1[b]=0;char*p2=piton_alloc(m+1);if(at<0)p2[0]=0;else piton_memcpy(p2,sep,m+1);char*p3=piton_alloc(n-(usize)a+1);piton_memcpy(p3,s+a,n-(usize)a);p3[n-(usize)a]=0;r->items[0]=(PitonSlot){(long)p1,PK_STR};r->items[1]=(PitonSlot){(long)p2,PK_STR};r->items[2]=(PitonSlot){(long)p3,PK_STR};return(long)r;}
 static long piton_str_rsplit(const char*s,const char*sep,long maxsplit){if(!sep)return piton_str_split_ws(s);usize n=piton_strlen(s),m=piton_strlen(sep);PitonSeq*r=piton_seq_new(PK_LIST,0);if(m==0){for(long k=(long)n;k>=0;--k){char*q=piton_alloc(2);q[0]=s[k];q[1]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});}return(long)r;}usize end=n;long budget=maxsplit<0?(long)n:maxsplit;while(budget>0){long at=-1;for(long i=(long)end-(long)m;i>=0;--i){usize k=0;while(k<m&&s[i+(long)k]==sep[k])++k;if(k==m){at=i;break;}}if(at<0)break;--budget;usize tail=end-(usize)at-m;char*q=piton_alloc(tail+1);piton_memcpy(q,s+(usize)at+m,tail);q[tail]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});end=(usize)at;}char*head=piton_alloc(end+1);piton_memcpy(head,s,end);head[end]=0;piton_seq_append(r,(PitonSlot){(long)head,PK_STR});long total=r->length;for(long i=0;i<total/2;++i){PitonSlot t=r->items[i];r->items[i]=r->items[total-1-i];r->items[total-1-i]=t;}return(long)r;}
 static long piton_str_splitlines(const char*s){usize n=piton_strlen(s);PitonSeq*r=piton_seq_new(PK_LIST,0);usize i=0;while(i<n){usize j=i;while(j<n&&s[j]!='\n'&&s[j]!='\r')++j;usize take=j-i;if(take>0&&s[j-1]=='\r')--take;char*q=piton_alloc(take+1);piton_memcpy(q,s+i,take);q[take]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});if(j<n&&s[j]=='\r'&&j+1<n&&s[j+1]=='\n')i=j+2;else i=j+1;}return(long)r;}
@@ -949,6 +985,40 @@ static PitonBytes* piton_bytes_new(long len, const unsigned char* data){
     if(len>0&&data)piton_memcpy(b->data,data,(usize)len);
     if(b->data)b->data[len]=0;
     return b;
+}
+static long piton_str_encode(const char*s,const char*enc){
+  if(!s)s="";
+  int is_latin=(enc&&*enc&&(piton_strcmp(enc,"latin-1")==0||piton_strcmp(enc,"latin1")==0||piton_strcmp(enc,"iso-8859-1")==0));
+  int is_ascii=(enc&&*enc&&piton_strcmp(enc,"ascii")==0);
+  if(enc&&*enc&&!is_latin&&!is_ascii&&piton_strcmp(enc,"utf-8")!=0&&piton_strcmp(enc,"utf8")!=0){
+    piton_raise_set("LookupError","unknown encoding");return 0;}
+  if(is_latin){
+    /* decodificar UTF-8 -> code points -> 1 byte por punto (U+0000..U+00FF) */
+    usize n=piton_strlen(s);
+    unsigned char*out=(unsigned char*)piton_alloc(n+1);
+    usize o=0;
+    for(usize i=0;i<n;){
+      unsigned char c=(unsigned char)s[i];long cp;int k;
+      if(c<0x80){cp=c;k=1;}
+      else if((c&0xE0)==0xC0){cp=c&0x1F;k=2;}
+      else if((c&0xF0)==0xE0){cp=c&0x0F;k=3;}
+      else if((c&0xF8)==0xF0){cp=c&0x07;k=4;}
+      else{piton_raise_set("UnicodeEncodeError","'latin-1' codec can't encode character");return 0;}
+      if(i+(usize)k>n){piton_raise_set("UnicodeEncodeError","'latin-1' codec can't encode character");return 0;}
+      for(int j=1;j<k;++j){unsigned char cc=(unsigned char)s[i+(usize)j];if((cc&0xC0)!=0x80){piton_raise_set("UnicodeEncodeError","'latin-1' codec can't encode character");return 0;}cp=(cp<<6)|(cc&0x3F);}
+      if(cp>0xFF){piton_raise_set("UnicodeEncodeError","'latin-1' codec can't encode character");return 0;}
+      out[o++]=(unsigned char)cp;
+      i+=(usize)k;
+    }
+    return(long)piton_bytes_new((long)o,out);
+  }
+  usize n=piton_strlen(s);
+  PitonBytes*b=piton_bytes_new((long)n,(const unsigned char*)s);
+  if(!b)return 0;
+  if(is_ascii){
+    for(usize i=0;i<n;++i)if((unsigned char)s[i]>=0x80){piton_raise_set("UnicodeEncodeError","'ascii' codec can't encode character");return 0;}
+  }
+  return(long)b;
 }
 
 static PitonByteArray* piton_bytearray_new(long len, const unsigned char* data){
@@ -3276,6 +3346,25 @@ class LinuxCEmitter:
             require_count(0, "no arguments")
             out.append(f"    {_name(result)}=piton_str_isascii((const char*){operand});")
             types[result] = "bool"
+        elif method == "isprintable":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=piton_str_isprintable((const char*){operand});")
+            types[result] = "bool"
+        elif method == "encode":
+            if len(call_args) > 1:
+                raise NativeBuildError("Linux str.encode() takes at most one argument")
+            enc_expr = "0"
+            if call_args:
+                if types.get(call_args[0]) != "str":
+                    raise NativeBuildError("Linux str.encode() encoding must be a str")
+                enc_expr = self._value(call_args[0])
+            out.append(f"    {_name(result)}=piton_str_encode((const char*){operand},{enc_expr});")
+            out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
+            types[result] = "bytes"
+        elif method == "isidentifier":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=piton_str_isidentifier((const char*){operand});")
+            types[result] = "bool"
         elif method == "swapcase":
             require_count(0, "no arguments")
             out.append(f"    {_name(result)}=(long)piton_str_swapcase((const char*){operand});")
@@ -3349,6 +3438,11 @@ class LinuxCEmitter:
         elif method == "partition":
             require_count(1, "exactly one str argument")
             out.append(f"    {_name(result)}=piton_str_partition((const char*){operand},{require_str(0, 'a str separator')});")
+            types[result] = "tuple"
+            self._tuple_elems[result] = (("%pre", "str"), ("%sep", "str"), ("%suf", "str"))
+        elif method == "rpartition":
+            require_count(1, "exactly one str argument")
+            out.append(f"    {_name(result)}=piton_str_rpartition((const char*){operand},{require_str(0, 'a str separator')});")
             types[result] = "tuple"
             self._tuple_elems[result] = (("%pre", "str"), ("%sep", "str"), ("%suf", "str"))
         elif method == "rsplit":
@@ -3586,6 +3680,25 @@ class LinuxCEmitter:
         elif method == "isascii":
             require_count(0, "no arguments")
             out.append(f"    {_name(result)}=piton_str_isascii((const char*){operand});")
+            types[result] = "bool"
+        elif method == "isprintable":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=piton_str_isprintable((const char*){operand});")
+            types[result] = "bool"
+        elif method == "encode":
+            if len(call_args) > 1:
+                raise NativeBuildError("Linux str.encode() takes at most one argument")
+            enc_expr = "0"
+            if call_args:
+                if types.get(call_args[0]) != "str":
+                    raise NativeBuildError("Linux str.encode() encoding must be a str")
+                enc_expr = self._value(call_args[0])
+            out.append(f"    {_name(result)}=piton_str_encode((const char*){operand},{enc_expr});")
+            out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
+            types[result] = "bytes"
+        elif method == "isidentifier":
+            require_count(0, "no arguments")
+            out.append(f"    {_name(result)}=piton_str_isidentifier((const char*){operand});")
             types[result] = "bool"
         elif method == "swapcase":
             require_count(0, "no arguments")

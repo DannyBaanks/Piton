@@ -26,18 +26,18 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 56,
+      "FAIL_CLOSED": 51,
       "RAISE_EQ": 0,
-      "EQUIV": 177
+      "EQUIV": 182
     },
     "by_area": {
       "str_methods_more": {
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 8,
+        "FAIL_CLOSED": 3,
         "RAISE_EQ": 0,
-        "EQUIV": 15
+        "EQUIV": 20
       },
       "dict_ops_more": {
         "DIVERGENT_CRASH": 0,
@@ -128,7 +128,7 @@
         "EQUIV": 13
       }
     },
-    "pct_equiv": 76.0,
+    "pct_equiv": 78.1,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -146,8 +146,10 @@
       "area": "str_methods_more",
       "name": "rpartition",
       "src": "imprimir('a-b-c'.rpartition('-'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.rpartition() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "str_methods_more",
@@ -203,15 +205,19 @@
       "area": "str_methods_more",
       "name": "encode",
       "src": "imprimir('abc'.encode())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.encode() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "str_methods_more",
       "name": "encode-utf8",
       "src": "imprimir('ñ'.encode('utf-8'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.encode() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "str_methods_more",
@@ -305,15 +311,19 @@
       "area": "str_methods_more",
       "name": "isprintable",
       "src": "imprimir('abc'.isprintable())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.isprintable() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "str_methods_more",
       "name": "isidentifier",
       "src": "imprimir('abc'.isidentifier())\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux str.isidentifier() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "str_methods_more",
@@ -2098,7 +2108,7 @@
       "name": "classmethod-ref",
       "src": "clase P:\n    @classmethod\n    funcion f(cls): devolver 9\nimprimir(P.f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-8gg0lyfz/program.c: In function ‘piton_main’:\n/tmp/piton-linux-8gg0lyfz/program.c:2483:14: error: ‘P’ undeclared (first use in this function)\n 2483 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-8gg0lyfz/program.c:2483:14: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-6rolec6w/program.c: In function ‘piton_main’:\n/tmp/piton-linux-6rolec6w/program.c:2553:14: error: ‘P’ undeclared (first use in this function)\n 2553 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-6rolec6w/program.c:2553:14: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "callable_protocol",
