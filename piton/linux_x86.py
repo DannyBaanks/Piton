@@ -40,7 +40,7 @@ typedef struct{long refcount;long kind;long length;long capacity;unsigned char*d
 typedef struct{long magic;void*bytes_obj;long index;}PitonBytesIterator;
 /* MEMORYVIEW_V1: vista sobre bytes/bytearray. Referencia el buffer original
  * (no copia): la mutación a través de la vista se ve en el buffer. */
-typedef struct{long refcount;long kind;long length;int is_bytearray;void*buf;long offset;}PitonMemoryView;
+typedef struct{long refcount;long kind;long length;int is_bytearray;void*buf;long offset;long stride;}PitonMemoryView;
 static long piton_range_len(PitonRange*r);
 static long piton_range_eq(PitonRange*a,PitonRange*b);
 static unsigned char piton_arena[8*1024*1024];
@@ -631,7 +631,7 @@ static PitonRange*piton_range_new(long start,long stop,long step){
   r->start=start;r->stop=stop;r->step=step;return r;}
 static PitonBytes* piton_bytes_new(long len,const unsigned char*data);
 static long piton_strdup(const char*s);
-static long piton_memoryview_new(void*buf,int is_bytearray,long off,long len);
+static long piton_memoryview_new(void*buf,int is_bytearray,long off,long len,long stride);
 static void piton_print_memoryview(PitonMemoryView*m);
 static long piton_slice_new(long start,long stop,long step,int hs,int hp,int ht);
 static void piton_print_slice(PitonSlice*x);
@@ -647,29 +647,29 @@ static unsigned char* piton_mv_buf(PitonMemoryView*m){
   if(m->is_bytearray)return ((PitonByteArray*)m->buf)->data;
   return ((PitonBytes*)m->buf)->data;
 }
-static long piton_memoryview_new(void*buf,int is_bytearray,long off,long len){
+static long piton_memoryview_new(void*buf,int is_bytearray,long off,long len,long stride){
   if(!buf){piton_raise_set("TypeError","memoryview: a bytes-like object is required");return 0;}
   PitonMemoryView*m=(PitonMemoryView*)piton_alloc(sizeof(PitonMemoryView));
   m->refcount=1;m->kind=PK_MEMORYVIEW;
-  m->buf=buf;m->is_bytearray=is_bytearray;m->offset=off;m->length=len;
+  m->buf=buf;m->is_bytearray=is_bytearray;m->offset=off;m->length=len;m->stride=stride;
   return(long)m;
 }
 static long piton_memoryview_get(PitonMemoryView*m,long i){
   if(i<0)i+=m->length;
   if(i<0||i>=m->length){piton_raise_set("IndexError","index out of bounds on memoryview");return 0;}
-  return (long)piton_mv_buf(m)[m->offset+i];
+  return (long)piton_mv_buf(m)[m->offset+i*m->stride];
 }
 static void piton_memoryview_set(PitonMemoryView*m,long i,long v){
   if(!m->is_bytearray){piton_raise_set("TypeError","cannot modify read-only memoryview");return;}
   if(i<0)i+=m->length;
   if(i<0||i>=m->length){piton_raise_set("IndexError","index out of bounds on memoryview");return;}
   if(v<0||v>255){piton_raise_set("ValueError","memoryview assignment value out of range");return;}
-  piton_mv_buf(m)[m->offset+i]=(unsigned char)v;
+  piton_mv_buf(m)[m->offset+i*m->stride]=(unsigned char)v;
 }
 static int piton_memoryview_eq(PitonMemoryView*a,PitonMemoryView*b){
   if(a->length!=b->length)return 0;
   unsigned char*pa=piton_mv_buf(a);unsigned char*pb=piton_mv_buf(b);
-  for(long i=0;i<a->length;++i)if(pa[a->offset+i]!=pb[b->offset+i])return 0;
+  for(long i=0;i<a->length;++i)if(pa[a->offset+i*a->stride]!=pb[b->offset+i*b->stride])return 0;
   return 1;
 }
 static void piton_print_memoryview(PitonMemoryView*m){
@@ -679,12 +679,17 @@ static void piton_print_memoryview(PitonMemoryView*m){
   piton_write(1,">",1);
 }
 static long piton_memoryview_tobytes(PitonMemoryView*m){
-  return(long)(PitonBytes*)piton_bytes_new(m->length,piton_mv_buf(m)+m->offset);
+  if(m->stride==1)return(long)(PitonBytes*)piton_bytes_new(m->length,piton_mv_buf(m)+m->offset);
+  /* MEMORYVIEW_STRIDE_V1: vista no contigua -> coleccion en orden de items. */
+  char*p=piton_alloc((usize)(m->length>0?m->length:1));
+  unsigned char*b=piton_mv_buf(m);
+  for(long i=0;i<m->length;++i)p[i]=(char)b[m->offset+i*m->stride];
+  return(long)(PitonBytes*)piton_bytes_new(m->length,p);
 }
 static long piton_memoryview_tolist(PitonMemoryView*m){
   PitonSeq*r=piton_seq_new(PK_LIST,m->length);
   unsigned char*p=piton_mv_buf(m);
-  for(long i=0;i<m->length;++i)r->items[i]=(PitonSlot){(long)p[m->offset+i],PK_INT};
+  for(long i=0;i<m->length;++i)r->items[i]=(PitonSlot){(long)p[m->offset+i*m->stride],PK_INT};
   return(long)r;
 }
 typedef struct{long magic;PitonMemoryView*mv;long index;}PitonMemoryViewIterator;
@@ -697,12 +702,47 @@ static long piton_memoryview_iter_next(long raw){
   PitonMemoryViewIterator*i=(PitonMemoryViewIterator*)raw;
   if(!i||i->magic!=0x5049544E4D564557LL){piton_write(2,"TypeError: object is not a memoryview iterator\n",49);piton_exit(1);}
   if(i->index>=i->mv->length){piton_raise_set("StopIteration","");return 0;}
-  return (long)piton_mv_buf(i->mv)[i->mv->offset+i->index++];
+  return (long)piton_mv_buf(i->mv)[i->mv->offset+(i->index++)*i->mv->stride];
 }
 static long piton_memoryview_slice(PitonMemoryView*m,long lo,long hi){
   long n=m->length;if(lo<0)lo+=n;if(hi<0)hi+=n;
   if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;
-  return piton_memoryview_new(m->buf,m->is_bytearray,m->offset+lo,hi-lo);
+  return piton_memoryview_new(m->buf,m->is_bytearray,m->offset+lo*m->stride,hi-lo,m->stride);
+}
+/* MEMORYVIEW_STRIDE_V1: m[lo:hi:step] -> VISTA con stride (positivo o
+ * negativo), sin copia: sigue compartiendo el buffer y refleja mutaciones
+ * como en CPython. Los bounds ausentes llegan como los sentinels INT64_MIN /
+ * INT64_MAX del emisor (el primer test cubre el literal y su wrap -1). */
+static long piton_memoryview_slice_step(PitonMemoryView*m,long lo,long hi,long step){
+  long n=m->length;
+  if(step==0){piton_write(2,"ValueError: slice step cannot be zero\n",38);piton_exit(1);}
+  long start,stop,count;
+  if(step>0){
+    if(lo==(-0x7FFFFFFFFFFFFFFFL)||lo==(-0x7FFFFFFFFFFFFFFFL-1))start=0;
+    else if(lo<0){start=lo+n;if(start<0)start=0;}
+    else if(lo>n)start=n;
+    else start=lo;
+    if(hi==0x7FFFFFFFFFFFFFFFL)stop=n;
+    else if(hi<0){stop=hi+n;if(stop<0)stop=0;}
+    else if(hi>n)stop=n;
+    else stop=hi;
+    if(stop<start)stop=start;
+    count=(stop-start+step-1)/step;
+  }else{
+    if(lo==(-0x7FFFFFFFFFFFFFFFL)||lo==(-0x7FFFFFFFFFFFFFFFL-1))start=n-1;
+    else if(lo<0){start=lo+n;if(start<0)start=-1;}
+    else if(lo>=n)start=n-1;
+    else start=lo;
+    if(hi==0x7FFFFFFFFFFFFFFFL)stop=-1;
+    else if(hi<0){stop=hi+n;if(stop<0)stop=-1;}
+    else if(hi>=n)stop=n-1;
+    else stop=hi;
+    if(stop>start)stop=start;
+    count=(start-stop-step-1)/(-step);
+  }
+  if(count<0)count=0;
+  return piton_memoryview_new(m->buf,m->is_bytearray,
+     count?m->offset+start*m->stride:m->offset,count,m->stride*step);
 }
 static long piton_slice_new(long start,long stop,long step,int hs,int hp,int ht){
   PitonSlice*x=(PitonSlice*)piton_alloc(sizeof(PitonSlice));
@@ -2487,6 +2527,8 @@ class LinuxCEmitter:
         # builtin like sum() can tell what it is accumulating instead of
         # assuming int (which made it add raw pointers for bigints).
         self._coll_elems: dict[str, str] = {}
+        # MEMORYVIEW_STRIDE_V1: temps cuya vista NO es contigua (stride != 1).
+        self._mv_noncontig: set[str] = set()
         self._tuple_list_elems: dict[str, tuple[str, str]] = {}
         self._iter_source: dict[str, str] = {}
         self._enum_elem: dict[str, str] = {}
@@ -6487,7 +6529,7 @@ class LinuxCEmitter:
                 _ba = 1 if vt == "bytearray" else 0
                 out.append(
                     f"    {_name(result)}=piton_memoryview_new({self._value(values[0])},{_ba},0,"
-                    f"((PitonBytes*){self._value(values[0])})->length);"
+                    f"((PitonBytes*){self._value(values[0])})->length,1);"
                 )
                 types[result] = "memoryview"
                 return out
@@ -7815,6 +7857,24 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}=({_mv})->length;")
                         types[result] = "int"
                         return out
+                    if method == "cast":
+                        # MEMORYVIEW_CAST_V1: cast('B') devuelve una vista con
+                        # el mismo buffer (alias, como CPython). Requiere vista
+                        # contigua: un receiver marcado como no contiguo es un
+                        # build error (CPython lanza TypeError en runtime).
+                        if len(call_args) != 1:
+                            raise NativeBuildError("Linux memoryview.cast() takes exactly one argument")
+                        _fmt = call_args[0]
+                        _fmt_val = _fmt if isinstance(_fmt, str) and not _fmt.startswith(("%", "@")) else self._fn_consts.get(_fmt)
+                        if _fmt_val not in {"B", "b", "c"}:
+                            raise NativeBuildError("Linux memoryview.cast() supports only the 1-byte formats ('B','b','c')")
+                        if obj in self._mv_noncontig:
+                            raise NativeBuildError("memoryview.cast() requires a C-contiguous view (non-contiguous receiver)")
+                        out.append(
+                            f"    {_name(result)}=piton_memoryview_new(({_mv})->buf,({_mv})->is_bytearray,({_mv})->offset,({_mv})->length,1);"
+                        )
+                        types[result] = "memoryview"
+                        return out
                     raise NativeBuildError(f"Linux memoryview.{method}() is not supported")
                 if coll_type == "complex" and method == "conjugate":
                     # COMPLEX_CONJUGATE_V1: z.conjugate() -> z con la parte
@@ -8231,9 +8291,11 @@ class LinuxCEmitter:
                         f"long _lo=_sl->has_start?(_sl->start<0?_sl->start+_n:_sl->start):0;"
                         f"long _hi=_sl->has_stop?(_sl->stop<0?_sl->stop+_n:_sl->stop):_n;"
                         f"if(_lo<0)_lo=0;if(_hi>_n)_hi=_n;if(_hi<_lo)_hi=_lo;"
-                        f"{_name(result)}=piton_memoryview_new(((PitonMemoryView*){self._value(coll)})->buf,((PitonMemoryView*){self._value(coll)})->is_bytearray,((PitonMemoryView*){self._value(coll)})->offset+_lo,_hi-_lo);}}"
+                        f"{_name(result)}=piton_memoryview_new(((PitonMemoryView*){self._value(coll)})->buf,((PitonMemoryView*){self._value(coll)})->is_bytearray,((PitonMemoryView*){self._value(coll)})->offset+_lo*((PitonMemoryView*){self._value(coll)})->stride,_hi-_lo,((PitonMemoryView*){self._value(coll)})->stride);}}"
                     )
                     types[result] = "memoryview"
+                    if coll in self._mv_noncontig:
+                        self._mv_noncontig.add(result)
                     if _gi_handler:
                         self._emit_exc_check(out, function, _gi_handler)
                     return out
@@ -8391,6 +8453,8 @@ class LinuxCEmitter:
                         f"    {_name(result)}=piton_memoryview_slice((PitonMemoryView*){self._value(coll)},{lower_value},{upper_value});"
                     )
                     types[result] = "memoryview"
+                    if coll in self._mv_noncontig:
+                        self._mv_noncontig.add(result)
                     return out
                 else:
                     raise NativeBuildError(f"Linux slice not supported for {collection_type}")
@@ -8412,6 +8476,15 @@ class LinuxCEmitter:
             elif collection_type in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=piton_seq_slice_step((PitonSeq*){self._value(coll)},{lower_value},{upper_value},{step_value});')
                 types[result] = collection_type
+            elif collection_type == "memoryview":
+                # MEMORYVIEW_STRIDE_V1: vista con stride, sin copia.
+                out.append(
+                    f"    {_name(result)}=piton_memoryview_slice_step((PitonMemoryView*){self._value(coll)},{lower_value},{upper_value},{step_value});"
+                )
+                types[result] = "memoryview"
+                # Contiguo solo si el padre lo era y el step es literal 1.
+                if step_value != "1" or coll in self._mv_noncontig:
+                    self._mv_noncontig.add(result)
             else:
                 raise NativeBuildError(f"Linux slice not supported for {collection_type}")
         elif op == "collection_len":

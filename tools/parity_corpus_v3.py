@@ -199,7 +199,10 @@ def area_memoryview():
         # NOTA: imprimir un memoryview muestra una dirección (varía por
         # proceso): no es comparable. Se mide forma y contenido.
         ("slice", "m = memoryview(b'abcdef')\nv = m[1:4]\nimprimir(v.tobytes())\nimprimir(longitud(v))"),
-        ("slice-step", "m = memoryview(b'abcdef')\nimprimir(m[::2])"),
+        # slice-step medía `imprimir(m[::2])`, que en CPython imprime
+        # <memory at 0x...> con dirección aleatoria: un caso no determinista
+        # (si compilara, daría DIVERGENT). Se mide el contenido, como slice.
+        ("slice-step", "m = memoryview(b'abcdef')\nimprimir(m[::2].tobytes())\nimprimir(longitud(m[::2]))"),
         ("tobytes", "m = memoryview(b'abc')\nimprimir(m.tobytes())"),
         ("tolist", "m = memoryview(b'abc')\nimprimir(m.tolist())"),
         ("eq", "imprimir(memoryview(b'ab') == memoryview(b'ab'))"),

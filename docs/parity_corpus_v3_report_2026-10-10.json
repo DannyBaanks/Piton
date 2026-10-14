@@ -26,9 +26,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 4,
+      "FAIL_CLOSED": 2,
       "RAISE_EQ": 0,
-      "EQUIV": 231
+      "EQUIV": 233
     },
     "by_area": {
       "str_methods_more": {
@@ -67,9 +67,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 2,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 12
+        "EQUIV": 14
       },
       "slice_value": {
         "DIVERGENT_CRASH": 0,
@@ -128,7 +128,7 @@
         "EQUIV": 14
       }
     },
-    "pct_equiv": 98.3,
+    "pct_equiv": 99.1,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -951,9 +951,11 @@
     {
       "area": "memoryview",
       "name": "slice-step",
-      "src": "m = memoryview(b'abcdef')\nimprimir(m[::2])\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux slice not supported for memoryview"
+      "src": "m = memoryview(b'abcdef')\nimprimir(m[::2].tobytes())\nimprimir(longitud(m[::2]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "memoryview",
@@ -995,8 +997,10 @@
       "area": "memoryview",
       "name": "cast",
       "src": "m = memoryview(b'abcd')\nc = m.cast('B')\nimprimir(longitud(c))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux memoryview.cast() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "memoryview",
