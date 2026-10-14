@@ -26,9 +26,9 @@
       "DIVERGENT_CRASH": 0,
       "DIVERGENT_MISMATCH": 0,
       "TIMEOUT": 0,
-      "FAIL_CLOSED": 51,
+      "FAIL_CLOSED": 44,
       "RAISE_EQ": 0,
-      "EQUIV": 182
+      "EQUIV": 189
     },
     "by_area": {
       "str_methods_more": {
@@ -51,9 +51,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 3,
+        "FAIL_CLOSED": 0,
         "RAISE_EQ": 0,
-        "EQUIV": 25
+        "EQUIV": 28
       },
       "frozenset": {
         "DIVERGENT_CRASH": 0,
@@ -91,9 +91,9 @@
         "DIVERGENT_CRASH": 0,
         "DIVERGENT_MISMATCH": 0,
         "TIMEOUT": 0,
-        "FAIL_CLOSED": 5,
+        "FAIL_CLOSED": 1,
         "RAISE_EQ": 0,
-        "EQUIV": 22
+        "EQUIV": 26
       },
       "exceptions_deep": {
         "DIVERGENT_CRASH": 0,
@@ -128,7 +128,7 @@
         "EQUIV": 13
       }
     },
-    "pct_equiv": 78.1,
+    "pct_equiv": 81.1,
     "pct_honest": 100.0,
     "pct_divergent": 0.0
   },
@@ -611,22 +611,28 @@
       "area": "set_ops",
       "name": "inter-update",
       "src": "s = {1, 2}\ns.intersection_update({2})\nimprimir(s)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux set.intersection_update() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "set_ops",
       "name": "diff-update",
       "src": "s = {1, 2}\ns.difference_update({1})\nimprimir(s)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux set.difference_update() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "set_ops",
       "name": "symdiff-update",
       "src": "s = {1, 2}\ns.symmetric_difference_update({2, 3})\nimprimir(s)\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux set.symmetric_difference_update() is not supported"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "set_ops",
@@ -1377,8 +1383,10 @@
       "area": "builtins_more",
       "name": "sum-start",
       "src": "imprimir(suma([1, 2], 10))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux sum requires one collection"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins_more",
@@ -1402,8 +1410,10 @@
       "area": "builtins_more",
       "name": "divmod-float",
       "src": "imprimir(divmod(7.5, 2))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux divmod requires int arguments"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins_more",
@@ -1454,15 +1464,19 @@
       "area": "builtins_more",
       "name": "format-fn",
       "src": "imprimir(format(5, '05d'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'format' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins_more",
       "name": "format-float",
       "src": "imprimir(format(1.5, '.2f'))\n",
-      "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux native call to builtin 'format' is not supported in this position"
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
     },
     {
       "area": "builtins_more",
@@ -1612,7 +1626,7 @@
       "name": "bigint-divmod",
       "src": "imprimir(divmod(10 ** 25, 7))\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: Linux divmod requires int arguments"
+      "detail": "build: NativeBuildError: Linux divmod requires int or float arguments"
     },
     {
       "area": "numeric_semantics",
@@ -2108,7 +2122,7 @@
       "name": "classmethod-ref",
       "src": "clase P:\n    @classmethod\n    funcion f(cls): devolver 9\nimprimir(P.f())\n",
       "bucket": "FAIL_CLOSED",
-      "detail": "build: NativeBuildError: /tmp/piton-linux-6rolec6w/program.c: In function ‘piton_main’:\n/tmp/piton-linux-6rolec6w/program.c:2553:14: error: ‘P’ undeclared (first use in this function)\n 2553 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-6rolec6w/program.c:2553:14: note: each undeclared identifier is reported only once for each function it appears in\n"
+      "detail": "build: NativeBuildError: /tmp/piton-linux-hj56x8cf/program.c: In function ‘piton_main’:\n/tmp/piton-linux-hj56x8cf/program.c:2592:14: error: ‘P’ undeclared (first use in this function)\n 2592 |     _12=P__f(P);\n      |              ^\n/tmp/piton-linux-hj56x8cf/program.c:2592:14: note: each undeclared identifier is reported only once for each function it appears in\n"
     },
     {
       "area": "callable_protocol",

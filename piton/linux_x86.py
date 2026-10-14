@@ -812,6 +812,9 @@ static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_writ
  * piton_dict_get, which raises KeyError as CPython does. */
 static PitonSlot piton_dict_nth_key(PitonDict*d,long i){if(!d||i<0||i>=d->length)piton_write(2,"IndexError\n",10),piton_exit(1);return d->items[i].key;}
 static PitonSlot piton_set_nth(PitonSet*s,long i){if(!s||i<0||i>=s->length)piton_write(2,"IndexError\n",10),piton_exit(1);return s->items[i];}
+/* SUM_START_V1: variantes con valor inicial. */
+static long piton_sum_seq_start(PitonSeq*s,long start){long r=start;if(s)for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
+static long piton_sum_seq_float_start(PitonSeq*s,long start){double r=piton_bits_double(start);if(s)for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_FLOAT)r+=piton_bits_double(v.bits);else if(v.kind==PK_INT||v.kind==PK_BOOL)r+=(double)v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return piton_double_bits(r);}
 static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i){PitonSlot v=d->items[i].key;if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
@@ -961,6 +964,31 @@ static long piton_set_issubset(PitonSet*a,PitonSet*b){if(!a)return 1;if(!b)retur
 static long piton_set_issuperset(PitonSet*a,PitonSet*b){return piton_set_issubset(b,a);}
 static long piton_set_isdisjoint(PitonSet*a,PitonSet*b){if(!a||!b)return 1;for(long i=0;i<a->length;++i)if(piton_set_contains(b,a->items[i]))return 0;return 1;}
 static void piton_set_update(PitonSet*a,PitonSet*b){if(a&&b)for(long i=0;i<b->length;++i)piton_set_add(a,b->items[i]);}
+/* SET_INPLACE_V1: variantes in-place de las operaciones de conjunto. */
+static void piton_set_intersection_update(PitonSet*a,PitonSet*b){
+  if(!a)return;
+  if(!b){a->length=0;return;}
+  long w=0;
+  for(long i=0;i<a->length;++i)if(piton_set_contains(b,a->items[i]))a->items[w++]=a->items[i];
+  a->length=w;
+}
+static void piton_set_difference_update(PitonSet*a,PitonSet*b){
+  if(!a)return;
+  if(!b)return;
+  long w=0;
+  for(long i=0;i<a->length;++i)if(!piton_set_contains(b,a->items[i]))a->items[w++]=a->items[i];
+  a->length=w;
+}
+static void piton_set_symmetric_difference_update(PitonSet*a,PitonSet*b){
+  if(!a||!b)return;
+  /* diferencia simétrica = (a - b) U (b - a). Se construye el resultado en un
+   * conjunto nuevo y se copia de vuelta a `a` (que conserva su identidad). */
+  PitonSet*r=piton_set_new(a->length+b->length);
+  for(long i=0;i<a->length;++i)if(!piton_set_contains(b,a->items[i]))piton_set_add(r,a->items[i]);
+  for(long i=0;i<b->length;++i)if(!piton_set_contains(a,b->items[i]))piton_set_add(r,b->items[i]);
+  a->length=0;
+  for(long i=0;i<r->length;++i)piton_set_add(a,r->items[i]);
+}
 static long piton_str_removeprefix(const char*s,const char*prefix){if(!s||!prefix)return(long)s;usize pl=piton_strlen(prefix),sl=piton_strlen(s);if(sl>=pl&&piton_memcmp(s,prefix,pl)==0){usize rem=sl-pl;char*r=piton_alloc(rem+1);piton_memcpy(r,s+pl,rem);r[rem]=0;return(long)r;}char*r=piton_alloc(sl+1);piton_memcpy(r,s,sl);r[sl]=0;return(long)r;}
 static long piton_str_removesuffix(const char*s,const char*suffix){if(!s||!suffix)return(long)s;usize sufl=piton_strlen(suffix),sl=piton_strlen(s);if(sl>=sufl&&piton_memcmp(s+(sl-sufl),suffix,sufl)==0){usize rem=sl-sufl;char*r=piton_alloc(rem+1);piton_memcpy(r,s,rem);r[rem]=0;return(long)r;}char*r=piton_alloc(sl+1);piton_memcpy(r,s,sl);r[sl]=0;return(long)r;}
 static long piton_dict_keys(PitonDict*d){PitonSeq*s=piton_seq_new(PK_LIST,d?d->length:0);if(d)for(long i=0;i<d->length;++i)s->items[i]=d->items[i].key;return(long)s;}
@@ -968,6 +996,17 @@ static long piton_dict_values(PitonDict*d){PitonSeq*s=piton_seq_new(PK_LIST,d?d-
 static long piton_dict_items(PitonDict*d){PitonSeq*s=piton_seq_new(PK_LIST,d?d->length:0);if(d)for(long i=0;i<d->length;++i){PitonSeq*p=piton_seq_new(PK_TUPLE,2);p->items[0]=d->items[i].key;p->items[1]=d->items[i].value;s->items[i]=(PitonSlot){(long)p,PK_TUPLE};}return(long)s;}
 static long piton_range_slice(PitonRange*r,long lo,long hi){if(!r)return 0;long n=piton_range_len(r);if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;return(long)piton_range_new(r->start+lo*r->step,r->start+hi*r->step,r->step);}
 static long piton_range_slice_step(PitonRange*r,long lo,long hi,long st){if(!r)return 0;if(st==0){piton_raise_set("ValueError","slice step cannot be zero");return 0;}long n=piton_range_len(r);long a=0,b=0;if(st>0){if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=0;if(hi==0x7FFFFFFFFFFFFFFFL)hi=n;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;a=lo;b=hi;}else{if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=n-1;if(hi==0x7FFFFFFFFFFFFFFFL)hi=-n-1;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo>=n)lo=n-1;if(hi<-1)hi=-1;a=lo;b=hi;}return(long)piton_range_new(r->start+a*r->step,r->start+b*r->step,r->step*st);}
+/* DIVMOD_FLOAT_V1: divmod(a, b) con floats -> tupla (q, r). */
+static long piton_divmod_float(double a,double b){
+  if(b==0.0){piton_raise_set("ZeroDivisionError","float divmod()");return 0;}
+  double q=__builtin_floor(a/b);
+  double r=a-q*b;
+  if(r!=0.0&&((r<0.0)!=(b<0.0))){q-=1.0;r+=b;}
+  PitonSeq*p=piton_seq_new(PK_TUPLE,2);
+  p->items[0]=(PitonSlot){piton_double_bits(q),PK_FLOAT};
+  p->items[1]=(PitonSlot){piton_double_bits(r),PK_FLOAT};
+  return(long)p;
+}
 static long piton_divmod_xy(long a,long b){if(!b){piton_raise_set("ZeroDivisionError","integer division or modulo by zero");return 0;}long q=a/b,r=a%b;if(r&&((r<0)!=(b<0))){q-=1;r+=b;}PitonSeq*p=piton_seq_new(PK_TUPLE,2);p->items[0]=(PitonSlot){q,PK_INT};p->items[1]=(PitonSlot){r,PK_INT};return(long)p;}
 static PitonSlot piton_str_minmax(const char*s,int want_min){if(!s||!*s){piton_raise_set("ValueError","min() arg is an empty sequence");return (PitonSlot){0,PK_STR};}unsigned char best=(unsigned char)s[0];for(long i=1;s[i];++i){unsigned char c=(unsigned char)s[i];if(want_min?c<best:c>best)best=c;}char*r=piton_alloc(2);r[0]=(char)best;r[1]=0;return (PitonSlot){(long)r,PK_STR};}
 static long piton_collect(int which,long raw,int elemkind){PitonSeq*s=piton_seq_new(PK_LIST,0);if(!s)return 0;for(;;){long v;if(which==0)v=piton_enumerate_next(raw);else if(which==1)v=piton_reversed_next(raw);else if(which==2)v=piton_callback_iterator_next(raw);else if(which==3)v=piton_zip_next(raw);else if(which==4)v=piton_gen_next(raw);else{piton_raise_set("TypeError","collect");return 0;}if(piton_exc_flag){if(piton_exc_type&&piton_strcmp(piton_exc_type,"StopIteration")==0){piton_catch_clear();break;}return 0;}piton_seq_append(s,(PitonSlot){v,elemkind});}return(long)s;}
@@ -3204,6 +3243,18 @@ class LinuxCEmitter:
             elif method == "update":
                 require_count((1,), "one argument (a set)")
                 out.append(f"    piton_set_update((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "none"
+            elif method == "intersection_update":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    piton_set_intersection_update((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "none"
+            elif method == "difference_update":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    piton_set_difference_update((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
+                types[result] = "none"
+            elif method == "symmetric_difference_update":
+                require_count((1,), "one argument (a set)")
+                out.append(f"    piton_set_symmetric_difference_update((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
                 types[result] = "none"
             else:
                 raise NativeBuildError(f"Linux set.{method}() is not supported")
@@ -5890,6 +5941,58 @@ class LinuxCEmitter:
                 else:
                     out.append('    piton_write(1,"\\n",1);')
                 out.append(f"    {_name(result)}=0;")
+            elif function_name in {"formato", "format"}:
+                # FORMAT_V1: format(valor, spec) == '{spec}'.format(valor) — se
+                # reutiliza el motor de str.format (mismo comportamiento).
+                if len(values) != 2:
+                    raise NativeBuildError("Linux format() requires exactly two arguments")
+                if types.get(values[1], "") != "str":
+                    raise NativeBuildError("Linux format() spec must be a str literal")
+                spec = self._fn_consts.get(values[1])
+                if not isinstance(spec, str):
+                    raise NativeBuildError("Linux format() requires a literal spec")
+                vt = types.get(values[0], "int")
+                if vt == "int" or vt == "bool":
+                    # el type char 'd' lo consume apply_spec como desconocido:
+                    # se elimina antes de aplicar presentación.
+                    _spec = spec[:-1] if spec.endswith("d") else spec
+                    _conv = f"piton_str_from_int({self._value(values[0])})"
+                elif vt == "float":
+                    # conversiones de tipo real: se resuelven con los
+                    # formateadores existentes y luego se aplica la
+                    # presentación (fill/align/sign/width).
+                    _t = spec.rstrip("fFeEgG%")
+                    _prec = None
+                    if "." in _t:
+                        try:
+                            _prec = int(_t.split(".")[1])
+                        except ValueError:
+                            _prec = None
+                    # la parte de presentación se aplica al resultado COMPLETO
+                    # del formateador (fill/align/sign/width), nunca antes.
+                    _present = _t.split(".")[0]
+                    if spec.endswith("f") or spec.endswith("F"):
+                        _conv = f"piton_float_fmt_fixed({self._value(values[0])},{_prec if _prec is not None else 6})"
+                    elif spec.endswith("e") or spec.endswith("E"):
+                        _conv = f"piton_float_fmt_exp({self._value(values[0])},{_prec if _prec is not None else 6},{1 if spec.endswith('E') else 0})"
+                    elif spec.endswith("g") or spec.endswith("G"):
+                        _conv = f"piton_float_fmt_g({self._value(values[0])},{1 if spec.endswith('G') else 0})"
+                    elif spec.endswith("%"):
+                        _conv = f"piton_float_fmt_pct({self._value(values[0])},{_prec if _prec is not None else 6})"
+                    else:
+                        _conv = f"piton_str_from_float({self._value(values[0])})"
+                    _spec = _present
+                elif vt == "str":
+                    _conv = f"((const char*){self._value(values[0])})"
+                    _spec = spec
+                else:
+                    raise NativeBuildError(f"Linux format() does not support {vt} values")
+                if not _spec:
+                    out.append(f"    {_name(result)}=(long){_conv};")
+                else:
+                    out.append(f"    {_name(result)}=(long)piton_str_apply_spec((const char*){_conv},{json.dumps(_spec)});")
+                types[result] = "str"
+                return out
             elif function_name in {"longitud", "len"}:
                 if values:
                     v0_type = types.get(values[0], "") or "int"
@@ -6131,8 +6234,18 @@ class LinuxCEmitter:
             elif function_name == "divmod":
                 if len(values) != 2:
                     raise NativeBuildError("Linux divmod requires two arguments")
-                if types.get(values[0], "int") not in {"int", "bool"} or types.get(values[1], "int") not in {"int", "bool"}:
-                    raise NativeBuildError("Linux divmod requires int arguments")
+                t0, t1 = types.get(values[0], "int"), types.get(values[1], "int")
+                if "float" in {t0, t1}:
+                    # DIVMOD_FLOAT_V1: divmod(float, float) -> (q, r) floats.
+                    lv = f"piton_bits_double({self._value(values[0])})" if t0 == "float" else f"(double){self._value(values[0])}"
+                    rv = f"piton_bits_double({self._value(values[1])})" if t1 == "float" else f"(double){self._value(values[1])}"
+                    out.append(f"    {_name(result)}=piton_divmod_float({lv},{rv});")
+                    self._emit_exc_check(out, function, call_handler)
+                    types[result] = "tuple"
+                    self._coll_elems[result] = "float"
+                    return out
+                if t0 not in {"int", "bool"} or t1 not in {"int", "bool"}:
+                    raise NativeBuildError("Linux divmod requires int or float arguments")
                 out.append(f"    {_name(result)}=piton_divmod_xy({self._value(values[0])},{self._value(values[1])});")
                 types[result] = "tuple"
                 self._coll_elems[result] = "int"
@@ -6364,6 +6477,24 @@ class LinuxCEmitter:
                         f"Linux min/max requires two values of the same kind, not {t0}/{t1}"
                     )
             elif function_name in {"sum", "suma"}:
+                if len(values) == 2:
+                    # SUM_START_V1: sum(iterable, start) — el inicio se suma al
+                    # total acumulado (CPython acepta cualquier start numérico).
+                    st = types.get(values[1], "int")
+                    if st not in {"int", "bool", "float"}:
+                        raise NativeBuildError("Linux sum(x, start) requires a numeric start")
+                    acc = f"piton_double_bits({self._value(values[1])})" if st == "float" else self._value(values[1])
+                    et = self._coll_elems.get(values[0])
+                    _mixed_float = et is not None and "float" in et.split("|")
+                    if _mixed_float or st == "float":
+                        _stv = self._value(values[1]) if st == "float" else f"piton_double_bits((double)({self._value(values[1])}))"
+                        out.append(f"    {_name(result)}=piton_sum_seq_float_start({self._value(values[0])},{_stv});")
+                        types[result] = "float"
+                    else:
+                        out.append(f"    {_name(result)}=piton_sum_seq_start({self._value(values[0])},{self._value(values[1])});")
+                        types[result] = "int"
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 if len(values) != 1 or types.get(values[0]) not in {
                     "list", "tuple", "dict", "set", "set:frozen", "range", "generator"
                 }:
