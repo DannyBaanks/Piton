@@ -351,6 +351,9 @@ class Win64NasmEmitter:
             # with "symbol not defined" on every getattr/hasattr/dict.copy/
             # dict.pop/index/set algebra/removeprefix program.
             "extern piton_getattr", "extern piton_hasattr", "extern piton_setattr",
+            # MATCH_DYNAMIC_V1: isinstance dinamico por class_name para
+            # subjects sin tipo estatico (caso Point(...)).
+            "extern piton_isinstance_class",
             "extern piton_dict_copy", "extern piton_dict_pop",
             # COLL_METHODS_EXTERNS_V1: dict/set methods added to
             # native_runtime.c without the matching extern here; NASM failed
@@ -499,6 +502,9 @@ class Win64NasmEmitter:
 
     def _emit_function(self, function: MIRFunction) -> None:
         self.function = function
+        # MATCH_DYNAMIC_V1: capturas de `segun` tipadas slot antes de emitir
+        # (los cuerpos de caso preceden al bloque store en orden MIR).
+        self._slot_capture_names = self._prescan_slot_captures(function)
         if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
             self._emit_generator_function(function)
             return
@@ -1193,6 +1199,9 @@ class Win64NasmEmitter:
             name = args[0]
             self.aliases[result] = name
             self.types[result] = self.types.get(name, "int")
+            # MATCH_DYNAMIC_V1: captura de `segun` prescaneada -> slot.
+            if name in getattr(self, "_slot_capture_names", ()):
+                self.types[result] = "slot"
             # FMT_SPEC_V1: a load of a tracked string constant keeps the
             # literal, so `'{:>4}'.format(x)` stays provably a template.
             if self.types.get(name) == "str" and name in self.constants:
@@ -1334,6 +1343,11 @@ class Win64NasmEmitter:
                 self._str_elem_colls.add(args[0])
             if isinstance(args[1], str) and self.types.get(args[1]) == "str-boxed":
                 self.types[args[0]] = "str-boxed"
+            if isinstance(args[1], str) and self.types.get(args[1]) == "slot":
+                # MATCH_DYNAMIC_V1: una captura de `segun` (o cualquier store
+                # de un valor taggeado) conserva el tipo slot para que
+                # print/compare despachen por tag en runtime.
+                self.types[args[0]] = "slot"
             if isinstance(args[1], str) and args[1] in self._bigint_elem_colls:
                 self._bigint_elem_colls.add(args[0])
             if isinstance(args[1], str) and args[1] in self._mixed_elem_colls:
@@ -2089,14 +2103,20 @@ class Win64NasmEmitter:
                 return
             if "slot" in {left_type, right_type} and operator in {"==", "!="}:
                 # SLOT_EQ_V1 (Windows): compare tagged values by tag+payload
-                # (piton_value_eq_raw). A raw int/str/none side is boxed
-                # first so the tags line up; ordering on slots fails closed.
+                # (piton_value_eq_raw). A raw int/str/none side is boxed AND
+                # TAGGED first (piton_slot: pv_encode) so the tags line up
+                # -- piton_str_box devuelve un PitonStr* SIN tag y bajo wine
+                # los punteros 0x7ff... tienen top-bits 3 (parecen FLOAT),
+                # asi que la comparacion daba siempre "distinto"... y con
+                # la polaridad vieja (sete para ==) eso matcheaba SIEMPRE.
+                # Orden sobre slots sigue fail-closed.
                 if left_type == "slot":
                     self._load_operand(left, "rcx")
                     self.lines.append("    push rcx")
                 elif left_type == "str":
                     self._load_operand(left, "rcx")
-                    self.lines.append("    call piton_str_box")
+                    self.lines.append("    mov rdx, 1")
+                    self.lines.append("    call piton_slot")
                     self.lines.append("    push rax")
                 elif left_type == "none":
                     self.lines.append("    xor ecx, ecx")
@@ -2110,7 +2130,8 @@ class Win64NasmEmitter:
                     self._load_operand(right, "rdx")
                 elif right_type == "str":
                     self._load_operand(right, "rcx")
-                    self.lines.append("    call piton_str_box")
+                    self.lines.append("    mov rdx, 1")
+                    self.lines.append("    call piton_slot")
                     self.lines.append("    mov rdx, rax")
                 elif right_type == "none":
                     self.lines.append("    xor edx, edx")
@@ -2122,7 +2143,9 @@ class Win64NasmEmitter:
                 self.lines.append("    pop rcx")
                 self.lines.append("    call piton_value_eq")
                 self.lines.append("    test eax, eax")
-                self.lines.append(f"    set{'ne' if operator == '!=' else 'e'} al")
+                # piton_value_eq devuelve 1=IGUALES: para '==' el match es
+                # eax!=0 (setne); para '!=' es eax==0 (sete).
+                self.lines.append(f"    set{'ne' if operator == '==' else 'e'} al")
                 self.lines.append("    movzx rax, al")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "bool"
@@ -2443,6 +2466,53 @@ class Win64NasmEmitter:
                 _st = self._set_elem_kind(container) if hasattr(self, "_set_elem_kind") else "slot"
                 self.types[result] = "slot"
                 return
+            if container_type == "slot":
+                # MATCH_DYNAMIC_V1: contenedor slot (elemento anidado).
+                # Untag del payload y get_raw verbatim; el resultado
+                # hereda slot para print/compare por tag.
+                self._load_operand(container, "rax")
+                # Mismo idioma shl/shr que collection_len: AND imm64 no es
+                # encodable en x86-64.
+                self.lines.extend(["    shl rax, 3", "    shr rax, 3"])
+                self.lines.append("    mov rcx, rax")
+                self._load_operand(key, "rdx")
+                self.lines.append("    call piton_collection_get_raw")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "slot"
+                return
+            if container_type in (None, "int") and self._is_untyped_param_operand(container):
+                # MATCH_DYNAMIC_V1 (Windows): espejo del fallback get_item de
+                # linux_x86 -- el subject de `segun` es un parametro sin tipo
+                # cuyo valor real solo se conoce en runtime. Clave int ->
+                # peek de secuencia (piton_collection_get: decodifica
+                # INT/BOOL y devuelve el OBJECT verbatim taggeado); clave
+                # str -> peek de dict tagged (boxea la clave y busca por
+                # contenido, como dict.get). El resultado se tipa "slot"
+                # para que print/compare despachen por tag en runtime.
+                _key_t = self.types.get(key, "int")
+                if isinstance(key, str) and not key.startswith("%"):
+                    _key_t = "str"
+                if _key_t == "str":
+                    # OJO: _emit_box boxea via rcx y destruye el container;
+                    # se boxea primero a scratch y se recarga rcx despues
+                    # (mismo orden que el dict.get tagged de COLL_METHODS).
+                    self._emit_box(key, "str")
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    self._load_operand(container, "rcx")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    self.lines.append("    call piton_dict_get_tagged_1")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
+                    return
+                self._load_operand(container, "rcx")
+                self._load_operand(key, "rdx")
+                # VERBATIM: get_raw devuelve el item TAGGEADO tal cual esta
+                # en la coleccion (get decodificaba INT/BOOL a raw y el
+                # tipado "slot" era mentira para ints -> imprimia None).
+                self.lines.append("    call piton_collection_get_raw")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "slot"
+                return
             if container_type not in {"list", "tuple", "dict", "dict:module"}:
                 raise NativeBuildError(f"native subscription not supported for {container_type}")
             if container_type in {"dict", "dict:module"}:
@@ -2601,17 +2671,43 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
                 return
-            if ctype is None:
-                # LEN_UNKNOWN_V1: match/collection lowering calls len() on a
-                # parameter whose static type never resolved. Linux emits
-                # `x ? ((PitonSeq*)x)->length : 0`; Windows reads
+            if ctype is None or (ctype == "int" and self._is_untyped_param_operand(collection)):
+                # LEN_UNKNOWN_V1 / MATCH_DYNAMIC_V1: match/collection lowering
+                # calls len() on a parameter whose static type never resolved
+                # (el load lo tipa "int" por defecto). Linux emite
+                # `x ? ((PitonSeq*)x)->length : 0`; Windows lee
                 # PitonCollection.length (offset 24 = header 16 + kind 8)
-                # with the same null guard. Parity tests always pass a real
-                # list/tuple at runtime, exactly like the Linux backend.
+                # con el mismo null guard. Los tests de paridad siempre
+                # pasan una lista/tupla real en runtime, exactamente como
+                # el backend Linux.
                 self._load_operand(collection, "rax")
                 self.lines.append("    test rax, rax")
-                zero = f"{result}_lenzero"
-                done = f"{result}_lendone"
+                zero = self._internal_label("lenzero")
+                done = self._internal_label("lendone")
+                self.lines.append(f"    jz {zero}")
+                self.lines.append("    mov rax, qword [rax+24]")
+                self.lines.append(f"    jmp {done}")
+                self.lines.append(f"{zero}:")
+                self.lines.append("    xor eax, eax")
+                self.lines.append(f"{done}:")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+                return
+            if ctype == "slot":
+                # MATCH_DYNAMIC_V1: contenedor slot (elemento anidado de una
+                # coleccion dinamica, `caso [[a, b], [c, d]]`). El valor esta
+                # TAGGEADO: untag del payload (PAYLOAD_MASK = (1<<61)-1) y
+                # peek de PitonCollection.length (+24), igual que el camino
+                # de parametro sin tipo.
+                self._load_operand(collection, "rax")
+                # OJO: `and rax, 0x1FFF...` NO es encodable (AND r64 no
+                # tiene imm64; NASM trunca a dword con warning y el untag
+                # se vuelve no-op -> deref del puntero taggeado). Idioma
+                # shl/shr: (v << 3) >> 3 logico = v & (2^61 - 1).
+                self.lines.extend(["    shl rax, 3", "    shr rax, 3"])
+                self.lines.append("    test rax, rax")
+                zero = self._internal_label("lenzero")
+                done = self._internal_label("lendone")
                 self.lines.append(f"    jz {zero}")
                 self.lines.append("    mov rax, qword [rax+24]")
                 self.lines.append(f"    jmp {done}")
@@ -4096,6 +4192,28 @@ class Win64NasmEmitter:
             elif function_name in {"isinstance", "es_instancia"}:
                 if len(values) != 2:
                     raise NativeBuildError("isinstance requires 2 arguments")
+                # MATCH_DYNAMIC_V1: subject sin tipo estatico. Contra una
+                # CLASE de usuario se resuelve en runtime con
+                # piton_isinstance_class (el PitonObject se autodescribe por
+                # class_name; espejo de la rama dinamica de linux).
+                # Contra un tipo builtin NO hay forma honesta: los valores
+                # crudos del subset Windows no llevan tag (42 es raw 42,
+                # 'hola' es char*, [1,2] es puntero) y detectar el kind en
+                # runtime seria adivinar -> fallo cerrado, nunca aproximacion
+                # silenciosa (isinstance('hola', int) respondia True).
+                _target_alias = self.aliases.get(values[1], values[1])
+                if self._is_untyped_param_operand(values[0]):
+                    if _target_alias in self.classes:
+                        self._load_operand(values[0], "rcx")
+                        self.lines.append(f"    lea rdx, [{self._string(_target_alias)}]")
+                        self.lines.append("    call piton_isinstance_class")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "bool"
+                        return
+                    raise NativeBuildError(
+                        "native isinstance of an untyped parameter against a builtin type "
+                        "is not supported (raw values carry no runtime tag; fail closed)"
+                    )
                 # TUPLE_ELEMS_ISINSTANCE_V1: la tupla de tipos es una
                 # disyuncion (anidada incluida); ver _isinstance_matches.
                 if self._isinstance_matches(values[0], self.types.get(values[0], "int"), values[1]):
@@ -4759,8 +4877,15 @@ class Win64NasmEmitter:
                                 origins[result] = ("call", _target) if _target and _target in by_name else ("opaque", None)
                             elif op == "binary" and result:
                                 # METHODTYPE_V1: `'B' + <str>` stays str.
+                                # STR_PLUS_UNKNOWN_V1: el EMITTER concatena en
+                                # cuanto UN lado es str (regla de linux), asi
+                                # que la inferencia debe seguir la misma regla
+                                # -- con ambos-lados-str el retorno del
+                                # wrapper decorador (`"<"+t+">"+fn(s)+...) se
+                                # quedaba opaque y el caller imprimia el
+                                # puntero como int.
                                 _bop, _l, _r = iargs[0], iargs[1], iargs[2]
-                                if _bop == "+" and operand_type(_l) == "str" and operand_type(_r) == "str":
+                                if _bop == "+" and "str" in {operand_type(_l), operand_type(_r)}:
                                     origins[result] = ("kind", "str")
                                 else:
                                     origins[result] = ("opaque", None)
@@ -5723,6 +5848,69 @@ class Win64NasmEmitter:
             self._load_operand(value, "rax")
         else:
             raise NativeBuildError(f"native str.format() does not support {arg_type} arguments")
+
+    def _prescan_slot_captures(self, function: MIRFunction) -> set[str]:
+        """MATCH_DYNAMIC_V1: el cuerpo de un `caso` se EMITE antes que el
+        bloque que almacena la captura (el orden de bloques del MIR no es el
+        orden de runtime), asi que el load de la captura ve la variable sin
+        tipo y el print usaba fmt_int (imprimia los bits taggeados).
+        Pre-escanea la funcion completa: get_item sobre el load de un
+        PARAMETRO produce slot; store de ese slot a un nombre marca el
+        nombre como slot para TODA la funcion."""
+        load_names: dict[str, str] = {}
+        for block in function.blocks:
+            for ins in block.instructions:
+                if ins.op == "load" and ins.result and isinstance(ins.args[0], str):
+                    load_names[ins.result] = ins.args[0]
+        slot_srcs: set[str] = set()
+        params = list(function.params or [])
+        # Cierre transitivo: get_item sobre un load de un PARAMETRO produce
+        # slot; get_item sobre OTRO slot-src tambien (patrones anidados
+        # `caso [[a, b], [c, d]]`).
+        changed = True
+        while changed:
+            changed = False
+            for block in function.blocks:
+                for ins in block.instructions:
+                    if (
+                        ins.op == "get_item"
+                        and ins.result
+                        and ins.result not in slot_srcs
+                        and isinstance(ins.args[0], str)
+                        and (
+                            (
+                                ins.args[0] in load_names
+                                and load_names[ins.args[0]] in params
+                            )
+                            or ins.args[0] in slot_srcs
+                        )
+                    ):
+                        slot_srcs.add(ins.result)
+                        changed = True
+        names: set[str] = set()
+        for block in function.blocks:
+            for ins in block.instructions:
+                if (
+                    ins.op == "store"
+                    and len(ins.args) >= 2
+                    and isinstance(ins.args[0], str)
+                    and ins.args[1] in slot_srcs
+                ):
+                    names.add(ins.args[0])
+        return names
+
+    def _is_untyped_param_operand(self, operand: Any) -> bool:
+        """MATCH_DYNAMIC_V1 (Windows): True si el operando resuelve, via
+        aliases, a un parametro de la funcion actual SIN tipo estatico --
+        el subject de `segun`, cuyo tipo real solo se conoce en runtime.
+        Distingue de un literal int (const), que debe seguir fail-closed.
+        (Espejo de la condicion linux: alli `types.get(x)` devuelve None
+        para estos casos; aqui el load por defecto tipa "int".)"""
+        if not isinstance(operand, str):
+            return False
+        name = self.aliases.get(operand, operand)
+        params = getattr(self.function, "params", None) or []
+        return name in params and self.types.get(name) is None
 
     def _dict_owner_is_tagged(self, owner: Any) -> bool:
         """DICT_POP_SETDEFAULT_STR_V1: True cuando el dict guarda claves
