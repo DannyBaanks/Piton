@@ -328,6 +328,16 @@ class Win64NasmEmitter:
             # dict.pop/index/set algebra/removeprefix program.
             "extern piton_getattr", "extern piton_hasattr", "extern piton_setattr",
             "extern piton_dict_copy", "extern piton_dict_pop",
+            # COLL_METHODS_EXTERNS_V1: dict/set methods added to
+            # native_runtime.c without the matching extern here; NASM failed
+            # with "symbol not defined" on every dict.clear/copy and set
+            # algebra/predicate program.
+            "extern piton_dict_clear", "extern piton_dict_setdefault",
+            "extern piton_set_clear", "extern piton_set_copy",
+            "extern piton_set_difference", "extern piton_set_intersection",
+            "extern piton_set_isdisjoint", "extern piton_set_issuperset",
+            "extern piton_set_pop", "extern piton_set_sym_diff",
+            "extern piton_set_update",
             "extern piton_seq_index",
             "extern piton_set_union", "extern piton_set_issubset",
             "extern piton_str_removeprefix", "extern piton_str_removesuffix",
@@ -5679,6 +5689,18 @@ class Win64NasmEmitter:
         else:
             raise NativeBuildError(f"native str.format() does not support {arg_type} arguments")
 
+    def _dict_owner_is_tagged(self, owner: Any) -> bool:
+        """DICT_POP_SETDEFAULT_STR_V1: True cuando el dict guarda claves
+        taggeadas (str/float), el caso que los helpers int-only del runtime
+        no pueden atender."""
+        _src = self.aliases.get(owner, owner) if isinstance(owner, str) else owner
+        return (
+            owner in self._tagged_dicts
+            or _src in self._tagged_dicts
+            or self._dict_key_types.get(owner) not in {None, "int", "bool"}
+            or self._dict_key_types.get(_src) not in {None, "int", "bool"}
+        )
+
     def _emit_collection_method(self, result: Any, method: str, owner: Any,
                                   call_args: list[Any], coll_type: str) -> None:
         """COLL_METHODS_V1: builtin collection methods bound by static dispatch.
@@ -5738,14 +5760,35 @@ class Win64NasmEmitter:
                 self.types[result] = "none"
             elif method == "index":
                 require_count((1,), "exactly one argument")
-                self._load_operand(call_args[0], "rdx")
-                self.lines.append("    xor r8d, r8d")
+                # SEQ_INDEX_STR_V1: una lista/tupla de str guarda PitonStr
+                # boxeados (OBJECT); con type_tag=0 el needle se comparaba
+                # como INT crudo y `['hola','mundo'].index('mundo')` nunca
+                # encontraba (ValueError falso). Se boxea el needle y se
+                # pasa tag=1, que es lo que piton_value_eq_raw sabe comparar.
+                _needle = call_args[0]
+                _needle_str = (
+                    self.types.get(_needle, "int") == "str"
+                    or (isinstance(_needle, str) and not _needle.startswith("%"))
+                )
+                if _needle_str:
+                    # OJO: _emit_collection_method ya dejo el receptor en rcx
+                    # (linea 5696); piton_str_box lo destruye, asi que se
+                    # recarga despues de boxear.
+                    self._load_operand(_needle, "rcx")
+                    self.lines.append("    call piton_str_box")
+                    self._load_operand(owner, "rcx")
+                    self.lines.append("    mov rdx, rax")
+                    self.lines.append("    mov r8d, 1")
+                else:
+                    self._load_operand(_needle, "rdx")
+                    self.lines.append("    xor r8d, r8d")
                 self.lines.append("    call piton_seq_index")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
             elif method == "clear":
                 require_count((0,), "no arguments")
                 self.lines.append("    call piton_seq_clear")
+                self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "none"
             elif method == "copy":
                 require_count((0,), "no arguments")
@@ -5764,8 +5807,25 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
             elif method == "index":
                 require_count((1,), "exactly one argument")
-                self._load_operand(call_args[0], "rdx")
-                self.lines.append("    xor r8d, r8d")
+                # SEQ_INDEX_STR_V1: mismo motivo que list.index -- el needle
+                # str se boxea para comparar contra el PitonStr boxeado.
+                _needle = call_args[0]
+                _needle_str = (
+                    self.types.get(_needle, "int") == "str"
+                    or (isinstance(_needle, str) and not _needle.startswith("%"))
+                )
+                if _needle_str:
+                    # OJO: _emit_collection_method ya dejo el receptor en rcx
+                    # (linea 5696); piton_str_box lo destruye, asi que se
+                    # recarga despues de boxear.
+                    self._load_operand(_needle, "rcx")
+                    self.lines.append("    call piton_str_box")
+                    self._load_operand(owner, "rcx")
+                    self.lines.append("    mov rdx, rax")
+                    self.lines.append("    mov r8d, 1")
+                else:
+                    self._load_operand(_needle, "rdx")
+                    self.lines.append("    xor r8d, r8d")
                 self.lines.append("    call piton_seq_index")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
@@ -5807,6 +5867,15 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
             elif method == "pop":
                 require_count((1, 2), "one or two arguments (key[, default])")
+                # DICT_POP_SETDEFAULT_STR_V1: piton_dict_pop del runtime
+                # fuerza pv_int(key): con claves str (tagged) nunca encontraria
+                # la clave y daria un KeyError FALSO. No hay variante tagged
+                # en el runtime -> fallo cerrado en build, no aproximacion.
+                if self._dict_owner_is_tagged(owner):
+                    raise NativeBuildError(
+                        "native dict.pop() requires int keys in this subset "
+                        "(the runtime has no tagged-key removal)"
+                    )
                 self._load_operand(call_args[0], "rdx")
                 if len(call_args) == 2:
                     self.lines.append("    mov r8, 1")
@@ -5819,6 +5888,13 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
             elif method == "setdefault":
                 require_count((1, 2), "one or two arguments (key[, default])")
+                # DICT_POP_SETDEFAULT_STR_V1: misma razon que pop -- el
+                # helper fuerza pv_int(key) y no sabe insertar tagged.
+                if self._dict_owner_is_tagged(owner):
+                    raise NativeBuildError(
+                        "native dict.setdefault() requires int keys in this subset "
+                        "(the runtime has no tagged-key insertion)"
+                    )
                 self._load_operand(call_args[0], "rdx")
                 if len(call_args) == 2:
                     self._load_operand(call_args[1], "r8")
@@ -5833,6 +5909,26 @@ class Win64NasmEmitter:
                 self.types[result] = "none"
             elif method == "copy":
                 require_count((0,), "no arguments")
+                # DICT_COPY_METADATA_V1: la copia es un dict nuevo; sin
+                # propagar la metadata del fuente (tagged/plain/key-val
+                # types/elems/strkey) `c.get(k)` tomaba el camino int y
+                # fallaba con KeyError falso sobre claves str.
+                _src = self.aliases.get(owner, owner)
+                if owner in self._tagged_dicts or _src in self._tagged_dicts:
+                    self._tagged_dicts.add(result)
+                if owner in self._plain_int_dicts or _src in self._plain_int_dicts:
+                    self._plain_int_dicts.add(result)
+                if owner in self.strkey_dict_temps or _src in self.strkey_dict_temps:
+                    self.strkey_dict_temps.add(result)
+                for _dmap in (self._dict_key_types, self._dict_val_types):
+                    for _cand in (owner, _src):
+                        if _cand in _dmap:
+                            _dmap[result] = _dmap[_cand]
+                            break
+                for _cand in (owner, _src):
+                    if _cand in self.dict_elems:
+                        self.dict_elems[result] = self.dict_elems[_cand]
+                        break
                 self.lines.append("    call piton_dict_copy")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "dict"
