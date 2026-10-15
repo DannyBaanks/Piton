@@ -263,6 +263,30 @@ class Win64NasmEmitter:
         for _mf in module.functions:
             if _mf.name == "main":
                 _mf.name = "main__user"
+                # MAIN_RENAME_REFS_V1: gen_init y load referencian la
+                # funcion por NOMBRE crudo; sin reescribirlos, el driver
+                # del coroutine buscaba layouts['main'] tras el rename.
+                # Guard de sombreado: si 'main' es local (param o store)
+                # en esa funcion, su load es la VARIABLE y no se toca.
+                for _fn in module.functions:
+                    _local_mains = set(_fn.params) | {
+                        _ins.args[0]
+                        for _blk in _fn.blocks
+                        for _ins in _blk.instructions
+                        if _ins.op == "store" and _ins.args and isinstance(_ins.args[0], str) and _ins.args[0] == "main"
+                    }
+                    if "main" in _local_mains:
+                        continue
+                    for _blk in _fn.blocks:
+                        for _i, _ins in enumerate(_blk.instructions):
+                            if _ins.op == "gen_init" and _ins.args and _ins.args[0] == "main":
+                                _blk.instructions[_i] = MIRInstruction(
+                                    _ins.op, ("main__user", *_ins.args[1:]), _ins.result
+                                )
+                            elif _ins.op == "load" and _ins.args == ("main",):
+                                _blk.instructions[_i] = MIRInstruction(
+                                    _ins.op, ("main__user",), _ins.result
+                                )
         self.function_names = {function.name for function in module.functions}
         self.function_return_types = self._infer_return_types(module)
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
