@@ -3042,6 +3042,20 @@ class Win64NasmEmitter:
                     if not params:
                         raise NativeBuildError(f"bound method '{name}' has no native signature")
                     target = f"{resolved_method}__{name}"
+                    if target in self.static_methods:
+                        # STATICMETHOD_TEAROFF_V1: un staticmethod no liga self;
+                        # bound_method_new le restaria un arg al n_args y la
+                        # llamada con la aridad real explotaba con "bound
+                        # method called with wrong number of arguments". El
+                        # valor es la DIRECCION de la funcion (misma
+                        # convencion que el load de un nombre-funcion): el
+                        # branch is_code_addr de piton_closure_call_frame la
+                        # invoca con los args tal cual.
+                        self.lines.append(f"    lea rax, [{target}]")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "closure"
+                        self._function_temps.add(result)
+                        return
                     if self.function_frame_abi.get(target, False):
                         frame_size = ((8 + 32 + 15) // 16) * 16
                         self.lines.append(f"    sub rsp, {frame_size}")
