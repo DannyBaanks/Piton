@@ -1013,14 +1013,25 @@ class Win64NasmEmitter:
                 if result and source_type == 'dict' and source in self._dict_key_types:
                     self._dict_key_types[result] = self._dict_key_types[source]
             self.lines.append(f"    mov {self._address(result)}, rax")
-            if result and self.types.get(result, "").startswith("iterator:") and self.types[result] != "iterator:genexpr":
+            _iter_t = self.types.get(result, "")
+            # GEN_DRIVER_FRAME_V1: un driver `para x en gen()` llama
+            # piton_gen_next, que al agotarse hace piton_raise("StopIteration")
+            # -- que imprime y sale si ningun frame lo acepta. Los generadores
+            # basicos se aplanan estaticamente a tupla (mir _lower_for), asi
+            # que este camino solo se ejercita con yield-from/yields dinamicos
+            # y el leak pasaba desapercibido. Mismo frame StopIteration-only
+            # de ITER_LOOP_GUARD_V1; el accepted-filter lo hace invisible
+            # para excepciones de usuario y el pop va al bloque exit.
+            # (genexpr sigue excluido: usa el flag-only setter.)
+            if result and (
+                _iter_t == "generator"
+                or (_iter_t.startswith("iterator:") and _iter_t != "iterator:genexpr")
+            ):
                 # ITER_LOOP_GUARD_V1: for-loop exhaustion raises StopIteration
                 # through piton_raise, which prints and exits when no handler
                 # accepts it. Push a StopIteration-only frame for the loop's
                 # lifetime so the static jne-handler in iter_next routes the
                 # exit; the matching pop is emitted at the loop-exit block.
-                # (genexpr iterators use the flag-only setter and generator
-                # bodies run under the coro frame, so they are excluded.)
                 self.lines.append("    call piton_try_push")
                 stop_label = self._string("StopIteration")
                 self.lines.append(f"    lea rcx, [{stop_label}]")
