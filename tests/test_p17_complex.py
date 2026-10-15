@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import unittest
 
 from piton.native_differential import compare_native_to_cpython
@@ -25,6 +26,11 @@ def _assert_build_fails(testcase: unittest.TestCase, source: str) -> None:
         compare_native_to_cpython(source)
 
 
+@unittest.skipIf(
+    sys.platform.startswith("win32"),
+    "COMPLEX_V1 is Linux-only: the Windows backend raises NativeBuildError "
+    "at build time by design (fail closed, no approximation)",
+)
 class TestComplex(unittest.TestCase):
     """COMPLEX_V1 — números complejos en el backend Linux x86-64.
 

@@ -2446,9 +2446,14 @@ class MIRLowerer:
         # construyen como tupla y el runtime la guarda en .args (CPython:
         # e.args == ('a', 'b')). Antes era fail-closed.
         args_tuple = None
-        if len(node.exc.args) != 1:
-            # 0 args -> () ; 2+ args -> la tupla completa. 1 arg se materializa
-            # en el backend como (mensaje,) (caso historico).
+        if len(node.exc.args) > 1:
+            # 2+ args -> la tupla completa. 1 arg se materializa en el
+            # backend como (mensaje,) (caso historico) y 0 args vuelve al
+            # camino historico payload=None: construir una tupla VACIA aqui
+            # hacia fallar al backend Windows (raise_typed recibia un 4to
+            # operando que su runtime no puede guardar y tenia que rechazar
+            # sin distincion de arity, rompiendo `afirmar cond` -> lanzar
+            # AssertionError()). .args solo es observable en el multi-arg.
             lowered_args = tuple(self._lower_expr(builder, a) for a in node.exc.args)
             args_tuple = builder.temp()
             builder.emit("build_collection", "tuple", lowered_args, result=args_tuple)
