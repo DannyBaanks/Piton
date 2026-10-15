@@ -4769,6 +4769,9 @@ class Win64NasmEmitter:
         by_name = {function.name: function for function in module.functions}
         memo: dict[str, str | None] = {}
         resolving: set[str] = set()
+        # CLOSURE_CALL_INFER_V1: alias-de-variable -> retorno resuelto de la
+        # closure que sostiene (se vuelca a la tabla final).
+        call_through: dict[str, str] = {}
 
         def literal_type(value) -> str:
             if value is None:
@@ -4832,6 +4835,11 @@ class Win64NasmEmitter:
                             return literal_type(origin[1])
                         if origin[0] in {"kind", "object"}:
                             return origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
+                        if origin[0] == "closure":
+                            # CLOSURE_RETURNTYPE_V1: el valor ES una closure
+                            # sobre el simbolo; fluye como tipo de primer
+                            # orden para que la cadena resuelva en infer().
+                            return ("closure", origin[1])
                         if origin[0] == "var":
                             return single(origin[1])
                         if origin[0] == "call":
@@ -4856,12 +4864,41 @@ class Win64NasmEmitter:
                             elif op in {"load", "cell_load"} and result and iargs:
                                 load_src[result] = iargs[0]
                                 origins[result] = ("var", iargs[0])
+                            elif op == "closure_new" and result:
+                                # CLOSURE_RETURNTYPE_V1: el valor es una
+                                # closure sobre el simbolo lifted de args[0];
+                                # la cadena de decoradores se resuelve a traves
+                                # de infer() (memoizada, ciclos -> None).
+                                origins[result] = ("closure", iargs[0])
                             elif op == "call" and result:
                                 callee = load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
                                 if isinstance(callee, str) and callee in by_name and callee not in function.params:
                                     origins[result] = ("call", callee)
                                 else:
-                                    origins[result] = ("opaque", None)
+                                    # CLOSURE_CALL_INFER_V1: el callee es un
+                                    # temp que sostiene una closure (directa,
+                                    # via variable, o via retorno de otra
+                                    # llamada). Se resuelve su TIPO y si es
+                                    # ("closure", F) esta llamada invoca F.
+                                    _ct = operand_type(iargs[0]) if isinstance(iargs[0], str) else None
+                                    if isinstance(_ct, tuple) and _ct[0] == "closure":
+                                        origins[result] = ("call", _ct[1])
+                                        # El emitter tipa `call %alias` con
+                                        # function_return_types[alias]; para
+                                        # una VARIABLE que sostiene la
+                                        # closure se registra el retorno
+                                        # RESUELTO del target (la unica
+                                        # forma de que `imprimir(greet(x))`
+                                        # no imprima un puntero como int).
+                                        _alias = load_src.get(iargs[0])
+                                        if isinstance(_alias, str) and _alias not in by_name:
+                                            _r = infer(_ct[1])
+                                            while isinstance(_r, tuple) and _r[0] == "closure":
+                                                _r = infer(_r[1])
+                                            if isinstance(_r, str) and _r != self._UNKNOWN:
+                                                call_through[_alias] = _r
+                                    else:
+                                        origins[result] = ("opaque", None)
                             elif op == "method_call" and result:
                                 # METHODTYPE_V1: resolve to the defining method
                                 # (MRO) so its return type flows to the caller.
@@ -4944,7 +4981,18 @@ class Win64NasmEmitter:
         resolved: dict[str, str] = {}
         for function in module.functions:
             inferred = infer(function.name)
+            # CLOSURE_RETURNTYPE_V1: un retorno que ES una closure (tupla)
+            # no entra a la tabla de tipos de retorno como tal -- el emitter
+            # tipa los resultados de llamada con strings; una closure
+            # directa conserva el historico "int" (imprimir(tag("b")) sigue
+            # siendo fail-closed por PRINT_UNPRINTABLE).
+            if isinstance(inferred, tuple):
+                inferred = None
             resolved[function.name] = inferred if inferred else "int"
+        # Las variables que sostienen closures (greet tras @tag) heredan el
+        # retorno RESUELTO del target: el emitter consulta exactamente esta
+        # tabla al tipar `call <alias>`.
+        resolved.update(call_through)
         return resolved
 
 
