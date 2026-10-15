@@ -134,6 +134,9 @@ class MIRModule:
     class_properties: dict = field(default_factory=dict)
     static_methods: set = field(default_factory=set)
     class_methods: set = field(default_factory=set)
+    # CLASS_ATTR_TYPES_V1: {clase: {atributo: tipo literal}} — lo llena el
+    # lowerer desde los class_attrs; los backends lo consultan en get_attr.
+    class_attr_types: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {"functions": [function.to_dict() for function in self.functions]}
@@ -727,6 +730,25 @@ class MIRLowerer:
         module = MIRModule(self.functions)
         module.classes = dict(self.classes)
         module.class_parents = dict(self.class_parents)
+        # CLASS_ATTR_TYPES_V1: tipos literales de los atributos de clase,
+        # para que el backend tipa `obj.attr` / `Cls.attr` y no imprima un
+        # str como puntero-int (el MIR replica los attrs en instancias
+        # literales y en el marcador, asi que el tipo fluye al get_attr).
+        _attr_types: dict[str, dict[str, str]] = {}
+        for _cls, _attrs in getattr(self, "class_attrs", {}).items():
+            for _attr, _value_node in _attrs.items():
+                _val = getattr(_value_node, "value", None)
+                if _val is None and getattr(_value_node, "kind", None) == HIRKind.CONST:
+                    _attr_types.setdefault(_cls, {})[_attr] = "none"
+                elif isinstance(_val, bool):
+                    _attr_types.setdefault(_cls, {})[_attr] = "bool"
+                elif isinstance(_val, str):
+                    _attr_types.setdefault(_cls, {})[_attr] = "str"
+                elif isinstance(_val, float):
+                    _attr_types.setdefault(_cls, {})[_attr] = "float"
+                elif isinstance(_val, int):
+                    _attr_types.setdefault(_cls, {})[_attr] = "int"
+        module.class_attr_types = _attr_types
         self._finalize_mro()
         module.class_mro = dict(self.class_mro)
         module.class_properties = dict(self.class_properties)

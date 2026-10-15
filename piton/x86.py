@@ -251,6 +251,8 @@ class Win64NasmEmitter:
         self.class_properties = getattr(module, "class_properties", {})
         self.static_methods = getattr(module, "static_methods", set())
         self.class_methods = getattr(module, "class_methods", set())
+        # CLASS_ATTR_TYPES_V1: tipos literales de atributos de clase.
+        self.mir_module_class_attr_types = getattr(module, "class_attr_types", {})
         # Windows reads _tuple_elems in the static-tuple typing paths but
         # never populated it -> AttributeError on every tuple-typed target.
         self._tuple_elems: dict[str, tuple] = {}
@@ -1253,6 +1255,23 @@ class Win64NasmEmitter:
             if name in self.classes or name in {"object", "objeto"}:
                 self.aliases[result] = name
                 self.types[result] = f"class:{name}" if name in self.classes else "class:object"
+                if name in self.classes and (
+                    name in self._module_stored
+                    and getattr(self.function, "name", "<module>") == "<module>"
+                ):
+                    # CLASS_STORED_LOAD_V1: cada definicion de clase termina
+                    # en `store Counter <- <objeto>` a nivel de modulo, y ese
+                    # objeto lleva los ATRIBUTOS DE CLASE escritos por el
+                    # set_attr de la definicion. El marcador fresco de
+                    # CLASS_OBJECT_LOAD_V1 los perdia: `Counter.count` y
+                    # `cls.count` (classmethod) devolvian 0. En scope de
+                    # modulo se carga el slot real; dentro de funciones se
+                    # conserva el marcador fresco (el slot del modulo no es
+                    # accesible sin `global`, y el marcador sigue siendo
+                    # suficiente para llamar Counter.metodo()).
+                    self.lines.append(f"    mov rax, {self._address(name)}")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    return
                 if name in self.classes:
                     # CLASS_OBJECT_LOAD_V1 (mirrors Linux): loading a class
                     # name yields a REAL class object (PitonObject with
@@ -3070,7 +3089,16 @@ class Win64NasmEmitter:
                 if owner_type == "object:module":
                     self.types[result] = module_attr_types.get(name, "int")
                 else:
-                    self.types[result] = "int"
+                    # CLASS_ATTR_TYPES_V1: el MIR replica los atributos de
+                    # clase en el marcador y en las instancias literales;
+                    # el tipo literal fluye aqui para que `imprimir(cls.attr)`
+                    # con attr str no imprima el puntero como int.
+                    _owner_cls = owner_type.split(":", 1)[1] if owner_type.startswith(("object:", "class:")) else None
+                    self.types[result] = (
+                        self.mir_module_class_attr_types.get(_owner_cls, {}).get(name, "int")
+                        if _owner_cls
+                        else "int"
+                    )
         elif op == "del_attr":
             owner, name = args
             owner_type = self.types.get(owner, "")
@@ -3122,22 +3150,27 @@ class Win64NasmEmitter:
                 if owner_type.startswith(("object:", "class:"))
                 else None
             )
-            if class_name is None and not owner_type:
+            if class_name is None and (not owner_type or owner_type == "int"):
                 # DYNAMIC_RECEIVER_V1 (mirrors Linux): the receiver's static
                 # type never resolved (a decorated class instance, a bare
-                # parameter). Linux chains runtime
-                # `strcmp(_d_obj->class_name, "X")` tests over every class
-                # that declares the method; Windows does the same: the
-                # PitonObject.class_name pointer lives at offset 16 (16-byte
-                # PitonHeader + pointer).
+                # parameter) -- INCLUIDO el default "int" (resultado de una
+                # llamada sin tipo inferible, como una instancia creada por
+                # un decorador de clase); linux_x86 despacha igual para todo
+                # receptor no-object: cadena runtime strcmp(class_name) sobre
+                # cada clase que declara el metodo; PitonObject.class_name
+                # vive en offset 16.
                 candidates = [
                     c for c in self.classes
                     if method_name in self.mir_module_classes.get(c, set())
                 ]
                 if not candidates:
                     raise NativeBuildError("native method receiver class is not statically known")
-                miss = f"{result}_recv_miss"
-                done = f"{result}_recv_done"
+                miss = self._internal_label("recv_miss")
+                done = self._internal_label("recv_done")
+                # _internal_label genera un nombre UNICO por llamada: las
+                # labels por candidato se pre-computan para que el jz y la
+                # definicion coincidan.
+                cand_labels = [self._internal_label(f"recv_m{index}") for index in range(len(candidates))]
                 self._load_operand(owner, "rax")
                 self.lines.append("    test rax, rax")
                 self.lines.append(f"    jz {miss}")
@@ -3152,14 +3185,14 @@ class Win64NasmEmitter:
                     self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
                     self.lines.append("    call strcmp")
                     self.lines.append("    test eax, eax")
-                    self.lines.append(f"    jz {result}_recv_m{index}")
+                    self.lines.append(f"    jz {cand_labels[index]}")
                 self.lines.append(f"    jmp {miss}")
                 for index, candidate in enumerate(candidates):
                     target = f"{candidate}__{method_name}"
                     values = [owner, *raw_values]
                     if target in self.static_methods:
                         values = list(raw_values)
-                    self.lines.append(f"{result}_recv_m{index}:")
+                    self.lines.append(f"{cand_labels[index]}:")
                     if self.function_frame_abi.get(target, False):
                         frame_size = ((len(values) * 8 + 32 + 15) // 16) * 16
                         self.lines.append(f"    sub rsp, {frame_size}")
@@ -4320,13 +4353,71 @@ class Win64NasmEmitter:
                             for index, value in enumerate(values):
                                 self._load_operand(value, "r10")
                                 self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
-                            self.lines.extend([
-                                f"    mov rcx, {self._address(function_operand)}",
-                                f"    mov edx, {argc}",
-                                "    lea r8, [rsp+32]",
-                                "    call piton_closure_call_frame",
-                                f"    add rsp, {frame_size}",
-                            ])
+                            # CLASS_CALLEE_DYNAMIC_V1 (mirrors linux): llamar un
+                            # VALOR-CLASE (el `cls()` de un decorador de clase)
+                            # es instanciarlo. El piton_closure_call_frame de
+                            # Linux lleva el branch PK_OBJECT; el de Windows no
+                            # (archivo de otra sesion), asi que el emitter
+                            # discrimina aqui: qword[0]==PITON_CLOSURE_MAGIC
+                            # (0x5049544EC10557) -> closure normal; byte[0]
+                            # ==SUB_TAG_OBJECT (11) -> clase: object_new con
+                            # su class_name (PitonObject.class_name, offset
+                            # 16). Solo el caso 0-arg instancia (con args
+                            # sigue el camino normal y falla loud).
+                            _cls_ok = self._internal_label("clscall_ok")
+                            _cls_done = self._internal_label("clscall_done")
+                            self.lines.append(f"    mov rcx, {self._address(function_operand)}")
+                            self.lines.append("    test rcx, rcx")
+                            self.lines.append(f"    jz {_cls_ok}")
+                            self.lines.append("    mov rax, [rcx]")
+                            self.lines.append("    cmp rax, 0x5049544EC10557")
+                            self.lines.append(f"    je {_cls_ok}")
+                            if argc == 0:
+                                self.lines.append("    cmp byte [rcx], 11")
+                                self.lines.append(f"    jne {_cls_ok}")
+                                # el marcador se parquea en @scratch0: el call
+                                # clobbera TODOS los caller-saved (r11 incl.)
+                                self.lines.append(f"    mov {self._address('@scratch0')}, rcx")
+                                self.lines.append("    mov rcx, [rcx+16]")
+                                self.lines.append("    call piton_object_new")
+                                self.lines.append(f"    mov r11, {self._address('@scratch0')}")
+                                # Copiar los atributos del marcador a la
+                                # instancia: el set_attr de la definicion de
+                                # clase los dejo en el objeto-clase, y el MIR
+                                # los replica estaticamente solo en las
+                                # instancias literales; este camino dinamico
+                                # no conoce la clase en compile time.
+                                # PitonObject: length +32, attributes[16]
+                                # inline desde +40 (PitonAttribute 16B).
+                                self.lines.append("    mov rdx, [r11+32]")
+                                self.lines.append("    test rdx, rdx")
+                                self.lines.append(f"    jz {_cls_done}")
+                                self.lines.append("    mov [rax+32], rdx")
+                                self.lines.append("    shl rdx, 4")
+                                self.lines.append("    xor r8d, r8d")
+                                _cpy = self._internal_label("clscall_copy")
+                                self.lines.append(f"{_cpy}:")
+                                self.lines.append("    mov r9, [r11+r8+40]")
+                                self.lines.append("    mov r10, [r11+r8+48]")
+                                self.lines.append("    mov [rax+r8+40], r9")
+                                self.lines.append("    mov [rax+r8+48], r10")
+                                self.lines.append("    add r8, 16")
+                                self.lines.append("    cmp r8, rdx")
+                                self.lines.append(f"    jl {_cpy}")
+                                self.lines.append(f"    jmp {_cls_done}")
+                                self.lines.append(f"{_cls_ok}:")
+                                self.lines.append(f"    mov rcx, {self._address(function_operand)}")
+                                self.lines.append(f"    mov edx, {argc}")
+                                self.lines.append("    lea r8, [rsp+32]")
+                                self.lines.append("    call piton_closure_call_frame")
+                                self.lines.append(f"{_cls_done}:")
+                            else:
+                                self.lines.append(f"{_cls_ok}:")
+                                self.lines.append(f"    mov rcx, {self._address(function_operand)}")
+                                self.lines.append(f"    mov edx, {argc}")
+                                self.lines.append("    lea r8, [rsp+32]")
+                                self.lines.append("    call piton_closure_call_frame")
+                            self.lines.append(f"    add rsp, {frame_size}")
             # CALL_PROPAGATE_V1: every user-code call above is a potential raise
             # site. Route the flag to the handler, or propagate/exit when the
             # MIR attached none. piton_catch_flag CLOBBERS rax, so the call
@@ -4870,6 +4961,23 @@ class Win64NasmEmitter:
                                 # la cadena de decoradores se resuelve a traves
                                 # de infer() (memoizada, ciclos -> None).
                                 origins[result] = ("closure", iargs[0])
+                            elif op == "get_attr" and result:
+                                # CLASS_ATTR_TYPES_V1: el retorno de un metodo
+                                # que hace `devolver self.attr` con attr de clase
+                                # literal resuelve su tipo; sin esto
+                                # `imprimir(s.get_info())` tipaba el str como
+                                # int y en el print salia el puntero.
+                                _owner = operand_type(iargs[0]) if isinstance(iargs[0], str) else None
+                                if (
+                                    isinstance(_owner, str)
+                                    and _owner.startswith("object:")
+                                ):
+                                    _t = self.mir_module_class_attr_types.get(
+                                        _owner.split(":", 1)[1], {}
+                                    ).get(iargs[1])
+                                    origins[result] = ("kind", _t) if _t else ("opaque", None)
+                                else:
+                                    origins[result] = ("opaque", None)
                             elif op == "call" and result:
                                 callee = load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
                                 if isinstance(callee, str) and callee in by_name and callee not in function.params:
