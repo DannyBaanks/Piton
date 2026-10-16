@@ -353,6 +353,8 @@ class Win64NasmEmitter:
             # with "symbol not defined" on every getattr/hasattr/dict.copy/
             # dict.pop/index/set algebra/removeprefix program.
             "extern piton_getattr", "extern piton_hasattr", "extern piton_setattr",
+            # DICT_POP_SETDEFAULT_TAGGED_V1: variantes con clave taggeada.
+            "extern piton_dict_pop_tagged", "extern piton_dict_setdefault_tagged",
             # MATCH_DYNAMIC_V1: isinstance dinamico por class_name para
             # subjects sin tipo estatico (caso Point(...)).
             "extern piton_isinstance_class",
@@ -844,6 +846,13 @@ class Win64NasmEmitter:
         self.lines.append(f"    mov {self._address(name)}, {register}")
 
     def _load_operand(self, operand: Any, register: str = "rax") -> None:
+        if operand == "@with_none_str":
+            # WITH_NONE_PRINT_V1: el `__exit__(None, None, None)` del path
+            # normal de `con` viaja como la literal "None" (los params de
+            # __exit__ se tipan str; un NULL crudo hacia printf "%s"
+            # imprimia "(null)" en vez de "None").
+            self.lines.append(f"    lea {register}, [lit_none]")
+            return
         if isinstance(operand, str) and operand.startswith("%"):
             self.lines.append(f"    mov {register}, {self._address(operand)}")
         elif isinstance(operand, bool):
@@ -3257,6 +3266,13 @@ class Win64NasmEmitter:
                     f"native property '{method_name}' of '{class_name}' object is not a method (calling a property is unsupported)"
                 )
             target = f"{resolved_class}__{method_name}"
+            # WITH_NONE_PRINT_V1: los args None de __exit__/__aexit__ viajan
+            # como la literal "None" (ver _load_operand).
+            if method_name in {"__exit__", "__aexit__"}:
+                raw_values = tuple(
+                    "@with_none_str" if self.types.get(v) == "none" else v
+                    for v in raw_values
+                )
             values = [owner, *raw_values]
             if target in self.static_methods:
                 # STATICMETHOD_V1: a static method takes no receiver; Linux
@@ -6260,15 +6276,32 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
             elif method == "pop":
                 require_count((1, 2), "one or two arguments (key[, default])")
-                # DICT_POP_SETDEFAULT_STR_V1: piton_dict_pop del runtime
-                # fuerza pv_int(key): con claves str (tagged) nunca encontraria
-                # la clave y daria un KeyError FALSO. No hay variante tagged
-                # en el runtime -> fallo cerrado en build, no aproximacion.
+                # DICT_POP_SETDEFAULT_STR_V1: con claves str (dict tagged) se
+                # boxea la clave y se usa la variante tagged del runtime, que
+                # compara por contenido (piton_dict_pop fuerza pv_int y daba
+                # KeyError falso). El default no-str va raw; str se boxea.
                 if self._dict_owner_is_tagged(owner):
-                    raise NativeBuildError(
-                        "native dict.pop() requires int keys in this subset "
-                        "(the runtime has no tagged-key removal)"
-                    )
+                    _kt = "str" if (isinstance(call_args[0], str) and not call_args[0].startswith("%")) else self.types.get(call_args[0], "int")
+                    self._emit_box(call_args[0], _kt)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    if len(call_args) == 2:
+                        # El default SIEMPRE boxeado: los valores del dict
+                        # tagged viajan taggeados y el resultado se tipa
+                        # slot (uniforme con dict.get, que boxea igual).
+                        _dt = "str" if (isinstance(call_args[1], str) and not call_args[1].startswith("%")) else self.types.get(call_args[1], "int")
+                        self._emit_box(call_args[1], _dt)
+                        self.lines.append(f"    mov {self._address('@scratch1')}, rax")
+                        self.lines.append("    mov r8, 1")
+                        self.lines.append(f"    mov r9, {self._address('@scratch1')}")
+                    else:
+                        self.lines.append("    mov r8, 0")
+                        self.lines.append("    xor r9, r9")
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    self.lines.append("    call piton_dict_pop_tagged")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
+                    return
                 self._load_operand(call_args[0], "rdx")
                 if len(call_args) == 2:
                     self.lines.append("    mov r8, 1")
@@ -6281,13 +6314,23 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
             elif method == "setdefault":
                 require_count((1, 2), "one or two arguments (key[, default])")
-                # DICT_POP_SETDEFAULT_STR_V1: misma razon que pop -- el
-                # helper fuerza pv_int(key) y no sabe insertar tagged.
+                # DICT_POP_SETDEFAULT_STR_V1: mismo tratamiento que pop.
                 if self._dict_owner_is_tagged(owner):
-                    raise NativeBuildError(
-                        "native dict.setdefault() requires int keys in this subset "
-                        "(the runtime has no tagged-key insertion)"
-                    )
+                    _kt = "str" if (isinstance(call_args[0], str) and not call_args[0].startswith("%")) else self.types.get(call_args[0], "int")
+                    self._emit_box(call_args[0], _kt)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    if len(call_args) == 2:
+                        _dt = "str" if (isinstance(call_args[1], str) and not call_args[1].startswith("%")) else self.types.get(call_args[1], "int")
+                        self._emit_box(call_args[1], _dt)
+                        self.lines.append("    mov r8, rax")
+                    else:
+                        self.lines.append("    xor r8, r8")
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    self.lines.append("    call piton_dict_setdefault_tagged")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
+                    return
                 self._load_operand(call_args[0], "rdx")
                 if len(call_args) == 2:
                     self._load_operand(call_args[1], "r8")
