@@ -3525,15 +3525,20 @@ class Phase5Gates(unittest.TestCase):
         self.assertTrue(result.equivalent, result)
 
     def test_x86_generator_yield_from_fails_closed(self):
+        # RETRACTED_BY_R13: yield-from is implemented in the Windows backend
+        # now (test_x86_yield_from_delegates_subgen_values below proves the
+        # delegation end to end). The old "not supported yet" expectation
+        # made this test fail with "Exception not raised"; keep the case as a
+        # build smoke instead of deleting coverage.
         with tempfile.TemporaryDirectory(prefix="piton-phase5-") as directory:
-            with self.assertRaisesRegex(Exception, "not supported yet"):
-                compile_native(
-                    "funcion gen():\n"
-                    "    producir desde [1, 2, 3]\n"
-                    "x = gen()\n"
-                    "imprimir(next(x))\n",
-                    Path(directory) / "program.exe",
-                )
+            output = compile_native(
+                "funcion gen():\n"
+                "    producir desde [1, 2, 3]\n"
+                "x = gen()\n"
+                "imprimir(next(x))\n",
+                Path(directory) / "program.exe",
+            )
+            self.assertTrue(Path(output).exists(), output)
 
     def test_x86_yield_from_delegates_subgen_values(self):
         result = compare_native_to_cpython(

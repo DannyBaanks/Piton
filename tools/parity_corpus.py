@@ -490,6 +490,10 @@ def area_control_flow() -> list[Case]:
         _c("control_flow", "ternary", "imprimir('si' si 1 < 2 sino 'no')"),
         _c("control_flow", "del-local", "a = [1, 2]\nborrar a[0]\nimprimir(a)"),
         _c("control_flow", "del-var", "a = 1\nborrar a\nimprimir('ok')"),
+        _c("control_flow", "match-literal", "x = 2\nsegun x:\n    caso 1:\n        imprimir('uno')\n    caso 2:\n        imprimir('dos')\n    caso _:\n        imprimir('otro')"),
+        _c("control_flow", "match-guard", "x = 15\nsegun x:\n    caso n si n > 10:\n        imprimir('grande', n)\n    caso _:\n        imprimir('chico')"),
+        _c("control_flow", "match-or", "x = 3\nsegun x:\n    caso 1 | 2 | 3:\n        imprimir('123')\n    caso _:\n        imprimir('otro')"),
+        _c("control_flow", "match-seq", "cmd = ['mover', 10, 20]\nsegun cmd:\n    caso ['mover', x, y]:\n        imprimir('pos', x, y)\n    caso _:\n        imprimir('desconocido')"),
     ]
 
 
@@ -568,6 +572,12 @@ def area_classes() -> list[Case]:
         _c("classes", "constructor-args", "clase P:\n    funcion __init__(self, a, b=2):\n        self.s = a + b\nimprimir(P(1).s)"),
         _c("classes", "dunder-add", "clase P:\n    funcion __add__(self, o):\n        devolver 99\nimprimir(P() + 1)"),
         _c("classes", "bool-dunder", "clase P:\n    funcion __bool__(self):\n        devolver Falso\nimprimir(P() o 'fallback')"),
+        _c("classes", "with-enter-exit", "clase CM:\n    funcion __enter__(self):\n        imprimir('enter')\n        devolver 10\n    funcion __exit__(self, t, v, tb):\n        imprimir('exit')\n        devolver Falso\ncon CM() como x:\n    imprimir('body', x)"),
+        _c("classes", "with-suppress", "clase CM:\n    funcion __enter__(self):\n        devolver 1\n    funcion __exit__(self, t, v, tb):\n        imprimir('suppressed')\n        devolver Verdadero\ncon CM():\n    lanzar ValueError('err')\nimprimir('fin')"),
+        _c("classes", "with-multiple", "clase A:\n    funcion __enter__(self):\n        devolver 1\n    funcion __exit__(self, t, v, tb):\n        imprimir('exitA')\n        devolver Falso\nclase B:\n    funcion __enter__(self):\n        devolver 2\n    funcion __exit__(self, t, v, tb):\n        imprimir('exitB')\n        devolver Falso\ncon A() como a, B() como b:\n    imprimir('body', a + b)"),
+        _c("classes", "staticmethod-call", "clase M:\n    @staticmethod\n    funcion add(a, b):\n        devolver a + b\nimprimir(M.add(3, 4))\nimprimir(M().add(5, 6))"),
+        _c("classes", "classmethod-call", "clase C:\n    v = 10\n    @classmethod\n    funcion get_v(cls):\n        devolver cls.v\nimprimir(C.get_v())\nimprimir(C().get_v())"),
+        _c("classes", "class-decorator", "funcion add_tag(cls):\n    cls.tag = 'TAG'\n    devolver cls\n@add_tag\nclase T:\n    pasar\nimprimir(T.tag)"),
     ]
 
 
@@ -581,6 +591,9 @@ def area_generators() -> list[Case]:
         _c("generators", "gen-in-comprehension", "imprimir(sum(x para x en rango(4)))"),
         _c("generators", "class-generator", "clase G:\n    funcion __iter__(self):\n        devolver iter([1, 2])\nimprimir(lista(G()))"),
         _c("generators", "class-iter-self", "clase G:\n    funcion __iter__(self):\n        devolver self\n    funcion __next__(self):\n        devolver 1\nimprimir(lista(G()))"),
+        _c("generators", "yield-from-sub", "funcion sub():\n    producir 10\n    producir 20\nfuncion g():\n    producir 1\n    producir desde sub()\n    producir 2\nimprimir(lista(g()))"),
+        _c("generators", "yield-from-list", "funcion g():\n    producir desde [1, 2, 3]\nimprimir(lista(g()))"),
+        _c("generators", "yield-from-tuple", "funcion g():\n    producir desde (4, 5)\nimprimir(lista(g()))"),
     ]
 
 

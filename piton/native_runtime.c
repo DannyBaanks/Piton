@@ -2972,6 +2972,139 @@ int64_t piton_dict_get_1(void *raw, int64_t key) {
     return 0;
 }
 
+int64_t piton_seq_index(void *raw, int64_t value, int64_t type_tag) {
+    PitonCollection *c = raw;
+    if (!c) { piton_raise_unhandled("ValueError", "sequence.index(x): x not in sequence"); return 0; }
+    int64_t needle = (type_tag == 0) ? pv_int(value) : pv_encode(PITON_TAG_OBJECT, value);
+    for (int64_t i = 0; i < c->length; ++i) {
+        if (piton_value_eq_raw(c->items[i], needle)) return i;
+    }
+    piton_raise_unhandled("ValueError", "sequence.index(x): x not in sequence");
+    return 0;
+}
+
+void piton_dict_clear(void *raw) {
+    PitonDict *d = raw;
+    if (d) d->length = 0;
+}
+
+void *piton_dict_copy(void *raw) {
+    PitonDict *d = raw;
+    if (!d) return NULL;
+    PitonDict *r = piton_dict_new((int)d->length);
+    r->length = d->length;
+    for (int64_t i = 0; i < d->length; ++i) r->entries[i] = d->entries[i];
+    return r;
+}
+
+int64_t piton_dict_pop(void *raw, int64_t key, int64_t has_def, int64_t def_val) {
+    PitonDict *d = raw;
+    if (d) {
+        int64_t ek = pv_int(key);
+        for (int64_t i = 0; i < d->length; ++i) {
+            if (piton_value_eq_raw(d->entries[i].key, ek)) {
+                int64_t v = d->entries[i].value;
+                for (int64_t j = i; j + 1 < d->length; ++j) d->entries[j] = d->entries[j + 1];
+                --d->length;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                return v;
+            }
+        }
+    }
+    if (has_def) return def_val;
+    piton_raise_unhandled("KeyError", "key not found");
+    return 0;
+}
+
+void piton_dict_put(void *raw, int64_t key, int64_t value);
+int64_t piton_dict_setdefault(void *raw, int64_t key, int64_t def_val) {
+    PitonDict *d = raw;
+    if (d) {
+        int64_t ek = pv_int(key);
+        for (int64_t i = 0; i < d->length; ++i) {
+            if (piton_value_eq_raw(d->entries[i].key, ek)) {
+                int64_t v = d->entries[i].value;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                return v;
+            }
+        }
+        piton_dict_put(d, key, def_val);
+    }
+    return def_val;
+}
+
+int64_t piton_dict_pop_tagged(void *raw, int64_t key, int64_t has_def, int64_t def_val) {
+    /* DICT_POP_TAGGED_V1: clave TAGGEADA (str boxeado), espejo de
+     * piton_dict_get_tagged_1. piton_dict_pop fuerza pv_int(key) y con
+     * claves str nunca encontraba la entrada (KeyError falso). */
+    PitonDict *d = raw;
+    if (d) {
+        for (int64_t i = 0; i < d->length; ++i) {
+            if (piton_value_eq_raw(d->entries[i].key, key)) {
+                int64_t v = d->entries[i].value;
+                for (int64_t j = i; j + 1 < d->length; ++j) d->entries[j] = d->entries[j + 1];
+                --d->length;
+                /* VERBATIM como piton_dict_get_tagged_1: el valor sale
+                 * taggeado y el consumidor (slot) decodifica; mezclar
+                 * raw/tagged rompia el print. */
+                return v;
+            }
+        }
+    }
+    if (has_def) return def_val;
+    piton_raise_unhandled("KeyError", "key not found");
+    return 0;
+}
+
+int64_t piton_dict_setdefault_tagged(void *raw, int64_t key, int64_t def_val) {
+    /* DICT_SETDEFAULT_TAGGED_V1: mismo motivo que pop; el insert usa
+     * piton_dict_put_tagged, que guarda la clave tal cual (taggeada) y
+     * compara por contenido. */
+    PitonDict *d = raw;
+    if (d) {
+        for (int64_t i = 0; i < d->length; ++i) {
+            if (piton_value_eq_raw(d->entries[i].key, key)) {
+                /* VERBATIM (ver pop_tagged). */
+                return d->entries[i].value;
+            }
+        }
+        piton_dict_put_tagged(d, key, def_val);
+    }
+    return def_val;
+}
+
+char *piton_str_removeprefix(const char *s, const char *prefix) {
+    if (!s || !prefix) return (char *)s;
+    size_t pl = strlen(prefix), sl = strlen(s);
+    if (sl >= pl && memcmp(s, prefix, pl) == 0) {
+        size_t rem = sl - pl;
+        char *r = malloc(rem + 1);
+        memcpy(r, s + pl, rem);
+        r[rem] = 0;
+        return r;
+    }
+    char *r = malloc(sl + 1);
+    memcpy(r, s, sl + 1);
+    return r;
+}
+
+char *piton_str_removesuffix(const char *s, const char *suffix) {
+    if (!s || !suffix) return (char *)s;
+    size_t sufl = strlen(suffix), sl = strlen(s);
+    if (sl >= sufl && memcmp(s + (sl - sufl), suffix, sufl) == 0) {
+        size_t rem = sl - sufl;
+        char *r = malloc(rem + 1);
+        memcpy(r, s, rem);
+        r[rem] = 0;
+        return r;
+    }
+    char *r = malloc(sl + 1);
+    memcpy(r, s, sl + 1);
+    return r;
+}
+
 /* CPython {} / {N} positional substitution with {{ }} escapes; {name},
    format specs and keywords are out of subset (runtime error, same
    convention as the other helpers). Extra args are ignored. */
@@ -3380,6 +3513,122 @@ void piton_set_free(void *raw) {
 
 int64_t piton_set_live_count(void) { return live_sets; }
 
+void piton_set_clear(void *raw) {
+    PitonSet *s = raw;
+    if (s) s->length = 0;
+}
+
+void *piton_set_copy(void *raw) {
+    PitonSet *s = raw;
+    if (!s) return NULL;
+    PitonSet *r = piton_set_new(s->length);
+    r->length = s->length;
+    for (int64_t i = 0; i < s->length; ++i) r->items[i] = s->items[i];
+    return r;
+}
+
+int64_t piton_set_pop(void *raw) {
+    PitonSet *s = raw;
+    if (!s || s->length <= 0) {
+        piton_raise_unhandled("KeyError", "pop from an empty set");
+        return 0;
+    }
+    int64_t v = s->items[--s->length];
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    return v;
+}
+
+void *piton_set_union(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    PitonSet *r = piton_set_new((a ? a->length : 0) + (b ? b->length : 0));
+    if (a) for (int64_t i = 0; i < a->length; ++i) {
+        if (!piton_set_contains_tagged(r, a->items[i])) r->items[r->length++] = a->items[i];
+    }
+    if (b) for (int64_t i = 0; i < b->length; ++i) {
+        if (!piton_set_contains_tagged(r, b->items[i])) r->items[r->length++] = b->items[i];
+    }
+    return r;
+}
+
+void *piton_set_intersection(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    PitonSet *r = piton_set_new(a ? a->length : 0);
+    if (a && b) {
+        for (int64_t i = 0; i < a->length; ++i) {
+            if (piton_set_contains_tagged(b, a->items[i])) r->items[r->length++] = a->items[i];
+        }
+    }
+    return r;
+}
+
+void *piton_set_difference(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    PitonSet *r = piton_set_new(a ? a->length : 0);
+    if (a) {
+        for (int64_t i = 0; i < a->length; ++i) {
+            if (!b || !piton_set_contains_tagged(b, a->items[i])) r->items[r->length++] = a->items[i];
+        }
+    }
+    return r;
+}
+
+void *piton_set_sym_diff(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    PitonSet *r = piton_set_new((a ? a->length : 0) + (b ? b->length : 0));
+    if (a) {
+        for (int64_t i = 0; i < a->length; ++i) {
+            if (!b || !piton_set_contains_tagged(b, a->items[i])) r->items[r->length++] = a->items[i];
+        }
+    }
+    if (b) {
+        for (int64_t i = 0; i < b->length; ++i) {
+            if (!a || !piton_set_contains_tagged(a, b->items[i])) r->items[r->length++] = b->items[i];
+        }
+    }
+    return r;
+}
+
+int64_t piton_set_issubset(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    if (!a) return 1;
+    if (!b) return a->length == 0;
+    for (int64_t i = 0; i < a->length; ++i) {
+        if (!piton_set_contains_tagged(b, a->items[i])) return 0;
+    }
+    return 1;
+}
+
+int64_t piton_set_issuperset(void *a_raw, void *b_raw) {
+    return piton_set_issubset(b_raw, a_raw);
+}
+
+int64_t piton_set_isdisjoint(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    if (!a || !b) return 1;
+    for (int64_t i = 0; i < a->length; ++i) {
+        if (piton_set_contains_tagged(b, a->items[i])) return 0;
+    }
+    return 1;
+}
+
+void piton_set_update(void *a_raw, void *b_raw) {
+    PitonSet *a = a_raw, *b = b_raw;
+    if (a && b) {
+        for (int64_t i = 0; i < b->length; ++i) {
+            if (!piton_set_contains_tagged(a, b->items[i])) {
+                if (a->length >= a->capacity) {
+                    int64_t new_cap = a->capacity ? a->capacity * 2 : 4;
+                    a->items = realloc(a->items, (size_t)new_cap * sizeof(int64_t));
+                    memset(a->items + a->capacity, 0, (size_t)(new_cap - a->capacity) * sizeof(int64_t));
+                    a->capacity = new_cap;
+                }
+                a->items[a->length++] = b->items[i];
+            }
+        }
+    }
+}
+
 /* ── Closure escape (CLOSURES_COMPLETE_V1) ───────────────────────────── */
 
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
@@ -3692,6 +3941,45 @@ int64_t piton_object_lookup(void *raw, const char *name, int64_t fallback) {
             return v;
         }
     return ((int64_t (*)(int64_t, const char *))fallback)((int64_t)o, name);
+}
+
+int64_t piton_hasattr(void *raw, const char *name) {
+    if (!raw || !name) return 0;
+    PitonObject *o = raw;
+    for (int64_t i = 0; i < o->length; ++i) {
+        if (strcmp(o->attributes[i].name, name) == 0) return 1;
+    }
+    return 0;
+}
+
+int64_t piton_getattr(void *raw, const char *name, int has_default, int64_t def_val) {
+    if (raw && name) {
+        PitonObject *o = raw;
+        for (int64_t i = 0; i < o->length; ++i) {
+            if (strcmp(o->attributes[i].name, name) == 0) {
+                int64_t v = o->attributes[i].value;
+                if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+                if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+                return v;
+            }
+        }
+    }
+    if (has_default) return def_val;
+    piton_raise_unhandled("AttributeError", "object has no attribute");
+    return 0;
+}
+
+void piton_setattr(void *raw, const char *name, int64_t value) {
+    if (!raw) { piton_raise_unhandled("AttributeError", "null object"); return; }
+    piton_object_set(raw, name, value);
+}
+
+int64_t piton_isinstance_class(void *raw, const char *target_name) {
+    if (!raw || !target_name) return 0;
+    PitonObject *o = raw;
+    if (o->class_name && strcmp(o->class_name, target_name) == 0) return 1;
+    if (o->parent_class_name && strcmp(o->parent_class_name, target_name) == 0) return 1;
+    return 0;
 }
 
 void piton_object_free(void *raw) {
@@ -4304,6 +4592,128 @@ void piton_print_value_raw(int64_t value) {
 void piton_print_value(int64_t value) {
     piton_print_value_raw(value);
     printf("\n");
+}
+
+/* ── MATCH_TYPE_DYNAMIC_V1: discriminacion de kind en runtime ────────────
+ * Para parametros sin tipo estatico (el subject de `segun ... caso int()`),
+ * el valor crudo solo puede discriminarse en runtime. Espejo de
+ * piton_isinstance_dynamic del backend Linux, adaptado al layout Windows
+ * (byte0 = sub_tag de PitonHeader, qword1 = refcount) y al convenio de
+ * valores crudos Windows (int crudo, double bits, char* imprimible,
+ * puntero a coleccion, 0 = None). Mismos limites documentados que Linux:
+ * el 0 crudo responde como None y un bool crudo crudo responde como int;
+ * bytes/bytearray/complex no existen en este backend (p16 se salta en
+ * win32) y esos objetivos siguen fail-closed en el emisor. */
+enum {
+    PK_NONE = 0, PK_BOOL = 1, PK_INT = 2, PK_FLOAT = 3, PK_STR = 4,
+    PK_LIST = 5, PK_TUPLE = 6, PK_DICT = 7, PK_SET = 8, PK_OBJECT = 9,
+    PK_BIGINT = 10, PK_RANGE = 11, PK_BYTES = 12, PK_BYTEARRAY = 13,
+    PK_COMPLEX = 14
+};
+
+static int piton_is_printable_str(const char *s) {
+    if (!s) return 0;
+    int has = 0;
+    for (int i = 0; i < 256; ++i) {
+        char c = s[i];
+        if (c == 0) return has;
+        if ((unsigned char)c < 9 || ((unsigned char)c > 13 && (unsigned char)c < 32)) return 0;
+        has = 1;
+    }
+    return 0;
+}
+
+static int piton_is_double_bits(int64_t bits) {
+    uint64_t u = (uint64_t)bits;
+    uint64_t exp = (u >> 52) & 0x7FF;
+    return (exp >= 0x3CC && exp <= 0x434 && (u & 0xFFFFFFFFFFFFFULL) != 0);
+}
+
+int64_t piton_isinstance_dynamic(int64_t bits, int32_t kind);
+
+int64_t piton_isinstance_dynamic(int64_t bits, int32_t kind) {
+    if (!bits) return kind == PK_NONE;
+    if (piton_is_double_bits(bits)) return kind == PK_FLOAT;
+    if (bits > 0x400000LL && bits < 0x7FFFFFFFFFFFLL) {
+        unsigned char st = *(const unsigned char *)bits;
+        if (st >= SUB_TAG_STR && st <= SUB_TAG_RANGE) {
+            int64_t refc = ((const int64_t *)bits)[1];
+            if (refc > 0 && refc < 1000000LL) {
+                switch (st) {
+                case SUB_TAG_STR:    return kind == PK_STR;
+                case SUB_TAG_LIST:   return kind == PK_LIST;
+                case SUB_TAG_TUPLE:  return kind == PK_TUPLE;
+                case SUB_TAG_DICT:   return kind == PK_DICT;
+                case SUB_TAG_SET:    return kind == PK_SET;
+                case SUB_TAG_BIGINT: return kind == PK_INT;
+                case SUB_TAG_OBJECT: return kind == PK_OBJECT;
+                case SUB_TAG_RANGE:  return kind == PK_RANGE;
+                default: break;
+                }
+            }
+        }
+        if (piton_is_printable_str((const char *)bits)) return kind == PK_STR;
+    }
+    return kind == PK_INT;
+}
+
+/* MATCH_PRINT_AUTO_V1: print sin newline de un valor crudo cuyo tipo solo
+ * se conoce en runtime (parametro sin tipo). Mismo orden de la heuristica
+ * que piton_isinstance_dynamic; el default final es %lld, el comportamiento
+ * que el emisor ya usaba para enteros (cero regresion para int/bool/0). */
+void piton_print_auto_raw(int64_t bits);
+
+void piton_print_auto_raw(int64_t bits) {
+    if (!bits) { fputs("0", stdout); return; }
+    if (piton_is_double_bits(bits)) {
+        union { int64_t i; double d; } u;
+        u.i = bits;
+        piton_print_float_raw(u.d);
+        return;
+    }
+    if (bits > 0x400000LL && bits < 0x7FFFFFFFFFFFLL) {
+        unsigned char st = *(const unsigned char *)bits;
+        if (st >= SUB_TAG_STR && st <= SUB_TAG_RANGE) {
+            int64_t refc = ((const int64_t *)bits)[1];
+            if (refc > 0 && refc < 1000000LL) {
+                switch (st) {
+                case SUB_TAG_STR: {
+                    PitonStr *s = (PitonStr *)bits;
+                    if (s->data) fwrite(s->data, 1, (size_t)s->len, stdout);
+                    return;
+                }
+                case SUB_TAG_LIST:
+                case SUB_TAG_TUPLE:
+                    piton_collection_print_raw((void *)bits);
+                    return;
+                case SUB_TAG_DICT:
+                    piton_dict_print_raw((void *)bits);
+                    return;
+                case SUB_TAG_SET:
+                    piton_set_print_raw((void *)bits);
+                    return;
+                case SUB_TAG_BIGINT:
+                    piton_bigint_print_raw((void *)bits);
+                    return;
+                case SUB_TAG_RANGE:
+                    piton_range_print_raw((PitonRange *)bits);
+                    return;
+                case SUB_TAG_OBJECT:
+                    /* Un objeto sin __str__ emite la direccion: CPython
+                     * imprime <Cls object at 0x...> y no puede matchear
+                     * de todas formas; se conserva el %lld de antes. */
+                    printf("%lld", bits);
+                    return;
+                default: break;
+                }
+            }
+        }
+        if (piton_is_printable_str((const char *)bits)) {
+            printf("%s", (const char *)bits);
+            return;
+        }
+    }
+    printf("%lld", bits);
 }
 
 /* ── Stdlib: abs, min, max, sum, type ────────────────────────────────── */
@@ -4958,3 +5368,134 @@ int64_t piton_argv_new(void) {
 int64_t piton_total_live_count(void) {
     return live_collections + live_objects + live_dicts + live_sets;
 }
+
+/* ── Terminal functions (TERMINAL_V1) ─────────────────────────────────── */
+/* TERMINAL_V1 es POSIX puro (termios/ioctl): termios.h NO existe en MinGW
+ * y sin este guard TODO build del backend Windows falla en compile
+ * (incluido el runner de CI). El backend x86-64 no referencia
+ * piton_terminal_* (verificado por grep); el soporte de terminal de
+ * Linux vive spliced en linux_x86.py. Se guarda el WIP intacto para el
+ * host POSIX y se enlazan stubs en Windows. */
+#ifndef _WIN32
+#include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
+#include <sys/ioctl.h>
+
+static struct termios g_original_termios;
+static int g_terminal_initialized = 0;
+
+int64_t piton_terminal_init(void) {
+    if (g_terminal_initialized) return 1;
+    
+    if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO)) {
+        return 0;  // Not a TTY
+    }
+    
+    // Save original terminal settings
+    if (tcgetattr(STDIN_FILENO, &g_original_termios) != 0) {
+        return 0;
+    }
+    
+    struct termios raw = g_original_termios;
+    raw.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);
+    raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+    raw.c_oflag &= ~(OPOST);
+    raw.c_cflag |= (CS8);
+    raw.c_cc[VMIN] = 0;   // Non-blocking read
+    raw.c_cc[VTIME] = 0;
+    
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) {
+        return 0;
+    }
+    
+    // Enable alternate screen buffer and hide cursor (ANSI escape codes)
+    write(STDOUT_FILENO, "\033[?1049h\033[?25l", 12);
+    
+    g_terminal_initialized = 1;
+    return 1;
+}
+
+int64_t piton_terminal_cleanup(void) {
+    if (!g_terminal_initialized) return 1;
+    
+    // Restore cursor and exit alternate screen
+    write(STDOUT_FILENO, "\033[?25h\033[?1049l", 11);
+    
+    // Restore original terminal settings
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_original_termios) != 0) {
+        return 0;
+    }
+    
+    g_terminal_initialized = 0;
+    return 1;
+}
+
+int64_t piton_terminal_write(int64_t str_val) {
+    // Extract string from Piton value
+    // str_val is a tagged PitonValue (PK_STR or PK_OBJECT with SUB_TAG_STR)
+    int tag = (int)((str_val >> 61) & 7);
+    int64_t payload = str_val & ((1LL << 61) - 1);
+    
+    const char *data = NULL;
+    int64_t len = 0;
+    
+    if (tag == 3) {  // PITON_TAG_STR (if exists)
+        // Direct string pointer - not used in our encoding
+    } else if (tag == 4) {  // PITON_TAG_OBJECT
+        void *obj = (void *)payload;
+        if (obj) {
+            uint8_t sub_tag = *(uint8_t *)obj;
+            if (sub_tag == 5) {  // SUB_TAG_STR
+                int64_t *len_ptr = (int64_t *)((char *)obj + 8);  // header(8) + len(8)
+                len = *len_ptr;
+                data = (const char *)((char *)obj + 16);  // header(8) + len(8) + data
+            }
+        }
+    }
+    
+    if (data && len > 0) {
+        write(STDOUT_FILENO, data, (size_t)len);
+    }
+    return 1;
+}
+
+int64_t piton_terminal_read(int64_t max_bytes) {
+    char buf[256];
+    int64_t to_read = max_bytes > 255 ? 255 : max_bytes;
+    
+    ssize_t n = read(STDIN_FILENO, buf, (size_t)to_read);
+    if (n <= 0) {
+        // Return empty string
+        void *empty = piton_str_new("", 0);
+        return pv_encode(PITON_TAG_OBJECT, (int64_t)empty);
+    }
+    
+    buf[n] = '\0';
+    void *s = piton_str_new(buf, n);
+    return pv_encode(PITON_TAG_OBJECT, (int64_t)s);
+}
+
+int64_t piton_terminal_size(void) {
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) != 0) {
+        // Default fallback
+        ws.ws_row = 24;
+        ws.ws_col = 80;
+    }
+    
+    // Create tuple (rows, cols)
+    PitonCollection *t = piton_collection_new(2, 2);  // tuple kind = 2
+    t->items[0] = pv_encode(PITON_TAG_INT, ws.ws_row);
+    t->items[1] = pv_encode(PITON_TAG_INT, ws.ws_col);
+    t->length = 2;
+    return (int64_t)t;
+}
+
+#else  /* _WIN32: stubs de enlace (nadie los referencia hoy) */
+int64_t piton_terminal_init(void) { return 0; }
+int64_t piton_terminal_cleanup(void) { return 0; }
+int64_t piton_terminal_write(int64_t str_val) { (void)str_val; return 0; }
+int64_t piton_terminal_read(int64_t max_bytes) { (void)max_bytes; return 0; }
+int64_t piton_terminal_size(void) { return 0; }
+#endif  /* !_WIN32 */
