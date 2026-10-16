@@ -212,7 +212,13 @@ def _wrap_line(line: list[tuple[int, str]]) -> list[tuple[int, str]]:
                 out.extend(line[last:end])
             last = end
             if sep >= 0:
-                out.append(line[sep])
+                if line[sep][1] == ";":
+                    # SEMI_SPLIT_V1: `a=1;b=2` -> dos sentencias; el token
+                    # `;` no existe en la gramatica PITON y si se conservaba
+                    # el parser moria en SEMI.
+                    out.append((tokenize.NEWLINE, "\n"))
+                else:
+                    out.append(line[sep])
                 last = sep + 1
         if last < len(line):
             out.extend(line[last:])
@@ -222,8 +228,11 @@ def _wrap_line(line: list[tuple[int, str]]) -> list[tuple[int, str]]:
         return line
     if _top_comma(line, 0, len(line)):
         # sentencia sin `=` (devolver/producir/segun/caso...): envuelve tras
-        # la palabra clave inicial
-        insert_at = first_name + 1
+        # la palabra clave inicial. WRAP_HEAD_NO_KW_V1: si NO hay palabra
+        # clave (expr desnuda con coma, p.ej. `termios.tcgetattr, ...`), abrir
+        # tras el primer nombre produciria `termios(.tcgetattr, ...)`, un call
+        # falso: la tupla es toda la sentencia y se abre en la columna 0.
+        insert_at = first_name + 1 if head in _AFTER_WRAP_HEADS else 0
         return line[:insert_at] + [(tokenize.OP, "(")] + line[insert_at:] \
             + [(tokenize.OP, ")")]
     return line
@@ -267,7 +276,13 @@ def python_to_piton(src: str) -> str:
                 value = mapped
             elif value in _SOFT_ADAPT and _soft_is_statement(token.line, value):
                 value = "segun" if value == "match" else "caso"
-        elif kind == tokenize.STRING and result and result[-1][0] == tokenize.STRING:
+        elif (kind in (tokenize.STRING, getattr(tokenize, "FSTRING_START", -3))
+              and result
+              and result[-1][0] in (tokenize.STRING,
+                                    getattr(tokenize, "FSTRING_END", -4))):
+            # FSTRING_CONCAT_V1: la concatenacion implicita une f-strings
+            # adyacentes; 3.12 las tokeniza como FSTRING_* (no STRING), sin
+            # esta condicion el `f".." f".."` llegaba pegado -> RPAREN.
             result.append((tokenize.OP, "+"))  # concatenacion implicita
         result.append((kind, value))
 
@@ -289,6 +304,12 @@ def python_to_piton(src: str) -> str:
                 elif k2 == tokenize.OP and v2 in ")]":
                     level -= 1
                 if cursor > index + 1 and level == 0:
+                    # IMPORT_TRAILING_COMMA_V1: la coma final de la lista
+                    # quedaba suelta al quitar los parentesis y el parser
+                    # PITON exige NAME despues de cada coma -> NameError de
+                    # parse en imports multilinea reales (typing, dis...).
+                    if cleaned and cleaned[-1] == (tokenize.OP, ","):
+                        cleaned.pop()
                     break
                 if cursor != index + 1:  # se salta '(' y ')'
                     cleaned.append((k2, v2))

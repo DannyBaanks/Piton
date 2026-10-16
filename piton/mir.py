@@ -4106,6 +4106,13 @@ class MIRLowerer:
             builder.emit("build_collection", kind.name.lower(), items, result=result)
             return result
         if kind == HIRKind.DICT:
+            # DICT_MERGE_V1: el parser baja `{**a, **b}` con clave None, pero
+            # no existe op de merge de runtime — fail-closed con mensaje
+            # claro (sin esto _lower_expr(None) petaba sin diagnosticar).
+            if any(key is None for key in node.keys):
+                raise MIRLoweringError(
+                    "dict literal merge {**a, **b} is not implemented natively"
+                )
             items = tuple(
                 (self._lower_expr(builder, key), self._lower_expr(builder, value))
                 for key, value in zip(node.keys, node.values)

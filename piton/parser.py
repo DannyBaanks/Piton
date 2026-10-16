@@ -279,6 +279,13 @@ class Parser:
         if not self._match(TokenType.IN):
             raise ParseError("Se esperaba 'en' en bucle para", self._peek())
         iter_ = self._parse_expression(0)
+        # FOR_TUPLE_ITER_V1: `para g en a, b :` — el iterable admite la
+        # tupla desnuda del testlist de CPython (sin parentesis).
+        if self._check(TokenType.COMMA):
+            elements = [iter_]
+            while self._match(TokenType.COMMA):
+                elements.append(self._parse_expression(0))
+            iter_ = Tuple(elts=elements, ctx="Load").set_pos(tok)
         self._consume(TokenType.COLON)
         body = self._parse_block()
         orelse = []
@@ -546,6 +553,26 @@ class Parser:
         value = self._parse_expression(0)
         return AnnAssign(target=target, annotation=value, value=None, simple=1).set_pos(tok)
 
+    def _parse_tuple_elts(self, first: CSTNode, closer: TokenType) -> List[CSTNode]:
+        """Elementos posteriores al primero de una tupla hasta `closer`.
+
+        STARRED_TUPLE_V1: `*` dentro de la lista se arma como Starred
+        (`(a, *rest)` / `(*head, b)`); la coma tras `first` ya esta consumida.
+        """
+        elts = [first]
+        while not self._check(closer):
+            if self._check(TokenType.STAR):
+                star_tok = self._advance()
+                elts.append(Starred(
+                    value=self._parse_expression(0), ctx="Load"
+                ).set_pos(star_tok))
+            else:
+                elts.append(self._parse_expression(0))
+            if not self._match(TokenType.COMMA):
+                break
+        self._consume(closer)
+        return elts
+
     def _parse_maybe_starred_target(self) -> CSTNode:
         """A store target that may carry a `*` prefix (`a, *resto = ...`).
 
@@ -727,8 +754,24 @@ class Parser:
     # ---- Expresiones (precedencia) ----
 
     def _parse_expression(self, min_prec: int = 0, allow_ternary: bool = True) -> CSTNode:
-        # Parse lhs
-        lhs = self._parse_primary()
+        # WALRUS_STMT_V1: `si n := 5 :` / `mientras linea := leer():` —
+        # `NAME :=` solo puede ser un walrus en Python (PEP 572), asi que se
+        # detecta antes del lhs y vale en cualquier posicion de expresion;
+        # antes solo existia el caso entre parentesis `(n := 5)`.
+        if (
+            self._check(TokenType.NAME)
+            and self._peek_ahead(1).type == TokenType.COLONEQUAL
+        ):
+            name_tok = self._advance()
+            self._advance()  # :=
+            value = self._parse_expression(0)
+            lhs = NamedExpr(
+                target=Name(id=name_tok.value, ctx="Store").set_pos(name_tok),
+                value=value,
+            ).set_pos(name_tok)
+        else:
+            # Parse lhs
+            lhs = self._parse_primary()
         # CHAINCMP_V1: the Compare node built by THIS loop invocation, if
         # any. A following comparison merges into it (CPython chains);
         # anything else (BinOp, BoolOp, a parenthesized Compare arriving
@@ -855,6 +898,11 @@ class Parser:
             # 1.5.real, (era ParseError: el STRING ya lo hacía).
             return self._parse_postfix(Constant(value=val).set_pos(tok))
 
+        # ELLIPSIS_V1: `...` es el singleton Ellipsis (type(...) == Ellipsis).
+        if tok.type == TokenType.DOT_DOT_DOT:
+            self._advance()
+            return self._parse_postfix(Constant(value=...).set_pos(tok))
+
         if tok.type == TokenType.STRING:
             self._advance()
             val = tok.value
@@ -955,18 +1003,27 @@ class Parser:
                     value=value,
                 ).set_pos(tok)
                 return self._parse_postfix(walrus)
+            # STARRED_TUPLE_V1: `(*a, b)` — el `*` tambien puede abrir la
+            # tupla paréntesis (antes solo como target de asignacion); debe
+            # venir seguido de coma, como en CPython.
+            if self._check(TokenType.STAR):
+                star_tok = self._advance()
+                first_elt = Starred(
+                    value=self._parse_expression(0), ctx="Load"
+                ).set_pos(star_tok)
+                if not self._match(TokenType.COMMA):
+                    raise ParseError(
+                        "Se esperaba ',' tras '*' en tupla", self._peek()
+                    )
+                elts = self._parse_tuple_elts(first_elt, TokenType.RPAREN)
+                return self._parse_postfix(Tuple(elts=elts, ctx="Load").set_pos(tok))
             expr = self._parse_expression(0)
             if self._check(TokenType.NAME) and self._peek().value == "para":
                 generators = self._parse_comp_generators()
                 self._consume(TokenType.RPAREN)
                 return GenExpr(elt=expr, generators=generators).set_pos(tok)
             if self._match(TokenType.COMMA):
-                elts = [expr]
-                while not self._check(TokenType.RPAREN):
-                    elts.append(self._parse_expression(0))
-                    if not self._match(TokenType.COMMA):
-                        break
-                self._consume(TokenType.RPAREN)
+                elts = self._parse_tuple_elts(expr, TokenType.RPAREN)
                 return self._parse_postfix(Tuple(elts=elts, ctx="Load").set_pos(tok))
             self._consume(TokenType.RPAREN)
             return self._parse_postfix(expr)
@@ -996,6 +1053,28 @@ class Parser:
             if self._check(TokenType.RBRACE):
                 self._advance()
                 return self._parse_postfix(Dict(keys=[], values=[]).set_pos(tok))
+            # DICT_MERGE_V1: `{**a, **b}` — la clave `**` es None en CPython.
+            # El merge de runtime no existe aun (MIR fall-closed), pero el
+            # embudo de parse deja de morir en DOUBLE_STAR (dict-merge era
+            # hallazgo verificado del corpus v4).
+            if self._check(TokenType.DOUBLE_STAR):
+                self._advance()
+                keys = [None]
+                values = [self._parse_expression(0)]
+                while self._match(TokenType.COMMA):
+                    if self._check(TokenType.RBRACE):
+                        break
+                    if self._check(TokenType.DOUBLE_STAR):
+                        self._advance()
+                        keys.append(None)
+                        values.append(self._parse_expression(0))
+                    else:
+                        k = self._parse_expression(0)
+                        self._consume(TokenType.COLON)
+                        keys.append(k)
+                        values.append(self._parse_expression(0))
+                self._consume(TokenType.RBRACE)
+                return self._parse_postfix(Dict(keys=keys, values=values).set_pos(tok))
             first = self._parse_expression(0)
             if self._match(TokenType.COLON):
                 # Dict or dict comp
@@ -1009,6 +1088,11 @@ class Parser:
                 while self._match(TokenType.COMMA):
                     if self._check(TokenType.RBRACE):
                         break
+                    if self._check(TokenType.DOUBLE_STAR):
+                        self._advance()
+                        keys.append(None)
+                        values.append(self._parse_expression(0))
+                        continue
                     k = self._parse_expression(0)
                     self._consume(TokenType.COLON)
                     keys.append(k)
@@ -1108,6 +1192,15 @@ class Parser:
                     slice_ = Slice(lower=lower, upper=upper, step=step).set_pos(self._peek())
                 else:
                     slice_ = lower
+                    # SUBSCRIPT_TUPLE_V1: `d[k1, k2]` es la tupla implicita
+                    # `d[(k1, k2)]` (CPython la modela como slice=Tuple).
+                    if slice_ is not None and self._check(TokenType.COMMA):
+                        elts = [slice_]
+                        while self._match(TokenType.COMMA):
+                            if self._check(TokenType.RBRACKET):
+                                break
+                            elts.append(self._parse_expression(0))
+                        slice_ = Tuple(elts=elts, ctx="Load").set_pos(self._peek())
                 self._consume(TokenType.RBRACKET)
                 node = Subscript(value=node, slice=slice_, ctx="Load").set_pos(self._peek())
             elif self._check(TokenType.LPAREN):

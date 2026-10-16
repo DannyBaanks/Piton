@@ -147,5 +147,118 @@ class FstringConversionV1(unittest.TestCase):
             lower_cst_to_hir(parse("imprimir (f'{1 !d }')\n"))
 
 
+class WalrusStmtV1(unittest.TestCase):
+    """WALRUS_STMT_V1: `NAME := expr` sin parentesis en cualquier expr."""
+
+    def test_walrus_in_si_condition(self):
+        _assert_matches(self, "n =0\nsi n := 5 :\n    imprimir (n )\n")
+
+    def test_walrus_in_mientras_condition(self):
+        _assert_matches(self, "x =0\nmientras x := 0 :\n    imprimir ('no')\nimprimir ('fin')\n")
+
+    def test_walrus_binds_comparison_in_condition(self):
+        # `n := 5 > 3` evalua el comparo completo (precedencia de :=)
+        _assert_matches(self, "n =0\nsi n := 5 > 3 :\n    imprimir (n )\n")
+
+    def test_walrus_paren_still_parses(self):
+        _assert_matches(self, "imprimir ((n := 5) )\n")
+
+    def test_walrus_as_call_argument(self):
+        _assert_matches(self, "imprimir ((n := 5) *2 )\n")
+
+    def test_conditional_without_walrus_untouched(self):
+        self.assertIsNotNone(parse("si x :\n    pasar\n"))
+
+
+class SubscriptTupleV1(unittest.TestCase):
+    """SUBSCRIPT_TUPLE_V1: `d[k1, k2]` es la tupla implicita d[(k1, k2)]."""
+
+    def test_subscript_tuple_store(self):
+        _assert_matches(self, "d ={}\nd [1 ,2 ]=7\nimprimir (d [1 ,2 ])\n")
+
+    def test_subscript_tuple_read(self):
+        _assert_matches(self, "d ={}\nd [(1 ,2 ) ]=7\nimprimir (d [1 ,2 ])\n")
+
+    def test_subscript_single_key_untouched(self):
+        _assert_matches(self, "d ={}\nd ['a' ]=1\nimprimir (d ['a' ])\n")
+
+    def test_subscript_slice_untouched(self):
+        _assert_matches(self, "x = [1 ,2 ,3 ]\nimprimir (x [1 :2 ])\n")
+
+
+class ForTupleIterV1(unittest.TestCase):
+    """FOR_TUPLE_ITER_V1: `para g en a, b :` admite la tupla desnuda."""
+
+    def test_for_bare_tuple_iter(self):
+        _assert_matches(self, "a =1\nb =2\npara g en a ,b :\n    imprimir (g )\n")
+
+    def test_for_paren_tuple_iter_untouched(self):
+        _assert_matches(self, "para g en (1 ,2 ) :\n    imprimir (g )\n")
+
+    def test_for_single_iter_untouched(self):
+        _assert_matches(self, "para g en [1 ,2 ] :\n    imprimir (g )\n")
+
+
+class StarredTupleV1(unittest.TestCase):
+    """STARRED_TUPLE_V1: el `*` abre/compone tuplas paréntesis en parse.
+
+    El unpacking de runtime (`set_target`) todavia no existe en el subconjunto
+    nativo: el gate diferencial falla cerrado con NativeBuildError, que es el
+    comportamiento honesto (el registro concreto lo marcara el corpus).
+    """
+
+    def test_star_led_parses(self):
+        self.assertIsNotNone(parse("(*head ,tail )=t\n"))
+
+    def test_star_second_position_parses(self):
+        self.assertIsNotNone(parse("(a ,*rest )=t\n"))
+
+    def test_star_in_tuple_value_parses(self):
+        self.assertIsNotNone(parse("x = (a ,b ,*c )\n"))
+
+    def test_unpack_fails_closed(self):
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython("t =(1 ,2 ,3 )\n(*head ,tail )=t\n")
+
+
+class DictMergeV1(unittest.TestCase):
+    """DICT_MERGE_V1: `{**a, **b}` parsea; el merge de runtime no existe y
+    MIR lo rechaza fail-closed con mensaje claro (antes el parser moria en
+    DOUBLE_STAR)."""
+
+    def test_merge_parses(self):
+        self.assertIsNotNone(parse("a = {**x ,**y }\n"))
+
+    def test_mixed_literal_parses(self):
+        self.assertIsNotNone(parse("a = {1 :2 ,**x }\n"))
+
+    def test_plain_dict_untouched(self):
+        _assert_matches(self, "a = {1 :2 ,3 :4 }\nimprimir (a )\n")
+
+    def test_merge_fails_closed_at_mir(self):
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError) as ctx:
+            compare_native_to_cpython("x ={}\ny ={}\nz ={**x ,**y }\n")
+        self.assertIn("dict literal merge", str(ctx.exception))
+
+
+class EllipsisV1(unittest.TestCase):
+    """ELLIPSIS_V1: `...` parsea como constante; el backend C no codifica
+    Ellipsis aun y falla cerrado con mensaje propio (antes: PARSE_FAIL)."""
+
+    def test_ellipsis_parses(self):
+        self.assertIsNotNone(parse("x = type (...)\n"))
+
+    def test_ellipsis_in_call_parses(self):
+        self.assertIsNotNone(parse("imprimir (...)\n"))
+
+    def test_backend_fails_closed(self):
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError) as ctx:
+            compare_native_to_cpython("imprimir (type (...))\n")
+        self.assertIn("Ellipsis", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
