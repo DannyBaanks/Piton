@@ -137,6 +137,11 @@ class MIRModule:
     # CLASS_ATTR_TYPES_V1: {clase: {atributo: tipo literal}} — lo llena el
     # lowerer desde los class_attrs; los backends lo consultan en get_attr.
     class_attr_types: dict = field(default_factory=dict)
+    # INJECTED_ATTR_TYPES_V1: attr_name -> tipo, para attrs escritos en
+    # runtime sobre un receiver sin tipo estatico (decoradores: cls.author
+    # = "PITON"). Clave global: el get_attr no sabe que clase recibe la
+    # inyeccion. Conflicto de tipos -> se omite (default "int" del emisor).
+    injected_attr_types: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {"functions": [function.to_dict() for function in self.functions]}
@@ -749,6 +754,54 @@ class MIRLowerer:
                 elif isinstance(_val, int):
                     _attr_types.setdefault(_cls, {})[_attr] = "int"
         module.class_attr_types = _attr_types
+        # INJECTED_ATTR_TYPES_V1: escanear TODAS las funciones por set_attr
+        # cuyo valor sea una constante resoluble. Si la constante fluye por
+        # un temp con unico defensor const, se resuelve; conflicto de tipos
+        # para el mismo nombre -> se descarta (no registrar es conservador:
+        # el emisor cae al default de antes).
+        _injected: dict[str, str] = {}
+        _injected_conflicts: set[str] = set()
+        _SENTINEL = object()
+
+        def _const_type(v: Any) -> str | None:
+            if isinstance(v, bool):
+                return "bool"
+            if isinstance(v, str):
+                return "str"
+            if isinstance(v, float):
+                return "float"
+            if isinstance(v, int):
+                return "int"
+            if v is None:
+                return "none"
+            return None
+
+        for _fn in self.functions:
+            _const_of: dict[str, Any] = {}
+            for _blk in _fn.blocks:
+                for _ins in _blk.instructions:
+                    if _ins.op == "const" and _ins.result and _ins.args:
+                        _const_of[_ins.result] = _ins.args[0]
+            for _blk in _fn.blocks:
+                for _ins in _blk.instructions:
+                    if _ins.op != "set_attr" or len(_ins.args) < 3:
+                        continue
+                    _iname, _ival = _ins.args[1], _ins.args[2]
+                    if not isinstance(_iname, str) or _iname in _injected_conflicts:
+                        continue
+                    _c = _ival if not isinstance(_ival, str) else _const_of.get(_ival, _SENTINEL)
+                    if _c is _SENTINEL:
+                        continue
+                    _ct = _const_type(_c)
+                    if _ct is None:
+                        continue
+                    _prev = _injected.get(_iname)
+                    if _prev is not None and _prev != _ct:
+                        del _injected[_iname]
+                        _injected_conflicts.add(_iname)
+                    else:
+                        _injected[_iname] = _ct
+        module.injected_attr_types = {k: v for k, v in _injected.items() if k not in _injected_conflicts}
         self._finalize_mro()
         module.class_mro = dict(self.class_mro)
         module.class_properties = dict(self.class_properties)

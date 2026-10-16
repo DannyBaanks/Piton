@@ -4594,6 +4594,128 @@ void piton_print_value(int64_t value) {
     printf("\n");
 }
 
+/* ── MATCH_TYPE_DYNAMIC_V1: discriminacion de kind en runtime ────────────
+ * Para parametros sin tipo estatico (el subject de `segun ... caso int()`),
+ * el valor crudo solo puede discriminarse en runtime. Espejo de
+ * piton_isinstance_dynamic del backend Linux, adaptado al layout Windows
+ * (byte0 = sub_tag de PitonHeader, qword1 = refcount) y al convenio de
+ * valores crudos Windows (int crudo, double bits, char* imprimible,
+ * puntero a coleccion, 0 = None). Mismos limites documentados que Linux:
+ * el 0 crudo responde como None y un bool crudo crudo responde como int;
+ * bytes/bytearray/complex no existen en este backend (p16 se salta en
+ * win32) y esos objetivos siguen fail-closed en el emisor. */
+enum {
+    PK_NONE = 0, PK_BOOL = 1, PK_INT = 2, PK_FLOAT = 3, PK_STR = 4,
+    PK_LIST = 5, PK_TUPLE = 6, PK_DICT = 7, PK_SET = 8, PK_OBJECT = 9,
+    PK_BIGINT = 10, PK_RANGE = 11, PK_BYTES = 12, PK_BYTEARRAY = 13,
+    PK_COMPLEX = 14
+};
+
+static int piton_is_printable_str(const char *s) {
+    if (!s) return 0;
+    int has = 0;
+    for (int i = 0; i < 256; ++i) {
+        char c = s[i];
+        if (c == 0) return has;
+        if ((unsigned char)c < 9 || ((unsigned char)c > 13 && (unsigned char)c < 32)) return 0;
+        has = 1;
+    }
+    return 0;
+}
+
+static int piton_is_double_bits(int64_t bits) {
+    uint64_t u = (uint64_t)bits;
+    uint64_t exp = (u >> 52) & 0x7FF;
+    return (exp >= 0x3CC && exp <= 0x434 && (u & 0xFFFFFFFFFFFFFULL) != 0);
+}
+
+int64_t piton_isinstance_dynamic(int64_t bits, int32_t kind);
+
+int64_t piton_isinstance_dynamic(int64_t bits, int32_t kind) {
+    if (!bits) return kind == PK_NONE;
+    if (piton_is_double_bits(bits)) return kind == PK_FLOAT;
+    if (bits > 0x400000LL && bits < 0x7FFFFFFFFFFFLL) {
+        unsigned char st = *(const unsigned char *)bits;
+        if (st >= SUB_TAG_STR && st <= SUB_TAG_RANGE) {
+            int64_t refc = ((const int64_t *)bits)[1];
+            if (refc > 0 && refc < 1000000LL) {
+                switch (st) {
+                case SUB_TAG_STR:    return kind == PK_STR;
+                case SUB_TAG_LIST:   return kind == PK_LIST;
+                case SUB_TAG_TUPLE:  return kind == PK_TUPLE;
+                case SUB_TAG_DICT:   return kind == PK_DICT;
+                case SUB_TAG_SET:    return kind == PK_SET;
+                case SUB_TAG_BIGINT: return kind == PK_INT;
+                case SUB_TAG_OBJECT: return kind == PK_OBJECT;
+                case SUB_TAG_RANGE:  return kind == PK_RANGE;
+                default: break;
+                }
+            }
+        }
+        if (piton_is_printable_str((const char *)bits)) return kind == PK_STR;
+    }
+    return kind == PK_INT;
+}
+
+/* MATCH_PRINT_AUTO_V1: print sin newline de un valor crudo cuyo tipo solo
+ * se conoce en runtime (parametro sin tipo). Mismo orden de la heuristica
+ * que piton_isinstance_dynamic; el default final es %lld, el comportamiento
+ * que el emisor ya usaba para enteros (cero regresion para int/bool/0). */
+void piton_print_auto_raw(int64_t bits);
+
+void piton_print_auto_raw(int64_t bits) {
+    if (!bits) { fputs("0", stdout); return; }
+    if (piton_is_double_bits(bits)) {
+        union { int64_t i; double d; } u;
+        u.i = bits;
+        piton_print_float_raw(u.d);
+        return;
+    }
+    if (bits > 0x400000LL && bits < 0x7FFFFFFFFFFFLL) {
+        unsigned char st = *(const unsigned char *)bits;
+        if (st >= SUB_TAG_STR && st <= SUB_TAG_RANGE) {
+            int64_t refc = ((const int64_t *)bits)[1];
+            if (refc > 0 && refc < 1000000LL) {
+                switch (st) {
+                case SUB_TAG_STR: {
+                    PitonStr *s = (PitonStr *)bits;
+                    if (s->data) fwrite(s->data, 1, (size_t)s->len, stdout);
+                    return;
+                }
+                case SUB_TAG_LIST:
+                case SUB_TAG_TUPLE:
+                    piton_collection_print_raw((void *)bits);
+                    return;
+                case SUB_TAG_DICT:
+                    piton_dict_print_raw((void *)bits);
+                    return;
+                case SUB_TAG_SET:
+                    piton_set_print_raw((void *)bits);
+                    return;
+                case SUB_TAG_BIGINT:
+                    piton_bigint_print_raw((void *)bits);
+                    return;
+                case SUB_TAG_RANGE:
+                    piton_range_print_raw((PitonRange *)bits);
+                    return;
+                case SUB_TAG_OBJECT:
+                    /* Un objeto sin __str__ emite la direccion: CPython
+                     * imprime <Cls object at 0x...> y no puede matchear
+                     * de todas formas; se conserva el %lld de antes. */
+                    printf("%lld", bits);
+                    return;
+                default: break;
+                }
+            }
+        }
+        if (piton_is_printable_str((const char *)bits)) {
+            printf("%s", (const char *)bits);
+            return;
+        }
+    }
+    printf("%lld", bits);
+}
+
 /* ── Stdlib: abs, min, max, sum, type ────────────────────────────────── */
 
 int64_t piton_abs_int(int64_t x) {

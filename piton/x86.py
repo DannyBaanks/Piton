@@ -253,6 +253,11 @@ class Win64NasmEmitter:
         self.class_methods = getattr(module, "class_methods", set())
         # CLASS_ATTR_TYPES_V1: tipos literales de atributos de clase.
         self.mir_module_class_attr_types = getattr(module, "class_attr_types", {})
+        # INJECTED_ATTR_TYPES_V1: tipos de attrs inyectados en runtime
+        # sobre un receiver sin tipo (cls.author = "PITON" en un
+        # decorador); fallback cuando el attr no esta en el dict de la
+        # clase. Sin esto el default "int" imprimia el puntero del str.
+        self.mir_module_injected_attr_types = getattr(module, "injected_attr_types", {})
         # Windows reads _tuple_elems in the static-tuple typing paths but
         # never populated it -> AttributeError on every tuple-typed target.
         self._tuple_elems: dict[str, tuple] = {}
@@ -358,6 +363,8 @@ class Win64NasmEmitter:
             # MATCH_DYNAMIC_V1: isinstance dinamico por class_name para
             # subjects sin tipo estatico (caso Point(...)).
             "extern piton_isinstance_class",
+            "extern piton_isinstance_dynamic",
+            "extern piton_print_auto_raw",
             "extern piton_dict_copy", "extern piton_dict_pop",
             # COLL_METHODS_EXTERNS_V1: dict/set methods added to
             # native_runtime.c without the matching extern here; NASM failed
@@ -3117,10 +3124,13 @@ class Win64NasmEmitter:
                     # el tipo literal fluye aqui para que `imprimir(cls.attr)`
                     # con attr str no imprima el puntero como int.
                     _owner_cls = owner_type.split(":", 1)[1] if owner_type.startswith(("object:", "class:")) else None
+                    # INJECTED_ATTR_TYPES_V1: el attr inyectado en runtime
+                    # no esta en el dict de la clase; su tipo registrado en
+                    # el MIR manda antes del default "int".
                     self.types[result] = (
-                        self.mir_module_class_attr_types.get(_owner_cls, {}).get(name, "int")
-                        if _owner_cls
-                        else "int"
+                        self.mir_module_class_attr_types.get(_owner_cls, {}).get(name)
+                        or self.mir_module_injected_attr_types.get(name)
+                        or "int"
                     )
         elif op == "del_attr":
             owner, name = args
@@ -3584,6 +3594,16 @@ class Win64NasmEmitter:
                             f"native print of a {value_type} value is not supported "
                             "(can never match CPython output)"
                         )
+                    # MATCH_PRINT_AUTO_V1: un parametro sin tipo estatico
+                    # se discrimina en runtime (int crudo / double bits /
+                    # char* / cabecera de coleccion); antes caia al %lld
+                    # por defecto e imprimia el puntero de un str o de una
+                    # lista. Para int/bool/0 el auto imprime exactamente lo
+                    # mismo que antes (cero regresion).
+                    if self._is_untyped_param_operand(value):
+                        self._load_operand(value, "rcx")
+                        self.lines.append("    call piton_print_auto_raw")
+                        continue
                     # SPECIAL_METHOD_LOOKUP_V1: print(obj) despacha a __str__
                     # cuando existe (MRO); el método devuelve una str.
                     if str(value_type).startswith("object:"):
@@ -4266,6 +4286,37 @@ class Win64NasmEmitter:
                 # silenciosa (isinstance('hola', int) respondia True).
                 _target_alias = self.aliases.get(values[1], values[1])
                 if self._is_untyped_param_operand(values[0]):
+                    # MATCH_TYPE_DYNAMIC_V1: contra un tipo builtin el kind
+                    # del valor crudo se discrimina EN RUNTIME con
+                    # piton_isinstance_dynamic (double bits / sub_tag de
+                    # cabecera / string imprimible / fallback int), espejo
+                    # exacto de la heuristica linux. Reemplaza el
+                    # fail-closed anterior: el backend hermano ya resuelve
+                    # estos casos y la paridad se juzga contra CPython.
+                    _dyn_kinds = {
+                        "int": 2, "entero": 2,
+                        "bool": 1, "booleano": 1,
+                        "float": 3, "decimal": 3, "flotante": 3,
+                        "str": 4, "texto": 4,
+                        "list": 5, "lista": 5,
+                        "tuple": 6, "tupla": 6,
+                        "dict": 7, "diccionario": 7,
+                        "set": 8, "conjunto": 8,
+                        "range": 11, "rango": 11,
+                    }
+                    if _target_alias in _dyn_kinds:
+                        self._load_operand(values[0], "rcx")
+                        self.lines.append(f"    mov edx, {_dyn_kinds[_target_alias]}")
+                        self.lines.append("    call piton_isinstance_dynamic")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "bool"
+                        return
+                    if _target_alias in {"object", "objeto"}:
+                        # Espejo de linux: isinstance(x, object) es True
+                        # siempre, sin tocar el valor.
+                        self.lines.append(f"    mov {self._address(result)}, 1")
+                        self.types[result] = "bool"
+                        return
                     if _target_alias in self.classes:
                         self._load_operand(values[0], "rcx")
                         self.lines.append(f"    lea rdx, [{self._string(_target_alias)}]")
@@ -4273,9 +4324,12 @@ class Win64NasmEmitter:
                         self.lines.append(f"    mov {self._address(result)}, rax")
                         self.types[result] = "bool"
                         return
+                    # bytes/bytearray/complex no existen en el backend
+                    # Windows (p16 se salta en win32): sin objeto que
+                    # discriminar, se sigue fail-closed.
                     raise NativeBuildError(
-                        "native isinstance of an untyped parameter against a builtin type "
-                        "is not supported (raw values carry no runtime tag; fail closed)"
+                        f"native isinstance of an untyped parameter against '{_target_alias}' "
+                        "is not supported by this backend (fail closed)"
                     )
                 # TUPLE_ELEMS_ISINSTANCE_V1: la tupla de tipos es una
                 # disyuncion (anidada incluida); ver _isinstance_matches.
@@ -5004,7 +5058,7 @@ class Win64NasmEmitter:
                                 ):
                                     _t = self.mir_module_class_attr_types.get(
                                         _owner.split(":", 1)[1], {}
-                                    ).get(iargs[1])
+                                    ).get(iargs[1]) or self.mir_module_injected_attr_types.get(iargs[1])
                                     origins[result] = ("kind", _t) if _t else ("opaque", None)
                                 else:
                                     origins[result] = ("opaque", None)
