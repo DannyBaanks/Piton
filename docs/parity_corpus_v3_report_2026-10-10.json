@@ -1,0 +1,2252 @@
+{
+  "meta": {
+    "backend": "linux_x86 (Linux native)",
+    "oracle": "3.12.3",
+    "instrument": "tools/parity_corpus_v3.py",
+    "areas": [
+      "str_methods_more",
+      "dict_ops_more",
+      "set_ops",
+      "frozenset",
+      "memoryview",
+      "slice_value",
+      "complex_deep",
+      "builtins_more",
+      "exceptions_deep",
+      "numeric_semantics",
+      "object_protocol3",
+      "callable_protocol"
+    ],
+    "jobs": 12,
+    "timeout": 10.0
+  },
+  "summary": {
+    "total": 235,
+    "by_bucket": {
+      "DIVERGENT_CRASH": 0,
+      "DIVERGENT_MISMATCH": 0,
+      "TIMEOUT": 0,
+      "FAIL_CLOSED": 0,
+      "RAISE_EQ": 0,
+      "EQUIV": 235
+    },
+    "by_area": {
+      "str_methods_more": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 25
+      },
+      "dict_ops_more": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 19
+      },
+      "set_ops": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 28
+      },
+      "frozenset": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 15
+      },
+      "memoryview": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 14
+      },
+      "slice_value": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 10
+      },
+      "complex_deep": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 22
+      },
+      "builtins_more": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 27
+      },
+      "exceptions_deep": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 14
+      },
+      "numeric_semantics": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 31
+      },
+      "object_protocol3": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 16
+      },
+      "callable_protocol": {
+        "DIVERGENT_CRASH": 0,
+        "DIVERGENT_MISMATCH": 0,
+        "TIMEOUT": 0,
+        "FAIL_CLOSED": 0,
+        "RAISE_EQ": 0,
+        "EQUIV": 14
+      }
+    },
+    "pct_equiv": 100.0,
+    "pct_honest": 100.0,
+    "pct_divergent": 0.0
+  },
+  "records": [
+    {
+      "area": "str_methods_more",
+      "name": "partition",
+      "src": "imprimir('a-b-c'.partition('-'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "rpartition",
+      "src": "imprimir('a-b-c'.rpartition('-'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "splitlines",
+      "src": "imprimir('a\\nb'.splitlines())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "removeprefix",
+      "src": "imprimir('foobar'.removeprefix('foo'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "removesuffix",
+      "src": "imprimir('foobar'.removesuffix('bar'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "expandtabs",
+      "src": "imprimir('a\\tb'.expandtabs(4))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "translate-ord",
+      "src": "imprimir('abc'.translate({ord('a'): 'X'}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "translate-str-key",
+      "src": "imprimir('abc'.translate({'a': 'X'}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "translate-multi",
+      "src": "imprimir('hola lol'.translate({ord('o'): '0', ord('l'): '1'}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "translate-empty",
+      "src": "imprimir('abc'.translate({}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "encode",
+      "src": "imprimir('abc'.encode())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "encode-utf8",
+      "src": "imprimir('ñ'.encode('utf-8'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "format-map",
+      "src": "imprimir('{a}'.format_map({'a': 1}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "join-gen",
+      "src": "imprimir(','.join(['a', 'b']))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "rsplit",
+      "src": "imprimir('a b c'.rsplit(' ', 1))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "count-sub",
+      "src": "imprimir('abab'.count('ab'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "index-sub",
+      "src": "imprimir('abcabc'.index('bc'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "zfill-neg",
+      "src": "imprimir('-42'.zfill(5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "format-spec",
+      "src": "imprimir('{:>6}'.format('ab'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "casefold-gap",
+      "src": "imprimir('HOLA'.casefold())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "isascii-gap",
+      "src": "imprimir('abc'.isascii())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "isascii-gap2",
+      "src": "imprimir('ñ'.isascii())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "isprintable",
+      "src": "imprimir('abc'.isprintable())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "isidentifier",
+      "src": "imprimir('abc'.isidentifier())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "str_methods_more",
+      "name": "title-mixed",
+      "src": "imprimir('hola MUNDO 123'.title())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "setdefault",
+      "src": "d = {}\nimprimir(d.setdefault('a', 1))\nimprimir(d)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "setdefault-hit",
+      "src": "d = {'a': 5}\nimprimir(d.setdefault('a', 9))\nimprimir(d)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "pop",
+      "src": "d = {'a': 1, 'b': 2}\nimprimir(d.pop('a'))\nimprimir(d)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "pop-default",
+      "src": "d = {'a': 1}\nimprimir(d.pop('z', 7))\nimprimir(d)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "popitem",
+      "src": "d = {'a': 1}\nimprimir(d.popitem())\nimprimir(d)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "update-kwargs",
+      "src": "d = {'a': 1}\nd.update(b=2)\nimprimir(d)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "fromkeys",
+      "src": "imprimir(dict.fromkeys(['a', 'b'], 0))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "fromkeys-nodef",
+      "src": "imprimir(dict.fromkeys(['a', 'b']))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "merge-op",
+      "src": "imprimir({'a': 1} | {'b': 2})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "merge-ior",
+      "src": "d = {'a': 1}\nd |= {'b': 2}\nimprimir(d)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "items-view",
+      "src": "d = {'a': 1}\nimprimir(lista(d.items()))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "keys-view",
+      "src": "d = {'a': 1, 'b': 2}\nimprimir(lista(d.keys()))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "values-view",
+      "src": "d = {'a': 1}\nimprimir(lista(d.values()))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "copy",
+      "src": "d = {'a': [1]}\nc = d.copy()\nc['a'].append(2)\nimprimir(d)\nimprimir(c)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "del",
+      "src": "d = {'a': 1, 'b': 2}\nborrar d['a']\nimprimir(d)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "in-keys",
+      "src": "imprimir('a' en {'a': 1})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "eq",
+      "src": "imprimir({'a': 1} == {'a': 1})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "ne",
+      "src": "imprimir({'a': 1} != {'a': 2})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "dict_ops_more",
+      "name": "nested",
+      "src": "imprimir({'a': {'b': [1, 2]}})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "union",
+      "src": "{1, 2} | {2, 3}\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "inter",
+      "src": "{1, 2, 3} & {2, 3, 4}\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "diff",
+      "src": "{1, 2, 3} - {2}\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "symdiff",
+      "src": "{1, 2, 3} ^ {2, 3, 4}\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "union-method",
+      "src": "{1, 2}.union({3})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "inter-method",
+      "src": "{1, 2, 3}.intersection({2, 3})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "diff-method",
+      "src": "{1, 2, 3}.difference({2})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "symdiff-method",
+      "src": "{1, 2}.symmetric_difference({2, 3})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "issubset",
+      "src": "{1}.issubset({1, 2})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "issuperset",
+      "src": "{1, 2}.issuperset({1})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "isdisjoint",
+      "src": "{1}.isdisjoint({2})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "update",
+      "src": "s = {1}\ns.update({2})\nimprimir(s)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "inter-update",
+      "src": "s = {1, 2}\ns.intersection_update({2})\nimprimir(s)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "diff-update",
+      "src": "s = {1, 2}\ns.difference_update({1})\nimprimir(s)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "symdiff-update",
+      "src": "s = {1, 2}\ns.symmetric_difference_update({2, 3})\nimprimir(s)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "add",
+      "src": "s = {1}\ns.add(2)\nimprimir(s)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "discard",
+      "src": "s = {1, 2}\ns.discard(1)\nimprimir(s)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "remove",
+      "src": "s = {1, 2}\ns.remove(1)\nimprimir(s)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "pop",
+      "src": "s = {1}\nimprimir(s.pop())\nimprimir(s)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "clear",
+      "src": "s = {1}\ns.clear()\nimprimir(s)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "copy",
+      "src": "s = {1, 2}\nc = s.copy()\nc.add(3)\nimprimir(s)\nimprimir(c)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "len",
+      "src": "imprimir(longitud({1, 2, 2}))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "in",
+      "src": "imprimir(1 en {1, 2})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "eq",
+      "src": "imprimir({1, 2} == {2, 1})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "subset-op",
+      "src": "imprimir({1} <= {1, 2})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "lt-op",
+      "src": "imprimir({1} < {1, 2})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "sup-op",
+      "src": "imprimir({1, 2} >= {1})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "set_ops",
+      "name": "gt-op",
+      "src": "imprimir({1, 2} > {1})\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "ctor-list",
+      "src": "imprimir(frozenset([1, 2, 2]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "ctor-range",
+      "src": "imprimir(frozenset(rango(3)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "sum",
+      "src": "imprimir(suma(frozenset([1, 2, 3])))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "len",
+      "src": "imprimir(longitud(frozenset([1, 2, 2])))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "in",
+      "src": "imprimir(1 en frozenset([1, 2]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "not-in",
+      "src": "imprimir(3 no en frozenset([1, 2]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "eq",
+      "src": "imprimir(frozenset([1, 2]) == frozenset([2, 1]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "union",
+      "src": "imprimir(frozenset([1]) | frozenset([2]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "inter",
+      "src": "imprimir(frozenset([1, 2]) & frozenset([2, 3]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "issubset",
+      "src": "imprimir(frozenset([1]).issubset(frozenset([1, 2])))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "isdisjoint",
+      "src": "imprimir(frozenset([1]).isdisjoint(frozenset([2])))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "iter-uno",
+      "src": "para x en frozenset([1]):\n    imprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "iter-total",
+      "src": "total = 0\npara x en frozenset([1, 2, 3]):\n    total = total + x\nimprimir(total)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "hash-eq",
+      "src": "imprimir(hash(frozenset([1, 2])) == hash(frozenset([2, 1])))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "frozenset",
+      "name": "from-ctor",
+      "src": "imprimir(frozenset())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "ctor",
+      "src": "m = memoryview(b'abc')\nimprimir(longitud(m))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "index",
+      "src": "m = memoryview(b'abc')\nimprimir(m[0])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "negindex",
+      "src": "m = memoryview(b'abc')\nimprimir(m[-1])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "slice",
+      "src": "m = memoryview(b'abcdef')\nv = m[1:4]\nimprimir(v.tobytes())\nimprimir(longitud(v))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "slice-step",
+      "src": "m = memoryview(b'abcdef')\nimprimir(m[::2].tobytes())\nimprimir(longitud(m[::2]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "tobytes",
+      "src": "m = memoryview(b'abc')\nimprimir(m.tobytes())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "tolist",
+      "src": "m = memoryview(b'abc')\nimprimir(m.tolist())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "eq",
+      "src": "imprimir(memoryview(b'ab') == memoryview(b'ab'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "iter",
+      "src": "m = memoryview(b'ab')\npara x en m:\n    imprimir(x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "cast",
+      "src": "m = memoryview(b'abcd')\nc = m.cast('B')\nimprimir(longitud(c))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "readonly",
+      "src": "m = memoryview(b'ab')\nimprimir(m.readonly)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "bytearray-mut",
+      "src": "ba = bytearray(b'abc')\nm = memoryview(ba)\nm[0] = 65\nimprimir(ba)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "itemsize",
+      "src": "m = memoryview(b'abc')\nimprimir(m.itemsize)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "memoryview",
+      "name": "nbytes",
+      "src": "m = memoryview(b'abc')\nimprimir(m.nbytes)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "ctor-attrs",
+      "src": "s = slice(1, 5, 2)\nimprimir(s.start)\nimprimir(s.stop)\nimprimir(s.step)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "ctor-attrs-none",
+      "src": "s = slice(1, 5, 2)\nimprimir(s.start)\nimprimir(s.stop)\nimprimir(s.step)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "apply-list",
+      "src": "imprimir([1, 2, 3, 4, 5][slice(1, 4)])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "apply-str",
+      "src": "imprimir('abcdef'[slice(1, 4)])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "apply-step",
+      "src": "imprimir([1, 2, 3, 4, 5][slice(None, None, 2)])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "indices",
+      "src": "s = slice(1, 8, 2)\nimprimir(s.indices(10))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "indices-neg",
+      "src": "s = slice(-3, None)\nimprimir(s.indices(10))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "eq",
+      "src": "imprimir(slice(1, 2) == slice(1, 2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "ne",
+      "src": "imprimir(slice(1, 2) != slice(1, 3))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "slice_value",
+      "name": "type",
+      "src": "imprimir(tipo(slice(1)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "conjugate",
+      "src": "imprimir((2+3j).conjugate())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "pow-int",
+      "src": "imprimir(1j ** 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "pow-two",
+      "src": "imprimir((1+1j) ** 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "pow-zero",
+      "src": "imprimir((1+2j) ** 0)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "ctor-str",
+      "src": "imprimir(complejo('1+2j'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "ctor-str-int",
+      "src": "imprimir(complejo('3'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "bool-zero",
+      "src": "imprimir(bool(0j))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "bool-nonzero",
+      "src": "imprimir(bool(1+0j))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "eq-int",
+      "src": "imprimir((1+0j) == 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "eq-float",
+      "src": "imprimir((1.5+0j) == 1.5)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "ne-mixed",
+      "src": "imprimir((1+0j) != 1.5)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "abs-zero",
+      "src": "imprimir(abs(0j))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "real-int-part",
+      "src": "imprimir((3+0j).real)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "imag-int-part",
+      "src": "imprimir((0+4j).imag)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "add-self",
+      "src": "z = 1+2j\nz += 1j\nimprimir(z)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "mul-self",
+      "src": "z = 1+1j\nz *= 2\nimprimir(z)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "in-list",
+      "src": "imprimir(1j en [1j, 2j])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "list-print",
+      "src": "imprimir([1j, 2+3j])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "dict-key",
+      "src": "d = {1j: 'a'}\nimprimir(d[1j])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "fstring",
+      "src": "imprimir(f'{1+2j}')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "pct-s",
+      "src": "imprimir('%s' % (1+2j))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "complex_deep",
+      "name": "round-none",
+      "src": "imprimir(round(1+2j.real))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "repr-str",
+      "src": "imprimir(repr('a'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "repr-list",
+      "src": "imprimir(repr([1, 'a']))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "repr-tuple",
+      "src": "imprimir(repr((1,)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "repr-int",
+      "src": "imprimir(repr(5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "repr-float",
+      "src": "imprimir(repr(1.5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "hash-int",
+      "src": "imprimir(hash(42) == hash(42))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "hash-str",
+      "src": "imprimir(hash('a') == hash('a'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "hash-bool",
+      "src": "imprimir(hash(Verdadero) == hash(1))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "hash-none-err",
+      "src": "imprimir(hash(Nada))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "callable-fn",
+      "src": "imprimir(callable(len))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "callable-int",
+      "src": "imprimir(callable(5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "iter-sentinel",
+      "src": "imprimir(lista(iter([1, 2].pop, IndexError)))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "builtins_more",
+      "name": "min-key",
+      "src": "imprimir(min([3, 1, 2], key=lambda x: -x))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "max-key",
+      "src": "imprimir(max([3, 1, 2], key=lambda x: -x))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "sorted-key",
+      "src": "imprimir(ordenar([3, 1, 2], key=lambda x: -x))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "sum-start",
+      "src": "imprimir(suma([1, 2], 10))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "divmod",
+      "src": "imprimir(divmod(7, 2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "divmod-neg",
+      "src": "imprimir(divmod(-7, 2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "divmod-float",
+      "src": "imprimir(divmod(7.5, 2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "abs-float",
+      "src": "imprimir(abs(-3.5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "abs-int",
+      "src": "imprimir(abs(-3))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "round-half-even",
+      "src": "imprimir(round(2.5))\nimprimir(round(3.5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "pow-mod",
+      "src": "imprimir(pow(2, 10, 100))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "chr-ord",
+      "src": "imprimir(chr(97))\nimprimir(ord('a'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "format-fn",
+      "src": "imprimir(format(5, '05d'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "format-float",
+      "src": "imprimir(format(1.5, '.2f'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "builtins_more",
+      "name": "ascii-fn",
+      "src": "imprimir(ascii('ñ'))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "args-attr",
+      "src": "intentar:\n    lanzar ValueError('a', 'b')\nexcepto ValueError como e:\n    imprimir(e.args)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "args-single",
+      "src": "intentar:\n    lanzar ValueError('x')\nexcepto ValueError como e:\n    imprimir(e.args)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "str-exc",
+      "src": "intentar:\n    lanzar ValueError('boom')\nexcepto ValueError como e:\n    imprimir(texto(e))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "cause-chain",
+      "src": "intentar:\n    intentar:\n        lanzar ValueError('in')\n    excepto ValueError como e:\n        lanzar KeyError('out') desde e\nexcepto KeyError como e:\n    imprimir('c')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "context",
+      "src": "intentar:\n    intentar:\n        lanzar ValueError('a')\n    excepto ValueError:\n        lanzar KeyError('b')\nexcepto KeyError:\n    imprimir('ok')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "finally-runs",
+      "src": "r = []\nintentar:\n    lanzar ValueError('x')\nexcepto ValueError:\n    r.append('c')\nfinalmente:\n    r.append('f')\nimprimir(r)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "raise-type-only",
+      "src": "lanzar ValueError\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "custom-args",
+      "src": "clase E(Exception):\n    pasar\nintentar:\n    lanzar E('a', 'b')\nexcepto E como e:\n    imprimir(e.args)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "hierarchy-3",
+      "src": "clase A(Exception): pasar\nclase B(A): pasar\nclase C(B): pasar\nintentar:\n    lanzar C('x')\nexcepto A:\n    imprimir('A')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "nested-reraise",
+      "src": "intentar:\n    intentar:\n        lanzar ValueError('x')\n    excepto ValueError:\n        lanzar\nexcepto ValueError:\n    imprimir('outer')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "exc-in-comprehension",
+      "src": "intentar:\n    [1 // 0 para x en rango(1)]\nexcepto ZeroDivisionError:\n    imprimir('ok')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "exc-in-generator",
+      "src": "funcion g():\n    lanzar ValueError('g')\nintentar:\n    lista(g())\nexcepto ValueError:\n    imprimir('caught')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "base-error",
+      "src": "intentar:\n    d = {}\n    d['k']\nexcepto Exception:\n    imprimir('e')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "exceptions_deep",
+      "name": "stopiteration",
+      "src": "it = iter([1])\nimprimir(next(it))\nintentar:\n    next(it)\nexcepto StopIteration:\n    imprimir('si')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "int-overflow-add",
+      "src": "imprimir(2 ** 62 + 2 ** 62)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "int-overflow-mul",
+      "src": "imprimir(2 ** 40 * 2 ** 40)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "bigint-divmod",
+      "src": "imprimir(divmod(10 ** 25, 7))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "bigint-pow",
+      "src": "imprimir(2 ** 100)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "float-inf-add",
+      "src": "imprimir(1e308 * 10)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "float-inf-sub",
+      "src": "imprimir(-1e308 * 10)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "float-nan",
+      "src": "imprimir(0.0 / 0.0 si Falso sino 1e309 - 1e309)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "int-float-eq",
+      "src": "imprimir(1 == 1.0)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "int-float-cmp",
+      "src": "imprimir(1 < 1.5)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "bool-int-add",
+      "src": "imprimir(Verdadero + 1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "bool-float-mul",
+      "src": "imprimir(Falso * 1.5)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "mixed-div",
+      "src": "imprimir(7 / 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "mixed-floordiv",
+      "src": "imprimir(7.0 // 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "mixed-mod",
+      "src": "imprimir(7.5 % 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "neg-mod",
+      "src": "imprimir(-7 % 3)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "neg-floordiv",
+      "src": "imprimir(-7 // 3)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "pow-neg-base-int",
+      "src": "imprimir((-2) ** 3)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "pow-frac",
+      "src": "imprimir(2 ** 0.5)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "pow-neg-exp",
+      "src": "imprimir(2 ** -1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "shift-neg",
+      "src": "imprimir(1 << -1)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 1,
+      "oracle_rc": 1
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "chained-shift",
+      "src": "imprimir(1 << 2 << 3)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "bitand-neg",
+      "src": "imprimir(-1 & 0xFF)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "bitor-mix",
+      "src": "imprimir(5 | 2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "invert",
+      "src": "imprimir(~5)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "float-int-sum",
+      "src": "imprimir(suma([1, 2.5]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "float-sum-empty",
+      "src": "imprimir(suma([]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "bigint-sum",
+      "src": "imprimir(suma([10 ** 20, 1]))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "int-str-concat-err",
+      "src": "imprimir('a' + 'b')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "float-repr",
+      "src": "imprimir(0.1 + 0.2)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "float-scientific",
+      "src": "imprimir(1e-7)\nimprimir(1e21)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "numeric_semantics",
+      "name": "float-neg-zero",
+      "src": "imprimir(-0.0)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "getattribute",
+      "src": "clase P:\n    funcion __getattribute__(self, n):\n        devolver 42\nimprimir(P().x)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "getattr-hook",
+      "src": "clase P:\n    funcion __getattr__(self, n):\n        devolver 'fallback'\nimprimir(P().zz)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "delattr",
+      "src": "clase P:\n    funcion __delattr__(self, n):\n        imprimir('del', n)\np = P()\nborrar p.x\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "contains",
+      "src": "clase P:\n    funcion __contains__(self, v):\n        devolver v == 1\nimprimir(1 en P())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "getitem-slice",
+      "src": "clase P:\n    funcion __getitem__(self, i):\n        devolver i * 2\nimprimir(P()[3])\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "call",
+      "src": "clase P:\n    funcion __call__(self, x):\n        devolver x + 1\np = P()\nimprimir(p(1))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "bool-len",
+      "src": "clase P:\n    funcion __len__(self):\n        devolver 0\nimprimir(bool(P()))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "repr-str",
+      "src": "clase P:\n    funcion __repr__(self):\n        devolver 'P()'\n    funcion __str__(self):\n        devolver 'soy P'\nimprimir(P())\nimprimir(repr(P()))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "eq-ne",
+      "src": "clase P:\n    funcion __init__(self, x): self.x = x\n    funcion __eq__(self, o):\n        devolver self.x == o.x\nimprimir(P(1) == P(1))\nimprimir(P(1) != P(2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "hash-eq",
+      "src": "clase P:\n    funcion __init__(self, x): self.x = x\n    funcion __hash__(self):\n        devolver self.x\nimprimir(hash(P(3)) == 3)\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "iter-next",
+      "src": "clase C:\n    funcion __init__(self):\n        self.i = 0\n    funcion __iter__(self):\n        devolver self\n    funcion __next__(self):\n        self.i = self.i + 1\n        si self.i > 2:\n            lanzar StopIteration\n        devolver self.i\nimprimir(lista(C()))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "add-reflected",
+      "src": "clase P:\n    funcion __radd__(self, o):\n        devolver 99\nimprimir(1 + P())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "iadd",
+      "src": "clase P:\n    funcion __iadd__(self, o):\n        devolver self\np = P()\np += 1\nimprimir('ok')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "neg",
+      "src": "clase P:\n    funcion __neg__(self):\n        devolver 1\nimprimir(-P())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "len-method",
+      "src": "clase P:\n    funcion __len__(self):\n        devolver 3\nimprimir(longitud(P()))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "object_protocol3",
+      "name": "getitem-missing",
+      "src": "clase P:\n    funcion __getitem__(self, i):\n        lanzar KeyError('k')\nintentar:\n    P()[1]\nexcepto KeyError:\n    imprimir('ok')\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "fn-value",
+      "src": "funcion f(x): devolver x\nimprimir(f(1))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "fn-alias",
+      "src": "funcion f(x): devolver x + 1\ng = f\nimprimir(g(2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "fn-in-list",
+      "src": "funcion f(): devolver 1\nfs = [f]\nimprimir(fs[0]())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "fn-in-dict",
+      "src": "funcion f(): devolver 1\nd = {'k': f}\nimprimir(d['k']())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "fn-arg",
+      "src": "funcion ap(f, v): devolver f(v)\nfuncion doble(x): devolver x * 2\nimprimir(ap(doble, 3))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "closure-capture",
+      "src": "funcion mk(n):\n    funcion g(x): devolver x * n\n    devolver g\nimprimir(mk(3)(2))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "lambda",
+      "src": "f = lambda x: x * 2\nimprimir(f(3))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "lambda-multi",
+      "src": "f = lambda x, y=2: x + y\nimprimir(f(1))\nimprimir(f(1, 5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "lambda-in-call",
+      "src": "imprimir((lambda x: x + 1)(1))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "method-ref",
+      "src": "clase P:\n    funcion f(self): devolver 7\np = P()\nm = p.f\nimprimir(m())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "staticmethod-ref",
+      "src": "clase P:\n    @staticmethod\n    funcion f(): devolver 8\nimprimir(P.f())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "classmethod-ref",
+      "src": "clase P:\n    @classmethod\n    funcion f(cls): devolver 9\nimprimir(P.f())\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "recursive",
+      "src": "funcion fac(n):\n    si n <= 1:\n        devolver 1\n    devolver n * fac(n - 1)\nimprimir(fac(5))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    },
+    {
+      "area": "callable_protocol",
+      "name": "mutual",
+      "src": "funcion par(n):\n    si n == 0:\n        devolver Verdadero\n    devolver impar(n - 1)\nfuncion impar(n):\n    si n == 0:\n        devolver Falso\n    devolver par(n - 1)\nimprimir(par(4))\n",
+      "bucket": "EQUIV",
+      "detail": "",
+      "native_rc": 0,
+      "oracle_rc": 0
+    }
+  ]
+}

@@ -837,11 +837,20 @@ class Parser:
                 val = int(val, 8)
             elif val.startswith(("0b", "0B")):
                 val = int(val, 2)
+            elif val[-1] in "jJ":
+                # COMPLEX_LITERAL_V1: literal imaginario (1j, 2.5j, 1e3j).
+                try:
+                    val = complex(val)
+                except ValueError as exc:
+                    raise ParseError(f"Literal complejo inválido: {val!r}", tok) from exc
             elif "." in val or "e" in val.lower():
                 val = float(val)
             else:
                 val = int(val)
-            return Constant(value=val).set_pos(tok)
+            # NUMERIC_POSTFIX_V1: un literal numérico es un primary —
+            # `.attr` y `[...]` deben componerse con él (1+2j.real,
+            # 1.5.real, (era ParseError: el STRING ya lo hacía).
+            return self._parse_postfix(Constant(value=val).set_pos(tok))
 
         if tok.type == TokenType.STRING:
             self._advance()
@@ -880,8 +889,25 @@ class Parser:
 
             if val == "esperar":
                 return Await(value=self._parse_unary()).set_pos(tok)
+            if val == "producir":
+                # YIELD_EXPR_V1: `x = producir 1` — en CPython yield es una
+                # EXPRESion (el generador recibe el valor enviado por send()).
+                # El NAME 'producir' YA fue consumido por esta rama, así que
+                # se construye el nodo aquí: llamar a _parse_yield() avanzaría
+                # otra vez y se comería el valor.
+                if self._peek().type == TokenType.NAME and self._peek().value == "desde":
+                    self._advance()
+                    value = self._parse_expression(0)
+                    return self._parse_postfix(YieldFromStmt(value=value).set_pos(tok))
+                value = None
+                if not self._check(TokenType.NEWLINE, TokenType.ENDMARKER, TokenType.DEDENT):
+                    value = self._parse_expression(0)
+                return self._parse_postfix(YieldStmt(value=value).set_pos(tok))
             if val == "no":
-                return UnaryOp(op="not", operand=self._parse_unary()).set_pos(tok)
+                # NOT_PREC_V1: el operando de `no` es una comparación en la
+                # gramática de CPython (`no 2 + 3` == `no (2 + 3)`; con
+                # _parse_unary salía `(no 2) + 3` = 3). `y`/`o` siguen fuera.
+                return UnaryOp(op="not", operand=self._parse_expression(PRECEDENCE["en"])).set_pos(tok)
 
             # Literales booleanos / None
             if val == "Verdadero":
@@ -1018,7 +1044,11 @@ class Parser:
 
         if self._check(TokenType.NAME) and self._peek().value == "no":
             tok = self._advance()
-            operand = self._parse_expression(PRECEDENCE["**"])
+            # NOT_PREC_V1: el operando de `no` es una COMPARACIÓN en la
+            # gramática de CPython (`no x < y` == `no (x < y)`). Con
+            # PRECEDENCE["**"], `no 2 + 3` salía como `(no 2) + 3` = 3 en
+            # vez de False. `y`/`o` siguen quedando fuera del operando.
+            operand = self._parse_expression(PRECEDENCE["en"])
             return UnaryOp(op="not", operand=operand).set_pos(tok)
 
         raise ParseError(f"Expresión inesperada: {tok}", tok)
@@ -1039,8 +1069,10 @@ class Parser:
             return UnaryOp(op=op, operand=operand).set_pos(tok)
         if self._check(TokenType.NAME) and tok.value == "no":
             self._advance()
-            # UNARY_POW_PREC_V1: `no` (not) is weaker than `**` in CPython.
-            operand = self._parse_expression(PRECEDENCE["**"])
+            # NOT_PREC_V1: mirrors the statement-level branch - the operand is
+            # a comparison, so `no 2 + 3` is `no (2 + 3)` (False), not
+            # `(no 2) + 3`.
+            operand = self._parse_expression(PRECEDENCE["en"])
             return UnaryOp(op="not", operand=operand).set_pos(tok)
         if self._check(TokenType.NAME) and tok.value == "esperar":
             self._advance()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import unittest
 from piton.native_differential import compare_native_to_cpython
 
@@ -18,6 +19,11 @@ def _assert_matches(testcase: unittest.TestCase, source: str) -> None:
     )
 
 
+@unittest.skipIf(
+    sys.platform.startswith("win32"),
+    "BYTES_LINUX_ONLY: bytes/bytearray support is Linux-only (050e6fb); "
+    "the Windows backend fails closed at build time by design",
+)
 class TestBytesBytearray(unittest.TestCase):
 
     def test_literals_print_and_len(self):

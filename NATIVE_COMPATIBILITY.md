@@ -14,6 +14,7 @@ una ejecución dentro de una VM Windows limpia permanece `NOT_DEMONSTRATED`.
 | Área | Estado nativo | Evidencia | Brecha principal |
 |---|---|---|---|
 | Literales int/bool/Nada/string/float | PARTIAL | `tests/test_phase5.py` | float repr completos |
+| Complejos (`COMPLEX_V1`) | PARTIAL | `tests/test_p17_complex.py` | **Linux PASS** (aritmética +-*/ bit-exacta vs CPython 3.12.4, división por algoritmo de Smith, repr con reglas de `-0.0`/bit de signo, `abs`, `.real`/`.imag`, `complejo()`, `==`/`!=`, pertenencia, impresión en colecciones, `texto()`/format). **Windows fail-closed** en build. Huecos: backend Windows, `**`, `complejo('1+2j')`, paso por ABI de llamada (fail-closed) |
 | Aritmética entera | PARTIAL | `tests/test_phase5.py` | Overflow a bigint y zero division |
 | Floats | PARTIAL | `tests/test_phase5.py` | división, NaN y repr shortest-roundtrip |
 | Bigints | PARTIAL | `tests/test_phase5.py` | aritmética por limbs |

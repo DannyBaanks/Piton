@@ -56,7 +56,7 @@ def _ordering_pair_ok(left_type: str, right_type: str) -> bool:
     return left_type == right_type and left_type not in {"none", ""}
 
 
-_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes"}
+_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "format", "formato", "slice", "rebanada", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes", "complex", "complejo", "repr", "hash", "callable", "ascii", "format", "frozenset", "memoryview", "slice"}
 
 _math_fn_map = {
     "math_sqrt": "piton_float_sqrt",
@@ -160,15 +160,140 @@ class Win64NasmEmitter:
         """
         return generator_slot_layout(function)
 
+    def _isinstance_matches(self, obj_val: str, obj_type: str, target_val: str) -> bool:
+        """TUPLE_ELEMS_ISINSTANCE_V1 (Windows): espejo de linux_x86
+        `_build_isinstance_expr` -- una tupla de tipos es una disyuncion y
+        una tupla anidada se evalua recursivamente, de modo que
+        `isinstance(5, (str, (float, int)))` sigue dando True.
+        """
+        t_items = self._tuple_elems.get(target_val) or self._tuple_elems.get(self.aliases.get(target_val, target_val))
+        if t_items is not None:
+            for item in t_items:
+                iname = item[0] if isinstance(item, tuple) else item
+                if self._isinstance_matches(obj_val, obj_type, iname):
+                    return True
+            return False
+        tclean = self.aliases.get(target_val, target_val)
+        if tclean in {"object", "objeto"}:
+            return True
+        elif tclean in {"int", "entero"} and obj_type in {"int", "bool"}:
+            return True
+        elif tclean in {"bool", "booleano"} and obj_type == "bool":
+            return True
+        elif tclean in {"float", "decimal", "flotante"} and obj_type == "float":
+            return True
+        elif tclean in {"str", "texto"} and obj_type == "str":
+            return True
+        elif tclean in {"list", "lista"} and obj_type == "list":
+            return True
+        elif tclean in {"tuple", "tupla"} and obj_type == "tuple":
+            return True
+        elif tclean in {"dict", "diccionario"} and obj_type == "dict":
+            return True
+        elif tclean in {"set", "conjunto"} and obj_type == "set":
+            return True
+        elif tclean in self.classes and obj_type.startswith("object:"):
+            cls_name = obj_type.split(":", 1)[1]
+            mro = self.class_mro.get(cls_name, [cls_name])
+            if tclean in mro:
+                return True
+        return False
+
+    def _issubclass_matches(self, c1_arg: str, target_val: str) -> bool:
+        """TUPLE_ELEMS_ISINSTANCE_V1 (Windows): espejo de linux_x86
+        `_build_issubclass_expr` -- disyuncion recursiva sobre la tupla.
+        """
+        t_items = self._tuple_elems.get(target_val) or self._tuple_elems.get(self.aliases.get(target_val, target_val))
+        if t_items is not None:
+            for item in t_items:
+                iname = item[0] if isinstance(item, tuple) else item
+                if self._issubclass_matches(c1_arg, iname):
+                    return True
+            return False
+        c1 = self.aliases.get(c1_arg, c1_arg)
+        c2_clean = self.aliases.get(target_val, target_val)
+        type_norm = {
+            "int": "int", "entero": "int",
+            "bool": "bool", "booleano": "bool",
+            "float": "float", "flotante": "float", "decimal": "float",
+            "str": "str", "texto": "str",
+            "list": "list", "lista": "list",
+            "tuple": "tuple", "tupla": "tuple",
+            "dict": "dict", "diccionario": "dict",
+            "set": "set", "conjunto": "set",
+            "range": "range", "rango": "range",
+            "object": "object", "objeto": "object",
+        }
+        c1_norm = type_norm.get(c1, c1)
+        c2_norm = type_norm.get(c2_clean, c2_clean)
+        if c2_norm == "object" or c1_norm == c2_norm:
+            return True
+        if c1_norm == "bool" and c2_norm == "int":
+            return True
+        if c1 in self.classes and c2_clean in self.classes:
+            mro = self.class_mro.get(c1, [c1])
+            if c2_clean in mro:
+                return True
+        return False
+
     def emit(self, module: MIRModule) -> str:
         self.mir_module = module
         self.mir_module_classes = getattr(module, 'classes', {})
         self.mir_module_class_mro = getattr(module, 'class_mro', {})
         self.mir_module_class_properties = getattr(module, 'class_properties', {})
-        # Introspection paths use these short names; bind them to the
-        # module metadata before any function can be emitted.
-        self.classes = self.mir_module_classes
-        self.class_mro = self.mir_module_class_mro
+        # Class metadata under the same short names linux_x86.emit binds:
+        # the introspection dispatch (7c2509d) reads self.classes and
+        # self.class_mro here, and without this binding every PE build died
+        # with AttributeError before touching NASM.
+        self.classes = getattr(module, "classes", {})
+        self.class_parents = getattr(module, "class_parents", {})
+        self.class_mro = getattr(module, "class_mro", {})
+        self.class_properties = getattr(module, "class_properties", {})
+        self.static_methods = getattr(module, "static_methods", set())
+        self.class_methods = getattr(module, "class_methods", set())
+        # CLASS_ATTR_TYPES_V1: tipos literales de atributos de clase.
+        self.mir_module_class_attr_types = getattr(module, "class_attr_types", {})
+        # INJECTED_ATTR_TYPES_V1: tipos de attrs inyectados en runtime
+        # sobre un receiver sin tipo (cls.author = "PITON" en un
+        # decorador); fallback cuando el attr no esta en el dict de la
+        # clase. Sin esto el default "int" imprimia el puntero del str.
+        self.mir_module_injected_attr_types = getattr(module, "injected_attr_types", {})
+        # Windows reads _tuple_elems in the static-tuple typing paths but
+        # never populated it -> AttributeError on every tuple-typed target.
+        self._tuple_elems: dict[str, tuple] = {}
+        # MAIN_LABEL_COLLISION_V1: <module> owns the PE entry label `main`
+        # (the MinGW CRT calls it), so a user function literally named
+        # `main` used to emit a second `main:` plus duplicated block labels
+        # (main_entry/main_b1/...) -> "label `main' inconsistently
+        # redefined". Rename the user function before any name table is
+        # built; every reference below flows from function.name.
+        for _mf in module.functions:
+            if _mf.name == "main":
+                _mf.name = "main__user"
+                # MAIN_RENAME_REFS_V1: gen_init y load referencian la
+                # funcion por NOMBRE crudo; sin reescribirlos, el driver
+                # del coroutine buscaba layouts['main'] tras el rename.
+                # Guard de sombreado: si 'main' es local (param o store)
+                # en esa funcion, su load es la VARIABLE y no se toca.
+                for _fn in module.functions:
+                    _local_mains = set(_fn.params) | {
+                        _ins.args[0]
+                        for _blk in _fn.blocks
+                        for _ins in _blk.instructions
+                        if _ins.op == "store" and _ins.args and isinstance(_ins.args[0], str) and _ins.args[0] == "main"
+                    }
+                    if "main" in _local_mains:
+                        continue
+                    for _blk in _fn.blocks:
+                        for _i, _ins in enumerate(_blk.instructions):
+                            if _ins.op == "gen_init" and _ins.args and _ins.args[0] == "main":
+                                _blk.instructions[_i] = MIRInstruction(
+                                    _ins.op, ("main__user", *_ins.args[1:]), _ins.result
+                                )
+                            elif _ins.op == "load" and _ins.args == ("main",):
+                                _blk.instructions[_i] = MIRInstruction(
+                                    _ins.op, ("main__user",), _ins.result
+                                )
         self.function_names = {function.name for function in module.functions}
         self.function_return_types = self._infer_return_types(module)
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
@@ -228,6 +353,32 @@ class Win64NasmEmitter:
             "extern piton_dict_get_tagged_int",
             "extern piton_dict_contains_tagged", "extern piton_box_float",
             "extern piton_dict_nth_key", "extern piton_set_nth",
+            # INTROSPECTION/SEQUENCE_METHODS_V1: helpers added to
+            # native_runtime.c without the matching extern here; NASM failed
+            # with "symbol not defined" on every getattr/hasattr/dict.copy/
+            # dict.pop/index/set algebra/removeprefix program.
+            "extern piton_getattr", "extern piton_hasattr", "extern piton_setattr",
+            # DICT_POP_SETDEFAULT_TAGGED_V1: variantes con clave taggeada.
+            "extern piton_dict_pop_tagged", "extern piton_dict_setdefault_tagged",
+            # MATCH_DYNAMIC_V1: isinstance dinamico por class_name para
+            # subjects sin tipo estatico (caso Point(...)).
+            "extern piton_isinstance_class",
+            "extern piton_isinstance_dynamic",
+            "extern piton_print_auto_raw",
+            "extern piton_dict_copy", "extern piton_dict_pop",
+            # COLL_METHODS_EXTERNS_V1: dict/set methods added to
+            # native_runtime.c without the matching extern here; NASM failed
+            # with "symbol not defined" on every dict.clear/copy and set
+            # algebra/predicate program.
+            "extern piton_dict_clear", "extern piton_dict_setdefault",
+            "extern piton_set_clear", "extern piton_set_copy",
+            "extern piton_set_difference", "extern piton_set_intersection",
+            "extern piton_set_isdisjoint", "extern piton_set_issuperset",
+            "extern piton_set_pop", "extern piton_set_sym_diff",
+            "extern piton_set_update",
+            "extern piton_seq_index",
+            "extern piton_set_union", "extern piton_set_issubset",
+            "extern piton_str_removeprefix", "extern piton_str_removesuffix",
             "extern piton_slot_bool", "extern piton_iterator_next_any_raw",
             "extern piton_slot_callable_check",
             "extern piton_collection_put_verbatim", "extern piton_list_append_tagged",
@@ -362,6 +513,9 @@ class Win64NasmEmitter:
 
     def _emit_function(self, function: MIRFunction) -> None:
         self.function = function
+        # MATCH_DYNAMIC_V1: capturas de `segun` tipadas slot antes de emitir
+        # (los cuerpos de caso preceden al bloque store en orden MIR).
+        self._slot_capture_names = self._prescan_slot_captures(function)
         if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
             self._emit_generator_function(function)
             return
@@ -374,6 +528,9 @@ class Win64NasmEmitter:
         self._popped_iters = set()
         self._loop_exit_pops = {}
         self.tuple_etypes = {k: v for k, v in self.tuple_etypes.items() if not k.startswith('%')}
+        # TUPLE_ELEMS_ISINSTANCE_V1: los %temps de _tuple_elems mueren con
+        # la funcion, igual que tuple_etypes (mismo espejo linux_x86 2696).
+        self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self.dict_elems = {k: v for k, v in self.dict_elems.items() if not k.startswith('%')}
         # NOTE: the GLOBAL_DECL_V1 tables are set once by _scan_module_globals
         # in emit() and must NOT be reset per function (that wiped them before
@@ -493,6 +650,9 @@ class Win64NasmEmitter:
         self._popped_iters = set()
         self._loop_exit_pops = {}
         self.tuple_etypes = {k: v for k, v in self.tuple_etypes.items() if not k.startswith('%')}
+        # TUPLE_ELEMS_ISINSTANCE_V1: los %temps de _tuple_elems mueren con
+        # la funcion, igual que tuple_etypes (mismo espejo linux_x86 2696).
+        self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self.dict_elems = {k: v for k, v in self.dict_elems.items() if not k.startswith('%')}
         # NOTE: the GLOBAL_DECL_V1 tables are set once by _scan_module_globals
         # in emit() and must NOT be reset per function (that wiped them before
@@ -554,6 +714,9 @@ class Win64NasmEmitter:
         self._popped_iters = set()
         self._loop_exit_pops = {}
         self.tuple_etypes = {k: v for k, v in self.tuple_etypes.items() if not k.startswith('%')}
+        # TUPLE_ELEMS_ISINSTANCE_V1: los %temps de _tuple_elems mueren con
+        # la funcion, igual que tuple_etypes (mismo espejo linux_x86 2696).
+        self._tuple_elems = {k: v for k, v in self._tuple_elems.items() if not k.startswith('%')}
         self.dict_elems = {k: v for k, v in self.dict_elems.items() if not k.startswith('%')}
         # NOTE: the GLOBAL_DECL_V1 tables are set once by _scan_module_globals
         # in emit() and must NOT be reset per function (that wiped them before
@@ -690,6 +853,13 @@ class Win64NasmEmitter:
         self.lines.append(f"    mov {self._address(name)}, {register}")
 
     def _load_operand(self, operand: Any, register: str = "rax") -> None:
+        if operand == "@with_none_str":
+            # WITH_NONE_PRINT_V1: el `__exit__(None, None, None)` del path
+            # normal de `con` viaja como la literal "None" (los params de
+            # __exit__ se tipan str; un NULL crudo hacia printf "%s"
+            # imprimia "(null)" en vez de "None").
+            self.lines.append(f"    lea {register}, [lit_none]")
+            return
         if isinstance(operand, str) and operand.startswith("%"):
             self.lines.append(f"    mov {register}, {self._address(operand)}")
         elif isinstance(operand, bool):
@@ -732,6 +902,11 @@ class Win64NasmEmitter:
                 else:
                     _pairs.append((item, self._percent_literal_type(item)))
             self.tuple_etypes[result] = tuple(_pairs)
+            # TUPLE_ELEMS_ISINSTANCE_V1 (Windows): espejo de linux_x86
+            # (~8281). isinstance/issubclass leen SOLO _tuple_elems, asi
+            # que sin esta escritura cada isinstance contra una tupla de
+            # tipos caia al fallback [target_name] y contestaba False.
+            self._tuple_elems[result] = tuple(_pairs)
         self.lines.extend([
             f"    mov rcx, {self._address(result)}",
             "    call piton_collection_free",
@@ -862,14 +1037,25 @@ class Win64NasmEmitter:
                 if result and source_type == 'dict' and source in self._dict_key_types:
                     self._dict_key_types[result] = self._dict_key_types[source]
             self.lines.append(f"    mov {self._address(result)}, rax")
-            if result and self.types.get(result, "").startswith("iterator:") and self.types[result] != "iterator:genexpr":
+            _iter_t = self.types.get(result, "")
+            # GEN_DRIVER_FRAME_V1: un driver `para x en gen()` llama
+            # piton_gen_next, que al agotarse hace piton_raise("StopIteration")
+            # -- que imprime y sale si ningun frame lo acepta. Los generadores
+            # basicos se aplanan estaticamente a tupla (mir _lower_for), asi
+            # que este camino solo se ejercita con yield-from/yields dinamicos
+            # y el leak pasaba desapercibido. Mismo frame StopIteration-only
+            # de ITER_LOOP_GUARD_V1; el accepted-filter lo hace invisible
+            # para excepciones de usuario y el pop va al bloque exit.
+            # (genexpr sigue excluido: usa el flag-only setter.)
+            if result and (
+                _iter_t == "generator"
+                or (_iter_t.startswith("iterator:") and _iter_t != "iterator:genexpr")
+            ):
                 # ITER_LOOP_GUARD_V1: for-loop exhaustion raises StopIteration
                 # through piton_raise, which prints and exits when no handler
                 # accepts it. Push a StopIteration-only frame for the loop's
                 # lifetime so the static jne-handler in iter_next routes the
                 # exit; the matching pop is emitted at the loop-exit block.
-                # (genexpr iterators use the flag-only setter and generator
-                # bodies run under the coro frame, so they are excluded.)
                 self.lines.append("    call piton_try_push")
                 stop_label = self._string("StopIteration")
                 self.lines.append(f"    lea rcx, [{stop_label}]")
@@ -997,6 +1183,14 @@ class Win64NasmEmitter:
         elif op == "const":
             value = args[0]
             self.constants[result] = value
+            if isinstance(value, complex):
+                # COMPLEX_V1: implementado SOLO en el backend Linux (ver
+                # piton/linux_x86.py). El backend Windows falla cerrado en
+                # build en vez de emitir un valor aproximado.
+                raise NativeBuildError(
+                    "Windows backend does not support complex yet "
+                    "(COMPLEX_V1 is Linux-only; fail closed)"
+                )
             if value is None:
                 self.types[result] = "none"
             elif isinstance(value, bool):
@@ -1023,12 +1217,17 @@ class Win64NasmEmitter:
             name = args[0]
             self.aliases[result] = name
             self.types[result] = self.types.get(name, "int")
+            # MATCH_DYNAMIC_V1: captura de `segun` prescaneada -> slot.
+            if name in getattr(self, "_slot_capture_names", ()):
+                self.types[result] = "slot"
             # FMT_SPEC_V1: a load of a tracked string constant keeps the
             # literal, so `'{:>4}'.format(x)` stays provably a template.
             if self.types.get(name) == "str" and name in self.constants:
                 self.constants[result] = self.constants[name]
             if name in self.tuple_etypes:
                 self.tuple_etypes[result] = self.tuple_etypes[name]
+            if name in self._tuple_elems:
+                self._tuple_elems[result] = self._tuple_elems[name]
             if name in self.function_names or name in self._function_temps:
                 # FUNCTION_TEMP_V1 (Windows): los valores-funcion viajan
                 # tipados int por defecto; marcarlos evita que el gate
@@ -1072,7 +1271,37 @@ class Win64NasmEmitter:
             if name in self.classes or name in {"object", "objeto"}:
                 self.aliases[result] = name
                 self.types[result] = f"class:{name}" if name in self.classes else "class:object"
-                self.lines.append(f"    mov qword ptr {self._address(result)}, 0")
+                if name in self.classes and (
+                    name in self._module_stored
+                    and getattr(self.function, "name", "<module>") == "<module>"
+                ):
+                    # CLASS_STORED_LOAD_V1: cada definicion de clase termina
+                    # en `store Counter <- <objeto>` a nivel de modulo, y ese
+                    # objeto lleva los ATRIBUTOS DE CLASE escritos por el
+                    # set_attr de la definicion. El marcador fresco de
+                    # CLASS_OBJECT_LOAD_V1 los perdia: `Counter.count` y
+                    # `cls.count` (classmethod) devolvian 0. En scope de
+                    # modulo se carga el slot real; dentro de funciones se
+                    # conserva el marcador fresco (el slot del modulo no es
+                    # accesible sin `global`, y el marcador sigue siendo
+                    # suficiente para llamar Counter.metodo()).
+                    self.lines.append(f"    mov rax, {self._address(name)}")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    return
+                if name in self.classes:
+                    # CLASS_OBJECT_LOAD_V1 (mirrors Linux): loading a class
+                    # name yields a REAL class object (PitonObject with
+                    # class_name set), which is what makes `C.m()` receive a
+                    # usable `cls` and `C.attr` read class-attribute writes.
+                    # A null slot made every classmethod receiver crash.
+                    self.lines.append(f"    lea rcx, [{self._string(name)}]")
+                    self.lines.append("    call piton_object_new")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                else:
+                    # NASM has no MASM `ptr` keyword: `qword ptr [x]` assembled
+                    # as "symbol `ptr' not defined" on every class/introspection
+                    # program (WIN64_PTR_V1).
+                    self.lines.append(f"    mov qword {self._address(result)}, 0")
                 return
             if name in _BUILTINS and name not in self.slots:
                 # BUILTIN_MARKER_V1: no code is emitted — the builtin is only
@@ -1149,6 +1378,11 @@ class Win64NasmEmitter:
                 self._str_elem_colls.add(args[0])
             if isinstance(args[1], str) and self.types.get(args[1]) == "str-boxed":
                 self.types[args[0]] = "str-boxed"
+            if isinstance(args[1], str) and self.types.get(args[1]) == "slot":
+                # MATCH_DYNAMIC_V1: una captura de `segun` (o cualquier store
+                # de un valor taggeado) conserva el tipo slot para que
+                # print/compare despachen por tag en runtime.
+                self.types[args[0]] = "slot"
             if isinstance(args[1], str) and args[1] in self._bigint_elem_colls:
                 self._bigint_elem_colls.add(args[0])
             if isinstance(args[1], str) and args[1] in self._mixed_elem_colls:
@@ -1201,6 +1435,8 @@ class Win64NasmEmitter:
                     self.types[args[0]] = self.types.get(args[1], "int")
                     if args[1] in self.tuple_etypes:
                         self.tuple_etypes[args[0]] = self.tuple_etypes[args[1]]
+                    if args[1] in self._tuple_elems:
+                        self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
                     if args[1] in self.dict_elems:
                         self.dict_elems[args[0]] = self.dict_elems[args[1]]
                 return
@@ -1290,7 +1526,15 @@ class Win64NasmEmitter:
                 self._emit_contains(result, left, right, negate=False)
                 return
             if "str" in {left_type, right_type}:
-                if operator == "+" and left_type == right_type == "str":
+                if operator == "+":
+                    # STR_PLUS_UNKNOWN_V1 (mirrors Linux): one side is
+                    # statically str while the other side is a parameter or
+                    # an un-inferred call result (typed "int" by default)
+                    # that carries a str at runtime — the parameterized
+                    # decorator chain `"<" + t + ">" + fn(s) + ...` depends
+                    # on this: Linux concatenates as soon as ONE side is
+                    # str, so Windows does the same instead of failing
+                    # closed on the default int type.
                     self._emit_string_concat(left, right, result)
                     return
                 if operator == "*":
@@ -1894,14 +2138,20 @@ class Win64NasmEmitter:
                 return
             if "slot" in {left_type, right_type} and operator in {"==", "!="}:
                 # SLOT_EQ_V1 (Windows): compare tagged values by tag+payload
-                # (piton_value_eq_raw). A raw int/str/none side is boxed
-                # first so the tags line up; ordering on slots fails closed.
+                # (piton_value_eq_raw). A raw int/str/none side is boxed AND
+                # TAGGED first (piton_slot: pv_encode) so the tags line up
+                # -- piton_str_box devuelve un PitonStr* SIN tag y bajo wine
+                # los punteros 0x7ff... tienen top-bits 3 (parecen FLOAT),
+                # asi que la comparacion daba siempre "distinto"... y con
+                # la polaridad vieja (sete para ==) eso matcheaba SIEMPRE.
+                # Orden sobre slots sigue fail-closed.
                 if left_type == "slot":
                     self._load_operand(left, "rcx")
                     self.lines.append("    push rcx")
                 elif left_type == "str":
                     self._load_operand(left, "rcx")
-                    self.lines.append("    call piton_str_box")
+                    self.lines.append("    mov rdx, 1")
+                    self.lines.append("    call piton_slot")
                     self.lines.append("    push rax")
                 elif left_type == "none":
                     self.lines.append("    xor ecx, ecx")
@@ -1915,7 +2165,8 @@ class Win64NasmEmitter:
                     self._load_operand(right, "rdx")
                 elif right_type == "str":
                     self._load_operand(right, "rcx")
-                    self.lines.append("    call piton_str_box")
+                    self.lines.append("    mov rdx, 1")
+                    self.lines.append("    call piton_slot")
                     self.lines.append("    mov rdx, rax")
                 elif right_type == "none":
                     self.lines.append("    xor edx, edx")
@@ -1927,7 +2178,9 @@ class Win64NasmEmitter:
                 self.lines.append("    pop rcx")
                 self.lines.append("    call piton_value_eq")
                 self.lines.append("    test eax, eax")
-                self.lines.append(f"    set{'ne' if operator == '!=' else 'e'} al")
+                # piton_value_eq devuelve 1=IGUALES: para '==' el match es
+                # eax!=0 (setne); para '!=' es eax==0 (sete).
+                self.lines.append(f"    set{'ne' if operator == '==' else 'e'} al")
                 self.lines.append("    movzx rax, al")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "bool"
@@ -2216,7 +2469,12 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_raise_unhandled")
             self.lines.append(f"{ok_label}:")
         elif op == "get_item":
-            container, key = args
+            # GETITEM_HANDLER_V1 carries an optional handler label as a 3rd
+            # arg (KeyError/IndexError routing, mirrors linux_x86). Windows
+            # consumes the two data operands and ignores the handler for now
+            # -- the unpack used to crash with too-many-values on every
+            # subscript once the lowering started attaching it.
+            container, key = args[0], args[1]
             container_type = self.types.get(container)
             if container_type == "str":
                 # PARITY_P2_V1: str[s] yields the one-character string.
@@ -2241,6 +2499,53 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_set_nth")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 _st = self._set_elem_kind(container) if hasattr(self, "_set_elem_kind") else "slot"
+                self.types[result] = "slot"
+                return
+            if container_type == "slot":
+                # MATCH_DYNAMIC_V1: contenedor slot (elemento anidado).
+                # Untag del payload y get_raw verbatim; el resultado
+                # hereda slot para print/compare por tag.
+                self._load_operand(container, "rax")
+                # Mismo idioma shl/shr que collection_len: AND imm64 no es
+                # encodable en x86-64.
+                self.lines.extend(["    shl rax, 3", "    shr rax, 3"])
+                self.lines.append("    mov rcx, rax")
+                self._load_operand(key, "rdx")
+                self.lines.append("    call piton_collection_get_raw")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "slot"
+                return
+            if container_type in (None, "int") and self._is_untyped_param_operand(container):
+                # MATCH_DYNAMIC_V1 (Windows): espejo del fallback get_item de
+                # linux_x86 -- el subject de `segun` es un parametro sin tipo
+                # cuyo valor real solo se conoce en runtime. Clave int ->
+                # peek de secuencia (piton_collection_get: decodifica
+                # INT/BOOL y devuelve el OBJECT verbatim taggeado); clave
+                # str -> peek de dict tagged (boxea la clave y busca por
+                # contenido, como dict.get). El resultado se tipa "slot"
+                # para que print/compare despachen por tag en runtime.
+                _key_t = self.types.get(key, "int")
+                if isinstance(key, str) and not key.startswith("%"):
+                    _key_t = "str"
+                if _key_t == "str":
+                    # OJO: _emit_box boxea via rcx y destruye el container;
+                    # se boxea primero a scratch y se recarga rcx despues
+                    # (mismo orden que el dict.get tagged de COLL_METHODS).
+                    self._emit_box(key, "str")
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    self._load_operand(container, "rcx")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    self.lines.append("    call piton_dict_get_tagged_1")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
+                    return
+                self._load_operand(container, "rcx")
+                self._load_operand(key, "rdx")
+                # VERBATIM: get_raw devuelve el item TAGGEADO tal cual esta
+                # en la coleccion (get decodificaba INT/BOOL a raw y el
+                # tipado "slot" era mentira para ints -> imprimia None).
+                self.lines.append("    call piton_collection_get_raw")
+                self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "slot"
                 return
             if container_type not in {"list", "tuple", "dict", "dict:module"}:
@@ -2398,6 +2703,52 @@ class Win64NasmEmitter:
                 # STR_LEN_V1: len('hola') is the C string length.
                 self._load_operand(collection, "rcx")
                 self.lines.append("    call piton_str_len")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+                return
+            if ctype is None or (ctype == "int" and self._is_untyped_param_operand(collection)):
+                # LEN_UNKNOWN_V1 / MATCH_DYNAMIC_V1: match/collection lowering
+                # calls len() on a parameter whose static type never resolved
+                # (el load lo tipa "int" por defecto). Linux emite
+                # `x ? ((PitonSeq*)x)->length : 0`; Windows lee
+                # PitonCollection.length (offset 24 = header 16 + kind 8)
+                # con el mismo null guard. Los tests de paridad siempre
+                # pasan una lista/tupla real en runtime, exactamente como
+                # el backend Linux.
+                self._load_operand(collection, "rax")
+                self.lines.append("    test rax, rax")
+                zero = self._internal_label("lenzero")
+                done = self._internal_label("lendone")
+                self.lines.append(f"    jz {zero}")
+                self.lines.append("    mov rax, qword [rax+24]")
+                self.lines.append(f"    jmp {done}")
+                self.lines.append(f"{zero}:")
+                self.lines.append("    xor eax, eax")
+                self.lines.append(f"{done}:")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "int"
+                return
+            if ctype == "slot":
+                # MATCH_DYNAMIC_V1: contenedor slot (elemento anidado de una
+                # coleccion dinamica, `caso [[a, b], [c, d]]`). El valor esta
+                # TAGGEADO: untag del payload (PAYLOAD_MASK = (1<<61)-1) y
+                # peek de PitonCollection.length (+24), igual que el camino
+                # de parametro sin tipo.
+                self._load_operand(collection, "rax")
+                # OJO: `and rax, 0x1FFF...` NO es encodable (AND r64 no
+                # tiene imm64; NASM trunca a dword con warning y el untag
+                # se vuelve no-op -> deref del puntero taggeado). Idioma
+                # shl/shr: (v << 3) >> 3 logico = v & (2^61 - 1).
+                self.lines.extend(["    shl rax, 3", "    shr rax, 3"])
+                self.lines.append("    test rax, rax")
+                zero = self._internal_label("lenzero")
+                done = self._internal_label("lendone")
+                self.lines.append(f"    jz {zero}")
+                self.lines.append("    mov rax, qword [rax+24]")
+                self.lines.append(f"    jmp {done}")
+                self.lines.append(f"{zero}:")
+                self.lines.append("    xor eax, eax")
+                self.lines.append(f"{done}:")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
                 return
@@ -2707,6 +3058,20 @@ class Win64NasmEmitter:
                     if not params:
                         raise NativeBuildError(f"bound method '{name}' has no native signature")
                     target = f"{resolved_method}__{name}"
+                    if target in self.static_methods:
+                        # STATICMETHOD_TEAROFF_V1: un staticmethod no liga self;
+                        # bound_method_new le restaria un arg al n_args y la
+                        # llamada con la aridad real explotaba con "bound
+                        # method called with wrong number of arguments". El
+                        # valor es la DIRECCION de la funcion (misma
+                        # convencion que el load de un nombre-funcion): el
+                        # branch is_code_addr de piton_closure_call_frame la
+                        # invoca con los args tal cual.
+                        self.lines.append(f"    lea rax, [{target}]")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "closure"
+                        self._function_temps.add(result)
+                        return
                     if self.function_frame_abi.get(target, False):
                         frame_size = ((8 + 32 + 15) // 16) * 16
                         self.lines.append(f"    sub rsp, {frame_size}")
@@ -2754,7 +3119,19 @@ class Win64NasmEmitter:
                 if owner_type == "object:module":
                     self.types[result] = module_attr_types.get(name, "int")
                 else:
-                    self.types[result] = "int"
+                    # CLASS_ATTR_TYPES_V1: el MIR replica los atributos de
+                    # clase en el marcador y en las instancias literales;
+                    # el tipo literal fluye aqui para que `imprimir(cls.attr)`
+                    # con attr str no imprima el puntero como int.
+                    _owner_cls = owner_type.split(":", 1)[1] if owner_type.startswith(("object:", "class:")) else None
+                    # INJECTED_ATTR_TYPES_V1: el attr inyectado en runtime
+                    # no esta en el dict de la clase; su tipo registrado en
+                    # el MIR manda antes del default "int".
+                    self.types[result] = (
+                        self.mir_module_class_attr_types.get(_owner_cls, {}).get(name)
+                        or self.mir_module_injected_attr_types.get(name)
+                        or "int"
+                    )
         elif op == "del_attr":
             owner, name = args
             owner_type = self.types.get(owner, "")
@@ -2801,7 +3178,84 @@ class Win64NasmEmitter:
                 # here, mirroring the Linux backend's table.
                 self._emit_collection_method(result, method_name, owner, list(raw_values), coll_type)
                 return
-            class_name = explicit_class or (owner_type.split(":", 1)[1] if owner_type.startswith("object:") else None)
+            class_name = explicit_class or (
+                owner_type.split(":", 1)[1]
+                if owner_type.startswith(("object:", "class:"))
+                else None
+            )
+            if class_name is None and (not owner_type or owner_type == "int"):
+                # DYNAMIC_RECEIVER_V1 (mirrors Linux): the receiver's static
+                # type never resolved (a decorated class instance, a bare
+                # parameter) -- INCLUIDO el default "int" (resultado de una
+                # llamada sin tipo inferible, como una instancia creada por
+                # un decorador de clase); linux_x86 despacha igual para todo
+                # receptor no-object: cadena runtime strcmp(class_name) sobre
+                # cada clase que declara el metodo; PitonObject.class_name
+                # vive en offset 16.
+                candidates = [
+                    c for c in self.classes
+                    if method_name in self.mir_module_classes.get(c, set())
+                ]
+                if not candidates:
+                    raise NativeBuildError("native method receiver class is not statically known")
+                miss = self._internal_label("recv_miss")
+                done = self._internal_label("recv_done")
+                # _internal_label genera un nombre UNICO por llamada: las
+                # labels por candidato se pre-computan para que el jz y la
+                # definicion coincidan.
+                cand_labels = [self._internal_label(f"recv_m{index}") for index in range(len(candidates))]
+                self._load_operand(owner, "rax")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jz {miss}")
+                self.lines.append("    mov rax, qword [rax+16]")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jz {miss}")
+                # strcmp is allowed to clobber every volatile register
+                # (including r11): park the class_name pointer first.
+                self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                for index, candidate in enumerate(candidates):
+                    self.lines.append(f"    lea rcx, [{self._string(candidate)}]")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    self.lines.append("    call strcmp")
+                    self.lines.append("    test eax, eax")
+                    self.lines.append(f"    jz {cand_labels[index]}")
+                self.lines.append(f"    jmp {miss}")
+                for index, candidate in enumerate(candidates):
+                    target = f"{candidate}__{method_name}"
+                    values = [owner, *raw_values]
+                    if target in self.static_methods:
+                        values = list(raw_values)
+                    self.lines.append(f"{cand_labels[index]}:")
+                    if self.function_frame_abi.get(target, False):
+                        frame_size = ((len(values) * 8 + 32 + 15) // 16) * 16
+                        self.lines.append(f"    sub rsp, {frame_size}")
+                        for slot_index, value in enumerate(values):
+                            self._load_operand(value, "r10")
+                            self.lines.append(f"    mov qword [rsp+32+{slot_index * 8}], r10")
+                        self.lines.extend([
+                            "    lea rcx, [" + target + "]", f"    mov edx, {len(values)}",
+                            "    lea r8, [rsp+32]", "    call piton_frame_call",
+                            f"    add rsp, {frame_size}",
+                        ])
+                    else:
+                        if len(values) > 4:
+                            raise NativeBuildError("native method calls support at most four total arguments")
+                        for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
+                            self._load_operand(value, register)
+                        self.lines.append(f"    call {target}")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.lines.append(f"    jmp {done}")
+                self.lines.append(f"{miss}:")
+                # No runtime class matched: deterministic zero instead of the
+                # uninitialized slot Linux leaves behind (parity tests never
+                # reach this branch).
+                self.lines.append("    xor eax, eax")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.lines.append(f"{done}:")
+                self.types[result] = self.function_return_types.get(
+                    f"{candidates[0]}__{method_name}", "int"
+                )
+                return
             if not class_name:
                 raise NativeBuildError("native method receiver class is not statically known")
             # Resolve method through MRO (C3), fallback to parent chain
@@ -2821,8 +3275,19 @@ class Win64NasmEmitter:
                 raise NativeBuildError(
                     f"native property '{method_name}' of '{class_name}' object is not a method (calling a property is unsupported)"
                 )
-            values = [owner, *raw_values]
             target = f"{resolved_class}__{method_name}"
+            # WITH_NONE_PRINT_V1: los args None de __exit__/__aexit__ viajan
+            # como la literal "None" (ver _load_operand).
+            if method_name in {"__exit__", "__aexit__"}:
+                raw_values = tuple(
+                    "@with_none_str" if self.types.get(v) == "none" else v
+                    for v in raw_values
+                )
+            values = [owner, *raw_values]
+            if target in self.static_methods:
+                # STATICMETHOD_V1: a static method takes no receiver; Linux
+                # passes only the call arguments.
+                values = list(raw_values)
             if self.function_frame_abi.get(target, False):
                 frame_size = ((len(values) * 8 + 32 + 15) // 16) * 16
                 self.lines.append(f"    sub rsp, {frame_size}")
@@ -2986,7 +3451,16 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_raise_chain")
                 self._emit_propagate_or_exit()
         elif op == "raise_typed":
-            exception_type, payload, handler_label = args
+            exception_type, payload, handler_label = args[0], args[1], args[2]
+            # EXC_ARGS_MULTI_V1: 4th operand is the multi-arg tuple (lanzar
+            # E('a','b')). The Windows runtime (native_runtime.c) has no
+            # piton_raise_set_args helper, so multi-arg raises fail closed
+            # here instead of silently dropping .args.
+            if len(args) > 3 and args[3] is not None:
+                raise NativeBuildError(
+                    "native multi-arg raise is Linux-only right now "
+                    "(Windows runtime lacks piton_raise_set_args); use a single message"
+                )
             self.lines.append(f"    lea rcx, [{self._string(exception_type)}]")
             if payload is None:
                 self.lines.append("    xor edx, edx")
@@ -3120,6 +3594,16 @@ class Win64NasmEmitter:
                             f"native print of a {value_type} value is not supported "
                             "(can never match CPython output)"
                         )
+                    # MATCH_PRINT_AUTO_V1: un parametro sin tipo estatico
+                    # se discrimina en runtime (int crudo / double bits /
+                    # char* / cabecera de coleccion); antes caia al %lld
+                    # por defecto e imprimia el puntero de un str o de una
+                    # lista. Para int/bool/0 el auto imprime exactamente lo
+                    # mismo que antes (cero regresion).
+                    if self._is_untyped_param_operand(value):
+                        self._load_operand(value, "rcx")
+                        self.lines.append("    call piton_print_auto_raw")
+                        continue
                     # SPECIAL_METHOD_LOOKUP_V1: print(obj) despacha a __str__
                     # cuando existe (MRO); el método devuelve una str.
                     if str(value_type).startswith("object:"):
@@ -3743,6 +4227,28 @@ class Win64NasmEmitter:
             elif function_name in {"getattr", "obtener_atr"}:
                 if len(values) not in {2, 3}:
                     raise NativeBuildError("getattr requires 2 or 3 arguments")
+                # GETATTR_CATCHABLE_V1 (Windows): piton_getattr del runtime
+                # hace raise_unhandled (stderr + exit) y NUNCA enruta al
+                # handler del `intentar`, mientras linux_x86.py:1030 levanta
+                # catchable. Espejo solo donde hace falta: con handler activo
+                # se comprueba presencia y el AttributeError se emite
+                # enrutable; sin handler se conserva el fail-closed actual.
+                if len(values) == 2 and call_handler:
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self.lines.append("    call piton_hasattr")
+                    present_label = self._internal_label("getattr_present")
+                    self.lines.extend([
+                        "    test rax, rax",
+                        f"    jne {present_label}",
+                        f"    lea rcx, [{self._string('AttributeError')}]",
+                        f"    lea rdx, [{self._string('object has no attribute')}]",
+                        "    call piton_raise",
+                        "    call piton_catch_flag",
+                        "    test rax, rax",
+                        f"    jne {labels.get(call_handler, call_handler)}",
+                        f"{present_label}:",
+                    ])
                 self._load_operand(values[0], "rcx")
                 self._load_operand(values[1], "rdx")
                 if len(values) == 3:
@@ -3761,54 +4267,73 @@ class Win64NasmEmitter:
                 self._load_operand(values[1], "rdx")
                 self._load_operand(values[2], "r8")
                 self.lines.append("    call piton_setattr")
-                self.lines.append(f"    mov qword ptr {self._address(result)}, 0")
+                # NASM has no MASM `ptr` keyword: `qword ptr [x]` assembled
+                # as "symbol `ptr' not defined" on every class/introspection
+                # program (WIN64_PTR_V1).
+                self.lines.append(f"    mov qword {self._address(result)}, 0")
                 self.types[result] = "none"
             elif function_name in {"isinstance", "es_instancia"}:
                 if len(values) != 2:
                     raise NativeBuildError("isinstance requires 2 arguments")
-                obj_val = values[0]
-                target_val = values[1]
-                target_name = self.aliases.get(target_val, target_val)
-                obj_type = self.types.get(obj_val, "int")
-                t_items = self._tuple_elems.get(target_val) or self._tuple_elems.get(self.aliases.get(target_val, target_val))
-                target_names = [item[0] if isinstance(item, tuple) else item for item in t_items] if t_items is not None else [target_name]
-                matched = False
-                for tname in target_names:
-                    tclean = self.aliases.get(tname, tname)
-                    if tclean in {"object", "objeto"}:
-                        matched = True
-                        break
-                    elif tclean in {"int", "entero"} and obj_type in {"int", "bool"}:
-                        matched = True
-                        break
-                    elif tclean in {"bool", "booleano"} and obj_type == "bool":
-                        matched = True
-                        break
-                    elif tclean in {"float", "decimal", "flotante"} and obj_type == "float":
-                        matched = True
-                        break
-                    elif tclean in {"str", "texto"} and obj_type == "str":
-                        matched = True
-                        break
-                    elif tclean in {"list", "lista"} and obj_type == "list":
-                        matched = True
-                        break
-                    elif tclean in {"tuple", "tupla"} and obj_type == "tuple":
-                        matched = True
-                        break
-                    elif tclean in {"dict", "diccionario"} and obj_type == "dict":
-                        matched = True
-                        break
-                    elif tclean in {"set", "conjunto"} and obj_type == "set":
-                        matched = True
-                        break
-                    elif tclean in self.classes and obj_type.startswith("object:"):
-                        cls_name = obj_type.split(":", 1)[1]
-                        mro = self.class_mro.get(cls_name, [cls_name])
-                        if tclean in mro:
-                            matched = True
-                            break
-                if matched:
+                # MATCH_DYNAMIC_V1: subject sin tipo estatico. Contra una
+                # CLASE de usuario se resuelve en runtime con
+                # piton_isinstance_class (el PitonObject se autodescribe por
+                # class_name; espejo de la rama dinamica de linux).
+                # Contra un tipo builtin NO hay forma honesta: los valores
+                # crudos del subset Windows no llevan tag (42 es raw 42,
+                # 'hola' es char*, [1,2] es puntero) y detectar el kind en
+                # runtime seria adivinar -> fallo cerrado, nunca aproximacion
+                # silenciosa (isinstance('hola', int) respondia True).
+                _target_alias = self.aliases.get(values[1], values[1])
+                if self._is_untyped_param_operand(values[0]):
+                    # MATCH_TYPE_DYNAMIC_V1: contra un tipo builtin el kind
+                    # del valor crudo se discrimina EN RUNTIME con
+                    # piton_isinstance_dynamic (double bits / sub_tag de
+                    # cabecera / string imprimible / fallback int), espejo
+                    # exacto de la heuristica linux. Reemplaza el
+                    # fail-closed anterior: el backend hermano ya resuelve
+                    # estos casos y la paridad se juzga contra CPython.
+                    _dyn_kinds = {
+                        "int": 2, "entero": 2,
+                        "bool": 1, "booleano": 1,
+                        "float": 3, "decimal": 3, "flotante": 3,
+                        "str": 4, "texto": 4,
+                        "list": 5, "lista": 5,
+                        "tuple": 6, "tupla": 6,
+                        "dict": 7, "diccionario": 7,
+                        "set": 8, "conjunto": 8,
+                        "range": 11, "rango": 11,
+                    }
+                    if _target_alias in _dyn_kinds:
+                        self._load_operand(values[0], "rcx")
+                        self.lines.append(f"    mov edx, {_dyn_kinds[_target_alias]}")
+                        self.lines.append("    call piton_isinstance_dynamic")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "bool"
+                        return
+                    if _target_alias in {"object", "objeto"}:
+                        # Espejo de linux: isinstance(x, object) es True
+                        # siempre, sin tocar el valor.
+                        self.lines.append(f"    mov {self._address(result)}, 1")
+                        self.types[result] = "bool"
+                        return
+                    if _target_alias in self.classes:
+                        self._load_operand(values[0], "rcx")
+                        self.lines.append(f"    lea rdx, [{self._string(_target_alias)}]")
+                        self.lines.append("    call piton_isinstance_class")
+                        self.lines.append(f"    mov {self._address(result)}, rax")
+                        self.types[result] = "bool"
+                        return
+                    # bytes/bytearray/complex no existen en el backend
+                    # Windows (p16 se salta en win32): sin objeto que
+                    # discriminar, se sigue fail-closed.
+                    raise NativeBuildError(
+                        f"native isinstance of an untyped parameter against '{_target_alias}' "
+                        "is not supported by this backend (fail closed)"
+                    )
+                # TUPLE_ELEMS_ISINSTANCE_V1: la tupla de tipos es una
+                # disyuncion (anidada incluida); ver _isinstance_matches.
+                if self._isinstance_matches(values[0], self.types.get(values[0], "int"), values[1]):
                     self.lines.append("    mov rax, 1")
                 else:
                     self.lines.append("    xor rax, rax")
@@ -3817,38 +4342,9 @@ class Win64NasmEmitter:
             elif function_name in {"issubclass", "es_subclase"}:
                 if len(values) != 2:
                     raise NativeBuildError("issubclass requires 2 arguments")
-                c1 = self.aliases.get(values[0], values[0])
-                t_items = self._tuple_elems.get(values[1]) or self._tuple_elems.get(self.aliases.get(values[1], values[1]))
-                target_names = [item[0] if isinstance(item, tuple) else item for item in t_items] if t_items is not None else [self.aliases.get(values[1], values[1])]
-                type_norm = {
-                    "int": "int", "entero": "int",
-                    "bool": "bool", "booleano": "bool",
-                    "float": "float", "flotante": "float", "decimal": "float",
-                    "str": "str", "texto": "str",
-                    "list": "list", "lista": "list",
-                    "tuple": "tuple", "tupla": "tuple",
-                    "dict": "dict", "diccionario": "dict",
-                    "set": "set", "conjunto": "set",
-                    "range": "range", "rango": "range",
-                    "object": "object", "objeto": "object",
-                }
-                c1_norm = type_norm.get(c1, c1)
-                matched = False
-                for c2 in target_names:
-                    c2_clean = self.aliases.get(c2, c2)
-                    c2_norm = type_norm.get(c2_clean, c2_clean)
-                    if c2_norm == "object" or c1_norm == c2_norm:
-                        matched = True
-                        break
-                    if c1_norm == "bool" and c2_norm == "int":
-                        matched = True
-                        break
-                    if c1 in self.classes and c2_clean in self.classes:
-                        mro = self.class_mro.get(c1, [c1])
-                        if c2_clean in mro:
-                            matched = True
-                            break
-                if matched:
+                # TUPLE_ELEMS_ISINSTANCE_V1: disyuncion recursiva
+                # (anidada incluida); ver _issubclass_matches.
+                if self._issubclass_matches(values[0], values[1]):
                     self.lines.append("    mov rax, 1")
                 else:
                     self.lines.append("    xor rax, rax")
@@ -3941,13 +4437,71 @@ class Win64NasmEmitter:
                             for index, value in enumerate(values):
                                 self._load_operand(value, "r10")
                                 self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
-                            self.lines.extend([
-                                f"    mov rcx, {self._address(function_operand)}",
-                                f"    mov edx, {argc}",
-                                "    lea r8, [rsp+32]",
-                                "    call piton_closure_call_frame",
-                                f"    add rsp, {frame_size}",
-                            ])
+                            # CLASS_CALLEE_DYNAMIC_V1 (mirrors linux): llamar un
+                            # VALOR-CLASE (el `cls()` de un decorador de clase)
+                            # es instanciarlo. El piton_closure_call_frame de
+                            # Linux lleva el branch PK_OBJECT; el de Windows no
+                            # (archivo de otra sesion), asi que el emitter
+                            # discrimina aqui: qword[0]==PITON_CLOSURE_MAGIC
+                            # (0x5049544EC10557) -> closure normal; byte[0]
+                            # ==SUB_TAG_OBJECT (11) -> clase: object_new con
+                            # su class_name (PitonObject.class_name, offset
+                            # 16). Solo el caso 0-arg instancia (con args
+                            # sigue el camino normal y falla loud).
+                            _cls_ok = self._internal_label("clscall_ok")
+                            _cls_done = self._internal_label("clscall_done")
+                            self.lines.append(f"    mov rcx, {self._address(function_operand)}")
+                            self.lines.append("    test rcx, rcx")
+                            self.lines.append(f"    jz {_cls_ok}")
+                            self.lines.append("    mov rax, [rcx]")
+                            self.lines.append("    cmp rax, 0x5049544EC10557")
+                            self.lines.append(f"    je {_cls_ok}")
+                            if argc == 0:
+                                self.lines.append("    cmp byte [rcx], 11")
+                                self.lines.append(f"    jne {_cls_ok}")
+                                # el marcador se parquea en @scratch0: el call
+                                # clobbera TODOS los caller-saved (r11 incl.)
+                                self.lines.append(f"    mov {self._address('@scratch0')}, rcx")
+                                self.lines.append("    mov rcx, [rcx+16]")
+                                self.lines.append("    call piton_object_new")
+                                self.lines.append(f"    mov r11, {self._address('@scratch0')}")
+                                # Copiar los atributos del marcador a la
+                                # instancia: el set_attr de la definicion de
+                                # clase los dejo en el objeto-clase, y el MIR
+                                # los replica estaticamente solo en las
+                                # instancias literales; este camino dinamico
+                                # no conoce la clase en compile time.
+                                # PitonObject: length +32, attributes[16]
+                                # inline desde +40 (PitonAttribute 16B).
+                                self.lines.append("    mov rdx, [r11+32]")
+                                self.lines.append("    test rdx, rdx")
+                                self.lines.append(f"    jz {_cls_done}")
+                                self.lines.append("    mov [rax+32], rdx")
+                                self.lines.append("    shl rdx, 4")
+                                self.lines.append("    xor r8d, r8d")
+                                _cpy = self._internal_label("clscall_copy")
+                                self.lines.append(f"{_cpy}:")
+                                self.lines.append("    mov r9, [r11+r8+40]")
+                                self.lines.append("    mov r10, [r11+r8+48]")
+                                self.lines.append("    mov [rax+r8+40], r9")
+                                self.lines.append("    mov [rax+r8+48], r10")
+                                self.lines.append("    add r8, 16")
+                                self.lines.append("    cmp r8, rdx")
+                                self.lines.append(f"    jl {_cpy}")
+                                self.lines.append(f"    jmp {_cls_done}")
+                                self.lines.append(f"{_cls_ok}:")
+                                self.lines.append(f"    mov rcx, {self._address(function_operand)}")
+                                self.lines.append(f"    mov edx, {argc}")
+                                self.lines.append("    lea r8, [rsp+32]")
+                                self.lines.append("    call piton_closure_call_frame")
+                                self.lines.append(f"{_cls_done}:")
+                            else:
+                                self.lines.append(f"{_cls_ok}:")
+                                self.lines.append(f"    mov rcx, {self._address(function_operand)}")
+                                self.lines.append(f"    mov edx, {argc}")
+                                self.lines.append("    lea r8, [rsp+32]")
+                                self.lines.append("    call piton_closure_call_frame")
+                            self.lines.append(f"    add rsp, {frame_size}")
             # CALL_PROPAGATE_V1: every user-code call above is a potential raise
             # site. Route the flag to the handler, or propagate/exit when the
             # MIR attached none. piton_catch_flag CLOBBERS rax, so the call
@@ -4390,6 +4944,9 @@ class Win64NasmEmitter:
         by_name = {function.name: function for function in module.functions}
         memo: dict[str, str | None] = {}
         resolving: set[str] = set()
+        # CLOSURE_CALL_INFER_V1: alias-de-variable -> retorno resuelto de la
+        # closure que sostiene (se vuelca a la tabla final).
+        call_through: dict[str, str] = {}
 
         def literal_type(value) -> str:
             if value is None:
@@ -4453,6 +5010,11 @@ class Win64NasmEmitter:
                             return literal_type(origin[1])
                         if origin[0] in {"kind", "object"}:
                             return origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
+                        if origin[0] == "closure":
+                            # CLOSURE_RETURNTYPE_V1: el valor ES una closure
+                            # sobre el simbolo; fluye como tipo de primer
+                            # orden para que la cadena resuelva en infer().
+                            return ("closure", origin[1])
                         if origin[0] == "var":
                             return single(origin[1])
                         if origin[0] == "call":
@@ -4477,12 +5039,58 @@ class Win64NasmEmitter:
                             elif op in {"load", "cell_load"} and result and iargs:
                                 load_src[result] = iargs[0]
                                 origins[result] = ("var", iargs[0])
+                            elif op == "closure_new" and result:
+                                # CLOSURE_RETURNTYPE_V1: el valor es una
+                                # closure sobre el simbolo lifted de args[0];
+                                # la cadena de decoradores se resuelve a traves
+                                # de infer() (memoizada, ciclos -> None).
+                                origins[result] = ("closure", iargs[0])
+                            elif op == "get_attr" and result:
+                                # CLASS_ATTR_TYPES_V1: el retorno de un metodo
+                                # que hace `devolver self.attr` con attr de clase
+                                # literal resuelve su tipo; sin esto
+                                # `imprimir(s.get_info())` tipaba el str como
+                                # int y en el print salia el puntero.
+                                _owner = operand_type(iargs[0]) if isinstance(iargs[0], str) else None
+                                if (
+                                    isinstance(_owner, str)
+                                    and _owner.startswith("object:")
+                                ):
+                                    _t = self.mir_module_class_attr_types.get(
+                                        _owner.split(":", 1)[1], {}
+                                    ).get(iargs[1]) or self.mir_module_injected_attr_types.get(iargs[1])
+                                    origins[result] = ("kind", _t) if _t else ("opaque", None)
+                                else:
+                                    origins[result] = ("opaque", None)
                             elif op == "call" and result:
                                 callee = load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
                                 if isinstance(callee, str) and callee in by_name and callee not in function.params:
                                     origins[result] = ("call", callee)
                                 else:
-                                    origins[result] = ("opaque", None)
+                                    # CLOSURE_CALL_INFER_V1: el callee es un
+                                    # temp que sostiene una closure (directa,
+                                    # via variable, o via retorno de otra
+                                    # llamada). Se resuelve su TIPO y si es
+                                    # ("closure", F) esta llamada invoca F.
+                                    _ct = operand_type(iargs[0]) if isinstance(iargs[0], str) else None
+                                    if isinstance(_ct, tuple) and _ct[0] == "closure":
+                                        origins[result] = ("call", _ct[1])
+                                        # El emitter tipa `call %alias` con
+                                        # function_return_types[alias]; para
+                                        # una VARIABLE que sostiene la
+                                        # closure se registra el retorno
+                                        # RESUELTO del target (la unica
+                                        # forma de que `imprimir(greet(x))`
+                                        # no imprima un puntero como int).
+                                        _alias = load_src.get(iargs[0])
+                                        if isinstance(_alias, str) and _alias not in by_name:
+                                            _r = infer(_ct[1])
+                                            while isinstance(_r, tuple) and _r[0] == "closure":
+                                                _r = infer(_r[1])
+                                            if isinstance(_r, str) and _r != self._UNKNOWN:
+                                                call_through[_alias] = _r
+                                    else:
+                                        origins[result] = ("opaque", None)
                             elif op == "method_call" and result:
                                 # METHODTYPE_V1: resolve to the defining method
                                 # (MRO) so its return type flows to the caller.
@@ -4498,8 +5106,15 @@ class Win64NasmEmitter:
                                 origins[result] = ("call", _target) if _target and _target in by_name else ("opaque", None)
                             elif op == "binary" and result:
                                 # METHODTYPE_V1: `'B' + <str>` stays str.
+                                # STR_PLUS_UNKNOWN_V1: el EMITTER concatena en
+                                # cuanto UN lado es str (regla de linux), asi
+                                # que la inferencia debe seguir la misma regla
+                                # -- con ambos-lados-str el retorno del
+                                # wrapper decorador (`"<"+t+">"+fn(s)+...) se
+                                # quedaba opaque y el caller imprimia el
+                                # puntero como int.
                                 _bop, _l, _r = iargs[0], iargs[1], iargs[2]
-                                if _bop == "+" and operand_type(_l) == "str" and operand_type(_r) == "str":
+                                if _bop == "+" and "str" in {operand_type(_l), operand_type(_r)}:
                                     origins[result] = ("kind", "str")
                                 else:
                                     origins[result] = ("opaque", None)
@@ -4558,7 +5173,18 @@ class Win64NasmEmitter:
         resolved: dict[str, str] = {}
         for function in module.functions:
             inferred = infer(function.name)
+            # CLOSURE_RETURNTYPE_V1: un retorno que ES una closure (tupla)
+            # no entra a la tabla de tipos de retorno como tal -- el emitter
+            # tipa los resultados de llamada con strings; una closure
+            # directa conserva el historico "int" (imprimir(tag("b")) sigue
+            # siendo fail-closed por PRINT_UNPRINTABLE).
+            if isinstance(inferred, tuple):
+                inferred = None
             resolved[function.name] = inferred if inferred else "int"
+        # Las variables que sostienen closures (greet tras @tag) heredan el
+        # retorno RESUELTO del target: el emitter consulta exactamente esta
+        # tabla al tipar `call <alias>`.
+        resolved.update(call_through)
         return resolved
 
 
@@ -5084,7 +5710,26 @@ class Win64NasmEmitter:
             self._load_operand(left, "rdx")
             self.lines.append("    call piton_range_contains")
         else:
-            raise NativeBuildError(f"native 'in' is not supported on {haystack_type}")
+            # CONTAINS_UNKNOWN_V1 (mirrors Linux): an unresolved haystack
+            # (a bare parameter — the `segun` dict/sequence pattern lowering
+            # hits this) dispatches by NEEDLE exactly like the Linux
+            # backend: str needle -> dict membership through the tagged
+            # helper, int/bool needle -> seq membership with a raw-int tag.
+            # The runtime shape the parity tests pass is a real dict/list,
+            # the same contract Linux already relies on.
+            if needle_type == "str":
+                self._emit_box(left, "str")
+                self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                self.lines.append(f"    mov rcx, {self._address(right)}")
+                self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                self.lines.append("    call piton_dict_contains_tagged")
+            elif needle_type in {"int", "bool"}:
+                self._load_operand(right, "rcx")
+                self._load_operand(left, "rdx")
+                self.lines.append("    xor r8d, r8d")
+                self.lines.append("    call piton_seq_contains")
+            else:
+                raise NativeBuildError(f"native 'in' is not supported on {haystack_type}")
         if negate:
             self.lines.append("    xor eax, 1")
         self.lines.append(f"    mov {self._address(result)}, rax")
@@ -5444,6 +6089,81 @@ class Win64NasmEmitter:
         else:
             raise NativeBuildError(f"native str.format() does not support {arg_type} arguments")
 
+    def _prescan_slot_captures(self, function: MIRFunction) -> set[str]:
+        """MATCH_DYNAMIC_V1: el cuerpo de un `caso` se EMITE antes que el
+        bloque que almacena la captura (el orden de bloques del MIR no es el
+        orden de runtime), asi que el load de la captura ve la variable sin
+        tipo y el print usaba fmt_int (imprimia los bits taggeados).
+        Pre-escanea la funcion completa: get_item sobre el load de un
+        PARAMETRO produce slot; store de ese slot a un nombre marca el
+        nombre como slot para TODA la funcion."""
+        load_names: dict[str, str] = {}
+        for block in function.blocks:
+            for ins in block.instructions:
+                if ins.op == "load" and ins.result and isinstance(ins.args[0], str):
+                    load_names[ins.result] = ins.args[0]
+        slot_srcs: set[str] = set()
+        params = list(function.params or [])
+        # Cierre transitivo: get_item sobre un load de un PARAMETRO produce
+        # slot; get_item sobre OTRO slot-src tambien (patrones anidados
+        # `caso [[a, b], [c, d]]`).
+        changed = True
+        while changed:
+            changed = False
+            for block in function.blocks:
+                for ins in block.instructions:
+                    if (
+                        ins.op == "get_item"
+                        and ins.result
+                        and ins.result not in slot_srcs
+                        and isinstance(ins.args[0], str)
+                        and (
+                            (
+                                ins.args[0] in load_names
+                                and load_names[ins.args[0]] in params
+                            )
+                            or ins.args[0] in slot_srcs
+                        )
+                    ):
+                        slot_srcs.add(ins.result)
+                        changed = True
+        names: set[str] = set()
+        for block in function.blocks:
+            for ins in block.instructions:
+                if (
+                    ins.op == "store"
+                    and len(ins.args) >= 2
+                    and isinstance(ins.args[0], str)
+                    and ins.args[1] in slot_srcs
+                ):
+                    names.add(ins.args[0])
+        return names
+
+    def _is_untyped_param_operand(self, operand: Any) -> bool:
+        """MATCH_DYNAMIC_V1 (Windows): True si el operando resuelve, via
+        aliases, a un parametro de la funcion actual SIN tipo estatico --
+        el subject de `segun`, cuyo tipo real solo se conoce en runtime.
+        Distingue de un literal int (const), que debe seguir fail-closed.
+        (Espejo de la condicion linux: alli `types.get(x)` devuelve None
+        para estos casos; aqui el load por defecto tipa "int".)"""
+        if not isinstance(operand, str):
+            return False
+        name = self.aliases.get(operand, operand)
+        params = getattr(self.function, "params", None) or []
+        return name in params and self.types.get(name) is None
+
+    def _dict_owner_is_tagged(self, owner: Any) -> bool:
+        """DICT_POP_SETDEFAULT_STR_V1: True cuando el dict guarda claves
+        taggeadas (str/float), el caso que los helpers int-only del runtime
+        no pueden atender."""
+        _src = self.aliases.get(owner, owner) if isinstance(owner, str) else owner
+        return (
+            owner in self._tagged_dicts
+            or _src in self._tagged_dicts
+            or self._dict_key_types.get(owner) not in {None, "int", "bool"}
+            or self._dict_key_types.get(_src) not in {None, "int", "bool"}
+        )
+
     def _emit_collection_method(self, result: Any, method: str, owner: Any,
                                   call_args: list[Any], coll_type: str) -> None:
         """COLL_METHODS_V1: builtin collection methods bound by static dispatch.
@@ -5503,14 +6223,35 @@ class Win64NasmEmitter:
                 self.types[result] = "none"
             elif method == "index":
                 require_count((1,), "exactly one argument")
-                self._load_operand(call_args[0], "rdx")
-                self.lines.append("    xor r8d, r8d")
+                # SEQ_INDEX_STR_V1: una lista/tupla de str guarda PitonStr
+                # boxeados (OBJECT); con type_tag=0 el needle se comparaba
+                # como INT crudo y `['hola','mundo'].index('mundo')` nunca
+                # encontraba (ValueError falso). Se boxea el needle y se
+                # pasa tag=1, que es lo que piton_value_eq_raw sabe comparar.
+                _needle = call_args[0]
+                _needle_str = (
+                    self.types.get(_needle, "int") == "str"
+                    or (isinstance(_needle, str) and not _needle.startswith("%"))
+                )
+                if _needle_str:
+                    # OJO: _emit_collection_method ya dejo el receptor en rcx
+                    # (linea 5696); piton_str_box lo destruye, asi que se
+                    # recarga despues de boxear.
+                    self._load_operand(_needle, "rcx")
+                    self.lines.append("    call piton_str_box")
+                    self._load_operand(owner, "rcx")
+                    self.lines.append("    mov rdx, rax")
+                    self.lines.append("    mov r8d, 1")
+                else:
+                    self._load_operand(_needle, "rdx")
+                    self.lines.append("    xor r8d, r8d")
                 self.lines.append("    call piton_seq_index")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
             elif method == "clear":
                 require_count((0,), "no arguments")
                 self.lines.append("    call piton_seq_clear")
+                self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "none"
             elif method == "copy":
                 require_count((0,), "no arguments")
@@ -5529,8 +6270,25 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
             elif method == "index":
                 require_count((1,), "exactly one argument")
-                self._load_operand(call_args[0], "rdx")
-                self.lines.append("    xor r8d, r8d")
+                # SEQ_INDEX_STR_V1: mismo motivo que list.index -- el needle
+                # str se boxea para comparar contra el PitonStr boxeado.
+                _needle = call_args[0]
+                _needle_str = (
+                    self.types.get(_needle, "int") == "str"
+                    or (isinstance(_needle, str) and not _needle.startswith("%"))
+                )
+                if _needle_str:
+                    # OJO: _emit_collection_method ya dejo el receptor en rcx
+                    # (linea 5696); piton_str_box lo destruye, asi que se
+                    # recarga despues de boxear.
+                    self._load_operand(_needle, "rcx")
+                    self.lines.append("    call piton_str_box")
+                    self._load_operand(owner, "rcx")
+                    self.lines.append("    mov rdx, rax")
+                    self.lines.append("    mov r8d, 1")
+                else:
+                    self._load_operand(_needle, "rdx")
+                    self.lines.append("    xor r8d, r8d")
                 self.lines.append("    call piton_seq_index")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "int"
@@ -5572,6 +6330,32 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
             elif method == "pop":
                 require_count((1, 2), "one or two arguments (key[, default])")
+                # DICT_POP_SETDEFAULT_STR_V1: con claves str (dict tagged) se
+                # boxea la clave y se usa la variante tagged del runtime, que
+                # compara por contenido (piton_dict_pop fuerza pv_int y daba
+                # KeyError falso). El default no-str va raw; str se boxea.
+                if self._dict_owner_is_tagged(owner):
+                    _kt = "str" if (isinstance(call_args[0], str) and not call_args[0].startswith("%")) else self.types.get(call_args[0], "int")
+                    self._emit_box(call_args[0], _kt)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    if len(call_args) == 2:
+                        # El default SIEMPRE boxeado: los valores del dict
+                        # tagged viajan taggeados y el resultado se tipa
+                        # slot (uniforme con dict.get, que boxea igual).
+                        _dt = "str" if (isinstance(call_args[1], str) and not call_args[1].startswith("%")) else self.types.get(call_args[1], "int")
+                        self._emit_box(call_args[1], _dt)
+                        self.lines.append(f"    mov {self._address('@scratch1')}, rax")
+                        self.lines.append("    mov r8, 1")
+                        self.lines.append(f"    mov r9, {self._address('@scratch1')}")
+                    else:
+                        self.lines.append("    mov r8, 0")
+                        self.lines.append("    xor r9, r9")
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    self.lines.append("    call piton_dict_pop_tagged")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
+                    return
                 self._load_operand(call_args[0], "rdx")
                 if len(call_args) == 2:
                     self.lines.append("    mov r8, 1")
@@ -5584,6 +6368,23 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
             elif method == "setdefault":
                 require_count((1, 2), "one or two arguments (key[, default])")
+                # DICT_POP_SETDEFAULT_STR_V1: mismo tratamiento que pop.
+                if self._dict_owner_is_tagged(owner):
+                    _kt = "str" if (isinstance(call_args[0], str) and not call_args[0].startswith("%")) else self.types.get(call_args[0], "int")
+                    self._emit_box(call_args[0], _kt)
+                    self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+                    if len(call_args) == 2:
+                        _dt = "str" if (isinstance(call_args[1], str) and not call_args[1].startswith("%")) else self.types.get(call_args[1], "int")
+                        self._emit_box(call_args[1], _dt)
+                        self.lines.append("    mov r8, rax")
+                    else:
+                        self.lines.append("    xor r8, r8")
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                    self.lines.append("    call piton_dict_setdefault_tagged")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
+                    return
                 self._load_operand(call_args[0], "rdx")
                 if len(call_args) == 2:
                     self._load_operand(call_args[1], "r8")
@@ -5598,6 +6399,26 @@ class Win64NasmEmitter:
                 self.types[result] = "none"
             elif method == "copy":
                 require_count((0,), "no arguments")
+                # DICT_COPY_METADATA_V1: la copia es un dict nuevo; sin
+                # propagar la metadata del fuente (tagged/plain/key-val
+                # types/elems/strkey) `c.get(k)` tomaba el camino int y
+                # fallaba con KeyError falso sobre claves str.
+                _src = self.aliases.get(owner, owner)
+                if owner in self._tagged_dicts or _src in self._tagged_dicts:
+                    self._tagged_dicts.add(result)
+                if owner in self._plain_int_dicts or _src in self._plain_int_dicts:
+                    self._plain_int_dicts.add(result)
+                if owner in self.strkey_dict_temps or _src in self.strkey_dict_temps:
+                    self.strkey_dict_temps.add(result)
+                for _dmap in (self._dict_key_types, self._dict_val_types):
+                    for _cand in (owner, _src):
+                        if _cand in _dmap:
+                            _dmap[result] = _dmap[_cand]
+                            break
+                for _cand in (owner, _src):
+                    if _cand in self.dict_elems:
+                        self.dict_elems[result] = self.dict_elems[_cand]
+                        break
                 self.lines.append("    call piton_dict_copy")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "dict"
@@ -6071,10 +6892,10 @@ def compile_native(source: str, output: str | Path) -> Path:
     for statement in hir.body:
         if getattr(statement, "kind", None) == HIRKind.IMPORT_FROM:
             mod_name = getattr(statement, "module", None)
-            if mod_name and mod_name not in {"asyncio", "math", "sys"}:
+            if mod_name and mod_name not in {"asyncio", "math", "sys", "terminal"}:
                 raise NativeBuildError(f"native from-import requires multi-file compilation: {mod_name}")
             for alias in getattr(statement, "names", []):
-                if mod_name in {"asyncio", "math", "sys"}:
+                if mod_name in {"asyncio", "math", "sys", "terminal"}:
                     from_imports[(mod_name, alias.asname or alias.name)] = True
     try:
         mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
@@ -6162,7 +6983,7 @@ def _scan_native_modules(
         parts = dotted.split(".")
         for length in range(1, len(parts) + 1):
             prefix = ".".join(parts[:length])
-            if prefix in modules or prefix in {"asyncio", "math", "sys"}:
+            if prefix in modules or prefix in {"asyncio", "math", "sys", "terminal"}:
                 continue
             path = resolve_native_module(root, prefix)
             register(prefix, path, path.name == "__init__.piton")
@@ -6178,7 +6999,7 @@ def _scan_native_modules(
         for statement in hir.body:
             if statement.kind.name == "IMPORT":
                 for alias in statement.names:
-                    if alias.name in {"asyncio", "math", "sys"}:
+                    if alias.name in {"asyncio", "math", "sys", "terminal"}:
                         continue
                     register_chain(alias.name)
             elif statement.kind.name == "IMPORT_FROM":
@@ -6213,7 +7034,7 @@ def _scan_native_modules(
                     else:
                         register_chain(f"{base}.{mod_name}")
                 else:
-                    if not mod_name or mod_name in {"asyncio", "math", "sys"}:
+                    if not mod_name or mod_name in {"asyncio", "math", "sys", "terminal"}:
                         continue
                     register_chain(mod_name)
                     if not is_entry(package):
@@ -6286,7 +7107,7 @@ def _scan_native_modules(
             return
         for length in range(1, len(target.split(".")) + 1):
             simulate_execute(".".join(target.split(".")[:length]))
-        if target in {"asyncio", "math", "sys"}:
+        if target in {"asyncio", "math", "sys", "terminal"}:
             for alias in statement.names:
                 names.add(alias.asname or alias.name)
             return
@@ -6310,7 +7131,7 @@ def _scan_native_modules(
             names.add(alias.asname or alias.name)
 
     def simulate_execute(dotted: str) -> None:
-        if dotted in states or dotted in {"asyncio", "math", "sys"}:
+        if dotted in states or dotted in {"asyncio", "math", "sys", "terminal"}:
             return
         states[dotted] = "IN_PROGRESS"
         hir = modules[dotted]
@@ -6323,7 +7144,7 @@ def _scan_native_modules(
                 names.add(statement.name)
             elif kind == "IMPORT":
                 for alias in statement.names:
-                    if alias.name in {"asyncio", "math", "sys"}:
+                    if alias.name in {"asyncio", "math", "sys", "terminal"}:
                         continue
                     for length in range(1, len(alias.name.split(".")) + 1):
                         simulate_execute(".".join(alias.name.split(".")[:length]))
@@ -6338,7 +7159,7 @@ def _scan_native_modules(
     for statement in entry_hir.body:
         if statement.kind.name == "IMPORT":
             for alias in statement.names:
-                if alias.name in {"asyncio", "math", "sys"}:
+                if alias.name in {"asyncio", "math", "sys", "terminal"}:
                     continue
                 for length in range(1, len(alias.name.split(".")) + 1):
                     simulate_execute(".".join(alias.name.split(".")[:length]))

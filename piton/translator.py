@@ -66,6 +66,7 @@ ALIASES_BUILTIN = {
     "entero": "int",
     "decimal": "float",
     "texto": "str",
+    "complejo": "complex",
     "booleano": "bool",
     "abrir": "open",
     "ordenar": "sorted",
@@ -85,6 +86,9 @@ ALIASES_BUILTIN = {
     "propiedad": "property",
     "octetos": "bytes",
     "arreglo_bytes": "bytearray",
+    "conjunto_inmutable": "frozenset",
+    "vista_memoria": "memoryview",
+    "rebanada": "slice",
 }
 
 _TRIVIA = {

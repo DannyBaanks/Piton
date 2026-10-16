@@ -47,7 +47,7 @@ Pitón **no es**:
   el objetivo es correcto, no rápido.
 - Self-hosted: el compilador está escrito en Python, no en Pitón.
 
-## Qué SÍ hace (estado verificado 2026-10-04, commit `ce9aa11`)
+## Qué SÍ hace (estado verificado 2026-10-14; CI en el commit `ce9aa11`)
 
 - **Traduce superficie español → Python ordinario** (source-to-source,
   líneas 1:1) y lo ejecuta con CPython: `piton ejecutar`, `piton traducir`,
@@ -56,10 +56,16 @@ Pitón **no es**:
   (NASM + MinGW) y ELF estático Linux (GCC freestanding) — que corre **sin
   CPython** en el runtime. Lista cerrada: sección «Qué puede compilar
   nativamente».
-- **Produce evidencia diferencial contra el oracle CPython**: corpus de 1220
-  casos → 1219 EQUIV (99.9%), FAIL_CLOSED 0, DIVERGENT 0, TIMEOUT 1 (entrada
-  documentada donde el oracle tampoco termina) —
-  `docs/parity_corpus_report.md`.
+- **Produce evidencia diferencial contra el oracle CPython**:
+  - corpus v1: 1220 casos → 1219 EQUIV (99.9%), FAIL_CLOSED 0, DIVERGENT 0,
+    TIMEOUT 1 (entrada documentada donde el oracle tampoco termina) —
+    `docs/parity_corpus_report.md`.
+  - corpus v2: 221/221 EQUIV (100%) —
+    `docs/parity_corpus_v2_report_2026-10-10.md`.
+  - corpus v3: 235/235 EQUIV (100%) sobre 12 áreas avanzadas (str/set/frozenset
+    methods, memoryview, slices con paso, complejos profundos, excepciones
+    multi-arg, numerics, object/callable protocol) —
+    `docs/parity_corpus_v3_report_2026-10-10.md`.
 - **CI verde en ambas plataformas** en el commit `ce9aa11`: test-linux,
   test-windows y verify-oracle (run 37245148477).
 - **Falla cerrado** (regla de oro): compatibilidad demostrada o error de
@@ -244,6 +250,7 @@ dependen de CPython**. Hay dos backends:
 [x] Comparación de strings (strcmp)
 [x] BigInt arbitrary-precision integers (Win64 + Linux, 14/14 + 13/13 differential tests)
 [x] Colecciones: listas, tuplas, diccionarios, conjuntos, bytes (octetos), bytearray (arreglo_bytes)
+[x] Números complejos (Linux): literales 1j / 2.5j / 1e3j, 2+3j, aritmética + - * / (división bit-exacta, algoritmo de Smith de CPython), == / != (ordenar es TypeError), repr byte-idéntico ((-0-1j), (2-0j), -0j), abs, .real / .imag, complejo() / complejo(r, i), pertenencia, impresión dentro de colecciones (Windows: falla cerrado en build)
 [x] Operaciones de bytes/bytearray: literales (b'', b""), constructores, indexado, asignación por subíndice mutable, slicing con/sin paso, concatenación (+), repetición (*), métodos (decode, hex, fromhex, count, find, rfind, index, rindex, startswith, endswith, append, extend)
 [x] Acceso a elementos: get_item, collection_len
 [x] Heap objects: object_new, set_attr, get_attr, method_call
@@ -268,6 +275,13 @@ dependen de CPython**. Hay dos backends:
 [x] Builtins tier 1: all/any/bin/chr/ord/pow/round; int/float/str/bool/texto; math.sqrt/floor/ceil/trunc/fabs/gcd
 [x] `__del__` exactamente una vez por objeto; GC de ciclos en Windows; freelist+refcount en Linux
 [x] MIR con clasificación de efectos (PURE/READ/WRITE/IO/OPAQUE) y verificador de cadena
+[x] Excepciones multi-arg: `lanzar Error("a", "b")` y `e.args` (tupla idéntica a CPython)
+[x] memoryview: indexado, iteración, tobytes/tolist, slicing con paso (vista sin copia, mutación compartida preservada) y `cast("B")`
+[x] dict: `update(**kwargs)`, `fromkeys`
+[x] str: `translate` (tabla de traducción) y `format_map` con `{name}` simple (specs/conversions/accessors rechazados en build)
+[x] `slice.indices(...)`, literales numéricos como primary (`1+2j.real`, `1.5.real`), `.real`/`.imag` de int/float
+[x] Clases cargadas como valores (referencia, no instancia), `classmethod` con `cls`
+[x] `divmod` con bigint, `bool(objeto)`, asignación compuesta por índice (`a[i] += x`)
 ```
 
 ### Compilar desde la CLI
@@ -297,6 +311,8 @@ El contrato exacto vive en `NATIVE_SUBSET_1_0.md`.
 
 ```text
 [ ] Metaclasses
+[ ] Complejos en el backend Windows, `complejo('1+2j')`, `complejo ** complejo`,
+    paso de complejos como argumentos de función (falla cerrado en build)
 [ ] Decoradores sobre métodos/clases/generadores
 [ ] Stdlib amplia (demostrado tier 1: abs/min/max/sum/type/len/print,
     int/float/str/bool, all/any/bin/chr/ord/pow/round,
@@ -314,8 +330,12 @@ El contrato exacto vive en `NATIVE_SUBSET_1_0.md`.
 > + MIR_HASH_REBASELINE_V1). El corpus diferencial de paridad cerró en
 > **P54** (2026-10-04, tras P53/P52): **1220 casos, 1219 EQUIV (99.9% del
 > corpus declarado — no el 99.9% de todo Python), 0 FAIL_CLOSED, 0 DIVERGENT,
-> 1 TIMEOUT no terminante también en el oracle** (`docs/parity_corpus_report.md`,
-> `docs/parity_corpus_report.json`). Estado vivo:
+> 1 TIMEOUT no terminante también en el oracle**
+> (`docs/parity_corpus_report.md`, `docs/parity_corpus_report.json`);
+> después se cerraron también el **corpus v2 (221/221 EQUIV, 100%)** y el
+> **corpus v3 (235/235 EQUIV, 100%, 12 áreas)** —
+> `docs/parity_corpus_v2_report_2026-10-10.md`,
+> `docs/parity_corpus_v3_report_2026-10-10.md`. Estado vivo:
 > `piton/final_dashboard.py` (53 gates, todos PASS) y
 > `docs/FEATURE_STATUS_MATRIX.md`.
 
@@ -392,16 +412,27 @@ Subconjunto representativo:
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-10-05)
+### Estado nativo verificado (2026-10-14)
 
 ```text
-Suite completa Linux: 811 passed / 26 skipped / 133 subtests
-  (python3 -m pytest tests/ -q --ignore=tests/test_windows_validate.py)
+Suite completa Linux: 936 passed / 34 skipped / 133 subtests / 0 failed
+  (python3 -m pytest tests -q, CPython 3.12.3, 2026-10-14)
+Corpus diferencial enumerativo v3: 235 casos (12 áreas)
+  -> 235 EQUIV (100.0%), 0 FAIL_CLOSED, 0 DIVERGENT, 0 TIMEOUT
+  (python3 tools/parity_corpus_v3.py,
+   docs/parity_corpus_v3_report_2026-10-10.{json,md})
+Corpus diferencial v2: 221/221 EQUIV (100%)
+  (docs/parity_corpus_v2_report_2026-10-10.{json,md})
+```
+
+Evidencia anterior verificada (2026-10-05, no re-ejecutada hoy):
+
+```text
 CI verde: test-linux + test-windows + verify-oracle (run 37245148477, ce9aa11)
-Corpus diferencial enumerativo: 1220 casos
-  → 1219 EQUIV (99.9% del corpus declarado), 0 FAIL_CLOSED, 0 DIVERGENT,
-    1 TIMEOUT no terminante también en el oracle
-    (class-iter-self: entrada mala del corpus, no divergencia)
+Corpus diferencial v1: 1220 casos
+  -> 1219 EQUIV (99.9% del corpus declarado), 0 FAIL_CLOSED, 0 DIVERGENT,
+     1 TIMEOUT no terminante también en el oracle
+     (class-iter-self: entrada mala del corpus, no divergencia)
 Dashboard: 53/53 gates PASS
   (python3 -m piton.final_dashboard --format summary)
 test_phase10_linux.py: 246 passed / 12 skipped
@@ -519,19 +550,25 @@ exec(codigo)
 
 ## Pruebas y evidencia
 
-Suite completa:
+Suite completa (Linux, 2026-10-14):
 
-```powershell
-py -m unittest discover -s tests -v
+```bash
+python3 -m pytest tests -q
+# 936 passed, 34 skipped, 133 subtests passed, 0 failed
 ```
 
-Resultado real en CPython 3.12.4:
+Corpus diferencial enumerativo v3 (nativo vs CPython, backend Linux):
 
-```text
-Ran 149 tests
-
-OK
+```bash
+python3 tools/parity_corpus_v3.py \
+  --out docs/parity_corpus_v3_report_2026-10-10.json \
+  --markdown docs/parity_corpus_v3_report_2026-10-10.md
+# 235 casos -> 235 EQUIV (100%), 0 FAIL_CLOSED, 0 DIVERGENT, 0 TIMEOUT
 ```
+
+Cada caso compara la salida y el exit del ELF nativo contra CPython
+(`piton/native_differential.py`). Los resultados viven en
+`docs/parity_corpus*_report*.{json,md}`.
 
 Resumen ejecutable de evidencia:
 
@@ -541,6 +578,10 @@ py tests\evidence.py
 
 Salida real: exit 0. El script separa `WINDOWS = PASS` de
 `LINUX_MACOS = NOT_DEMONSTRATED`; no infiere plataformas no ejecutadas.
+
+> Histórico: la suite con `py -m unittest discover -s tests -v` reportó
+> `Ran 149 tests / OK` en CPython 3.12.4 (registro git; no describe el
+> estado actual).
 
 ## Estructura
 

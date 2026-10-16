@@ -184,9 +184,19 @@ class FormatV1(unittest.TestCase):
             compare_native_to_cpython("imprimir('{5}'.format(1))\n")
 
     def test_unknown_method_fails_closed(self):
-        # title (P23), partition (P36), removeprefix (P38) implemented; casefold still outside
+        # title (P23), partition/rpartition (P36/v6), removeprefix (P38),
+        # casefold/isascii (v3), isprintable/isidentifier/encode (v6) implemented;
+        # format_map implementado en FORMAT_MAP_V1 (template + mapping
+        # literales); translate sigue fuera.
+        if sys.platform.startswith("win32"):
+            # FORMAT_MAP_V1 is implemented in the Linux backend only; the
+            # Windows backend fails closed at build time (no approximation).
+            with pytest.raises(NativeBuildError):
+                compare_native_to_cpython("imprimir('a'.format_map({}))\n")
+        else:
+            _assert_matches(self, "imprimir('a'.format_map({}))\n")
         with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('a'.casefold())\n")
+            compare_native_to_cpython("imprimir('a'.translate(None))\n")
 
 
 class StrMethodsChainedV1(unittest.TestCase):

@@ -408,6 +408,15 @@ class Lexer:
                     break
                 while self._peek().isdigit() or self._peek() == "_":
                     self._advance()
+                if self._peek() in "jJ":
+                    # COMPLEX_LITERAL_V1: 1e3j también es complejo.
+                    self._advance()
+                break
+            elif ch in "jJ":
+                # COMPLEX_LITERAL_V1: sufijo imaginario (1j, 2.5j, 1e3j).
+                # Python trata el número completo como literal complejo, no
+                # como número + identificador suelto.
+                self._advance()
                 break
             else:
                 break
