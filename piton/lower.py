@@ -332,18 +332,34 @@ class Lowerer:
     def _lower_fstring(self, cst: CSTFString):
         # FSTRINGS_V1: f'...' with plain expressions lowers to
         # '<template>'.format(arg, ...) — reusing STR_METHODS_V1 in both
-        # backends with zero mir/backend work. Conversions (!r !s !a) and
-        # format specs fail closed (LoweringError, wrapped to
-        # NativeBuildError at the compile entry points).
+        # backends with zero mir/backend work. FSTRING_CONVERSION_V1: !r/!a
+        # envuelven el arg en repr()/ascii() (builtins con emision en el
+        # backend linux C) y el placeholder sigue '{}'; !s y sin conversion
+        # quedan como estaban; otras conversiones y format specs dinamicos
+        # fallan cerrados (LoweringError, wrapped to NativeBuildError at the
+        # compile entry points).
         template_parts: List[str] = []
         args = []
         for part in cst.parts:
             if isinstance(part, CSTFStringPart):
                 template_parts.append(part.value)
             elif isinstance(part, CSTFStringExpr):
-                if part.conversion not in (-1, ord('s')):
+                if part.conversion not in (-1, ord('s'), ord('r'), ord('a')):
                     raise LoweringError(
-                        "f-string conversion must be !s or omitted here"
+                        "f-string conversion must be !s, !r, !a or omitted here"
+                    )
+                arg = self.lower(part.value)
+                if part.conversion == ord('r'):
+                    arg = Call(
+                        kind=HIRKind.CALL,
+                        func=Load(kind=HIRKind.LOAD, name="repr"),
+                        args=[arg],
+                    )
+                elif part.conversion == ord('a'):
+                    arg = Call(
+                        kind=HIRKind.CALL,
+                        func=Load(kind=HIRKind.LOAD, name="ascii"),
+                        args=[arg],
                     )
                 placeholder = "{}"
                 if part.format_spec is not None:
@@ -355,7 +371,7 @@ class Lowerer:
                     else:
                         raise LoweringError("f-string format_spec dynamic expressions are unsupported")
                 template_parts.append(placeholder)
-                args.append(self.lower(part.value))
+                args.append(arg)
             else:
                 raise LoweringError(
                     f"f-string with unexpected part {type(part).__name__} is not supported"

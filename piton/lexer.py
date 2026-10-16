@@ -206,6 +206,17 @@ NUMBER_START = set("0123456789")
 IDENTIFIER_RE = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
 
 
+def _word_char_after(source: str, index: int) -> bool:
+    """NOT_IN_BND_V1: ¿source[index] continua un identificador?
+
+    Se usa para no fundir 'no en'/'no es' cuando lo que sigue es la cola de
+    un nombre ('no enum_class' -> NO + NAME(enum_class), no NOT_IN)."""
+    if index >= len(source):
+        return False
+    ch = source[index]
+    return ch == "_" or ch.isalnum()
+
+
 class Lexer:
     def __init__(self, source: str, filename: str = "<source>"):
         self.source = source
@@ -433,13 +444,27 @@ class Lexer:
         # Operadores de comparación que son keywords en Python
         if value == "en":
             return self._make_token(TokenType.IN, value)
-        if value == "no" and self._peek() == " " and self.source.startswith("en", self.pos + 1):
+        # NOT_IN_BND_V1: fusionar 'no en'/'no es' solo si lo que sigue a
+        # 'en'/'es' NO continua un identificador. Sin esto, 'si no enum_class'
+        # se leia como NOT_IN('no en') + NAME('um_class') y rompia cualquier
+        # 'no <nombre que empiece por en/es>' (corpus v4: enum/netrc/pathlib).
+        if (
+            value == "no"
+            and self._peek() == " "
+            and self.source.startswith("en", self.pos + 1)
+            and not _word_char_after(self.source, self.pos + 3)
+        ):
             self._advance()  # consume space
             self._advance(2)  # consume "en"
             return self._make_token(TokenType.NOT_IN, "no en")
         if value == "es":
             return self._make_token(TokenType.IS, value)
-        if value == "no" and self._peek() == " " and self.source.startswith("es", self.pos + 1):
+        if (
+            value == "no"
+            and self._peek() == " "
+            and self.source.startswith("es", self.pos + 1)
+            and not _word_char_after(self.source, self.pos + 3)
+        ):
             self._advance()  # consume space
             self._advance(2)  # consume "es"
             return self._make_token(TokenType.IS_NOT, "no es")

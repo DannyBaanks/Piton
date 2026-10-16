@@ -327,14 +327,17 @@ class Parser:
     def _parse_return(self) -> ReturnStmt:
         tok = self._advance()
         value = None
-        if not self._check(TokenType.NEWLINE, TokenType.ENDMARKER, TokenType.DEDENT):
+        # BARE_NL_V1: el lexer cierra un bloque 'devolver'/'lanzar'/'producir'
+        # sin expr con NL (EOF o linea en blanco despues) en vez de NEWLINE;
+        # sin NL aqui se intentaba parsear expr y molia con 'Token(NL)'.
+        if not self._check(TokenType.NEWLINE, TokenType.NL, TokenType.ENDMARKER, TokenType.DEDENT):
             value = self._parse_expression(0)
         return ReturnStmt(value=value).set_pos(tok)
 
     def _parse_yield(self) -> YieldStmt:
         tok = self._advance()
         value = None
-        if not self._check(TokenType.NEWLINE, TokenType.ENDMARKER, TokenType.DEDENT):
+        if not self._check(TokenType.NEWLINE, TokenType.NL, TokenType.ENDMARKER, TokenType.DEDENT):
             value = self._parse_expression(0)
         return YieldStmt(value=value).set_pos(tok)
 
@@ -348,7 +351,7 @@ class Parser:
         tok = self._advance()
         exc = None
         cause = None
-        if not self._check(TokenType.NEWLINE, TokenType.ENDMARKER, TokenType.DEDENT):
+        if not self._check(TokenType.NEWLINE, TokenType.NL, TokenType.ENDMARKER, TokenType.DEDENT):
             exc = self._parse_expression(0)
             if self._check(TokenType.NAME) and self._peek().value == "desde":
                 self._advance()
@@ -900,7 +903,7 @@ class Parser:
                     value = self._parse_expression(0)
                     return self._parse_postfix(YieldFromStmt(value=value).set_pos(tok))
                 value = None
-                if not self._check(TokenType.NEWLINE, TokenType.ENDMARKER, TokenType.DEDENT):
+                if not self._check(TokenType.NEWLINE, TokenType.NL, TokenType.ENDMARKER, TokenType.DEDENT):
                     value = self._parse_expression(0)
                 return self._parse_postfix(YieldStmt(value=value).set_pos(tok))
             if val == "no":
@@ -1225,10 +1228,20 @@ class Parser:
             expression = body[cursor + 1:end - 1]
             format_spec = None
             conversion = -1
+            # FSTRING_SPEC_V1: el spec va despues de la conversion
+            # ('{x!r:>10}'). Antes el ':' se buscaba en la expression ya
+            # recortada por '!', asi que '1.5!r:>10' dejaba conversion='r' y
+            # tiraba el spec entero -> el nativo ignoraba el padding y
+            # divergia silenciosamente de CPython.
             if "!" in expression:
-                expression, conversion_text = expression.rsplit("!", 1)
-                conversion = ord(conversion_text[0]) if conversion_text else -1
-            if ":" in expression:
+                expression, conv_and_spec = expression.rsplit("!", 1)
+                if ":" in conv_and_spec:
+                    conv_text, format_text = conv_and_spec.split(":", 1)
+                    conversion = ord(conv_text.strip()[0]) if conv_text.strip() else -1
+                    format_spec = Constant(value=format_text)
+                else:
+                    conversion = ord(conv_and_spec.strip()[0]) if conv_and_spec.strip() else -1
+            elif ":" in expression:
                 expression, format_text = expression.split(":", 1)
                 format_spec = Constant(value=format_text)
             nested = Parser(tokenize(expression, "<fstring>"))
