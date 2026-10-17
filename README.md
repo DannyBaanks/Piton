@@ -47,7 +47,7 @@ Pitón **no es**:
   el objetivo es correcto, no rápido.
 - Self-hosted: el compilador está escrito en Python, no en Pitón.
 
-## Qué SÍ hace (estado verificado 2026-10-14; CI en el commit `ce9aa11`)
+## Qué SÍ hace (estado verificado 2026-10-17; CI en el commit `ce9aa11`)
 
 - **Traduce superficie español → Python ordinario** (source-to-source,
   líneas 1:1) y lo ejecuta con CPython: `piton ejecutar`, `piton traducir`,
@@ -66,6 +66,15 @@ Pitón **no es**:
     methods, memoryview, slices con paso, complejos profundos, excepciones
     multi-arg, numerics, object/callable protocol) —
     `docs/parity_corpus_v3_report_2026-10-10.md`.
+  - **corpus v4 (stdlib real, 2026-10-16/17)**: embudo sobre 167 archivos de
+    `/usr/lib/python3.12/` — adapt 100%, parse 98.2% (164/167), MIR 9.0%
+    (15/167), build 4.2% (7/167). Los cuellos restantes son imports de
+    módulos no provistos en el backend y familias downstream (method-kwarg,
+    keyword-call, next(), dynamic unpack). Tandas cerradas: gaps v1–v3
+    (gramática/adaptador), MIR v1 (docstrings de clase, except tupla, OSError,
+    bases object, unpack anidado/star), M6 (defaults de collection/str
+    evaluables). Reporte vivo: `docs/parity_corpus_v4_report_2026-10-16_after-m6.{json,md}`
+    (re-ejecutable con `python3 tools/parity_corpus_v4.py run --tier all`).
 - **CI verde en ambas plataformas** en el commit `ce9aa11`: test-linux,
   test-windows y verify-oracle (run 37245148477).
 - **Falla cerrado** (regla de oro): compatibilidad demostrada o error de
@@ -412,11 +421,15 @@ Subconjunto representativo:
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-10-14)
+### Estado nativo verificado (2026-10-17)
 
 ```text
-Suite completa Linux: 936 passed / 34 skipped / 133 subtests / 0 failed
-  (python3 -m pytest tests -q, CPython 3.12.3, 2026-10-14)
+Suite completa Linux: 1056 passed / 26 skipped / 133 subtests / 0 failed
+  (python3 -m pytest tests -q --ignore=tests/test_windows_validate.py,
+   CPython 3.12.3, 2026-10-17; commit 20baecb)
+Corpus v4 (stdlib real, tier A, 167 archivos): adapt 100% | parse 98.2%
+  | MIR 9.0% | build 4.2%; fail_classes MIR_FAIL 149, BUILD_FAIL 8,
+  PARSE_FAIL 3 (docs/parity_corpus_v4_report_2026-10-16_after-m6.{json,md})
 Corpus diferencial enumerativo v3: 235 casos (12 áreas)
   -> 235 EQUIV (100.0%), 0 FAIL_CLOSED, 0 DIVERGENT, 0 TIMEOUT
   (python3 tools/parity_corpus_v3.py,
@@ -550,11 +563,20 @@ exec(codigo)
 
 ## Pruebas y evidencia
 
-Suite completa (Linux, 2026-10-14):
+Suite completa (Linux, 2026-10-17):
 
 ```bash
-python3 -m pytest tests -q
-# 936 passed, 34 skipped, 133 subtests passed, 0 failed
+python3 -m pytest tests -q --ignore=tests/test_windows_validate.py
+# 1056 passed, 26 skipped, 133 subtests passed, 0 failed
+```
+
+Corpus v4 — stdlib real de CPython 3.12 (nativo vs oracle, backend Linux):
+
+```bash
+python3 tools/parity_corpus_v4.py run --tier all \
+  --out docs/parity_corpus_v4_report_2026-10-16_after-m6.json \
+  --markdown docs/parity_corpus_v4_report_2026-10-16_after-m6.md
+# tier A (167 archivos): adapt 100% | parse 98.2% | MIR 9.0% | build 4.2%
 ```
 
 Corpus diferencial enumerativo v3 (nativo vs CPython, backend Linux):
