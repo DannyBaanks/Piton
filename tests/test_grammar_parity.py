@@ -720,5 +720,86 @@ class M6SeqDefaultsV1(unittest.TestCase):
             compare_native_to_cpython('funcion f (b ="x ") :\n    devolver b \nimprimir (f (7 ))\n')
 
 
+class DownstreamGatesV1(unittest.TestCase):
+    """DOWNSTREAM_V1: familias que dejaron los MIR_FAIL no-modulo tras
+    mir-v1/m6 (report after-m6), atacadas en mir.py + linux_x86.py:
+
+      ITER_NEXT_ATTR_V1  `it.__next__` como bound method (heapq:468
+          `next = it.__next__` + `next()` posterior). Edge documentado:
+          sobre enumerate/zip/map el retorno tupla no lleva anotacion a
+          traves del bound call y se imprimiria como puntero.
+      NEXT_SHADOW_V1  `next()` con cero args baja como bound-method call
+          (antes: el branch builtin next rechazaba la aridad 0 y heapq
+          moria con 'requires one iterator').
+      SPLIT_MAXSPLIT_KW_V1  `s.split(sep, maxsplit=n)` expande el kwarg a
+          posicional (nturl2path:70); unico metodo builtin con firma kw
+          soportada fuera de dict.update.
+      STR_SPLIT_NOMATCH_FIX  bug preexistente: el scan de piton_str_split
+          perdia hasta nl-1 chars del ultimo segmento cuando el sep no
+          aparecia ('a :b :c '.split(': ') devolia 'a :b :c').
+      SEQ_ELEM_REPR_V1  bug preexistente: los elems str de list/dict/set/tuple
+          se escribian raw (print(["a\\\\b"]) divergiaba); ahora usan el repr
+          completo de CPython; el print top-level queda intacto.
+    """
+
+    def test_iter_next_attr_bound(self):
+        _assert_matches(
+            self,
+            "it = iter ([1 ,2 ,3 ])\n"
+            "nxt = it . __next__\n"
+            "imprimir (nxt () ,nxt () ,nxt () )\n",
+        )
+
+    def test_iter_next_attr_exhaustion(self):
+        _assert_matches(
+            self,
+            "it = iter ([1 ])\n"
+            "nxt = it . __next__\n"
+            "imprimir (nxt () )\n"
+            "intentar :\n"
+            "    nxt ()\n"
+            "excepto StopIteration :\n"
+            '    imprimir ("fin ")\n',
+        )
+
+    def test_next_shadow_zero_args(self):
+        # heap-like: el nombre local next sombra al builtin; 0 args no
+        # puede ser el builtin next (requiere >=1).
+        _assert_matches(
+            self,
+            "it = iter ([7 ])\n"
+            "next = it . __next__\n"
+            "imprimir (next () )\n",
+        )
+
+    def test_split_maxsplit_kw(self):
+        _assert_matches(self, 'p = "a :b :c "\nimprimir (p . split (": ",maxsplit =1 ))\n')
+
+    def test_split_maxsplit_zero(self):
+        _assert_matches(self, 'p = "a :b "\nimprimir (p . split (": ",maxsplit =0 ))\n')
+
+    def test_split_no_match_keeps_tail(self):
+        # STR_SPLIT_NOMATCH_FIX: preexistente — sin match el segmento es la
+        # cadena COMPLETA (antes perdia el trailing space).
+        _assert_matches(self, 'p = "a :b :c "\nimprimir (p . split (": "))\n')
+
+    def test_split_plain_untouched(self):
+        _assert_matches(self, 'imprimir ("a ,b ,c " . split (","))\n')
+
+    def test_seq_elem_backslash_repr(self):
+        # SEQ_ELEM_REPR_V1: preexistente — elems con repr escapado.
+        _assert_matches(self, 'imprimir (["a\\\\b "])\n')
+        _assert_matches(self, 'imprimir ({"k\\\\a ":1 })\n')
+        _assert_matches(self, 'imprimir ({"x\\\\y "})\n')
+        _assert_matches(self, 'imprimir ([["a\\\\b "]])\n')
+
+    def test_seq_elem_quote_repr(self):
+        # repr elige comillas dobles cuando el texto tiene ' (regla CPython).
+        _assert_matches(self, 'imprimir (["el \'cero\' "])\n')
+
+    def test_str_top_level_untouched(self):
+        _assert_matches(self, 'imprimir ("a\\\\b ")\n')
+
+
 if __name__ == "__main__":
     unittest.main()

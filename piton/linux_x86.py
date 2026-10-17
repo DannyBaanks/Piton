@@ -511,7 +511,12 @@ static long piton_str_partition(const char*s,const char*sep){usize n=piton_strle
 static long piton_str_rsplit(const char*s,const char*sep,long maxsplit){if(!sep)return piton_str_split_ws(s);usize n=piton_strlen(s),m=piton_strlen(sep);PitonSeq*r=piton_seq_new(PK_LIST,0);if(m==0){for(long k=(long)n;k>=0;--k){char*q=piton_alloc(2);q[0]=s[k];q[1]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});}return(long)r;}usize end=n;long budget=maxsplit<0?(long)n:maxsplit;while(budget>0){long at=-1;for(long i=(long)end-(long)m;i>=0;--i){usize k=0;while(k<m&&s[i+(long)k]==sep[k])++k;if(k==m){at=i;break;}}if(at<0)break;--budget;usize tail=end-(usize)at-m;char*q=piton_alloc(tail+1);piton_memcpy(q,s+(usize)at+m,tail);q[tail]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});end=(usize)at;}char*head=piton_alloc(end+1);piton_memcpy(head,s,end);head[end]=0;piton_seq_append(r,(PitonSlot){(long)head,PK_STR});long total=r->length;for(long i=0;i<total/2;++i){PitonSlot t=r->items[i];r->items[i]=r->items[total-1-i];r->items[total-1-i]=t;}return(long)r;}
 static long piton_str_splitlines(const char*s){usize n=piton_strlen(s);PitonSeq*r=piton_seq_new(PK_LIST,0);usize i=0;while(i<n){usize j=i;while(j<n&&s[j]!='\n'&&s[j]!='\r')++j;usize take=j-i;if(take>0&&s[j-1]=='\r')--take;char*q=piton_alloc(take+1);piton_memcpy(q,s+i,take);q[take]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});if(j<n&&s[j]=='\r'&&j+1<n&&s[j+1]=='\n')i=j+2;else i=j+1;}return(long)r;}
 static long piton_str_expandtabs(const char*s,long tabsize){usize n=piton_strlen(s);char*out=piton_alloc(n*2+n+1);usize o=0,col=0;if(tabsize<1)tabsize=1;for(usize i=0;i<n;++i){char c=s[i];if(c=='\t'){usize w=(usize)tabsize-(col%(usize)tabsize);for(usize k=0;k<w;++k)out[o++]=' ';col+=w;}else{out[o++]=c;++col;}}out[o]=0;return(long)out;}
-static long piton_str_split(const char*s,const char*sep){if(!sep)return piton_str_split_ws(s);PitonSeq*r=piton_seq_new(PK_LIST,0);usize sl=piton_strlen(s),nl=piton_strlen(sep);if(nl==0){for(usize k=0;k<=sl;++k){char*q=piton_alloc(2);q[0]=k<sl?s[k]:0;q[1]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});}return(long)r;}usize i=0;while(1){usize j=i;while(j+nl<=sl){usize k=0;while(k<nl&&s[j+k]==sep[k])++k;if(k==nl)break;++j;}usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});if(j+nl>sl)break;i=j+nl;}return(long)r;}
+/* SPLIT_MAXSPLIT_V1: s.split(sep, n) — a lo mas n splits (n+1 elementos);
+   n<0 = sin limite. Busqueda explicita del match: el scan viejo del str_split
+   perdia hasta nl-1 chars del ultimo segmento cuando el sep no aparecia
+   ('a :b :c '.split(': ') devolvia 'a :b :c' — bug preexistente arreglado). */
+static long piton_str_split_max(const char*s,const char*sep,long maxsplit){if(!sep)return piton_str_split_ws(s);PitonSeq*r=piton_seq_new(PK_LIST,0);usize sl=piton_strlen(s),nl=piton_strlen(sep);long budget=maxsplit<0?(long)sl+1:maxsplit;if(nl==0){for(usize k=0;k<=sl;++k){char*q=piton_alloc(2);q[0]=k<sl?s[k]:0;q[1]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});}return(long)r;}usize i=0;while(1){long at=-1;if(budget>0){for(long j=(long)i;(usize)j+nl<=sl;++j){usize k=0;while(k<nl&&s[(usize)j+k]==sep[k])++k;if(k==nl){at=j;break;}}}if(at<0){usize len=sl-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});break;}usize len=(usize)at-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});--budget;i=(usize)at+nl;}return(long)r;}
+static long piton_str_split(const char*s,const char*sep){return piton_str_split_max(s,sep,-1);}
 static long piton_str_strip(const char*s,int mode){usize n=piton_strlen(s),a=0,b=n;if(mode!=2){while(a<n&&piton_ws((unsigned char)s[a]))++a;}if(mode!=1){while(b>a&&piton_ws((unsigned char)s[b-1]))--b;}char*p=piton_alloc(b-a+1);piton_memcpy(p,s+a,b-a);p[b-a]=0;return(long)p;}
 static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(sep);usize total=0;long cnt=items?items->length:0;for(long i=0;i<cnt;++i){if(items->items[i].kind!=PK_STR){piton_write(2,"TypeError: sequence item is not a string\n",41);piton_exit(1);}total+=piton_strlen((const char*)items->items[i].bits);}total+=sl*(usize)(cnt>0?cnt-1:0);char*p=piton_alloc(total+1);usize o=0;for(long i=0;i<cnt;++i){if(i){piton_memcpy(p+o,sep,sl);o+=sl;}usize el=piton_strlen((const char*)items->items[i].bits);piton_memcpy(p+o,(const char*)items->items[i].bits,el);o+=el;}p[o]=0;return(long)p;}
 /* CHR_NUL_V1: encoded length of a chr() result. strlen stops at NUL, so
@@ -1060,11 +1065,12 @@ static void piton_bigint_print_raw(void*a);
 static void piton_bytes_print(PitonBytes* b);
 static void piton_bytearray_print(PitonByteArray* ba);
 static void piton_print_slot(PitonSlot v);
+static void piton_print_slot_repr(PitonSlot v);
 static void piton_print_complex_raw(long bits);
 static long piton_cx_eq(PitonComplexVal x,PitonComplexVal y);
 static int piton_cx_truthy_bits(long bits);
-static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}if(s->kind==PK_TUPLE&&s->length==1)piton_write(1,",",1);piton_write(1,s->kind==PK_TUPLE?")":"]",1);}
-static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(d->items[i].key);piton_write(1,": ",2);piton_print_slot(d->items[i].value);}piton_write(1,"}",1);}
+static void piton_print_seq(PitonSeq*s){piton_write(1,s->kind==PK_TUPLE?"(":"[",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot_repr(s->items[i]);}if(s->kind==PK_TUPLE&&s->length==1)piton_write(1,",",1);piton_write(1,s->kind==PK_TUPLE?")":"]",1);}
+static void piton_print_dict(PitonDict*d){piton_write(1,"{",1);for(long i=0;i<d->length;++i){if(i)piton_write(1,", ",2);piton_print_slot_repr(d->items[i].key);piton_write(1,": ",2);piton_print_slot_repr(d->items[i].value);}piton_write(1,"}",1);}
 /* DICT_EQ_V1: igualdad por contenido (mismo largo, cada clave de a existe en
  * b con slot_eq igual). */
 static int piton_dict_eq(PitonDict*a,PitonDict*b){
@@ -1084,9 +1090,14 @@ static int piton_dict_eq(PitonDict*a,PitonDict*b){
   }
   return 1;
 }
-static void piton_print_set(PitonSet*s){if(s->kind==PK_SET&&s->length==0){piton_write(1,"set()",5);return;}piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot(s->items[i]);}piton_write(1,"}",1);}
+static void piton_print_set(PitonSet*s){if(s->kind==PK_SET&&s->length==0){piton_write(1,"set()",5);return;}piton_write(1,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(1,", ",2);piton_print_slot_repr(s->items[i]);}piton_write(1,"}",1);}
 static long piton_object_repr_hook(long obj,const char*cls);
 static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(1,"None",4);break;case PK_BOOL:piton_write(1,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(1,r,(usize)n);break;}case PK_STR:piton_write(1,"'",1);piton_write(1,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(1,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(1,"frozenset()",11);break;}piton_write(1,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(1,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_repr_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(1,"<object>",8);break;}default:piton_write(1,"<object>",8);}}
+/* SEQ_ELEM_REPR_V1: los elementos de una coleccion se imprimen con el
+   repr completo de CPython (escapes de backslash/comillas); el camino
+   viejo escribia el str raw dentro de [ ] y print(["a\\b"]) divergiaba.
+   El print top-level de str queda intacto. */
+static void piton_print_slot_repr(PitonSlot v){if(v.kind==PK_STR){PitonStrBuf b;sb_init(&b);piton_str_repr_into(&b,(const char*)v.bits);piton_write(1,b.d,(usize)b.len);return;}piton_print_slot(v);}
 /* COMP_DICT_ITER_V1: the i-th KEY of a dict / the i-th element of a set,
  * for a comprehension's index loop. Explicit subscripts keep using
  * piton_dict_get, which raises KeyError as CPython does. */
@@ -3817,6 +3828,17 @@ class LinuxCEmitter:
             )
             types[result] = "str"
         elif method == "split":
+            # SPLIT_MAXSPLIT_V1: s.split(sep, maxsplit) — segundo arg int
+            # (el kwarg lo expande MIR a posicional).
+            if (
+                len(call_args) == 2
+                and types.get(call_args[0]) in {"str", "none"}
+                and types.get(call_args[1]) in {"int", "bool"}
+            ):
+                sep = "(const char*)0" if types.get(call_args[0]) == "none" else f"(const char*){self._value(call_args[0])}"
+                out.append(f"    {_name(result)}=piton_str_split_max((const char*){operand},{sep},{self._value(call_args[1])});")
+                types[result] = "list"
+                return out
             if len(call_args) > 1:
                 raise NativeBuildError("Linux str.split() requires zero or one argument")
             if call_args and types.get(call_args[0]) not in {"str", "none"}:
@@ -7827,6 +7849,29 @@ class LinuxCEmitter:
                 # MEMORYVIEW_ITEMSIZE_V1: vistas 'B' -> 1 byte por elemento.
                 out.append(f"    {_name(result)}=1;")
                 types[result] = "int"
+                return out
+            if attr == "__next__" and owner_type.startswith("iterator"):
+                # ITER_NEXT_ATTR_V1: `it.__next__` como bound method (heapq:
+                # `next = it.__next__` + `next()` posterior). Los helpers de
+                # iter_next son unary; el bound method con n_args=0 los invoca
+                # con self en el primer registro (mismo ABI que los métodos
+                # resueltos arriba).
+                _iter_next_helper = {
+                    "iterator:str": "piton_str_iterator_next",
+                    "iterator:bytes": "piton_bytes_iterator_next",
+                    "iterator:memoryview": "piton_memoryview_iter_next",
+                    "iterator:any": "piton_iterator_next_any",
+                    "iterator:enumerate": "piton_enumerate_next",
+                    "iterator:reversed": "piton_reversed_next",
+                    "iterator:zip": "piton_zip_next",
+                    "iterator:map": "piton_callback_iterator_next",
+                    "iterator:filter": "piton_callback_iterator_next",
+                    "iterator:calliter": "piton_calliter_next",
+                }.get(owner_type, "piton_iterator_next_any")
+                out.append(
+                    f"    {_name(result)}=piton_bound_method_new((long)&{_iter_next_helper},0,{self._value(obj)});"
+                )
+                types[result] = "closure"
                 return out
             if owner_type == "slice" and attr in {"start", "stop", "step"}:
                 # SLICE_ATTR_V1: s.start / s.stop / s.step — None si el bound

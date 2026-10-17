@@ -119,9 +119,15 @@ class SplitV1(unittest.TestCase):
     def test_split_edges(self):
         _assert_matches(self, "imprimir(''.split(','), ''.split(), 'a,'.split(','))\n")
 
+    def test_split_maxsplit_differential(self):
+        # SPLIT_MAXSPLIT_KW_V1: split(sep, maxsplit) posicional es valido
+        # (antes el aridad-2 era fail-closed por no existir el path).
+        _assert_matches(self, "imprimir('a,b,c'.split(',', 1))\n")
+        _assert_matches(self, "imprimir('a,b,c'.split(',', 0))\n")
+
     def test_split_wrong_arity_fails_closed(self):
         with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('a'.split(',', 1))\n")
+            compare_native_to_cpython("imprimir('a'.split(',', 1, 2))\n")
 
 
 class StripV1(unittest.TestCase):

@@ -3277,8 +3277,29 @@ class MIRLowerer:
                 # cualquier otro metodo con kwargs sigue fail-closed (el
                 # backend acepta kw solo en dict.update; receiver distinto:
                 # build error, nunca semantica aproximada silenciosa).
-                if node.keywords and node.func.attr != "update":
+                # SPLIT_MAXSPLIT_KW_V1: `s.split(sep, maxsplit=n)` expande el
+                # kwarg a posicional (nturl2path:70) — unica firma builtin
+                # adicional cuyo backend consume posicionalmente.
+                if (
+                    node.keywords
+                    and node.func.attr != "update"
+                    and not (
+                        node.func.attr == "split"
+                        and len(node.keywords) == 1
+                        and node.keywords[0].arg == "maxsplit"
+                        and len(node.args) == 1
+                    )
+                ):
                     raise MIRLoweringError("native method calls do not support keyword arguments yet")
+                if (
+                    node.keywords
+                    and node.func.attr == "split"
+                    and len(node.keywords) == 1
+                    and node.keywords[0].arg == "maxsplit"
+                    and len(node.args) == 1
+                ):
+                    node.args = (*node.args, node.keywords[0].value)
+                    node.keywords = ()
                 super_call = node.func.value if node.func.value.kind == HIRKind.CALL else None
                 if (
                     super_call is not None
@@ -3739,7 +3760,14 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("iter_new", value, result=result)
                 return result
-            if node.func.kind == HIRKind.LOAD and node.func.name in {"next", "siguiente"}:
+            if (
+                node.func.kind == HIRKind.LOAD
+                and node.func.name in {"next", "siguiente"}
+                # NEXT_SHADOW_V1: `next()` con cero args no puede ser el
+                # builtin (requiere >=1); heapq hace `next = it.__next__`
+                # y llama `next()` — baja como bound-method call normal.
+                and (len(node.args) in {1, 2} or node.keywords)
+            ):
                 if len(node.args) not in {1, 2} or node.keywords:
                     raise MIRLoweringError("native next requires one iterator and optional default")
                 iterator = self._lower_expr(builder, node.args[0])
@@ -4089,8 +4117,29 @@ class MIRLowerer:
                 # cualquier otro metodo con kwargs sigue fail-closed (el
                 # backend acepta kw solo en dict.update; receiver distinto:
                 # build error, nunca semantica aproximada silenciosa).
-                if node.keywords and node.func.attr != "update":
+                # SPLIT_MAXSPLIT_KW_V1: `s.split(sep, maxsplit=n)` expande el
+                # kwarg a posicional (nturl2path:70) — unica firma builtin
+                # adicional cuyo backend consume posicionalmente.
+                if (
+                    node.keywords
+                    and node.func.attr != "update"
+                    and not (
+                        node.func.attr == "split"
+                        and len(node.keywords) == 1
+                        and node.keywords[0].arg == "maxsplit"
+                        and len(node.args) == 1
+                    )
+                ):
                     raise MIRLoweringError("native method calls do not support keyword arguments yet")
+                if (
+                    node.keywords
+                    and node.func.attr == "split"
+                    and len(node.keywords) == 1
+                    and node.keywords[0].arg == "maxsplit"
+                    and len(node.args) == 1
+                ):
+                    node.args = (*node.args, node.keywords[0].value)
+                    node.keywords = ()
                 super_call = node.func.value if node.func.value.kind == HIRKind.CALL else None
                 if (
                     super_call is not None
