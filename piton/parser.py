@@ -298,6 +298,9 @@ class Parser:
     def _parse_func_def(self, decorators: List, is_async: bool = False) -> FuncDef:
         tok = self._advance()
         name = self._consume(TokenType.NAME, "nombre de función").value
+        # FUNC_TYPE_PARAMS_V1: `funcion f[T](x :T )->T :` (PEP 695) — mismo
+        # descarte balanceado que en clase (typing.py:3024 era este caso).
+        self._skip_type_params()
         self._consume(TokenType.LPAREN)
         args = self._parse_arguments()
         self._consume(TokenType.RPAREN)
@@ -309,9 +312,27 @@ class Parser:
         return FuncDef(name=name, args=args, body=body, returns=returns,
                        decorators=decorators, is_async=is_async).set_pos(tok)
 
+    def _skip_type_params(self) -> None:
+        """CLASS/FUNC_TYPE_PARAMS_V1: consume balanceados `[...]` (PEP 695).
+
+        El subset nativo no tiene generics: los type params se descartan (la
+        firma runtime no los observa; el CPython del tier A si, pero ese tier
+        solo buildea).
+        """
+        if self._match(TokenType.LBRACKET):
+            depth = 1
+            while depth and not self._at_end():
+                inner = self._advance()
+                if inner.type == TokenType.LBRACKET:
+                    depth += 1
+                elif inner.type == TokenType.RBRACKET:
+                    depth -= 1
+
     def _parse_class_def(self, decorators: List) -> ClassDef:
         tok = self._advance()
         name = self._consume(TokenType.NAME, "nombre de clase").value
+        # CLASS_TYPE_PARAMS_V1: `clase C[T](Base):` (typing.py:2481).
+        self._skip_type_params()
         bases = []
         keywords = []
         if self._match(TokenType.LPAREN):
@@ -700,6 +721,15 @@ class Parser:
             stmt = self._parse_statement()
             if stmt:
                 stmts.append(stmt)
+            # ONE_LINER_CHAIN_V1: la suite one-liner termina en NEWLINE. Si se
+            # deja pendiente, el check `while NAME in ("sino_si","sino")` del
+            # chain-loop (if/while) y `while NAME` de try (excepto/sino/
+            # finalmente) nunca ve la keyword: la continuacion caia a expr-stmt
+            # en top-level ('sino' se "pasaba" convertido en un AnnAssign
+            # falsamente valido; sino_si/finalmente reventaban en COLON o
+            # PLUS_EQUAL). Consumir NEWLINE/NL aqui deja el flujo limpio.
+            while self._check(TokenType.NEWLINE, TokenType.NL):
+                self._advance()
             return stmts
 
         while not self._at_end():
@@ -719,12 +749,23 @@ class Parser:
         while not self._check(TokenType.RPAREN):
             if self._check(TokenType.DOUBLE_STAR):
                 self._advance()
-                args.kwarg = Arg(arg=self._consume(TokenType.NAME).value).set_pos(self._peek())
+                kw_name = self._consume(TokenType.NAME).value
+                # ANNOT_STAR_ARGS_V1: `**kwargs :Any` — la anotacion del
+                # vararg/kwarg dejaba el ':' colgado y rompia en _consume(RPAREN)
+                # (typing.py:3048, 9 parametros con anotacion).
+                kw_annotation = None
+                if self._match(TokenType.COLON):
+                    kw_annotation = self._parse_expression(0)
+                args.kwarg = Arg(arg=kw_name, annotation=kw_annotation).set_pos(self._peek())
             elif self._check(TokenType.STAR):
                 self._advance()
                 keyword_only = True
                 if not self._check(TokenType.COMMA):
-                    args.vararg = Arg(arg=self._consume(TokenType.NAME).value).set_pos(self._peek())
+                    var_name = self._consume(TokenType.NAME).value
+                    var_annotation = None
+                    if self._match(TokenType.COLON):
+                        var_annotation = self._parse_expression(0)
+                    args.vararg = Arg(arg=var_name, annotation=var_annotation).set_pos(self._peek())
             elif self._check(TokenType.SLASH):
                 if not args.args or args.posonlyargs:
                     raise ParseError("'/' requires preceding positional parameters", self._peek())
@@ -927,6 +968,26 @@ class Parser:
                 # Arguments.defaults, so only the parser was missing.
                 args = Arguments()
                 while not self._check(TokenType.COLON):
+                    # LAMBDA_STAR_V1: `lambda *args: ...` / `lambda **kw: ...`
+                    # — mismos slots vararg/kwarg que _parse_arguments (solo
+                    # faltaba en la sintaxis lambda).
+                    if self._check(TokenType.STAR):
+                        self._advance()
+                        if not self._check(TokenType.COLON, TokenType.COMMA):
+                            args.vararg = Arg(
+                                arg=self._consume(TokenType.NAME).value
+                            ).set_pos(self._peek())
+                        if not self._match(TokenType.COMMA):
+                            break
+                        continue
+                    if self._check(TokenType.DOUBLE_STAR):
+                        self._advance()
+                        args.kwarg = Arg(
+                            arg=self._consume(TokenType.NAME).value
+                        ).set_pos(self._peek())
+                        if not self._match(TokenType.COMMA):
+                            break
+                        continue
                     name = self._consume(TokenType.NAME).value
                     arg = Arg(arg=name).set_pos(self._peek())
                     args.args.append(arg)
@@ -951,7 +1012,15 @@ class Parser:
                     value = self._parse_expression(0)
                     return self._parse_postfix(YieldFromStmt(value=value).set_pos(tok))
                 value = None
-                if not self._check(TokenType.NEWLINE, TokenType.NL, TokenType.ENDMARKER, TokenType.DEDENT):
+                # YIELD_EXPR_TERMINATOR_V1: yield sin valor dentro de
+                # agrupadores — `(producir)`, `f(a, producir)`, `d[k:producir]`
+                # — termina en ese token; sin RPAREN/COMMA/RBRACKET/RBRACE/
+                # COLON la rama intentaba parsear valor sobre el cierre.
+                if not self._check(
+                    TokenType.NEWLINE, TokenType.NL, TokenType.ENDMARKER,
+                    TokenType.DEDENT, TokenType.RPAREN, TokenType.RBRACKET,
+                    TokenType.RBRACE, TokenType.COMMA, TokenType.COLON,
+                ):
                     value = self._parse_expression(0)
                 return self._parse_postfix(YieldStmt(value=value).set_pos(tok))
             if val == "no":
@@ -961,20 +1030,23 @@ class Parser:
                 return UnaryOp(op="not", operand=self._parse_expression(PRECEDENCE["en"])).set_pos(tok)
 
             # Literales booleanos / None
+            # CONST_POSTFIX_V1: las constantes volvian por `return` sin pasar
+            # por _parse_postfix, asi que `None.__new__`/`True.real` reventaban
+            # con 'unexpected DOT' (enum.py:936: el set {None.__new__, ...}).
             if val == "Verdadero":
-                return Constant(value=True).set_pos(tok)
+                return self._parse_postfix(Constant(value=True).set_pos(tok))
             if val == "Falso":
-                return Constant(value=False).set_pos(tok)
+                return self._parse_postfix(Constant(value=False).set_pos(tok))
             if val == "Nada":
-                return Constant(value=None).set_pos(tok)
+                return self._parse_postfix(Constant(value=None).set_pos(tok))
             # PARSER_BOOL_NONE_V1: native sources may interleave the English
             # constants (the translator can introduce them); accept them too.
             if val == "True":
-                return Constant(value=True).set_pos(tok)
+                return self._parse_postfix(Constant(value=True).set_pos(tok))
             if val == "False":
-                return Constant(value=False).set_pos(tok)
+                return self._parse_postfix(Constant(value=False).set_pos(tok))
             if val == "None":
-                return Constant(value=None).set_pos(tok)
+                return self._parse_postfix(Constant(value=None).set_pos(tok))
 
             # Llamada: nombre seguido de (
             if self._check(TokenType.LPAREN):
@@ -1033,20 +1105,31 @@ class Parser:
             if self._check(TokenType.RBRACKET):
                 self._advance()
                 return self._parse_postfix(List(elts=[], ctx="Load").set_pos(tok))
+            # STAR_LIST_V1: `[a, *b]` / `[*a]` — mismo Starred que la tupla
+            # paréntesis; `[*a]` sin coma es valido en CPython (a diferencia
+            # de `(*a)`). _parse_tuple_elts arma el star de elementos posteriores.
+            if self._check(TokenType.STAR):
+                star_tok = self._advance()
+                first_elt = Starred(
+                    value=self._parse_expression(0), ctx="Load"
+                ).set_pos(star_tok)
+                if not self._match(TokenType.COMMA):
+                    self._consume(TokenType.RBRACKET)
+                    return self._parse_postfix(
+                        List(elts=[first_elt], ctx="Load").set_pos(tok)
+                    )
+                elts = self._parse_tuple_elts(first_elt, TokenType.RBRACKET)
+                return self._parse_postfix(List(elts=elts, ctx="Load").set_pos(tok))
             first = self._parse_expression(0)
             if self._check(TokenType.NAME) and self._peek().value == "para":
                 generators = self._parse_comp_generators()
                 self._consume(TokenType.RBRACKET)
                 return ListComp(elt=first, generators=generators).set_pos(tok)
-            elts = [first]
-            while not self._check(TokenType.RBRACKET):
-                if not self._match(TokenType.COMMA):
-                    break
-                if self._check(TokenType.RBRACKET):
-                    break
-                elts.append(self._parse_expression(0))
+            if self._match(TokenType.COMMA):
+                elts = self._parse_tuple_elts(first, TokenType.RBRACKET)
+                return self._parse_postfix(List(elts=elts, ctx="Load").set_pos(tok))
             self._consume(TokenType.RBRACKET)
-            return self._parse_postfix(List(elts=elts, ctx="Load").set_pos(tok))
+            return self._parse_postfix(List(elts=[first], ctx="Load").set_pos(tok))
 
         # Sets / Dicts / Dictcomp
         if self._match(TokenType.LBRACE):
@@ -1216,6 +1299,11 @@ class Parser:
         keywords = []
         if not self._check(TokenType.RPAREN):
             while True:
+                # CALL_TRAILING_COMMA_V1: `f(1, 2,)` — tras la coma la
+                # iteracion vuelve a entrar con ')' a la vista; CPython lo
+                # acepta (dominaba la long tail: ~12 archivos del corpus v4).
+                if self._check(TokenType.RPAREN):
+                    break
                 if self._check(TokenType.NAME) and self._peek_n(1).type == TokenType.EQUAL:
                     arg_name = self._advance().value
                     self._advance()  # =
@@ -1335,8 +1423,26 @@ class Parser:
                 else:
                     conversion = ord(conv_and_spec.strip()[0]) if conv_and_spec.strip() else -1
             elif ":" in expression:
-                expression, format_text = expression.split(":", 1)
-                format_spec = Constant(value=format_text)
+                # FSTRING_SPEC_BRACKET_V1: `{mod_name[:-3]}` — el ':' de un
+                # slice/subscript vive dentro de [], no es format-spec (el
+                # split ciego cortaba el fragmento en `mod_name [` y el
+                # sub-tokenizador reventaba con ENDMARKER; runpy.py:121).
+                spec_idx = None
+                depth = 0
+                for idx, ch in enumerate(expression):
+                    if ch in "[({":
+                        depth += 1
+                    elif ch in "])}":
+                        depth = max(depth - 1, 0)
+                    elif ch == ":" and depth == 0:
+                        spec_idx = idx
+                        break
+                if spec_idx is not None:
+                    expression, format_text = (
+                        expression[:spec_idx],
+                        expression[spec_idx + 1:],
+                    )
+                    format_spec = Constant(value=format_text)
             nested = Parser(tokenize(expression, "<fstring>"))
             nested._source = expression
             expr = nested._parse_expression(0)

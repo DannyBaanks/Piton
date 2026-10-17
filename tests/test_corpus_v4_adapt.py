@@ -87,5 +87,37 @@ class SemiSplitV1(unittest.TestCase):
         parse(out)
 
 
+class SoftMultilineV1(unittest.TestCase):
+    def test_case_opening_paren_multiline(self):
+        # turtle.py:3817 (tier A): `case (` cierra su `):` tres lineas
+        # despues; exigir ':' en la misma linea dejaba `case` sin traducir
+        # y el parser PITON lo veia como nombre.
+        out = pcv4.python_to_piton(
+            "match x:\n"
+            "    case (\n"
+            "        1 | 2,\n"
+            "    ):\n"
+            "        pass\n"
+        )
+        self.assertIn("caso (", out)
+        self.assertIn("segun", out)
+        parse(out)
+
+    def test_case_colon_same_line_still_translates(self):
+        out = pcv4.python_to_piton("match x:\n    case 1:\n        pass\n")
+        self.assertIn("caso", out)
+        parse(out)
+
+    def test_match_assignment_untouched(self):
+        out = pcv4.python_to_piton("match = re.match(pat, s)\n")
+        self.assertIn("match =", out)
+        parse(out)
+
+    def test_case_assignment_untouched(self):
+        out = pcv4.python_to_piton("case = 1\n")
+        self.assertNotIn("caso", out)
+        parse(out)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -103,9 +103,15 @@ _SOFT_ADAPT = ("match", "case")
 
 def _soft_is_statement(line: str, word: str) -> bool:
     stripped = line.strip()
-    return (stripped.startswith(word + " ")
-            and stripped.endswith(":")
-            and "=" not in stripped)
+    if not stripped.startswith(word + " "):
+        return False
+    if "=" in stripped:
+        return False
+    # SOFT_MULTILINE_V1: la sentencia soft puede abrir '(' y cerrar su ':' en
+    # otra linea — turtle.py:3965 abre `case (` y cierra `):` tres lineas
+    # despues; exigir ':' en la misma linea dejaba `case` sin traducir y el
+    # parser PITON lo veia como nombre (COLON en el '|').
+    return stripped.endswith(":") or "(" in stripped
 
 
 def _top_comma(tokens: list[tuple[int, str]], start: int, end: int) -> bool:

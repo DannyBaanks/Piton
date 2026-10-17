@@ -1018,6 +1018,20 @@ class MIRLowerer:
         frame_abi: bool = False, is_generator: bool = False,
     ) -> None:
         args = getattr(node, "args", None)
+        # LAMBDA_VARARG_FAILCLOSED_V1: el dispatcher de closures con vararg
+        # solo se enlaza para funciones (function_varargs + call-sites); una
+        # lambda `*args` construia el closure con has_vararg=0 y el runtime
+        # reventaba en `piton_closure_call6` con un TypeError divergente
+        # (hallado por el gate LambdaStarV1 del corpus v4). Antes de que el
+        # parser aceptara `lambda *args` esto era inalcanzable; ahora falla
+        # cerrado en MIR, como dict-merge.
+        if (
+            getattr(node, "kind", None) == HIRKind.LAMBDA
+            and (getattr(args, "vararg", None) or getattr(args, "kwarg", None))
+        ):
+            raise MIRLoweringError(
+                "lambda *args/**kwargs is not supported in the native subset yet"
+            )
         posonly_params = list(getattr(args, "posonlyargs", []) or []) if args else []
         params = list(getattr(args, "args", []) or []) if args else []
         kwonly_params = list(getattr(args, "kwonlyargs", []) or []) if args else []
