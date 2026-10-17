@@ -10,6 +10,12 @@ from piton.hir import BoolOp, Call, ExceptHandler, HIRKind, HIRNode, Keyword, Wi
 
 
 _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError", "KeyError", "IndexError", "AttributeError", "NameError", "ZeroDivisionError", "OverflowError", "NotImplementedError"}
+# EXC_OSError_V1: raise/except de la familia OSError — el backend solo ve el
+# nombre como string (piton_raise_set + strcmp en handlers), asi que no
+# requiere runtime nuevo. IOError/EnvironmentError son aliases de OSError.
+_BUILTIN_EXCEPTIONS |= {"OSError", "IOError", "EnvironmentError"}
+# BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
+_BUILTIN_BASES = {"object", "classmethod"}
 
 
 def _os_name_const() -> str:
@@ -422,6 +428,15 @@ class MIRLowerer:
                 return
             idx = self._lower_expr(builder, target.slice)
             builder.emit("subscript_store", obj, idx, value)
+        elif target.kind == HIRKind.LOAD:
+            # UNPACK_TARGET_LOAD_V1: el for-target de un genexpr baja como
+            # LOAD (`for (k, v) in ...` en _compat_pickle) — es un nombre, se
+            # guarda igual que STORE. Antes caia al runtime_call set_target,
+            # que el backend no implementa.
+            if target.name in builder.cell_params:
+                builder.emit("cell_store", target.name, value)
+            else:
+                builder.emit("store", target.name, value)
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -581,7 +596,11 @@ class MIRLowerer:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
                 if node.keywords or any(
-                    item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS, HIRKind.ASSIGN, HIRKind.ANN_ASSIGN}
+                    # CLASS_DOCSTRING_V1: el docstring baja como CONST directo
+                    # en el body; CPython lo guarda en __doc__ y el subset no lo
+                    # observa, asi que se descarta (abc/types/warnings/__hello__).
+                    item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS, HIRKind.ASSIGN,
+                                      HIRKind.ANN_ASSIGN, HIRKind.CONST}
                     for item in node.body
                 ):
                     raise MIRLoweringError("native classes currently support methods and class-level assignments only")
@@ -589,7 +608,13 @@ class MIRLowerer:
                     self.decorated_classes.add(node.name)
                 bases = [base.name for base in node.bases if getattr(base, "name", None)]
                 for base in bases:
-                    if base not in self.classes and base not in _BUILTIN_EXCEPTIONS:
+                    # BASE_BUILTIN_V1: `object` es no-op semantico puro en
+                    # CPython (toda clase ya lo hereda); `classmethod` lo pide
+                    # abc.py:28. El subset no modela herencia de metodos
+                    # heredados de estas bases (dunder de object divergiria si
+                    # se usara) — el walk de resolucion se detiene en la clase.
+                    if (base not in self.classes and base not in _BUILTIN_EXCEPTIONS
+                            and base not in _BUILTIN_BASES):
                         raise MIRLoweringError(f"native base class '{base}' must be defined before '{node.name}'")
                 self.classes[node.name] = set()
                 self.class_base_list[node.name] = bases
@@ -598,6 +623,10 @@ class MIRLowerer:
                 used_symbols: set[str] = set()
                 for method in node.body:
                     if method.kind == HIRKind.PASS:
+                        continue
+                    if method.kind == HIRKind.CONST:
+                        # CLASS_DOCSTRING_V1: docstring de miembro (const en el
+                        # body) — descartado como el de modulo.
                         continue
                     if method.kind == HIRKind.ASSIGN:
                         # CLASS_ATTR_V1: record class-level assignments; they
@@ -1707,7 +1736,19 @@ class MIRLowerer:
         if not starred:
             builder.emit("unpack_check", value, len(elts), _active_handler(builder))
             for index, element in enumerate(elts):
-                if element.kind not in (HIRKind.STORE, HIRKind.ATTR):
+                # UNPACK_NESTED_V1: `a, (b, c) = ...` — el sub-target tupla se
+                # materializa con get_item y se recorre (heapq/_compat_pickle).
+                # El unpack_check de cada nivel valida su propia longitud; el
+                # caso de error 'subvalor no-secuencia' queda divergente (nativo
+                # ValueError vs CPython TypeError) y documentado.
+                if element.kind == HIRKind.TUPLE:
+                    index_temp = builder.temp()
+                    builder.emit("const", index, result=index_temp)
+                    element_value = builder.temp()
+                    builder.emit("get_item", value, index_temp, result=element_value)
+                    self._store_tuple_target(builder, element, element_value)
+                    continue
+                if element.kind not in (HIRKind.STORE, HIRKind.ATTR, HIRKind.SUBSCR, HIRKind.LOAD):
                     raise MIRLoweringError(
                         "desempaquetado solo soporta nombres y atributos (tuplas anidadas pendientes)"
                     )
@@ -1745,10 +1786,13 @@ class MIRLowerer:
         else:
             upper = None
         middle = builder.temp()
+        # STARRED_SLICE_LIST_V1: el `*medio` de un desempaquetado es SIEMPRE
+        # lista en CPython; el flag as_list le dice al backend que convierta
+        # (un slice de tupla vuelve tupla — divergia contra el oracle).
         if upper is None:
-            builder.emit("get_slice", value, lower, None, result=middle)
+            builder.emit("get_slice", value, lower, None, None, "as_list", result=middle)
         else:
-            builder.emit("get_slice", value, lower, upper, result=middle)
+            builder.emit("get_slice", value, lower, upper, None, "as_list", result=middle)
         self._store(builder, elts[si].value, middle)
         total = len(elts) - 1
         for offset, element in enumerate(after):
@@ -1756,7 +1800,15 @@ class MIRLowerer:
 
     def _store_indexed_element(self, builder: _Builder, element: HIRNode, value: str, index: int) -> None:
         """Store one unpacked element fetched by (possibly negative) position."""
-        if element.kind not in (HIRKind.STORE, HIRKind.ATTR):
+        # UNPACK_NESTED_V1: sub-target tupla tambien en el camino con star.
+        if element.kind == HIRKind.TUPLE:
+            index_temp = builder.temp()
+            builder.emit("const", index, result=index_temp)
+            element_value = builder.temp()
+            builder.emit("get_item", value, index_temp, result=element_value)
+            self._store_tuple_target(builder, element, element_value)
+            return
+        if element.kind not in (HIRKind.STORE, HIRKind.ATTR, HIRKind.SUBSCR, HIRKind.LOAD):
             raise MIRLoweringError(
                 "desempaquetado solo soporta nombres y atributos (tuplas anidadas pendientes)"
             )
@@ -2071,9 +2123,17 @@ class MIRLowerer:
                     raise MIRLoweringError("native except does not support except* yet")
                 h_accepted = None
                 if handler.type_ is not None:
-                    if handler.type_.kind != HIRKind.LOAD:
+                    # EXCEPT_TUPLE_V1: `excepto (A, B):` — se guarda la lista
+                    # de nombres; se expande a N pares (accepted, label) al
+                    # MISMO bloque al volcar exception_handlers (hashlib.py:140).
+                    if handler.type_.kind == HIRKind.LOAD:
+                        h_accepted = handler.type_.name
+                    elif (handler.type_.kind == HIRKind.TUPLE
+                          and getattr(handler.type_, "elts", None)
+                          and all(e.kind == HIRKind.LOAD for e in handler.type_.elts)):
+                        h_accepted = [e.name for e in handler.type_.elts]
+                    else:
                         raise MIRLoweringError("native except type must be a builtin exception name")
-                    h_accepted = handler.type_.name
                 handlers.append((handler, h_accepted, builder.new_block(), handler.name))
             handlers_meta = handlers
         else:
@@ -2088,7 +2148,12 @@ class MIRLowerer:
         handler_block = handlers_meta[0][2] if handlers_meta else None
         accepted = handlers_meta[0][1] if handlers_meta else None
         if handlers_meta:
-            builder.exception_handlers.append([(acc, block.label) for _, acc, block, _ in handlers_meta])
+            # EXCEPT_TUPLE_V1: un handler con N nombres ocupa N pares.
+            handler_pairs = []
+            for _, acc, block, _ in handlers_meta:
+                names = acc if isinstance(acc, list) else [acc]
+                handler_pairs.extend((name, block.label) for name in names)
+            builder.exception_handlers.append(handler_pairs)
         elif finally_body:
             # FINALBODY_UNWIND_V1: an exception escaping the try still runs
             # the finally block first, instead of skipping it.
@@ -2127,7 +2192,11 @@ class MIRLowerer:
             builder.emit("catch_clear")
             previous_reraise_type = builder.reraise_type
             previous_in_handler = builder.in_except_handler
-            builder.reraise_type = handler_accepted
+            # EXCEPT_TUPLE_V1: con lista de nombres el reraise estatico usa
+            # el primero (el tipo live real lo conserva piton_reraise_save).
+            builder.reraise_type = (
+                handler_accepted[0] if isinstance(handler_accepted, list) else handler_accepted
+            )
             builder.in_except_handler = True
             previous_bindings = builder.exception_bindings
             builder.exception_bindings = previous_bindings | ({bind_name} if bind_name else set())
@@ -2654,7 +2723,13 @@ class MIRLowerer:
         chain = self._exception_chain(exception_type)
         for entries in reversed(builder.exception_handlers):
             for accepted, label in entries:
-                if accepted is None or accepted in {"Exception", "BaseException"} or accepted in chain:
+                # EXCEPT_TUPLE_V1: accepted puede ser la lista de nombres de
+                # un handler en tupla; matchea si cualquiera esta en la chain.
+                names = accepted if isinstance(accepted, list) else [accepted]
+                if any(
+                    name is None or name in {"Exception", "BaseException"} or name in chain
+                    for name in names
+                ):
                     return label
         return None
 

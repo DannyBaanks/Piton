@@ -200,11 +200,12 @@ class ForTupleIterV1(unittest.TestCase):
 
 
 class StarredTupleV1(unittest.TestCase):
-    """STARRED_TUPLE_V1: el `*` abre/compone tuplas paréntesis en parse.
+    """STARRED_TUPLE_V1: el `*` abre/compone tuplas parentesis en parse.
 
-    El unpacking de runtime (`set_target`) todavia no existe en el subconjunto
-    nativo: el gate diferencial falla cerrado con NativeBuildError, que es el
-    comportamiento honesto (el registro concreto lo marcara el corpus).
+    El desempaquetado de runtime (`(*head, tail)=t`) ahora corre: MIR emite
+    get_slice con flag as_list (STARRED_SLICE_LIST_V1) porque CPython
+    devuelve SIEMPRE lista en `*mid` (tupla/str/list de origen); el backend
+    convierte el slice a PK_LIST en linux x86.
     """
 
     def test_star_led_parses(self):
@@ -216,10 +217,13 @@ class StarredTupleV1(unittest.TestCase):
     def test_star_in_tuple_value_parses(self):
         self.assertIsNotNone(parse("x = (a ,b ,*c )\n"))
 
-    def test_unpack_fails_closed(self):
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError):
-            compare_native_to_cpython("t =(1 ,2 ,3 )\n(*head ,tail )=t\n")
+    def test_star_led_differential(self):
+        # STARRED_SLICE_LIST_V1: `*head` de una tupla devuelve LISTA (el
+        # flag as_list convierte el slice; antes fallaba cerrado en build).
+        _assert_matches(self, "t =(1 ,2 ,3 )\n(*head ,tail )=t\nimprimir (head ,tail )\n")
+
+    def test_star_on_str_differential(self):
+        _assert_matches(self, "a ,*b ='xyz'\nimprimir (a ,b )\n")
 
 
 class DictMergeV1(unittest.TestCase):
@@ -533,6 +537,118 @@ class AnnotStarArgsV1(unittest.TestCase):
             "    devolver kwargs\n"
             "imprimir (f (a =1 ))\n",
         )
+
+
+class MirStdlibGatesV1(unittest.TestCase):
+    """MIR_STDLIB_V1: los 5 huecos que dejaron los 13 MIR_FAIL no-modulo del
+    corpus v4 (report after-gaps-v3: 152 MIR_FAIL, 13 sin `native module not
+    supplied`), atacados en piton/mir.py + linux_x86.py:
+
+      M1 CLASS_DOCSTRING_V1  docstring de clase: el CONST del body llegaba
+          al loop `for method in node.body` y MIR lo rechazaba
+          (`__hello__.py`: `class TestFrozenUtf8_1: "<doc>"`).
+      M2 UNPACK_* (ver UnpackV1/StarredTupleV1)  sub-tupla anidada +
+          target LOAD + star con as_list + indice negativo del resto.
+      M3 EXCEPT_TUPLE_V1  `excepto (ValueError, TypeError)`; solo se
+          aceptaba un nombre por handler (hashlib.py: except (TypeError,
+          ValueError): ...).
+      M4 EXC_OSError_V1  OSError/IOError/EnvironmentError no estaban en
+          _BUILTIN_EXCEPTIONS (nturl2path.py).
+      M5 BASE_BUILTIN_V1  `class C(object)` sin definicion previa de object
+          (593: base-class-not-defined).
+
+    Edge documentado (fail-closed honesto): target anidado dentro de un
+    `para` (unpack de runtime no existe en el camino del for).
+    """
+
+    def test_m1_class_docstring_with_method(self):
+        _assert_matches(
+            self,
+            'clase C :\n'
+            '    "doc "\n'
+            '    funcion f (self ):\n'
+            '        devolver 1 \n'
+            'obj = C ()\n'
+            'imprimir (obj . f () )\n',
+        )
+
+    def test_m1_class_docstring_only(self):
+        # __hello__.py: docstring como unico statement del body.
+        _assert_matches(
+            self,
+            'clase D :\n'
+            '    "solo doc "\n'
+            'imprimir ("si " si D () sino "no ")\n',
+        )
+
+    def test_m3_except_tuple_hit(self):
+        _assert_matches(
+            self,
+            'intentar :\n'
+            '    lanzar ValueError ("a ")\n'
+            'excepto (ValueError ,TypeError ):\n'
+            '    imprimir ("valor ")\n',
+        )
+
+    def test_m3_except_tuple_second_name(self):
+        # el segundo nombre del tupla tambien captura (antes solo el
+        # primero estaba en el set del handler).
+        _assert_matches(
+            self,
+            'intentar :\n'
+            '    lanzar TypeError ("b ")\n'
+            'excepto (ValueError ,TypeError ):\n'
+            '    imprimir ("tipo ")\n',
+        )
+
+    def test_m3_except_tuple_miss_falls_through(self):
+        _assert_matches(
+            self,
+            'intentar :\n'
+            '    lanzar KeyError ("c ")\n'
+            'excepto (ValueError ,TypeError ):\n'
+            '    imprimir ("nunca ")\n'
+            'sino :\n'
+            '    imprimir ("otro ")\n',
+        )
+
+    def test_m4_oserror_builtin(self):
+        _assert_matches(
+            self,
+            'intentar :\n'
+            '    lanzar OSError ("falta ")\n'
+            'excepto OSError :\n'
+            '    imprimir ("capturado ")\n',
+        )
+
+    def test_m4_ioerror_alias(self):
+        _assert_matches(
+            self,
+            'intentar :\n'
+            '    lanzar IOError ("io ")\n'
+            'excepto IOError :\n'
+            '    imprimir ("capturado ")\n',
+        )
+
+    def test_m5_object_base(self):
+        _assert_matches(
+            self,
+            'clase C (object ):\n'
+            '    funcion f (self ):\n'
+            '        devolver 7 \n'
+            'imprimir (C () . f () )\n',
+        )
+
+    def test_edge_for_nested_target_fails_closed(self):
+        # documentado: el `para` no tiene unpack de runtime en el backend;
+        # el tipo del indice no es seq y el check es fail-closed.
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython(
+                'datos = [(1 ,(2 ,3 ))]\n'
+                'para a ,(b ,c ) en datos :\n'
+                '    imprimir (a )\n'
+            )
 
 
 if __name__ == "__main__":

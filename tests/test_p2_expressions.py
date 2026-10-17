@@ -90,11 +90,14 @@ class UnpackV1(unittest.TestCase):
             "funcion par():\n    devolver (7, 8)\na, b = par()\nimprimir((a, b))\n",
         )
 
-    def test_nested_tuple_target_fails_closed(self):
-        # parses, but the MIR layer rejects nested tuple targets fail-closed
+    def test_nested_tuple_target(self):
+        # UNPACK_NESTED_V1: sub-target tupla soportado (recursion con
+        # unpack_check por nivel; antes fail-closed).
         parse("a, (b, c) = (1, (2, 3))\n")
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("a, (b, c) = (1, (2, 3))\n")
+        _assert_matches(self, "a, (b, c) = (1, (2, 3))\nimprimir((a, b, c))\n")
+
+    def test_nested_triple_target(self):
+        _assert_matches(self, "a,(b,(c,d))=1,(2,(3,4))\nimprimir((a,b,c,d))\n")
 
 
 class UnpackArityV1(unittest.TestCase):

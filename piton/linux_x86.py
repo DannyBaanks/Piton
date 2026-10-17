@@ -8471,10 +8471,27 @@ class LinuxCEmitter:
                 raw_idx = self._fn_consts.get(idx)
                 if raw_idx is None:
                     raw_idx = self._fn_consts.get(aliases.get(idx, idx))
-                if te is not None and isinstance(raw_idx, int) and 0 <= raw_idx < len(te):
-                    types[result] = te[raw_idx][1]
-                    self._emit_exc_check(out, function, _gi_handler)
-                    return out
+                if te is not None and isinstance(raw_idx, int):
+                    # GET_ITEM_ELEM_NEG_V1: `t[-1]` (el resto tras `*` en el
+                    # star-unpack usa indice negativo) normaliza como en
+                    # CPython; sin esto la anotacion no aplicaba y el slot
+                    # se imprimia como int crudo.
+                    if raw_idx < 0:
+                        raw_idx += len(te)
+                    if 0 <= raw_idx < len(te):
+                        types[result] = te[raw_idx][1]
+                        # GET_ITEM_ELEM_PROP_V1: si el item es una tupla con
+                        # estructura anotada, el resultado la hereda (cadena de
+                        # niveles de `a,(b,(c,d))=...`) y el TIPO tambien: sin la
+                        # anotacion el slot se imprimia como int (puntero crudo
+                        # en `(*a, rest)=t` con rest de tipo tupla).
+                        _sub = te[raw_idx][0]
+                        if te[raw_idx][1] == "tuple" and isinstance(_sub, str) and _sub.startswith("%") \
+                                and _sub in self._tuple_elems:
+                            self._tuple_elems[result] = self._tuple_elems[_sub]
+                            types[result] = "tuple"
+                        self._emit_exc_check(out, function, _gi_handler)
+                        return out
             elif collection_type in {"bytes", "bytearray"}:
                 # BYTES_V1: b[i] is an int 0..255 (negative indices wrap).
                 out.append(f'    {_name(result)}=piton_bytes_get((PitonBytes*){self._value(coll)},{self._value(idx)});')
@@ -8579,13 +8596,28 @@ class LinuxCEmitter:
             # helpers apply direction-aware defaults.
             coll, lower, upper = args[0], args[1], args[2]
             step = args[3] if len(args) > 3 else None
+            # STARRED_SLICE_LIST_V1: `as_list` llega como 5to arg (MIR starred
+            # unpack); step=None via args[3].
+            as_list = len(args) > 4 and args[4] == "as_list"
             collection_type = types.get(coll)
             if step is None:
                 lower_value = self._value(lower) if lower is not None else "0"
                 upper_value = self._value(upper) if upper is not None else "0x7FFFFFFFFFFFFFFFL"
                 if collection_type == "str":
-                    out.append(f'    {_name(result)}=(long)piton_str_slice((const char*){self._value(coll)},{lower_value},{upper_value});')
-                    types[result] = "str"
+                    if as_list:
+                        # STARRED_SLICE_LIST_V1: `*b` sobre str -> lista de chars
+                        # (CPython: a,*b='xyz' -> b=['y','z']). piton_str_slice
+                        # devuelve bits (long) y items es PitonSlot{bits,kind}.
+                        out.append(
+                            f'    {{const char*_cs=(const char*)piton_str_slice((const char*){self._value(coll)},{lower_value},{upper_value});'
+                            f'long _n=(long)piton_strlen(_cs);PitonSeq*_sl=piton_seq_new(PK_LIST,_n);'
+                            f'for(long _si=0;_si<_n;_si++)_sl->items[_si]=(PitonSlot){{(long)piton_str_slice(_cs+_si,0,1),PK_STR}};'
+                            f'{_name(result)}=(long)_sl;}}'
+                        )
+                        types[result] = "list"
+                    else:
+                        out.append(f'    {_name(result)}=(long)piton_str_slice((const char*){self._value(coll)},{lower_value},{upper_value});')
+                        types[result] = "str"
                 elif collection_type == "range":
                     out.append(f'    {_name(result)}=piton_range_slice((PitonRange*){self._value(coll)},{lower_value},{upper_value});')
                     types[result] = "range"
@@ -8594,6 +8626,15 @@ class LinuxCEmitter:
                     cty = "PitonBytes" if collection_type == "bytes" else "PitonByteArray"
                     out.append(f'    {_name(result)}=(long){fn}(({cty}*){self._value(coll)},{lower_value},{upper_value});')
                     types[result] = collection_type
+                elif collection_type == "tuple" and as_list:
+                    # tupla -> copia explicita a PK_LIST (CPython: *mid es list)
+                    out.append(
+                        f'    {{PitonSeq*_ss=piton_seq_slice((PitonSeq*){self._value(coll)},{lower_value},{upper_value});'
+                        f'PitonSeq*_sl=piton_seq_new(PK_LIST,_ss->length);'
+                        f'for(long _si=0;_si<_ss->length;_si++)_sl->items[_si]=_ss->items[_si];'
+                        f'{_name(result)}=(long)_sl;}}'
+                    )
+                    types[result] = "list"
                 elif collection_type in {"list", "tuple"}:
                     out.append(f'    {_name(result)}=piton_seq_slice((PitonSeq*){self._value(coll)},{lower_value},{upper_value});')
                     types[result] = collection_type
