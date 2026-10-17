@@ -1097,15 +1097,17 @@ class MIRLowerer:
             raw_defaults = list(getattr(args, "defaults", []) or [])
             default_params = positional_params[-len(raw_defaults):] if raw_defaults else []
             for param, default_node in zip(default_params, raw_defaults):
-                if default_node.kind != HIRKind.CONST:
+                # M6 STATIC_CONST_EVAL_V1: CONST y literales compuestos de
+                # consts ((), [], (a, b)) se evaluan a valor estatico; Name /
+                # Attribute / exprs siguen fail-closed (el binding de modulo
+                # no es const en definicion).
+                if not self._static_default_value(default_node, defaults_map, param):
                     raise MIRLoweringError("native function defaults currently support constant values only")
-                defaults_map[param] = default_node.value
             for param, default_node in zip(kwonly_params, getattr(args, "kw_defaults", []) or []):
                 if default_node is None:
                     continue
-                if default_node.kind != HIRKind.CONST:
+                if not self._static_default_value(default_node, defaults_map, param):
                     raise MIRLoweringError("native function defaults currently support constant values only")
-                defaults_map[param] = default_node.value
         total_params = len(positional_params) + len(kwonly_params) + int(bool(vararg_name)) + int(bool(kwarg_name))
         use_frame_abi = frame_abi or total_params > 4
         if vararg_name:
@@ -1201,6 +1203,27 @@ class MIRLowerer:
         if cell_vars:
             builder.function.cell_vars = list(cell_vars)
         self.functions.append(builder.function)
+
+    def _static_default_value(self, node: HIRNode, defaults_map: dict[str, Any], param: str) -> bool:
+        """M6 STATIC_CONST_EVAL_V1: evalua el HIR de un default a valor
+        estatico. Acepta CONST y TUPLE/LIST cuyos elementos sean todos
+        evaluables (incluidos vacios: getopt `output=[]`, warnings
+        `warn(..., ())`). Devuelve False para cualquier otro HIR (Name,
+        Attribute, ops): el binding no es const en el momento de definicion
+        y el subset no modela evaluacion diferida."""
+        if node.kind == HIRKind.CONST:
+            defaults_map[param] = node.value
+            return True
+        if node.kind in (HIRKind.TUPLE, HIRKind.LIST):
+            elts = list(getattr(node, "elts", None) or [])
+            values: list[Any] = []
+            for elt in elts:
+                if elt.kind != HIRKind.CONST:
+                    return False
+                values.append(elt.value)
+            defaults_map[param] = tuple(values) if node.kind == HIRKind.TUPLE else values
+            return True
+        return False
 
     def _walk(self, value: Any):
         if isinstance(value, HIRNode):

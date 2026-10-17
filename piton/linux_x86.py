@@ -2703,6 +2703,35 @@ class LinuxCEmitter:
             types[function.vararg] = "tuple"
         if function.kwarg:
             types[function.kwarg] = "dict"
+        # M6 SEQ_PARAM_DEFAULT_V1: un param cuyo default estatico es
+        # list/tuple hereda ese tipo dentro del callee (el ABI no trae tipos;
+        # sin esto la collection default se imprimia como puntero crudo).
+        # El caller rechaza escalar explicito en ese param (ver
+        # _emit_user_function_call), asi que la anotacion no se contradice
+        # con argumentos observados.
+        for _pd_param, _pd_value in zip(function.params, function.defaults or []):
+            if isinstance(_pd_value, tuple):
+                types[_pd_param] = "tuple"
+                _pd_elems = []
+                for _item in _pd_value:
+                    if isinstance(_item, str):
+                        _pd_elems.append((_item, "str"))
+                    elif isinstance(_item, bool):
+                        _pd_elems.append((_item, "bool"))
+                    elif isinstance(_item, int):
+                        _pd_elems.append((_item, "int"))
+                    elif _item is None:
+                        _pd_elems.append((_item, "none"))
+                    else:
+                        _pd_elems.append((_item, "float"))
+                self._tuple_elems[_pd_param] = tuple(_pd_elems)
+            elif isinstance(_pd_value, list):
+                types[_pd_param] = "list"
+            elif isinstance(_pd_value, str):
+                # M6 STR_PARAM_DEFAULT_V1: misma familia que SEQ_PARAM_DEFAULT
+                # (bug preexistente: `devolver (a, b)` con default str imprimia
+                # el puntero del param como int).
+                types[_pd_param] = "str"
         if function.self_class and function.params:
             types[function.params[0]] = f"object:{function.self_class}"
         # WITH_PROTOCOL_V1: __exit__(self, tipo, mensaje, tb) receives the
@@ -2878,9 +2907,11 @@ class LinuxCEmitter:
     def _reject_complex_args(self, values: Any, types: dict, ctx: str) -> None:
         """COMPLEX_V1: el ABI de llamada tipa los parámetros del callee como int;
         un complejo cruzando esa frontera se imprimiría como puntero (divergencia
-        silenciosa). Fail-closed en build hasta existir tipado de parámetros."""
+        silenciosa). Fail-closed en build hasta existir tipado de parámetros.
+        M6: los defaults completados pueden ser list/tuple de Python (no son
+        operands hashables) — solo los operands str se consultan en types."""
         for value in values:
-            if types.get(value) == "complex":
+            if isinstance(value, str) and types.get(value) == "complex":
                 raise NativeBuildError(
                     f"Linux passing a complex value into {ctx} is not supported yet (fail closed)"
                 )
@@ -2926,6 +2957,29 @@ class LinuxCEmitter:
             return f"piton_double_bits({_float_c_literal(value)})"
         if isinstance(value, complex):
             return f"(long)piton_complex_new({_float_c_literal(value.real)},{_float_c_literal(value.imag)})"
+        if isinstance(value, (list, tuple)):
+            # M6 SEQ_VALUE_V1: default/const collection -> IIFE con
+            # piton_seq_new (el caller completa defaults; el callee no tiene
+            # anotacion de tipo, asi que un uso interno tipo-estatico puede
+            # seguir fallando — documentado). Items anidados fallan cerrados.
+            seq_kind = "PK_TUPLE" if isinstance(value, tuple) else "PK_LIST"
+            parts = [f"{{PitonSeq*_d=piton_seq_new({seq_kind},{len(value)});"]
+            for i, item in enumerate(value):
+                if item is None:
+                    bits, slot_kind = "0", "PK_NONE"
+                elif isinstance(item, bool):
+                    bits, slot_kind = str(int(item)), "PK_BOOL"
+                elif isinstance(item, int):
+                    bits, slot_kind = str(item), "PK_INT"
+                elif isinstance(item, float):
+                    bits, slot_kind = f"piton_double_bits({_float_c_literal(item)})", "PK_FLOAT"
+                elif isinstance(item, str):
+                    bits, slot_kind = f"(long){json.dumps(item)}", "PK_STR"
+                else:
+                    raise NativeBuildError(f"Linux scalar backend cannot encode nested collection item {item!r}")
+                parts.append(f"_d->items[{i}]=(PitonSlot){{{bits},{slot_kind}}};")
+            parts.append("_d;}")
+            return f"(long)({''.join(parts)})"
         raise NativeBuildError(f"Linux scalar backend cannot encode {value!r}")
 
     @staticmethod
@@ -3317,6 +3371,22 @@ class LinuxCEmitter:
             types[result] = "int"
             return out
         values = self._complete_call_args(function_name, list(values))
+        # M6 SEQ_PARAM_DEFAULT_V1: el callee anota el tipo del default
+        # collection; un argumento escalar explicito con tipo conocido en
+        # ese param es fail-closed (CPython lo admitiria, pero el subset no
+        # puede re-anotar el callee por llamada).
+        for _val, _pd in zip(values, _defaults or []):
+            if isinstance(_pd, (list, tuple, str)) and isinstance(_val, str):
+                _pt = types.get(_val)
+                _allowed = (
+                    {"list"} if isinstance(_pd, list)
+                    else {"tuple"} if isinstance(_pd, tuple)
+                    else {"str"}
+                )
+                if _pt is not None and _pt not in _allowed:
+                    raise NativeBuildError(
+                        f"Linux {function_name}() collection/string-default param rejects a {_pt} argument (fail closed)"
+                    )
         self._reject_complex_args(values, types, f"function '{function_name}'")
         encoded_values = ",".join(self._value(value) for value in values)
         out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
@@ -4790,6 +4860,11 @@ class LinuxCEmitter:
                 return "complex"
             if isinstance(value, int):
                 return "bigint" if abs(value) > 9223372036854775807 else "int"
+            # M6 SEQ_LITERAL_V1: literales compuestos de consts (defaults).
+            if isinstance(value, tuple):
+                return "tuple"
+            if isinstance(value, list):
+                return "list"
             return self._UNKNOWN
 
         cycle_cache: dict[str, str | None] = {}
@@ -4953,6 +5028,21 @@ class LinuxCEmitter:
                     if function.kwarg and function.kwarg not in seeded:
                         seeded.add(function.kwarg)
                         changed = note_var(function.kwarg, "dict") or changed
+                    # M6 SEQ_PARAM_DEFAULT_V1: param con default collection
+                    # se seedea con ese tipo; `devolver b` infiere tuple y
+                    # el caller imprime la collection, no el puntero.
+                    for _pd_param, _pd_value in zip(function.params, function.defaults or []):
+                        if _pd_param in seeded:
+                            continue
+                        if isinstance(_pd_value, tuple):
+                            seeded.add(_pd_param)
+                            changed = note_var(_pd_param, "tuple") or changed
+                        elif isinstance(_pd_value, list):
+                            seeded.add(_pd_param)
+                            changed = note_var(_pd_param, "list") or changed
+                        elif isinstance(_pd_value, str):
+                            seeded.add(_pd_param)
+                            changed = note_var(_pd_param, "str") or changed
 
                 if not returns:
                     inferred: str | None = "none"
@@ -5246,6 +5336,30 @@ class LinuxCEmitter:
                 self._fn_consts[result] = value
                 out.append(f"    {_name(result)}=(long)piton_complex_new({_float_c_literal(value.real)},{_float_c_literal(value.imag)});")
                 types[result] = "complex"
+            elif isinstance(value, (list, tuple)):
+                # M6 SEQ_CONST_V1: los call paths de kwonly/frame-ABI emiten
+                # el default collection como const; _value lo convierte a
+                # IIFE piton_seq_new y se anota el tipo (+ elems de tuple).
+                out.append(f"    {_name(result)}={self._value(value)};")
+                types[result] = "list" if isinstance(value, list) else "tuple"
+
+                def _seq_elem_kind(item: Any) -> str:
+                    if isinstance(item, str):
+                        return "str"
+                    if isinstance(item, bool):
+                        return "bool"
+                    if isinstance(item, int):
+                        return "int"
+                    if item is None:
+                        return "none"
+                    return "float"
+
+                if isinstance(value, tuple):
+                    self._tuple_elems[result] = tuple((item, _seq_elem_kind(item)) for item in value)
+                elif value:
+                    kinds = {_seq_elem_kind(item) for item in value}
+                    if len(kinds) == 1:
+                        self._coll_elems[result] = kinds.pop()
             else:
                 raise NativeBuildError(f"Linux backend cannot encode constant {value!r}")
         elif op == "load":

@@ -651,5 +651,74 @@ class MirStdlibGatesV1(unittest.TestCase):
             )
 
 
+class M6SeqDefaultsV1(unittest.TestCase):
+    """M6 STATIC_CONST_EVAL_V1 + SEQ_VALUE_V1 + SEQ_PARAM_DEFAULT_V1 +
+    STR_PARAM_DEFAULT_V1: los defaults no-const evaluables a literal.
+
+    MIR acepta defaults TUPLE/LIST de consts (incl. vacios: getopt
+    `output=[]`, warnings `warn(..., ())`); el backend los codifica como
+    IIFE piton_seq_new (op const y _value), anota el tipo del param en el
+    callee y la inferencia de return types. Name/Attribute siguen
+    fail-closed (el binding de modulo no es const en definicion: quopri
+    `output=output`, warnings `Warning`).
+
+    Edge documentado: un argumento escalar explicito en un param con
+    default collection/str es fail-closed en build (CPython lo admitiria,
+    el subset no puede re-anotar el callee por llamada).
+    """
+
+    def test_list_empty_default(self):
+        _assert_matches(self, "funcion f (x =[]) :\n    devolver 0 \nimprimir (f () )\n")
+
+    def test_tuple_empty_default(self):
+        _assert_matches(self, "funcion f (x =()) :\n    devolver 1 \nimprimir (f () )\n")
+
+    def test_tuple_const_default_roundtrip(self):
+        _assert_matches(
+            self,
+            "funcion f (a =1 ,b =(2 ,3 )) :\n"
+            "    devolver (a ,b )\n"
+            "imprimir (f () )\n",
+        )
+
+    def test_list_default_roundtrip(self):
+        _assert_matches(self, "funcion f (a =[1 ,2 ]) :\n    devolver a \nimprimir (f () )\n")
+
+    def test_mixed_const_list_default(self):
+        _assert_matches(
+            self,
+            'funcion f (a =["x ",1 ,Verdadero ,Nada ]) :\n'
+            "    devolver a \n"
+            "imprimir (f () )\n",
+        )
+
+    def test_kwonly_tuple_default(self):
+        _assert_matches(self, "funcion f (*,b =(5 ,6 )) :\n    devolver b \nimprimir (f () )\n")
+
+    def test_str_default_roundtrip(self):
+        # STR_PARAM_DEFAULT_V1: preexistente — `devolver (a, b)` con default
+        # str imprimia el puntero del param como int.
+        _assert_matches(
+            self,
+            'funcion f (a =1 ,b ="x ") :\n'
+            "    devolver (a ,b )\n"
+            "imprimir (f () )\n"
+            'imprimir (f (2 ,"y "))\n',
+        )
+
+    def test_collection_arg_override(self):
+        _assert_matches(self, "funcion f (a =[1 ,2 ]) :\n    devolver a \nimprimir (f ([9 ]))\n")
+
+    def test_scalar_arg_to_collection_default_fails_closed(self):
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython("funcion f (a =[1 ]) :\n    devolver 3 \nimprimir (f (7 ))\n")
+
+    def test_int_arg_to_str_default_fails_closed(self):
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython('funcion f (b ="x ") :\n    devolver b \nimprimir (f (7 ))\n')
+
+
 if __name__ == "__main__":
     unittest.main()
