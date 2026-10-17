@@ -801,5 +801,83 @@ class DownstreamGatesV1(unittest.TestCase):
         _assert_matches(self, 'imprimir ("a\\\\b ")\n')
 
 
+class CorpusFinishParseV1(unittest.TestCase):
+    """CORPUS_FINISH_PARSE_V1: los 3 PARSE_FAIL del corpus v4 (report
+    after-downstream-v1), atacados en lexer.py + parser.py:
+
+      FSTRING_QUOTE_REUSE_V1 (PEP 701, CPython 3.12): dentro del
+      replacement field la quote del f-string NO cierra el token; los
+      strings internos se escanean como bloques con brace-matching
+      (turtle:3820 f'({', '.join(call_args)})', traceback:681 con
+      '__notes__' en la misma quote).
+      NO_VAR_V1: la variable `no` de pydoc:283 (`no = []`, :284
+      `no.append(x)`, :285 `devolver (yes, no)`) — legal en Python, keyword
+      en PITON. El parser la trata como nombre cuando el token siguiente
+      no puede iniciar una expresion (= . ) ] } , : ; == != < <= > >=
+      NEWLINE/DEDENT/EOF).
+      ONE_IF_ASSIGN_V1 (pydoc:1812): el adaptador reescribe el one-liner
+      `if c: a, b = v1, v2` como `(si c :a ,b )=(v1 ,v2 )`; se desugara a
+      un IfStmt real con la asignacion en el body.
+    """
+
+    def test_fstring_quote_reuse_join(self):
+        # turtle:3820 — quote simple dentro de f'...' con {expr}.
+        _assert_matches(
+            self,
+            "call_args =['a ','b ']\n"
+            "call_text =f'({', '.join (call_args )})'\n"
+            "imprimir (call_text )\n",
+        )
+
+    def test_fstring_quote_reuse_args(self):
+        # traceback:681 — string con la misma quote como argumento del expr.
+        _assert_matches(
+            self,
+            "e =1 \n"
+            "m =f'Ignored error getting __notes__: {'__notes__'} {e }'\n"
+            "imprimir (m )\n",
+        )
+
+    def test_fstring_plain_and_escapes_untouched(self):
+        _assert_matches(self, "x =2 \nimprimir (f'val {x }',f'{{lit}} {x }')\n")
+
+    def test_pydoc_no_variable(self):
+        _assert_matches(
+            self,
+            "s =[1 ,2 ]\n"
+            "no =[] \n"
+            "si 1 en s :\n"
+            "    pasar \n"
+            "sino :\n"
+            "    no .append (9 )\n"
+            "imprimir (no )\n",
+        )
+
+    def test_pydoc_no_return_tuple(self):
+        # pydoc:285 `return yes, no` adaptado.
+        _assert_matches(self, "no =4 \nimprimir ((1 ,no ))\n")
+
+    def test_no_operator_untouched(self):
+        _assert_matches(self, "imprimir (no Verdadero ,no (1 ==2 ),no no 1 )\n")
+
+    def test_no_in_fusion_untouched(self):
+        _assert_matches(self, "imprimir (1 no en [2 ],'a ' no es 2 )\n")
+
+    def test_one_if_assign_parses(self):
+        # forma exclusiva del adaptador (tier A compila, no ejecuta).
+        self.assertIsNotNone(parse("(si 1 :x )=(2 )\n"))
+        self.assertIsNotNone(parse("x ,y =0 ,0 \n(si 1 :x ,y )=(2 ,3 )\n"))
+
+    def test_one_liner_tuple_assign_differential(self):
+        # la semantica desugared, via el one-liner nativo de PITON.
+        _assert_matches(self, "x ,y =0 ,0 \nsi 1 :x ,y =2 ,3 \nimprimir ((x ,y ))\n")
+
+    def test_one_liner_pydoc_shape_differential(self):
+        _assert_matches(
+            self,
+            "n =2 \nmodule ,m =0 ,0 \nsi n >1 :module ,m =7 ,n +1 \nimprimir ((module ,m ))\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

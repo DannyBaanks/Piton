@@ -608,9 +608,51 @@ class Parser:
             return Starred(value=inner, ctx="Store").set_pos(star_tok)
         return self._parse_expression(7)
 
+    def _parse_one_if_assign(self) -> CSTNode:
+        """ONE_IF_ASSIGN_V1: `(si cond :a ,b )=(v1 ,v2 )` — desugar a
+        If(cond, [Assign]) para el one-liner `if c: a, b = v1, v2`."""
+        lparen = self._advance()
+        si_tok = self._advance()
+        cond = self._parse_expression(0)
+        self._consume(TokenType.COLON)
+        targets = [self._parse_expression(0)]
+        while self._match(TokenType.COMMA):
+            if self._check(TokenType.RPAREN):
+                break
+            targets.append(self._parse_expression(0))
+        self._consume(TokenType.RPAREN)
+        self._consume(TokenType.EQUAL)
+        first_value = self._parse_expression(0)
+        if self._check(TokenType.COMMA):
+            values = [first_value]
+            while self._match(TokenType.COMMA):
+                values.append(self._parse_expression(0))
+            value = Tuple(elts=values, ctx="Load").set_pos(first_value)
+        else:
+            value = first_value
+        for target in targets:
+            self._mark_store(target)
+        tuple_target = (
+            Tuple(elts=targets, ctx="Store").set_pos(lparen)
+            if len(targets) > 1 else targets[0]
+        )
+        assign = Assign(targets=[tuple_target], value=value).set_pos(lparen)
+        return IfStmt(test=cond, body=[assign], orelse=[]).set_pos(si_tok)
+
     def _parse_expr_stmt(self) -> CSTNode:
         """Parsea: assignment, annotated assign, augmented assign, o expresión simple."""
         start_tok = self._peek()
+        # ONE_IF_ASSIGN_V1 (pydoc:1812): el adaptador del corpus reescribe el
+        # one-liner `if c: a, b = v1, v2` como `(si c :a ,b )=(v1 ,v2 )` —
+        # asignacion condicional. Se desugara a un If real con la asignacion
+        # en el body (gramatica exclusiva del adaptador; no existe en PITON
+        # escrito a mano, donde el one-liner nativo es `si c :a ,b =v1 ,v2 `).
+        if (
+            self._check(TokenType.LPAREN)
+            and self._peek_n(1).type == TokenType.NAME
+            and self._peek_n(1).value == "si"
+        ):
+            return self._parse_one_if_assign()
         # STARRED_FIRST_V1: `*r, b = ...` starts with a star, which is not an
         # expression. Parse it as a target directly.
         if self._check(TokenType.STAR):
@@ -1024,6 +1066,25 @@ class Parser:
                     value = self._parse_expression(0)
                 return self._parse_postfix(YieldStmt(value=value).set_pos(tok))
             if val == "no":
+                # NO_VAR_V1: la VARIABLE no (pydoc:283 `no = []`, :284
+                # `no.append(x)`, :285 `devolver (yes, no)`) — nombre legal
+                # en Python que el adaptador copia tal cual. El lexer ya lo
+                # dejo pasar como NAME; cuando el token que sigue a `no` NO
+                # puede iniciar una expresion, `no` solo puede ser un
+                # nombre, nunca el operador. OJO: el NAME ya fue consumido
+                # arriba, asi que el token siguiente a `no` es el CURRENT
+                # (_peek), no _peek_n(1).
+                nxt_tok = self._peek()
+                if nxt_tok.type in (
+                    TokenType.EQUAL, TokenType.DOT, TokenType.RPAREN,
+                    TokenType.RBRACKET, TokenType.RBRACE, TokenType.COMMA,
+                    TokenType.COLON, TokenType.SEMI, TokenType.EQ,
+                    TokenType.NOT_EQ, TokenType.LT, TokenType.LT_EQ,
+                    TokenType.GT, TokenType.GT_EQ,
+                    TokenType.NEWLINE, TokenType.NL, TokenType.DEDENT,
+                    TokenType.ENDMARKER,
+                ):
+                    return self._parse_postfix(Name(id=val, ctx="Load").set_pos(tok))
                 # NOT_PREC_V1: el operando de `no` es una comparación en la
                 # gramática de CPython (`no 2 + 3` == `no (2 + 3)`; con
                 # _parse_unary salía `(no 2) + 3` = 3). `y`/`o` siguen fuera.
