@@ -2058,6 +2058,13 @@ class MIRLowerer:
         builder.current = increment_block
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # FOR_EXIT_CLEAR_V1: el iter_next salta aqui con el StopIteration de
+        # agotamiento (exc_flag=1). En <module> nadie revisa el flag, pero en
+        # funciones el caller lo revisa tras el call y reportaba un
+        # 'StopIteration' fantasma (rc 1 sin salida): todo `para x en xs`
+        # dentro de una funcion moria al volver. El end_block solo recibe
+        # el agotamiento y breaks, asi que limpiar aqui es correcto.
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()

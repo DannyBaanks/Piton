@@ -970,5 +970,102 @@ class BuildFailGatesV1(unittest.TestCase):
         )
 
 
+class ParamStrGatesV1(unittest.TestCase):
+    """PARAM_STR_V1: tipado estatico extendido para stdlib real — 4 fixes
+    de la familia A (report after-build-fail-v1):
+
+      SHARED_COLL_ELEMS_V1  los globals promovidos a static heredan el elem
+          type en el store (opcode: `para oplist en oplists` con .append
+          sobre el for-target; antes 'method receiver not statically
+          known').
+      FOR_EXIT_CLEAR_V1  (bug preexistente GRAVE): el exit del for via
+          iteradores dejaba el exc_flag del StopIteration de agotamiento;
+          en <module> nadie lo revisa, pero el caller de una funcion si —
+          TODO `para x en xs` dentro de una funcion moria con rc 1 y un
+          'StopIteration' fantasma al volver. El end_block limpia el flag
+          (solo recibe agotamiento y breaks).
+      USAGE_PARAM_TYPE_V1  si TODOS los usos de un param como receiver son
+          metodos exclusivos de str (replace/startswith/...), se tipa str
+          por uso; el call-site rechaza argumentos de tipo conocido
+          contradictorio (float/list/dict...) fail-closed (nturl2path
+          url.replace, getopt args.startswith).
+      MINMAX_VARIADIC_V1  min/max de N>=3 escalares homogeneos (colorsys:
+          max(r, g, b) floats) — distinguibles del key= porque alli
+          values[0] es list/tuple; mezclas heterogeneas fallan cerradas.
+    """
+
+    def test_shared_coll_elems_for_target_append(self):
+        _assert_matches(
+            self,
+            'oplists =[[1 ],[2 ]]\nfuncion ps ():\n    para oplist en oplists :\n        oplist .append (9 )\n    devolver longitud (oplists [0 ])\nimprimir (ps () )\n',
+        )
+
+    def test_for_in_function_plain(self):
+        # FOR_EXIT_CLEAR_V1: antes rc 1 con 'StopIteration' fantasma.
+        _assert_matches(
+            self,
+            'funcion f ():\n    xs =[1 ,2 ]\n    total =0 \n    para x en xs :\n        total =total +x \n    devolver total \nimprimir (f () )\n',
+        )
+
+    def test_for_in_function_promoted_global(self):
+        _assert_matches(
+            self,
+            'xs =[1 ,2 ]\nfuncion f ():\n    total =0 \n    para x en xs :\n        total =total +x \n    devolver total \nimprimir (f () )\n',
+        )
+
+    def test_for_in_function_break(self):
+        _assert_matches(
+            self,
+            'xs =[1 ,2 ,3 ]\nfuncion f ():\n    para x en xs :\n        si x ==2 :\n            romper \n    devolver x \nimprimir (f () )\n',
+        )
+
+    def test_for_module_untouched(self):
+        _assert_matches(
+            self,
+            'xs =[1 ,2 ]\ntotal =0 \npara x en xs :\n    total =total +x \nimprimir (total )\n',
+        )
+
+    def test_usage_param_str_replace(self):
+        _assert_matches(
+            self,
+            'funcion limpiar (url ):\n    devolver url .replace (":","|")\nimprimir (limpiar ("a:b ") )\n',
+        )
+
+    def test_usage_param_str_multi(self):
+        _assert_matches(
+            self,
+            'funcion f (s ):\n    devolver s .upper () +s .strip ()\nimprimir (f (" ab ") )\n',
+        )
+
+    def test_usage_param_contradiction_fails_closed(self):
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython('funcion f (s ):\n    devolver s .upper ()\nimprimir (f (1.5 ))\n')
+
+    def test_usage_param_list_methods_untouched(self):
+        # append demuestra no-str: el param NO se tipa (fail-closed igual
+        # que antes, familia A documentada).
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython('funcion f (xs ):\n    xs .append (1 )\n    devolver 0 \nf ([0 ])\n')
+
+    def test_minmax_varadic_ints(self):
+        _assert_matches(self, "imprimir (min (4 ,2 ,7 ,1 ),max (4 ,2 ,7 ,1 ))\n")
+
+    def test_minmax_varadic_floats(self):
+        _assert_matches(self, "imprimir (min (0.5 ,0.2 ,0.9 ),max (1.5 ,2.5 ,0.5 ))\n")
+
+    def test_minmax_varadic_strs(self):
+        _assert_matches(self, 'imprimir (max ("a ","c ","b "),min ("b ","a ","c "))\n')
+
+    def test_minmax_varadic_mixed_fails_closed(self):
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython("imprimir (min (1 ,2.5 ,3 ))\n")
+
+    def test_minmax_two_args_untouched(self):
+        _assert_matches(self, "imprimir (min (2 ,5 ),min ([3 ,1 ]))\n")
+
+
 if __name__ == "__main__":
     unittest.main()

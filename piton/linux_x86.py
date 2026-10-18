@@ -2519,6 +2519,23 @@ def _raise_or_propagate(out, function):
 # program error (they have no C value), but as a NAME they must not shadow a
 # user variable of the same name (`suma = 0`).
 _FUNC_ONLY_BUILTINS = frozenset({"suma", "redondear"})
+# USAGE_PARAM_TYPE_V1: metodos que SOLO existen en str. Si todos los usos de
+# un param como receiver son de este set (y ninguno de collection), el param
+# se tipa str por uso (nturl2path url.replace, getopt args.startswith).
+_USAGE_STR_METHODS = frozenset({
+    "upper", "lower", "title", "capitalize", "strip", "lstrip", "rstrip",
+    "split", "rsplit", "splitlines", "replace", "startswith", "endswith",
+    "find", "rfind", "join", "zfill", "rjust", "ljust", "center", "encode",
+    "isdigit", "isalpha", "isspace", "expandtabs", "partition", "rpartition",
+    "format",
+})
+# metodos que demuestran que el receiver NO es str (collections/objects).
+_USAGE_NONSTR_METHODS = frozenset({
+    "append", "extend", "insert", "remove", "sort", "reverse", "clear",
+    "items", "keys", "values", "update", "setdefault", "pop", "popitem",
+    "add", "discard", "difference", "union", "intersection", "__next__",
+    "close", "read", "write", "flush",
+})
 
 
 class LinuxCEmitter:
@@ -2573,11 +2590,16 @@ class LinuxCEmitter:
         self._module_funcs = list(module.functions)
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
+        # USAGE_PARAM_TYPE_V1: tipo inferido por uso de cada param, por
+        # funcion — el call-site lo consulta para rechazar (fail-closed)
+        # argumentos de tipo conocido contradictorio.
+        self._usage_param_types: dict[str, dict[str, str]] = {f.name: {} for f in module.functions}
         self.function_params = {function.name: list(function.params) for function in module.functions}
         self.function_varargs = {function.name: function.vararg for function in module.functions}
         self.function_kwargs = {function.name: function.kwarg for function in module.functions}
         self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
         self._scan_module_globals(module)
+        self._scan_usage_param_types(module)
         self.function_return_types = self._infer_return_types(module)
         self.generator_layouts = {}
         for function in module.functions:
@@ -2769,6 +2791,12 @@ class LinuxCEmitter:
                 # (bug preexistente: `devolver (a, b)` con default str imprimia
                 # el puntero del param como int).
                 types[_pd_param] = "str"
+        # USAGE_PARAM_TYPE_V1: el pre-pass de emit() escanea TODAS las
+        # funciones ANTES de emitir (el call de <module> a una funcion
+        # definida despues ya necesita el seed); aqui solo se aplica al
+        # types local del callee.
+        for _uparam, _uutype in (self._usage_param_types.get(function.name) or {}).items():
+            types[_uparam] = _uutype
         if function.self_class and function.params:
             types[function.params[0]] = f"object:{function.self_class}"
         # WITH_PROTOCOL_V1: __exit__(self, tipo, mensaje, tb) receives the
@@ -3423,6 +3451,21 @@ class LinuxCEmitter:
                 if _pt is not None and _pt not in _allowed:
                     raise NativeBuildError(
                         f"Linux {function_name}() collection/string-default param rejects a {_pt} argument (fail closed)"
+                    )
+        # USAGE_PARAM_TYPE_V1: el callee tipa params por uso (str-methods);
+        # un argumento de tipo estatico conocido y contradictorio (float,
+        # list, dict...) es fail-closed — el callee emitiria un str-method
+        # sobre un puntero no-str. "int" no se revisa: el default estatico
+        # mezcla int-real con desconocido (misma garantia best-effort que
+        # M6 en defaults).
+        _usage_types = self._usage_param_types.get(function_name) or {}
+        for _ival, _iparam in zip(values, _params):
+            _iut = _usage_types.get(_iparam)
+            if _iut == "str" and isinstance(_ival, str):
+                _ipt = types.get(_ival)
+                if _ipt is not None and _ipt not in {"str", "int", "bool", "none"}:
+                    raise NativeBuildError(
+                        f"Linux {function_name}() param '{_iparam}' is used as str; a {_ipt} argument is rejected (fail closed)"
                     )
         self._reject_complex_args(values, types, f"function '{function_name}'")
         encoded_values = ",".join(self._value(value) for value in values)
@@ -4901,6 +4944,46 @@ class LinuxCEmitter:
                             read_anywhere.add(name)
         self._shared_globals = self._module_stored & (declared_anywhere | read_anywhere)
 
+    def _scan_usage_param_types(self, module: MIRModule) -> None:
+        """USAGE_PARAM_TYPE_V1: pre-pass — si TODOS los usos de un param como
+        receiver de method_call son metodos exclusivos de str (y ninguno
+        contradice collections/objects), el param se tipa str (nturl2path:
+        url.replace; getopt: args.startswith). Otros usos (truthy, len,
+        comparaciones, indexado) no contradicen: son legales sobre str. Se
+        computa antes de emitir porque el call de <module> a una funcion
+        posterior necesita el seed para el check fail-closed del call-site.
+        """
+        for function in module.functions:
+            if function.name == "<module>" or not function.params:
+                continue
+            _param_set = set(function.params)
+            _loads_of: dict[str, set[str]] = {}
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if (
+                        instruction.op == "load" and instruction.args
+                        and isinstance(instruction.args[0], str)
+                        and instruction.args[0] in _param_set and instruction.result
+                    ):
+                        _loads_of.setdefault(instruction.args[0], set()).add(instruction.result)
+            for _uparam, _uloads in _loads_of.items():
+                _has_str_evidence = False
+                _contradicts = False
+                for block in function.blocks:
+                    for instruction in block.instructions:
+                        if (
+                            instruction.op == "method_call"
+                            and len(instruction.args) >= 3
+                            and instruction.args[2] in _uloads
+                        ):
+                            _umethod = instruction.args[1]
+                            if _umethod in _USAGE_NONSTR_METHODS:
+                                _contradicts = True
+                            elif _umethod in _USAGE_STR_METHODS:
+                                _has_str_evidence = True
+                if _has_str_evidence and not _contradicts:
+                    self._usage_param_types[function.name][_uparam] = "str"
+
     def _infer_return_types(self, module: MIRModule) -> dict[str, str]:
         """RETURNTYPE_V1: narrow, sound return-type inference over MIR.
 
@@ -5638,6 +5721,15 @@ class LinuxCEmitter:
                     self._dict_elems[args[0]] = self._dict_elems[args[1]]
                 if args[1] in self._dict_key_types:
                     self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
+                # SHARED_COLL_ELEMS_V1: los globals promovidos a static (por
+                # `global` o por MODULE_GLOBAL_READ) también heredan el elem
+                # type — sin esto, `para oplist en oplists` perdia el tipo del
+                # for-target y oplist.append reventaba como receiver
+                # desconocido (opcode.pseudo_op sobre oplist global).
+                if args[1] in self._coll_elems:
+                    self._coll_elems[args[0]] = self._coll_elems[args[1]]
+                if args[1] in self._dict_val_types:
+                    self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
                 return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
@@ -7262,8 +7354,33 @@ class LinuxCEmitter:
                     raise NativeBuildError("Linux bool() requires int/float/str/collection/None (M14 v1)")
                 types[result] = "bool"
             elif function_name in {"min", "max"}:
+                # MINMAX_VARIADIC_V1: min/max de N>=3 ESCALARES del mismo
+                # tipo estatico (colorsys: max(r, g, b) floats) — se
+                # distingue del key= porque alli values[0] es list/tuple.
+                # Fold de comparaciones tipadas, misma regla que el caso
+                # binario (mezclas fallan cerradas).
+                if len(values) >= 3 and types.get(values[0]) not in {"list", "tuple"}:
+                    _vts = [types.get(v, "int") for v in values]
+                    if len(set(_vts)) != 1 or _vts[0] not in {"str", "float", "int", "bool"}:
+                        raise NativeBuildError(
+                            f"Linux min/max of {len(values)} values requires one homogeneous kind, not {sorted(set(_vts))}"
+                        )
+                    _cmp = "<" if function_name == "min" else ">"
+                    _expr = self._value(values[0])
+                    for _v in values[1:]:
+                        _b = self._value(_v)
+                        if _vts[0] == "str":
+                            _expr = f"(piton_strcmp((const char*)({_expr}),(const char*){_b}){_cmp}0)?({_expr}):{_b}"
+                        elif _vts[0] == "float":
+                            _expr = f"(piton_bits_double({_expr}){_cmp}piton_bits_double({_b}))?({_expr}):{_b}"
+                        else:
+                            _expr = f"(({_expr}){_cmp}{_b})?({_expr}):{_b}"
+                    out.append(f"    {_name(result)}={_expr};")
+                    types[result] = _vts[0]
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 # MINMAX_KEY_V1: min/max con `key=` llegan como (coleccion,
-                # clave, reversa). La clave SÍ se aplica (extrem Node sobre la
+                # clave, reversa). La clave SÍ se aplica (extremo Node sobre la
                 # clave, devolviendo el elemento original).
                 if len(values) == 3:
                     if types.get(values[0]) not in {"list", "tuple"}:
