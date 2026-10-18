@@ -2578,6 +2578,13 @@ class LinuxCEmitter:
         # MEMORYVIEW_STRIDE_V1: temps cuya vista NO es contigua (stride != 1).
         self._mv_noncontig: set[str] = set()
         self._tuple_list_elems: dict[str, tuple[str, str]] = {}
+        # NESTED_TUPLE_LIST_V1: una LISTA DE TUPLAS (p.ej. stat._filemode_table)
+        # anota su estructura por indice: cada temp que la referencia lleva una
+        # tupla de tipos (uno por campo de la tupla elemental). iter_new copia la
+        # anotacion al iterador; iter_next la copia al valor rendido; unpack_check
+        # y get_item la consultan para tipar cada desempaquetado. Es el anlogo de
+        # _tuple_list_elems pero con profundidad/aridad arbitraria (no 2-tupla fija).
+        self._nested_tuple_lists: dict[str, tuple[str, ...]] = {}
         self._iter_source: dict[str, str] = {}
         self._enum_elem: dict[str, str] = {}
         # builtins that are only ever CALLED (never a value): marking them
@@ -5398,6 +5405,10 @@ class LinuxCEmitter:
                     self._coll_elems[result] = self._coll_elems[source]
                 if result and source_type == "list" and source in self._tuple_list_elems:
                     self._tuple_list_elems[result] = self._tuple_list_elems[source]
+                # NESTED_TUPLE_LIST_V1: el iterador sobre una lista O tupla de
+                # tuplas conserva la estructura anotada de la fuente.
+                if result and source_type in {"list", "tuple"} and source in self._nested_tuple_lists:
+                    self._nested_tuple_lists[result] = self._nested_tuple_lists[source]
                 # DICT_KEY_TYPE_V1: `iter_new` receives a load temp, so the key
                 # type is followed through the load as well as the store.
                 if result and source_type == 'dict':
@@ -5524,6 +5535,51 @@ class LinuxCEmitter:
                         break
                 if _tx is not None and elem_kind == "tuple":
                     self._tuple_elems[result] = (("%k", _tx[0]), ("%v", _tx[1]))
+                # NESTED_TUPLE_LIST_V1: si el elem es tuple, el item rendido es
+                # una TUPLA — propaga _coll_elems para que el load del loop var
+                # (table) y el iter_new siguiente la hereden.
+                if elem_kind == "tuple":
+                    self._coll_elems[result] = "tuple"
+                    # NESTED_TUPLE_LIST_V1: el source es una lista/tupla de
+                    # tuplas. El shape del ITEM es el del PRIMER sub-item de la
+                    # coleccion. Busca _tuple_elems en el source y sus aliases;
+                    # si no, en _nested_tuple_lists (shape de la primera tupla).
+                    if types.get(args[0]) in {"list", "tuple"}:
+                        _src_te = self._tuple_elems.get(args[0])
+                        if _src_te is None:
+                            _nt = self._nested_tuple_lists.get(args[0])
+                            if _nt is not None:
+                                _src_te = tuple((f"%{i}", t) for i, t in enumerate(_nt))
+                        if _src_te is not None:
+                            self._tuple_elems[result] = _src_te
+                # NESTED_TUPLE_LIST_V1: el valor rendido por un iterador sobre
+                # una lista/tupla de tuplas es una TUPLA. Copia la estructura
+                # del shape de la PRIMERA sub-tupla de la fuente (CPython
+                # desempaqueta contra la coincidencia de la primera). Para
+                # colecciones heterogeneas (stat: tupla de tablas de aridades
+                # distintas), cada ITEM ya es una tupla individual homogenea:
+                # su shape vive en _tuple_elems de la fuente, no en
+                # _nested_tuple_lists. Fallback: si la fuente es tuple pero no
+                # nested, buscar el shape en _tuple_elems del primer sub-item.
+                _nt = None
+                for _k in _cands:
+                    _nt = self._nested_tuple_lists.get(_k)
+                    if _nt is not None:
+                        break
+                if _nt is not None and elem_kind == "tuple":
+                    self._tuple_elems[result] = tuple((f"%{i}", t) for i, t in enumerate(_nt))
+                    # NESTED_TUPLE_LIST_V1: el valor rendido apunta a la lista
+                    # fuente, para que unpack_check pueda resolver la aridad
+                    # leyendo _nested_tuple_lists sobre el mismo source.
+                    self._iter_source[result] = self._iter_source.get(args[0], args[0])
+                elif elem_kind == "tuple" and types.get(args[0]) in {"list", "tuple"}:
+                    # FALLBACK: la fuente es una coleccion cuyo elem es tuple
+                    # pero no tiene nested anotado (outer heterogeneo). El item
+                    # rendido ES una tupla; su shape se resuelve en el
+                    # unpack_check via _tuple_elems del SOURCE (cada sub-item
+                    # del outer tiene _tuple_elems del build). Marca el source
+                    # para que unpack_check lea el shape del primer sub-item.
+                    self._iter_source[result] = self._iter_source.get(args[0], args[0])
             elif iterator_type == "iterator:bytes":
                 types[result] = "int"
             else:
@@ -5627,6 +5683,10 @@ class LinuxCEmitter:
                 self._dict_key_types[result] = self._dict_key_types[source]
             if source in self._coll_elems:
                 self._coll_elems[result] = self._coll_elems[source]
+            if source in self._nested_tuple_lists:
+                self._nested_tuple_lists[result] = self._nested_tuple_lists[source]
+            if source in self._tuple_elems:
+                self._tuple_elems[result] = self._tuple_elems[source]
             if source in self._chr_results:
                 self._chr_results.add(result)
             if source in self._dict_val_types:
@@ -5711,6 +5771,8 @@ class LinuxCEmitter:
                     self._dict_key_types[result] = self._dict_key_types[source]
                 if source in self._coll_elems:
                     self._coll_elems[result] = self._coll_elems[source]
+                if source in self._nested_tuple_lists:
+                    self._nested_tuple_lists[result] = self._nested_tuple_lists[source]
                 if source in self._dict_val_types:
                     self._dict_val_types[result] = self._dict_val_types[source]
                 return out
@@ -5746,6 +5808,8 @@ class LinuxCEmitter:
                     self._dict_key_types[result] = self._dict_key_types[source]
                 if source in self._coll_elems:
                     self._coll_elems[result] = self._coll_elems[source]
+                if source in self._nested_tuple_lists:
+                    self._nested_tuple_lists[result] = self._nested_tuple_lists[source]
                 if source in self._dict_val_types:
                     self._dict_val_types[result] = self._dict_val_types[source]
                 return out
@@ -5803,6 +5867,11 @@ class LinuxCEmitter:
                 # desconocido (opcode.pseudo_op sobre oplist global).
                 if args[1] in self._coll_elems:
                     self._coll_elems[args[0]] = self._coll_elems[args[1]]
+                # NESTED_TUPLE_LIST_V1: un global promovido a static hereda la
+                # estructura anidada de tuplas — sin esto, `table = (...)` en un
+                # modulo pierde el shape al leerlo como global compartido.
+                if args[1] in self._nested_tuple_lists:
+                    self._nested_tuple_lists[args[0]] = self._nested_tuple_lists[args[1]]
                 if args[1] in self._dict_val_types:
                     self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
                 return out
@@ -5820,6 +5889,10 @@ class LinuxCEmitter:
                 self._dict_key_types[args[0]] = self._dict_key_types[args[1]]
             if args[1] in self._coll_elems:
                 self._coll_elems[args[0]] = self._coll_elems[args[1]]
+            if args[1] in self._nested_tuple_lists:
+                self._nested_tuple_lists[args[0]] = self._nested_tuple_lists[args[1]]
+            if args[1] in self._tuple_elems:
+                self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
             if args[1] in self._chr_results:
                 self._chr_results.add(args[0])
             if args[1] in self._dict_val_types:
@@ -8749,6 +8822,26 @@ class LinuxCEmitter:
                     # containing a bigint instead of silently defaulting to int
                     # and adding pointers.
                     self._coll_elems[result] = "|".join(sorted(elem_kinds))
+                # NESTED_TUPLE_LIST_V1: una coleccion cuyos items son TODOS
+                # temporales de tipo tuple anota la estructura de la PRIMERA
+                # tupla elemental. En stat: `_filemode_table` es una TUPLA de
+                # tablas de aridades heterogeneas, pero `table` (cada fila) es
+                # una TUPLA de tuplas (bit, char) HOMOGENEA. El `for table en
+                # _filemode_table` rinde cada table como tupla; `para bit, char
+                # en table` desempaqueta su item. La anotacion usa el shape de
+                # la PRIMERA tupla (CPython desempaqueta contra la primera
+                # coincidencia); aridades distintas entre items NO se anotan
+                # (fail-closed, unpack_check rechaza si la aridad no calza).
+                if kind in {"list", "tuple"} and items and all(
+                    isinstance(i, str) and i.startswith("%") and types.get(i) == "tuple"
+                    for i in items
+                ):
+                    _shapes = [self._tuple_elems.get(i) for i in items]
+                    _first = _shapes[0]
+                    if _first is not None and all(
+                        s is not None and len(s) == len(_first) for s in _shapes
+                    ):
+                        self._nested_tuple_lists[result] = tuple(t for _, t in _first)
             if kind in {"list", "tuple"}:
                 out.append(f'    {_name(result)}=(long)piton_seq_new({self._kind(kind)},{len(items)});')
                 for index, value in enumerate(items):
@@ -8848,11 +8941,41 @@ class LinuxCEmitter:
             handler_label = args[2] if len(args) > 2 else None
             vtype = types.get(value, "int")
             if vtype in {"list", "tuple"}:
+                # NESTED_TUPLE_LIST_V1: unpack anidado en FOR-TARGET es
+                # fail-closed — el backend no tiene runtime de unpack anidado
+                # sobre iteradores (el build pasa pero crashea en runtime).
+                # SOLO rechaza si el value viene de iter_next (for-target,
+                # _iter_source seteado) Y el shape tiene un campo "tuple".
+                # La asignacion directa `a, (b, c) = ...` (value de
+                # build_collection, sin _iter_source) sigue soportada
+                # (UNPACK_NESTED_V1).
+                if vtype == "tuple" and self._iter_source.get(value) is not None:
+                    _te = self._tuple_elems.get(value)
+                    if _te is not None and any(t == "tuple" for _, t in _te):
+                        raise NativeBuildError("Linux unpack of nested tuple targets is not supported")
                 length = f"((PitonSeq*){self._value(value)})->length"
             elif vtype == "str":
                 length = f"(long)piton_strlen((const char*){self._value(value)})"
             else:
-                raise NativeBuildError(f"Linux unpack requires a list, tuple or str, not {vtype}")
+                # NESTED_TUPLE_LIST_V1: el valor rendido por iter_next sobre una
+                # coleccion de tuplas. Si es una tupla (elem_kind == "tuple"),
+                # la aridad se resuelve desde _tuple_elems del SOURCE (cada
+                # sub-item del outer heterogeneo tiene su shape en el build).
+                # Si es "int" (homogeneo), la fuente debe ser lista/tupla de
+                # tuplas anotada (_nested_tuple_lists) y la aridad compara
+                # contra la longitud de la lista fuente. Sin anotacion -> fail.
+                _src = self._iter_source.get(value)
+                if vtype == "tuple" and _src is not None:
+                    _te = self._tuple_elems.get(_src)
+                    if _te is not None and len(_te) == expected:
+                        length = f"((PitonSeq*){self._value(_src)})->length"
+                    else:
+                        raise NativeBuildError(f"Linux unpack requires a list, tuple or str, not {vtype}")
+                else:
+                    _nt = self._nested_tuple_lists.get(_src) if _src else None
+                    if _nt is None or len(_nt) != expected:
+                        raise NativeBuildError(f"Linux unpack requires a list, tuple or str, not {vtype}")
+                    length = f"((PitonSeq*){self._value(_src)})->length"
             out.append("    {")
             out.append(f"    long _ul={length};")
             out.append(f"    if(_ul!={expected}){{")
@@ -8910,7 +9033,15 @@ class LinuxCEmitter:
                 # `lista('abc')[1]` returned a str pointer in an int slot and
                 # printed an address, and `[10 ** 20][0]` printed `<object>`.
                 elem_kind = self._coll_elems.get(coll)
-                if elem_kind and "|" not in elem_kind:
+                # NESTED_TUPLE_LIST_V1: si el elem es tuple, delegar a la rama
+                # de tuple para resolver el TIPO DEL CAMPO por indice — la rama
+                # de elem_kind setea types[result]="tuple" (el puntero a la
+                # tupla), no el tipo del campo indexado. Sin esto, `a = item[0]`
+                # de una lista de tuplas heredaba "tuple" y `imprimir(a)` trataba
+                # un int como puntero a seq -> SIGSEGV.
+                if elem_kind == "tuple" and (self._tuple_elems.get(coll) or self._tuple_elems.get(aliases.get(coll, coll))):
+                    pass  # fallthrough a la rama de tuple de abajo
+                elif elem_kind and "|" not in elem_kind:
                     types[result] = elem_kind
                     _tx = self._tuple_list_elems.get(coll) or self._tuple_list_elems.get(aliases.get(coll, coll))
                     if _tx is not None and elem_kind == "tuple":
