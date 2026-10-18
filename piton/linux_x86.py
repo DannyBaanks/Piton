@@ -2544,6 +2544,13 @@ _USAGE_NONSTR_METHODS = frozenset({
 _USAGE_LIST_METHODS = frozenset({
     "append", "extend", "insert", "sort", "reverse",
 })
+# RECEIVER_TYPE_V1: metodos exclusivos de dict. El pre-pass no los ve porque
+# el receiver de token.py `globals().items()` es un TEMPORARIO tras store, no
+# un param — el seed no lo alcanza y el receiver queda como int. Se infiere en
+# tiempo de uso (ver _infer_receiver_type) antes del dispatch.
+_USAGE_DICT_METHODS = frozenset({
+    "items", "keys", "values", "update", "setdefault", "popitem",
+})
 _USAGE_NONLIST_METHODS = frozenset(
     _USAGE_STR_METHODS
     | {
@@ -3504,6 +3511,110 @@ class LinuxCEmitter:
         self._emit_exc_check(out, function, call_handler)
         types[result] = self.function_return_types.get(function_name, "int")
         return out
+
+    def _infer_receiver_type(
+        self,
+        obj: Any,
+        method: str,
+        types: dict[str, str],
+        function: Any,
+    ) -> str:
+        """RECEIVER_TYPE_V1: infiere el tipo del receiver de method_call cuando
+        el mapa de tipos lo deja como "int" (el default de load sobre una
+        variable no anotada).
+
+        El pre-pass de params (USAGE_PARAM_TYPE_V1) solo tipa params, no
+        temporarios locales tras store (getopt `args[0].startswith`,
+        token `globals().items()`). Aqui se resuelve en tiempo de uso a partir
+        de las evidencias de uso del metodo + el flujo def-use local:
+
+        * si el receiver es un metodo EXCLUSIVO de dict (items/keys/...) -> dict
+          si ademas el flujo def-use confirma (store de un build_collection dict
+          o de un call de una funcion builtin que devuelve dict).
+        * str-methods y non-str son contrarios, como en el pre-pass.
+
+        El tipo devuelto se CACHEA en `types[obj]` para que el dispatch
+        posterior (y el str_method_collection_method) vea el receiver tipado.
+        Falla con "int" (sin inferir) si las evidencias son ambiguas, para no
+        romper dispatch legítimos sobre int.
+        """
+        current = types.get(obj, "")
+        if current and current != "int":
+            return current
+        if method in _USAGE_STR_METHODS and method not in _USAGE_NONSTR_METHODS:
+            # startswith/replace/etc. son solo str — sin contradiccion.
+            types[obj] = "str"
+            return "str"
+        if method in _USAGE_DICT_METHODS:
+            # items/keys/etc. solo dict — confirmar el flujo def-use.
+            # token: `tok_name = {.. for name, value in globals().items()}` —
+            # el receiver %87 es el resultado de `call %86` donde %86 es un
+            # `load globals` (callee resuelto via aliases/def-use), NO un call
+            # directo con callee-literal `globals`. Se resuelve el callee.
+            def _callee_name(callee: Any) -> str:
+                if isinstance(callee, str):
+                    if callee in aliases:
+                        return aliases[callee]
+                    return self._fn_consts.get(callee, callee) if not callee.startswith("%") else callee
+                return ""
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if (
+                        instruction.op == "store"
+                        and len(instruction.args) >= 2
+                        and instruction.args[1] == obj
+                    ):
+                        src = instruction.args[0]
+                        for b2 in function.blocks:
+                            for i2 in b2.instructions:
+                                if (
+                                    i2.op == "build_collection"
+                                    and i2.result == src
+                                    and i2.args
+                                    and i2.args[0] == "dict"
+                                ):
+                                    types[obj] = "dict"
+                                    return "dict"
+                                if i2.op == "call" and i2.result == src and isinstance(i2.args, tuple) and i2.args:
+                                    callee = _callee_name(i2.args[0])
+                                    if callee in {"globals", "locals", "dict"}:
+                                        types[obj] = "dict"
+                                        return "dict"
+                                        # el callee puede ser otro temporario con
+                                        # un load de globals detras (token %86).
+                                    if callee.startswith("%"):
+                                        for b3 in function.blocks:
+                                            for i3 in b3.instructions:
+                                                if i3.op == "load" and i3.result == callee and i3.args:
+                                                    if i3.args[0] in {"globals", "locals"}:
+                                                        types[obj] = "dict"
+                                                        return "dict"
+            # sin flujo confirmatorio — como fallback, si TODOS los usos del
+            # receiver como method_call son metodos exclusivos de dict (token:
+            # solo .items()), inferir dict. Evidencia-only: un uso contradictorio
+            # (metodo no-dict) lo deja como int.
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if (
+                        instruction.op == "method_call"
+                        and len(instruction.args) >= 3
+                        and instruction.args[2] == obj
+                    ):
+                        _um = instruction.args[1]
+                        if _um not in _USAGE_DICT_METHODS and _um not in ("__init__",):
+                            return current  # evidencia contradictoria
+            # al menos un uso dict y ninguno contradictorio -> dict.
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if (
+                        instruction.op == "method_call"
+                        and len(instruction.args) >= 3
+                        and instruction.args[2] == obj
+                        and instruction.args[1] in _USAGE_DICT_METHODS
+                    ):
+                        types[obj] = "dict"
+                        return "dict"
+        return current
 
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
                                 call_args: list[Any], coll_type: str, types: dict[str, str],
@@ -8444,7 +8555,46 @@ class LinuxCEmitter:
                 types[result] = "none"
                 return out
             if cls_name is None:
-                owner_type = types.get(obj, "")
+                # RECEIVER_TYPE_V1: si el receiver no esta tipado, intentar
+                # inferirlo por uso en tiempo de uso antes del dispatch
+                # (token: globals().items() -> dict; getopt: args.startswith
+                # -> str). Cachea el tipo en types[obj].
+                owner_type = self._infer_receiver_type(obj, method, types, function)
+                # MODULE_METHOD_CALL_V1: si el receiver es un modulo (tipo
+                # "module" / "object:module"), resolver la funcion compilada
+                # "mod__method" (el camino que from_imports ya usa). nturl2path:
+                # `urllib.parse.unquote(..)` (import LOCAL a la funcion, por
+                # eso el chequeo de imports de modulo no lo alcanza) -> llama a
+                # "urllib__parse__unquote". sitecustomize: apport_python_hook
+                # (modulo externo no compilado) -> falla cerrado.
+                _mod_target: str | None = None
+                if owner_type in {"module", "object:module"}:
+                    _obj_name = aliases.get(obj, obj)
+                    if isinstance(_obj_name, str) and _obj_name:
+                        _cand = f"{_obj_name}__{method}"
+                        if _cand in self.function_names:
+                            _mod_target = _cand
+                        else:
+                            _top = _obj_name.split(".")[0]
+                            _cand2 = f"{_top}__{method}"
+                            if _cand2 in self.function_names:
+                                _mod_target = _cand2
+                    if _mod_target is None:
+                        raise NativeBuildError(
+                            f"Linux module method {method}() is not statically known "
+                            f"(module '{aliases.get(obj, obj)}' has no compiled function '{method}')"
+                        )
+                    # emitir la llamada a la funcion de modulo resuelta (como
+                    # call directo: los params de modulo NO llevan self).
+                    _all_values = self._complete_call_args(_mod_target, list(call_args))
+                    if self.function_frame_abi.get(_mod_target, False):
+                        _vals_c = ",".join(self._value(v) for v in _all_values)
+                        out.append(f"    long _mc_args[]={{{_vals_c}}}; {_name(result)}=piton_frame_call((long)&{_name(_mod_target)},{len(_all_values)},_mc_args);")
+                    else:
+                        _vals_c = ",".join(self._value(v) for v in _all_values)
+                        out.append(f"    {_name(result)}={_name(_mod_target)}({_vals_c});")
+                    types[result] = "int"
+                    return out
                 if owner_type == "str":
                     # STR_METHODS_V1: builtin str methods bind statically here;
                     # anything not in the table fails closed.
