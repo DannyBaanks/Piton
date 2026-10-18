@@ -2536,6 +2536,22 @@ _USAGE_NONSTR_METHODS = frozenset({
     "add", "discard", "difference", "union", "intersection", "__next__",
     "close", "read", "write", "flush",
 })
+# USAGE_LIST_SEED_V1: metodos exclusivos de list entre las colecciones
+# builtin (dict/set/str/tuple no los tienen) — prueban que el receiver es
+# list (bisect: a.insert(lo, x) sobre el param a). Ambiguos (pop/clear/
+# remove: list/dict/set comparten) NO cuentan como evidencia; str-methods
+# y dict/set/object methods prueban que NO es list.
+_USAGE_LIST_METHODS = frozenset({
+    "append", "extend", "insert", "sort", "reverse",
+})
+_USAGE_NONLIST_METHODS = frozenset(
+    _USAGE_STR_METHODS
+    | {
+        "items", "keys", "values", "update", "setdefault", "popitem",
+        "add", "discard", "difference", "union", "intersection",
+        "__next__", "close", "read", "write", "flush",
+    }
+)
 
 
 class LinuxCEmitter:
@@ -3457,7 +3473,9 @@ class LinuxCEmitter:
         # list, dict...) es fail-closed — el callee emitiria un str-method
         # sobre un puntero no-str. "int" no se revisa: el default estatico
         # mezcla int-real con desconocido (misma garantia best-effort que
-        # M6 en defaults).
+        # M6 en defaults). USAGE_LIST_SEED_V1: mismo contrato para params
+        # tipados list por uso mutador (bisect: a.insert) — args str/
+        # tuple/dict/set/float se rechazan; "int" (unknown) pasa.
         _usage_types = self._usage_param_types.get(function_name) or {}
         for _ival, _iparam in zip(values, _params):
             _iut = _usage_types.get(_iparam)
@@ -3466,6 +3484,12 @@ class LinuxCEmitter:
                 if _ipt is not None and _ipt not in {"str", "int", "bool", "none"}:
                     raise NativeBuildError(
                         f"Linux {function_name}() param '{_iparam}' is used as str; a {_ipt} argument is rejected (fail closed)"
+                    )
+            elif _iut == "list" and isinstance(_ival, str):
+                _ipt = types.get(_ival)
+                if _ipt is not None and _ipt not in {"list", "int", "bool", "none"}:
+                    raise NativeBuildError(
+                        f"Linux {function_name}() param '{_iparam}' is used as list; a {_ipt} argument is rejected (fail closed)"
                     )
         self._reject_complex_args(values, types, f"function '{function_name}'")
         encoded_values = ",".join(self._value(value) for value in values)
@@ -4958,17 +4982,30 @@ class LinuxCEmitter:
                 continue
             _param_set = set(function.params)
             _loads_of: dict[str, set[str]] = {}
+            _all_load_src: dict[str, str] = {}
             for block in function.blocks:
                 for instruction in block.instructions:
                     if (
                         instruction.op == "load" and instruction.args
                         and isinstance(instruction.args[0], str)
-                        and instruction.args[0] in _param_set and instruction.result
                     ):
-                        _loads_of.setdefault(instruction.args[0], set()).add(instruction.result)
+                        if instruction.result:
+                            _all_load_src[instruction.result] = instruction.args[0]
+                        if instruction.args[0] in _param_set and instruction.result:
+                            _loads_of.setdefault(instruction.args[0], set()).add(instruction.result)
             for _uparam, _uloads in _loads_of.items():
                 _has_str_evidence = False
                 _contradicts = False
+                _has_list_evidence = False
+                _contradicts_list = False
+                # SEQ_USAGE_SEED_V1: len() + get_item sobre el param sin
+                # metodo contradictorio (bisect_right: len(a), a[mid] — el
+                # param no tiene method_call, asi que el seed de mutadores
+                # no lo alcanza). Best-effort: str/tuple comparten estas
+                # operaciones, pero el subset asume seq-lineal y el
+                # call-site rechaza args de tipo conocido contradictorio.
+                _uses_len = False
+                _uses_get_item = False
                 for block in function.blocks:
                     for instruction in block.instructions:
                         if (
@@ -4981,8 +5018,37 @@ class LinuxCEmitter:
                                 _contradicts = True
                             elif _umethod in _USAGE_STR_METHODS:
                                 _has_str_evidence = True
+                            # USAGE_LIST_SEED_V1: evidencia/contradiccion
+                            # independiente del juicio str (insert es
+                            # NONSTR y a la vez LIST).
+                            if _umethod in _USAGE_LIST_METHODS:
+                                _has_list_evidence = True
+                            elif _umethod in _USAGE_NONLIST_METHODS:
+                                _contradicts_list = True
+                        elif (
+                            instruction.op == "get_item" and instruction.args
+                            and instruction.args[0] in _uloads
+                        ):
+                            _uses_get_item = True
+                        elif (
+                            instruction.op == "call" and len(instruction.args) >= 2
+                            and isinstance(instruction.args[1], tuple)
+                            and instruction.args[1]
+                            and _all_load_src.get(instruction.args[0]) == "len"
+                            and instruction.args[1][0] in _uloads
+                        ):
+                            _uses_len = True
                 if _has_str_evidence and not _contradicts:
                     self._usage_param_types[function.name][_uparam] = "str"
+                elif _has_list_evidence and not _contradicts_list:
+                    # bisect: a.insert(lo, x) — el param mutador se tipa
+                    # list; el call-site rechaza args conocidos no-list.
+                    self._usage_param_types[function.name][_uparam] = "list"
+                elif (
+                    _uses_len and _uses_get_item and not _contradicts_list
+                    and not _has_str_evidence and not _contradicts
+                ):
+                    self._usage_param_types[function.name][_uparam] = "list"
 
     def _infer_return_types(self, module: MIRModule) -> dict[str, str]:
         """RETURNTYPE_V1: narrow, sound return-type inference over MIR.
@@ -5203,6 +5269,15 @@ class LinuxCEmitter:
                         elif isinstance(_pd_value, str):
                             seeded.add(_pd_param)
                             changed = note_var(_pd_param, "str") or changed
+                    # MIR-REACH-V1 (RETURNS PARAM TYPE): param seedeado por
+                    # uso (str/list) devuelve ese tipo al retornarlo directo
+                    # (bisect insort_right: `a.insert(...)` muta y el caller
+                    # de `devolver xs` imprime la collection, no el puntero).
+                    for _up_param, _up_type in (self._usage_param_types.get(function.name) or {}).items():
+                        if _up_param in seeded:
+                            continue
+                        seeded.add(_up_param)
+                        changed = note_var(_up_param, _up_type) or changed
 
                 if not returns:
                     inferred: str | None = "none"

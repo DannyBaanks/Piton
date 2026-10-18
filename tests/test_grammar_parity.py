@@ -1043,11 +1043,11 @@ class ParamStrGatesV1(unittest.TestCase):
             compare_native_to_cpython('funcion f (s ):\n    devolver s .upper ()\nimprimir (f (1.5 ))\n')
 
     def test_usage_param_list_methods_untouched(self):
-        # append demuestra no-str: el param NO se tipa (fail-closed igual
-        # que antes, familia A documentada).
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError):
-            compare_native_to_cpython('funcion f (xs ):\n    xs .append (1 )\n    devolver 0 \nf ([0 ])\n')
+        # MIR-REACH-V1 (USAGE_LIST_SEED_V1): ANTES este gate documentaba el
+        # fail-closed de `xs.append(1)` sobre un param sin tipo (familia A).
+        # Ahora el mutador exclusivo de list siembra "list" y el programa
+        # corre igual que en CPython.
+        _assert_matches(self, 'funcion f (xs ):\n    xs .append (1 )\n    devolver 0 \nimprimir (f ([0 ]))\n')
 
     def test_minmax_varadic_ints(self):
         _assert_matches(self, "imprimir (min (4 ,2 ,7 ,1 ),max (4 ,2 ,7 ,1 ))\n")
@@ -1065,6 +1065,103 @@ class ParamStrGatesV1(unittest.TestCase):
 
     def test_minmax_two_args_untouched(self):
         _assert_matches(self, "imprimir (min (2 ,5 ),min ([3 ,1 ]))\n")
+
+
+class MirReachGatesV1(unittest.TestCase):
+    """MIR-REACH-V1: cerrar MIR_FAIL alcanzables del corpus v4 (report
+    after-param-str-v1: 9 alcanzables de 151 MIR_FAIL).
+
+      FUNC_SIG_PRESCAN_V1  firmas de funciones de modulo registradas ANTES
+          de bajar cuerpos (bisect: insort_right, def linea 4, llama con
+          key= a bisect_right, def linea 21 — el registro tardio reventaba
+          el keyword call forward).
+      USAGE_LIST_SEED_V1   mutadores exclusivos de list (append/extend/
+          insert/sort/reverse) siembran "list" en el param (bisect:
+          a.insert); str/dict/set/float args conocidos rechazados.
+      SEQ_USAGE_SEED_V1    len() + get_item sobre el param sin metodo
+          contradictorio siembra "list" (bisect_right: len(a), a[mid]).
+
+    Alcance declarado: bisect pipeline completo. quopri/warnings (defaults
+    Name/Attribute), heapq (min/max default=), hashlib (dynamic call+kw),
+    copyreg/types (unpack dinamico), _sitebuiltins (SystemExit), abc
+    (super-MRO) siguen fail-closed — familias mas profundas.
+    """
+
+    def test_forward_keyword_call_resolves(self):
+        # FUNC_SIG_PRESCAN_V1: keyword call a funcion definida DESPUES.
+        _assert_matches(
+            self,
+            "funcion f ():\n    devolver g (1 ,b =2 )\n"
+            "funcion g (a ,b ):\n    devolver a + b \n"
+            "imprimir (f ())\n",
+        )
+
+    def test_forward_keyword_default_fill(self):
+        # FUNC_SIG_PRESCAN_V1: el keyword call forward rellena el default
+        # estatico de un param no provisto (g(b=6) -> a=1).
+        _assert_matches(
+            self,
+            "funcion f ():\n    devolver g (b =6 )\n"
+            "funcion g (a =1 ,b =2 ):\n    devolver a + b \n"
+            "imprimir (f ())\n",
+        )
+
+    def test_usage_param_list_append(self):
+        # USAGE_LIST_SEED_V1: append en param siembra list (bisect insert).
+        _assert_matches(
+            self,
+            "funcion f (xs ):\n    xs .append (1 )\n    devolver longitud (xs )\n"
+            "imprimir (f ([0 ]))\n",
+        )
+
+    def test_usage_param_list_insert(self):
+        # USAGE_LIST_SEED_V1: insert devuelve None y muta in-place.
+        _assert_matches(
+            self,
+            "funcion f (xs ):\n    xs .insert (0 ,9 )\n    devolver xs \n"
+            "imprimir (f ([1 ,2 ]))\n",
+        )
+
+    def test_usage_param_list_contradiction_fails_closed(self):
+        # USAGE_LIST_SEED_V1: arg str conocido a param list → rechazado.
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython(
+                "funcion f (xs ):\n    xs .append (1 )\n    devolver longitud (xs )\n"
+                "imprimir (f ('ab' ))\n"
+            )
+
+    def test_seq_usage_len_index(self):
+        # SEQ_USAGE_SEED_V1: len+get_item sin method_call siembra list
+        # (bisect_right: len(a), a[mid]).
+        _assert_matches(
+            self,
+            "funcion f (xs ,i ):\n    devolver xs [i ]\n"
+            "imprimir (f ([7 ,8 ,9 ] ,1 ))\n",
+        )
+
+    def test_seq_usage_len_index_str_contradiction(self):
+        # SEQ_USAGE_SEED_V1: str arg conocido a param seq (len+index) →
+        # rechazado. El callee necesita AMBAS operaciones para el seed.
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython(
+                "funcion f (xs ,i ):\n    devolver longitud (xs )+ xs [i ]\n"
+                "imprimir (f ('ab' ,0 ))\n"
+            )
+
+    def test_bisect_real_compiles(self):
+        # El archivo real del corpus completa el pipeline (MIR_FAIL ->
+        # BUILD_OK; el unico archivo stdlib ganado por esta tanda).
+        import importlib.util as _ilu
+        import pathlib as _pl
+        from piton.linux_x86 import compile_native_linux as _c
+        _spec = _ilu.spec_from_file_location("pcv4", "tools/parity_corpus_v4.py")
+        _mod = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        _src = _mod.python_to_piton(_pl.Path("/usr/lib/python3.12/bisect.py").read_text())
+        _c(_src, _pl.Path("/tmp/opencode/gate_bisect.exe"))
+        self.assertTrue(True)
 
 
 if __name__ == "__main__":

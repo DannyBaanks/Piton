@@ -696,6 +696,11 @@ class MIRLowerer:
                 and getattr(node, "is_async", False)
                 and self._contains_kind(node.body, {HIRKind.YIELD, HIRKind.YIELD_FROM})
             }
+            # FUNC_SIG_PRESCAN_V1: registrar firmas de todas las funciones
+            # de nivel modulo antes de bajar cuerpos, para que un keyword
+            # call forward (bisect: insort_right -> bisect_right con key=)
+            # resuelva sin depender del orden del archivo.
+            self._prescan_module_signatures(module_body)
             for node in module_body:
                 if node.kind == HIRKind.FUNC_DEF:
                     is_gen = node.name in self.generators
@@ -1224,6 +1229,67 @@ class MIRLowerer:
             defaults_map[param] = tuple(values) if node.kind == HIRKind.TUPLE else values
             return True
         return False
+
+    def _prescan_module_signatures(self, module_body: list) -> None:
+        """FUNC_SIG_PRESCAN_V1: registra params/defaults/varargs/posonly/
+        kwonly/frame_abi de TODAS las funciones de nivel modulo ANTES de
+        bajar cuerpos (bisect: insort_right, definida en la linea 4, llama
+        con key= a bisect_right, definida en la linea 21 — el registro
+        tardio por _lower_function hacia fallar el keyword call forward).
+        Alcance fail-closed: solo funciones sin decoradores (el symbol
+        decorado se registra bajo __decorated__X y su resolucion de calls
+        no cambia) y con TODOS los defaults estaticos (los no estaticos
+        siguen rechazados identicamente al bajar la funcion). El orden de
+        params replica _lower_function: [*posonly, *pos, vararg?, *kwonly,
+        kwarg?]. _lower_function re-registra los mismos valores al bajar,
+        por lo que el pre-scan es idempotente."""
+        for node in module_body:
+            if node.kind != HIRKind.FUNC_DEF:
+                continue
+            if list(getattr(node, "decorators", None) or []):
+                continue
+            args = getattr(node, "args", None)
+            posonly_params = list(getattr(args, "posonlyargs", []) or []) if args else []
+            positional_params = list(getattr(args, "args", []) or []) if args else []
+            kwonly_params = list(getattr(args, "kwonlyargs", []) or []) if args else []
+            vararg_name = getattr(args, "vararg", None) if args else None
+            kwarg_name = getattr(args, "kwarg", None) if args else None
+            defaults_map: dict[str, Any] = {}
+            if args:
+                raw_defaults = list(getattr(args, "defaults", []) or [])
+                default_params = positional_params[-len(raw_defaults):] if raw_defaults else []
+                ok = True
+                for param, default_node in zip(default_params, raw_defaults):
+                    if not self._static_default_value(default_node, defaults_map, param):
+                        ok = False
+                        break
+                if ok:
+                    for param, default_node in zip(kwonly_params, getattr(args, "kw_defaults", []) or []):
+                        if default_node is None:
+                            continue
+                        if not self._static_default_value(default_node, defaults_map, param):
+                            ok = False
+                            break
+                if not ok:
+                    continue
+            name = node.name
+            params = [*posonly_params, *positional_params]
+            if vararg_name:
+                params.append(vararg_name)
+            params.extend(kwonly_params)
+            if kwarg_name:
+                params.append(kwarg_name)
+            self.function_params[name] = list(params)
+            self.function_defaults[name] = dict(defaults_map)
+            self.function_varargs[name] = vararg_name
+            self.function_kwargs[name] = kwarg_name
+            self.function_posonly[name] = posonly_params
+            self.function_kwonly[name] = kwonly_params
+            total_params = (
+                len(positional_params) + len(kwonly_params)
+                + int(bool(vararg_name)) + int(bool(kwarg_name))
+            )
+            self.function_frame_abi[name] = total_params > 4
 
     def _walk(self, value: Any):
         if isinstance(value, HIRNode):
