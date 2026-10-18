@@ -879,5 +879,96 @@ class CorpusFinishParseV1(unittest.TestCase):
         )
 
 
+class BuildFailGatesV1(unittest.TestCase):
+    """BUILD_FAIL_V1: las familias downstream de build que dejaron los 9
+    BUILD_FAIL del corpus v4 (report after-corpus-finish-v1), atacadas en
+    linux_x86.py + mir.py:
+
+      SPLIT_ELEM_STR_V1  str.split anota elems str (comp[0].upper() de
+          nturl2path:34 moria con 'method receiver class is not statically
+          known'; splitlines/rsplit ya lo hacian).
+      MODULE_GLOBAL_READ_V1  leer un nombre de modulo dentro de una funcion
+          sin `global` (opcode/stat: constantes) — CPython lo permite; el
+          store sin declarar sigue siendo local (shadowing intacto) y se
+          promueven a static los nombres leidos.
+      DEL_FN_SCOPE_V1  `del def_op` al final de opcode.py:282 no mata los
+          loads de funciones llamadas antes del del; el NameError estatico
+          aplica al flujo lineal de <module> y a deletes en la misma fn.
+      REPR_RUNTIME_V1 + SLOT_REPR_FWD  los metodos __repr__ usan
+          piton_slot_repr del runtime que vive en el string C de bigint;
+          sin bigint (__future__.py: solo clases) el ld fallaba con
+          implicit/never defined. __future__.py ahora BUILD OK completo.
+      FUNC_IMPORT_ALIAS_V1  `importar sys` dentro de una funcion (getopt:
+          main) registra el alias para el patron sys.argv -> op sys_argv.
+
+    Edge documentado (familia A, tipado estatico insuficiente): method
+    calls sobre params/attrs/call-results sin tipo (nturl2path .replace,
+    colorsys min/max key, sitecustomize import no provisto, token
+    globals().items()); return-inference de comparisons imprime 1 vs True.
+    """
+
+    def test_split_elem_attr(self):
+        _assert_matches(self, 'p ="a:b "\ncomp =p .split (":")\nimprimir (comp [0 ].upper () )\n')
+
+    def test_split_elem_index(self):
+        _assert_matches(self, 'p ="a:b "\ncomp =p .split (":")\nimprimir (comp [0 ][-1 ])\n')
+
+    def test_split_maxsplit_elem(self):
+        _assert_matches(self, 'p ="a:b:c "\ncomp =p .split (":",1 )\nimprimir (comp [1 ].upper () )\n')
+
+    def test_read_module_const_in_fn(self):
+        _assert_matches(self, "S_IFDIR =0o040000 \nfuncion f ():\n    devolver S_IFDIR \nimprimir (f () )\n")
+
+    def test_read_module_globals_expr(self):
+        _assert_matches(self, "A =10 \nB =20 \nfuncion f ():\n    devolver A +B \nimprimir (f () )\n")
+
+    def test_read_module_reassigned_between_calls(self):
+        _assert_matches(self, "x =1 \nfuncion f ():\n    devolver x \nimprimir (f () )\nx =2 \nimprimir (f () )\n")
+
+    def test_del_module_cleanup_fn_loads_alive(self):
+        # opcode.py:282 — del de limpieza al final; las funciones viven.
+        _assert_matches(self, 'funcion def_op (n ,o ):\n    pasar \ndef_op ("a ",1 )\nborrar def_op \n')
+
+    def test_del_then_module_load_still_fails_closed(self):
+        # el flujo lineal de <module> sigue modelando el NameError.
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython("x =1 \nborrar x \nimprimir (x )\n")
+
+    def test_repr_method_without_bigint(self):
+        # REPR_RUNTIME_V1: antes ni compilaba (ld: piton_slot_repr
+        # implicit/never defined). El __repr__ de un int funciona; el de
+        # attr str diverge (familia A, documentado).
+        _assert_matches(
+            self,
+            "clase P :\n"
+            "    funcion __init__ (self ,v ):\n"
+            "        self .v =v \n"
+            "    funcion __repr__ (self ):\n"
+            "        devolver repr (self .v )\n"
+            "p =P (42 )\n"
+            "imprimir (p )\n",
+        )
+
+    def test_func_import_sys_argv(self):
+        _assert_matches(
+            self,
+            "funcion main ():\n"
+            "    importar sys \n"
+            "    devolver longitud (sys .argv )\n"
+            "imprimir (main ()>=0 )\n",
+        )
+
+    def test_func_import_slice_argv(self):
+        _assert_matches(
+            self,
+            "funcion main ():\n"
+            "    importar sys \n"
+            "    args =sys .argv [1: ]\n"
+            "    devolver longitud (args )\n"
+            "imprimir (main ()>=0 )\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -82,9 +82,16 @@ class GlobalDeclV1(unittest.TestCase):
     def test_param_shadows(self):
         _assert_matches(self, "g = 9\nfuncion f(g):\n    imprimir(g)\nf(1)\nimprimir(g)\n")
 
-    def test_read_without_declaration_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("g = 0\nfuncion f():\n    imprimir(g)\nf()\n")
+    def test_read_without_declaration(self):
+        # MODULE_GLOBAL_READ_V1: CPython permite leer un nombre de modulo
+        # sin declarar `global` (solo la escritura es local sin declaracion);
+        # antes era fail-closed y el corpus (opcode/stat) no compilaba.
+        _assert_matches(self, "g = 7\nfuncion f():\n    imprimir(g)\nf()\n")
+
+    def test_read_without_declaration_shadow_wins(self):
+        # el store local sigue ganando (write sin `global` = local, como
+        # CPython); el read de f no toca el binding del modulo.
+        _assert_matches(self, "g = 0\nfuncion f():\n    g = 5\n    imprimir(g)\nf()\nimprimir(g)\n")
 
     def test_global_inside_generator_fails_closed(self):
         with pytest.raises(NativeBuildError):

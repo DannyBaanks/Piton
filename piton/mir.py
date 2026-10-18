@@ -1662,6 +1662,15 @@ class MIRLowerer:
         elif kind == HIRKind.RAISE:
             self._lower_raise(builder, node)
         elif kind == HIRKind.IMPORT:
+            # FUNC_IMPORT_ALIAS_V1: `importar sys` dentro de una funcion
+            # (getopt.py: main hace `import sys` y luego sys.argv[1:])
+            # registra el alias en el builder para que los patrones de
+            # modulo (sys.argv -> op sys_argv) apliquen igual que a nivel
+            # de modulo. El import en runtime es no-op: los modulos builtin
+            # ya viven en el binario.
+            for alias in getattr(node, "names", ()) or ():
+                if alias.name in {"asyncio", "math", "sys", "os", "terminal"}:
+                    builder.module_aliases[alias.asname or alias.name] = alias.name
             return
         elif kind == HIRKind.IMPORT_FROM:
             return

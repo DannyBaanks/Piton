@@ -146,6 +146,10 @@ static void sb_put_int(PitonStrBuf*b,long v){char t[24];long n=0;unsigned long u
   do{t[n++]=(char)('0'+u%10);u/=10;}while(u);
   while(n)sb_putc(b,t[--n]);}
 static void piton_slot_repr_into(PitonStrBuf*b,PitonSlot v);
+/* SLOT_REPR_FWD_V1: los metodos __repr__ de clases (emitidos antes del
+   cuerpo del prelude que define piton_slot_repr) necesitan el prototipo
+   (__future__.py: implicit declaration -> ld fallaba). */
+static long piton_slot_repr(long bits,int kind);
 static void piton_seq_repr_into(PitonStrBuf*b,PitonSeq*s){
   sb_putc(b,s->kind==PK_TUPLE?'(':'[');
   for(long i=0;i<s->length;++i){if(i)sb_puts(b,", ");piton_slot_repr_into(b,s->items[i]);}
@@ -2597,6 +2601,25 @@ class LinuxCEmitter:
             for block in function.blocks
             for instruction in block.instructions
         )
+        # REPR_RUNTIME_V1: los metodos __repr__/__ascii__ de clases (y el
+        # builtin repr/ascii) emiten piton_slot_repr* del rich runtime;
+        # sin esta deteccion __future__.py (solo define clases) compilaba
+        # sin el prelude -> implicit declaration / never defined en ld.
+        _repr_temps = {
+            instruction.result
+            for function in module.functions
+            for block in function.blocks
+            for instruction in block.instructions
+            if instruction.op == "load" and instruction.args
+            and str(instruction.args[0]).strip("'\"") in {"repr", "ascii", "repr_ascii"}
+        }
+        _uses_repr_runtime = any(f.name.endswith("____repr__") or f.name.endswith("____ascii__")
+                                 for f in module.functions) or any(
+            instruction.op == "call" and instruction.args and instruction.args[0] in _repr_temps
+            for function in module.functions
+            for block in function.blocks
+            for instruction in block.instructions
+        )
         self._has_bigint = any(
             instruction.op == "const" and instruction.args
             and isinstance(instruction.args[0], int) and abs(instruction.args[0]) > 9223372036854775807
@@ -2606,7 +2629,7 @@ class LinuxCEmitter:
         ) or self._const_fold_overflows(module) or self._uses_float_mod(module) or _prints_collection
         # Rich runtime (with __argc/__argv/_start and object/dict/set structs) needed for
         # bigint or sys.argv/os.name or any object/dict/set/bytes operations
-        self._has_rich_runtime = self._has_bigint or any(
+        self._has_rich_runtime = self._has_bigint or _uses_repr_runtime or any(
             instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv"}
             or (instruction.op == "const" and instruction.args and isinstance(instruction.args[0], (bytes, bytearray)))
             for function in module.functions
@@ -2633,7 +2656,10 @@ class LinuxCEmitter:
         if self._has_rich_runtime:
             lines.append(_FLOAT_REPR_C)
             lines.append(_RICH_FREESTANDING_C)
-        if self._has_bigint:
+        if self._has_bigint or _uses_repr_runtime:
+            # REPR_RUNTIME_V1: el runtime de repr/ascii (piton_slot_repr_into
+            # y familia) vive en el mismo string C que bigint; los metodos
+            # __repr__ sin bigint (__future__.py: solo clases) lo necesitan.
             bigint_code = _BIGINT_FREESTANDING_C
             lines.extend(bigint_code.split("\n"))
         for function in module.functions:
@@ -3838,6 +3864,10 @@ class LinuxCEmitter:
                 sep = "(const char*)0" if types.get(call_args[0]) == "none" else f"(const char*){self._value(call_args[0])}"
                 out.append(f"    {_name(result)}=piton_str_split_max((const char*){operand},{sep},{self._value(call_args[1])});")
                 types[result] = "list"
+                # SPLIT_ELEM_STR_V1: los elementos son str (comp[0].upper()
+                # necesita el tipo; nturl2path:34 — antes "method receiver
+                # class is not statically known", igual que splitlines/rsplit).
+                self._coll_elems[result] = "str"
                 return out
             if len(call_args) > 1:
                 raise NativeBuildError("Linux str.split() requires zero or one argument")
@@ -3846,6 +3876,8 @@ class LinuxCEmitter:
             sep = "(const char*)0" if not call_args or types.get(call_args[0]) == "none" else f"(const char*){self._value(call_args[0])}"
             out.append(f"    {_name(result)}=piton_str_split((const char*){operand},{sep});")
             types[result] = "list"
+            # SPLIT_ELEM_STR_V1: idem — elems str.
+            self._coll_elems[result] = "str"
         elif method in {"strip", "lstrip", "rstrip"}:
             if len(call_args) not in {0, 1}:
                 raise NativeBuildError(f"Linux str.{method}() requires no or one argument")
@@ -4776,6 +4808,7 @@ class LinuxCEmitter:
         types for constant initializers."""
         self._func_globals = {}
         self._deleted_names = set()
+        self._deleted_by_function: dict[str, set[str]] = {}
         self._func_stores = {}
         self._module_stored = set()
         self._module_types = {}
@@ -4844,7 +4877,29 @@ class LinuxCEmitter:
         declared_anywhere: set[str] = set()
         for names in self._func_globals.values():
             declared_anywhere |= names
-        self._shared_globals = self._module_stored & declared_anywhere
+        # MODULE_GLOBAL_READ_V1: CPython lee el binding del modulo cuando la
+        # funcion no lo asigna localmente ni declara `global` (solo la
+        # escritura es local sin declaracion). Esos nombres se promueven a
+        # static como los declarados, para que el load del op alcance la
+        # variable file-scope (opcode/stat: constantes de modulo leidas en
+        # funciones).
+        read_anywhere: set[str] = set()
+        for function in module.functions:
+            if function.name == "<module>":
+                continue
+            func_params = set(function.params or ())
+            func_stored = self._func_stores.get(function.name, ())
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if instruction.op == "load" and instruction.args and isinstance(instruction.args[0], str):
+                        name = instruction.args[0]
+                        if (
+                            name in self._module_stored
+                            and name not in func_params
+                            and name not in func_stored
+                        ):
+                            read_anywhere.add(name)
+        self._shared_globals = self._module_stored & (declared_anywhere | read_anywhere)
 
     def _infer_return_types(self, module: MIRModule) -> dict[str, str]:
         """RETURNTYPE_V1: narrow, sound return-type inference over MIR.
@@ -5386,7 +5441,19 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"Linux backend cannot encode constant {value!r}")
         elif op == "load":
             source = args[0]
-            if source in self._deleted_names:
+            # DEL_FN_SCOPE_V1: el NameError estatico de `borrar` aplica al
+            # flujo lineal de <module> y a deletes anteriores en la MISMA
+            # funcion — no a funciones que leen un nombre que el modulo
+            # borra despues (opcode.py:282 del def_op; las calls ocurren
+            # antes del del).
+            _deleted_for_this_scope = (
+                source in self._deleted_names
+                and (
+                    function.name == "<module>"
+                    or source in self._deleted_by_function.get(function.name, ())
+                )
+            )
+            if _deleted_for_this_scope:
                 # DEL_NAME_V1: borrado estatico -> NameError en build modelado
                 raise NativeBuildError(f"NameError: name '{source}' is not defined")
 
@@ -5495,12 +5562,35 @@ class LinuxCEmitter:
                 and source not in function.params
                 and source not in self._func_stores.get(function.name, ())
             ):
-                # CPython allows reads without declaration, but the subset
-                # needs the explicit opt-in (it keeps writes local); fail
-                # closed with an actionable message instead of C spew.
-                raise NativeBuildError(
-                    f"Linux '{source}' is assigned at module level; declare it global to read it inside '{function.name}'"
-                )
+                # MODULE_GLOBAL_READ_V1: CPython permite leer un nombre de
+                # modulo sin declarar `global` (solo la escritura es local
+                # sin declaracion). La funcion no lo asigna localmente ni
+                # lo declara, asi que el load es el module global — mismo
+                # emit que GLOBAL_DECL_V1, sin el opt-in explicito
+                # (opcode/stat del corpus: lectura de constantes de modulo
+                # dentro de funciones; la escritura sigue exigiendo
+                # `global` para no volverse silenciosamente local).
+                if (
+                    getattr(function, "is_generator", False)
+                    or getattr(function, "is_coroutine", False)
+                    or getattr(function, "is_async_generator", False)
+                ):
+                    raise NativeBuildError(
+                        f"Linux global '{source}' inside generators is not supported yet"
+                    )
+                out.append(f"    {_name(result)}={_name(source)};")
+                types[result] = self._module_types.get(source, types.get(source, "int"))
+                if source in self._tuple_elems:
+                    self._tuple_elems[result] = self._tuple_elems[source]
+                if source in self._dict_elems:
+                    self._dict_elems[result] = self._dict_elems[source]
+                if source in self._dict_key_types:
+                    self._dict_key_types[result] = self._dict_key_types[source]
+                if source in self._coll_elems:
+                    self._coll_elems[result] = self._coll_elems[source]
+                if source in self._dict_val_types:
+                    self._dict_val_types[result] = self._dict_val_types[source]
+                return out
             # NAME_RESOLVE_V1: every resolution above declined, so this bare
             # identifier would reach the C file undeclared (gcc naming a
             # Spanish builtin like `suma` is not a PITON diagnostic).
@@ -8040,13 +8130,22 @@ class LinuxCEmitter:
             # model of CPython's NameError: branches that only conditionally
             # delete a variable are conservatively handled by the static type
             # map (scope documented in the PITON contract).
+            # DEL_FN_SCOPE_V1: un `borrar` de modulo (opcode.py: `del def_op`
+            # al final) NO mata los loads dentro de funciones — la funcion
+            # pudo ejecutarse antes del del (los calls de opcode.py ocurren
+            # antes); el NameError estatico solo aplica al flujo lineal de
+            # <module> y a deletes anteriores EN LA MISMA funcion. El delete
+            # runtime no es observable en funciones (edge documentado).
+            deleted_here = self._deleted_by_function.setdefault(function.name, set())
             if isinstance(args[0], str):
                 types.pop(args[0], None)
                 self._deleted_names.add(args[0])
+                deleted_here.add(args[0])
             else:
                 for name in args:
                     types.pop(name, None)
                     self._deleted_names.add(name)
+                    deleted_here.add(name)
             return out
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
