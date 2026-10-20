@@ -187,6 +187,8 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "jump": "PURE", "branch": "PURE", "return": "PURE",
     "branch_exc": "OPAQUE",
     "binary": "PURE", "unary": "PURE", "compare": "PURE",
+    # GETTEXT_IDENTITY_V1: gettext.gettext es la identidad (sin efectos).
+    "gettext_identity": "PURE",
     "math_sqrt": "PURE",
     "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE",
     "math_floor": "PURE", "math_ceil": "PURE", "math_trunc": "PURE",
@@ -367,6 +369,27 @@ def _active_handler(builder: "_Builder") -> str | None:
     if len(group) == 1:
         return group[0][1]
     return list(group)
+
+
+def _iter_nested_statements(items: Any):
+    """GETTEXT_IDENTITY_V1: recorre las sentencias ANIDADAS de un modulo
+    (cuerpos de try/except, if/else, while, for, with) buscando imports que
+    el scan de nivel de modulo no ve.
+
+    Los imports anidados son legitimos en Python (getopt mete
+    `from gettext import gettext as _` dentro de un try/except de bootstrap)
+    y el scan de nivel de modulo los ignora, dejando el nombre sin resolver.
+    """
+    for node in items or ():
+        yield node
+        for attr in ("body", "orelse", "finalbody"):
+            sub = getattr(node, attr, None)
+            if isinstance(sub, list):
+                yield from _iter_nested_statements(sub)
+        for handler in getattr(node, "handlers", ()) or ():
+            hbody = getattr(handler, "body", None)
+            if isinstance(hbody, list):
+                yield from _iter_nested_statements(hbody)
 
 
 class MIRLowerer:
@@ -579,6 +602,20 @@ class MIRLowerer:
                                 self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
                             else:
                                 self.from_import_aliases[local] = f"{mod_name.replace('.', '__')}__{alias.name}"
+            # GETTEXT_IDENTITY_V1: `from gettext import gettext as X` — el
+            # import suele estar ANIDADO (getopt lo mete en un try/except de
+            # bootstrap), asi que el scan de imports de modulo no lo ve.
+            # gettext.gettext es la IDENTIDAD en CPython (devuelve su
+            # argumento sin cambios cuando no hay traduccion instalada), asi
+            # que la llamada se puede lowerar como identidad.
+            for _nested in _iter_nested_statements(module_body):
+                if _nested.kind != HIRKind.IMPORT_FROM:
+                    continue
+                if getattr(_nested, "module", None) != "gettext":
+                    continue
+                for _alias in _nested.names:
+                    if _alias.name == "gettext":
+                        self.from_import_aliases[_alias.asname or _alias.name] = "gettext.gettext"
             for module_name, imported in sorted(imported_modules.items()):
                 for item in imported.body:
                     if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM, HIRKind.PASS}:
@@ -3141,6 +3178,20 @@ class MIRLowerer:
             # Handle from-imported builtins (e.g. `desde math importar sqrt; sqrt(16)`)
             if node.func.kind == HIRKind.LOAD and node.func.name in builder.from_import_aliases:
                 qualified = builder.from_import_aliases[node.func.name]
+                if qualified == "gettext.gettext":
+                    # GETTEXT_IDENTITY_V1: gettext.gettext es la identidad
+                    # (CPython devuelve el argumento sin cambios si no hay
+                    # traduccion instalada) -> la llamada se lowera como
+                    # identidad y el backend conserva la plantilla literal
+                    # para el operador `%`.
+                    if len(node.args) != 1 or node.keywords:
+                        raise MIRLoweringError(
+                            "native gettext.gettext requires exactly one positional argument"
+                        )
+                    value = self._lower_expr(builder, node.args[0])
+                    result = builder.temp()
+                    builder.emit("gettext_identity", value, result=result)
+                    return result
                 _MATH_FUNCS = {
                     "math.sqrt": "math_sqrt", "math.floor": "math_floor",
                     "math.ceil": "math_ceil", "math.trunc": "math_trunc",
@@ -3981,6 +4032,20 @@ class MIRLowerer:
             # Handle from-imported builtins (e.g. `desde math importar sqrt; sqrt(16)`)
             if node.func.kind == HIRKind.LOAD and node.func.name in builder.from_import_aliases:
                 qualified = builder.from_import_aliases[node.func.name]
+                if qualified == "gettext.gettext":
+                    # GETTEXT_IDENTITY_V1: gettext.gettext es la identidad
+                    # (CPython devuelve el argumento sin cambios si no hay
+                    # traduccion instalada) -> la llamada se lowera como
+                    # identidad y el backend conserva la plantilla literal
+                    # para el operador `%`.
+                    if len(node.args) != 1 or node.keywords:
+                        raise MIRLoweringError(
+                            "native gettext.gettext requires exactly one positional argument"
+                        )
+                    value = self._lower_expr(builder, node.args[0])
+                    result = builder.temp()
+                    builder.emit("gettext_identity", value, result=result)
+                    return result
                 _MATH_FUNCS = {
                     "math.sqrt": "math_sqrt", "math.floor": "math_floor",
                     "math.ceil": "math_ceil", "math.trunc": "math_trunc",

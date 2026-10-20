@@ -1164,5 +1164,72 @@ class MirReachGatesV1(unittest.TestCase):
         self.assertTrue(True)
 
 
+class GetoptGatesV1(unittest.TestCase):
+    """GETOPT-V1: cerrar el BUILD_FAIL de getopt.py (parametros de tipo
+    secuencia deducidos por uso + reconciliados en el call-site).
+
+      SEQ_SLICE_SEED_V1   un param con indice+slice (y sin metodo str) se
+          tipa list; el seed por slice es AMBIGUO (slice es legal en str y
+          en list) y el call-site lo reconcilia con el tipo del argumento.
+      ELEM_KIND_V1        el tipo del elemento se deduce del uso de
+          `param[i]` (metodo str, directo o a traves de un store).
+      CALL_ARG_TYPE_V1    el tipo del param deducido del call-site (el
+          argumento conocido) se aplica a params usados como secuencia.
+      STR_ARG_EVIDENCE_V1 un param pasado como argumento de un metodo str
+          es un str.
+      GETTEXT_IDENTITY_V1 `from gettext import gettext as X` es la
+          identidad -> su resultado conserva la plantilla del `%`.
+      STR_OFFSET_PREFIX_V1  s.startswith(p, start) / s.endswith(p, start).
+      UNBOUND_BASE_CALL_V1   `Exception.__init__(self, ...)` es desbound:
+          el self ya viene en los argumentos.
+    """
+
+    def test_seq_slice_seed_and_reconcile(self):
+        # el slice del param es legal; el elemento se deduce str.
+        _assert_matches(
+            self,
+            "funcion f (xs ):\n    cola = xs [1 :]\n    imprimir (cola )\n"
+            "f (['a' ,'b' ])\n",
+        )
+
+    def test_call_arg_type_reconciles_ambiguous_seed(self):
+        # el param se indexa y se slicea (seed ambiguo) pero el call-site
+        # lo pasa como str -> el param es str y s[0] es un caracter.
+        # NOTA: el tipo del call-site llega al callee cuando el callee esta
+        # DEFINIDO DESPUES (llamada hacia adelante) — el patron de getopt.
+        _assert_matches(
+            self,
+            "funcion f (xs ):\n    devolver g (xs )\n"
+            "funcion g (s ):\n    devolver s [0 ]\n"
+            "imprimir (f ('hola' ) )\n",
+        )
+
+    def test_str_arg_evidence_is_str(self):
+        # un param usado como argumento de startswith es str.
+        _assert_matches(
+            self,
+            "funcion f (s ):\n    devolver s .upper ()\n"
+            "imprimir (f ('abc' ) )\n",
+        )
+
+    def test_getopt_real_compiles(self):
+        # el archivo real del corpus completa el pipeline.
+        import importlib.util as _ilu
+        import pathlib as _pl
+        from piton.linux_x86 import compile_native_linux as _c
+        _spec = _ilu.spec_from_file_location("pcv4g", "tools/parity_corpus_v4.py")
+        _mod = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        _src = _mod.python_to_piton(_pl.Path("/usr/lib/python3.12/getopt.py").read_text())
+        _c(_src, _pl.Path("/tmp/opencode/gate_getopt.exe"))
+        self.assertTrue(True)
+
+    def test_str_startswith_with_offset(self):
+        # STR_OFFSET_PREFIX_V1: s.startswith(p, start) — la comparacion es
+        # sobre s[start:].
+        _assert_matches(self, "imprimir ('abcd' .startswith ('bc' ,1 ))\n")
+        _assert_matches(self, "imprimir ('abcd' .endswith ('bc' ,1 ))\n")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -11,7 +11,14 @@ from pathlib import Path
 from typing import Any
 
 from .lower import LoweringError, lower_cst_to_hir
-from .mir import MIRFunction, MIRInstruction, MIRLoweringError, MIRModule, lower_hir_to_mir
+from .mir import (
+    _BUILTIN_EXCEPTIONS,
+    MIRFunction,
+    MIRInstruction,
+    MIRLoweringError,
+    MIRModule,
+    lower_hir_to_mir,
+)
 from .parser import parse
 from .x86 import NativeBuildError, _BUILTINS, _scan_native_modules, generator_slot_layout
 
@@ -366,6 +373,11 @@ static long piton_str_case(const char*s,int upper){usize n=piton_strlen(s);char*
 static long piton_str_find(const char*s,const char*n){usize hl=piton_strlen(s),nl=piton_strlen(n);if(nl==0)return 0;if(nl>hl)return -1;for(usize i=0;i+nl<=hl;++i){usize j=0;while(j<nl&&s[i+j]==n[j])++j;if(j==nl)return(long)i;}return -1;}
 static long piton_str_startswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[i]!=p[i])return 0;return 1;}
 static long piton_str_endswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[hl-nl+i]!=p[i])return 0;return 1;}
+/* STR_OFFSET_PREFIX_V1: s.startswith(p, start) / s.endswith(p, start) — la
+   comparacion ocurre sobre s[start:] (CPython), con start fuera de rango
+   -> False (startswith) / True solo si el sufijo cabe (endswith). */
+static long piton_str_startswith_at(const char*s,const char*p,long start){usize hl=piton_strlen(s),nl=piton_strlen(p);if(start<0)start=0;if((usize)start>hl)return 0;if(nl>hl-(usize)start)return 0;for(usize i=0;i<nl;++i)if(s[start+i]!=p[i])return 0;return 1;}
+static long piton_str_endswith_at(const char*s,const char*p,long start){usize hl=piton_strlen(s),nl=piton_strlen(p);if(start<0)start=0;if((usize)start>hl)return 0;if(nl>hl-(usize)start)return 0;for(usize i=0;i<nl;++i)if(s[hl-nl+i]!=p[i])return 0;return 1;}
 /* STR_TRANSLATE_V1: translate(dict) — cada carácter se sustituye por el
  * mapeo; una clave ausente deja el carácter; valor None/'' borra (V1: valor
  * string vacío). */
@@ -561,6 +573,10 @@ static long piton_str_apply_slice(const char*s,PitonSlice*sl){
   return(long)p;
 }
 static long piton_str_slice(const char*s,long lo,long hi){long n=(long)piton_strlen(s);if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;char*p=piton_alloc((usize)(hi-lo)+1);for(long i=0;i<hi-lo;++i)p[i]=s[lo+i];p[hi-lo]=0;return(long)p;}
+/* STR_GET_ITEM_V1: s[i] -> str de UN caracter (CPython). Sin esto el
+   subscript de un str caia al fallback generico (que lo leia como
+   PitonSeq*) -> SIGSEGV. Indice fuera de rango -> IndexError. */
+static long piton_str_get(const char*s,long i){long n=(long)piton_strlen(s);if(i<0)i+=n;if(i<0||i>=n){piton_raise_set("IndexError","string index out of range");return 0;}char*p=piton_alloc(2);p[0]=s[i];p[1]=0;return(long)p;}
 static PitonSlot piton_seq_pop(PitonSeq*s,long i){if(!s||s->length<=0){piton_write(2,"IndexError: pop from empty list\n",32);piton_exit(1);}if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError: pop index out of range\n",35);piton_exit(1);}PitonSlot v=s->items[i];for(long j=i;j+1<s->length;++j)s->items[j]=s->items[j+1];--s->length;return v;}
 static void piton_seq_reverse(PitonSeq*s){if(!s)return;for(long i=0,j=s->length-1;i<j;++i,--j){PitonSlot t=s->items[i];s->items[i]=s->items[j];s->items[j]=t;}}
 static void piton_seq_insert(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0)i=0;if(i>s->length)i=s->length;if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}for(long j=s->length;j>i;--j)s->items[j]=s->items[j-1];s->items[i]=v;++s->length;}
@@ -2624,12 +2640,40 @@ class LinuxCEmitter:
         # funcion — el call-site lo consulta para rechazar (fail-closed)
         # argumentos de tipo conocido contradictorio.
         self._usage_param_types: dict[str, dict[str, str]] = {f.name: {} for f in module.functions}
+        # ELEM_KIND_V1: elemento de una lista parametrica deducido por uso
+        # (ej. getopt: args[0].startswith -> elem str).
+        self._usage_param_elems: dict[str, dict[str, str]] = {f.name: {} for f in module.functions}
+        # AMBIG_SEED_V1: seeds AMBIGUOS (indice+slice no distinguen str de
+        # list) — el call-site los reconcilia con el tipo real del argumento
+        # (getopt: do_shorts(optstring) recibe un str, no una list).
+        self._usage_param_weak: dict[str, dict[str, bool]] = {f.name: {} for f in module.functions}
+        # CALL_ARG_TYPE_V1: tipo de un param deducido del call-site (el
+        # argumento conocido): getopt do_longs(opt) recibe `args[0][2:]` (str)
+        # y `opt.index('=')` no tiene seed local (index es metodo de str Y
+        # de list). Solo se aplica a params usados como secuencia.
+        self._call_param_types: dict[str, dict[str, str]] = {}
+        self._param_seq_use: dict[str, set[str]] = {}
+        # RUNTIME_TYPE_PARAMS_V1: params cuyo tipo se decide EN RUNTIME
+        # (isinstance/issubclass, y el match de patrones que las usa) — no
+        # pueden recibir un tipo estatico del call-site, o el dispatch por
+        # tipo se resuelve en build y no en runtime.
+        self._runtime_type_params: dict[str, set[str]] = {}
+        # STORE_TARGETS_V1: nombres <- valor (para propagar elem-kinds que
+        # aparecen despues del store).
+        self._store_targets: dict[str, set[str]] = {}
+        # IDENTITY_FN_V1: funciones que devuelven su param sin cambios
+        # (getopt: `def _(msg): return msg`, el stub de gettext). Su
+        # resultado ES el argumento, asi que un `%` con ese resultado tiene
+        # plantilla literal.
+        self._identity_params: dict[str, int] = {}
+        self._identity_templates: dict[str, str] = {}
         self.function_params = {function.name: list(function.params) for function in module.functions}
         self.function_varargs = {function.name: function.vararg for function in module.functions}
         self.function_kwargs = {function.name: function.kwarg for function in module.functions}
         self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
         self._scan_module_globals(module)
         self._scan_usage_param_types(module)
+        self._scan_identity_functions(module)
         self.function_return_types = self._infer_return_types(module)
         self.generator_layouts = {}
         for function in module.functions:
@@ -2827,6 +2871,21 @@ class LinuxCEmitter:
         # types local del callee.
         for _uparam, _uutype in (self._usage_param_types.get(function.name) or {}).items():
             types[_uparam] = _uutype
+        # CALL_ARG_TYPE_V1: si el param no tiene seed local y el call-site
+        # conoce el tipo del argumento, usarlo. El tipo del call-site es la
+        # verdad del valor en esa llamada; un store posterior con valor
+        # TIPADO re-anota el param (el SEED_KEEP_V1 solo protege frente a
+        # stores sin tipo). getopt: do_longs(opt) <- str.
+        for _cparam, _ctype in (self._call_param_types.get(function.name) or {}).items():
+            if (
+                types.get(_cparam) in {None, "int"}
+                and _ctype != "int"
+                and _cparam not in (self._runtime_type_params.get(function.name) or ())
+            ):
+                types[_cparam] = _ctype
+                # el tipo del call-site pasa a ser seed: lo protege el
+                # SEED_KEEP_V1 frente a stores de valor sin tipo.
+                self._usage_param_types.setdefault(function.name, {})[_cparam] = _ctype
         if function.self_class and function.params:
             types[function.params[0]] = f"object:{function.self_class}"
         # WITH_PROTOCOL_V1: __exit__(self, tipo, mensaje, tb) receives the
@@ -3466,6 +3525,18 @@ class LinuxCEmitter:
             types[result] = "int"
             return out
         values = self._complete_call_args(function_name, list(values))
+        # IDENTITY_FN_V1: si el callee devuelve su param sin cambios y el
+        # argumento es un literal str, el resultado de la llamada ES ese
+        # literal — un `%` con ese resultado tiene plantilla conocida
+        # (getopt: `_('option --%s ...') % opt`).
+        _id_index = self._identity_params.get(function_name)
+        if _id_index is not None and _id_index < len(values):
+            _id_val = values[_id_index]
+            # el default de un param puede ser un literal de coleccion
+            # (no un temp) — no es indexable en _fn_consts.
+            _id_lit = self._fn_consts.get(_id_val) if isinstance(_id_val, str) else None
+            if isinstance(_id_lit, str):
+                self._identity_templates[result] = _id_lit
         # M6 SEQ_PARAM_DEFAULT_V1: el callee anota el tipo del default
         # collection; un argumento escalar explicito con tipo conocido en
         # ese param es fail-closed (CPython lo admitiria, pero el subset no
@@ -3491,8 +3562,28 @@ class LinuxCEmitter:
         # tipados list por uso mutador (bisect: a.insert) — args str/
         # tuple/dict/set/float se rechazan; "int" (unknown) pasa.
         _usage_types = self._usage_param_types.get(function_name) or {}
+        _weak_types = self._usage_param_weak.get(function_name) or {}
         for _ival, _iparam in zip(values, _params):
             _iut = _usage_types.get(_iparam)
+            # CALL_ARG_TYPE_V1: registrar el tipo conocido del argumento —
+            # el callee lo usa para tipar un param sin seed local (getopt:
+            # do_longs(opt) <- args[0][2:] es str).
+            _ipt_known = types.get(_ival) if isinstance(_ival, str) else None
+            if _ipt_known in {"str", "list", "tuple", "dict", "set"}:
+                self._call_param_types.setdefault(function_name, {})[_iparam] = _ipt_known
+            if _weak_types.get(_iparam) and isinstance(_ival, str):
+                # RECONCILE_SEED_V1: el seed del param fue AMBIGUO (indice+
+                # slice son legales en str y en list) y el call-site conoce
+                # el tipo real del argumento -> reconcilia el seed en vez de
+                # rechazar. getopt: do_shorts(optstring) recibe `args[0][1:]`
+                # (str) -> el param es str, no list.
+                _ipt = types.get(_ival)
+                if _ipt in {"str", "list", "tuple"}:
+                    _usage_types[_iparam] = _ipt
+                    _weak_types[_iparam] = False
+                    if _ipt == "str":
+                        self._usage_param_elems.get(function_name, {}).pop(_iparam, None)
+                    continue
             if _iut == "str" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
                 if _ipt is not None and _ipt not in {"str", "int", "bool", "none"}:
@@ -4022,6 +4113,20 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=piton_str_find((const char*){operand},{require_str(0, 'a str argument')});")
             types[result] = "int"
         elif method in {"startswith", "endswith"}:
+            # STR_OFFSET_PREFIX_V1: `s.startswith(p, start)` /
+            # `s.endswith(p, start)` — la comparacion es sobre s[start:].
+            if len(call_args) == 2:
+                if types.get(call_args[1]) not in {"int", "bool"}:
+                    raise NativeBuildError(f"Linux str.{method}() requires an int start offset")
+                helper_at = (
+                    "piton_str_startswith_at" if method == "startswith" else "piton_str_endswith_at"
+                )
+                out.append(
+                    f"    {_name(result)}={helper_at}((const char*){operand},"
+                    f"{require_str(0, 'a str argument')},{self._value(call_args[1])});"
+                )
+                types[result] = "bool"
+                return
             require_count(1, "exactly one str argument")
             helper = "piton_str_startswith" if method == "startswith" else "piton_str_endswith"
             out.append(f"    {_name(result)}={helper}((const char*){operand},{require_str(0, 'a str argument')});")
@@ -5111,11 +5216,76 @@ class LinuxCEmitter:
                             _all_load_src[instruction.result] = instruction.args[0]
                         if instruction.args[0] in _param_set and instruction.result:
                             _loads_of.setdefault(instruction.args[0], set()).add(instruction.result)
+            # STR_ARG_EVIDENCE_V1: un param usado como ARGUMENTO de un metodo
+            # exclusivo de str (getopt: longopt.startswith(opt)) es un str:
+            # esos metodos exigen un argumento str.
+            _str_arg_params: set[str] = set()
+            # RUNTIME_TYPE_PARAMS_V1: el primer argumento de isinstance /
+            # issubclass decide el tipo EN RUNTIME.
+            _runtime_type_params: set[str] = set()
+            for _block in function.blocks:
+                for _ins in _block.instructions:
+                    if (
+                        _ins.op == "method_call"
+                        and len(_ins.args) >= 4
+                        and _ins.args[1] in _USAGE_STR_METHODS
+                    ):
+                        for _a in _ins.args[3]:
+                            _src = _all_load_src.get(_a)
+                            if _src in _param_set:
+                                _str_arg_params.add(_src)
+                    elif (
+                        _ins.op == "call"
+                        and len(_ins.args) >= 2
+                        and isinstance(_ins.args[1], tuple)
+                        and _ins.args[1]
+                        and (
+                            _ins.args[0] in {"isinstance", "es_instancia", "issubclass", "es_subclase"}
+                            if isinstance(_ins.args[0], str)
+                            else _all_load_src.get(_ins.args[0]) in {
+                                "isinstance", "es_instancia", "issubclass", "es_subclase"
+                            }
+                        )
+                    ):
+                        _src = _all_load_src.get(_ins.args[1][0])
+                        if _src in _param_set:
+                            _runtime_type_params.add(_src)
+            if _runtime_type_params:
+                self._runtime_type_params[function.name] = _runtime_type_params
             for _uparam, _uloads in _loads_of.items():
+                # VARARG_KWARG_SEED_V1: `*args` es una tupla y `**kwargs` un
+                # dict — el seed de secuencia (list) no aplica a esos params.
+                if _uparam in {getattr(function, "vararg", None), getattr(function, "kwarg", None)}:
+                    continue
                 _has_str_evidence = False
                 _contradicts = False
                 _has_list_evidence = False
                 _contradicts_list = False
+                # CALL_ARG_TYPE_V1: el param se usa como SECUENCIA (indice,
+                # slice, receiver de metodo o len) — el tipo del call-site
+                # puede darle el tipo real (getopt: do_longs(opt) recibe un
+                # str y `opt.index('=')` no tiene seed local).
+                self._param_seq_use.setdefault(function.name, set())
+                for block in function.blocks:
+                    for instruction in block.instructions:
+                        if (
+                            instruction.op == "method_call"
+                            and len(instruction.args) >= 3
+                            and instruction.args[2] in _uloads
+                        ):
+                            self._param_seq_use[function.name].add(_uparam)
+                        elif (
+                            instruction.op in {"get_item", "get_slice"}
+                            and instruction.args
+                            and instruction.args[0] in _uloads
+                        ):
+                            self._param_seq_use[function.name].add(_uparam)
+                        elif instruction.op == "compare" and len(instruction.args) >= 3:
+                            # un param comparado necesita tipo conocido (la
+                            # comparacion exige tipos ordenables/iguales).
+                            for _side in instruction.args[1:3]:
+                                if _side in _uloads:
+                                    self._param_seq_use[function.name].add(_uparam)
                 # SEQ_USAGE_SEED_V1: len() + get_item sobre el param sin
                 # metodo contradictorio (bisect_right: len(a), a[mid] — el
                 # param no tiene method_call, asi que el seed de mutadores
@@ -5124,6 +5294,8 @@ class LinuxCEmitter:
                 # call-site rechaza args de tipo conocido contradictorio.
                 _uses_len = False
                 _uses_get_item = False
+                _uses_get_slice = False
+                _get_item_results: set[str] = set()
                 for block in function.blocks:
                     for instruction in block.instructions:
                         if (
@@ -5148,25 +5320,138 @@ class LinuxCEmitter:
                             and instruction.args[0] in _uloads
                         ):
                             _uses_get_item = True
+                            _get_item_results.add(instruction.result)
+                        elif (
+                            instruction.op == "get_slice" and instruction.args
+                            and instruction.args[0] in _uloads
+                        ):
+                            _uses_get_slice = True
                         elif (
                             instruction.op == "call" and len(instruction.args) >= 2
                             and isinstance(instruction.args[1], tuple)
                             and instruction.args[1]
-                            and _all_load_src.get(instruction.args[0]) == "len"
+                            and _all_load_src.get(instruction.args[0]) in {"len", "longitud"}
                             and instruction.args[1][0] in _uloads
                         ):
+                            # LEN_CALL_V1: `longitud(x)` (PITON) y `len(x)`
+                            # son el mismo builtin — sin el nombre espanol la
+                            # evidencia de secuencia no se detectaba.
+                            _uses_len = True
+                        elif (
+                            instruction.op == "collection_len" and instruction.args
+                            and instruction.args[0] in _uloads
+                        ):
+                            # LEN_COLL_V1: `len(lista)` se lowers como
+                            # collection_len (no como call a len) — es la
+                            # misma evidencia de secuencia.
                             _uses_len = True
                 if _has_str_evidence and not _contradicts:
+                    self._usage_param_types[function.name][_uparam] = "str"
+                elif _uparam in _str_arg_params and not _contradicts_list:
+                    # STR_ARG_EVIDENCE_V1: el param se pasa como argumento de
+                    # un metodo str -> es un str (getopt: long_has_args(opt)).
                     self._usage_param_types[function.name][_uparam] = "str"
                 elif _has_list_evidence and not _contradicts_list:
                     # bisect: a.insert(lo, x) — el param mutador se tipa
                     # list; el call-site rechaza args conocidos no-list.
                     self._usage_param_types[function.name][_uparam] = "list"
                 elif (
-                    _uses_len and _uses_get_item and not _contradicts_list
-                    and not _has_str_evidence and not _contradicts
+                    not _contradicts_list
+                    and not _has_str_evidence
+                    and not _contradicts
+                    and ((_uses_len and _uses_get_item) or (_uses_get_slice and _uses_get_item))
                 ):
+                    # SEQ_USAGE_SEED_V1: indexado/sliceado del param sin
+                    # metodos str (bisect: len(a), a[mid]; getopt:
+                    # args[0], args[1:]) -> el param es una secuencia lineal,
+                    # se asume list.
                     self._usage_param_types[function.name][_uparam] = "list"
+                    # AMBIG_SEED_V1: SOLO el seed por indice+SLICE es ambiguo
+                    # (slice es legal en str y en list; el call-site lo
+                    # reconcilia con el tipo real del argumento). El seed por
+                    # len+indice conserva el contrato fail-closed del
+                    # call-site (un argumento str a un param seq se rechaza).
+                    self._usage_param_weak[function.name][_uparam] = bool(
+                        _uses_get_slice and not _uses_len
+                    )
+                # ELEM_KIND_V1: para un param list, deducir el tipo de
+                # sus elementos por el uso de `param[i]` (get_item) como
+                # receiver de metodos str; getopt: args[0].startswith('-')
+                # -> elem str. Sin esto args[0] queda int y los slices
+                # / comparaciones de sus elementos fallan cerrado.
+                _up_type = self._usage_param_types.get(function.name, {}).get(_uparam)
+                if _up_type == "list":
+                    # ELEM_KIND_V1: el tipo del elemento se deduce del uso de
+                    # `param[i]`: receiver de metodo str, directo o a traves
+                    # de un store (getopt: o = longopts[i]; o.startswith(opt)).
+                    _stores_of: dict[str, set[str]] = {}
+                    for _b in function.blocks:
+                        for _i in _b.instructions:
+                            if _i.op == "store" and len(_i.args) >= 2:
+                                _stores_of.setdefault(_i.args[1], set()).add(_i.args[0])
+                    _item_names: set[str] = set()
+                    for _r in _get_item_results:
+                        _item_names |= _stores_of.get(_r, set())
+                    _uses_str_elem = any(
+                        instruction.op == "method_call"
+                        and len(instruction.args) >= 3
+                        and instruction.args[1] in _USAGE_STR_METHODS
+                        and instruction.args[1] not in _USAGE_NONSTR_METHODS
+                        and (
+                            instruction.args[2] in _get_item_results
+                            or _all_load_src.get(instruction.args[2]) in _item_names
+                        )
+                        for block in function.blocks
+                        for instruction in block.instructions
+                    )
+                    self._usage_param_elems[function.name][_uparam] = (
+                        "str" if _uses_str_elem else None
+                    )
+                    if _uses_str_elem:
+                        # evidencia de elem str: el param es una LIST de str
+                        # (los chars de un str no se usan con metodos str).
+                        self._usage_param_weak[function.name][_uparam] = False
+
+    def _scan_identity_functions(self, module: MIRModule) -> None:
+        """IDENTITY_FN_V1: detecta funciones que devuelven su param sin
+        cambios y sin efectos (getopt: `def _(msg): return msg`, el stub de
+        gettext). Su resultado ES el argumento recibido, asi que un `%` con
+        ese resultado tiene una plantilla literal conocida.
+
+        Solo se acepta un unico `return` cuyo valor es un load de un param, y
+        el cuerpo no tiene store/call/method_call/raise/print (sin efectos).
+        """
+        for function in module.functions:
+            if function.name == "<module>" or not function.params:
+                continue
+            returns: list[Any] = []
+            has_effect = False
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if instruction.op == "return" and instruction.args:
+                        returns.append(instruction.args[0])
+                    elif instruction.op in {
+                        "store", "set_attr", "call", "method_call",
+                        "raise_typed", "print", "del",
+                    }:
+                        has_effect = True
+            if len(returns) != 1 or has_effect:
+                continue
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if (
+                        instruction.op == "load"
+                        and instruction.result == returns[0]
+                        and instruction.args
+                        and instruction.args[0] in function.params
+                    ):
+                        self._identity_params[function.name] = function.params.index(
+                            instruction.args[0]
+                        )
+                        break
+                else:
+                    continue
+                break
 
     def _infer_return_types(self, module: MIRModule) -> dict[str, str]:
         """RETURNTYPE_V1: narrow, sound return-type inference over MIR.
@@ -5802,6 +6087,15 @@ class LinuxCEmitter:
                 self._chr_results.add(result)
             if source in self._dict_val_types:
                 self._dict_val_types[result] = self._dict_val_types[source]
+            # ELEM_KIND_V1: al cargar un param list con elem-kind conocido,
+            # anotar el temp result (getopt: args[0] es str, no int, por
+            # que args[0].startswith('-') resuelve el elemento como str).
+            # Va DESPUES de las copias genericas: `_coll_elems[source]` puede
+            # traer el elem-kind de otro binding del mismo nombre.
+            if source in function.params:
+                _ek = self._usage_param_elems.get(function.name, {}).get(source)
+                if _ek:
+                    self._coll_elems[result] = _ek
             if source in self.function_names:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
@@ -5816,6 +6110,16 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}={_name(source)};")
                 else:
                     out.append(f'    {_name(result)}=(long)piton_object_new("{source}",0);')
+                return out
+            if source in _BUILTIN_EXCEPTIONS:
+                # BUILTIN_EXC_CLASS_V1: cargar el nombre de una excepcion
+                # builtin (Exception, ValueError, ...) produce un objeto de
+                # clase — la llamada `Exception.__init__(self, ...)` es
+                # DESBOUND (el self ya viene en los argumentos), y sin esta
+                # marca el dispatch la tomaba por una llamada ligada y
+                # duplicaba el self.
+                types[result] = f"class:{source}"
+                out.append(f'    {_name(result)}=(long)piton_object_new("{source}",0);')
                 return out
             if source in {"object", "objeto"}:
                 types[result] = "class:object"
@@ -5988,6 +6292,25 @@ class LinuxCEmitter:
                 return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
+            # STORE_TARGETS_V1: que nombres guardaron este valor — el
+            # elem-kind de una lista puede apesare despues del store (la
+            # comprension se llena despues), y hay que propagarlo.
+            self._store_targets.setdefault(args[1], set()).add(args[0])
+            # SEED_KEEP_V1: un store cuyo valor NO tiene tipo conocido (el
+            # unpack de una tupla de elems desconocidos deja el valor sin
+            # tipo) no debe pisar el tipo deducido del param. El seed se
+            # computa sobre TODOS los usos del param en la funcion, asi que
+            # describe su tipo a lo largo de toda su vida. getopt:
+            # `opts, args = do_longs(...)` y `has_arg, opt = long_has_args(..)`
+            # degradaban los params a int y sus usos (args[0][1:],
+            # opt.index('=')) fallaban cerrado.
+            _seed_keep = (self._usage_param_types.get(function.name) or {}).get(args[0])
+            if (
+                _seed_keep
+                and _seed_keep != "int"
+                and types.get(args[1]) is None
+            ):
+                types[args[0]] = _seed_keep
             # DICT_VAL_TYPE_V1: a dict value stored into a name keeps the
             # value-type record, so `d = {...}; d.get(k)` resolves.
             if args[1] in self._dict_val_types:
@@ -6067,6 +6390,17 @@ class LinuxCEmitter:
                 self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
             if args[1] in self._dict_elems:
                 self._dict_elems[args[0]] = self._dict_elems[args[1]]
+        elif op == "gettext_identity":
+            # GETTEXT_IDENTITY_V1: gettext.gettext(msg) devuelve msg sin
+            # cambios (identidad). El resultado conserva la plantilla
+            # literal para que el operador `%` la pueda usar.
+            value = args[0]
+            out.append(f"    {_name(result)}={self._value(value)};")
+            types[result] = types.get(value, "int")
+            _gt_literal = self._fn_consts.get(value)
+            if isinstance(_gt_literal, str):
+                self._identity_templates[result] = _gt_literal
+            return out
         elif op == "unary":
             operator = {"no": "!", "not": "!"}.get(args[0], args[0])
             if operator not in {"+", "-", "~", "!"}:
@@ -6278,6 +6612,11 @@ class LinuxCEmitter:
                     # fails closed, like the single-value path below.
                     template = self._fn_consts.get(left)
                     if not isinstance(template, str):
+                        # IDENTITY_FN_V1: el operando izquierdo puede ser el
+                        # resultado de una funcion identidad (gettext stub)
+                        # llamada con un literal — la plantilla es ese literal.
+                        template = self._identity_templates.get(left)
+                    if not isinstance(template, str):
                         raise NativeBuildError("Linux str % formatting requires a literal template")
                     translated, fields = self._parse_percent_template(template)
                     has_map = any(field[0] is not None for field in fields)
@@ -6289,6 +6628,12 @@ class LinuxCEmitter:
                         if isinstance(item, str) and item.startswith("%"):
                             source = aliases.get(item, item)
                             if source in function.params or item in function.params:
+                                # PARAM_TYPE_V1: el tipo del param puede ser
+                                # conocido (seed de uso o tipo del call-site)
+                                # -> usarlo en vez de fallar cerrado.
+                                _pt = types.get(source) or types.get(item)
+                                if _pt and _pt not in {"int", "bool", "none", ""}:
+                                    return _pt
                                 raise NativeBuildError(
                                     "Linux str % formatting a bare parameter is not supported (type unknown)"
                                 )
@@ -6324,12 +6669,15 @@ class LinuxCEmitter:
                             etypes.append(_resolve_etype(item, etype0))
                     else:
                         if aliases.get(right, right) in function.params:
-                            # the parameter's runtime type is unknown: treating
-                            # it as a scalar would print a raw pointer for
-                            # tuple/object arguments (fail-open).
-                            raise NativeBuildError(
-                                "Linux str % formatting a bare parameter is not supported (type unknown)"
-                            )
+                            # PARAM_TYPE_V1: si el tipo del param es conocido
+                            # (seed de uso o tipo del call-site) se usa; si no,
+                            # tratarlo como escalar imprimiria un puntero
+                            # crudo (fail-open) -> falla cerrado.
+                            _pt2 = types.get(aliases.get(right, right)) or types.get(right)
+                            if not (_pt2 and _pt2 not in {"int", "bool", "none", ""}):
+                                raise NativeBuildError(
+                                    "Linux str % formatting a bare parameter is not supported (type unknown)"
+                                )
                         operands = [self._value(right)]
                         etypes = [types.get(right, "int")]
                     if len(fields) != len(operands):
@@ -8724,10 +9072,19 @@ class LinuxCEmitter:
                     else:
                         candidates = [c for c in self.classes if method in self.classes[c]]
                         if candidates:
+                            # UNBOUND_BASE_CALL_V1: si el receiver es una
+                            # CLASE (no una instancia), la llamada es
+                            # desbound: el self ya viene en los argumentos
+                            # (`Exception.__init__(self, msg, opt)`), asi que
+                            # NO se antepone el receiver — sin esto la
+                            # llamada llevaba self dos veces y gcc rechazaba
+                            # elabi con "too many arguments".
+                            _is_class_receiver = owner_type.startswith("class:")
+                            _recv_args = [] if _is_class_receiver else [obj]
                             out.append(f"    {{PitonObject* _d_obj=(PitonObject*){self._value(obj)};")
                             for idx, c in enumerate(candidates):
                                 target = f"{c}__{method}"
-                                all_vals = self._complete_call_args(target, [obj, *call_args])
+                                all_vals = self._complete_call_args(target, [*_recv_args, *call_args])
                                 vals_c = ",".join(self._value(v) for v in all_vals)
                                 branch = "if" if idx == 0 else "else if"
                                 out.append(f'    {branch}(_d_obj&&_d_obj->class_name&&piton_strcmp(_d_obj->class_name,"{c}")==0){{')
@@ -9271,6 +9628,22 @@ class LinuxCEmitter:
                 types[result] = "int"
                 self._emit_exc_check(out, function, _gi_handler)
                 return out
+            elif collection_type == "str":
+                # STR_GET_ITEM_V1: s[i] -> str de un caracter (CPython);
+                # s[slice(...)] -> str recortada. Antes caia al fallback
+                # generico (PitonSeq*) -> SIGSEGV.
+                if types.get(idx, "") == "slice":
+                    out.append(
+                        f'    {_name(result)}=piton_str_apply_slice((const char*){self._value(coll)},'
+                        f'(PitonSlice*){self._value(idx)});'
+                    )
+                else:
+                    out.append(
+                        f'    {_name(result)}=piton_str_get((const char*){self._value(coll)},{self._value(idx)});'
+                    )
+                types[result] = "str"
+                self._emit_exc_check(out, function, _gi_handler)
+                return out
             elif collection_type in {"dict", "dict:module"}:
                 out.append(f'    {_name(result)}=piton_dict_get((PitonDict*){self._value(coll)},{self._slot(idx, types)}).bits;')
                 # DICT_VAL_TYPE_V1: `d[k]` must carry the dict's value type, or
@@ -9369,6 +9742,8 @@ class LinuxCEmitter:
                 elif collection_type in {"list", "tuple"}:
                     out.append(f'    {_name(result)}=piton_seq_slice((PitonSeq*){self._value(coll)},{lower_value},{upper_value});')
                     types[result] = collection_type
+                    if coll in self._coll_elems:
+                        self._coll_elems[result] = self._coll_elems[coll]
                 elif collection_type == "memoryview":
                     # MEMORYVIEW_SLICE_V1: m[a:b] -> vista (comparte buffer).
                     out.append(
@@ -9470,6 +9845,24 @@ class LinuxCEmitter:
             if collection_type != "list":
                 raise NativeBuildError("Linux list_append requires a list")
             out.append(f'    {{PitonSeq*_c=(PitonSeq*){self._value(coll)};PitonSlot _s;_s.bits={self._value(value)};_s.kind={self._kind(types.get(value, "int"))};piton_seq_append(_c,_s);}}')
+            # LIST_APPEND_ELEM_V1: el valor appendido define el elem-kind de
+            # la lista (getopt: la comprension `[o for o in longopts]` deja
+            # la lista sin elem-kind, y `possibilities[0]` quedaba sin tipo
+            # -> `unique_match[:-1]` fallaba cerrado). kind mezclado -> "a|b"
+            # (marcado como no uniforme, como el resto del backend).
+            _val_kind = types.get(value, "int")
+            if _val_kind and "|" not in _val_kind:
+                _cur_kind = self._coll_elems.get(coll)
+                if _cur_kind is None:
+                    self._coll_elems[coll] = _val_kind
+                elif "|" not in _cur_kind and _cur_kind != _val_kind:
+                    self._coll_elems[coll] = f"{_cur_kind}|{_val_kind}"
+                # el store del nombre puede preceder a los appends (la
+                # comprension se llena despues del store) -> propagar el
+                # elem-kind a los nombres que guardaron esa lista.
+                for _nm in self._store_targets.get(coll, ()):
+                    if self._coll_elems.get(_nm) is None:
+                        self._coll_elems[_nm] = self._coll_elems.get(coll)
         elif op == "gen_init":
             func_name = args[0]
             gen_args = tuple(args[1]) if len(args) > 1 and args[1] else ()
