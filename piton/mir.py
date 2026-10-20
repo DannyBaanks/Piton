@@ -14,6 +14,22 @@ _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", 
 # nombre como string (piton_raise_set + strcmp en handlers), asi que no
 # requiere runtime nuevo. IOError/EnvironmentError son aliases de OSError.
 _BUILTIN_EXCEPTIONS |= {"OSError", "IOError", "EnvironmentError"}
+# EXC_BUILTIN_FULL_V1: el resto de excepciones builtin de CPython. El
+# backend las maneja por NOMBRE (piton_raise_set + comparacion en el
+# handler), asi que no hace falta runtime nuevo: sin esta lista,
+# `raise SystemExit(code)` (sitebuiltins.Quitter) fallaba cerrado por
+# "unsupported native exception type".
+_BUILTIN_EXCEPTIONS |= {
+    "SystemExit", "KeyboardInterrupt", "StopAsyncIteration",
+    "ArithmeticError", "FloatingPointError", "LookupError",
+    "ReferenceError", "BufferError", "MemoryError", "RecursionError",
+    "ImportError", "ModuleNotFoundError", "EOFError",
+    "SyntaxError", "IndentationError", "TabError",
+    "UnicodeError", "UnicodeDecodeError", "UnicodeEncodeError", "UnicodeTranslateError",
+    "FileNotFoundError", "FileExistsError", "IsADirectoryError", "NotADirectoryError",
+    "PermissionError", "ProcessLookupError", "TimeoutError", "ConnectionError",
+    "BrokenPipeError", "ChildProcessError", "BlockingIOError", "InterruptedError",
+}
 # BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
 _BUILTIN_BASES = {"object", "classmethod"}
 
@@ -392,6 +408,31 @@ def _iter_nested_statements(items: Any):
                 yield from _iter_nested_statements(hbody)
 
 
+def _module_level_defs(module_body: list) -> list:
+    """FUNC_SIG_PRESCAN_V1: las definiciones de NIVEL DE MODULO, incluidas
+    las que viven en el cuerpo de un try/except o de un if (quopri define
+    los fallbacks de binascii dentro de un `except ImportError`, y el
+    modulo los llama con keywords).
+
+    No se baja dentro de los cuerpos de FUNCION: esas defs son closures
+    (se levantan como `padre__hijo`), no funciones de modulo.
+    """
+    found: list = []
+    for node in module_body or ():
+        if getattr(node, "kind", None) == HIRKind.FUNC_DEF:
+            found.append(node)
+            continue
+        for attr in ("body", "orelse", "finalbody"):
+            sub = getattr(node, attr, None)
+            if isinstance(sub, list):
+                found.extend(_module_level_defs(sub))
+        for handler in getattr(node, "handlers", ()) or ():
+            hbody = getattr(handler, "body", None)
+            if isinstance(hbody, list):
+                found.extend(_module_level_defs(hbody))
+    return found
+
+
 class MIRLowerer:
     def __init__(self):
         self.functions: List[MIRFunction] = []
@@ -629,6 +670,12 @@ class MIRLowerer:
                             self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
                 finally:
                     self._module_scope_stack.pop()
+            # FUNC_SIG_PRESCAN_V1: registrar las firmas de TODAS las funciones
+            # de nivel modulo ANTES de bajar cualquier cuerpo — los de las
+            # clases tambien (warnings: `catch_warnings.__exit__` llama a
+            # `simplefilter(*self._filter)`, y simplefilter esta definida
+            # DESPUES de la clase: sin el pre-scan el call no resolvia).
+            self._prescan_module_signatures(module_body)
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
@@ -733,11 +780,9 @@ class MIRLowerer:
                 and getattr(node, "is_async", False)
                 and self._contains_kind(node.body, {HIRKind.YIELD, HIRKind.YIELD_FROM})
             }
-            # FUNC_SIG_PRESCAN_V1: registrar firmas de todas las funciones
-            # de nivel modulo antes de bajar cuerpos, para que un keyword
-            # call forward (bisect: insort_right -> bisect_right con key=)
-            # resuelva sin depender del orden del archivo.
-            self._prescan_module_signatures(module_body)
+            # FUNC_SIG_PRESCAN_V1: el pre-scan ya corrio antes de bajar los
+            # cuerpos (ver mas arriba: las firmas se registran antes que las
+            # clases, para que un call desde un metodo de clase resuelva).
             for node in module_body:
                 if node.kind == HIRKind.FUNC_DEF:
                     is_gen = node.name in self.generators
@@ -1252,7 +1297,14 @@ class MIRLowerer:
         evaluables (incluidos vacios: getopt `output=[]`, warnings
         `warn(..., ())`). Devuelve False para cualquier otro HIR (Name,
         Attribute, ops): el binding no es const en el momento de definicion
-        y el subset no modela evaluacion diferida."""
+        y el subset no modela evaluacion diferida.
+
+        NON_CONST_DEFAULT_V1: un default que es un NOMBRE se acepta como
+        referencia: se materializa en el call-site (con el valor que tenga
+        el nombre ahi) y falla cerrado si el nombre no esta en alcance.
+        Cubre `category=Warning` (excepcion builtin: el backend compara
+        por NOMBRE) y `output=output` (variable de la funcion que envuelve
+        a la closure)."""
         if node.kind == HIRKind.CONST:
             defaults_map[param] = node.value
             return True
@@ -1264,6 +1316,10 @@ class MIRLowerer:
                     return False
                 values.append(elt.value)
             defaults_map[param] = tuple(values) if node.kind == HIRKind.TUPLE else values
+            return True
+        if node.kind == HIRKind.LOAD and isinstance(getattr(node, "name", None), str):
+            # NON_CONST_DEFAULT_V1: referencia por nombre.
+            defaults_map[param] = ("__name__", node.name)
             return True
         return False
 
@@ -1280,7 +1336,7 @@ class MIRLowerer:
         params replica _lower_function: [*posonly, *pos, vararg?, *kwonly,
         kwarg?]. _lower_function re-registra los mismos valores al bajar,
         por lo que el pre-scan es idempotente."""
-        for node in module_body:
+        for node in _module_level_defs(module_body):
             if node.kind != HIRKind.FUNC_DEF:
                 continue
             if list(getattr(node, "decorators", None) or []):
@@ -3422,6 +3478,12 @@ class MIRLowerer:
                         and node.keywords[0].arg == "maxsplit"
                         and len(node.args) == 1
                     )
+                    and not (
+                        node.func.attr == "sort"
+                        and len(node.keywords) == 1
+                        and node.keywords[0].arg == "reverse"
+                        and not node.args
+                    )
                 ):
                     raise MIRLoweringError("native method calls do not support keyword arguments yet")
                 if (
@@ -3432,6 +3494,17 @@ class MIRLowerer:
                     and len(node.args) == 1
                 ):
                     node.args = (*node.args, node.keywords[0].value)
+                    node.keywords = ()
+                if (
+                    node.keywords
+                    and node.func.attr == "sort"
+                    and len(node.keywords) == 1
+                    and node.keywords[0].arg == "reverse"
+                    and not node.args
+                ):
+                    # SORT_REVERSE_KW_V1: `lista.sort(reverse=True)` — el kwarg
+                    # se expande a un flag posicional (heapq:560).
+                    node.args = (node.keywords[0].value,)
                     node.keywords = ()
                 super_call = node.func.value if node.func.value.kind == HIRKind.CALL else None
                 if (
@@ -4276,6 +4349,12 @@ class MIRLowerer:
                         and node.keywords[0].arg == "maxsplit"
                         and len(node.args) == 1
                     )
+                    and not (
+                        node.func.attr == "sort"
+                        and len(node.keywords) == 1
+                        and node.keywords[0].arg == "reverse"
+                        and not node.args
+                    )
                 ):
                     raise MIRLoweringError("native method calls do not support keyword arguments yet")
                 if (
@@ -4286,6 +4365,17 @@ class MIRLowerer:
                     and len(node.args) == 1
                 ):
                     node.args = (*node.args, node.keywords[0].value)
+                    node.keywords = ()
+                if (
+                    node.keywords
+                    and node.func.attr == "sort"
+                    and len(node.keywords) == 1
+                    and node.keywords[0].arg == "reverse"
+                    and not node.args
+                ):
+                    # SORT_REVERSE_KW_V1: `lista.sort(reverse=True)` — el kwarg
+                    # se expande a un flag posicional (heapq:560).
+                    node.args = (node.keywords[0].value,)
                     node.keywords = ()
                 super_call = node.func.value if node.func.value.kind == HIRKind.CALL else None
                 if (
@@ -4953,14 +5043,31 @@ class MIRLowerer:
         if params is None and func_name in {"min", "max"}:
             # MINMAX_KEY_V1: min/max con `key=` (mismo alcance: la clave se
             # baja pero el orden nativo no la aplica — hueco conocido).
+            # MINMAX_DEFAULT_V1: `default=` añade el valor por defecto que
+            # se devuelve si la coleccion esta vacia. Se codifica con 4
+            # valores (coleccion, default, clave, reversa) para no chocar
+            # con la variante de clave (3 valores) ni con min(a, b).
             if len(positional) not in (1, 2) or any(kw.arg not in {"key", "default"} for kw in (keywords or ())):
                 raise MIRLoweringError("native min/max keyword schema violated")
             values = [self._lower_expr(builder, arg) for arg in positional]
+            _key_value: str | None = None
+            _default_value: str | None = None
             for kw in keywords or ():
-                if kw.arg == "default":
-                    raise MIRLoweringError("native min/max default= is not supported yet")
+                if kw.arg == "key":
+                    _key_value = self._lower_expr(builder, kw.value)
+                else:
+                    _default_value = self._lower_expr(builder, kw.value)
             from piton.hir import Const as _HIRConstFalse2
-            values.append(self._lower_expr(builder, keywords[0].value))
+            if _default_value is not None:
+                values.append(_default_value)
+                values.append(_key_value)
+                values.append(self._lower_expr(builder, _HIRConstFalse2(kind=HIRKind.CONST, value=False)))
+                return tuple(values)
+            values.append(
+                _key_value
+                if _key_value is not None
+                else self._lower_expr(builder, _HIRConstFalse2(kind=HIRKind.CONST, value=False))
+            )
             values.append(self._lower_expr(builder, _HIRConstFalse2(kind=HIRKind.CONST, value=False)))
             return tuple(values)
         if params is None:

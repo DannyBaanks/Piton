@@ -1231,5 +1231,90 @@ class GetoptGatesV1(unittest.TestCase):
         _assert_matches(self, "imprimir ('abcd' .endswith ('bc' ,1 ))\n")
 
 
+class StdlibV2GatesV1(unittest.TestCase):
+    """STDLIB-V2: capacidades nuevas para cerrar los alcanzables de la
+    stdlib (systemexit, defaults no constantes, dict(genexpr), min/max
+    default=, sort(reverse=), generadores grandes).
+
+      EXC_BUILTIN_FULL_V1  el resto de excepciones builtin de CPython
+          (SystemExit, KeyboardInterrupt, ...) se pueden elevar.
+      NON_CONST_DEFAULT_V1 un default que es un NOMBRE se materializa en el
+          call-site (variable de la closure, clase o excepcion builtin).
+      DICT_FROM_PAIRS_V1   dict(genexpr de pares) arma el dict en runtime.
+      MINMAX_DEFAULT_V1    min/max con `default=` (y `key=`).
+      SORT_REVERSE_KW_V1   lista.sort(reverse=True).
+      GEN_SLOTS_V1         el tope de slots persistidos de un generador.
+      PRESCAN_CLASS_V1    el pre-scan de firmas corre antes de bajar los
+          cuerpos de las CLASES (un metodo puede llamar a una funcion de
+          modulo definida despues).
+    """
+
+    def test_systemexit_is_raisable(self):
+        # EXC_BUILTIN_FULL_V1: SystemExit es una excepcion builtin.
+        _assert_matches(
+            self,
+            "intentar :\n    lanzar SystemExit (3 )\n"
+            "excepto SystemExit :\n    imprimir ('caught' )\n",
+        )
+
+    def test_non_const_default_closure(self):
+        # NON_CONST_DEFAULT_V1: el default referencia una variable de la
+        # funcion que envuelve a la closure.
+        _assert_matches(
+            self,
+            "funcion g (a ):\n"
+            "    funcion h (b =a ):\n"
+            "        devolver b\n"
+            "    devolver h ()\n"
+            "imprimir (g (7 ))\n",
+        )
+
+    def test_dict_from_genexpr(self):
+        # DICT_FROM_PAIRS_V1: dict() desde un generador de pares.
+        _assert_matches(
+            self,
+            "d = diccionario ((k ,v ) para k ,v en [('a' ,1 )] )\n"
+            "imprimir (d ['a' ])\n",
+        )
+
+    def test_minmax_default(self):
+        # MINMAX_DEFAULT_V1: default= (y el camino de clave).
+        _assert_matches(self, "imprimir (min ([] , default =5 ))\n")
+        _assert_matches(self, "imprimir (min (['b' ,'a' ] , default ='z' ))\n")
+        _assert_matches(self, "imprimir (max ([3 ,1 ,2 ] , default =0 ))\n")
+
+    def test_sort_reverse(self):
+        # SORT_REVERSE_KW_V1: lista.sort(reverse=True).
+        _assert_matches(
+            self,
+            "x = [3 ,1 ,2 ]\nx .sort (reverse =Verdadero )\nimprimir (x )\n",
+        )
+
+    def test_class_method_calls_later_module_function(self):
+        # PRESCAN_CLASS_V1: un metodo de clase llama a una funcion de
+        # modulo DEFINIDA DESPUES.
+        _assert_matches(
+            self,
+            "clase C :\n"
+            "    funcion usar (self ):\n"
+            "        devolver tarde ()\n"
+            "funcion tarde ():\n"
+            "    devolver 5\n"
+            "imprimir (C () .usar ())\n",
+        )
+
+    def test_compat_pickle_real_compiles(self):
+        # El archivo real del corpus completa el pipeline.
+        import importlib.util as _ilu
+        import pathlib as _pl
+        from piton.linux_x86 import compile_native_linux as _c
+        _spec = _ilu.spec_from_file_location("pcv4c", "tools/parity_corpus_v4.py")
+        _mod = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        _src = _mod.python_to_piton(_pl.Path("/usr/lib/python3.12/_compat_pickle.py").read_text())
+        _c(_src, _pl.Path("/tmp/opencode/gate_compat_pickle.exe"))
+        self.assertTrue(True)
+
+
 if __name__ == "__main__":
     unittest.main()

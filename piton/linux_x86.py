@@ -614,11 +614,13 @@ static PitonSlot piton_dict_get_d(PitonDict*d,PitonSlot k,PitonSlot dflt){if(d)f
 static long piton_seq_slice_step(PitonSeq*s,long lo,long hi,long st){if(!s)return 0;if(st==0){piton_write(2,"ValueError: slice step cannot be zero\n",38);piton_exit(1);}long n=s->length;long len=0;if(st>0){if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=0;if(hi==0x7FFFFFFFFFFFFFFFL)hi=n;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;len=(hi-lo+st-1)/st;}else{if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=n-1;if(hi==0x7FFFFFFFFFFFFFFFL)hi=-n-1;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo>=n)lo=n-1;if(hi<-1)hi=-1;if(lo<=hi)len=0;else len=(lo-hi-st-1)/(-st);}PitonSeq*r=piton_seq_new((int)s->kind,len);for(long i=0;i<len;++i)r->items[i]=s->items[lo+i*st];return(long)r;}
 static long piton_str_slice_step(const char*s,long lo,long hi,long st){if(st==0){piton_write(2,"ValueError: slice step cannot be zero\n",38);piton_exit(1);}long n=(long)piton_strlen(s);long len=0;long a=0;if(st>0){if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=0;if(hi==0x7FFFFFFFFFFFFFFFL)hi=n;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;len=(hi-lo+st-1)/st;a=lo;}else{if(lo==(-0x7FFFFFFFFFFFFFFFL-1))lo=n-1;if(hi==0x7FFFFFFFFFFFFFFFL)hi=-n-1;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo>=n)lo=n-1;if(hi<-1)hi=-1;if(lo<=hi)len=0;else len=(lo-hi-st-1)/(-st);a=lo;}char*p=piton_alloc((usize)len+1);for(long i=0;i<len;++i)p[i]=s[a+i*st];p[len]=0;return(long)p;}
 static long piton_seq_slice(PitonSeq*s,long lo,long hi){if(!s)return 0;long n=s->length;if(lo<0)lo+=n;if(hi<0)hi+=n;if(lo<0)lo=0;if(hi>n)hi=n;if(hi<lo)hi=lo;PitonSeq*r=piton_seq_new((int)s->kind,hi-lo);for(long i=0;i<hi-lo;++i)r->items[i]=s->items[lo+i];return(long)r;}
+static void piton_seq_sort_rev(PitonSeq*s){if(!s||s->length<2)return;int allint=1,allstr=1;for(long i=0;i<s->length;++i){if(s->items[i].kind!=PK_INT&&s->items[i].kind!=PK_BOOL)allint=0;if(s->items[i].kind!=PK_STR)allstr=0;}if(!allint&&!allstr){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}for(long i=1;i<s->length;++i){PitonSlot k=s->items[i];long j=i-1;if(allstr&&!allint){while(j>=0&&piton_strcmp((const char*)s->items[j].bits,(const char*)k.bits)<0){s->items[j+1]=s->items[j];--j;}}else{while(j>=0&&s->items[j].bits<k.bits){s->items[j+1]=s->items[j];--j;}}s->items[j+1]=k;}}
 static PitonSlot piton_seq_get(PitonSeq*s,long i){if(i<0)i+=s->length;if(i<0||i>=s->length){/* GETITEM_RAISE_V1 */piton_raise_set("IndexError","list index out of range");return (PitonSlot){0,PK_NONE};}return s->items[i];}
 static long piton_iterator_new(PitonSeq*s){if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->index=0;return(long)i;}
 static long piton_iterator_next(long raw){PitonIterator*i=(PitonIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_write(2,"StopIteration\n",14);piton_exit(1);}return i->seq->items[i->index++].bits;}
 static long piton_genexpr_new(PitonSeq*s){if(!s){piton_write(2,"TypeError: invalid generator expression\n",41);piton_exit(1);}PitonGenExpr*g=piton_alloc(sizeof(*g));g->source=s;g->index=0;return(long)g;}
 static long piton_genexpr_iter(PitonGenExpr*g){return(long)g;}
+static long piton_genexpr_to_list(long raw){PitonGenExpr*g=(PitonGenExpr*)raw;if(!g||!g->source){piton_write(2,"TypeError: invalid generator expression\n",41);piton_exit(1);}return(long)g->source;}
 static long piton_genexpr_next(PitonGenExpr*g){if(!g||!g->source){piton_write(2,"TypeError: invalid generator expression\n",41);piton_exit(1);}if(g->index>=g->source->length){piton_raise_set("StopIteration","");return 0;}return g->source->items[g->index++].bits;}
 static PitonDict*piton_dict_new(long n){PitonDict*d=piton_alloc(sizeof(*d));d->refcount=1;d->kind=PK_DICT;d->length=n;d->capacity=n;d->items=n>0?piton_alloc((usize)n*sizeof(PitonDictEntry)):0;return d;}
 static void piton_dict_put(PitonDict*d,long i,PitonSlot k,PitonSlot v){if(i>=0&&i<d->length){d->items[i].key=k;d->items[i].value=v;}}
@@ -924,7 +926,11 @@ static PitonDict*piton_conv_dict(PitonSlot src){
     PitonSeq*pair=(PitonSeq*)a->items[i].bits;
     if(pair->length!=2){piton_write(2,"ValueError: dictionary update sequence element has wrong length\n",67);piton_exit(1);}
     piton_dict_put(r,i,pair->items[0],pair->items[1]);}
-  return r;}
+   return r;}
+/* DICT_FROM_PAIRS_V1: dict(genexpr de pares) — el genexpr del backend ya
+   esta materializado como una secuencia de tuplas, asi que se convierte con
+   el mismo helper que dict(lista_de_pares). */
+static long piton_conv_dict_from_genexpr(long raw){PitonGenExpr*g=(PitonGenExpr*)raw;if(!g||!g->source){piton_write(2,"TypeError: cannot convert to a dict\n",33);piton_exit(1);}return(long)piton_conv_dict((PitonSlot){(long)g->source,PK_LIST});}
 typedef struct{long magic;long kind;void*raw;long index;}PitonAnyIterator;
 static long piton_iterator_new_any(void*raw,long kind){if(!raw||(kind!=PK_LIST&&kind!=PK_TUPLE&&kind!=PK_DICT&&kind!=PK_SET&&kind!=PK_FROZENSET&&kind!=PK_RANGE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonAnyIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->raw=raw;i->index=0;i->kind=kind;return(long)i;}
 static long piton_iterator_next_any(long raw){PitonAnyIterator*i=(PitonAnyIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_RANGE)n=piton_range_len((PitonRange*)i->raw);else if(i->kind==PK_SET||i->kind==PK_FROZENSET)n=((PitonSet*)i->raw)->length;else{piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else if(i->kind==PK_RANGE){PitonRange*rr=(PitonRange*)i->raw;v.bits=rr->start+(i->index++)*rr->step;v.kind=PK_INT;}else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
@@ -1008,11 +1014,32 @@ static long piton_extreme_key_new(void*raw,long keyfn,int want_min){
     if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}
     if(want_min?(l==1):(l==0)){bestk=k;best=s->items[i].bits;}
   }
+   return best;
+}
+/* MINMAX_DEFAULT_V1: min/max con `default=` — la coleccion YA viene
+   materializada; si esta vacia devuelve el default (CPython). Con clave
+   (`key=`) la clave se aplica sobre los elementos, como en
+   piton_extreme_key_new. */
+static long piton_extreme_default_new(void*raw,long keyfn,int want_min,long dflt){
+  PitonSeq*s=(PitonSeq*)raw;
+  if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: min()/max() argument is not iterable\n",53);piton_exit(1);}
+  if(s->length==0)return dflt;
+  if(!keyfn){PitonSlot mm=piton_seq_minmax(s,want_min);if(PITON_EXC_FLAG)return 0;return mm.bits;}
+  long best=s->items[0].bits,bestk=0;
+  for(long i=0;i<s->length;++i){
+    long k;
+    {long _ka[1];_ka[0]=s->items[i].bits;k=piton_closure_call_frame(keyfn,1,_ka);}
+    if(PITON_EXC_FLAG)return 0;
+    if(i==0){bestk=k;best=s->items[i].bits;continue;}
+    int l=piton_slot_less((PitonSlot){k,PK_INT},(PitonSlot){bestk,PK_INT});
+    if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}
+    if(want_min?(l==1):(l==0)){bestk=k;best=s->items[i].bits;}
+  }
   return best;
 }
 static long piton_sorted_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: sorted() argument is not iterable\n",46);piton_exit(1);}PitonSeq*r=piton_seq_new(PK_LIST,s->length);for(long i=0;i<s->length;++i)r->items[i]=s->items[i];for(long i=1;i<r->length;++i){PitonSlot v=r->items[i];long j=i;while(j>0){int l=piton_slot_less(v,r->items[j-1]);if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}if(l){r->items[j]=r->items[j-1];--j;}else break;}r->items[j]=v;}return(long)r;}
 #define PITON_GEN_MAGIC 0x5049544E47654ELL
-#define PITON_GEN_MAX_SLOTS 64
+#define PITON_GEN_MAX_SLOTS 256
 typedef struct{long magic;long state;long finished;long started;long sent_value;long(*func)(void*);long slots[PITON_GEN_MAX_SLOTS];long n_slots;}PitonGenerator;
 static long piton_gen_new(long func,long n){PitonGenerator*g=piton_alloc(sizeof(*g));g->magic=PITON_GEN_MAGIC;g->state=0;g->finished=0;g->started=0;g->sent_value=0;g->func=(long(*)(void*))func;g->n_slots=n<0?0:(n>PITON_GEN_MAX_SLOTS?PITON_GEN_MAX_SLOTS:n);return(long)g;}
 static long piton_gen_next(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished){piton_raise_set("StopIteration","");return 0;}g->sent_value=0;g->started=1;long r=g->func(g);if(g->finished){piton_raise_set("StopIteration","");return 0;}return r;}
@@ -3084,6 +3111,25 @@ class LinuxCEmitter:
         return None
 
     def _value(self, value: Any) -> str:
+        if isinstance(value, tuple) and len(value) == 2 and value[0] == "__name__":
+            # NON_CONST_DEFAULT_V1: default que referencia un NOMBRE — se
+            # materializa en el call-site con el valor actual del nombre.
+            # * si el nombre es una variable en alcance (closure): su valor.
+            # * si es una excepcion builtin: su NOMBRE (el backend compara
+            #   tipos por nombre, asi que isinstance(v, cat) funciona).
+            # * si no: falla cerrado (el default no es estatico).
+            _dname = value[1]
+            if _dname in (getattr(self, "_cur_slots", None) or ()):
+                return _name(_dname)
+            if _dname in self.classes:
+                # el default es una CLASE: se materializa el objeto de clase
+                # (mismo camino que cargar el nombre de una clase).
+                return f'(long)piton_object_new("{_dname}",0)'
+            if _dname in _BUILTIN_EXCEPTIONS:
+                return f"(long){json.dumps(_dname)}"
+            raise NativeBuildError(
+                f"Linux default '{_dname}' is not statically known at the call site"
+            )
         if isinstance(value, str) and value in self.classes and not (
             value in self._module_stored or value in self._shared_globals
         ):
@@ -3756,8 +3802,17 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_seq_count((PitonSeq*){operand},{self._slot(call_args[0], types)});")
                 types[result] = "int"
             elif method == "sort":
-                require_count((0,), "no arguments")
-                out.append(f"    piton_seq_sort((PitonSeq*){operand});")
+                # SORT_REVERSE_V1: `lista.sort(reverse=True)` — el kwarg se
+                # expande a un flag posicional en el MIR (heapq:560).
+                if len(call_args) == 1:
+                    _rev_expr = self._value(call_args[0])
+                    out.append(
+                        f"    if({_rev_expr}){{piton_seq_sort_rev((PitonSeq*){operand});}}"
+                        f"else{{piton_seq_sort((PitonSeq*){operand});}}"
+                    )
+                else:
+                    require_count((0,), "no arguments")
+                    out.append(f"    piton_seq_sort((PitonSeq*){operand});")
                 types[result] = "none"
             elif method == "remove":
                 require_count((1,), "exactly one argument")
@@ -7989,6 +8044,34 @@ class LinuxCEmitter:
                 # MINMAX_KEY_V1: min/max con `key=` llegan como (coleccion,
                 # clave, reversa). La clave SÍ se aplica (extremo Node sobre la
                 # clave, devolviendo el elemento original).
+                if len(values) == 4:
+                    # MINMAX_DEFAULT_V1: (coleccion, default, clave, reversa).
+                    # `default=` devuelve ese valor si la coleccion esta
+                    # vacia; la clave (si la hay) se aplica como en key=.
+                    _coll, _dflt, _key, _rev = values
+                    _coll_type = types.get(_coll, "")
+                    _want_min = 1 if function_name == "min" else 0
+                    _key_expr = self._value(_key) if _key is not None else "0"
+                    _dflt_expr = self._value(_dflt)
+                    if _coll_type == "iterator:genexpr":
+                        out.append(f"    {{PitonSeq*_mmc=(PitonSeq*)piton_genexpr_to_list({self._value(_coll)});")
+                        out.append(f"    {_name(result)}=piton_extreme_default_new(_mmc,{_key_expr},{_want_min},{_dflt_expr});}}")
+                    elif _coll_type.startswith("iterator:"):
+                        out.append(f"    {{PitonSeq*_mmc=(PitonSeq*)piton_collect_any_iter({self._value(_coll)});")
+                        out.append(f"    {_name(result)}=piton_extreme_default_new(_mmc,{_key_expr},{_want_min},{_dflt_expr});}}")
+                    elif _coll_type in {"list", "tuple"}:
+                        out.append(f"    {_name(result)}=piton_extreme_default_new((void*){self._value(_coll)},{_key_expr},{_want_min},{_dflt_expr});")
+                    else:
+                        raise NativeBuildError(
+                            "Linux min/max default= requires one list, tuple or iterator"
+                        )
+                    self._emit_exc_check(out, function, call_handler)
+                    _et = self._coll_elems.get(_coll, "int")
+                    if _coll_type.startswith("iterator:"):
+                        _src = self._iter_source.get(_coll)
+                        _et = self._coll_elems.get(_src, "int") if _src else "int"
+                    types[result] = _et if _et and "|" not in _et else "int"
+                    return out
                 if len(values) == 3:
                     if types.get(values[0]) not in {"list", "tuple"}:
                         raise NativeBuildError("Linux min/max key= requires one list or tuple")
@@ -8246,6 +8329,13 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=piton_list_from_none();")
                     types[result] = "list"
                     self._coll_elems[result] = "int"
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
+                if source_type in {"genexpr", "iterator:genexpr"} and alias in {"diccionario", "dict"}:
+                    # DICT_FROM_PAIRS_V1: dict(genexpr de pares) — el genexpr
+                    # ya esta materializado como secuencia de tuplas.
+                    out.append(f"    {_name(result)}=piton_conv_dict_from_genexpr({self._value(values[0])});")
+                    types[result] = "dict"
                     self._emit_exc_check(out, function, call_handler)
                     return out
                 if source_type not in {"list", "tuple", "str", "set", "dict", "range"}:
@@ -8527,6 +8617,12 @@ class LinuxCEmitter:
             types[result] = "closure"
         elif op == "frame_call":
             callee, call_args = args
+            # FRAME_CALL_DEFAULTS_V1: una funcion levantada (closure) con
+            # defaults los recibe en el call-site (el default puede ser una
+            # referencia: NON_CONST_DEFAULT_V1).
+            _fname = aliases.get(callee, callee)
+            if isinstance(_fname, str) and _fname in self.function_defaults:
+                call_args = self._complete_call_args(_fname, list(call_args))
             self._reject_complex_args(call_args, types, "a lifted frame-ABI function")
             arg_values = ",".join(self._value(arg) for arg in call_args)
             out.append(f"    {{long _frame_args[]={{ {arg_values} }};")
@@ -9550,6 +9646,18 @@ class LinuxCEmitter:
                     pass  # fallthrough a la rama de tuple de abajo
                 elif elem_kind and "|" not in elem_kind:
                     types[result] = elem_kind
+                    if elem_kind == "tuple":
+                        # NESTED_TUPLE_LIST_V1: el item de una lista de
+                        # tuplas hereda la ESTRUCTURA de la tupla (para que
+                        # el desempaquet de sus campos sepa el tipo de cada
+                        # uno: `para k ,v en [('a' ,1 )]` -> k es str).
+                        _nt_item = self._nested_tuple_lists.get(coll)
+                        if _nt_item is None:
+                            _nt_item = self._nested_tuple_lists.get(aliases.get(coll, coll))
+                        if _nt_item is not None:
+                            self._tuple_elems[result] = tuple(
+                                (f"%{i}", t) for i, t in enumerate(_nt_item)
+                            )
                     _tx = self._tuple_list_elems.get(coll) or self._tuple_list_elems.get(aliases.get(coll, coll))
                     if _tx is not None and elem_kind == "tuple":
                         self._tuple_elems[result] = (("%k", _tx[0]), ("%v", _tx[1]))
