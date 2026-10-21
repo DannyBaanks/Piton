@@ -5018,11 +5018,13 @@ class LinuxCEmitter:
         # ejemplo) se compara por IDENTIDAD (los bits del puntero) — que es
         # lo que hace CPython para `base in (object, type)`.
         if (
-            needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex"}
+            needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex",
+                                "tuple", "list"}
             and not needle_type.startswith(("object:", "class:"))
         ):
             raise NativeBuildError(
-                f"Linux 'in' requires an int/bool/str/bytes/bytearray/complex/object needle, not {needle_type}"
+                f"Linux 'in' requires an int/bool/str/bytes/bytearray/complex/"
+                f"tuple/list/object needle, not {needle_type}"
             )
         if haystack_type in {"bytes", "bytearray"}:
             expression = f"piton_bytes_contains((void*){self._value(right)},{self._slot(left, types)})"
@@ -6978,6 +6980,18 @@ class LinuxCEmitter:
                                 base = '"None"'
                             elif arg_type == "str":
                                 base = f"((const char*){operand})"
+                            elif arg_type in {"list", "tuple"}:
+                                # STR_SEQ_V1: el str() de una secuencia es su
+                                # repr ("(a, b)") como en CPython.
+                                base = f"piton_str_from_seq((PitonSeq*){operand})"
+                            elif arg_type.startswith(("object:", "class:")):
+                                # STR_OBJECT_V1: el str() de un objeto es su
+                                # repr ("<class 'X'>" para una clase).
+                                _ocls = arg_type.split(":", 1)[1]
+                                base = (
+                                    f'(piton_object_repr_hook({operand},"{_ocls}")'
+                                    f'?"":piton_str_quote("<object>"))'
+                                )
                             else:
                                 raise NativeBuildError(f"Linux str %s does not support {arg_type} arguments")
                         elif spec == "d":
