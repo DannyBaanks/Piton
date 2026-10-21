@@ -1640,5 +1640,58 @@ class BundledStdlibGatesV1(unittest.TestCase):
         _assert_matches(self, "imprimir (longitud ('hola' ))\n")
 
 
+class ModuleStateGatesV1(unittest.TestCase):
+    """MODULE_STATE_V1: un modulo importado puede tener ESTADO (variables a
+    nivel de modulo). Se materializan como globals de nombre CUALIFICADO
+    ("warnings__var__filtros") en el entry del modulo principal, para que no
+    choquen con los homonimos del principal."""
+
+    def test_imported_module_state_persists(self):
+        # el estado del modulo importado persiste entre llamadas
+        import pathlib as _pl
+        import subprocess
+        from piton.linux_x86 import compile_native_linux as _c
+        _mod_dir = _pl.Path("piton/stdlib_piton")
+        _mod_dir.mkdir(parents=True, exist_ok=True)
+        (_mod_dir / "_state_probe.piton").write_text(
+            "cuenta = 0\n\n"
+            "funcion siguiente():\n"
+            "    global cuenta\n"
+            "    cuenta = cuenta + 1\n"
+            "    devolver cuenta\n",
+            encoding="utf-8",
+        )
+        try:
+            _out = _pl.Path("/tmp/opencode/gate_module_state.exe")
+            _c(
+                "importar _state_probe\n"
+                "imprimir (_state_probe .siguiente ())\n"
+                "imprimir (_state_probe .siguiente ())\n",
+                _out,
+            )
+            _run = subprocess.run([str(_out)], capture_output=True, text=True)
+            self.assertEqual(_run.returncode, 0)
+            self.assertEqual(_run.stdout, "1\n2\n")
+        finally:
+            (_mod_dir / "_state_probe.piton").unlink(missing_ok=True)
+
+    def test_bundled_warnings_module(self):
+        # el modulo `warnings` empaquetado: warn escribe a stderr y
+        # simplefilter('ignore') suprime el aviso.
+        import pathlib as _pl
+        import subprocess
+        from piton.linux_x86 import compile_native_linux as _c
+        _out = _pl.Path("/tmp/opencode/gate_bundled_warnings.exe")
+        _c(
+            "importar warnings\n"
+            "warnings .warn ('aviso' )\n",
+            _out,
+        )
+        _run = subprocess.run([str(_out)], capture_output=True, text=True)
+        self.assertEqual(_run.returncode, 0)
+        self.assertEqual(_run.stdout, "")
+        self.assertEqual(_run.stderr, "aviso\n")
+
+
 if __name__ == "__main__":
     unittest.main()

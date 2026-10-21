@@ -389,6 +389,7 @@ class _Builder:
         self._loop_stack: list[tuple[str, str, str | None]] = []
         self.module_aliases: dict[str, str] = {}
         self.from_import_aliases: dict[str, str] = {}
+        self.module_state_vars: dict[str, str] = {}
         self.super_class: str | None = None
         self.super_self: str | None = None
         self.is_async = False
@@ -473,6 +474,14 @@ def _module_level_defs(module_body: list) -> list:
     return found
 
 
+def _module_state_name(module_name: str, var_name: str) -> str:
+    """MODULE_STATE_V1: el nombre CUALIFICADO de una variable de nivel de
+    modulo de un modulo importado ("warnings__var__filtros"). El prefijo
+    `var__` lo separa del de las funciones del modulo, para que una
+    variable y una funcion homonimas no choquen en C."""
+    return f"{module_name.replace('.', '__')}__var__{var_name}"
+
+
 def _bundled_module_hir(name: str):
     """BUNDLED_STDLIB_V1: el HIR de un modulo de la stdlib empaquetado en
     PITON (piton/stdlib_piton/<nombre>.piton), o None si no existe.
@@ -515,7 +524,13 @@ class MIRLowerer:
 
     def _store(self, builder: _Builder, target: HIRNode, value: str) -> None:
         if target.kind == HIRKind.STORE:
-            if target.name in builder.cell_params:
+            # MODULE_STATE_V1: una variable de nivel de modulo de un modulo
+            # importado se guarda con su nombre CUALIFICADO (el global que
+            # comparte con el resto del programa).
+            _state_name = (getattr(builder, "module_state_vars", None) or {}).get(target.name)
+            if _state_name:
+                builder.emit("store", _state_name, value)
+            elif target.name in builder.cell_params:
                 builder.emit("cell_store", target.name, value)
             else:
                 builder.emit("store", target.name, value)
@@ -739,15 +754,24 @@ class MIRLowerer:
                         self.from_import_aliases[_alias.asname or _alias.name] = "gettext.gettext"
             for module_name, imported in sorted(imported_modules.items()):
                 for item in imported.body:
-                    if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM, HIRKind.PASS}:
-                        raise MIRLoweringError("native imported modules currently support functions, imports, and pasar only")
+                    if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM, HIRKind.PASS, HIRKind.ASSIGN}:
+                        # MODULE_STATE_V1: se admite una asignacion a nivel de
+                        # modulo (el estado del modulo importado).
+                        raise MIRLoweringError("native imported modules currently support functions, imports, assignments, and pasar only")
+            module_state_inits: list[tuple[str, Any]] = []
             for module_name, imported in sorted(imported_modules.items()):
-                scope_names, scope_modules = self._build_module_scope(module_name, imported)
-                self._module_scope_stack.append((scope_names, scope_modules))
+                scope_names, scope_modules, scope_vars = self._build_module_scope(module_name, imported)
+                self._module_scope_stack.append((scope_names, scope_modules, scope_vars))
                 try:
                     for item in imported.body:
                         if item.kind == HIRKind.FUNC_DEF:
                             self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
+                        elif item.kind == HIRKind.ASSIGN:
+                            # MODULE_STATE_V1: el estado del modulo importado
+                            # se inicializa en el entry del modulo principal
+                            # (con nombres cualificados) — el builder del
+                            # entry todavia no existe aqui.
+                            module_state_inits.append((module_name, item))
                 finally:
                     self._module_scope_stack.pop()
             # FUNC_SIG_PRESCAN_V1: registrar las firmas de TODAS las funciones
@@ -927,6 +951,29 @@ class MIRLowerer:
                     self._class_attr_temps.setdefault(cls_name, {})[attr_name] = val
                 module_builder.emit("store", cls_name, cls_obj)
             self._lower_module_metadata(module, entry_file, module_meta)
+            # MODULE_STATE_V1: el estado de los modulos importados se
+            # inicializa aqui (en el entry del modulo principal, con nombres
+            # cualificados) — antes de que corra el codigo del principal.
+            for _mod_name, _state_item in module_state_inits:
+                _imported = imported_modules.get(_mod_name)
+                if _imported is None:
+                    continue
+                _scope_names, _scope_modules, _scope_vars = self._build_module_scope(_mod_name, _imported)
+                _saved_aliases = module.module_aliases
+                _saved_from = module.from_import_aliases
+                module.module_aliases = dict(_scope_modules)
+                module.from_import_aliases = dict(_scope_names)
+                try:
+                    for _target in getattr(_state_item, "targets", ()) or ():
+                        _tname = getattr(_target, "name", None)
+                        if not isinstance(_tname, str):
+                            continue
+                        _value = self._lower_expr(module, _state_item.value)
+                        _qualified = _module_state_name(_mod_name, _tname)
+                        module.emit("store", _qualified, _value)
+                finally:
+                    module.module_aliases = _saved_aliases
+                    module.from_import_aliases = _saved_from
             self._lower_statements(module, [
                 node for node in module_body
                 if node.kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF} or getattr(node, "decorators", None)
@@ -1083,7 +1130,7 @@ class MIRLowerer:
                 )
             self.class_mro[name] = mro
 
-    def _build_module_scope(self, module_name: str, imported: HIRNode) -> tuple[dict[str, str], dict[str, str]]:
+    def _build_module_scope(self, module_name: str, imported: HIRNode) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
         """Per-module name scope for an imported module body: imported module
         bodies are NOT executed, so their functions must resolve same-module
         names, from-imports and module aliases against the module's OWN context
@@ -1092,12 +1139,24 @@ class MIRLowerer:
         -> dotted module."""
         names: dict[str, str] = {}
         modules: dict[str, str] = {}
+        state_vars: dict[str, str] = {}
         meta = self.module_meta.get(module_name)
         is_package = bool(meta and meta[1])
         base = module_name.rsplit(".", 1)[0] if ("." in module_name and not is_package) else module_name
         for item in imported.body:
             if item.kind == HIRKind.FUNC_DEF:
                 names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
+            elif item.kind == HIRKind.ASSIGN:
+                # MODULE_STATE_V1: una variable de nivel de modulo de un
+                # modulo importado es un global con NOMBRE CUALIFICADO
+                # ("warnings__filtros") — sin cualificar chocaria con el
+                # global homonimo del modulo principal.
+                for _target in getattr(item, "targets", ()) or ():
+                    _tname = getattr(_target, "name", None)
+                    if isinstance(_tname, str):
+                        _qualified = _module_state_name(module_name, _tname)
+                        names[_tname] = _qualified
+                        state_vars[_tname] = _qualified
             elif item.kind == HIRKind.IMPORT:
                 for alias in item.names:
                     if (
@@ -1168,7 +1227,7 @@ class MIRLowerer:
                         raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                     for alias in item.names:
                         names[alias.asname or alias.name] = f"{mod_name.replace('.', '__')}__{alias.name}"
-        return names, modules
+        return names, modules, state_vars
 
     def _lower_module_metadata(
         self, builder: "_Builder", entry_file: str | None, module_meta: dict[str, tuple[str, bool]] | None
@@ -1260,9 +1319,11 @@ class MIRLowerer:
         builder.function.is_coroutine = builder.is_async
         builder.function.is_async_generator = (qualified_name or node.name) in self.async_generators
         if self._module_scope_stack:
-            scope_names, scope_modules = self._module_scope_stack[-1]
+            scope_names, scope_modules = self._module_scope_stack[-1][0], self._module_scope_stack[-1][1]
+            scope_vars = self._module_scope_stack[-1][2]
             builder.module_aliases = dict(scope_modules)
             builder.from_import_aliases = dict(scope_names)
+            builder.module_state_vars = dict(scope_vars)
         else:
             builder.module_aliases = dict(self.module_aliases)
             builder.from_import_aliases = dict(self.from_import_aliases)
@@ -1977,7 +2038,10 @@ class MIRLowerer:
             # backends resolve loads/stores of declared names to the shared
             # variable instead of function locals (pure metadata op).
             for name in node.names:
-                builder.emit("global_decl", name)
+                # MODULE_STATE_V1: el `global` de una variable de estado del
+                # modulo importado usa el nombre cualificado.
+                _state_name = (getattr(builder, "module_state_vars", None) or {}).get(name)
+                builder.emit("global_decl", _state_name if _state_name else name)
         elif kind == HIRKind.IF:
             self._lower_if(builder, node)
         elif kind == HIRKind.WHILE:
@@ -2667,7 +2731,10 @@ class MIRLowerer:
             # El kind va PRIMERO: si expr es un Load (con xobj), expr.func no
             # existe y el orden invertido lanzaba AttributeError en vez del
             # MIRLoweringError "direct call".
-            if expr.kind == HIRKind.CALL and expr.func.name in {"abrir", "open"}:
+            if (
+                expr.kind == HIRKind.CALL
+                and getattr(expr.func, "name", None) in {"abrir", "open"}
+            ):
                 var = item.optional_vars
                 if getattr(expr, "args", None):
                     file_expr = self._lower_expr(builder, expr.args[0])

@@ -1,0 +1,35 @@
+_warn_filtros = []
+
+
+funcion _warn_accion (categoria ) :
+    accion = 'default'
+    para f en _warn_filtros :
+        accion = f [0 ]
+    devolver accion
+
+
+funcion warn (mensaje , categoria ='UserWarning' , pila =1 , origen ='Ninguno' ) :
+    accion = _warn_accion (categoria )
+    si accion == 'ignore' :
+        devolver
+    si accion == 'error' :
+        lanzar UserWarning (mensaje )
+    imprimir (mensaje , file =2 )
+
+
+funcion simplefilter (accion , categoria ='UserWarning' , linea =0 , agregar =Falso ) :
+    si agregar :
+        _warn_filtros .append ([accion , categoria , linea ])
+    sino :
+        _warn_filtros = [[accion , categoria , linea ]]
+
+
+funcion filterwarnings (accion , mensaje ='' , categoria ='UserWarning' , modulo ='' , linea =0 , agregar =Falso ) :
+    si agregar :
+        _warn_filtros .append ([accion , categoria , linea ])
+    sino :
+        _warn_filtros = [[accion , categoria , linea ]]
+
+
+funcion resetwarnings ():
+    _warn_filtros = []
