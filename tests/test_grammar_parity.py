@@ -1644,7 +1644,31 @@ class ModuleStateGatesV1(unittest.TestCase):
     """MODULE_STATE_V1: un modulo importado puede tener ESTADO (variables a
     nivel de modulo). Se materializan como globals de nombre CUALIFICADO
     ("warnings__var__filtros") en el entry del modulo principal, para que no
-    choquen con los homonimos del principal."""
+    choquen con los homonimos del principal.
+
+    BUNDLED_STDLIB_V1: un modulo empaquetado en PITON se provee, se baja y
+    se inlinea; sus funciones variadicas (`*args`) se empaquetan en la tupla
+    que el ABI del callee espera (VARIADIC_MODULE_CALL_V1)."""
+
+    def test_bundled_fnmatch_module(self):
+        # el resultado booleano se imprime como 1/0 (la impresion de bools
+        # diverge de CPython — documentado); el gate compara el VALOR.
+        _assert_matches(
+            self,
+            "importar fnmatch\n"
+            "imprimir (1 si fnmatch .fnmatch ('hola.txt' ,'*.txt' ) sino 0 )\n",
+        )
+
+    def test_bundled_functools_reduce(self):
+        # el modulo `functools` empaquetado: reduce con *args (el vararg se
+        # empaqueta en la tupla que el ABI del callee espera).
+        _assert_matches(
+            self,
+            "importar functools\n"
+            "funcion suma (a ,b ):\n"
+            "    devolver a +b\n"
+            "imprimir (functools .reduce (suma ,[1 ,2 ,3] ))\n",
+        )
 
     def test_imported_module_state_persists(self):
         # el estado del modulo importado persiste entre llamadas

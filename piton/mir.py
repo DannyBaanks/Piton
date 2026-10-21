@@ -3624,7 +3624,16 @@ class MIRLowerer:
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
                     function = builder.temp()
                     builder.emit("load", symbol, result=function)
-                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                    # VARIADIC_MODULE_CALL_V1: una funcion de modulo con
+                    # *args/**kwargs baja por el camino variadico (el empaquetado
+                    # de la tupla del vararg lo hace el MIR).
+                    if (
+                        self.function_varargs.get(symbol) is not None
+                        or self.function_kwargs.get(symbol) is not None
+                    ):
+                        args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
+                    else:
+                        args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                     result = builder.temp()
                     builder.emit("call", function, args, result=result)
                     return result
@@ -3772,8 +3781,15 @@ class MIRLowerer:
                     builder.emit("sys_exit", code, result=result)
                     return result
                 function = builder.temp()
-                builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
-                args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                _symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                builder.emit("load", _symbol, result=function)
+                if (
+                    self.function_varargs.get(_symbol) is not None
+                    or self.function_kwargs.get(_symbol) is not None
+                ):
+                    args = self._lower_variadic_call(builder, _symbol, node.args, node.keywords)
+                else:
+                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
                 builder.emit("call", function, args, result=result)
                 return result
@@ -4708,8 +4724,18 @@ class MIRLowerer:
                     builder.emit("sys_exit", code, result=result)
                     return result
                 function = builder.temp()
-                builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
-                args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                _symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                builder.emit("load", _symbol, result=function)
+                # VARIADIC_MODULE_CALL_V1: una funcion de modulo con
+                # *args/**kwargs baja por el camino variadico (el empaquetado
+                # de la tupla del vararg lo hace el MIR).
+                if (
+                    self.function_varargs.get(_symbol) is not None
+                    or self.function_kwargs.get(_symbol) is not None
+                ):
+                    args = self._lower_variadic_call(builder, _symbol, node.args, node.keywords)
+                else:
+                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
                 builder.emit("call", function, args, _active_handler(builder), result=result)
                 return result

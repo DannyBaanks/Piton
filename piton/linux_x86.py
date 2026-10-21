@@ -1106,7 +1106,7 @@ static int piton_callable_value(long callee){return piton_in_arena(callee)||pito
 static void piton_raise_not_callable(void){piton_write(2,"TypeError: 'X' object is not callable\n",35);piton_exit(1);}
 static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){if(!callee||((long*)callee)[0]!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee))piton_raise_not_callable();return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);}PitonClosure*c=(PitonClosure*)callee;if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;if(total>4){piton_write(2,"TypeError: closure cell count plus arguments exceeds four\n",59);piton_exit(2);}long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);}
 static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells,long has_vararg,long has_kwarg){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=has_vararg;c->has_kwarg=has_kwarg;c->cells=piton_alloc((usize)(n_cells?n_cells:1)*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];return(long)c;}
-static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[1]==PK_OBJECT){PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);for(long i=0;i<co->length;++i){piton_object_set(inst,co->attrs[i].name,co->attrs[i].value);}return(long)inst;}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
+static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(piton_is_code_addr(callee)){/* CODE_ADDR_FIRST_V1: un code address se detecta PRIMERO — leer sus magic numbers (el codigo maquina) como si fueran un objeto puede coincidir por azar y fabricar una llamada rota (SIGSEGV). */if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[1]==PK_OBJECT){PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);for(long i=0;i<co->length;++i){piton_object_set(inst,co->attrs[i].name,co->attrs[i].value);}return(long)inst;}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
 static long piton_callback_invoke(long callback,long value){long args[1]={value};return piton_closure_call_frame(callback,1,args);}
 /* DYNAMIC_CALL_V1: llamar a un callable que NO se conoce en build time,
    con los argumentos posicionales y el dict de keywords resueltos en
@@ -2750,6 +2750,8 @@ class LinuxCEmitter:
         # (la celda) — sin el, la carga de la celda decae a "int" y las
         # operaciones sobre ella (un `+` de tuplas, un slice) fallan.
         self._cell_types: dict[str, str] = {}
+        # el contador de temporales del empaquetado de varargs
+        self._vararg_pack_counter = 0
         # IDENTITY_FN_V1: funciones que devuelven su param sin cambios
         # (getopt: `def _(msg): return msg`, el stub de gettext). Su
         # resultado ES el argumento, asi que un `%` con ese resultado tiene
@@ -2926,6 +2928,10 @@ class LinuxCEmitter:
             self._known_names = known
         if locals_:
             lines.append("    long " + ", ".join(f"{_name(slot)}=0" for slot in locals_) + ";")
+        # VARARG_PACK_V1: pool de temporales para las tuplas de *args (el
+        # empaquetado ocurre durante la emision de la llamada, donde el bloque
+        # de locals ya esta escrito).
+        lines.append("    long _vapack0=0, _vapack1=0, _vapack2=0, _vapack3=0;")
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
@@ -3786,14 +3792,20 @@ class LinuxCEmitter:
             # (values == params); aqui se empaqueta solo cuando la llamada
             # vino por el camino directo (values < params) y falta la tupla.
             if len(values) < len(_params) and len(values) >= _n_named:
+                # la tupla se construye como TEMPORAL (una expresion inline
+                # entrecomillada por _value seria un literal de string).
                 _extra = list(values)[_n_named:]
-                _parts = [f"{{PitonSeq*_va=piton_seq_new(PK_TUPLE,{len(_extra)});"]
+                # el nombre lleva el prefijo '%' (convencion de los temps):
+                # _value() lo traduce al identificador C sin entrecomillarlo.
+                _vname = f"%vapack{self._vararg_pack_counter % 4}"
+                self._vararg_pack_counter += 1
+                out.append(f"    {{PitonSeq*_va=piton_seq_new(PK_TUPLE,{len(_extra)});")
                 for _i, _ev in enumerate(_extra):
-                    _parts.append(
+                    out.append(
                         f"    piton_seq_put(_va,{_i},piton_slot({self._value(_ev)},PK_INT));"
                     )
-                _parts.append("_va;}")
-                values = list(values)[:_n_named] + [f"(long)({''.join(_parts)})"]
+                out.append(f"    {_name(_vname)}=(long)_va;}}")
+                values = list(values)[:_n_named] + [_vname]
         encoded_values = ",".join(self._value(value) for value in values)
         if self.function_frame_abi.get(function_name, False):
             # FRAME_CALL_ABI_V1: una funcion con frame ABI (mas de 4 params)
