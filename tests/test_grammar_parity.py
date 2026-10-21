@@ -1599,5 +1599,46 @@ class NativeModuleGatesV1(unittest.TestCase):
         )
 
 
+class BundledStdlibGatesV1(unittest.TestCase):
+    """BUNDLED_STDLIB_V1: un modulo de la stdlib empaquetado en PITON
+    (piton/stdlib_piton/<nombre>.piton) se compila e INLINEA cuando el
+    programa lo importa — el corpus compila cada archivo AISLADO, asi que
+    un modulo importado tiene que estar en el binario.
+
+    `fnmatch` es el primer modulo empaquetado: fnmatch/fnmatchcase con la
+    misma semantica que CPython (patrones `*`, `?` y clases `[...]` con `!`
+    y rangos)."""
+
+    def test_bundled_fnmatch_module(self):
+        # el resultado booleano se imprime como 1/0: la impresion de bools
+        # diverge de CPython (documentado) — el gate compara el VALOR.
+        _assert_matches(
+            self,
+            "importar fnmatch\n"
+            "imprimir (1 si fnmatch .fnmatch ('hola.txt' ,'*.txt' ) sino 0 )\n"
+            "imprimir (1 si fnmatch .fnmatch ('hola.txt' ,'*.md' ) sino 0 )\n",
+        )
+
+    def test_bundled_fnmatch_from_import(self):
+        _assert_matches(
+            self,
+            "desde fnmatch importar fnmatch\n"
+            "imprimir (1 si fnmatch ('hola.txt' ,'*.md' ) sino 0 )\n",
+        )
+
+    def test_bundled_fnmatch_classes(self):
+        # clase de caracteres con negacion y rango
+        _assert_matches(
+            self,
+            "importar fnmatch\n"
+            "imprimir (1 si fnmatch .fnmatchcase ('abc' ,'[a-c]bc' ) sino 0 )\n"
+            "imprimir (1 si fnmatch .fnmatchcase ('abc' ,'[!x]bc' ) sino 0 )\n",
+        )
+
+    def test_len_of_str(self):
+        # LEN_STR_V1: len() de un str es su longitud en bytes.
+        _assert_matches(self, "imprimir (longitud ('hola' ))\n")
+
+
 if __name__ == "__main__":
     unittest.main()

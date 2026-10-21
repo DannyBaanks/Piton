@@ -3753,7 +3753,18 @@ class LinuxCEmitter:
                     )
         self._reject_complex_args(values, types, f"function '{function_name}'")
         encoded_values = ",".join(self._value(value) for value in values)
-        out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
+        if self.function_frame_abi.get(function_name, False):
+            # FRAME_CALL_ABI_V1: una funcion con frame ABI (mas de 4 params)
+            # recibe su frame como puntero — la llamada directa pasaria los
+            # argumentos sueltos y gcc rechazaria "too many arguments" (la
+            # recursion a una funcion de frame ABI).
+            out.append(f"    {{long _fc_args[]={{ {encoded_values} }};")
+            out.append(
+                f"    {_name(result)}=piton_frame_call((long)&{_name(function_name)},"
+                f"{len(values)},_fc_args);}}"
+            )
+        else:
+            out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
         self._emit_exc_check(out, function, call_handler)
         types[result] = self.function_return_types.get(function_name, "int")
         return out
@@ -7800,6 +7811,13 @@ class LinuxCEmitter:
                     return out
                 if len(values) == 1 and types.get(values[0]) in {"bytes", "bytearray"}:
                     out.append(f"    {_name(result)}=((PitonBytes*){self._value(values[0])})->length;")
+                    types[result] = "int"
+                    return out
+                if len(values) == 1 and types.get(values[0]) == "str":
+                    # LEN_STR_V1: len() de un str es su longitud en BYTES
+                    # (como en CPython, que cuenta caracteres, no bytes: el
+                    # backend solo tiene bytes, asi que coincide con ASCII).
+                    out.append(f"    {_name(result)}=(long)piton_strlen((const char*){self._value(values[0])});")
                     types[result] = "int"
                     return out
                 if len(values) != 1 or types.get(values[0]) not in {"list", "tuple", "dict", "set", "set:frozen"}:

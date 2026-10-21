@@ -472,6 +472,22 @@ def _module_level_defs(module_body: list) -> list:
     return found
 
 
+def _bundled_module_hir(name: str):
+    """BUNDLED_STDLIB_V1: el HIR de un modulo de la stdlib empaquetado en
+    PITON (piton/stdlib_piton/<nombre>.piton), o None si no existe.
+
+    El corpus compila cada archivo AISLADO, asi que un modulo importado
+    tiene que estar en el binario: estos fuentes se compilan e inlinean.
+    """
+    from piton.bundled_stdlib import bundled_module_source
+    source = bundled_module_source(name)
+    if source is None:
+        return None
+    from piton.lower import lower_cst_to_hir
+    from piton.parser import parse
+    return lower_cst_to_hir(parse(source))
+
+
 class MIRLowerer:
     def __init__(self):
         self.functions: List[MIRFunction] = []
@@ -655,7 +671,15 @@ class MIRLowerer:
                                 self.module_aliases[top] = top
                             continue
                         if alias.name not in imported_modules:
-                            raise MIRLoweringError(f"native module not supplied: {alias.name}")
+                            # BUNDLED_STDLIB_V1: modulo empaquetado en PITON.
+                            _bundled = _bundled_module_hir(alias.name)
+                            if _bundled is None:
+                                raise MIRLoweringError(f"native module not supplied: {alias.name}")
+                            imported_modules[alias.name] = _bundled
+                            from piton.bundled_stdlib import bundled_module_path
+                            _path = bundled_module_path(alias.name)
+                            if _path is not None and module_meta is not None:
+                                module_meta[alias.name] = (_path, False)
                         self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
@@ -675,6 +699,15 @@ class MIRLowerer:
                         # OS_TIER1_V1: `from os import name` resolves to the builtin
                         # os.name attribute. A supplied real `os` module still wins;
                         # every other absent module keeps failing closed.
+                        if mod_name not in imported_modules:
+                            # BUNDLED_STDLIB_V1: modulo empaquetado en PITON.
+                            _bundled = _bundled_module_hir(mod_name)
+                            if _bundled is not None:
+                                imported_modules[mod_name] = _bundled
+                                from piton.bundled_stdlib import bundled_module_path
+                                _path = bundled_module_path(mod_name)
+                                if _path is not None and module_meta is not None:
+                                    module_meta[mod_name] = (_path, False)
                         if (
                             mod_name not in imported_modules
                             and mod_name not in {"asyncio", "math", "sys", "os"}
