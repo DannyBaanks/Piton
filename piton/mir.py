@@ -217,6 +217,8 @@ MIR_OP_EFFECTS: dict[str, str] = {
     # DYNAMIC_CALL_V1: llamada a un callable desconocido (el frame lo arma
     # el runtime; no hay efecto observable en build).
     "dynamic_call": "PURE",
+    # RAISE_VALUE_V1: levantar una instancia (no una clase).
+    "raise_value": "OPAQUE",
     "build_collection": "PURE", "genexpr_new": "PURE", "gen_init": "PURE",
     "gather_new": "PURE",
     # READ
@@ -2854,6 +2856,14 @@ class MIRLowerer:
             return
         if node.exc.kind == HIRKind.LOAD and (node.exc.name in _BUILTIN_EXCEPTIONS or node.exc.name in self.classes):
             node = replace(node, exc=Call(kind=HIRKind.CALL, func=node.exc, args=[], keywords=[]))
+        elif node.exc.kind == HIRKind.LOAD:
+            # RAISE_VALUE_V1: `raise <instancia>` — el nombre no es una clase
+            # ni una excepcion builtin: se levanta el VALOR (warnings:
+            # `raise message` con un Warning instanciado). El runtime deriva
+            # el tipo del class_name del objeto.
+            value = self._lower_expr(builder, node.exc)
+            builder.emit("raise_value", value, _active_handler(builder))
+            return
         if node.exc.kind != HIRKind.CALL or node.exc.func.kind != HIRKind.LOAD:
             raise MIRLoweringError("native raise requires a call to an exception constructor")
         exception_type = node.exc.func.name

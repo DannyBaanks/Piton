@@ -1376,5 +1376,23 @@ class DynamicCallGatesV1(unittest.TestCase):
         self.assertTrue(True)
 
 
+class RaiseValueGatesV1(unittest.TestCase):
+    """RAISE_VALUE_V1: `raise <instancia>` — se levanta el VALOR (no una
+    clase): el runtime deriva el tipo del class_name del objeto y lo lleva
+    al handler (warnings: `raise message` con un Warning instanciado)."""
+
+    def test_raise_instance_is_caught(self):
+        _assert_matches(
+            self,
+            "clase W (Exception ):\n"
+            "    pasar\n"
+            "intentar :\n"
+            "    m = W ()\n"
+            "    lanzar m\n"
+            "excepto W :\n"
+            "    imprimir ('caught' )\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

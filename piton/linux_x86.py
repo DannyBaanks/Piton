@@ -1304,6 +1304,9 @@ static void piton_print_int_safe(long bits){
 }
 static void piton_print_auto(long bits){if(bits==0){piton_write(1,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
+/* RAISE_VALUE_V1: `raise <instancia>` — el valor Levantado viaja al runtime
+   (el backend solo llevaba el NOMBRE del tipo y el mensaje). */
+static long piton_exc_value=0;
 static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
 /* EXC_ARGS_MULTI_V1: tupla .args de la excepcion activa (0 = sin multi-arg,
  * .args se materializa como (mensaje,) como antes). */
@@ -1311,6 +1314,9 @@ static long piton_exc_args=0;
 static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;piton_exc_args=0;}
 /* EXC_ARGS_MULTI_V1: raise con 2+ argumentos -> la tupla .args completa. */
 static void piton_raise_set_args(const char*type,const char*message,long args_tuple){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;piton_exc_args=args_tuple;}
+/* RAISE_VALUE_V1: levantar una INSTANCIA (no una clase): el tipo sale del
+   class_name del objeto y el valor queda disponible para el handler. */
+static void piton_raise_set_value(long value){piton_exc_flag=1;piton_exc_value=value;piton_exc_type="Exception";piton_exc_message=0;piton_exc_args=0;if(value&&piton_maybe_ptr(value)){long*ptr=(long*)value;if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_OBJECT){piton_exc_type=((PitonObject*)value)->class_name;}}}
 static long piton_int_add(long a,long b){i64 r;if(__builtin_add_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static long piton_int_sub(long a,long b){i64 r;if(__builtin_sub_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static long piton_int_mul(long a,long b){i64 r;if(__builtin_mul_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
@@ -2090,7 +2096,7 @@ static long piton_bytes_iterator_next(long raw){
     return (long)d[i->index++];
 }
 
-static void piton_report_unhandled(void){if(piton_exc_cause_type){piton_write(2,piton_exc_cause_type,piton_strlen(piton_exc_cause_type));if(piton_exc_cause_msg&&piton_exc_cause_msg[0]){piton_write(2,": ",2);piton_write(2,piton_exc_cause_msg,piton_strlen(piton_exc_cause_msg));}piton_write(2," -> causada por\n",16);}piton_write(2,piton_exc_type,piton_strlen(piton_exc_type));piton_write(2,": ",2);if(piton_exc_message)piton_write(2,piton_exc_message,piton_strlen(piton_exc_message));piton_write(2,"\n",1);}
+static void piton_report_unhandled(void){if(piton_exc_cause_type){piton_write(2,piton_exc_cause_type,piton_strlen(piton_exc_cause_type));if(piton_exc_cause_msg&&piton_exc_cause_msg[0]){piton_write(2,": ",2);piton_write(2,piton_exc_cause_msg,piton_strlen(piton_exc_cause_msg));}piton_write(2," -> causada por\n",16);}piton_write(2,piton_exc_type,piton_strlen(piton_exc_type));piton_write(2,": ",2);if(piton_exc_message)piton_write(2,piton_exc_message,piton_strlen(piton_exc_message));else if(piton_exc_value)piton_write(2,"<instancia>",10);piton_write(2,"\n",1);}
 """
 
 _BIGINT_FREESTANDING_C = r"""
@@ -9322,6 +9328,17 @@ class LinuxCEmitter:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:
                 _raise_or_propagate(out, function)
+        elif op == "raise_value":
+            # RAISE_VALUE_V1: `raise <instancia>` — el runtime deriva el tipo
+            # del objeto y lleva el valor.
+            value = args[0]
+            out.append(f"    piton_raise_set_value({self._value(value)});")
+            handler_label = args[1] if len(args) > 1 else None
+            if handler_label:
+                out.append(f"    goto {_name(function.name + '_' + handler_label)};")
+            else:
+                _raise_or_propagate(out, function)
+            return out
         elif op == "raise_typed":
             exc_type, payload, handler_label = args[0], args[1], args[2]
             args_tuple = args[3] if len(args) > 3 else None
