@@ -32,6 +32,9 @@ _BUILTIN_EXCEPTIONS |= {
 }
 # BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
 _BUILTIN_BASES = {"object", "classmethod"}
+# Builtins con schema FIJO de keywords (el resto de una llamada con
+# keywords a un nombre desconocido baja como DYNAMIC_CALL_V1).
+_BUILTIN_KEYWORD_SCHEMAS = {"sorted", "ordenar", "min", "max"}
 
 
 def _os_name_const() -> str:
@@ -211,6 +214,9 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "math_fabs": "PURE", "math_gcd": "PURE",
     "terminal_init": "PURE", "terminal_size": "PURE", "terminal_write": "PURE",
     "object_new": "PURE", "closure_new": "PURE", "cell_new": "PURE",
+    # DYNAMIC_CALL_V1: llamada a un callable desconocido (el frame lo arma
+    # el runtime; no hay efecto observable en build).
+    "dynamic_call": "PURE",
     "build_collection": "PURE", "genexpr_new": "PURE", "gen_init": "PURE",
     "gather_new": "PURE",
     # READ
@@ -1321,7 +1327,70 @@ class MIRLowerer:
             # NON_CONST_DEFAULT_V1: referencia por nombre.
             defaults_map[param] = ("__name__", node.name)
             return True
+        # CONST_EXPR_DEFAULT_V1: una expresion CONSTANTE (hashlib:
+        # `_bufsize=2**18`) se evalua en build time — el subset no modela
+        # la evaluacion diferida de defaults, pero una expresion de
+        # literales si es determinista.
+        folded = self._fold_const_expr(node)
+        if folded is not None:
+            defaults_map[param] = folded
+            return True
         return False
+
+    def _fold_const_expr(self, node: HIRNode) -> Any | None:
+        """CONST_EXPR_DEFAULT_V1: evalua una expresion de literales a un
+        valor estatico (para los defaults de funcion). Devuelve None si la
+        expresion no es determinista.
+
+        Cubre: constantes, `a ** b`, `a * b`, `a + b`, `a - b`, `a // b`,
+        `a << b`, `a | b`, `a & b` y el menos unario — solo con operandos
+        enteros/booleanos (hashlib: `_bufsize=2**18`).
+        """
+        kind = getattr(node, "kind", None)
+        if kind == HIRKind.CONST:
+            value = getattr(node, "value", None)
+            if isinstance(value, bool) or isinstance(value, int):
+                return value
+            return None
+        if kind == HIRKind.BINOP:
+            left = self._fold_const_expr(getattr(node, "left", None))
+            right = self._fold_const_expr(getattr(node, "right", None))
+            if left is None or right is None:
+                return None
+            op = getattr(node, "op", "")
+            try:
+                if op == "**":
+                    return left ** right
+                if op == "*":
+                    return left * right
+                if op == "+":
+                    return left + right
+                if op == "-":
+                    return left - right
+                if op == "//":
+                    return left // right
+                if op == "<<":
+                    return left << right
+                if op == "|":
+                    return left | right
+                if op == "&":
+                    return left & right
+            except Exception:
+                return None
+            return None
+        if kind == HIRKind.UNOP:
+            operand = self._fold_const_expr(getattr(node, "operand", None))
+            if operand is None:
+                return None
+            op = getattr(node, "op", "")
+            if op == "-":
+                return -operand
+            if op == "+":
+                return operand
+            if op == "~":
+                return ~operand
+            return None
+        return None
 
     def _prescan_module_signatures(self, module_body: list) -> None:
         """FUNC_SIG_PRESCAN_V1: registra params/defaults/varargs/posonly/
@@ -1644,7 +1713,8 @@ class MIRLowerer:
                     capture_ops.append(capture)
                 current = builder.temp()
                 has_vararg = 1 if lifted_name in getattr(self, "variadic_functions", set()) else 0
-                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg, result=current)
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=current)
                 for decorator in reversed(decorators):
                     dec_val = self._lower_expr(builder, decorator)
                     applied = builder.temp()
@@ -3032,7 +3102,8 @@ class MIRLowerer:
                     builder.emit("load", capture_name, result=capture)
                     capture_ops.append(capture)
                 result = builder.temp()
-                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), result=result)
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=result)
                 return result
             if node.name in builder.cell_params:
                 result = builder.temp()
@@ -3084,7 +3155,8 @@ class MIRLowerer:
                 builder.emit("cell_new", capture, result=cell)
                 capture_ops.append(cell)
             result = builder.temp()
-            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), result=result)
+            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=result)
             return result
         if kind == HIRKind.CALL:
             # GENEXP_ARG_V1: `sum(x para x en ...)` — a bare generator
@@ -3469,6 +3541,15 @@ class MIRLowerer:
                 # SPLIT_MAXSPLIT_KW_V1: `s.split(sep, maxsplit=n)` expande el
                 # kwarg a posicional (nturl2path:70) — unica firma builtin
                 # adicional cuyo backend consume posicionalmente.
+                # DYNAMIC_METHOD_CALL_V1 primero: un metodo con unpacking en
+                # runtime (o con keywords sobre un receiver dinamico) no puede
+                # bajar por el dispatch estatico — el callee se resuelve en
+                # runtime y el frame lo arma el runtime.
+                _starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
+                _has_star = any(id(arg) in _starred_ids for arg in node.args)
+                _has_kwstar = any(k.arg is None for k in (node.keywords or ()))
+                if _has_star or _has_kwstar:
+                    return self._lower_dynamic_method_call(builder, node, owner)
                 if (
                     node.keywords
                     and node.func.attr != "update"
@@ -3545,7 +3626,25 @@ class MIRLowerer:
             closure = builder.closures.get(node.func.name) if node.func.kind == HIRKind.LOAD else None
             if closure:
                 if node.keywords:
-                    raise MIRLoweringError("native closure calls do not support keyword arguments yet")
+                    # DYNAMIC_CALL_V1: una closure llamada con keywords no
+                    # puede mapearlos a slots posicionales (la firma no se
+                    # conoce en el call-site) -> call dinamico: los keywords
+                    # viajan como dict y el runtime lo coloca en el slot
+                    # **kwargs del callee.
+                    _lifted, _capture_names, _n_args = closure
+                    _capture_ops = []
+                    for _capture_name in _capture_names:
+                        _capture = builder.temp()
+                        builder.emit("load", _capture_name, result=_capture)
+                        _capture_ops.append(_capture)
+                    _callee = builder.temp()
+                    _has_vararg = 1 if _lifted in getattr(self, "variadic_functions", set()) else 0
+                    builder.emit(
+                        "closure_new", _lifted, _n_args, tuple(_capture_ops), _has_vararg,
+                        1 if self.function_kwargs.get(_lifted) else 0,
+                        result=_callee,
+                    )
+                    return self._lower_dynamic_call_with_callee(builder, node, _callee)
                 lifted_name, capture_names, _ = closure
                 # LAMBDA_DEFAULT_V1: fill missing args from recorded lambda
                 # defaults, mirroring named-function calls.
@@ -3585,6 +3684,15 @@ class MIRLowerer:
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
             elif node.func.kind == HIRKind.LOAD and node.keywords:
+                if (
+                    node.func.name not in self.function_params
+                    and node.func.name not in _BUILTIN_KEYWORD_SCHEMAS
+                ):
+                    # DYNAMIC_CALL_V1: keyword call a un callee que no se
+                    # conoce en build time (hashlib: f(usedforsecurity=False)
+                    # con f = getattr(_hashlib, ...)). Los keywords viajan
+                    # como dict al runtime.
+                    return self._lower_dynamic_call(builder, node)
                 args = self._resolve_call_args(builder, node.func.name, node.args, node.keywords)
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
@@ -3775,7 +3883,8 @@ class MIRLowerer:
                 # VARIADIC_CLOSURE_V1: variadic lifted functions mark the
                 # closure so the dispatcher packs extras into a tuple.
                 has_vararg = 1 if self.function_varargs.get(lifted_name) else 0
-                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg, result=result)
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=result)
                 return result
             if node.name in builder.cell_params:
                 result = builder.temp()
@@ -3925,7 +4034,8 @@ class MIRLowerer:
                 builder.emit("cell_new", capture, result=cell)
                 capture_ops.append(cell)
             result = builder.temp()
-            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0, result=result)
+            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=result)
             return result
         if kind == HIRKind.CALL:
             # GENEXP_ARG_V1: `sum(x para x en ...)` — a bare generator
@@ -4340,6 +4450,15 @@ class MIRLowerer:
                 # SPLIT_MAXSPLIT_KW_V1: `s.split(sep, maxsplit=n)` expande el
                 # kwarg a posicional (nturl2path:70) — unica firma builtin
                 # adicional cuyo backend consume posicionalmente.
+                # DYNAMIC_METHOD_CALL_V1 primero: un metodo con unpacking en
+                # runtime (o con keywords sobre un receiver dinamico) no puede
+                # bajar por el dispatch estatico — el callee se resuelve en
+                # runtime y el frame lo arma el runtime.
+                _starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
+                _has_star = any(id(arg) in _starred_ids for arg in node.args)
+                _has_kwstar = any(k.arg is None for k in (node.keywords or ()))
+                if _has_star or _has_kwstar:
+                    return self._lower_dynamic_method_call(builder, node, owner)
                 if (
                     node.keywords
                     and node.func.attr != "update"
@@ -4416,7 +4535,25 @@ class MIRLowerer:
             closure = builder.closures.get(node.func.name) if node.func.kind == HIRKind.LOAD else None
             if closure:
                 if node.keywords:
-                    raise MIRLoweringError("native closure calls do not support keyword arguments yet")
+                    # DYNAMIC_CALL_V1: una closure llamada con keywords no
+                    # puede mapearlos a slots posicionales (la firma no se
+                    # conoce en el call-site) -> call dinamico: los keywords
+                    # viajan como dict y el runtime lo coloca en el slot
+                    # **kwargs del callee.
+                    _lifted, _capture_names, _n_args = closure
+                    _capture_ops = []
+                    for _capture_name in _capture_names:
+                        _capture = builder.temp()
+                        builder.emit("load", _capture_name, result=_capture)
+                        _capture_ops.append(_capture)
+                    _callee = builder.temp()
+                    _has_vararg = 1 if _lifted in getattr(self, "variadic_functions", set()) else 0
+                    builder.emit(
+                        "closure_new", _lifted, _n_args, tuple(_capture_ops), _has_vararg,
+                        1 if self.function_kwargs.get(_lifted) else 0,
+                        result=_callee,
+                    )
+                    return self._lower_dynamic_call_with_callee(builder, node, _callee)
                 lifted_name, capture_names, _ = closure
                 # LAMBDA_DEFAULT_V1: fill missing args from recorded lambda
                 # defaults, mirroring named-function calls.
@@ -4456,6 +4593,15 @@ class MIRLowerer:
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
             elif node.func.kind == HIRKind.LOAD and node.keywords:
+                if (
+                    node.func.name not in self.function_params
+                    and node.func.name not in _BUILTIN_KEYWORD_SCHEMAS
+                ):
+                    # DYNAMIC_CALL_V1: keyword call a un callee que no se
+                    # conoce en build time (hashlib: f(usedforsecurity=False)
+                    # con f = getattr(_hashlib, ...)). Los keywords viajan
+                    # como dict al runtime.
+                    return self._lower_dynamic_call(builder, node)
                 args = self._resolve_call_args(builder, node.func.name, node.args, node.keywords)
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
@@ -4854,6 +5000,119 @@ class MIRLowerer:
                     return True
         return False
 
+    def _lower_dynamic_call(self, builder: _Builder, node: HIRNode) -> str:
+        """DYNAMIC_CALL_V1: baja una llamada cuyo callee no se conoce en
+        build time — `f(*args, **kw)` o `f(k=v)` donde `f` es una variable,
+        el resultado de otra llamada o un atributo dinamico.
+
+        El runtime (piton_call_dynamic) arma el frame:
+          - los posicionales planos se pasan como tupla;
+          - el `*seq` se pasa como la secuencia en runtime;
+          - los keywords con nombre se pasan como dict literal (el runtime
+            lo entrega al param **kwargs del callee, si lo tiene);
+          - el `**mapping` se pasa como el dict en runtime.
+        El callee se evalua como cualquier otra expresion.
+        """
+        func = node.func
+        if func.kind == HIRKind.LOAD and func.name in self.function_params:
+            raise MIRLoweringError(
+                "native dynamic call unpacking requires a statically-known function"
+            )
+        callee = self._lower_expr(builder, func)
+        return self._lower_dynamic_call_with_callee(builder, node, callee)
+
+    def _lower_dynamic_call_with_callee(self, builder: _Builder, node: HIRNode, callee: str) -> str:
+        """DYNAMIC_CALL_V1 (parte comun): arma el call dinamico con el
+        callee ya bajado — los posicionales planos como tupla, la secuencia
+        del `*args` y el dict de keywords (nombres conocidos o mapping de
+        runtime)."""
+        starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
+        plain = [arg for arg in node.args if id(arg) not in starred_ids]
+        starred = [arg for arg in node.args if id(arg) in starred_ids]
+        pos_values = tuple(self._lower_expr(builder, arg) for arg in plain)
+        # los posicionales planos -> una tupla que el runtime lee
+        pos_tuple = builder.temp()
+        builder.emit("build_collection", "tuple", pos_values, result=pos_tuple)
+        # el `*seq` -> la secuencia en runtime (una sola secuencia: el
+        # backend no modela varios `*args` en la misma llamada)
+        star_seq = None
+        if starred:
+            if len(starred) > 1:
+                raise MIRLoweringError("native dynamic call supports one *args sequence")
+            star_seq = self._lower_expr(builder, starred[0])
+        # los keywords -> dict literal; el `**mapping` -> el dict en runtime
+        kw_pairs: list[tuple[Any, Any]] = []
+        kw_runtime = None
+        for keyword in node.keywords or ():
+            if keyword.arg is None:
+                if kw_runtime is not None:
+                    raise MIRLoweringError("native dynamic call supports one **mapping")
+                kw_runtime = self._lower_expr(builder, keyword.value)
+            else:
+                kw_pairs.append((keyword.arg, self._lower_expr(builder, keyword.value)))
+        if kw_pairs:
+            kwargs_dict = builder.temp()
+            builder.emit(
+                "build_collection", "dict",
+                tuple((key, value) for key, value in kw_pairs),
+                result=kwargs_dict,
+            )
+        else:
+            kwargs_dict = kw_runtime
+        result = builder.temp()
+        builder.emit(
+            "dynamic_call", callee, pos_tuple, star_seq, kwargs_dict,
+            _active_handler(builder), result=result,
+        )
+        return result
+
+    def _lower_dynamic_method_call(self, builder: _Builder, node: HIRNode, owner: str) -> str:
+        """DYNAMIC_METHOD_CALL_V1: `recv.attr(*args, **kw)` con el receiver
+        dinamico — el callee es el valor del atributo, resuelto en runtime, y
+        el frame lo arma el runtime (DYNAMIC_CALL_V1).
+
+        El receiver se pasa como ARGUMENTO (no como self implicito): en
+        CPython `cls.__new__(cls, ...)` es una llamada DESBOUND al atributo.
+        """
+        attr = node.func.attr
+        callee = builder.temp()
+        builder.emit("get_attr", owner, attr, result=callee)
+        starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
+        plain = [arg for arg in node.args if id(arg) not in starred_ids]
+        starred = [arg for arg in node.args if id(arg) in starred_ids]
+        pos_values = tuple(self._lower_expr(builder, arg) for arg in plain)
+        pos_tuple = builder.temp()
+        builder.emit("build_collection", "tuple", pos_values, result=pos_tuple)
+        star_seq = None
+        if starred:
+            if len(starred) > 1:
+                raise MIRLoweringError("native dynamic call supports one *args sequence")
+            star_seq = self._lower_expr(builder, starred[0])
+        kw_pairs: list[tuple[Any, Any]] = []
+        kw_runtime = None
+        for keyword in node.keywords or ():
+            if keyword.arg is None:
+                if kw_runtime is not None:
+                    raise MIRLoweringError("native dynamic call supports one **mapping")
+                kw_runtime = self._lower_expr(builder, keyword.value)
+            else:
+                kw_pairs.append((keyword.arg, self._lower_expr(builder, keyword.value)))
+        if kw_pairs:
+            kwargs_dict = builder.temp()
+            builder.emit(
+                "build_collection", "dict",
+                tuple((key, value) for key, value in kw_pairs),
+                result=kwargs_dict,
+            )
+        else:
+            kwargs_dict = kw_runtime
+        result = builder.temp()
+        builder.emit(
+            "dynamic_call", callee, pos_tuple, star_seq, kwargs_dict,
+            _active_handler(builder), result=result,
+        )
+        return result
+
     def _lower_call_unpack(self, builder: _Builder, node: HIRNode) -> str:
         """CALL_UNPACKING_DYNAMIC4_V1: lower runtime `*seq` / `**mapping`
         unpacking for a statically-known callee with a plain signature.
@@ -4864,12 +5123,15 @@ class MIRLowerer:
             no keyword-only marker, no *args, no **kwargs;
           - `*seq` requires a statically sequence-typed operand at emit time
             (list/tuple), `**mapping` a string-keyed dict literal lineage.
+
+        DYNAMIC_CALL_V1: si el callee NO se conoce en build time (una
+        variable, el resultado de otra llamada, un atributo de un objeto
+        dinamico), la llamada baja como call dinamico: el runtime arma el
+        frame con los args y el dict de keywords resueltos en runtime.
         """
         func = node.func
         if func.kind != HIRKind.LOAD or func.name not in self.function_params:
-            raise MIRLoweringError(
-                "native dynamic call unpacking requires a statically-known function"
-            )
+            return self._lower_dynamic_call(builder, node)
         name = func.name
         params = self.function_params[name]
         if len(params) > 4:

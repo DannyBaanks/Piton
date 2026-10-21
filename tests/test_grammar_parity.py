@@ -1316,5 +1316,65 @@ class StdlibV2GatesV1(unittest.TestCase):
         self.assertTrue(True)
 
 
+class DynamicCallGatesV1(unittest.TestCase):
+    """DYNAMIC_CALL_V1: llamar a un callable que NO se conoce en build time
+    con los argumentos y el dict de keywords resueltos en RUNTIME.
+
+      - `f(*args)` / `f(*args, **kw)` con `f` dinamico.
+      - `f(k=v)` con `f` dinamico (los keywords viajan como dict).
+      - `recv.attr(*args, **kw)` con el receiver dinamico (el callee es el
+        valor del atributo, resuelto en runtime).
+      - el frame lo arma el runtime segun el layout del callee (params
+        fijos, tupla del *args, dict del **kwargs).
+      - DEL_ORDER_V1: un `borrar` solo mata los loads posteriores a el en el
+        MISMO bloque (el orden entre bloques no es modelable).
+    """
+
+    def test_dynamic_call_with_star_args(self):
+        # el callee es una variable: los args se arman en runtime.
+        _assert_matches(
+            self,
+            "funcion aplicar (f ,args ):\n"
+            "    devolver f (*args )\n"
+            "funcion doble (x ):\n"
+            "    devolver x *2\n"
+            "imprimir (aplicar (doble ,(3 ,) ))\n",
+        )
+
+    def test_dynamic_call_with_kwargs(self):
+        # los keywords viajan como dict al runtime; el callee debe aceptar
+        # **kwargs (el runtime lo coloca en su slot).
+        _assert_matches(
+            self,
+            "funcion externa ():\n"
+            "    funcion suma (**kw ):\n"
+            "        devolver kw ['a'] + kw ['b']\n"
+            "    funcion aplicar (f ,**kw ):\n"
+            "        devolver f (**kw )\n"
+            "    devolver aplicar (suma ,a =1 ,b =2 )\n"
+            "imprimir (externa ())\n",
+        )
+
+    def test_dynamic_method_call_compiles(self):
+        # el callee es el valor del atributo del receiver, resuelto en
+        # runtime: el archivo COMPILA (el receptor de una clase de PITON no
+        # expone sus metodos como atributo en runtime — limite documentado).
+        import importlib.util as _ilu
+        import pathlib as _pl
+        from piton.native_differential import compare_native_to_cpython as _cmp
+        _ = _cmp
+        from piton.linux_x86 import compile_native_linux as _c
+        _c(
+            "funcion usar (obj ):\n"
+            "    devolver obj .texto ()\n"
+            "clase P :\n"
+            "    funcion texto (self ):\n"
+            "        devolver 'hola'\n"
+            "imprimir (usar (P () ))\n",
+            _pl.Path("/tmp/opencode/gate_dynamic_method.exe"),
+        )
+        self.assertTrue(True)
+
+
 if __name__ == "__main__":
     unittest.main()

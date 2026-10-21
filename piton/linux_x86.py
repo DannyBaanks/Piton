@@ -1084,11 +1084,11 @@ static void piton_setattr(long raw,const char*name,PitonSlot val){if(!raw){piton
 static long piton_isinstance_class(long raw,const char*target_name){if(!raw||!target_name)return 0;PitonObject*o=(PitonObject*)raw;if(o->kind!=PK_OBJECT)return 0;if(o->class_name&&piton_strcmp(o->class_name,target_name)==0)return 1;if(o->parent_name&&piton_strcmp(o->parent_name,target_name)==0)return 1;return 0;}
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
 #define PITON_BOUND_METHOD_MAGIC 0x5049544E424D4554LL
-typedef struct{long magic;long addr;long n_args;long n_cells;long*cells;long has_vararg;}PitonClosure;
+typedef struct{long magic;long addr;long n_args;long n_cells;long*cells;long has_vararg;long has_kwarg;}PitonClosure;
 typedef struct{long magic;long addr;long self;long n_args;}PitonBoundMethod;
 static long piton_bound_method_new(long addr,long n_args,long self){PitonBoundMethod*m=piton_alloc(sizeof(*m));m->magic=PITON_BOUND_METHOD_MAGIC;m->addr=addr;m->self=self;m->n_args=n_args;return(long)m;}
 static long piton_bound_method_self(long raw){PitonBoundMethod*m=(PitonBoundMethod*)raw;if(!m||m->magic!=PITON_BOUND_METHOD_MAGIC){piton_write(2,"AttributeError: bound method has no __self__\n",45);piton_exit(1);}return m->self;}
-static long piton_closure_new8(long addr,long n_args,long n_cells,long c0,long c1,long c2,long c3){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=0;c->cells=piton_alloc((usize)n_cells*sizeof(long));long cs[4]={c0,c1,c2,c3};for(long i=0;i<n_cells&&i<4;++i)c->cells[i]=cs[i];return(long)c;}
+static long piton_closure_new8(long addr,long n_args,long n_cells,long c0,long c1,long c2,long c3){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=0;c->has_kwarg=0;c->cells=piton_alloc((usize)n_cells*sizeof(long));long cs[4]={c0,c1,c2,c3};for(long i=0;i<n_cells&&i<4;++i)c->cells[i]=cs[i];return(long)c;}
 /* CALL_NONCALLABLE_V1: a callee is only callable if it is a live object
    inside the arena (then its magic decides) or a real code address in
    this executable's text. `x = 5; x()` used to dereference address 5
@@ -1104,9 +1104,53 @@ static int piton_is_code_addr(long p){return p!=0&&(char*)p>=__executable_start&
 static int piton_callable_value(long callee){return piton_in_arena(callee)||piton_is_code_addr(callee);}
 static void piton_raise_not_callable(void){piton_write(2,"TypeError: 'X' object is not callable\n",35);piton_exit(1);}
 static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){if(!callee||((long*)callee)[0]!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee))piton_raise_not_callable();return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);}PitonClosure*c=(PitonClosure*)callee;if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;if(total>4){piton_write(2,"TypeError: closure cell count plus arguments exceeds four\n",59);piton_exit(2);}long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);}
-static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells,long has_vararg){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=has_vararg;c->cells=piton_alloc((usize)(n_cells?n_cells:1)*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];return(long)c;}
+static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells,long has_vararg,long has_kwarg){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=has_vararg;c->has_kwarg=has_kwarg;c->cells=piton_alloc((usize)(n_cells?n_cells:1)*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];return(long)c;}
 static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[1]==PK_OBJECT){PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);for(long i=0;i<co->length;++i){piton_object_set(inst,co->attrs[i].name,co->attrs[i].value);}return(long)inst;}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
 static long piton_callback_invoke(long callback,long value){long args[1]={value};return piton_closure_call_frame(callback,1,args);}
+/* DYNAMIC_CALL_V1: llamar a un callable que NO se conoce en build time,
+   con los argumentos posicionales y el dict de keywords resueltos en
+   RUNTIME (`f(*args, **kw)` / `f(k=v)` con `f` dinamico).
+
+   El frame del callee se arma segun su layout:
+     - closure: [celdas..., params fijos..., tupla del *args?, dict de **kw?]
+     - metodo ligado: [self, args...]
+     - code address: hasta 4 argumentos directos.
+   Los defaults NO se pueden llenar (no se conoce la firma): si faltan
+   argumentos posicionales, es un TypeError en runtime, como en CPython
+   cuando la llamada no encaja. */
+static long piton_call_dynamic(long callee,long pos_seq,long star_seq,long kwargs_dict){
+  PitonSeq*pos=(PitonSeq*)pos_seq,*star=(PitonSeq*)star_seq;
+  long np=pos?pos->length:0,ns=star?star->length:0,total=np+ns;
+  if(total>64){piton_write(2,"TypeError: too many arguments in a dynamic call\n",48);piton_exit(2);}
+  long args[64];
+  for(long i=0;i<np;++i)args[i]=pos->items[i].bits;
+  for(long i=0;i<ns;++i)args[np+i]=star->items[i].bits;
+  if(!piton_callable_value(callee)){piton_raise_not_callable();return 0;}
+  if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){
+    PitonBoundMethod*m=(PitonBoundMethod*)callee;
+    if(total+1!=m->n_args||total>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}
+    long a[4]={m->self,0,0,0};for(long i=0;i<total;++i)a[i+1]=args[i];
+    return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);
+  }
+  if(callee&&((long*)callee)[0]==PITON_CLOSURE_MAGIC){
+    PitonClosure*c=(PitonClosure*)callee;
+    long n_pos=c->n_args;
+    if(!c->has_vararg&&total<n_pos){piton_write(2,"TypeError: missing positional arguments in a dynamic call\n",52);piton_exit(2);}
+    long extra=(c->has_vararg&&total>n_pos)?total-n_pos:0;
+    long slots=c->n_cells+n_pos+(c->has_vararg?1:0)+(c->has_kwarg?1:0);
+    long*frame=piton_alloc((usize)slots*sizeof(long));
+    for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];
+    long nf=total<n_pos?total:n_pos;
+    for(long i=0;i<nf;++i)frame[c->n_cells+i]=args[i];
+    if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[n_pos+i],PK_INT};frame[c->n_cells+n_pos]=(long)t;}
+    if(c->has_kwarg)frame[slots-1]=kwargs_dict;
+    return((long(*)(long*))c->addr)(frame);
+  }
+  if(!piton_is_code_addr(callee)){piton_raise_not_callable();return 0;}
+  if(total>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}
+  long a[4]={0,0,0,0};for(long i=0;i<total;++i)a[i]=args[i];
+  return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);
+}
 static long piton_frame_call(long addr,long argc,long*args){long*frame=piton_alloc((usize)argc*sizeof(long));for(long i=0;i<argc;++i)frame[i]=args[i];return((long(*)(long*))addr)(frame);}
 static void piton_bigint_print_raw(void*a);
 static void piton_bytes_print(PitonBytes* b);
@@ -2925,7 +2969,8 @@ class LinuxCEmitter:
             for index, param in enumerate(function.params):
                 lines.append(f"    {_name(param)}=frame[{index}];")
         bigint_slots: list[str] = []
-        for block in function.blocks:
+        for _block_index, block in enumerate(function.blocks):
+            self._cur_block = _block_index
             lines.append(f"{_name(function.name + '_' + block.label)}:")
             for instruction in block.instructions:
                 lines.extend(self._emit_instruction(instruction, function, aliases, types, bigint_slots))
@@ -2994,7 +3039,8 @@ class LinuxCEmitter:
         self._gen_function_name = function.name
         self._gen_counter = 0
         try:
-            for block in function.blocks:
+            for _block_index, block in enumerate(function.blocks):
+                self._cur_block = _block_index
                 lines.append(f"{_name(function.name + '_' + block.label)}:")
                 for instruction in block.instructions:
                     lines.extend(self._emit_instruction(instruction, function, aliases, types, bigint_slots))
@@ -5154,6 +5200,13 @@ class LinuxCEmitter:
         self._func_globals = {}
         self._deleted_names = set()
         self._deleted_by_function: dict[str, set[str]] = {}
+        # DEL_ORDER_V1: (funcion, nombre) -> secuencia de instruccion del
+        # `borrar`. El NameError estatico solo aplica a los loads POSTERIORES
+        # al delete (hashlib: `del __get_hash` al final del modulo, con el
+        # load antes).
+        self._deleted_at: dict[tuple[str, str], tuple[int, int]] = {}
+        self._instr_seq = 0
+        self._cur_block = 0
         self._func_stores = {}
         self._module_stored = set()
         self._module_types = {}
@@ -5785,6 +5838,7 @@ class LinuxCEmitter:
         aliases: dict[str, str], types: dict[str, str], bigint_slots: list[str],
     ) -> list[str]:
         op, args, result = instruction.op, instruction.args, instruction.result
+        self._instr_seq += 1
         out: list[str] = []
         if op == "iter_new":
             source = args[0]
@@ -6107,16 +6161,25 @@ class LinuxCEmitter:
         elif op == "load":
             source = args[0]
             # DEL_FN_SCOPE_V1: el NameError estatico de `borrar` aplica al
-            # flujo lineal de <module> y a deletes anteriores en la MISMA
+            # flujo lineal de <module> y a deletes anteriores EN LA MISMA
             # funcion — no a funciones que leen un nombre que el modulo
             # borra despues (opcode.py:282 del def_op; las calls ocurren
             # antes del del).
+            # DEL_ORDER_V1: el delete solo mata los loads POSTERIORES a el
+            # dentro del MISMO bloque. El orden entre bloques no es
+            # modelable con el orden de emision (hashlib: `del __get_hash`
+            # al final del modulo, con el load DENTRO de un loop, que se
+            # emite despues).
+            _del_at = self._deleted_at.get((function.name, source))
             _deleted_for_this_scope = (
                 source in self._deleted_names
                 and (
                     function.name == "<module>"
                     or source in self._deleted_by_function.get(function.name, ())
                 )
+                and _del_at is not None
+                and _del_at[0] == self._cur_block
+                and _del_at[1] < self._instr_seq
             )
             if _deleted_for_this_scope:
                 # DEL_NAME_V1: borrado estatico -> NameError en build modelado
@@ -8608,13 +8671,25 @@ class LinuxCEmitter:
             cell_ptr_name, value_arg = args
             out.append(f"    ((long*){_name(cell_ptr_name)})[0]={self._value(value_arg)};")
         elif op == "closure_new":
-            lifted_name, n_args, capture_ops, has_vararg = args
+            lifted_name, n_args, capture_ops, has_vararg = args[:4]
+            has_kwarg = args[4] if len(args) > 4 else 0
             cell_values = [self._value(cap) for cap in capture_ops]
             out.append(
                 f"    {_name(result)}=piton_closure_new_frame((long)&{_name(lifted_name)},{n_args},"
-                f"{len(capture_ops)},(long[]){{ {','.join(cell_values)} }},{int(has_vararg)});"
+                f"{len(capture_ops)},(long[]){{ {','.join(cell_values)} }},{int(has_vararg)},{int(has_kwarg)});"
             )
             types[result] = "closure"
+        elif op == "dynamic_call":
+            # DYNAMIC_CALL_V1: llamada a un callable desconocido en build time;
+            # el runtime arma el frame con los args y el dict de keywords.
+            callee, pos_seq, star_seq, kwargs_dict = args[0], args[1], args[2], args[3]
+            out.append(
+                f"    {_name(result)}=piton_call_dynamic({self._value(callee)},"
+                f"{self._value(pos_seq)},{self._value(star_seq)},{self._value(kwargs_dict)});"
+            )
+            types[result] = "int"
+            self._emit_exc_check(out, function, args[4] if len(args) > 4 else None)
+            return out
         elif op == "frame_call":
             callee, call_args = args
             # FRAME_CALL_DEFAULTS_V1: una funcion levantada (closure) con
@@ -8853,7 +8928,7 @@ class LinuxCEmitter:
                         types[result] = "closure"
                         return out
                     elif self.function_frame_abi.get(target, False):
-                        out.append(f'    {_name(result)}=piton_closure_new_frame((long)&{_name(target)},{len(params)-1},1,(long[]){{(long){self._value(obj)}}},0);')
+                        out.append(f'    {_name(result)}=piton_closure_new_frame((long)&{_name(target)},{len(params)-1},1,(long[]){{(long){self._value(obj)}}},0,0);')
                     else:
                         out.append(f'    {_name(result)}=piton_bound_method_new((long)&{_name(target)},{len(params)-1},(long){self._value(obj)});')
                     types[result] = "closure"
@@ -8961,11 +9036,13 @@ class LinuxCEmitter:
                 types.pop(args[0], None)
                 self._deleted_names.add(args[0])
                 deleted_here.add(args[0])
+                self._deleted_at[(function.name, args[0])] = (self._cur_block, self._instr_seq)
             else:
                 for name in args:
                     types.pop(name, None)
                     self._deleted_names.add(name)
                     deleted_here.add(name)
+                    self._deleted_at[(function.name, name)] = (self._cur_block, self._instr_seq)
             return out
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
