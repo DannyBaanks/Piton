@@ -2869,7 +2869,15 @@ class LinuxCEmitter:
         if self._has_rich_runtime:
             # Forward declarations for runtime helpers used in <module>
             lines.append("static long piton_argv_new(void);")
-        for function in module.functions:
+        # CELL_SCOPE_ORDER_V1: una closure (funcion elevada) se baja DESPUES
+        # de la funcion que la contiene: la celda (y su tipo) se crea en el
+        # cuerpo del padre, asi que la carga de la celda en la closure ya
+        # conoce el tipo capturado. Sin este orden, el tipo de una variable
+        # capturada se perdia (la closure se compilaba antes que el padre).
+        for function in sorted(
+            module.functions,
+            key=lambda f: (f.name.count("__"), module.functions.index(f)),
+        ):
             lines.extend(self._emit_function(function))
         if self._has_rich_runtime:
             lines.append("__attribute__((used)) int __argc=0;__attribute__((used)) char**__argv=0;")
