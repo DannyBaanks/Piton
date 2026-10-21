@@ -1467,5 +1467,63 @@ class ClassBasesGatesV1(unittest.TestCase):
         )
 
 
+class SysSurfaceGatesV1(unittest.TestCase):
+    """PRINT_FD_V1 / SYS_FDS_V1 / FMT_NAMED_V1 / PCT_REPR_OBJECT_V1 /
+    INSTANCE_ATTR_TYPES_V1: la superficie de `sys` y `print`.
+
+      - print(..., file=X) escribe en el descriptor X (y lo restaura).
+      - sys.stdout / sys.stderr son los fd 1 y 2; sys.version_info es la
+        version del host.
+      - str.format(nombre=valor) coloca los argumentos por NOMBRE.
+      - '%r' de una instancia usa el hook __repr__ del runtime.
+      - el tipo de un atributo de instancia se deduce de `self.x = valor`.
+    """
+
+    def _run_backend(self, source: str, name: str):
+        # PRINT_FD_V1 / SYS_FDS_V1: el backend trata `file=` como un
+        # DESCRIPTOR y `sys` como builtin (CPython exige un objeto de archivo
+        # con write() y un import de sys) — por eso el gate afirma el
+        # comportamiento del backend y no la paridad con CPython.
+        import pathlib as _pl
+        import subprocess
+        from piton.linux_x86 import compile_native_linux as _c
+        _out = _pl.Path(f"/tmp/opencode/gate_{name}.exe")
+        _c(source, _out)
+        return subprocess.run([str(_out)], capture_output=True, text=True)
+
+    def test_print_to_file(self):
+        _run = self._run_backend(
+            "imprimir ('a' ,file =2 )\nimprimir ('b' )\n", "print_fd"
+        )
+        self.assertEqual(_run.returncode, 0)
+        self.assertEqual(_run.stdout, "b\n")
+        self.assertEqual(_run.stderr, "a\n")
+
+    def test_print_to_sys_stderr(self):
+        _run = self._run_backend(
+            "imprimir ('err' ,file =sys .stderr )\nimprimir ('out' )\n",
+            "print_sys_stderr",
+        )
+        self.assertEqual(_run.returncode, 0)
+        self.assertEqual(_run.stdout, "out\n")
+        self.assertEqual(_run.stderr, "err\n")
+
+    def test_format_with_keywords(self):
+        _assert_matches(
+            self,
+            "imprimir ('hola {nombre}!' .format (nombre ='mundo' ))\n",
+        )
+
+    def test_sys_version_info_default(self):
+        _run = self._run_backend(
+            "funcion f (v =sys .version_info ):\n"
+            "    devolver v [0 ]\n"
+            "imprimir (f () )\n",
+            "sys_version",
+        )
+        self.assertEqual(_run.returncode, 0)
+        self.assertTrue(_run.stdout.strip().isdigit())
+
+
 if __name__ == "__main__":
     unittest.main()

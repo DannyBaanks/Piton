@@ -37,7 +37,7 @@ _BUILTIN_EXCEPTIONS |= {
 _BUILTIN_BASES = {"object", "classmethod", "staticmethod", "property"}
 # Builtins con schema FIJO de keywords (el resto de una llamada con
 # keywords a un nombre desconocido baja como DYNAMIC_CALL_V1).
-_BUILTIN_KEYWORD_SCHEMAS = {"sorted", "ordenar", "min", "max"}
+_BUILTIN_KEYWORD_SCHEMAS = {"sorted", "ordenar", "min", "max", "print", "imprimir"}
 
 
 def _os_name_const() -> str:
@@ -224,6 +224,8 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "dynamic_call": "PURE",
     # RAISE_VALUE_V1: levantar una instancia (no una clase).
     "raise_value": "OPAQUE",
+    # PRINT_FD_V1: fijar/restaurar el descriptor de salida de print.
+    "print_set_fd": "PURE", "print_restore_fd": "PURE",
     "build_collection": "PURE", "genexpr_new": "PURE", "gen_init": "PURE",
     "gather_new": "PURE",
     # READ
@@ -1346,6 +1348,19 @@ class MIRLowerer:
             # NON_CONST_DEFAULT_V1: referencia por nombre.
             defaults_map[param] = ("__name__", node.name)
             return True
+        if node.kind == HIRKind.ATTR:
+            # NON_CONST_DEFAULT_V1 (atributo): `sys.version_info` como default
+            # (warnings: _deprecated(..., _version=sys.version_info)) — el
+            # backend lo materializa como el valor nativo del modulo.
+            value = getattr(node, "value", None)
+            attr = getattr(node, "attr", None)
+            if (
+                isinstance(attr, str)
+                and getattr(value, "kind", None) == HIRKind.LOAD
+                and isinstance(getattr(value, "name", None), str)
+            ):
+                defaults_map[param] = ("__attr__", value.name, attr)
+                return True
         # CONST_EXPR_DEFAULT_V1: una expresion CONSTANTE (hashlib:
         # `_bufsize=2**18`) se evalua en build time — el subset no modela
         # la evaluacion diferida de defaults, pero una expresion de
@@ -3603,8 +3618,12 @@ class MIRLowerer:
                         and node.keywords[0].arg == "reverse"
                         and not node.args
                     )
+                    and node.func.attr != "format"
                 ):
-                    raise MIRLoweringError("native method calls do not support keyword arguments yet")
+                    raise MIRLoweringError(
+                        f"native method calls do not support keyword arguments yet "
+                        f"(method '{node.func.attr}')"
+                    )
                 if (
                     node.keywords
                     and node.func.attr == "split"
@@ -3722,6 +3741,11 @@ class MIRLowerer:
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
             elif node.func.kind == HIRKind.LOAD and node.keywords:
+                if node.func.name in {"print", "imprimir"}:
+                    # PRINT_FILE_KW_V1: `print(a, b, file=X)` — el kwarg fija
+                    # el descriptor de salida (warnings: print(msg,
+                    # file=sys.stderr)). El resto de keywords no se modelan.
+                    return self._lower_print_call(builder, node)
                 if (
                     node.func.name not in self.function_params
                     and node.func.name not in _BUILTIN_KEYWORD_SCHEMAS
@@ -4523,8 +4547,12 @@ class MIRLowerer:
                         and node.keywords[0].arg == "reverse"
                         and not node.args
                     )
+                    and node.func.attr != "format"
                 ):
-                    raise MIRLoweringError("native method calls do not support keyword arguments yet")
+                    raise MIRLoweringError(
+                        f"native method calls do not support keyword arguments yet "
+                        f"(method '{node.func.attr}')"
+                    )
                 if (
                     node.keywords
                     and node.func.attr == "split"
@@ -4642,6 +4670,11 @@ class MIRLowerer:
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
             elif node.func.kind == HIRKind.LOAD and node.keywords:
+                if node.func.name in {"print", "imprimir"}:
+                    # PRINT_FILE_KW_V1: `print(a, b, file=X)` — el kwarg fija
+                    # el descriptor de salida (warnings: print(msg,
+                    # file=sys.stderr)). El resto de keywords no se modelan.
+                    return self._lower_print_call(builder, node)
                 if (
                     node.func.name not in self.function_params
                     and node.func.name not in _BUILTIN_KEYWORD_SCHEMAS
@@ -5160,6 +5193,24 @@ class MIRLowerer:
             "dynamic_call", callee, pos_tuple, star_seq, kwargs_dict,
             _active_handler(builder), result=result,
         )
+        return result
+
+    def _lower_print_call(self, builder: _Builder, node: HIRNode) -> str:
+        """PRINT_FILE_KW_V1: `print(a, b, file=X)` — el kwarg fija el
+        descriptor de salida de la impresion (el runtime lo restaura al
+        terminar). `sep=`/`end=` no se modelan (fail-closed)."""
+        if any(kw.arg is None or kw.arg != "file" for kw in (node.keywords or ())):
+            raise MIRLoweringError("native print() supports only the file= keyword")
+        values = [self._lower_expr(builder, arg) for arg in node.args]
+        if node.keywords:
+            file_value = self._lower_expr(builder, node.keywords[0].value)
+            builder.emit("print_set_fd", file_value)
+        callee = builder.temp()
+        builder.emit("load", "print", result=callee)
+        result = builder.temp()
+        builder.emit("call", callee, tuple(values), result=result)
+        if node.keywords:
+            builder.emit("print_restore_fd")
         return result
 
     def _lower_call_unpack(self, builder: _Builder, node: HIRNode) -> str:
