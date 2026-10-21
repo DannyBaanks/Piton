@@ -2856,6 +2856,12 @@ class LinuxCEmitter:
             # in file scope so every function references the same variable.
             for name in sorted(self._shared_globals):
                 lines.append(f"static long {_name(name)};")
+        # CLASS_OBJECT_INTERN_V1: cada clase tiene UN solo objeto de clase
+        # (a nivel de archivo) — sin interning, cada carga del nombre creaba
+        # uno nuevo y la IDENTIDAD fallaba (`A is A` -> False; `A en (A,)` ->
+        # False). El objeto se crea la primera vez que se usa.
+        for cls_name in sorted(self.classes):
+            lines.append(f"static long {_name('_clsobj_' + cls_name)};")
         if self._has_rich_runtime:
             # Forward declarations for runtime helpers used in <module>
             lines.append("static long piton_argv_new(void);")
@@ -3857,21 +3863,36 @@ class LinuxCEmitter:
         return current
 
     def _emit_class_bases_attribute(self, out: list[str], result: Any, cls_name: str) -> None:
-        """CLASS_BASES_V1: la clase lleva su `__bases__` como atributo (la
-        tupla de las bases DIRECTAS) — asi `cls.__bases__` funciona tambien
-        cuando la clase llega como parametro (abc: update_abstractmethods(cls)
-        recorre cls.__bases__)."""
+        """CLASS_BASES_V1: la clase lleva su `__bases__` (las bases
+        DIRECTAS) y su `__mro__` (la linearizacion) como atributos — asi
+        `cls.__bases__` y `cls.__mro__` funcionan tambien cuando la clase
+        llega como parametro (abc: update_abstractmethods(cls) recorre
+        cls.__bases__; copyreg: `for base in cls.__mro__`).
+
+        Los objetos de clase del MRO se crean con su nombre; el MRO incluye
+        las bases builtin (object/classmethod), que el runtime representa
+        tambien como objetos de clase.
+        """
         _cls_bases = list(self.class_bases.get(cls_name, ()))
-        if not _cls_bases:
-            return
-        out.append(f"    {{PitonSeq*_bs=piton_seq_new(PK_TUPLE,{len(_cls_bases)});")
-        for _bi, _base in enumerate(_cls_bases):
+        if _cls_bases:
+            out.append(f"    {{PitonSeq*_bs=piton_seq_new(PK_TUPLE,{len(_cls_bases)});")
+            for _bi, _base in enumerate(_cls_bases):
+                out.append(
+                    f'    piton_seq_put(_bs,{_bi},piton_slot((long)piton_object_new("{_base}",0),PK_OBJECT));'
+                )
             out.append(
-                f'    piton_seq_put(_bs,{_bi},piton_slot((long)piton_object_new("{_base}",0),PK_OBJECT));'
+                f'    piton_object_set((PitonObject*){_name(result)},"__bases__",piton_slot((long)_bs,PK_TUPLE));}}'
             )
-        out.append(
-            f'    piton_object_set((PitonObject*){_name(result)},"__bases__",piton_slot((long)_bs,PK_TUPLE));}}'
-        )
+        _mro = list(self.class_mro.get(cls_name, ()))
+        if _mro:
+            out.append(f"    {{PitonSeq*_mr=piton_seq_new(PK_TUPLE,{len(_mro)});")
+            for _mi, _mcls in enumerate(_mro):
+                out.append(
+                    f'    piton_seq_put(_mr,{_mi},piton_slot((long)piton_object_new("{_mcls}",0),PK_OBJECT));'
+                )
+            out.append(
+                f'    piton_object_set((PitonObject*){_name(result)},"__mro__",piton_slot((long)_mr,PK_TUPLE));}}'
+            )
 
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
                                 call_args: list[Any], coll_type: str, types: dict[str, str],
@@ -4993,9 +5014,15 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}={neg}{target}({self._value(right)},{self._value(left)});")
             types[result] = "bool"
             return out
-        if needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex"}:
+        # CONTAINS_OBJECT_NEEDLE_V1: un needle OBJETO (una clase, por
+        # ejemplo) se compara por IDENTIDAD (los bits del puntero) — que es
+        # lo que hace CPython para `base in (object, type)`.
+        if (
+            needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex"}
+            and not needle_type.startswith(("object:", "class:"))
+        ):
             raise NativeBuildError(
-                f"Linux 'in' requires an int/bool/str/bytes/bytearray/complex needle, not {needle_type}"
+                f"Linux 'in' requires an int/bool/str/bytes/bytearray/complex/object needle, not {needle_type}"
             )
         if haystack_type in {"bytes", "bytearray"}:
             expression = f"piton_bytes_contains((void*){self._value(right)},{self._slot(left, types)})"
@@ -6324,7 +6351,16 @@ class LinuxCEmitter:
                 if function.name == "<module>" and source in self._module_stored:
                     out.append(f"    {_name(result)}={_name(source)};")
                 else:
-                    out.append(f'    {_name(result)}=(long)piton_object_new("{source}",0);')
+                    # CLASS_OBJECT_INTERN_V1: el objeto de clase es UNO por
+                    # clase (variable a nivel de archivo) — la identidad del
+                    # objeto de clase se comporta como en CPython.
+                    _cvar = _name("_clsobj_" + source)
+                    out.append(
+                        f"    if(!{_cvar}){{{_cvar}=(long)piton_object_new(\"{source}\",0);"
+                        f"    piton_object_set((PitonObject*){_cvar},\"__name__\","
+                        f"piton_slot((long)\"{source}\",PK_STR));}}"
+                    )
+                    out.append(f"    {_name(result)}={_cvar};")
                     self._emit_class_bases_attribute(out, result, source)
                 return out
             if source in _BUILTIN_EXCEPTIONS:
@@ -9134,12 +9170,12 @@ class LinuxCEmitter:
                     )
                     types[result] = "int"
                     return out
-                if attr == "__bases__":
+                if attr in {"__bases__", "__mro__"}:
                     # CLASS_BASES_V1: el atributo lo lleva la clase (creada con
-                    # su tupla de bases) — el receptor puede ser dinamico (un
-                    # parametro que es una clase).
+                    # su tupla de bases y su MRO) — el receptor puede ser
+                    # dinamico (un parametro que es una clase).
                     out.append(
-                        f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},"__bases__").bits;'
+                        f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},"{attr}").bits;'
                     )
                     types[result] = "tuple"
                     self._coll_elems[result] = "object"
@@ -9470,7 +9506,49 @@ class LinuxCEmitter:
                             types[result] = "int"
                             return out
                         else:
-                            raise NativeBuildError("Linux method receiver class is not statically known")
+                            # DYNAMIC_METHOD_CALL_V1: el receiver no tiene
+                            # clase conocida -> el callee es el VALOR del
+                            # atributo, resuelto en runtime, y el frame lo
+                            # arma el runtime (DYNAMIC_CALL_V1). Funciona
+                            # cuando el atributo es un callable de runtime
+                            # (un closure, un metodo ligado, la funcion de
+                            # un modulo); una clase de PITON no expone sus
+                            # metodos como atributo en runtime (limite
+                            # documentado: la llamada falla en runtime).
+                            _attr_expr = (
+                                f'(const char*){self._value(method)}'
+                                if isinstance(method, str) and method.startswith('%') else f'"{method}"'
+                            )
+                            _dargs = []
+                            if not isinstance(obj, str) or not obj.startswith("%"):
+                                # un receiver que NO es una clase: la llamada
+                                # es ligada (el receiver va como primer arg).
+                                _dargs.append(obj)
+                            _dargs.extend(call_args)
+                            _dparts = [f"{{PitonSeq*_dpa=piton_seq_new(PK_TUPLE,{len(_dargs)});"]
+                            for _di, _dv in enumerate(_dargs):
+                                _dparts.append(
+                                    f"    _dpa->items[{_di}]=piton_slot({self._value(_dv)},PK_INT);"
+                                )
+                            _dparts.append("_dpa;}")
+                            _dtuple = f"(long)({''.join(_dparts)})"
+                            if kw_args:
+                                _kparts = [f"{{PitonDict*_dpk=piton_dict_new({len(kw_args)});"]
+                                for _kn, _kv in kw_args:
+                                    _kparts.append(
+                                        f'    piton_dict_append(_dpk,piton_slot((long){json.dumps(_kn)},PK_STR),{self._slot(_kv, types)});'
+                                    )
+                                _kparts.append("    }")
+                                _kdict = f"(long)({''.join(_kparts)})"
+                            else:
+                                _kdict = "0"
+                            out.append(
+                                f"    {_name(result)}=piton_call_dynamic("
+                                f"piton_object_get((PitonObject*){self._value(obj)},{_attr_expr}).bits,"
+                                f"{_dtuple},0,{_kdict});"
+                            )
+                            types[result] = "int"
+                            return out
                 if unbound_class is not None:
                     cls_name = unbound_class
                     target = f"{cls_name}__{method}"

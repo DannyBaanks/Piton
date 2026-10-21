@@ -1525,5 +1525,50 @@ class SysSurfaceGatesV1(unittest.TestCase):
         self.assertTrue(_run.stdout.strip().isdigit())
 
 
+class DynamicMethodGatesV1(unittest.TestCase):
+    """DYNAMIC_METHOD_CALL_V1 / CLASS_MRO_ATTR_V1 /
+    CONTAINS_OBJECT_NEEDLE_V1: el call de un metodo sobre un receiver sin
+    clase conocida resuelve el callee en RUNTIME (el valor del atributo) —
+    como CPython, que levanta AttributeError si el atributo no existe. La
+    clase lleva su `__mro__` como atributo, y un needle OBJETO en `in` se
+    compara por identidad."""
+
+    def test_dynamic_method_call_on_runtime_attribute(self):
+        # el atributo del receiver es un closure de runtime -> se invoca.
+        _assert_matches(
+            self,
+            "funcion aplicar (obj ):\n"
+            "    devolver obj .saludo ()\n"
+            "clase P :\n"
+            "    funcion saludo (self ):\n"
+            "        devolver 'hola'\n"
+            "imprimir ('ok' )\n",
+        )
+
+    def test_class_mro_is_iterable(self):
+        _assert_matches(
+            self,
+            "clase A (object ):\n"
+            "    pasar\n"
+            "clase B (A ):\n"
+            "    pasar\n"
+            "funcion f (c ):\n"
+            "    n = 0\n"
+            "    para x en c .__mro__ :\n"
+            "        n = n +1\n"
+            "    devolver n\n"
+            "imprimir (f (B ))\n",
+        )
+
+    def test_contains_with_object_needle(self):
+        # `x in (a, b)` con un needle objeto -> identidad.
+        _assert_matches(
+            self,
+            "clase A :\n"
+            "    pasar\n"
+            "imprimir (A en (A ,) )\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
