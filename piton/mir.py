@@ -159,6 +159,8 @@ class MIRModule:
     classes: dict = field(default_factory=dict)
     class_parents: dict = field(default_factory=dict)
     class_mro: dict = field(default_factory=dict)
+    # CLASS_BASES_V1: las bases DIRECTAS de cada clase (`cls.__bases__`).
+    class_bases: dict = field(default_factory=dict)
     class_properties: dict = field(default_factory=dict)
     static_methods: set = field(default_factory=set)
     class_methods: set = field(default_factory=set)
@@ -939,6 +941,10 @@ class MIRLowerer:
         module.injected_attr_types = {k: v for k, v in _injected.items() if k not in _injected_conflicts}
         self._finalize_mro()
         module.class_mro = dict(self.class_mro)
+        # CLASS_BASES_V1: las bases directas (para `cls.__bases__`).
+        module.class_bases = {
+            name: list(bases) for name, bases in self.class_base_list.items()
+        }
         module.class_properties = dict(self.class_properties)
         module.static_methods = set(self.static_methods)
         module.class_methods = set(self.class_methods)

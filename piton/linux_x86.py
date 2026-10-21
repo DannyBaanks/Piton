@@ -2707,6 +2707,8 @@ class LinuxCEmitter:
         self.classes = getattr(module, "classes", {})
         self.class_parents = getattr(module, "class_parents", {})
         self.class_mro = getattr(module, "class_mro", {})
+        # CLASS_BASES_V1: las bases directas de cada clase (`cls.__bases__`).
+        self.class_bases = getattr(module, "class_bases", {})
         self.class_properties = getattr(module, "class_properties", {})
         self.static_methods = getattr(module, "static_methods", set())
         self.class_methods = getattr(module, "class_methods", set())
@@ -3804,6 +3806,23 @@ class LinuxCEmitter:
                         types[obj] = "dict"
                         return "dict"
         return current
+
+    def _emit_class_bases_attribute(self, out: list[str], result: Any, cls_name: str) -> None:
+        """CLASS_BASES_V1: la clase lleva su `__bases__` como atributo (la
+        tupla de las bases DIRECTAS) — asi `cls.__bases__` funciona tambien
+        cuando la clase llega como parametro (abc: update_abstractmethods(cls)
+        recorre cls.__bases__)."""
+        _cls_bases = list(self.class_bases.get(cls_name, ()))
+        if not _cls_bases:
+            return
+        out.append(f"    {{PitonSeq*_bs=piton_seq_new(PK_TUPLE,{len(_cls_bases)});")
+        for _bi, _base in enumerate(_cls_bases):
+            out.append(
+                f'    piton_seq_put(_bs,{_bi},piton_slot((long)piton_object_new("{_base}",0),PK_OBJECT));'
+            )
+        out.append(
+            f'    piton_object_set((PitonObject*){_name(result)},"__bases__",piton_slot((long)_bs,PK_TUPLE));}}'
+        )
 
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
                                 call_args: list[Any], coll_type: str, types: dict[str, str],
@@ -6234,6 +6253,7 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}={_name(source)};")
                 else:
                     out.append(f'    {_name(result)}=(long)piton_object_new("{source}",0);')
+                    self._emit_class_bases_attribute(out, result, source)
                 return out
             if source in _BUILTIN_EXCEPTIONS:
                 # BUILTIN_EXC_CLASS_V1: cargar el nombre de una excepcion
@@ -8519,7 +8539,17 @@ class LinuxCEmitter:
                 def_val = self._value(values[2]) if has_def else "0"
                 out.append(f"    {_name(result)}=piton_getattr({self._value(obj_val)},(const char*){self._value(name_val)},{has_def},{def_val});")
                 self._emit_exc_check(out, function, call_handler)
+                # GETATTR_DEFAULT_TYPE_V1: con default, el resultado es el
+                # default cuando el atributo no existe — el tipo del default
+                # (abc: `getattr(scls, '__abstractmethods__', ())` -> tupla
+                # vacia; sin esto el for sobre el resultado fallaba).
                 types[result] = "int"
+                if has_def:
+                    _dft = types.get(values[2])
+                    if _dft and _dft not in {"int", "bool"}:
+                        types[result] = _dft
+                        if _dft in {"list", "tuple"}:
+                            self._coll_elems[result] = self._coll_elems.get(values[2], "int")
             elif function_name in {"setattr", "fijar_atr", "establecer_atr"}:
                 if len(values) != 3:
                     raise NativeBuildError("setattr requires 3 arguments (object, name, value)")
@@ -8656,6 +8686,7 @@ class LinuxCEmitter:
             if hasattr(self, "_class_attrs_map"):
                 for attr_name, val_expr in self._class_attrs_map.get(cls_name, {}).items():
                     out.append(f'    piton_object_set((PitonObject*){_name(result)},"{attr_name}",{val_expr});')
+            self._emit_class_bases_attribute(out, result, cls_name)
             types[result] = f"object:{cls_name}"
         elif op == "cell_new":
             value_arg = args[0]
@@ -8805,6 +8836,21 @@ class LinuxCEmitter:
         elif op == "get_attr":
             obj, attr = args
             owner_type = types.get(obj, "")
+            if owner_type.startswith("class:") and attr == "__bases__":
+                # CLASS_BASES_V1: `cls.__bases__` -> la tupla de las bases
+                # DIRECTAS (abc: update_abstractmethods las recorre). Cada
+                # base es un objeto de clase del runtime.
+                _cls_name = owner_type.split(":", 1)[1]
+                _bases = list(self.class_bases.get(_cls_name, ()))
+                out.append(f"    {{PitonSeq*_bs=piton_seq_new(PK_TUPLE,{len(_bases)});")
+                for _bi, _base in enumerate(_bases):
+                    out.append(
+                        f'    piton_seq_put(_bs,{_bi},piton_slot((long)piton_object_new("{_base}",0),PK_OBJECT));'
+                    )
+                out.append(f"    {_name(result)}=(long)_bs;}}")
+                types[result] = "tuple"
+                self._coll_elems[result] = "object"
+                return out
             if owner_type.startswith("object:"):
                 # GETATTRIBUTE_V1: __getattribute__ intercepta TODO acceso a
                 # atributo (a diferencia de __getattr__, que solo corre cuando
@@ -8973,6 +9019,16 @@ class LinuxCEmitter:
                         out, f"'{owner_type}' object has no attribute '{attr_name}'"
                     )
                     types[result] = "int"
+                    return out
+                if attr == "__bases__":
+                    # CLASS_BASES_V1: el atributo lo lleva la clase (creada con
+                    # su tupla de bases) — el receptor puede ser dinamico (un
+                    # parametro que es una clase).
+                    out.append(
+                        f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},"__bases__").bits;'
+                    )
+                    types[result] = "tuple"
+                    self._coll_elems[result] = "object"
                     return out
                 attr_expr_g = (
                     f'(const char*){self._value(attr)}'

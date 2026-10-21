@@ -1434,5 +1434,38 @@ class SuperBaseGatesV1(unittest.TestCase):
         self.assertEqual(_run.stdout, "ok\n")
 
 
+class ClassBasesGatesV1(unittest.TestCase):
+    """CLASS_BASES_V1 / GETATTR_DEFAULT_TYPE_V1: `cls.__bases__` es la tupla
+    de las bases DIRECTAS (la clase la lleva como atributo, asi que funciona
+    tambien con un receiver dinamico) y `getattr(x, 'n', default)` tiene el
+    TIPO del default (abc: `getattr(scls, '__abstractmethods__', ())` -> la
+    tupla vacia, que se recorre con un for)."""
+
+    def test_class_bases_is_iterable(self):
+        # `A.__bases__` — el receptor es la CLASE (no una instancia).
+        _assert_matches(
+            self,
+            "clase A (object ):\n"
+            "    pasar\n"
+            "funcion f (c ):\n"
+            "    n = 0\n"
+            "    para x en c .__bases__ :\n"
+            "        n = n +1\n"
+            "    devolver n\n"
+            "imprimir (f (A ))\n",
+        )
+
+    def test_getattr_default_type(self):
+        _assert_matches(
+            self,
+            "funcion f (d ):\n"
+            "    n = 0\n"
+            "    para x en getattr (d ,'k' ,() ) :\n"
+            "        n = n +1\n"
+            "    devolver n\n"
+            "imprimir (f (diccionario () ))\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
