@@ -20,7 +20,8 @@ _BUILTIN_EXCEPTIONS |= {"OSError", "IOError", "EnvironmentError"}
 # `raise SystemExit(code)` (sitebuiltins.Quitter) fallaba cerrado por
 # "unsupported native exception type".
 _BUILTIN_EXCEPTIONS |= {
-    "SystemExit", "KeyboardInterrupt", "StopAsyncIteration",
+    "SystemExit", "KeyboardInterrupt", "StopAsyncIteration", "UserWarning",
+    "DeprecationWarning", "RuntimeWarning", "FutureWarning", "PendingDeprecationWarning",
     "ArithmeticError", "FloatingPointError", "LookupError",
     "ReferenceError", "BufferError", "MemoryError", "RecursionError",
     "ImportError", "ModuleNotFoundError", "EOFError",
