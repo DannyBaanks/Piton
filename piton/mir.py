@@ -474,6 +474,12 @@ def _module_level_defs(module_body: list) -> list:
     return found
 
 
+def _is_bundled_module(module_name: str) -> bool:
+    """True si el modulo viene del bundled stdlib (piton/stdlib_piton/)."""
+    from piton.bundled_stdlib import bundled_module_source
+    return bundled_module_source(module_name) is not None
+
+
 def _module_state_name(module_name: str, var_name: str) -> str:
     """MODULE_STATE_V1: el nombre CUALIFICADO de una variable de nivel de
     modulo de un modulo importado ("warnings__var__filtros"). El prefijo
@@ -759,13 +765,22 @@ class MIRLowerer:
                         # modulo (el estado del modulo importado).
                         raise MIRLoweringError("native imported modules currently support functions, imports, assignments, and pasar only")
             module_state_inits: list[tuple[str, Any]] = []
+            bundled_functions: list[tuple[str, Any]] = []
             for module_name, imported in sorted(imported_modules.items()):
                 scope_names, scope_modules, scope_vars = self._build_module_scope(module_name, imported)
                 self._module_scope_stack.append((scope_names, scope_modules, scope_vars))
                 try:
                     for item in imported.body:
                         if item.kind == HIRKind.FUNC_DEF:
-                            self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
+                            if _is_bundled_module(module_name):
+                                # MODULE_STATE_V1: los modulos empaquetados se
+                                # bajan DESPUES del cuerpo del modulo
+                                # principal (ver mas abajo): asi el tipo de
+                                # sus params llega por el call-site (un
+                                # `para x en param` necesita el tipo).
+                                bundled_functions.append((module_name, item))
+                            else:
+                                self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
                         elif item.kind == HIRKind.ASSIGN:
                             # MODULE_STATE_V1: el estado del modulo importado
                             # se inicializa en el entry del modulo principal
@@ -780,6 +795,16 @@ class MIRLowerer:
             # `simplefilter(*self._filter)`, y simplefilter esta definida
             # DESPUES de la clase: sin el pre-scan el call no resolvia).
             self._prescan_module_signatures(module_body)
+            # MODULE_STATE_V1: el pre-scan tambien cubre los modulos
+            # importados (empaquetados o hermanos): su firma (params, *args,
+            # **kwargs) debe estar registrada ANTES de bajar el cuerpo del
+            # modulo principal, para que una llamada variadica se baje por el
+            # camino variadico y no por el directo.
+            for _imp_name, _imp in sorted(imported_modules.items()):
+                self._prescan_module_signatures(
+                    list(getattr(_imp, "body", []) or []),
+                    name_prefix=f"{_imp_name.replace('.', '__')}__",
+                )
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
@@ -978,6 +1003,21 @@ class MIRLowerer:
                 node for node in module_body
                 if node.kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF} or getattr(node, "decorators", None)
             ])
+            # MODULE_STATE_V1: los modulos empaquetados se bajan DESPUES del
+            # cuerpo principal: asi el tipo de sus params llega por el
+            # call-site (un `para x en param` necesita el tipo del param).
+            for _bmod_name, _bfunc in bundled_functions:
+                _bimported = imported_modules.get(_bmod_name)
+                if _bimported is None:
+                    continue
+                _bnames, _bmodules, _bvars = self._build_module_scope(_bmod_name, _bimported)
+                self._module_scope_stack.append((_bnames, _bmodules, _bvars))
+                try:
+                    self._lower_function(
+                        _bfunc, f"{_bmod_name.replace('.', '__')}__{_bfunc.name}"
+                    )
+                finally:
+                    self._module_scope_stack.pop()
             self.functions.insert(0, module.function)
         else:
             builder = _Builder("<module>")
@@ -1555,7 +1595,7 @@ class MIRLowerer:
             return None
         return None
 
-    def _prescan_module_signatures(self, module_body: list) -> None:
+    def _prescan_module_signatures(self, module_body: list, name_prefix: str = "") -> None:
         """FUNC_SIG_PRESCAN_V1: registra params/defaults/varargs/posonly/
         kwonly/frame_abi de TODAS las funciones de nivel modulo ANTES de
         bajar cuerpos (bisect: insort_right, definida en la linea 4, llama
@@ -1597,7 +1637,7 @@ class MIRLowerer:
                             break
                 if not ok:
                     continue
-            name = node.name
+            name = f"{name_prefix}{node.name}" if name_prefix else node.name
             params = [*posonly_params, *positional_params]
             if vararg_name:
                 params.append(vararg_name)

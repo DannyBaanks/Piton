@@ -1,0 +1,128 @@
+funcion add (a , b ) :
+    devolver a + b
+
+
+funcion sub (a , b ) :
+    devolver a - b
+
+
+funcion mul (a , b ) :
+    devolver a * b
+
+
+funcion truediv (a , b ) :
+    devolver a / b
+
+
+funcion floordiv (a , b ) :
+    devolver a // b
+
+
+funcion mod (a , b ) :
+    devolver a % b
+
+
+funcion pow (a , b ) :
+    devolver a ** b
+
+
+funcion and_ (a , b ) :
+    si a :
+        devolver b
+    devolver a
+
+
+funcion or_ (a , b ) :
+    si a :
+        devolver a
+    devolver b
+
+
+funcion xor (a , b ) :
+    devolver a ^ b
+
+
+funcion lt (a , b ) :
+    devolver a < b
+
+
+funcion le (a , b ) :
+    devolver a <= b
+
+
+funcion eq (a , b ) :
+    devolver a == b
+
+
+funcion ne (a , b ) :
+    devolver a != b
+
+
+funcion gt (a , b ) :
+    devolver a > b
+
+
+funcion ge (a , b ) :
+    devolver a >= b
+
+
+funcion not_ (a ) :
+    devolver no a
+
+
+funcion neg (a ) :
+    devolver -a
+
+
+funcion pos (a ) :
+    devolver +a
+
+
+funcion abs_ (a ) :
+    devolver a si a >= 0 sino -a
+
+
+funcion index (a ) :
+    devolver a
+
+
+funcion concat (a , b ) :
+    devolver a + b
+
+
+funcion contains (a , b ) :
+    devolver a en b
+
+
+funcion countOf (a , b ) :
+    n = 0
+    para x en a :
+        si x == b :
+            n = n + 1
+    devolver n
+
+
+funcion delitem (a , b ) :
+    devolver a [b ]
+
+
+funcion getitem (a , b ) :
+    devolver a [b ]
+
+
+funcion itemgetter (indice ) :
+    funcion obtener (obj ) :
+        devolver obj [indice ]
+    devolver obtener
+
+
+funcion attrgetter (nombre ) :
+    funcion obtener (obj ) :
+        devolver obj .nombre
+    devolver obtener
+
+
+funcion methodcaller (nombre ,*args ) :
+    funcion llamar (obj ) :
+        devolver obj .nombre (*args )
+    devolver llamar

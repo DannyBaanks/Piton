@@ -2746,6 +2746,10 @@ class LinuxCEmitter:
         # metodos (warnings: self._filters[:] — sin el tipo, el slice de un
         # valor sin tipo falla cerrado).
         self._instance_attr_types: dict[str, dict[str, str]] = {}
+        # CELL_TYPE_V1: el tipo de una variable CAPTURADA por una closure
+        # (la celda) — sin el, la carga de la celda decae a "int" y las
+        # operaciones sobre ella (un `+` de tuplas, un slice) fallan.
+        self._cell_types: dict[str, str] = {}
         # IDENTITY_FN_V1: funciones que devuelven su param sin cambios
         # (getopt: `def _(msg): return msg`, el stub de gettext). Su
         # resultado ES el argumento, asi que un `%` con ese resultado tiene
@@ -3670,9 +3674,21 @@ class LinuxCEmitter:
         # function_defaults is a full-length list with None holes for params
         # without a default; required = count of those holes (CPython forbids
         # a required parameter after a defaulted one, so holes are leading).
-        _min_args = max(0, sum(1 for d in _defaults if d is None))
-        if not (_min_args <= len(values) <= len(_params)):
-            self._runtime_type_error(out, f"{function_name}() takes " + (str(len(_params)) if _min_args == len(_params) else (str(_min_args) + " to " + str(len(_params)))) + " positional arguments but " + str(len(values)) + " were given")
+        # VARARG_ARITY_V1: `*args`/`**kwargs` no son parametros
+        # OBLIGATORIOS — el maximo con vararg es abierto (CPython acepta
+        # mas argumentos de los declarados) y el minimo no cuenta sus
+        # slots.
+        _vararg = self.function_varargs.get(function_name)
+        _kwarg = self.function_kwargs.get(function_name)
+        _n_fixed = len(_params) - (1 if _vararg is not None else 0) - (1 if _kwarg is not None else 0)
+        _fixed = list(_defaults)[:max(0, _n_fixed)]
+        _min_args = max(0, sum(1 for d in _fixed if d is None))
+        _max_args = len(_params) if _vararg is None and _kwarg is None else None
+        _too_few = len(values) < _min_args
+        _too_many = _max_args is not None and len(values) > _max_args
+        if _too_few or _too_many:
+            _max_text = str(_max_args) if _max_args is not None else "ilimitados"
+            self._runtime_type_error(out, f"{function_name}() takes " + (_max_text if _min_args == _max_args else (str(_min_args) + " to " + _max_text)) + " positional arguments but " + str(len(values)) + " were given")
             types[result] = "int"
             return out
         values = self._complete_call_args(function_name, list(values))
@@ -3752,6 +3768,24 @@ class LinuxCEmitter:
                         f"Linux {function_name}() param '{_iparam}' is used as list; a {_ipt} argument is rejected (fail closed)"
                     )
         self._reject_complex_args(values, types, f"function '{function_name}'")
+        # VARARG_PACK_V1: una llamada directa a una funcion con `*args`
+        # empaqueta los sobrantes en una tupla (el ABI del callee espera la
+        # tupla en su slot vararg).
+        _pack_vararg = self.function_varargs.get(function_name)
+        if _pack_vararg is not None:
+            _n_named = len([p for p in _params if p != _pack_vararg])
+            # el camino variadico del MIR ya entrega la tupla del vararg
+            # (values == params); aqui se empaqueta solo cuando la llamada
+            # vino por el camino directo (values < params) y falta la tupla.
+            if len(values) < len(_params) and len(values) >= _n_named:
+                _extra = list(values)[_n_named:]
+                _parts = [f"{{PitonSeq*_va=piton_seq_new(PK_TUPLE,{len(_extra)});"]
+                for _i, _ev in enumerate(_extra):
+                    _parts.append(
+                        f"    piton_seq_put(_va,{_i},piton_slot({self._value(_ev)},PK_INT));"
+                    )
+                _parts.append("_va;}")
+                values = list(values)[:_n_named] + [f"(long)({''.join(_parts)})"]
         encoded_values = ",".join(self._value(value) for value in values)
         if self.function_frame_abi.get(function_name, False):
             # FRAME_CALL_ABI_V1: una funcion con frame ABI (mas de 4 params)
@@ -5567,6 +5601,16 @@ class LinuxCEmitter:
                             _uses_get_item = True
                             _get_item_results.add(instruction.result)
                         elif (
+                            instruction.op == "iter_new" and instruction.args
+                            and instruction.args[0] in _uloads
+                        ):
+                            # ITER_SEED_V1: un param que se ITERA es una
+                            # secuencia (list/tuple): el `para x en param` de un
+                            # modulo empaquetado (functools.reduce) exige un
+                            # tipo conocido en el receptor. Misma ambiguedad
+                            # str/list que la regla len+get_item.
+                            _has_list_evidence = True
+                        elif (
                             instruction.op == "get_slice" and instruction.args
                             and instruction.args[0] in _uloads
                         ):
@@ -6582,6 +6626,13 @@ class LinuxCEmitter:
                     out.append(
                         f'    piton_object_set((PitonObject*){_name(args[1])},"version_info",piton_slot((long)_vi,PK_TUPLE));}}'
                     )
+            # CELL_TYPE_V1: al guardar una celda bajo el nombre de la
+            # captura, el tipo del VALOR capturado queda asociado a ese
+            # nombre (la carga de la celda lo consulta por nombre).
+            if types.get(args[1]) == "cell":
+                _cell_value_type = self._cell_types.get(args[1])
+                if _cell_value_type:
+                    self._cell_types[args[0]] = _cell_value_type
             # STORE_TARGETS_V1: que nombres guardaron este valor — el
             # elem-kind de una lista puede apesare despues del store (la
             # comprension se llena despues), y hay que propagarlo.
@@ -8868,8 +8919,10 @@ class LinuxCEmitter:
             out.append("        long*cell=(long*)piton_alloc(16);")
             if value_arg is None:
                 out.append("        cell[0]=0;")
+                self._cell_types[result] = "none"
             else:
                 out.append(f"        cell[0]={self._value(value_arg)};")
+                self._cell_types[result] = types.get(value_arg, "int")
             out.append("        cell[1]=0;")
             out.append(f"        {_name(result)}=(long)cell;")
             out.append("    }")
@@ -8877,10 +8930,11 @@ class LinuxCEmitter:
         elif op == "cell_load":
             cell_ptr_name = args[0]
             out.append(f"    {_name(result)}=((long*){_name(cell_ptr_name)})[0];")
-            types[result] = "int"
+            types[result] = self._cell_types.get(cell_ptr_name, "int")
         elif op == "cell_store":
             cell_ptr_name, value_arg = args
             out.append(f"    ((long*){_name(cell_ptr_name)})[0]={self._value(value_arg)};")
+            self._cell_types[cell_ptr_name] = types.get(value_arg, "int")
         elif op == "closure_new":
             lifted_name, n_args, capture_ops, has_vararg = args[:4]
             has_kwarg = args[4] if len(args) > 4 else 0
