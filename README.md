@@ -22,7 +22,7 @@ código .piton
 
 > **Congelado en el commit `ce9aa11`.** Estas afirmaciones describen el
 > alcance del proyecto y no cambian con cada gate. Para modificarlas se
-> requiere evidencia nueva (corpus diferencial, receipt, CI) o una decisión
+> requieren evidencia nueva (corpus diferencial, receipt, CI) o una decisión
 > explícita de Danny. El resto del README (checklist nativo, gates,
 > comandos) sigue vivo y se actualiza con la evidencia.
 
@@ -47,7 +47,7 @@ Pitón **no es**:
   el objetivo es correcto, no rápido.
 - Self-hosted: el compilador está escrito en Python, no en Pitón.
 
-## Qué SÍ hace (estado verificado 2026-10-17; CI en el commit `ce9aa11`)
+## Qué SÍ hace (estado verificado 2026-10-20)
 
 - **Traduce superficie español → Python ordinario** (source-to-source,
   líneas 1:1) y lo ejecuta con CPython: `piton ejecutar`, `piton traducir`,
@@ -66,17 +66,17 @@ Pitón **no es**:
     methods, memoryview, slices con paso, complejos profundos, excepciones
     multi-arg, numerics, object/callable protocol) —
     `docs/parity_corpus_v3_report_2026-10-10.md`.
-  - **corpus v4 (stdlib real, 2026-10-16/17)**: embudo sobre 167 archivos de
-    `/usr/lib/python3.12/` — adapt 100%, parse 98.2% (164/167), MIR 9.0%
-    (15/167), build 4.2% (7/167). Los cuellos restantes son imports de
-    módulos no provistos en el backend y familias downstream (method-kwarg,
-    keyword-call, next(), dynamic unpack). Tandas cerradas: gaps v1–v3
-    (gramática/adaptador), MIR v1 (docstrings de clase, except tupla, OSError,
-    bases object, unpack anidado/star), M6 (defaults de collection/str
-    evaluables). Reporte vivo: `docs/parity_corpus_v4_report_2026-10-16_after-m6.{json,md}`
-    (re-ejecutable con `python3 tools/parity_corpus_v4.py run --tier all`).
-- **CI verde en ambas plataformas** en el commit `ce9aa11`: test-linux,
-  test-windows y verify-oracle (run 37245148477).
+  - **corpus v4 (stdlib real de CPython 3.12)**: embudo sobre 167 archivos de
+    `/usr/lib/python3.12/` — adapt 167/167 (100%), parse 167/167 (100%),
+    MIR 24/167 (14.4%), build 18/167 (10.8%); `MIR_FAIL` 143, `BUILD_FAIL` 6.
+    El cuello restante son los **módulos de la stdlib que el backend no
+    provee** (el corpus compila cada archivo *aislado*, así que un módulo
+    importado tiene que estar en el binario) y 7 archivos "alcanzables" que
+    piden features de runtime: `globals()` como dict real, clases dinámicas
+    (`type`), objetos de archivo, el metaclass de `abc`, `print(file=)` y el
+    `except` con una excepción de usuario. Reporte vivo:
+    `docs/parity_corpus_v4_report_2026-10-20_after-cell-order-v1.{json,md}`
+    (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier all`).
 - **Falla cerrado** (regla de oro): compatibilidad demostrada o error de
   compilación; nunca semántica aproximada silenciosa.
 
@@ -103,9 +103,8 @@ Hola, mundo
 
 ## Validacion Windows desde otra maquina
 
-La validacion PE de Windows se comunica por este repositorio. En la maquina
-Windows limpia, instala Git, PowerShell, CPython 3.12, NASM y GCC/MinGW en
-`PATH`, y ejecuta:
+La validacion PE de Windows se comunica por este repositorio: en la maquina
+Windows limpia (Git, PowerShell, CPython 3.12, NASM y GCC/MinGW en `PATH`):
 
 ```powershell
 git clone https://github.com/DannyBaanks/Piton.git
@@ -116,17 +115,9 @@ py -3.12 -m pip install -e . --no-build-isolation
 
 `windowsvalidate.ps1` ejecuta el corpus focalizado de T2/T5, `test_phase14` y,
 con `-FullSuite`, la regresion PE completa. Escribe el receipt, el resumen y el
-log crudo en `validation/windows/`. Con `-Publish` solo hace stage de esa
-carpeta, crea un commit y lo publica en el branch actual de `origin`; nunca
-sube cambios de implementacion que ya estuvieran en el checkout.
-
-Resultados publicados:
-
-- `validation/windows/latest.json`: receipt con commit, host, herramientas,
-  comandos, exit codes y estado del worktree.
-- `validation/windows/latest.md`: resumen legible.
-- `validation/windows/latest.log`: salida cruda.
-- `validation/windows/windowsvalidate-<UTC timestamp>.*`: historial inmutable.
+log crudo en `validation/windows/` (`latest.json`, `latest.md`, `latest.log` e
+historial inmutable `windowsvalidate-<UTC timestamp>.*`). Con `-Publish` solo
+hace stage de esa carpeta: nunca sube cambios de implementacion.
 
 Un `PASS` de Windows no cierra por si solo un gate cross-platform: debe
 combinarse con el receipt Linux correspondiente.
@@ -235,7 +226,7 @@ de la superficie vive en `docs/CLI_CONTRACT.md`.
 
 ## Compilación nativa x86-64
 
-Pitón compila un subconjunto cada vez mayor a executables nativos que **no
+Pitón compila un subconjunto cada vez mayor a ejecutables nativos que **no
 dependen de CPython**. Hay dos backends:
 
 | Backend | Formato | Cadena de herramientas |
@@ -248,49 +239,51 @@ dependen de CPython**. Hay dos backends:
 ```text
 [x] Enteros, flotantes, strings, booleanos, None
 [x] Asignación, si/sino, mientras, para
-[x] Funciones con argumentos: ABI de 4 registros + frame ABI dinámica (más de 4 parámetros en funciones y métodos)
+[x] Funciones con argumentos: ABI de 4 registros + frame ABI dinámica (más de 4 parámetros)
 [x] *args / **kwargs, defaults, positional-only, keyword-only, annotations
 [x] Unpacking dinámico en la llamada: f(*xs), f(**d) (hasta 4 parámetros, claves string estáticas)
 [x] Operadores: +, -, *, /, //, %, **, ==, !=, <, >, <=, >=
 [x] Operadores bit a bit: &, |, ^, ~, <<, >>
 [x] Unarios: +, -, not
 [x] Strings Unicode: UTF-8 byte-identical vs CPython 3.12.4 (café, ñ, 日本語, etc.)
-[x] Concatenación de strings (malloc + memcpy)
-[x] Comparación de strings (strcmp)
+[x] Concatenación de strings (malloc + memcpy) · Comparación de strings (strcmp)
 [x] BigInt arbitrary-precision integers (Win64 + Linux, 14/14 + 13/13 differential tests)
-[x] Colecciones: listas, tuplas, diccionarios, conjuntos, bytes (octetos), bytearray (arreglo_bytes)
-[x] Números complejos (Linux): literales 1j / 2.5j / 1e3j, 2+3j, aritmética + - * / (división bit-exacta, algoritmo de Smith de CPython), == / != (ordenar es TypeError), repr byte-idéntico ((-0-1j), (2-0j), -0j), abs, .real / .imag, complejo() / complejo(r, i), pertenencia, impresión dentro de colecciones (Windows: falla cerrado en build)
-[x] Operaciones de bytes/bytearray: literales (b'', b""), constructores, indexado, asignación por subíndice mutable, slicing con/sin paso, concatenación (+), repetición (*), métodos (decode, hex, fromhex, count, find, rfind, index, rindex, startswith, endswith, append, extend)
+[x] Colecciones: listas, tuplas, diccionarios, conjuntos, bytes, bytearray
+[x] Números complejos (Linux): aritmética bit-exacta, repr byte-idéntico, abs, .real/.imag
+[x] Operaciones de bytes/bytearray: indexado, asignación, slicing con/sin paso, + , * , métodos
 [x] Acceso a elementos: get_item, collection_len
 [x] Heap objects: object_new, set_attr, get_attr, method_call
 [x] Bound methods: m = objeto.metodo; m(...); __self__; resolución por MRO
 [x] Decoradores: @dec sobre funciones de módulo, orden bottom-up, rebind del nombre
-[x] Lanzar X desde Y (causa almacenada y visible), BaseException catch-all, bare lanzar desde catch-all propaga
-[x] Excepciones tipadas: raise/except/finally con flag-based unwind
+[x] Excepciones tipadas: raise/except/finally, multi-arg con e.args, lanzar X desde Y
 [x] Closures: captures dinámicas, frame ABI, callbacks, recursión, fábricas
-[x] Generadores: frames suspendidos reales, send/throw/close
-[x] Clases: campos, __init__, métodos, @property (getter/setter/deleter)
-[x] Herencia C3/MRO, super() zero-arg, multinivel
+[x] Generadores: frames suspendidos reales, send/throw/close, yield from
+[x] Clases: campos, __init__, métodos, @property, herencia C3/MRO, super() zero-arg
 [x] Imports: paquetes, relative, star, ciclos (orden de inicialización CPython)
-[x] Async: coroutines reales, await, async for, async generators
-[x] async with: __aenter__/__aexit__ como coroutines awaited
-[x] Excepciones dentro de coroutines (raise/catch dentro del state machine)
+[x] Async: coroutines reales, await, async for, async generators, async with
 [x] Scheduler: create_task/gather/sleep(0)/cancel, FIFO determinista
-[x] Timers reales: asyncio.sleep(n>0) (Win Sleep / Linux nanosleep syscall 35)
-[x] With múltiple: con A() como a, B() como b (nested lowering)
-[x] math.sqrt nativo: SSE sqrtsd
-[x] División entera/piso: coincide con Python
-[x] yield from (`producir desde sub()`) con send forwarding y valor de retorno
-[x] Builtins tier 1: all/any/bin/chr/ord/pow/round; int/float/str/bool/texto; math.sqrt/floor/ceil/trunc/fabs/gcd
-[x] `__del__` exactamente una vez por objeto; GC de ciclos en Windows; freelist+refcount en Linux
+[x] Timers reales: asyncio.sleep(n>0) · With múltiple: con A() como a, B() como b
+[x] math.sqrt nativo (SSE sqrtsd) · División entera/piso: coincide con Python
+[x] `__del__` exactamente una vez por objeto; GC de ciclos en Windows
 [x] MIR con clasificación de efectos (PURE/READ/WRITE/IO/OPAQUE) y verificador de cadena
-[x] Excepciones multi-arg: `lanzar Error("a", "b")` y `e.args` (tupla idéntica a CPython)
-[x] memoryview: indexado, iteración, tobytes/tolist, slicing con paso (vista sin copia, mutación compartida preservada) y `cast("B")`
-[x] dict: `update(**kwargs)`, `fromkeys`
-[x] str: `translate` (tabla de traducción) y `format_map` con `{name}` simple (specs/conversions/accessors rechazados en build)
-[x] `slice.indices(...)`, literales numéricos como primary (`1+2j.real`, `1.5.real`), `.real`/`.imag` de int/float
+[x] memoryview: indexado, iteración, tobytes/tolist, slicing con paso, cast("B")
+[x] dict: update(**kwargs), fromkeys · str: translate, format_map
+[x] `slice.indices(...)`, literales numéricos como primary, .real/.imag de int/float
 [x] Clases cargadas como valores (referencia, no instancia), `classmethod` con `cls`
-[x] `divmod` con bigint, `bool(objeto)`, asignación compuesta por índice (`a[i] += x`)
+[x] `divmod` con bigint, `bool(objeto)`, asignación compuesta por índice
+[x] Tipos deducidos por uso: params de secuencia (list/tuple), elem-kind de
+    listas, `getattr(x, 'n', default)` con el tipo del default, tipos de
+    atributos de instancia, `cls.__bases__`/`cls.__mro__` como atributos
+[x] Calls a un callable desconocido: f(*args), f(**kw), f(k=v) — el runtime
+    arma el frame según el layout del callee
+[x] Módulos nativos con constantes: `stat`, `__future__`
+[x] Stdlib empaquetada en PITON (piton/stdlib_piton/): el import de un
+    módulo empaquetado lo provee, lo baja y lo inlinea en el binario; los
+    módulos con estado lo iniciales como globals de nombre cualificado
+[x] `print(..., file=X)`, `sys.stdout`/`sys.stderr` (descriptores 1 y 2),
+    `sys.version_info`
+[x] str.format con campos por nombre ({nombre}) y '%r'/'%s' de objetos
+[x] Excepciones builtin de CPython (SystemExit, UserWarning, …) por nombre
 ```
 
 ### Compilar desde la CLI
@@ -332,21 +325,12 @@ El contrato exacto vive en `NATIVE_SUBSET_1_0.md`.
 ```
 
 > **Actualización posterior al contrato NATIVE_SUBSET_1_0** (no reescrito: es un
-> snapshot histórico de ese recibo). Desde entonces el proyecto avanzó mucho
-> más allá: cerró los milestones **M2**–**M7**, **M9**, **M10** (with),
-> **M13** (finalización: `con`, `__del__` una vez, GC de ciclos en Windows),
-> **M14** (builtins tier 1) y la clasificación de efectos del MIR (EFFECT_*_V1
-> + MIR_HASH_REBASELINE_V1). El corpus diferencial de paridad cerró en
-> **P54** (2026-10-04, tras P53/P52): **1220 casos, 1219 EQUIV (99.9% del
-> corpus declarado — no el 99.9% de todo Python), 0 FAIL_CLOSED, 0 DIVERGENT,
-> 1 TIMEOUT no terminante también en el oracle**
-> (`docs/parity_corpus_report.md`, `docs/parity_corpus_report.json`);
-> después se cerraron también el **corpus v2 (221/221 EQUIV, 100%)** y el
-> **corpus v3 (235/235 EQUIV, 100%, 12 áreas)** —
-> `docs/parity_corpus_v2_report_2026-10-10.md`,
-> `docs/parity_corpus_v3_report_2026-10-10.md`. Estado vivo:
-> `piton/final_dashboard.py` (53 gates, todos PASS) y
-> `docs/FEATURE_STATUS_MATRIX.md`.
+> snapshot histórico de ese recibo). Desde entonces el proyecto cerró los
+> milestones **M2**–**M7**, **M9**, **M10**, **M13**, **M14**, la clasificación
+> de efectos del MIR (EFFECT_*_V1) y el corpus diferencial en **P54** (2026-10-04):
+> **1220 casos, 1219 EQUIV, 0 FAIL_CLOSED, 0 DIVERGENT, 1 TIMEOUT**; después el
+> **v2 (221/221)** y el **v3 (235/235)**. Estado vivo:
+> `piton/final_dashboard.py` (53 gates) y `docs/FEATURE_STATUS_MATRIX.md`.
 
 ### Regla de oro
 
@@ -364,25 +348,11 @@ de una VM QEMU/TCG sin libc, sin Python, sin shell:
 py -m unittest tests.test_phase10_linux -v
 ```
 
-Salida real verificada:
-
-```text
-test_static_elf_boots_as_only_userspace_in_qemu ... ok
-test_static_elf_runs_inside_empty_chroot ... ok
-test_static_elf_x86_64_runs_with_empty_environment ... ok
-
-Ran 3 tests in 48.580s
-OK
-```
-
-Para ejecutables Windows (PE), el differential oracle compara el output del
-nativo contra CPython 3.12.4:
-
-```powershell
-py -m unittest tests.test_phase5 -v
-```
-
-Salida verificada: 37 tests OK del backend PE y su corpus diferencial.
+Salida real verificada: los 3 tests (`boots_as_only_userspace_in_qemu`,
+`runs_inside_empty_chroot`, `runs_with_empty_environment`) OK en 48.580s. Para
+los PE de Windows, el differential oracle compara el output del nativo contra
+CPython 3.12.4: `py -m unittest tests.test_phase5 -v` (37 tests OK del
+backend PE y su corpus diferencial).
 
 ### Dashboard
 
@@ -421,33 +391,22 @@ Subconjunto representativo:
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-10-17)
+### Estado nativo verificado (2026-10-20)
 
 ```text
-Suite completa Linux: 1056 passed / 26 skipped / 133 subtests / 0 failed
+Suite completa Linux: 1157 passed / 26 skipped / 133 subtests / 0 failed
   (python3 -m pytest tests -q --ignore=tests/test_windows_validate.py,
-   CPython 3.12.3, 2026-10-17; commit 20baecb)
-Corpus v4 (stdlib real, tier A, 167 archivos): adapt 100% | parse 98.2%
-  | MIR 9.0% | build 4.2%; fail_classes MIR_FAIL 149, BUILD_FAIL 8,
-  PARSE_FAIL 3 (docs/parity_corpus_v4_report_2026-10-16_after-m6.{json,md})
+   CPython 3.12.3; commit 1f41a3c)
+Corpus v4 (stdlib real, tier A, 167 archivos): adapt 100% | parse 100%
+  | MIR 14.4% | build 10.8%; fail_classes MIR_FAIL 143, BUILD_FAIL 6
+  (docs/parity_corpus_v4_report_2026-10-20_after-cell-order-v1.{json,md})
 Corpus diferencial enumerativo v3: 235 casos (12 áreas)
   -> 235 EQUIV (100.0%), 0 FAIL_CLOSED, 0 DIVERGENT, 0 TIMEOUT
-  (python3 tools/parity_corpus_v3.py,
-   docs/parity_corpus_v3_report_2026-10-10.{json,md})
 Corpus diferencial v2: 221/221 EQUIV (100%)
-  (docs/parity_corpus_v2_report_2026-10-10.{json,md})
-```
-
-Evidencia anterior verificada (2026-10-05, no re-ejecutada hoy):
-
-```text
-CI verde: test-linux + test-windows + verify-oracle (run 37245148477, ce9aa11)
-Corpus diferencial v1: 1220 casos
-  -> 1219 EQUIV (99.9% del corpus declarado), 0 FAIL_CLOSED, 0 DIVERGENT,
-     1 TIMEOUT no terminante también en el oracle
-     (class-iter-self: entrada mala del corpus, no divergencia)
+Corpus diferencial v1: 1220 casos -> 1219 EQUIV (99.9% del corpus declarado),
+  0 FAIL_CLOSED, 0 DIVERGENT, 1 TIMEOUT no terminante también en el oracle
+  (class-iter-self: entrada mala del corpus, no divergencia)
 Dashboard: 53/53 gates PASS
-  (python3 -m piton.final_dashboard --format summary)
 test_phase10_linux.py: 246 passed / 12 skipped
   (ELF estático en QEMU, chroot y entorno vacío incluidos)
 Milestones cerrados: M2 frames/llamadas, M3 closures, M4 iteradores,
@@ -455,27 +414,44 @@ Milestones cerrados: M2 frames/llamadas, M3 closures, M4 iteradores,
   M7 excepciones, M9 async completo, M10 with múltiple,
   M13 finalización (__del__ + GC de ciclos Windows), M14 builtins tier 1,
   ME efectos MIR (EFFECT_*_V1 + MIR_HASH_REBASELINE_V1)
-  M14 = BUILTINS_CORE_V2 + TYPE_CONVERSION_V1 + MATH_TIER1_V1:
-      all/any/bin/chr/ord/pow/round; int/float/str/bool;
-      sqrt/floor/ceil/trunc/fabs/gcd, pi/e; UTF-8 completo; round half-even;
-      excepciones capturables; divergencias: pow(int, neg),
-      any/all solo list|tuple, round sin ndigits
 ```
 
-> Los números 300/300, 220/220 y 520/520 de backend del 2026-09-19 se
-> conservan como evidencia histórica (git log + `validation/windows/`); no
-> describen el estado CURRENT. La nota de WSL/timeout del 2026-09-12 fue
-> latencia de infraestructura, no lógica, y hoy la suite corre en host Linux
-> nativo.
+Reejecutables:
+
+```bash
+python3 -m pytest tests -q --ignore=tests/test_windows_validate.py
+python3 tools/parity_corpus_v4.py run --tier all \
+  --out docs/parity_corpus_v4_report_2026-10-20_after-cell-order-v1.json \
+  --markdown docs/parity_corpus_v4_report_2026-10-20_after-cell-order-v1.md
+python3 tools/parity_corpus_v3.py \
+  --out docs/parity_corpus_v3_report_2026-10-10.json \
+  --markdown docs/parity_corpus_v3_report_2026-10-10.md
+py tests\evidence.py
+```
+
+Cada caso del corpus compara la salida y el exit del ELF nativo contra
+CPython (`piton/native_differential.py`); los resultados viven en
+`docs/parity_corpus*_report*.{json,md}`. `py tests\evidence.py` separa
+`WINDOWS = PASS` de `LINUX_MACOS = NOT_DEMONSTRATED`: no infiere plataformas no
+ejecutadas.
+
+> Evidencia histórica (no re-ejecutada hoy): CI verde en `ce9aa11` (run
+> 37245148477) y los números de backend 300/300, 220/220 y 520/520 del
+> 2026-09-19 se conservan como registro de git + `validation/windows/`; no
+> describen el estado CURRENT. La suite con `py -m unittest discover -s tests
+> -v` reportó `Ran 149 tests / OK` en CPython 3.12.4 (registro de git).
 
 **Pendientes reales (honesto):** metaclasses; decoradores sobre
 métodos/clases/generadores; stdlib amplia fuera del tier demostrado; FFI
-nativo/ctypes; GC de ciclos dict/set en Linux con `gc.collect()` público; e
-interleaving concurrente durante `asyncio.sleep(n>0)` (documentado
-divergente). PITÓN está "terminado" en el sentido del alcance nativo actual
-declarado: corpus enumerativo sin divergencias observadas, Windows y Linux, y
-fail-closed fuera del subconjunto. No es una reimplementación completa de
-CPython 3.12 — ver «Qué NO es Pitón».
+nativo/ctypes; GC de ciclos dict/set en Linux con `gc.collect()` público;
+interleaving concurrente durante `asyncio.sleep(n>0)` (documentado divergente);
+y en el corpus v4 los 7 archivos "alcanzables" que piden features de runtime
+(`globals()` como dict real, clases dinámicas, objetos de archivo, metaclass de
+`abc`, `print(file=)`, `except` con excepción de usuario). PITÓN está
+"terminado" en el sentido del alcance nativo actual declarado: corpus
+enumerativo sin divergencias observadas, Windows y Linux, y fail-closed fuera
+del subconjunto. No es una reimplementación completa de CPython 3.12 — ver
+«Qué NO es Pitón».
 
 ## Por qué no usa `replace()`
 
@@ -496,62 +472,18 @@ La traducción no agrega ni elimina saltos de línea. Los números de línea se
 mantienen 1:1; las columnas pueden moverse porque `funcion` y `def` no miden lo
 mismo.
 
-## F-strings (v0.5)
+## F-strings, errores remapeados, import hook, REPL
 
-Las expresiones dentro de f-strings se traducen:
-
-```python
-# Pitón:
-f"hola {imprimir}"
-f"total: {suma(x)}"
-f"llaves {{imprimir}}"  # escapadas, intactas
-
-# Python generado:
-f"hola {print}"
-f"total: {sum(x)}"
-f"llaves {{imprimir}}"
-```
-
-## Errores remapeados (v0.6)
-
-Los errores de sintaxis se remapean a las ubicaciones originales del `.piton`:
-
-```text
-PITON_SYNTAX_ERROR
-archivo: tests\fixtures\error_sintaxis.piton
-linea: 1
-columna: 8
-
-Python rechazó la traducción:
-expected ':'
-```
-
-## Import hook (v0.7)
-
-Los archivos `.piton` se pueden importar directamente:
-
-```python
-import mi_modulo  # busca mi_modulo.piton en sys.path
-from paquete import submodulo  # soporta paquetes e imports relativos
-```
-
-El hook se instala con `piton.instalar_hook()` o automáticamente al usar
-`piton.ejecutar_archivo()`.
-
-## REPL (v0.8)
-
-```powershell
-piton repl
-```
-
-```text
-Pitón REPL — Python hablando español
->>> imprimir("hola")
-hola
->>> si True:
-...     imprimir("sí")
-sí
-```
+- **f-strings (v0.5)**: las expresiones dentro de f-strings se traducen
+  (`f"hola {imprimir}"` → `f"hola {print}"`); las llaves escapadas quedan
+  intactas.
+- **Errores remapeados (v0.6)**: los errores de sintaxis se remapean a las
+  ubicaciones originales del `.piton` (`PITON_SYNTAX_ERROR` + archivo/línea/
+  columna + el mensaje de Python).
+- **Import hook (v0.7)**: los `.piton` se importan directo
+  (`import mi_modulo` busca `mi_modulo.piton` en `sys.path`; `piton.instalar_hook()`
+  o automáticamente con `piton.ejecutar_archivo()`).
+- **REPL (v0.8)**: `piton repl` — REPL en español con bloques multilínea.
 
 ## API de compilación
 
@@ -561,98 +493,25 @@ codigo = compilar('imprimir("ok")\n')
 exec(codigo)
 ```
 
-## Pruebas y evidencia
-
-Suite completa (Linux, 2026-10-17):
-
-```bash
-python3 -m pytest tests -q --ignore=tests/test_windows_validate.py
-# 1056 passed, 26 skipped, 133 subtests passed, 0 failed
-```
-
-Corpus v4 — stdlib real de CPython 3.12 (nativo vs oracle, backend Linux):
-
-```bash
-python3 tools/parity_corpus_v4.py run --tier all \
-  --out docs/parity_corpus_v4_report_2026-10-16_after-m6.json \
-  --markdown docs/parity_corpus_v4_report_2026-10-16_after-m6.md
-# tier A (167 archivos): adapt 100% | parse 98.2% | MIR 9.0% | build 4.2%
-```
-
-Corpus diferencial enumerativo v3 (nativo vs CPython, backend Linux):
-
-```bash
-python3 tools/parity_corpus_v3.py \
-  --out docs/parity_corpus_v3_report_2026-10-10.json \
-  --markdown docs/parity_corpus_v3_report_2026-10-10.md
-# 235 casos -> 235 EQUIV (100%), 0 FAIL_CLOSED, 0 DIVERGENT, 0 TIMEOUT
-```
-
-Cada caso compara la salida y el exit del ELF nativo contra CPython
-(`piton/native_differential.py`). Los resultados viven en
-`docs/parity_corpus*_report*.{json,md}`.
-
-Resumen ejecutable de evidencia:
-
-```powershell
-py tests\evidence.py
-```
-
-Salida real: exit 0. El script separa `WINDOWS = PASS` de
-`LINUX_MACOS = NOT_DEMONSTRATED`; no infiere plataformas no ejecutadas.
-
-> Histórico: la suite con `py -m unittest discover -s tests -v` reportó
-> `Ran 149 tests / OK` en CPython 3.12.4 (registro git; no describe el
-> estado actual).
-
 ## Estructura
 
 ```text
 PITON/
 |-- piton/
-|   |-- __init__.py
-|   |-- __main__.py
-|   |-- cli.py
-|   |-- parser.py           # Parser -> CST Pitón
-|   |-- mir.py              # MIR intermedia
-|   |-- lower.py            # MIR -> Python lowerer
-|   |-- optimizer.py        # Optimizador MIR
-|   |-- x86.py              # Backend Windows PE (NASM + GCC)
-|   |-- linux_x86.py        # Backend Linux ELF (GCC freestanding)
-|   |-- native_runtime.c    # Runtime C11 vinculado a cada PE
-|   |-- native_differential.py  # Diferential oracle (nativo vs CPython)
-|   |-- native_evidence.py      # Recibo verificable del Native Subset 1.0
-|   |-- call_runtime.py     # Closures + excepciones
-|   |-- async_runtime.py    # Async runtime
-|   |-- object_protocol.py  # Protocolo de objetos
-|   |-- module_runtime.py   # Sistema de imports
-|   |-- stdlib_runtime.py   # Stdlib scope declarado
-|   |-- final_dashboard.py  # Dashboard Fase 14
-|   |-- runtime.py          # Runtime Python
-|   |-- translator.py       # Traductor Python
-|   |-- import_hook.py      # Import hook
-|   `-- repl.py
-|-- examples/
-|   |-- equivalentes/
-|   |-- 01_hola.piton ... 09_soft_keywords.piton
-|   `-- programa_completo.piton
-|-- tests/
-|   |-- fixtures/
-|   |-- evidence.py
-|   |-- test_phase5.py           # Gates nativos Win64 (~130 tests)
-|   |-- test_phase10_linux.py    # Gates Linux (ELF + chroot + QEMU)
-|   |-- test_phase8_10.py        # Bloques 1-10 (clases, imports, async)
-|   |-- test_phase11_13.py       # Fases 11-13 (eval, stdlib, MIR)
-|   |-- test_phase14.py          # Dashboard assertions
-|   |-- test_windows_validate.py  # Corpus focalizado PE T2/T5
-|   `-- test_cli_and_corpus.py
-|-- windowsvalidate.ps1          # Validador y publicador Windows
-|-- validation/windows/          # Receipts publicados por la Xeon
-|-- GUIA.md                  # Guia operativa comandos reales
-|-- NATIVE_COMPATIBILITY.md  # Matriz de compatibilidad nativa
-|-- NATIVE_SUBSET_1_0.md     # Contrato del milestone x86 acotado
-|-- ABI.md                   # ABI nativa
-|-- ROADMAP.md
+|   |-- parser.py, mir.py, lower.py, optimizer.py   # CST -> MIR -> Python
+|   |-- x86.py, linux_x86.py                         # backends PE (NASM) y ELF (GCC)
+|   |-- native_differential.py, native_evidence.py   # oracle y recibo
+|   |-- call_runtime.py, async_runtime.py            # closures, excepciones, async
+|   |-- object_protocol.py, module_runtime.py        # objetos, imports
+|   |-- stdlib_runtime.py, bundled_stdlib.py         # stdlib declarada y empaquetada
+|   |-- stdlib_piton/                                # fuentes PITON de la stdlib
+|   |-- cli.py, translator.py, import_hook.py, repl.py, runtime.py
+|   `-- final_dashboard.py                           # 53 gates
+|-- examples/            # .piton y sus equivalentes .py
+|-- tests/               # gates por fase + test_grammar_parity.py
+|-- tools/               # parity_corpus_v4.py (stdlib real, embudo + equiv)
+|-- validation/windows/  # receipts de la maquina Windows
+|-- GUIA.md, NATIVE_COMPATIBILITY.md, NATIVE_SUBSET_1_0.md, ABI.md, ROADMAP.md
 `-- README.md
 ```
 
