@@ -1570,5 +1570,34 @@ class DynamicMethodGatesV1(unittest.TestCase):
         )
 
 
+class NativeModuleGatesV1(unittest.TestCase):
+    """NATIVE_MODULE_CONSTS_V1: modulos de la stdlib que el backend provee
+    con sus CONSTANTES: `stat.S_IFDIR`, `desde stat importar S_IFDIR`,
+    `__future__.division`. Los valores son los POSIX/estandar."""
+
+    def test_stat_module_constants(self):
+        _assert_matches(
+            self,
+            "importar stat\nimprimir (stat .S_IFDIR )\n",
+        )
+
+    def test_stat_from_import(self):
+        _assert_matches(
+            self,
+            "desde stat importar S_IFDIR , S_IFREG\n"
+            "imprimir (S_IFDIR )\nimprimir (S_IFREG >0 )\n",
+        )
+
+    def test_future_module_constants(self):
+        # en CPython `__future__.division` es un objeto _Feature (su repr
+        # difiere) pero su VERDAD es la bandera — el gate afirma el uso
+        # booleano, que es como lo consume el codigo.
+        _assert_matches(
+            self,
+            "importar __future__\n"
+            "imprimir ('si' si __future__ .division sino 'no' )\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

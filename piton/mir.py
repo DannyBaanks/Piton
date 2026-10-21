@@ -35,6 +35,30 @@ _BUILTIN_EXCEPTIONS |= {
 # `staticmethod` (abc) y `property` son del mismo tipo: no aportan metodos
 # de usuario, asi que un super() hacia ellas es un no-op.
 _BUILTIN_BASES = {"object", "classmethod", "staticmethod", "property"}
+# NATIVE_MODULE_CONSTS_V1: modulos de la stdlib que el backend provee con
+# sus CONSTANTES (no con codigo): `stat.S_IFDIR`, `__future__.division`...
+# Los valores son los POSIX/estandar, no los del host. OJO: en CPython los
+# `stat.S_IS*` son FUNCIONES (S_ISDIR(mode)) y los `__future__.*` son
+# objetos _Feature — no son constantes, asi que no se proveen aqui (el
+# backend falla cerrado al usarlos).
+_NATIVE_MODULE_CONSTS: dict[str, dict[str, Any]] = {
+    "stat": {
+        "S_IFDIR": 0o040000, "S_IFCHR": 0o020000, "S_IFBLK": 0o060000,
+        "S_IFREG": 0o100000, "S_IFIFO": 0o010000, "S_IFLNK": 0o120000,
+        "S_IFSOCK": 0o140000, "S_IFMT": 0o170000, "S_ISUID": 0o4000,
+        "S_ISGID": 0o2000, "S_ISVTX": 0o1000, "S_IRWXU": 0o700,
+        "S_IRUSR": 0o400, "S_IWUSR": 0o200, "S_IXUSR": 0o100,
+        "S_IRWXG": 0o070, "S_IRGRP": 0o040, "S_IWGRP": 0o020,
+        "S_IXGRP": 0o010, "S_IRWXO": 0o007, "S_IROTH": 0o004,
+        "S_IWOTH": 0o002, "S_IXOTH": 0o001, "S_IMODE": 0o7777,
+    },
+    "__future__": {
+        "division": True, "absolute_import": True, "with_statement": True,
+        "print_function": True, "unicode_literals": True, "generator_stop": True,
+        "nested_scopes": True, "generators": True, "annotations": True,
+        "barry_as_FLUFL": False, "braces": False, "all_feature_names": False,
+    },
+}
 # Builtins con schema FIJO de keywords (el resto de una llamada con
 # keywords a un nombre desconocido baja como DYNAMIC_CALL_V1).
 _BUILTIN_KEYWORD_SCHEMAS = {"sorted", "ordenar", "min", "max", "print", "imprimir"}
@@ -614,7 +638,10 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind == HIRKind.IMPORT:
                     for alias in node.names:
-                        if alias.name in {"asyncio", "math", "sys", "os", "terminal"}:
+                        if (
+                            alias.name in {"asyncio", "math", "sys", "os", "terminal"}
+                            or alias.name in _NATIVE_MODULE_CONSTS
+                        ):
                             self.module_aliases[alias.asname or alias.name] = alias.name
                             continue
                         if "." in alias.name:
@@ -648,13 +675,17 @@ class MIRLowerer:
                         # OS_TIER1_V1: `from os import name` resolves to the builtin
                         # os.name attribute. A supplied real `os` module still wins;
                         # every other absent module keeps failing closed.
-                        if mod_name not in imported_modules and mod_name not in {"asyncio", "math", "sys", "os"}:
+                        if (
+                            mod_name not in imported_modules
+                            and mod_name not in {"asyncio", "math", "sys", "os"}
+                            and mod_name not in _NATIVE_MODULE_CONSTS
+                        ):
                             raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                         for alias in node.names:
                             local = alias.asname or alias.name
                             if mod_name in {"asyncio", "math", "terminal"} or (
                                 mod_name == "os" and mod_name not in imported_modules
-                            ):
+                            ) or mod_name in _NATIVE_MODULE_CONSTS:
                                 self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
                             else:
                                 self.from_import_aliases[local] = f"{mod_name.replace('.', '__')}__{alias.name}"
@@ -1035,7 +1066,10 @@ class MIRLowerer:
                 names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
             elif item.kind == HIRKind.IMPORT:
                 for alias in item.names:
-                    if alias.name in {"asyncio", "math", "sys", "os", "terminal"}:
+                    if (
+                            alias.name in {"asyncio", "math", "sys", "os", "terminal"}
+                            or alias.name in _NATIVE_MODULE_CONSTS
+                        ):
                         modules[alias.asname or alias.name] = alias.name
                         continue
                     if "." in alias.name:
@@ -1932,7 +1966,10 @@ class MIRLowerer:
             # de modulo. El import en runtime es no-op: los modulos builtin
             # ya viven en el binario.
             for alias in getattr(node, "names", ()) or ():
-                if alias.name in {"asyncio", "math", "sys", "os", "terminal"}:
+                if (
+                            alias.name in {"asyncio", "math", "sys", "os", "terminal"}
+                            or alias.name in _NATIVE_MODULE_CONSTS
+                        ):
                     builder.module_aliases[alias.asname or alias.name] = alias.name
             return
         elif kind == HIRKind.IMPORT_FROM:
@@ -3043,6 +3080,19 @@ class MIRLowerer:
                     return label
         return None
 
+    @staticmethod
+    def _native_module_const(qualified: str | None) -> tuple[bool, Any]:
+        """NATIVE_MODULE_CONSTS_V1: resuelve "mod.attr" de un modulo nativo
+        con CONSTANTES (stat.S_IFDIR, __future__.division). Devuelve
+        (encontrado, valor)."""
+        if not qualified or "." not in qualified:
+            return False, None
+        _mod, _attr = qualified.split(".", 1)
+        _consts = _NATIVE_MODULE_CONSTS.get(_mod)
+        if not _consts or _attr not in _consts:
+            return False, None
+        return True, _consts[_attr]
+
     def _lower_super_call(self, builder: _Builder, attr: str, user_args: tuple) -> str:
         if not builder.super_class:
             raise MIRLoweringError("native super() must be called directly inside a class method")
@@ -3983,6 +4033,13 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("sys_argv", result=result)
                 return result
+            if alias_qual is not None:
+                # NATIVE_MODULE_CONSTS_V1: constante de un modulo nativo.
+                _found, _value = self._native_module_const(alias_qual)
+                if _found:
+                    result = builder.temp()
+                    builder.emit("const", _value, result=result)
+                    return result
             if alias_qual is not None and alias_qual.startswith("os."):
                 raise MIRLoweringError(
                     f"native os.{alias_qual[3:]} is not supported yet; only os.name is native"
@@ -4842,6 +4899,13 @@ class MIRLowerer:
                 if _alias_module == "sys" and node.attr == "argv":
                     result = builder.temp()
                     builder.emit("sys_argv", result=result)
+                    return result
+                # NATIVE_MODULE_CONSTS_V1: constante de un modulo nativo
+                # (stat.S_IFDIR, __future__.division).
+                _found, _value = self._native_module_const(f"{_alias_module}.{node.attr}")
+                if _found:
+                    result = builder.temp()
+                    builder.emit("const", _value, result=result)
                     return result
                 if _alias_module == "os":
                     raise MIRLoweringError(
