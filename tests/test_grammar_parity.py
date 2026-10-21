@@ -1394,5 +1394,45 @@ class RaiseValueGatesV1(unittest.TestCase):
         )
 
 
+class SuperBaseGatesV1(unittest.TestCase):
+    """SUPER_BUILTIN_BASE_V1 / METACLASS_KEYWORD_V1: `super().__init__()`
+    hacia una base BUILTIN (abc: classmethod) es un no-op semantico (en
+    CPython resuelve contra type.__init__, sin efecto observable), y el
+    keyword `metaclass=` de la definicion de clase se acepta (los metodos
+    propios del metaclass fallan cerrados al invocarse)."""
+
+    def test_super_init_to_builtin_base_is_noop(self):
+        _assert_matches(
+            self,
+            "clase A (classmethod ):\n"
+            "    funcion __init__ (cls ,f ):\n"
+            "        super ().__init__ (cls ,f )\n"
+            "imprimir ('ok' )\n",
+        )
+
+    def test_class_with_metaclass_keyword(self):
+        # METACLASS_KEYWORD_V1: el keyword `metaclass=` se acepta y el
+        # metaclass NO se aplica (limite documentado: en CPython el
+        # metaclass se llama como fabrica de la clase — aqui la clase es
+        # plana). El gate afirma el comportamiento del backend, no la
+        # paridad con CPython (que ademas falla con este metaclass).
+        import importlib.util as _ilu
+        import pathlib as _pl
+        from piton.linux_x86 import compile_native_linux as _c
+        import subprocess
+        _out = _pl.Path("/tmp/opencode/gate_metaclass.exe")
+        _c(
+            "clase M :\n"
+            "    pasar\n"
+            "clase A (metaclass =M ):\n"
+            "    pasar\n"
+            "imprimir ('ok' )\n",
+            _out,
+        )
+        _run = subprocess.run([str(_out)], capture_output=True, text=True)
+        self.assertEqual(_run.returncode, 0)
+        self.assertEqual(_run.stdout, "ok\n")
+
+
 if __name__ == "__main__":
     unittest.main()

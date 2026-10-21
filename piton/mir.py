@@ -31,7 +31,10 @@ _BUILTIN_EXCEPTIONS |= {
     "BrokenPipeError", "ChildProcessError", "BlockingIOError", "InterruptedError",
 }
 # BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
-_BUILTIN_BASES = {"object", "classmethod"}
+# BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
+# `staticmethod` (abc) y `property` son del mismo tipo: no aportan metodos
+# de usuario, asi que un super() hacia ellas es un no-op.
+_BUILTIN_BASES = {"object", "classmethod", "staticmethod", "property"}
 # Builtins con schema FIJO de keywords (el resto de una llamada con
 # keywords a un nombre desconocido baja como DYNAMIC_CALL_V1).
 _BUILTIN_KEYWORD_SCHEMAS = {"sorted", "ordenar", "min", "max"}
@@ -687,7 +690,15 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
-                if node.keywords or any(
+                # METACLASS_KEYWORD_V1: `class ABC(metaclass=ABCMeta)` — el
+                # metaclass no aporta metodos de usuario al subset (los metodos
+                # propios del metaclass fallan cerrados al invocarse), asi que
+                # el keyword se acepta y se ignora.
+                _meta_keywords = [
+                    kw for kw in (getattr(node, "keywords", None) or [])
+                    if getattr(kw, "arg", None) not in {"metaclass", "metaclase"}
+                ]
+                if _meta_keywords or any(
                     # CLASS_DOCSTRING_V1: el docstring baja como CONST directo
                     # en el body; CPython lo guarda en __doc__ y el subset no lo
                     # observa, asi que se descarta (abc/types/warnings/__hello__).
@@ -3058,6 +3069,17 @@ class MIRLowerer:
                     raise MIRLoweringError("native super().__delattr__ requires exactly one argument")
                 builder.emit("del_attr", receiver, args[0])
                 return None
+            # SUPER_BUILTIN_BASE_V1: la base siguiente en el MRO es una clase
+            # BUILTIN (abc: `class abstractclassmethod(classmethod)`), que no
+            # aporta un __init__ de usuario. En CPython la llamada resuelve
+            # contra type.__init__ (sin efecto observable) -> la llamada es un
+            # no-op, no un error de build.
+            if attr == "__init__" and any(
+                cls in _BUILTIN_BASES for cls in mro if cls != current_class
+            ):
+                _none = builder.temp()
+                builder.emit("const", None, result=_none)
+                return _none
             raise MIRLoweringError(
                 f"native super().{attr}: no base class in MRO of '{current_class}' defines '{attr}'"
             )
@@ -3836,6 +3858,17 @@ class MIRLowerer:
                     raise MIRLoweringError("native super().__delattr__ requires exactly one argument")
                 builder.emit("del_attr", receiver, args[0])
                 return None
+            # SUPER_BUILTIN_BASE_V1: la base siguiente en el MRO es una clase
+            # BUILTIN (abc: `class abstractclassmethod(classmethod)`), que no
+            # aporta un __init__ de usuario. En CPython la llamada resuelve
+            # contra type.__init__ (sin efecto observable) -> la llamada es un
+            # no-op, no un error de build.
+            if attr == "__init__" and any(
+                cls in _BUILTIN_BASES for cls in mro if cls != current_class
+            ):
+                _none = builder.temp()
+                builder.emit("const", None, result=_none)
+                return _none
             raise MIRLoweringError(
                 f"native super().{attr}: no base class in MRO of '{current_class}' defines '{attr}'"
             )
