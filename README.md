@@ -274,6 +274,9 @@ dependen de CPython**. Hay dos backends:
 [x] Tipos deducidos por uso: params de secuencia (list/tuple), elem-kind de
     listas, `getattr(x, 'n', default)` con el tipo del default, tipos de
     atributos de instancia, `cls.__bases__`/`cls.__mro__` como atributos
+[x] Emisión en dos pasadas: los tipos de los params se deducen de los
+    call-sites (que pueden estar en otra función), así que un atributo de
+    instancia o una celda de closure conservan su tipo
 [x] Calls a un callable desconocido: f(*args), f(**kw), f(k=v) — el runtime
     arma el frame según el layout del callee
 [x] Módulos nativos con constantes: `stat`, `__future__`
@@ -394,9 +397,9 @@ para afirmar la afirmación.
 ### Estado nativo verificado (2026-10-20)
 
 ```text
-Suite completa Linux: 1157 passed / 26 skipped / 133 subtests / 0 failed
+Suite completa Linux: 1159 passed / 26 skipped / 133 subtests / 0 failed
   (python3 -m pytest tests -q --ignore=tests/test_windows_validate.py,
-   CPython 3.12.3; commit 1f41a3c)
+   CPython 3.12.3; commit 51b78c0)
 Corpus v4 (stdlib real, tier A, 167 archivos): adapt 100% | parse 100%
   | MIR 14.4% | build 10.8%; fail_classes MIR_FAIL 143, BUILD_FAIL 6
   (docs/parity_corpus_v4_report_2026-10-20_after-cell-order-v1.{json,md})
