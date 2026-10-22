@@ -1743,5 +1743,119 @@ class TwoPassGatesV1(unittest.TestCase):
         )
 
 
+class OsPathGatesV1(unittest.TestCase):
+    """OS_FSPATH_V1 / OS_PATHLIKE_V1: la superficie de `os` que usa el
+    stdlib real (genericpath usa os.fspath; imghdr usa os.PathLike).
+
+      - os.fspath(x) devuelve la ruta; un valor que no es str/bytes/
+        PathLike es un TypeError con el texto EXACTO de CPython
+        ("expected str, bytes or os.PathLike object, not int").
+      - os.PathLike es la clase builtin del protocolo de ruta: existe como
+        objeto y isinstance() la reconoce como clase (CPython: un str NO es
+        un PathLike, porque str no implementa __fspath__).
+    """
+
+    def test_fspath_of_str(self):
+        _assert_matches(
+            self,
+            "importar os\nimprimir (os .fspath ('/ruta' ))\n",
+        )
+
+    def test_fspath_of_int_is_type_error(self):
+        _assert_matches(
+            self,
+            "importar os\nimprimir (os .fspath (1 ))\n",
+        )
+
+    def test_fspath_of_none_is_type_error(self):
+        _assert_matches(
+            self,
+            "importar os\nimprimir (os .fspath (Nada ))\n",
+        )
+
+    def test_pathlike_is_a_class_object(self):
+        _assert_matches(
+            self,
+            "importar os\nimprimir (isinstance ('x' ,(str ,os .PathLike )) )\n",
+        )
+
+    def test_pathlike_str_is_not_pathlike(self):
+        # CPython: isinstance('x', os.PathLike) es False (str no tiene
+        # __fspath__); el backend tampoco lo declara.
+        _assert_matches(
+            self,
+            "importar os\nimprimir (isinstance ('x' ,os .PathLike ))\n",
+        )
+
+    def test_pathlike_from_import(self):
+        _assert_matches(
+            self,
+            "desde os importar PathLike\nimprimir (isinstance ('x' ,(str ,PathLike )) )\n",
+        )
+
+
+class PrintEndGatesV1(unittest.TestCase):
+    """PRINT_END_KW_V1: `print(a, end=X)` — el terminador en vez de "\\n".
+
+    CPython: print("a", end=" ") imprime "a " sin salto de linea; el
+    siguiente print continua en la MISMA linea.
+    """
+
+    def test_end_space(self):
+        _assert_matches(
+            self,
+            "imprimir ('a' ,end =' ' )\nimprimir ('b' )\n",
+        )
+
+    def test_end_custom(self):
+        _assert_matches(
+            self,
+            "imprimir ('a' ,end ='!' )\nimprimir ('b' ,end ='?' )\n",
+        )
+
+    def test_end_with_file(self):
+        # PRINT_FD_V1 + PRINT_END_KW_V1: file= y end= se combinan. El
+        # backend trata `file=` como un DESCRIPTOR (sys.stdout = 1), no como
+        # un objeto de archivo — por eso se afirma el comportamiento del
+        # backend (stdout = fd 1) y no la paridad con CPython.
+        import pathlib as _pl
+        import subprocess
+
+        from piton.linux_x86 import compile_native_linux as _c
+
+        _out = _pl.Path("/tmp/opencode/gate_print_end_file.exe")
+        _c("imprimir ('a' ,end =' ' ,file =sys .stdout )\nimprimir ('b' )\n", _out)
+        _run = subprocess.run([str(_out)], capture_output=True, text=True)
+        self.assertEqual(_run.returncode, 0)
+        self.assertEqual(_run.stdout, "a b\n")
+
+    def test_default_end_is_newline(self):
+        _assert_matches(
+            self,
+            "imprimir ('a' )\n",
+        )
+
+
+class CalliterElemGatesV1(unittest.TestCase):
+    """CALLITER_ELEM_V1: `iter(f, centinela)` entrega el tipo de retorno de f.
+
+    Sin esto, el needle de `x en <str>` se tipaba "int" (hueco de
+    inferencia) y el backend rechazaba la comparacion.
+    """
+
+    def test_iter_callable_element_is_str(self):
+        # `iter(f, '')` entrega lo que f devuelve: el elemento es str, y
+        # `c en 'xyz'` es una busqueda de subcadena (no un TypeError).
+        _assert_matches(
+            self,
+            "funcion f ():\n"
+            "    devolver 'x'\n"
+            "para c en iter (f ,'' ):\n"
+            "    si c en 'xyz':\n"
+            "        imprimir ('encontrado')\n"
+            "        romper\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -283,8 +283,10 @@ dependen de CPython**. Hay dos backends:
 [x] Stdlib empaquetada en PITON (piton/stdlib_piton/): el import de un
     módulo empaquetado lo provee, lo baja y lo inlinea en el binario; los
     módulos con estado lo iniciales como globals de nombre cualificado
-[x] `print(..., file=X)`, `sys.stdout`/`sys.stderr` (descriptores 1 y 2),
-    `sys.version_info`
+[x] `print(..., file=X)`, `print(..., end=Y)`, `sys.stdout`/`sys.stderr`
+    (descriptores 1 y 2), `sys.version_info`
+[x] `os.fspath(x)` (str/bytes pasan; el resto es TypeError con el texto de
+    CPython) y `os.PathLike` como clase builtin (`isinstance` la reconoce)
 [x] str.format con campos por nombre ({nombre}) y '%r'/'%s' de objetos
 [x] Excepciones builtin de CPython (SystemExit, UserWarning, …) por nombre
 ```
@@ -394,12 +396,12 @@ Subconjunto representativo:
 está abierto. `NOT_DEMONSTRATED` significa que aún no hay evidencia suficiente
 para afirmar la afirmación.
 
-### Estado nativo verificado (2026-10-20)
+### Estado nativo verificado (2026-10-22)
 
 ```text
-Suite completa Linux: 1159 passed / 26 skipped / 133 subtests / 0 failed
+Suite completa Linux: 1166 passed / 26 skipped / 133 subtests / 0 failed
   (python3 -m pytest tests -q --ignore=tests/test_windows_validate.py,
-   CPython 3.12.3; commit 51b78c0)
+   CPython 3.12.3; commit 6f1fbdd)
 Corpus v4 (stdlib real, tier A, 167 archivos): adapt 100% | parse 100%
   | MIR 14.4% | build 10.8%; fail_classes MIR_FAIL 143, BUILD_FAIL 6
   (docs/parity_corpus_v4_report_2026-10-20_after-cell-order-v1.{json,md})

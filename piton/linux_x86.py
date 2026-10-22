@@ -1238,6 +1238,9 @@ static long piton_round_float(long bits){double x=piton_bits_double(bits);double
 /* M14 TYPE_CONVERSION_V1 + MATH_TIER1_V1 (matriz: ver native_runtime.c) */
 static long piton_int_from_str(const char*s){if(!s){piton_raise_set("TypeError","int() argument must be a string");return 0;}while(*s==' '||*s=='\t'||*s=='\n')++s;int neg=0;if(*s=='-'||*s=='+'){neg=*s=='-';++s;}if(!*s||*s<'0'||*s>'9'){piton_raise_set("ValueError","invalid literal for int() with base 10");return 0;}long v=0;while(*s>='0'&&*s<='9'){v=v*10+(*s-'0');++s;}while(*s==' '||*s=='\t'||*s=='\n')++s;if(*s){piton_raise_set("ValueError","invalid literal for int() with base 10");return 0;}return neg?-v:v;}
 static long piton_float_from_str(const char*s){if(!s){piton_raise_set("TypeError","float() argument must be a string");return 0;}while(*s==' '||*s=='\t'||*s=='\n')++s;int neg=0;if(*s=='-'||*s=='+'){neg=*s=='-';++s;}const char*q=s;long ip=0;int has=0;while(*q>='0'&&*q<='9'){ip=ip*10+(*q-'0');++q;has=1;}double frac=0.0;double div=1.0;if(*q=='.'){++q;while(*q>='0'&&*q<='9'){frac=frac*10+(*q-'0');div*=10;++q;has=1;}}if(!has){piton_raise_set("ValueError","could not convert string to float");return 0;}while(*q==' '||*q=='\t'||*q=='\n')++q;if(*q){piton_raise_set("ValueError","could not convert string to float");return 0;}double v=(double)ip+frac/div;if(neg)v=-v;return piton_double_bits(v);}
+/* OS_FSPATH_V1: os.fspath de un str es el mismo str (el backend no tiene
+   objetos PathLike: esos llegan como error de tipo en runtime). */
+static long piton_fspath_str(const char*s){return(long)s;}
 static long piton_str_from_int(long v){char*p=piton_alloc(24);usize o=0;unsigned long u;if(v<0){p[o++]='-';u=(unsigned long)(-(v+1))+1;}else u=(unsigned long)v;char tmp[24];long n=0;do{tmp[n++]=(char)('0'+u%10);u/=10;}while(u);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static long piton_str_from_float(long bits){char*p=piton_alloc(PITON_REPR_MAX+1);int n=piton_repr_double(p,(unsigned long long)bits);p[n]=0;return(long)p;}
 static long piton_str_truthy(const char*s){return(s&&s[0])?1:0;}
@@ -1297,6 +1300,21 @@ static int piton_maybe_ptr(long bits){
   #undef PITON_IN_BUF
   return 0;
 }
+/* OS_FSPATH_V1: nombre del tipo dinamico de un valor `bits` (misma politica
+   que piton_isinstance_dynamic: puntero con cabecera -> secuencia/dict/
+   set/objeto; puntero imprimible -> str; doble -> float; resto -> int). */
+static const char* piton_dynamic_type_name(long bits){
+  if(!bits)return "NoneType";
+  if(piton_is_double_bits(bits))return "float";
+  if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){
+      if(k==PK_LIST)return "list";if(k==PK_TUPLE)return "tuple";
+      if(k==PK_DICT)return "dict";if(k==PK_SET)return "set";
+      if(k==PK_OBJECT)return((PitonObject*)bits)->class_name;
+      return "object";}
+    if(piton_is_printable_str((const char*)bits))return "str";}
+  return "int";
+}
 static void piton_print_int_safe(long bits){
   /* PRINT_INT_V1: un entero cuyo tipo estático es int pero que en runtime es
    * un puntero (huecos de inferencia) se imprime como string; si no, como int. */
@@ -1318,6 +1336,12 @@ static void piton_raise_set_args(const char*type,const char*message,long args_tu
 /* RAISE_VALUE_V1: levantar una INSTANCIA (no una clase): el tipo sale del
    class_name del objeto y el valor queda disponible para el handler. */
 static void piton_raise_set_value(long value){piton_exc_flag=1;piton_exc_value=value;piton_exc_type="Exception";piton_exc_message=0;piton_exc_args=0;if(value&&piton_maybe_ptr(value)){long*ptr=(long*)value;if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_OBJECT){piton_exc_type=((PitonObject*)value)->class_name;}}}
+/* OS_FSPATH_V1: TypeError de os.fspath con el texto EXACTO de CPython:
+   "expected str, bytes or os.PathLike object, not <tipo>". */
+static void piton_raise_fspath_type(long bits){
+  piton_raise_set("TypeError","expected str, bytes or os.PathLike object, not ");
+  piton_exc_message=(const char*)piton_str_concat(piton_exc_message,piton_dynamic_type_name(bits));
+}
 static long piton_int_add(long a,long b){i64 r;if(__builtin_add_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static long piton_int_sub(long a,long b){i64 r;if(__builtin_sub_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static long piton_int_mul(long a,long b){i64 r;if(__builtin_mul_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
@@ -2613,6 +2637,16 @@ def _raise_or_propagate(out, function):
 # program error (they have no C value), but as a NAME they must not shadow a
 # user variable of the same name (`suma = 0`).
 _FUNC_ONLY_BUILTINS = frozenset({"suma", "redondear"})
+# ISINSTANCE_BUILTIN_CLASS_V1: clases builtin ESTANDAR. Se cargan con el
+# prefijo "class:" igual que las clases de protocolo (os.PathLike), pero su
+# isinstance se resuelve por TIPO (dict/list/object/...), no por nombre de
+# clase del objeto.
+_STANDARD_BUILTIN_CLASSES = frozenset({
+    "int", "entero", "bool", "booleano", "str", "texto", "bytes", "octetos",
+    "bytearray", "arreglo_bytes", "list", "lista", "tuple", "tupla", "dict",
+    "diccionario", "set", "conjunto", "range", "rango", "complex", "complejo",
+    "object", "objeto", "slice", "rebanada", "frozenset", "conjunto_inmutable",
+})
 # USAGE_PARAM_TYPE_V1: metodos que SOLO existen en str. Si todos los usos de
 # un param como receiver son de este set (y ninguno de collection), el param
 # se tipa str por uso (nturl2path url.replace, getopt args.startswith).
@@ -2688,6 +2722,10 @@ class LinuxCEmitter:
         self._nested_tuple_lists: dict[str, tuple[str, ...]] = {}
         self._iter_source: dict[str, str] = {}
         self._enum_elem: dict[str, str] = {}
+        # CALLITER_ELEM_V1: tipo del elemento de `iter(f, sent)`.
+        self._calliter_elem: dict[str, str] = {}
+        # CALLITER_ELEM_V1: closure -> funcion de origen (para el tipo de retorno).
+        self._closure_origin: dict[str, str] = {}
         # builtins that are only ever CALLED (never a value): marking them
         # as a builtin value broke `suma = 0` as an ordinary variable.
         self._func_only_builtins: set[str] = set()
@@ -2817,7 +2855,7 @@ class LinuxCEmitter:
         # Rich runtime (with __argc/__argv/_start and object/dict/set structs) needed for
         # bigint or sys.argv/os.name or any object/dict/set/bytes operations
         self._has_rich_runtime = self._has_bigint or _uses_repr_runtime or any(
-            instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv"}
+            instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv", "builtin_class", "os_fspath"}
             or (instruction.op == "const" and instruction.args and isinstance(instruction.args[0], (bytes, bytearray)))
             for function in module.functions
             for block in function.blocks
@@ -5235,6 +5273,23 @@ class LinuxCEmitter:
             return f'piton_isinstance_class({self._value(obj_val)},"{target_clean}")'
         return "0"
 
+    def _print_end_expr(self, print_end: Any, types: dict) -> str:
+        """PRINT_END_KW_V1: el terminador de `print(..., end=X)`.
+
+        Sin `end=`, es "\\n" (CPython). Con `end=`, es el valor dado — que
+        debe ser un str (el backend no tiene objetos de archivo, asi que
+        `end=None` (CPython lo trata como "\\n") tampoco se modela: es
+        fail-closed.
+        """
+        if print_end is None:
+            return '    piton_write(piton_print_fd,"\\n",1);'
+        end_type = types.get(print_end, "")
+        if end_type != "str":
+            raise NativeBuildError(
+                f"Linux print(end=) requires a str, not {end_type or 'unknown'}"
+            )
+        return f'    piton_write(piton_print_fd,(const char*){self._value(print_end)},piton_strlen((const char*){self._value(print_end)}));'
+
     def _build_isinstance_expr(self, obj_val: str, target_arg: str, types: dict, aliases: dict) -> str:
         t_items = self._tuple_elems.get(target_arg) or self._tuple_elems.get(aliases.get(target_arg, target_arg))
         if t_items is not None:
@@ -5246,6 +5301,35 @@ class LinuxCEmitter:
                 return f"({' || '.join(sub_exprs)})"
             return "0"
         target_name = aliases.get(target_arg, target_arg)
+        # ISINSTANCE_BUILTIN_CLASS_V1: el target puede ser una clase builtin
+        # de PROTOCOLO (os.PathLike -> tipo "class:PathLike"), que no existe
+        # como tipo por nombre. En ese caso el match es por nombre de clase
+        # del objeto, igual que una clase de usuario. CPython:
+        # isinstance('x', os.PathLike) es False (str no implementa
+        # __fspath__), y un PathLike real si lo seria.
+        #
+        # OJO: el prefijo "class:" lo usan TAMBIEN las clases de usuario, las
+        # excepciones builtin y las clases builtin estandar (dict/list/
+        # object/...). Esos casos ya los resuelve _type_match_c_expr por su
+        # nombre (MRO para clases de usuario, kind_map para las estandar) y
+        # este camino NO debe capturarlos.
+        _target_type = types.get(target_arg) or types.get(target_name) or ""
+        if _target_type.startswith("class:"):
+            _cls_name = _target_type.split(":", 1)[1]
+            if (
+                _cls_name not in self.classes
+                and _cls_name not in _STANDARD_BUILTIN_CLASSES
+                and _cls_name not in _BUILTIN_EXCEPTIONS
+            ):
+                # Solo se consulta la clase del objeto si el backend sabe que
+                # el valor es un objeto: un int crudo no es un puntero y
+                # castearlo seria UB (SIGSEGV). Un str/int no es un PathLike.
+                _obj_t = types.get(obj_val, "")
+                if _obj_t.startswith("object:"):
+                    _cname = _obj_t.split(":", 1)[1]
+                    _mro = self.class_mro.get(_cname, [_cname])
+                    return "1" if _cls_name in _mro else "0"
+                return "0"
         return self._type_match_c_expr(obj_val, target_name, types, aliases)
 
     def _build_issubclass_expr(self, cls1_arg: str, cls2_arg: str, aliases: dict) -> str:
@@ -6106,6 +6190,19 @@ class LinuxCEmitter:
                     self._iter_source[result] = source
                     if source in self._iter_source_r:
                         self._iter_source_r[result] = self._iter_source_r[source]
+                    # CALLITER_ELEM_V1: el iter() sobre un iterador mantiene
+                    # el tipo de ELEMENTO (`iter(f, sent)` entrega el retorno
+                    # de f). La fuente suele ser un LOAD del store, asi que se
+                    # busca tambien en sus aliases.
+                    _ce = self._calliter_elem.get(source)
+                    if not _ce:
+                        for _k in (aliases.get(source, ""), self._iter_source.get(source, "")):
+                            if _k:
+                                _ce = self._calliter_elem.get(_k)
+                                if _ce:
+                                    break
+                    if _ce:
+                        self._calliter_elem[result] = _ce
                 return out
             elif source_type == "str":
                 out.append(f"    {_name(result)}=piton_str_iterator_new((char*){self._value(source)});")
@@ -6151,6 +6248,22 @@ class LinuxCEmitter:
             if builtin == "calliter":
                 callable_src, sentinel_src = source
                 out.append(f"    {_name(result)}=piton_calliter_new({self._value(callable_src)},{self._value(sentinel_src)});")
+                # CALLITER_ELEM_V1: `iter(f, sent)` entrega lo que f
+                # devuelve — el tipo de retorno de f (si se conoce) es el
+                # tipo del ELEMENTO. Sin esto, `ch en self.whitespace`
+                # (netrc) fallaba: el needle se tipaba "int" y el backend
+                # rechazaba `x en <str>` con un needle no-str.
+                _cb_name = aliases.get(callable_src, callable_src)
+                _cb_rt = self.function_return_types.get(_cb_name)
+                if _cb_rt is None:
+                    # CALLITER_ELEM_V1: el callable puede ser un closure de
+                    # metodo ligado (`self._read_char`) — su origen se sabe
+                    # por el mapa closure->funcion.
+                    _origin = self._closure_origin.get(callable_src)
+                    if _origin:
+                        _cb_rt = self.function_return_types.get(_origin)
+                if _cb_rt and _cb_rt not in {"none", "int"}:
+                    self._calliter_elem[result] = _cb_rt
             elif builtin == "enumerate":
                 if types.get(source) not in {"list", "tuple", "str"}:
                     raise NativeBuildError("native enumerate currently requires a list or tuple")
@@ -6313,6 +6426,11 @@ class LinuxCEmitter:
                     self._iter_source[result] = self._iter_source.get(args[0], args[0])
             elif iterator_type == "iterator:bytes":
                 types[result] = "int"
+            elif iterator_type == "iterator:calliter":
+                # CALLITER_ELEM_V1: el elemento de `iter(f, sent)` tiene el
+                # tipo de retorno de f (netrc: `iter(self._read_char, "")`
+                # entrega str, y `ch en self.whitespace` lo necesita).
+                types[result] = self._calliter_elem.get(args[0], "int")
             else:
                 types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:str" else "int"
             out.append("    if(piton_exc_flag){")
@@ -6646,6 +6764,11 @@ class LinuxCEmitter:
                 return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
+            # CALLITER_ELEM_V1: el nombre hereda el tipo de ELEMENTO del
+            # iterador (`fiter = iter(f, sent)` -> `fiter` entrega el retorno
+            # de f).
+            if args[1] in self._calliter_elem:
+                self._calliter_elem[args[0]] = self._calliter_elem[args[1]]
             # SYS_FDS_V1: el modulo `sys` lleva sus descriptores y su
             # version_info. stdout/stderr son los fd 1 y 2 (el backend no
             # tiene objetos de archivo: el descriptor es la representacion
@@ -7701,6 +7824,9 @@ class LinuxCEmitter:
             function_name = aliases.get(args[0], args[0])
             values = list(args[1])
             call_handler = args[2] if len(args) > 2 else None
+            # PRINT_END_KW_V1: `print(..., end=X)` — el terminador en vez de
+            # "\n" (solo para la impresion; el resto de llamadas lo ignora).
+            print_end = args[3] if len(args) > 3 else None
             # SHADOW_BUILTIN_V1: a user definition of the same name wins over
             # the builtin table (`funcion suma(a, b)` is not `sum`).
             if function_name in self.function_names and function_name not in _BUILTINS:
@@ -7813,9 +7939,9 @@ class LinuxCEmitter:
                             out.append(f'    piton_print_int_safe({self._value(value)});')
                         else:
                             out.append(f'    piton_print_auto((long){self._value(value)});')
-                    out.append('    piton_write(piton_print_fd,"\\n",1);')
+                    out.append(self._print_end_expr(print_end, types))
                 else:
-                    out.append('    piton_write(piton_print_fd,"\\n",1);')
+                    out.append(self._print_end_expr(print_end, types))
                 out.append(f"    {_name(result)}=0;")
             elif function_name in {"formato", "format"}:
                 # FORMAT_V1: format(valor, spec) == '{spec}'.format(valor) — se
@@ -9264,6 +9390,8 @@ class LinuxCEmitter:
                         out.append(f'    {_name(result)}=piton_closure_new_frame((long)&{_name(target)},{len(params)-1},1,(long[]){{(long){self._value(obj)}}},0,0);')
                     else:
                         out.append(f'    {_name(result)}=piton_bound_method_new((long)&{_name(target)},{len(params)-1},(long){self._value(obj)});')
+                    # CALLITER_ELEM_V1: el closure sabe de que funcion viene.
+                    self._closure_origin[result] = target
                     types[result] = "closure"
                     return out
                 # ATTRIBUTE_LOOKUP_V2: __getattr__ hook after method resolution
@@ -9741,6 +9869,38 @@ class LinuxCEmitter:
                 out.append(f"    goto {_name(function.name + '_' + handler_label)};")
             else:
                 _raise_or_propagate(out, function)
+        elif op == "builtin_class":
+            # OS_PATHLIKE_V1: una clase builtin (os.PathLike) como objeto.
+            out.append(f'    {_name(result)}=(long)piton_object_new("{args[0]}",0);')
+            types[result] = f"class:{args[0]}"
+            return out
+        elif op == "os_fspath":
+            # OS_FSPATH_V1: os.fspath(x) — un str pasa; un bytes tambien
+            # (CPython acepta str|bytes|PathLike); otro valor es un
+            # TypeError en runtime con el MISMO texto que CPython:
+            #   expected str, bytes or os.PathLike object, not int
+            _fp = self._value(args[0])
+            _fpt = types.get(args[0], "")
+            _fph = args[1] if len(args) > 1 else None
+            if _fpt == "str":
+                out.append(f"    {_name(result)}=(long)(const char*){_fp};")
+            elif _fpt == "bytes":
+                out.append(f"    {_name(result)}={_fp};")
+            else:
+                # Chequeo en runtime: el tipo estatico puede ser "int" por
+                # defecto (hueco de inferencia) mientras el valor real es un
+                # str, y al reves. La politica de puntero es la misma que
+                # piton_isinstance_dynamic (imprimible -> str).
+                out.append(
+                    f"    {{long _fpv={_fp};"
+                    f"if(piton_maybe_ptr(_fpv)&&piton_is_printable_str((const char*)_fpv))"
+                    f"{{{_name(result)}=_fpv;}}"
+                    f"else{{piton_raise_fspath_type(_fpv);}}"
+                    f"}}"
+                )
+                self._emit_exc_check(out, function, _fph)
+            types[result] = "str"
+            return out
         elif op == "print_set_fd":
             # PRINT_FD_V1: print(..., file=X) — el descriptor de salida activo.
             out.append(f"    piton_print_fd={self._value(args[0])};")

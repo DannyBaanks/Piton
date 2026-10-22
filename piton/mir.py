@@ -247,6 +247,8 @@ MIR_OP_EFFECTS: dict[str, str] = {
     # DYNAMIC_CALL_V1: llamada a un callable desconocido (el frame lo arma
     # el runtime; no hay efecto observable en build).
     "dynamic_call": "PURE",
+    # OS_FSPATH_V1 / OS_PATHLIKE_V1: valores nativos de `os`.
+    "os_fspath": "PURE", "builtin_class": "PURE",
     # RAISE_VALUE_V1: levantar una instancia (no una clase).
     "raise_value": "OPAQUE",
     # PRINT_FD_V1: fijar/restaurar el descriptor de salida de print.
@@ -3780,8 +3782,18 @@ class MIRLowerer:
                     result = builder.temp()
                     builder.emit("sys_exit", code, result=result)
                     return result
-                function = builder.temp()
                 _symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                if _symbol == "os__fspath":
+                    # OS_FSPATH_V1: os.fspath(x) devuelve la ruta como str
+                    # (el backend no tiene objetos PathLike: si el valor no
+                    # es un str, el runtime levanta TypeError como CPython).
+                    if len(node.args) != 1 or node.keywords:
+                        raise MIRLoweringError("native os.fspath() takes exactly one argument")
+                    _fspath_arg = self._lower_expr(builder, node.args[0])
+                    result = builder.temp()
+                    builder.emit("os_fspath", _fspath_arg, result=result)
+                    return result
+                function = builder.temp()
                 builder.emit("load", _symbol, result=function)
                 if (
                     self.function_varargs.get(_symbol) is not None
@@ -4182,6 +4194,12 @@ class MIRLowerer:
             # OS_TIER1_V1 / SYS_ARGV_V1: attributes reached through a
             # `desde ... importar ...` alias are values, not backend symbols.
             alias_qual = builder.from_import_aliases.get(node.name)
+            if alias_qual == "os.PathLike":
+                # OS_PATHLIKE_V1: os.PathLike es una clase builtin (protocolo
+                # de ruta); el backend la representa como objeto de clase.
+                result = builder.temp()
+                builder.emit("builtin_class", "PathLike", result=result)
+                return result
             if alias_qual == "os.name":
                 result = builder.temp()
                 builder.emit("const", _os_name_const(), result=result)
@@ -4398,6 +4416,27 @@ class MIRLowerer:
                 builder.emit("jump", end.label)
                 builder.current = end
                 return result
+            if (
+                node.func.kind == HIRKind.ATTR
+                and node.func.value.kind == HIRKind.LOAD
+                and node.func.value.name in builder.module_aliases
+                and builder.module_aliases[node.func.value.name] == "os"
+                and node.func.attr == "fspath"
+            ):
+                # OS_FSPATH_V1: `os.fspath(x)` devuelve la ruta como str.
+                # Se intercepta ANTES de la rama generica de method-call
+                # porque esa rama evalua el receiver (`load os`) y el modulo
+                # `os` no existe como objeto en el runtime: el nombre
+                # quedaria sin resolver (NameError).
+                if node.keywords:
+                    raise MIRLoweringError("native os.fspath() does not support keyword arguments")
+                if len(node.args) != 1:
+                    raise MIRLoweringError("native os.fspath() takes exactly one argument")
+                _fspath_arg = self._lower_expr(builder, node.args[0])
+                _fspath_res = builder.temp()
+                builder.emit("os_fspath", _fspath_arg, _active_handler(builder), result=_fspath_res)
+                return _fspath_res
+
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.LOAD:
                 attr_name = node.func.attr
                 owner = self._lower_expr(builder, node.func.value)
@@ -5059,6 +5098,11 @@ class MIRLowerer:
             # objects with fields but values of the platform runtime.
             if node.value.kind == HIRKind.LOAD and node.value.name in builder.module_aliases:
                 _alias_module = builder.module_aliases[node.value.name]
+                if _alias_module == "os" and node.attr == "PathLike":
+                    # OS_PATHLIKE_V1: la clase builtin del protocolo de ruta.
+                    result = builder.temp()
+                    builder.emit("builtin_class", "PathLike", result=result)
+                    return result
                 if _alias_module == "os" and node.attr == "name":
                     result = builder.temp()
                     builder.emit("const", _os_name_const(), result=result)
@@ -5427,20 +5471,40 @@ class MIRLowerer:
         return result
 
     def _lower_print_call(self, builder: _Builder, node: HIRNode) -> str:
-        """PRINT_FILE_KW_V1: `print(a, b, file=X)` — el kwarg fija el
-        descriptor de salida de la impresion (el runtime lo restaura al
-        terminar). `sep=`/`end=` no se modelan (fail-closed)."""
-        if any(kw.arg is None or kw.arg != "file" for kw in (node.keywords or ())):
-            raise MIRLoweringError("native print() supports only the file= keyword")
+        """PRINT_FILE_KW_V1 / PRINT_END_KW_V1: `print(a, b, file=X, end=Y)`.
+
+        - `file=` fija el descriptor de salida de la impresion (el runtime
+          lo restaura al terminar).
+        - `end=` es el terminador (por defecto "\\n"). `sep=` no se modela
+          (fail-closed).
+        """
+        _kw_file = None
+        _kw_end = None
+        for kw in (node.keywords or ()):
+            if kw.arg is None or kw.arg not in {"file", "end"}:
+                raise MIRLoweringError(
+                    "native print() supports only the file= and end= keywords"
+                )
+            if kw.arg == "file":
+                if _kw_file is not None:
+                    raise MIRLoweringError("native print() accepts one file= keyword")
+                _kw_file = kw.value
+            else:
+                if _kw_end is not None:
+                    raise MIRLoweringError("native print() accepts one end= keyword")
+                _kw_end = kw.value
         values = [self._lower_expr(builder, arg) for arg in node.args]
-        if node.keywords:
-            file_value = self._lower_expr(builder, node.keywords[0].value)
+        if _kw_file is not None:
+            file_value = self._lower_expr(builder, _kw_file)
             builder.emit("print_set_fd", file_value)
+        end_value = None
+        if _kw_end is not None:
+            end_value = self._lower_expr(builder, _kw_end)
         callee = builder.temp()
         builder.emit("load", "print", result=callee)
         result = builder.temp()
-        builder.emit("call", callee, tuple(values), result=result)
-        if node.keywords:
+        builder.emit("call", callee, tuple(values), None, end_value, result=result)
+        if _kw_file is not None:
             builder.emit("print_restore_fd")
         return result
 
