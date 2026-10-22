@@ -1717,5 +1717,31 @@ class ModuleStateGatesV1(unittest.TestCase):
         self.assertEqual(_run.stderr, "aviso\n")
 
 
+class TwoPassGatesV1(unittest.TestCase):
+    """TWO_PASS_TYPES_V1: los tipos de los params se deducen de los
+    CALL-SITES, que pueden estar en otra funcion (mas tarde en el orden de
+    emision). El emitter emite dos veces: la primera recoge los tipos de los
+    call-sites, la segunda los usa. Con eso, el tipo de un ATRIBUTO DE
+    INSTANCIA (deducido de `self.x = valor` en el __init__ y del tipo del
+    argumento del constructor) llega al punto donde se usa."""
+
+    def test_instance_attribute_type_from_constructor(self):
+        # el param del __init__ recibe el tipo del argumento del constructor
+        # -> el atributo de instancia tiene tipo -> se puede iterar.
+        _assert_matches(
+            self,
+            "clase P :\n"
+            "    funcion __init__ (self , archivos ):\n"
+            "        self .archivos = archivos\n"
+            "    funcion total (self ):\n"
+            "        n = 0\n"
+            "        para x en self .archivos :\n"
+            "            n = n +1\n"
+            "        devolver n\n"
+            "p = P ([1 ,2 ,3 ])\n"
+            "imprimir (p .total ())\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

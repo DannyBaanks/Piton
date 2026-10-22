@@ -2876,11 +2876,36 @@ class LinuxCEmitter:
         # cuerpo del padre, asi que la carga de la celda en la closure ya
         # conoce el tipo capturado. Sin este orden, el tipo de una variable
         # capturada se perdia (la closure se compilaba antes que el padre).
-        for function in sorted(
-            module.functions,
-            key=lambda f: (f.name.count("__"), module.functions.index(f)),
-        ):
-            lines.extend(self._emit_function(function))
+        # TWO_PASS_TYPES_V1: los tipos de los params de una funcion se
+        # deducen de los CALL-SITES (que pueden estar en otra funcion, mas
+        # tarde en el orden de emision). Con una sola pasada, un atributo
+        # de instancia o una celda de closure se quedan sin tipo y las
+        # operaciones que lo necesitan fallan cerradas. Se emite dos veces:
+        # la primera pasada recoge los tipos de los call-sites, la segunda
+        # los usa. La primera pasada se descarta.
+        # El orden natural del MIR ya pone al padre antes que a la closure
+        # (la closure se anade al bajar el cuerpo del padre) y conserva el
+        # orden del cuerpo de la clase — no se reordena.
+        _order = list(module.functions)
+        for _pass in (0, 1):
+            # el estado del `borrar` es POR PASADA (la primera pasada no
+            # debe dejar el nombre borrado para la segunda).
+            _del_state = (
+                set(self._deleted_names),
+                {k: set(v) for k, v in self._deleted_by_function.items()},
+                dict(self._deleted_at),
+            )
+            _pass_lines: list[str] = []
+            for function in _order:
+                _pass_lines.extend(self._emit_function(function))
+            if _pass == 0:
+                # se descarta la primera pasada, pero sus tipos (los de los
+                # call-sites) quedan en los mapas del emitter.
+                self._deleted_names = _del_state[0]
+                self._deleted_by_function = _del_state[1]
+                self._deleted_at = _del_state[2]
+                continue
+            lines.extend(_pass_lines)
         if self._has_rich_runtime:
             lines.append("__attribute__((used)) int __argc=0;__attribute__((used)) char**__argv=0;")
             lines.append("static long piton_argv_new(void){PitonSeq*s=piton_seq_new(PK_LIST,__argc);for(int i=0;i<__argc;++i){piton_seq_put(s,i,(PitonSlot){(long)__argv[i],PK_STR});}return(long)s;}")
@@ -9688,6 +9713,16 @@ class LinuxCEmitter:
                 all_values = self._complete_call_args(target, [obj, *call_args])
             else:
                 all_values = self._complete_call_args(target, [obj, *call_args])
+                # CALL_ARG_TYPE_V1: el call-site de un metodo informa el tipo
+                # de sus params (el constructor de una clase: `P([1,2])` deja
+                # el tipo de la lista en el param del __init__).
+                _mparams = self.function_params.get(target) or []
+                for _mi, _mv in enumerate(all_values[1:], start=1):
+                    if _mi >= len(_mparams):
+                        break
+                    _mvt = types.get(_mv)
+                    if _mvt and _mvt != "int":
+                        self._call_param_types.setdefault(target, {})[_mparams[_mi]] = _mvt
             values = ",".join(self._value(v) for v in all_values)
             if self.function_frame_abi.get(target, False):
                 args_c = ",".join(self._value(v) for v in all_values)
