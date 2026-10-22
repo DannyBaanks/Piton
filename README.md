@@ -399,12 +399,14 @@ para afirmar la afirmación.
 ### Estado nativo verificado (2026-10-22)
 
 ```text
-Suite completa Linux: 1166 passed / 26 skipped / 133 subtests / 0 failed
+Suite completa Linux: 1172 passed / 26 skipped / 133 subtests / 0 failed
   (python3 -m pytest tests -q --ignore=tests/test_windows_validate.py,
-   CPython 3.12.3; commit 6f1fbdd)
+   CPython 3.12.3; commit df2e534)
 Corpus v4 (stdlib real, tier A, 167 archivos): adapt 100% | parse 100%
-  | MIR 14.4% | build 10.8%; fail_classes MIR_FAIL 143, BUILD_FAIL 6
-  (docs/parity_corpus_v4_report_2026-10-20_after-cell-order-v1.{json,md})
+  | MIR 14.4% | build 11.4%; fail_classes MIR_FAIL 143, BUILD_FAIL 5
+  (docs/parity_corpus_v4_report_2026-10-22_after-pct-unknown.{json,md};
+   nuevo en build: copyreg.py — '%s' con operando de tipo desconocido aplica
+   str() de runtime en vez de fallar cerrado)
 Corpus diferencial enumerativo v3: 235 casos (12 áreas)
   -> 235 EQUIV (100.0%), 0 FAIL_CLOSED, 0 DIVERGENT, 0 TIMEOUT
 Corpus diferencial v2: 221/221 EQUIV (100%)

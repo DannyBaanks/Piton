@@ -1315,6 +1315,27 @@ static const char* piton_dynamic_type_name(long bits){
     if(piton_is_printable_str((const char*)bits))return "str";}
   return "int";
 }
+/* PCT_UNKNOWN_ARG_V1: `'%s' % x` con x de tipo DESCONOCIDO (un param sin
+   inferencia) — CPython aplica str(x). La conversion es dinamica: se mira
+   el valor en runtime (misma politica que piton_print_auto: puntero
+   imprimible -> str, cabecera de coleccion -> su repr, doble -> float,
+   enteros crudos -> int). Un valor que no cae en ninguno de esos casos se
+   reporta con raise_set, no se imprime como puntero basura. */
+static const char* piton_str_of_value(long bits){
+  if(!bits)return "None";
+  if(piton_is_double_bits(bits))return (const char*)piton_str_from_float(bits);
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;
+    if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_OBJECT){
+      PitonSeq*s=(PitonSeq*)bits;
+      if(s->kind==PK_LIST||s->kind==PK_TUPLE)return (const char*)piton_str_from_seq((PitonSeq*)bits);
+      piton_raise_set("TypeError","%s format: unsupported collection value");
+      return 0;
+    }
+    if(piton_is_printable_str((const char*)bits))return (const char*)bits;
+  }
+  return (const char*)piton_str_from_int(bits);
+}
 static void piton_print_int_safe(long bits){
   /* PRINT_INT_V1: un entero cuyo tipo estático es int pero que en runtime es
    * un puntero (huecos de inferencia) se imprime como string; si no, como int. */
@@ -7140,12 +7161,14 @@ class LinuxCEmitter:
                                 # PARAM_TYPE_V1: el tipo del param puede ser
                                 # conocido (seed de uso o tipo del call-site)
                                 # -> usarlo en vez de fallar cerrado.
+                                # PCT_UNKNOWN_ARG_V1: si NO se conoce, ya no
+                                # falla cerrado: la conversion %s acepta
+                                # cualquier valor (str() de runtime), que es
+                                # lo que CPython hace con `'%s' % x`.
                                 _pt = types.get(source) or types.get(item)
                                 if _pt and _pt not in {"int", "bool", "none", ""}:
                                     return _pt
-                                raise NativeBuildError(
-                                    "Linux str % formatting a bare parameter is not supported (type unknown)"
-                                )
+                                return ""
                             return types.get(item, recorded)
                         return recorded
 
@@ -7177,18 +7200,12 @@ class LinuxCEmitter:
                             )
                             etypes.append(_resolve_etype(item, etype0))
                     else:
-                        if aliases.get(right, right) in function.params:
-                            # PARAM_TYPE_V1: si el tipo del param es conocido
-                            # (seed de uso o tipo del call-site) se usa; si no,
-                            # tratarlo como escalar imprimiria un puntero
-                            # crudo (fail-open) -> falla cerrado.
-                            _pt2 = types.get(aliases.get(right, right)) or types.get(right)
-                            if not (_pt2 and _pt2 not in {"int", "bool", "none", ""}):
-                                raise NativeBuildError(
-                                    "Linux str % formatting a bare parameter is not supported (type unknown)"
-                                )
+                        # PCT_UNKNOWN_ARG_V1: un parametro como operando
+                        # escalar ya no falla cerrado — con %s el str() de
+                        # runtime (piton_str_of_value) cubre el tipo
+                        # desconocido. La misma politica que _resolve_etype.
                         operands = [self._value(right)]
-                        etypes = [types.get(right, "int")]
+                        etypes = [types.get(right, "")]
                     if len(fields) != len(operands):
                         self._runtime_type_error(out, "not all arguments converted during string formatting")
                         types[result] = "str"
@@ -7198,8 +7215,17 @@ class LinuxCEmitter:
                     for index, (field, operand, arg_type) in enumerate(zip(fields, operands, etypes)):
                         _fname, spec, flags, width, prec = field
                         if spec == "s":
-                            if arg_type == "int":
-                                base = f"piton_str_from_int({operand})"
+                            if arg_type in {"", "int", "none"}:
+                                # PCT_UNKNOWN_ARG_V1: tipo desconocido (o
+                                # escalar entero) -> str() de runtime. Para int
+                                # es exacto; para un puntero a str el helper lo
+                                # detecta; si el valor es otra cosa, el helper
+                                # falla cerrado en vez de imprimir un puntero
+                                # crudo (el fail-open historico).
+                                # bool NO entra aqui: '%s' % True es "True",
+                                # no "1" (CPython), y el helper no lo distingue
+                                # de un entero.
+                                base = f"piton_str_of_value({operand})"
                             elif arg_type == "complex":
                                 base = f"piton_complex_str({operand})"
                             elif arg_type == "float":
