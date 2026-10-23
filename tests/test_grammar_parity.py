@@ -2248,5 +2248,75 @@ class DynamicOpsGatesV1(unittest.TestCase):
         )
 
 
+class WarningAndReprGatesV1(unittest.TestCase):
+    """EXC_HIERARCHY_V1 + PCT_REPR_*_V1 - la jerarquia de warnings y el repr de
+    runtime con `%r` (warnings.py: `category=Warning` como default y
+    `"invalid action: %r" % (action,)` con action de parametro)."""
+
+    def test_exception_hierarchy_userwarning(self):
+        # excepto UserWarning NO atrapa un Warning pelado: si la jerarquia
+        # quedara aplanada, 'mal' saldria antes que 'bien'.
+        _assert_matches(
+            self,
+            "intentar :\n"
+            "    lanzar Warning ('boom')\n"
+            "excepto UserWarning :\n"
+            "    imprimir ('mal')\n"
+            "excepto Warning :\n"
+            "    imprimir ('bien')\n",
+        )
+
+    def test_raise_and_catch_warning(self):
+        _assert_matches(
+            self,
+            "intentar :\n"
+            "    lanzar Warning ('boom')\n"
+            "excepto Warning :\n"
+            "    imprimir ('atrapado')\n",
+        )
+
+    def test_percent_repr_of_untyped_value(self):
+        # Un str sin tipo estatico sale quoted (repr), no desnudo como %s.
+        # El valor no es un literal: viene de un diccionario, asi que el
+        # camino dinamico (piton_repr_of_value) es el que se ejercita.
+        _assert_matches(
+            self,
+            "d = { }\n"
+            "d ['a' ] = 'hola'\n"
+            "x = d ['a' ]\n"
+            "imprimir ('%r' % x )\n",
+        )
+
+    def test_percent_repr_of_untyped_int(self):
+        _assert_matches(
+            self,
+            "d = { }\n"
+            "d ['a' ] = 5\n"
+            "x = d ['a' ]\n"
+            "imprimir ('%r' % x )\n",
+        )
+
+    def test_percent_repr_of_runtime_concat(self):
+        _assert_matches(
+            self,
+            "imprimir ('%r' % ('ho'+'la'))\n",
+        )
+
+    def test_percent_repr_of_sequence(self):
+        _assert_matches(
+            self,
+            "imprimir ('%r' % ([1 ,2 ,3 ],))\n"
+            "imprimir ('%r' % (('a' ,'b' ),))\n",
+        )
+
+    def test_percent_repr_message_with_untyped_parts(self):
+        _assert_matches(
+            self,
+            "funcion aviso (accion , n ):\n"
+            "    devolver 'accion invalida: %r (%r)' % (accion , n )\n"
+            "imprimir (aviso ('si' ,3 ))\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

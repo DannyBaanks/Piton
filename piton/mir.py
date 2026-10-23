@@ -10,6 +10,24 @@ from piton.hir import BoolOp, Call, ExceptHandler, HIRKind, HIRNode, Keyword, Wi
 
 
 _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError", "KeyError", "IndexError", "AttributeError", "NameError", "ZeroDivisionError", "OverflowError", "NotImplementedError"}
+# EXC_HIERARCHY_V1: builtins cuya madre NO es Exception. Se declaran aparte
+# para no aplanar la jerarquia (un `excepto UserWarning` NO debe atrapar un
+# Warning pelado). warnings.py usa Warning como default y los construye.
+_BUILTIN_EXCEPTION_PARENTS = {
+    "Warning": "Exception",
+    "UserWarning": "Warning",
+    "DeprecationWarning": "Warning",
+    "PendingDeprecationWarning": "Warning",
+    "SyntaxWarning": "Warning",
+    "RuntimeWarning": "Warning",
+    "FutureWarning": "Warning",
+    "ImportWarning": "Warning",
+    "UnicodeWarning": "Warning",
+    "BytesWarning": "Warning",
+    "ResourceWarning": "Warning",
+    "EncodingWarning": "Warning",
+}
+_BUILTIN_EXCEPTIONS |= set(_BUILTIN_EXCEPTION_PARENTS)
 # EXC_OSError_V1: raise/except de la familia OSError — el backend solo ve el
 # nombre como string (piton_raise_set + strcmp en handlers), asi que no
 # requiere runtime nuevo. IOError/EnvironmentError son aliases de OSError.
@@ -3174,7 +3192,9 @@ class MIRLowerer:
             chain.append(current)
             if current == "BaseException":
                 break
-            if current in _BUILTIN_EXCEPTIONS:
+            if current in _BUILTIN_EXCEPTION_PARENTS:
+                current = _BUILTIN_EXCEPTION_PARENTS[current]
+            elif current in _BUILTIN_EXCEPTIONS:
                 current = "Exception" if current != "Exception" else "BaseException"
             else:
                 mro = self._mro_memo.get(current) or self._compute_mro(current)

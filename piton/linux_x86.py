@@ -1341,6 +1341,31 @@ static const char* piton_str_of_value(long bits){
   }
   return (const char*)piton_str_from_int(bits);
 }
+/* PCT_REPR_UNKNOWN_V1: `%r` de un valor sin tipo estatico (warnings.py:
+   `"invalid action: %r" % (action,)` con action de parametro). Es el repr de
+   runtime: un str va entre comillas (a diferencia de `%s`), las secuencias
+   usan su repr y los escalares su forma decimal. Un bool que cruza el ABI
+   como long es indistinguible de 0/1 y sale "1"/"0" — la misma
+   representacion de bools que usa el resto del backend. dict/set/bytes
+   dinamicos fallan cerrado (exit 2) en vez de divergir. */
+static const char* piton_repr_of_value(long bits){
+  if(!bits)return "None";
+  if(piton_is_double_bits(bits))return (const char*)piton_str_from_float(bits);
+  /* el str va ANTES de la cabecera: un literal de rodata no siempre pasa
+     piton_maybe_ptr, y su repr es el quoted. */
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;
+    if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<PK_BIGINT){
+      if(ptr[1]==PK_LIST||ptr[1]==PK_TUPLE)return (const char*)piton_str_from_seq((PitonSeq*)bits);
+      piton_write(2,"TypeError: %r of a dynamically typed collection is not supported in the native subset\n",94);
+      piton_exit(2);
+    }
+  }
+  {long b2=bits;if(!b2)return "None";
+   if(piton_maybe_ptr(b2)&&piton_is_printable_str((const char*)b2))return (const char*)piton_str_quote((const char*)b2);
+   if(b2>=0x400000L&&b2<0x480000L)return "None";}
+  return (const char*)piton_str_from_int(bits);
+}
 static void piton_print_int_safe(long bits){
   /* PRINT_INT_V1: un entero cuyo tipo estático es int pero que en runtime es
    * un puntero (huecos de inferencia) se imprime como string; si no, como int.
@@ -7761,12 +7786,22 @@ class LinuxCEmitter:
                                 base = f"piton_str_quote((const char*){operand})"
                             elif arg_type == "bool":
                                 base = f'({operand}?"True":"False")'
-                            elif arg_type == "int":
-                                base = f"piton_str_from_int({operand})"
+                            elif arg_type in {"int", ""}:
+                                # PCT_REPR_UNKNOWN_V1: un entero, y sobre todo
+                                # un parametro (que vale "int" por defecto pero
+                                # en runtime puede no serlo), se resuelven con
+                                # el repr de runtime: la misma politica que
+                                # `%s`, que ya trata "int" como desconocido.
+                                base = f"piton_repr_of_value({operand})"
                             elif arg_type == "float":
                                 base = f"piton_str_from_float({operand})"
                             elif arg_type == "none":
                                 base = '"None"'
+                            elif arg_type in {"list", "tuple"}:
+                                # PCT_REPR_SEQ_V1: `%r` de una secuencia es su
+                                # repr (mismo helper que `%s`, que ya imprime
+                                # con las marcas de lista/tupla).
+                                base = f"piton_str_from_seq((PitonSeq*){operand})"
                             elif arg_type.startswith("object:"):
                                 # PCT_REPR_OBJECT_V1: el repr de una
                                 # instancia usa el hook __repr__ del runtime
