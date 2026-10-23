@@ -2026,5 +2026,123 @@ class CorpusBuildFailGatesV1(unittest.TestCase):
         )
 
 
+class SliceDynamicGatesV1(unittest.TestCase):
+    """SLICE_DYNAMIC_V1 / SLICE_ASSIGN_DYNAMIC_V1.
+
+    El tipo estatico del valor no es una secuencia conocida (warnings.py:
+    `self._filters[:]` sobre un atributo de modulo; protocols.py:
+    `buf[:data_len] = data` con buf bytearray de parametro). La cabecera del
+    valor decide en runtime, igual que CPython.
+    """
+
+    _DICT_CON = (
+        "funcion f ():\n"
+        "    d = { }\n"
+        "    d ['a' ] = %s\n"
+        "    x = d ['a' ]\n"
+        "%s"
+        "f ()\n"
+    )
+
+    def test_dynamic_slice_of_list(self):
+        _assert_matches(
+            self,
+            self._DICT_CON % ("[1 ,2 ,3 ,4 ]", "    imprimir (x [1 :3 ])\n"),
+        )
+
+    def test_dynamic_slice_with_step(self):
+        _assert_matches(
+            self,
+            self._DICT_CON % ("[1 ,2 ,3 ,4 ,5 ]", "    imprimir (x [0 :5 :2 ])\n"),
+        )
+
+    def test_dynamic_slice_of_bytes(self):
+        _assert_matches(
+            self,
+            self._DICT_CON % ("b'abcdef'", "    imprimir (x [1 :3 ])\n"),
+        )
+
+    def test_dynamic_slice_assign_on_bytearray(self):
+        # protocols.py: buf[:data_len] = data
+        _assert_matches(
+            self,
+            self._DICT_CON % (
+                "bytearray (b'abcdef' )",
+                "    x [1 :3 ] = b'ZZ'\n"
+                "    imprimir (x [0 :4 ])\n",
+            ),
+        )
+
+    def test_dynamic_slice_of_int_raises_type_error(self):
+        # CPython: TypeError -> exit 1 y stdout vacio.
+        _assert_matches(self, self._DICT_CON % ("7", "    imprimir (x [1 :2 ])\n"))
+
+    def test_dynamic_len_of_bytes(self):
+        # LEN_DYNAMIC_V1 cubria solo hasta PK_OBJECT: bytes/bytearray/range
+        # (enum por encima) caian al TypeError.
+        _assert_matches(self, self._DICT_CON % ("b'abc'", "    imprimir (len (x ))\n"))
+
+
+class NestedAttrAndStarGatesV1(unittest.TestCase):
+    """ATTR_CHAIN_STORE_V1 / CALL_STAR_DYNAMIC_V1.
+
+    Ambos venian de warnings.py: `self._module.filters = x` (ATTR anidado) y
+    `simplefilter(*self._filters)` (star de tipo desconocido).
+    """
+
+    def test_nested_attribute_store(self):
+        _assert_matches(
+            self,
+            "clase Caja :\n"
+            "    funcion __init__ (self , v ):\n"
+            "        self . valor = v\n"
+            "clase Envoltorio :\n"
+            "    funcion __init__ (self ):\n"
+            "        self . caja = Caja (7 )\n"
+            "    funcion poner (self , v ):\n"
+            "        self . caja . valor = v\n"
+            "    funcion leer (self ):\n"
+            "        devolver self . caja . valor\n"
+            "e = Envoltorio ()\n"
+            "e . poner (9 )\n"
+            "imprimir (e . leer ())\n",
+        )
+
+    def test_star_of_untyped_list(self):
+        # CALL_STAR_DYNAMIC_V1: el valor es una lista en runtime aunque su
+        # tipo estatico no lo diga.
+        _assert_matches(
+            self,
+            "funcion suma (a , b ):\n"
+            "    devolver a + b\n"
+            "funcion f ():\n"
+            "    d = { }\n"
+            "    d ['x' ] = [1 ,2 ]\n"
+            "    valores = d ['x' ]\n"
+            "    devolver suma (*valores )\n"
+            "imprimir (f ())\n",
+        )
+
+    def test_star_of_int_raises_type_error(self):
+        # CPython: TypeError -> exit 1 y stdout vacio.
+        _assert_matches(
+            self,
+            "funcion ident (a ):\n"
+            "    devolver a\n"
+            "imprimir (ident (*5 ))\n",
+        )
+
+    def test_star_type_error_is_catchable(self):
+        _assert_matches(
+            self,
+            "funcion ident (a ):\n"
+            "    devolver a\n"
+            "intentar :\n"
+            "    imprimir (ident (*5 ))\n"
+            "excepto TypeError :\n"
+            "    imprimir ('capturado' )\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

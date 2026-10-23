@@ -1343,8 +1343,15 @@ static const char* piton_str_of_value(long bits){
 }
 static void piton_print_int_safe(long bits){
   /* PRINT_INT_V1: un entero cuyo tipo estático es int pero que en runtime es
-   * un puntero (huecos de inferencia) se imprime como string; si no, como int. */
-  if(piton_maybe_ptr(bits)&&piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}
+   * un puntero (huecos de inferencia) se imprime como string; si no, como int.
+   * PRINT_DYNAMIC_KIND_V1: si el puntero lleva cabecera de coleccion (el valor
+   * viene de un slice/llamada de tipo dinamico) se imprime su repr con el
+   * mismo criterio que piton_print_auto, no como numero. */
+  if(piton_maybe_ptr(bits)){
+    if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}
+    {long*ptr=(long*)bits;long k=ptr[1];
+     if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}}
+  }
   piton_write_int(bits);
 }
 static void piton_print_auto(long bits){if(bits==0){piton_write(piton_print_fd,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
@@ -1966,7 +1973,10 @@ static long piton_ord_dynamic(long v){
 static long piton_len_dynamic(long bits){
   if(!bits){piton_raise_set("TypeError","object of type 'NoneType' has no len()");return 0;}
   if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
-    if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){
+    /* LEN_DYNAMIC_V1: el rango debe cubrir TODAS las cabeceras (el enum pone
+       bigint/range/bytes/bytearray/complex/frozenset/slice/memoryview por
+       encima de PK_OBJECT), o las ramas de bytes quedan muertas. */
+    if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW){
       if(k==PK_LIST||k==PK_TUPLE)return ((PitonSeq*)bits)->length;
       if(k==PK_DICT)return ((PitonDict*)bits)->length;
       if(k==PK_SET||k==PK_FROZENSET)return ((PitonSet*)bits)->length;
@@ -2018,6 +2028,88 @@ static void piton_bytearray_slice_assign(PitonByteArray* ba, long lo, long hi, l
         long pos=lo+(st>0?i*st:-(i*(-st)));
         ba->data[pos]=src[i];
     }
+}
+/* SLICE_DYNAMIC_V1: el tipo estatico del valor NO es una secuencia conocida
+   (warnings.py: `self._filters[:]` sobre un atributo de modulo sin tipo). La
+   cabecera decide en runtime. Una secuencia se corta como CPython (el kind del
+   header manda al imprimir); un str dinamico falla cerrado con exit 2 (su
+   resultado tendria tipo estatico desconocido); el resto levanta el TypeError
+   de CPython. */
+static long piton_slice_dynamic(long bits,long lo,long hi,long has_step,long step){
+  if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>=0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW){
+      if(k==PK_LIST||k==PK_TUPLE)
+        return has_step?piton_seq_slice_step((PitonSeq*)bits,lo,hi,step)
+                       :piton_seq_slice((PitonSeq*)bits,lo,hi);
+      if(k==PK_BYTES)
+        return has_step?piton_bytes_slice_step((PitonBytes*)bits,lo,hi,step)
+                       :(long)piton_bytes_slice((PitonBytes*)bits,lo,hi);
+      if(k==PK_BYTEARRAY)
+        return has_step?piton_bytearray_slice_step((PitonByteArray*)bits,lo,hi,step)
+                       :(long)piton_bytearray_slice((PitonByteArray*)bits,lo,hi);
+      if(k==PK_RANGE)
+        return has_step?piton_range_slice_step((PitonRange*)bits,lo,hi,step)
+                       :piton_range_slice((PitonRange*)bits,lo,hi);
+    }
+    if(piton_is_printable_str((const char*)bits)){
+      piton_write(2,"TypeError: slice of a dynamically typed str is not supported in the native subset\n",88);
+      piton_exit(2);
+      return 0;
+    }
+  }
+  piton_raise_set("TypeError","object is not subscriptable");
+  return 0;
+}
+/* SLICE_ASSIGN_DYNAMIC_V1: destino de slice-store sin tipo anotado
+   (protocols.py: `buf[:data_len] = data` con buf bytearray de parametro). Solo
+   bytearray <- bytes/bytearray se resuelve; list/str (que CPython SI acepta)
+   fallan cerrado con exit 2 en vez de divergir en silencio, y bytes/tuple
+   levantan el TypeError de CPython. */
+static void piton_slice_assign_dynamic(long bits,long lo,long hi,long step,long src){
+  if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>=0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW){
+      if(k==PK_BYTEARRAY){
+        long kk=0;
+        if(piton_maybe_ptr(src)){kk=((long*)src)[1];}
+        if(kk==PK_BYTES||kk==PK_BYTEARRAY){
+          piton_bytearray_slice_assign((PitonByteArray*)bits,lo,hi,step,
+            (const unsigned char*)piton_bytes_data_ptr_of(src),piton_bytes_len_of(src));
+          return;
+        }
+        piton_write(2,"TypeError: bytearray slice assignment requires bytes/bytearray value\n",72);
+        piton_exit(1);
+        return;
+      }
+      if(k==PK_BYTES||k==PK_TUPLE||k==PK_STR){
+        piton_raise_set("TypeError","object does not support item assignment");
+        piton_report_unhandled();
+        piton_exit(1);
+        return;
+      }
+      piton_write(2,"TypeError: slice assignment of a dynamically typed sequence is not supported in the native subset\n",101);
+      piton_exit(2);
+      return;
+    }
+  }
+  piton_raise_set("TypeError","object does not support item assignment");
+  piton_report_unhandled();
+  piton_exit(1);
+}
+/* CALL_STAR_DYNAMIC_V1: `f(*x)` con x sin tipo estatico (warnings.py:
+   `simplefilter(*self._filters)`). El kind lo dice la cabecera; si no es una
+   lista/tupla se levanta el TypeError de CPython. Los iterables que CPython
+   acepta y el subset no (set, genexpr) siguen siendo un hueco documentado:
+   el build NO se relaja para tipos conocidos, solo para los desconocidos. */
+static long piton_unpack_seq4_dynamic(long bits,long capacity,long*out4){
+  if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>=0&&ptr[0]<1000000L&&(k==PK_LIST||k==PK_TUPLE)){
+      PitonSeq*s=(PitonSeq*)bits;
+      if(s->length>capacity){piton_raise_set("TypeError","too many positional arguments for call");return -1;}
+      for(long i=0;i<s->length;++i)out4[i]=s->items[i].bits;
+      return s->length;
+    }}
+  piton_raise_set("TypeError","argument after * must be a list or tuple");
+  return -1;
 }
 static void piton_bytearray_append(PitonByteArray* ba, long val){
     if(!ba)return;
@@ -9549,7 +9641,14 @@ class LinuxCEmitter:
                     )
                     return out
                 raise NativeBuildError("Linux bytearray slice assignment requires bytes/bytearray value")
-            raise NativeBuildError(f"Linux slice assignment not supported for {coll_type}")
+            # SLICE_DYNAMIC_V1: destino sin tipo anotado (protocols.py).
+            out.append(
+                f"    piton_slice_assign_dynamic({self._value(collection)},"
+                f"{self._value(lo)},{self._value(hi)},"
+                f"{self._value(step) if step is not None else 1},"
+                f"(long){self._value(value)});"
+            )
+            return out
         elif op == "subscript_store":
             collection, index, value = args
             coll_type = types.get(collection, "")
@@ -10947,7 +11046,16 @@ class LinuxCEmitter:
                         self._mv_noncontig.add(result)
                     return out
                 else:
-                    raise NativeBuildError(f"Linux slice not supported for {collection_type}")
+                    # SLICE_DYNAMIC_V1: tipo no conocido -> lo decide el runtime
+                    # (secuencia si lo es, TypeError si no).
+                    out.append(
+                        f"    {_name(result)}=piton_slice_dynamic({self._value(coll)},"
+                        f"{lower_value},{upper_value},0,0);"
+                    )
+                    self._emit_exc_check(out, function, None)
+                    # tipo DINAMICO: la forma la decide el header; imprimir
+                    # pasa por el despacho por cabecera de print_int_safe.
+                    types[result] = "int"
                 return out
             lower_value = self._value(lower) if lower is not None else "(-0x7FFFFFFFFFFFFFFFL-1)"
             upper_value = self._value(upper) if upper is not None else "0x7FFFFFFFFFFFFFFFL"
@@ -10976,7 +11084,13 @@ class LinuxCEmitter:
                 if step_value != "1" or coll in self._mv_noncontig:
                     self._mv_noncontig.add(result)
             else:
-                raise NativeBuildError(f"Linux slice not supported for {collection_type}")
+                # SLICE_DYNAMIC_V1: igual que sin step, decidido en runtime.
+                out.append(
+                    f"    {_name(result)}=piton_slice_dynamic({self._value(coll)},"
+                    f"{lower_value},{upper_value},1,{step_value});"
+                )
+                self._emit_exc_check(out, function, None)
+                types[result] = "int"
         elif op == "collection_len":
             coll = args[0]
             collection_type = types.get(coll)
@@ -11181,9 +11295,10 @@ class LinuxCEmitter:
                 out.append("    }")
                 types[result] = "int"
                 return out
-            for part in pos_parts:
-                if part[0] == "star" and types.get(part[1]) not in {"list", "tuple"}:
-                    raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1: * operand must be a statically-known list or tuple")
+            # CALL_STAR_DYNAMIC_V1: el `*` que no es list/tuple estatico se
+            # decide en runtime. Es al menos tan fiel como el build error: un
+            # int real levanta el TypeError de CPython (capturable con
+            # intentar/excepto) y un valor que SI era secuencia compila.
             for part in kw_parts:
                 if part[0] == "kwstar" and types.get(part[2]) != "dict":
                     raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1: ** operand must be a dict")
@@ -11203,8 +11318,12 @@ class LinuxCEmitter:
                 if part[0] == "value":
                     out.append(f"    if(f_{site}>={n_params}){{piton_raise_set(\"TypeError\",\"too many positional arguments for call\");goto {site}_runtime_err;}}")
                     out.append(f"    b_{site}[(int)f_{site}]=(long)({self._value(part[1])}); m_{site}|=1LL<<(int)f_{site}; f_{site}+=1;")
-                else:
+                elif types.get(part[1]) in {"list", "tuple"}:
                     out.append(f"    long n_{site}=piton_unpack_seq4((PitonSlot){{(long){self._value(part[1])},{'PK_LIST' if types.get(part[1]) == 'list' else 'PK_TUPLE'}}},{n_params}-f_{site},b_{site}+(int)f_{site});")
+                    out.append(f"    if(n_{site}<0)goto {site}_runtime_err; if(n_{site}>0){{m_{site}|=((1LL<<n_{site})-1)<<(int)f_{site}; f_{site}+=n_{site};}}")
+                else:
+                    # CALL_STAR_DYNAMIC_V1
+                    out.append(f"    long n_{site}=piton_unpack_seq4_dynamic((long){self._value(part[1])},{n_params}-f_{site},b_{site}+(int)f_{site});")
                     out.append(f"    if(n_{site}<0)goto {site}_runtime_err; if(n_{site}>0){{m_{site}|=((1LL<<n_{site})-1)<<(int)f_{site}; f_{site}+=n_{site};}}")
             for part in kw_parts:
                 if part[0] == "keyword":

@@ -542,7 +542,11 @@ class MIRLowerer:
                 builder.emit("cell_store", target.name, value)
             else:
                 builder.emit("store", target.name, value)
-        elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
+        elif target.kind == HIRKind.ATTR:
+            # ATTR_CHAIN_STORE_V1: el dueño puede ser cualquier expresion, no
+            # solo un LOAD (`self._module.filters = x` es ATTR(ATTR(self,
+            # _module), filters) y caia al runtime_call set_target, que el
+            # backend no implementa).
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
         elif target.kind == HIRKind.SUBSCR:
