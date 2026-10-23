@@ -1936,6 +1936,29 @@ static long piton_bytes_endswith(void* raw, PitonSlot v){
  * encoge el buffer); con step != 1 exige longitud EXACTA. El rastreo de
  * capacidad espeja piton_bytearray_append. */
 static long piton_bytes_len_of(long raw){long n=0;(void)piton_bytes_get_data((void*)raw,&n);return n;}
+/* IN_STR_DYNAMIC_V1: el needle de `x in <str>` sin tipo estatico fiable se
+   decide en runtime: un str imprimible es busqueda de subcadena, cualquier
+   otra cosa es el TypeError de CPython (netrc.py: `ch in self.whitespace`
+   con `ch` sin tipo; el tipo "int" por defecto era un hueco de inferencia). */
+static long piton_str_contains_dynamic(const char*h,long needle){
+  if(needle&&piton_maybe_ptr(needle)&&piton_is_printable_str((const char*)needle))
+    return piton_str_contains(h,(const char*)needle);
+  piton_raise_set("TypeError","'in <string>' requires string as left operand");
+  return 0;
+}
+/* ORD_DYNAMIC_V1: ord() de un valor sin tipo estatico (curses/ascii.py:
+   `ord(c)` con c de origen desconocido). La longitud y el tipo se deciden en
+   runtime; fuera del caso valido se levanta el TypeError de CPython. */
+static long piton_ord_dynamic(long v){
+  if(v&&piton_maybe_ptr(v)&&piton_is_printable_str((const char*)v)){
+    const char*s=(const char*)v;
+    if(piton_strlen(s)==1)return (long)(unsigned char)s[0];
+    piton_raise_set("TypeError","ord() expected a character, but string of length != 1 found");
+    return 0;
+  }
+  piton_raise_set("TypeError","ord() expected string of length 1");
+  return 0;
+}
 /* LEN_DYNAMIC_V1: len() de un valor cuyo tipo estatico NO se conoce. La
    verdad la decide la cabecera en runtime; si no es una coleccion se levanta
    el TypeError de CPython en vez de inventar un numero. protocols.py:
@@ -4306,8 +4329,22 @@ class LinuxCEmitter:
             elif method == "update":
                 # DICT_UPDATE_V1: merge otro dict (V1: solo dict -> dict);
                 # CPython args iterable/kwargs quedan fuera.
-                require_count((1,), "one argument (a dict)")
-                if types.get(call_args[0], "") != "dict":
+                require_count((1,), "one argument (a dict or pairs)")
+                _upd_type = types.get(call_args[0], "")
+                if _upd_type in {"genexpr", "iterator:genexpr"}:
+                    # DICT_UPDATE_PAIRS_V1: dict.update(genexpr de pares) —
+                    # CPython acepta un iterable de pares (multiprocessing/
+                    # __init__.py: globals().update((name, getattr(...)) ...)).
+                    # El genexpr ya esta materializado como secuencia de tuplas
+                    # y dict() lo convierte con el mismo helper de
+                    # DICT_FROM_PAIRS_V1.
+                    out.append(
+                        f"    piton_dict_update((PitonDict*){operand},"
+                        f"(PitonDict*)piton_conv_dict_from_genexpr({self._value(call_args[0])}));"
+                    )
+                    types[result] = "none"
+                    return out
+                if _upd_type != "dict":
                     raise NativeBuildError("Linux dict.update() requires a dict argument")
                 out.append(f"    piton_dict_update((PitonDict*){operand},(PitonDict*){self._value(call_args[0])});")
                 types[result] = "none"
@@ -5249,10 +5286,14 @@ class LinuxCEmitter:
         # ejemplo) se compara por IDENTIDAD (los bits del puntero) — que es
         # lo que hace CPython para `base in (object, type)`.
         if (
-            needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex",
-                                "tuple", "list"}
+            haystack_type != "str"
+            and needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex",
+                                    "tuple", "list"}
             and not needle_type.startswith(("object:", "class:"))
         ):
+            # IN_STR_DYNAMIC_V1: con haystack str el needle lo decide el
+            # runtime (piton_str_contains_dynamic), asi que el guard no
+            # aplica; para el resto de haystacks sigue fail-closed.
             raise NativeBuildError(
                 f"Linux 'in' requires an int/bool/str/bytes/bytearray/complex/"
                 f"tuple/list/object needle, not {needle_type}"
@@ -5269,7 +5310,20 @@ class LinuxCEmitter:
             return
         if haystack_type == "str":
             if needle_type != "str":
-                raise NativeBuildError("Linux 'in' on str requires a str needle")
+                # IN_STR_DYNAMIC_V1: el needle que no es str estatico no es
+                # un fallo de build: en CPython es un TypeError de runtime
+                # (`5 in 'ab'`) o un str que la inferencia no vio (netrc).
+                _h_op = self._value(right)
+                _n_op = self._value(left)
+                expression = f"piton_str_contains_dynamic((const char*){_h_op},{_n_op})"
+                prefix = "!" if negate else ""
+                out.append(f"    {_name(result)}={prefix}{expression};")
+                if function is not None:
+                    self._emit_exc_check(out, function, handler_label)
+                else:
+                    out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
+                types[result] = "bool"
+                return
             expression = f"piton_str_contains((const char*){self._value(right)},(const char*){self._value(left)})"
         elif haystack_type in {"list", "tuple"}:
             expression = f"piton_seq_contains((PitonSeq*){self._value(right)},{self._slot(left, types)})"
@@ -6173,6 +6227,40 @@ class LinuxCEmitter:
                     return literal_type(operand)
 
 
+                # RETBLOCK_REACHABLE_V1: el lowering SIEMPRE cierra con un
+                # bloque `return None` aunque sea inalcanzable (curses/ascii.
+                # _ctoi: las dos ramas retornan y aun asi hay un b3 huerfano
+                # con `return None`). Contarlo tipaba la funcion "none" y el
+                # caller veia un needle/valor none. Solo se descarta ese
+                # bloque final si NINGUN jump/branch lo referencia (los bloques
+                # de handler viven dentro del cuerpo y no son el ultimo).
+                _referenced: set[str] = set()
+                for _b in function.blocks:
+                    for _i in _b.instructions:
+                        if _i.op in {"jump", "branch"}:
+                            for _t in _i.args:
+                                if isinstance(_t, str):
+                                    _referenced.add(_t)
+                _dead_tail: set[str] = set()
+                for _b in function.blocks:
+                    # solo la forma SINTETICA exacta: `const None` + `return`
+                    # y sin ninguna referencia. Un bloque con `return n` (el
+                    # del bucle) NO es sintetico aunque no lo salte nadie: la
+                    # caida natural lo alcanza.
+                    _ins = _b.instructions
+                    if _ins and _b.label not in _referenced and all(
+                        _i.op in {"const", "return"} for _i in _ins
+                    ) and _ins[-1].op == "return":
+                        # dos formas del mismo bloque sintetico:
+                        #   [return (None,)]                 (const plegada)
+                        #   [const (None,), return ('%4',)]  (const como temp)
+                        _ret_arg = _ins[-1].args[0] if _ins[-1].args else None
+                        if _ret_arg is None or any(
+                            _i.op == "const" and _i.args == (None,) and _i.result == _ret_arg
+                            for _i in _ins
+                        ):
+                            _dead_tail.add(_b.label)
+
                 changed = True
                 while changed:
                     changed = False
@@ -6253,7 +6341,8 @@ class LinuxCEmitter:
                                 else:
                                     changed = note_var(target, literal_type(source)) or changed
                             elif op == "return":
-                                returns.append(iargs[0] if iargs else None)
+                                if block.label not in _dead_tail:
+                                    returns.append(iargs[0] if iargs else None)
                     if function.self_class and function.params and function.params[0] not in seeded:
                         seeded.add(function.params[0])
                         changed = note_var(function.params[0], f"object:{function.self_class}") or changed
@@ -7865,7 +7954,10 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}={expression};")
             types[result] = "int"
         elif op == "compare":
-            operator, left, right = args
+            operator, left, right = args[0], args[1], args[2]
+            # IN_GUARD_V1: 4to arg opcional = handler del intentar activo
+            # (solo lo traen las comparaciones de pertenencia).
+            compare_handler = args[3] if len(args) > 3 else None
             if operator in {"es", "no es"}:
                 # IS_IDENTITY_V1: `es` is IDENTITY, not equality. The raw C `==`
                 # answered True for `1 es Verdadero` (both are 1) where CPython
@@ -7890,7 +7982,8 @@ class LinuxCEmitter:
                 # ("expected ')' before 'en'"). The parity gate only covered
                 # `no en`, so the hole survived; the enumerative corpus found it.
                 self._emit_contains(out, result, left, right, types,
-                                    negate=(operator == "no en"), function=function)
+                                    negate=(operator == "no en"), function=function,
+                                    handler_label=compare_handler)
                 return out
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
@@ -8611,7 +8704,13 @@ class LinuxCEmitter:
                 if function_name in {"chr", "bin"} and arg_type not in {"int", "bool"}:
                     raise NativeBuildError(f"Linux {function_name} requires an int argument")
                 if function_name == "ord" and arg_type != "str":
-                    raise NativeBuildError("Linux ord requires a str argument")
+                    # ORD_DYNAMIC_V1: `ord(x)` con x de tipo desconocido se
+                    # decide en runtime (CPython levanta TypeError si no es
+                    # un caracter). curses/ascii.py: `ord(c)`.
+                    out.append(f"    {_name(result)}=piton_ord_dynamic({self._value(values[0])});")
+                    self._emit_exc_check(out, function, call_handler)
+                    types[result] = "int"
+                    return out
                 helper = f"piton_{function_name}"
                 if function_name == "ord":
                     out.append(f"    {_name(result)}={helper}((const char*){self._value(values[0])});")

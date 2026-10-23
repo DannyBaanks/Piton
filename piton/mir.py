@@ -5596,7 +5596,14 @@ class MIRLowerer:
 
     def _compare(self, builder: _Builder, op: str, left: Any, right: Any) -> str:
         result = builder.temp()
-        builder.emit("compare", op, left, right, result=result)
+        if op in {"en", "no en", "in"}:
+            # IN_GUARD_V1: la pertenencia en str puede levantar TypeError en
+            # runtime (needle no-str); el handler del intentar activo viaja en
+            # el op para que sea capturable, igual que en `//`/`%`/`<<`.
+            builder.emit("compare", op, left, right, _active_handler(builder),
+                         result=result)
+        else:
+            builder.emit("compare", op, left, right, result=result)
         return result
 
     def _lower_variadic_call(
