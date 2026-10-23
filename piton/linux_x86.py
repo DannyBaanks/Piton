@@ -1447,6 +1447,30 @@ static long piton_unpack_len_dynamic(long bits){
   piton_raise_set("TypeError","cannot unpack non-iterable object");
   return -1;
 }
+/* STR_PREFIX_DYNAMIC_V1: `s.startswith(p)` / `s.endswith(p)` con p sin tipo
+   estatico (warnings.py: el prefijo viene de un parametro). CPython exige un
+   str: un valor que no lo es levanta el MISMO TypeError, no divergencia. El
+   orden importa: un puntero menor que la imagen (0x400000) es un entero, y
+   solo se desreferencia una direccion que esta dentro de la imagen o de los
+   buffers de PITON. */
+static long piton_str_prefix_dyn(long self,long v,int end){
+  const char*msg=end?"endswith":"startswith";
+  /* Convencion del modulo (ver el docstring de _emit_str_method): un metodo
+     de str reporta y sale, no levanta bandera capturable. */
+  if(!v){piton_raise_set("TypeError","startswith first arg must be str or a tuple of str, not None");piton_report_unhandled();piton_exit(1);}
+  if(!piton_maybe_ptr(v)){
+    if(v<0x400000L){piton_raise_set("TypeError","startswith first arg must be str or a tuple of str, not int");piton_report_unhandled();piton_exit(1);}
+    if(!piton_is_printable_str((const char*)v)){piton_raise_set("TypeError","startswith first arg must be str or a tuple of str, not int");piton_report_unhandled();piton_exit(1);}
+  }else{
+    long*ptr=(long*)v;
+    if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_OBJECT){
+      piton_raise_set("TypeError","startswith first arg must be str or a tuple of str, not a collection");
+      piton_report_unhandled();piton_exit(1);
+    }
+  }
+  return end?piton_str_endswith((const char*)self,(const char*)v)
+             :piton_str_startswith((const char*)self,(const char*)v);
+}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 /* RAISE_VALUE_V1: `raise <instancia>` — el valor Levantado viaja al runtime
    (el backend solo llevaba el NOMBRE del tipo y el mensaje). */
@@ -3971,6 +3995,10 @@ class LinuxCEmitter:
                 )
             while i < n and pres[i].isdigit():
                 i += 1
+        # FMT_SPEC_S_V1: `{:s}` es la presentacion de str; para un str el
+        # especificador no cambia nada (como en CPython con `format(x, "s")`).
+        if i < n and pres[i] == "s" and i == n - 1:
+            i += 1
         if i != n:
             raise NativeBuildError(f"str.format(): unsupported format spec {pres!r}")
 
@@ -3981,7 +4009,7 @@ class LinuxCEmitter:
         if not spec:
             return ""
         t = spec[-1]
-        if t in "dxXobfeEgGFgn%":
+        if t in "dxXobfeEgGFgn%s":
             return spec[:-1]
         return spec
 
@@ -4779,7 +4807,16 @@ class LinuxCEmitter:
                 return
             require_count(1, "exactly one str argument")
             helper = "piton_str_startswith" if method == "startswith" else "piton_str_endswith"
-            out.append(f"    {_name(result)}={helper}((const char*){operand},{require_str(0, 'a str argument')});")
+            _p0 = call_args[0]
+            if types.get(_p0) in {"", "int", "none"}:
+                # STR_PREFIX_DYNAMIC_V1: el prefijo no tiene tipo estatico; el
+                # runtime levanta el TypeError de CPython si no es un str.
+                out.append(
+                    f"    {_name(result)}=piton_str_prefix_dyn((const char*){operand},"
+                    f"{self._value(_p0)},{1 if method == 'endswith' else 0});"
+                )
+            else:
+                out.append(f"    {_name(result)}={helper}((const char*){operand},{require_str(0, 'a str argument')});")
             types[result] = "bool"
         elif method in {"removeprefix", "removesuffix"}:
             require_count(1, "exactly one str argument")
@@ -8856,10 +8893,21 @@ class LinuxCEmitter:
                 types[result] = "str"
                 return out
             elif function_name in {"all", "any"}:
-                if len(values) != 1 or types.get(values[0]) not in {"list", "tuple"}:
-                    raise NativeBuildError(f"Linux {function_name} requires one list or tuple (M14 v1)")
+                if len(values) != 1:
+                    raise NativeBuildError(f"Linux {function_name} requires one argument (M14 v1)")
                 helper = "piton_all_seq" if function_name == "all" else "piton_any_seq"
-                out.append(f"    {_name(result)}={helper}((PitonSeq*){self._value(values[0])});")
+                if types.get(values[0]) in {"genexpr", "iterator:genexpr"}:
+                    # ANY_GENEXPR_V1: `any(f(x) for x in xs)` materializa el
+                    # genexpr (warnings.py: `any(filename.startswith(t) ...)`).
+                    out.append(
+                        f"    {_name(result)}={helper}((PitonSeq*)piton_genexpr_to_list({self._value(values[0])}));"
+                    )
+                elif types.get(values[0]) in {"list", "tuple"}:
+                    out.append(f"    {_name(result)}={helper}((PitonSeq*){self._value(values[0])});")
+                else:
+                    raise NativeBuildError(
+                        f"Linux {function_name} requires one list, tuple or generator expression (M14 v1)"
+                    )
                 types[result] = "bool"
             elif function_name == "divmod":
                 if len(values) != 2:

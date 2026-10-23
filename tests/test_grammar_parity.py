@@ -2318,5 +2318,59 @@ class WarningAndReprGatesV1(unittest.TestCase):
         )
 
 
+class WarningPathGatesV1(unittest.TestCase):
+    """STR_PREFIX_DYNAMIC_V1 / ANY_GENEXPR_V1 / FMT_SPEC_S_V1 — el camino que
+    sigue warnings.py dentro del corpus (build 46 / BUILD_FAIL 4)."""
+
+    def test_startswith_with_untyped_prefix(self):
+        # warnings.py: `filename.startswith(t)` con t de parametro. Un prefijo
+        # que no es str levanta el TypeError de CPython, no divergencia.
+        _assert_matches(
+            self,
+            "d = { }\n"
+            "d ['k' ] = 'pycache/mod.py'\n"
+            "fn = d ['k']\n"
+            "t = d ['k']\n"
+            "imprimir (1 si fn . startswith (t ) sino 0)\n",
+        )
+
+    def test_startswith_rejects_int_prefix(self):
+        _assert_matches(
+            self,
+            "d = { }\n"
+            "d ['k' ] = 'hola'\n"
+            "d ['n' ] = 5\n"
+            "fn = d ['k']\n"
+            "p = d ['n']\n"
+            "imprimir (1 si fn . startswith (p ) sino 0)\n",
+        )
+
+    def test_any_of_genexpr(self):
+        # warnings.py: `any(filename.startswith(t) for t in skip_file_prefixes)`
+        _assert_matches(
+            self,
+            "d = { }\n"
+            "d ['k' ] = 'hola.py'\n"
+            "fn = d ['k']\n"
+            "prefijos = ['x' ,'ho' ]\n"
+            "imprimir (1 si any (fn . startswith (t )para t en prefijos ) sino 0)\n"
+            "imprimir (1 si any (fn . startswith (t )para t en ['z' ]) sino 0)\n",
+        )
+
+    def test_any_of_list_still_works(self):
+        _assert_matches(
+            self,
+            "imprimir (1 si any ([0 ,0 ,1 ]) sino 0)\n"
+            "imprimir (1 si all ([1 ,1 ]) sino 0)\n",
+        )
+
+    def test_format_spec_s(self):
+        # warnings.py: "not '{:s}'".format(...)
+        _assert_matches(
+            self,
+            "imprimir ('no era {:s}'. format ('Warning'))\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
