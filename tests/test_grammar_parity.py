@@ -2434,5 +2434,40 @@ class MinmaxAndZipGatesV1(unittest.TestCase):
         )
 
 
+class ListDynamicGatesV1(unittest.TestCase):
+    """LIST_OF_DYNAMIC_V1: `lista(x)` con x sin tipo estatico.
+
+    Misma politica que len/ord/slice dinamicos: el runtime decide por la
+    cabecera, los escalares no-iterables levantan el TypeError de CPython y un
+    dict/set/range (que CPython tambien convierte) falla cerrado con exit 2."""
+
+    def test_list_of_untyped_str(self):
+        _assert_matches(
+            self,
+            "d = { }\n"
+            "d ['a' ] = 'hola'\n"
+            "x = d ['a']\n"
+            "imprimir (list (x ))\n",
+        )
+
+    def test_list_of_untyped_list(self):
+        _assert_matches(
+            self,
+            "d = { }\n"
+            "d ['a' ] = [1 ,2 ]\n"
+            "x = d ['a']\n"
+            "imprimir (list (x ))\n",
+        )
+
+    def test_list_of_untyped_int_raises_type_error(self):
+        _assert_matches(
+            self,
+            "d = { }\n"
+            "d ['a' ] = 5\n"
+            "x = d ['a']\n"
+            "imprimir (list (x ))\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

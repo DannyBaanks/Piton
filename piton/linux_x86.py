@@ -1471,6 +1471,29 @@ static long piton_str_prefix_dyn(long self,long v,int end){
   return end?piton_str_endswith((const char*)self,(const char*)v)
              :piton_str_startswith((const char*)self,(const char*)v);
 }
+/* LIST_OF_DYNAMIC_V1: `lista(x)` con x sin tipo estatico (warnings.py:
+   `lista(traceback.extract())` con el retorno desconocido). Se decide por la
+   cabecera con la misma politica que los del resto de dinamicos: list/tuple/str
+   se copian conservando la kind de cada elemento; un dict/set/range, que
+   CPython tambien convierte, falla cerrado con exit 2; un no-iterable levanta
+   el TypeError de CPython. */
+static long piton_list_of_dynamic(long bits){
+  if(!bits){piton_raise_set("TypeError","'NoneType' object is not iterable");return 0;}
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW){
+      if(k==PK_LIST||k==PK_TUPLE)return piton_conv_seq(PK_LIST,(PitonSlot){bits,(int)k});
+      piton_write(2,"TypeError: list() of a dynamically typed collection is not supported in the native subset\n",99);
+      piton_exit(2);
+    }
+    /* un str imprimible (heap o literal de rodata, que maybe_ptr acepta):
+       list('abc') -> ['a','b','c'] conservando la kind. */
+    if(piton_is_printable_str((const char*)bits))return piton_conv_seq(PK_LIST,(PitonSlot){bits,PK_STR});
+  }
+  if(piton_is_double_bits(bits)){piton_raise_set("TypeError","'float' object is not iterable");return 0;}
+  piton_raise_set("TypeError","'int' object is not iterable");
+  return 0;
+}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 /* RAISE_VALUE_V1: `raise <instancia>` — el valor Levantado viaja al runtime
    (el backend solo llevaba el NOMBRE del tipo y el mensaje). */
@@ -9520,6 +9543,17 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=piton_collect_any_iter({self._value(values[0])});")
                     types[result] = "list"
                     self._coll_elems[result] = "int"
+                    return out
+                if source_type in {"", "int", "bool", "float"} and alias in {"lista", "list"}:
+                    # LIST_OF_DYNAMIC_V1: lista(x) con x sin tipo estatico. El
+                    # runtime decide (list/tuple/str se copian conservando la
+                    # kind de cada elemento; dict/set/range/bytes fallan
+                    # cerrados con exit 2). Un no-iterable levanta el TypeError
+                    # de CPython. Misma politica que len/ord/slice dinamicos.
+                    out.append(f"    {_name(result)}=piton_list_of_dynamic({self._value(values[0])});")
+                    types[result] = "list"
+                    self._coll_elems[result] = "int"
+                    self._emit_exc_check(out, function, call_handler)
                     return out
                 if source_type not in {"list", "tuple", "str", "set", "dict", "range"}:
                     raise NativeBuildError(f"Linux {alias}() cannot convert a '{source_type}' value")
