@@ -137,15 +137,20 @@ class UnpackArityV1(unittest.TestCase):
         self.assertEqual(result.native.returncode, 1)
         self.assertIn(b"ValueError", result.native.stderr)
 
-    def test_unpack_non_sequence_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("a, b = 5\nimprimir(a, b)\n")
+    def test_unpack_non_sequence_raises_type_error(self):
+        # UNPACK_DYNAMIC_V1: desestructurar un no-iterable ya no es build
+        # error: es el TypeError de CPython en runtime (exit 1, stdout vacio).
+        result = compare_native_to_cpython("a, b = 5\nimprimir(a, b)\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertEqual(result.native.stdout, b"")
+        self.assertIn(b"TypeError", result.native.stderr)
 
-    def test_unpack_dict_fails_closed(self):
-        # dict unpacking needs key iteration (separate item); today it
-        # dies at get_item with KeyError, so reject statically instead.
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("a, b = {'x': 1, 'y': 2}\nimprimir(a, b)\n")
+    def test_unpack_dict_stays_closed_at_runtime(self):
+        # Un dict SI se desestructura en CPython (por claves), pero el backend
+        # no tiene key-iteration por indice: falla cerrado con exit 2 en vez
+        # de leer memoria como si fuera una tupla. Gap documentado.
+        result = compare_native_to_cpython("a, b = {'x': 1, 'y': 2}\nimprimir(a, b)\n")
+        self.assertEqual(result.native.returncode, 2)
 
     def test_unpack_variable(self):
         _assert_matches(self, "t = (1, 2)\na, b = t\nimprimir(a, b)\n")

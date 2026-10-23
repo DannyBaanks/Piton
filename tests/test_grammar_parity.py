@@ -2144,5 +2144,109 @@ class NestedAttrAndStarGatesV1(unittest.TestCase):
         )
 
 
+class DynamicOpsGatesV1(unittest.TestCase):
+    """BUILTIN_BOUND_METHOD_V1 / ITER_DYNAMIC_V1 / UNPACK_DYNAMIC_V1 /
+    JOIN_GENEXPR_V1 — operaciones que el emisor no puede tipar en build y que
+    CPython resuelve en runtime (heapq, sqlite3/dump)."""
+
+    def test_bound_append_then_unpack(self):
+        # heapq: h_append = h.append; value, order, next = h[0]
+        _assert_matches(
+            self,
+            "funcion f ():\n"
+            "    h = [ ]\n"
+            "    h_append = h . append\n"
+            "    h_append ([1 ,2 ,3 ])\n"
+            "    h_append ([4 ,5 ,6 ])\n"
+            "    a , b , c = h [0 ]\n"
+            "    imprimir (a , b , c )\n"
+            "f ()\n",
+        )
+
+    def test_bound_append_keeps_value_kinds(self):
+        # el ABI de bound method pasa longs: la kind se deriva del header.
+        _assert_matches(
+            self,
+            "funcion f ():\n"
+            "    h = [ ]\n"
+            "    h_append = h . append\n"
+            "    h_append ('x' )\n"
+            "    h_append (7 )\n"
+            "    imprimir (h )\n"
+            "f ()\n",
+        )
+
+    def test_iter_of_untyped_list(self):
+        _assert_matches(
+            self,
+            "funcion f ():\n"
+            "    d = { }\n"
+            "    d ['a' ] = [1 ,2 ,3 ]\n"
+            "    x = d ['a' ]\n"
+            "    total = 0\n"
+            "    para v en iter (x ):\n"
+            "        total = total + v\n"
+            "    imprimir (total )\n"
+            "f ()\n",
+        )
+
+    def test_iter_of_int_raises_type_error(self):
+        _assert_matches(
+            self,
+            "funcion f ():\n"
+            "    d = { }\n"
+            "    d ['a' ] = 7\n"
+            "    x = d ['a' ]\n"
+            "    para v en iter (x ):\n"
+            "        imprimir (v )\n"
+            "f ()\n",
+        )
+
+    def test_dynamic_unpack(self):
+        _assert_matches(
+            self,
+            "funcion f ():\n"
+            "    d = { }\n"
+            "    d ['a' ] = [1 ,2 ,3 ]\n"
+            "    x = d ['a' ]\n"
+            "    a , b , c = x\n"
+            "    imprimir (a , b , c )\n"
+            "f ()\n",
+        )
+
+    def test_dynamic_unpack_wrong_arity(self):
+        _assert_matches(
+            self,
+            "funcion f ():\n"
+            "    d = { }\n"
+            "    d ['a' ] = [1 ,2 ]\n"
+            "    x = d ['a' ]\n"
+            "    a , b , c = x\n"
+            "    imprimir (a )\n"
+            "f ()\n",
+        )
+
+    def test_dynamic_unpack_of_int(self):
+        _assert_matches(
+            self,
+            "funcion f ():\n"
+            "    d = { }\n"
+            "    d ['a' ] = 7\n"
+            "    x = d ['a' ]\n"
+            "    a , b = x\n"
+            "    imprimir (a )\n"
+            "f ()\n",
+        )
+
+    def test_join_of_genexpr(self):
+        # sqlite3/dump.py: ",".join(... for ...)
+        _assert_matches(self, 'print (",".join (str (n )para n en [1 ,2 ,3 ]))\n')
+
+    def test_join_of_genexpr_of_strs(self):
+        _assert_matches(
+            self, 'print ("|".join (c . upper ()para c en ["a" ,"b" ]))\n'
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

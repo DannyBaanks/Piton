@@ -1355,6 +1355,73 @@ static void piton_print_int_safe(long bits){
   piton_write_int(bits);
 }
 static void piton_print_auto(long bits){if(bits==0){piton_write(piton_print_fd,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
+/* SLOT_GUESS_V1: la kind de un valor que cruza un ABI sin slot (un metodo
+   ligado builtin recibe `long`). Se deriva de la cabecera con la misma
+   politica que piton_dynamic_type_name; el resto es int. NO inventa un tipo:
+   un valor que no es puntero con cabecera ni str imprimible es un entero. */
+static PitonSlot piton_slot_guess(long bits){
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>=0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW)return (PitonSlot){bits,(int)k};
+    if(piton_is_printable_str((const char*)bits))return (PitonSlot){bits,PK_STR};
+  }
+  return (PitonSlot){bits,PK_INT};
+}
+/* BUILTIN_BOUND_METHOD_V1: `m = xs.append; m(v)` — el metodo ligado de un
+   builtin no existia (AttributeError en runtime). El ABI de bound method pasa
+   longs, asi que la kind se deriva en runtime. */
+static long piton_list_append_bound(long self,long v){piton_seq_append((PitonSeq*)self,piton_slot_guess(v));return 0;}
+/* ITER_DYNAMIC_V1: `iter(x)` con x sin tipo estatico (heapq:
+   `map(iter, iterables)` con iterables de parametro). Las secuencias
+   list/tuple se iteran; str/bytes/dict/set/range, que CPython tambien itera
+   pero con otra forma de elemento, fallan cerrado con exit 2 en vez de
+   divergir; un no-iterable levanta el TypeError de CPython (exit 1). */
+static long piton_iter_dynamic(long bits){
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>=0&&ptr[0]<1000000L){
+      if(k==PK_LIST||k==PK_TUPLE)return piton_iterator_new_any((void*)bits,(int)k);
+      if(k==PK_DICT||k==PK_SET||k==PK_FROZENSET||k==PK_RANGE||k==PK_BYTES||k==PK_BYTEARRAY){
+        piton_write(2,"TypeError: iter() of a dynamically typed collection is not supported in the native subset\n",97);
+        piton_exit(2);
+      }
+    }
+    if(piton_is_printable_str((const char*)bits)){
+      piton_write(2,"TypeError: iter() of a dynamically typed str is not supported in the native subset\n",91);
+      piton_exit(2);
+    }
+  }
+  piton_write(2,"TypeError: object is not iterable\n",33);
+  piton_exit(1);
+  return 0;
+}
+/* UNPACK_DYNAMIC_V1: el valor a desestructurar no tiene tipo estatico
+   (sqlite3/dump.py: `for a, b, c in cursor.fetchall()`). La aridad la decide
+   la cabecera; un str/dict/set dinamico (que CPython tambien desestructura)
+   falla cerrado con exit 2 en vez de leer memoria como si fuera una tupla, y
+   un no-iterable levanta el TypeError de CPython. */
+static long piton_unpack_len_dynamic(long bits){
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>=0&&ptr[0]<1000000L){
+      if(k==PK_LIST||k==PK_TUPLE)return ((PitonSeq*)bits)->length;
+      if(k==PK_DICT||k==PK_SET||k==PK_FROZENSET){
+        piton_write(2,"TypeError: unpack of a dynamically typed set/dict is not supported in the native subset\n",100);
+        piton_exit(2);
+      }
+      if(k>=PK_BIGINT&&k<=PK_MEMORYVIEW){
+        piton_write(2,"TypeError: unpack of a dynamically typed scalar is not supported in the native subset\n",94);
+        piton_exit(2);
+      }
+    }
+    if(piton_is_printable_str((const char*)bits)){
+      piton_write(2,"TypeError: unpack of a dynamically typed str is not supported in the native subset\n",92);
+      piton_exit(2);
+    }
+  }
+  piton_raise_set("TypeError","cannot unpack non-iterable object");
+  return -1;
+}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 /* RAISE_VALUE_V1: `raise <instancia>` — el valor Levantado viaja al runtime
    (el backend solo llevaba el NOMBRE del tipo y el mensaje). */
@@ -2928,6 +2995,7 @@ class LinuxCEmitter:
         self._calliter_elem: dict[str, str] = {}
         # CALLITER_ELEM_V1: closure -> funcion de origen (para el tipo de retorno).
         self._closure_origin: dict[str, str] = {}
+        self._builtin_bound: dict[str, str] = {}
         # builtins that are only ever CALLED (never a value): marking them
         # as a builtin value broke `suma = 0` as an ordinary variable.
         self._func_only_builtins: set[str] = set()
@@ -4886,6 +4954,17 @@ class LinuxCEmitter:
             types[result] = "str"
         elif method == "join":
             require_count(1, "exactly one list or tuple argument")
+            if types.get(call_args[0]) in {"genexpr", "iterator:genexpr"}:
+                # JOIN_GENEXPR_V1: `sep.join(f(x) for x in xs)` materializa el
+                # genexpr (sqlite3/dump.py: join de una comprehension de strs).
+                out.append(
+                    f"    {{PitonSeq*_jl=(PitonSeq*)piton_genexpr_to_list({self._value(call_args[0])});"
+                )
+                out.append(
+                    f"    {_name(result)}=(long)piton_str_join((const char*){operand},_jl);}}"
+                )
+                types[result] = "str"
+                return out
             if types.get(call_args[0]) not in {"list", "tuple"}:
                 raise NativeBuildError("Linux str.join() requires one list or tuple argument")
             out.append(f"    {_name(result)}=(long)piton_str_join((const char*){operand},(PitonSeq*){self._value(call_args[0])});")
@@ -6589,7 +6668,11 @@ class LinuxCEmitter:
             else:
                 iterator_kind = {"list": "PK_LIST", "tuple": "PK_TUPLE", "dict": "PK_DICT", "set": "PK_SET", "set:frozen": "PK_FROZENSET", "range": "PK_RANGE"}.get(source_type)
                 if iterator_kind is None:
-                    raise NativeBuildError("Linux iter requires a native collection or user __iter__")
+                    # ITER_DYNAMIC_V1: tipo desconocido -> lo decide el runtime
+                    # (secuencia si lo es, exit 2/TypeError si no).
+                    out.append(f"    {_name(result)}=piton_iter_dynamic({self._value(source)});")
+                    types[result] = "iterator:any"
+                    return out
                 out.append(f"    {_name(result)}=piton_iterator_new_any((void*){self._value(source)},{iterator_kind});")
                 # COMP_TUPLE_UNPACK_V1: a comprehension over a list of tuples
                 # must unpack each item, so the element type follows the
@@ -7177,6 +7260,10 @@ class LinuxCEmitter:
             # de f).
             if args[1] in self._calliter_elem:
                 self._calliter_elem[args[0]] = self._calliter_elem[args[1]]
+            if args[1] in self._builtin_bound:
+                # BUILTIN_BOUND_METHOD_V1: `h_append = h.append` — el nombre
+                # hereda el vinculo con la lista dueña.
+                self._builtin_bound[args[0]] = self._builtin_bound[args[1]]
             # SYS_FDS_V1: el modulo `sys` lleva sus descriptores y su
             # version_info. stdout/stderr son los fd 1 y 2 (el backend no
             # tiene objetos de archivo: el descriptor es la representacion
@@ -8251,6 +8338,18 @@ class LinuxCEmitter:
         elif op == "call":
             function_name = aliases.get(args[0], args[0])
             values = list(args[1])
+            # BUILTIN_BOUND_METHOD_V1: una llamada a un `xs.append` ligado
+            # tipa el elemento de la lista igual que el append directo (sin
+            # esto, heapq no podia desestructurar `value, order, next = h[0]`).
+            _bound_owner = self._builtin_bound.get(args[0]) or self._builtin_bound.get(function_name)
+            if _bound_owner and values:
+                _bv_type = types.get(values[0])
+                if _bv_type and "|" not in _bv_type:
+                    _cur = self._coll_elems.get(_bound_owner)
+                    if _cur is None:
+                        self._coll_elems[_bound_owner] = _bv_type
+                    elif "|" not in _cur and _cur != _bv_type:
+                        self._coll_elems[_bound_owner] = _cur + "|" + _bv_type
             call_handler = args[2] if len(args) > 2 else None
             # PRINT_END_KW_V1: `print(..., end=X)` — el terminador en vez de
             # "\n" (solo para la impresion; el resto de llamadas lo ignora).
@@ -9830,6 +9929,22 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=0;")
                 types[result] = owner_type
                 return out
+            if owner_type in {"list", "tuple"} and attr == "append":
+                # BUILTIN_BOUND_METHOD_V1: `m = xs.append` como valor. El
+                # wrapper recibe (self, value) por el ABI de bound method y la
+                # kind del valor se deriva en runtime (piton_slot_guess).
+                if owner_type == "tuple":
+                    raise NativeBuildError("tuple has no attribute 'append'")
+                out.append(
+                    f"    {_name(result)}=piton_bound_method_new((long)&piton_list_append_bound,1,{self._value(obj)});"
+                )
+                types[result] = "closure"
+                # siembra estatica: el nombre dueño se anota para tipar su
+                # elemento cuando se llame (heapq: `h_append = h.append`).
+                _owner_name = aliases.get(obj, obj)
+                if isinstance(_owner_name, str):
+                    self._builtin_bound[result] = _owner_name
+                return out
             prop_class = self._resolve_property_class(owner_type, attr)
             module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
             if prop_class is not None:
@@ -10726,7 +10841,18 @@ class LinuxCEmitter:
             # separate item — today it dies at get_item with KeyError).
             value, expected = args[0], args[1]
             handler_label = args[2] if len(args) > 2 else None
-            vtype = types.get(value, "int")
+            vtype = types.get(value)
+            if vtype not in {"list", "tuple", "str"}:
+                # UNPACK_DYNAMIC_V1: cualquier valor que no sea una secuencia
+                # estatica decide en runtime. Es seguro tambien para un int
+                # REAL: CPython levanta TypeError al desestructurarlo y el
+                # helper levanta el mismo TypeError.
+                out.append("    {")
+                out.append(f"    long _ul=piton_unpack_len_dynamic({self._value(value)});")
+                out.append(f"    if(_ul>=0&&_ul!={expected}){{piton_raise_set(\"ValueError\",\"unpack length mismatch\");}}")
+                self._emit_exc_check(out, function, handler_label)
+                out.append("    }")
+                return out
             if vtype in {"list", "tuple"}:
                 # NESTED_TUPLE_LIST_V1: unpack anidado en FOR-TARGET es
                 # fail-closed — el backend no tiene runtime de unpack anidado
