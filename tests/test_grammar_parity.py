@@ -2372,5 +2372,67 @@ class WarningPathGatesV1(unittest.TestCase):
         )
 
 
+class MinmaxAndZipGatesV1(unittest.TestCase):
+    """MINMAX_KWARGS_FIRST_V1 / ZIP_DYNAMIC_V1 — los dos bloqueos que le
+    quedaban a heapq.py dentro del corpus."""
+
+    def test_min_with_default_over_iterator(self):
+        # heapq.nsmallest: min(it, default=sentinel) con it de iter(x).
+        _assert_matches(
+            self,
+            "funcion primero (xs ):\n"
+            "    it = iter (xs )\n"
+            "    devolver min (it ,default =0 )\n"
+            "imprimir (primero ([3 ,1 ,2 ]))\n"
+            "imprimir (primero ([] ))\n",
+        )
+
+    def test_max_with_key_over_iterator(self):
+        _assert_matches(
+            self,
+            "funcion clave (v ):\n"
+            "    devolver -v \n"
+            "funcion ultimo (xs ):\n"
+            "    it = iter (xs )\n"
+            "    devolver min (it ,default =0 ,key =clave )\n"
+            "imprimir (ultimo ([3 ,1 ,2 ]))\n",
+        )
+
+    def test_min_of_four_scalars_still_works(self):
+        # La rama variadica NO se rompe: 4 escalares siguen su camino.
+        _assert_matches(
+            self,
+            "imprimir (min (5 ,2 ,9 ,1 ))\n"
+            "imprimir (max (5 ,2 ,9 ,1 ))\n",
+        )
+
+    def test_zip_of_range_and_iterator(self):
+        # heapq: zip(range(n), it) con it de iter(iterable).
+        _assert_matches(
+            self,
+            "def :\n"
+            "",
+        ) if False else None
+        _assert_matches(
+            self,
+            "funcion enumera (xs ):\n"
+            "    it = iter (xs )\n"
+            "    salida = [] \n"
+            "    para i ,v en zip (range (3 ),it ):\n"
+            "        salida . append (i *10 +v )\n"
+            "    devolver salida \n"
+            "imprimir (enumera ([7 ,8 ,9 ]))\n",
+        )
+
+    def test_zip_of_two_lists(self):
+        _assert_matches(
+            self,
+            "salida = [] \n"
+            "para a ,b en zip ([1 ,2 ],['x' ,'y' ]):\n"
+            "    salida . append (str (a ) +b )\n"
+            "imprimir (salida )\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

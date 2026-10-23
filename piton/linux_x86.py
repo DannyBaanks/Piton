@@ -6829,9 +6829,44 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=piton_reversed_new((void*){_rev_src});")
             elif builtin == "zip":
                 left, right = source
-                if types.get(left) not in {"list", "tuple"} or types.get(right) not in {"list", "tuple"}:
-                    raise NativeBuildError("native zip currently requires two lists or tuples")
-                out.append(f"    {_name(result)}=piton_zip_new((void*){self._value(left)},(void*){self._value(right)});")
+
+                def _zip_materialize(value: Any) -> str:
+                    # ZIP_DYNAMIC_V1: cada lado se materializa a una lista antes
+                    # de zippear (heapq: `zip(range(n), it)` con it de
+                    # `iter(iterable)`). Un range usa piton_range_get; un
+                    # iterador/genexpr, su colector. Devuelve el nombre C de la
+                    # variable local.
+                    name = f"_zl{len(out)}"
+                    vtype = types.get(value, "")
+                    if vtype in {"list", "tuple"}:
+                        # camino directo: ninguna materializacion
+                        return f"(void*){self._value(value)}", False
+                    if vtype == "range":
+                        out.append(
+                            f"    {{PitonSeq*{name}=piton_seq_new(PK_LIST,piton_range_len((PitonRange*){self._value(value)}));"
+                        )
+                        out.append(
+                            f"     for(long _zi=0;_zi<{name}->length;++_zi)"
+                            f"{{piton_seq_put({name},_zi,piton_slot(piton_range_get((PitonRange*){self._value(value)},_zi),PK_INT));}}"
+                        )
+                        return f"(void*){name}", True
+                    if vtype in {"iterator:genexpr", "genexpr"}:
+                        out.append(f"    {{PitonSeq*{name}=(PitonSeq*)piton_genexpr_to_list({self._value(value)});")
+                        return f"(void*){name}", True
+                    if str(vtype).startswith("iterator:"):
+                        out.append(f"    {{PitonSeq*{name}=(PitonSeq*)piton_collect_any_iter({self._value(value)});")
+                        return f"(void*){name}", True
+                    raise NativeBuildError("native zip requires two lists, tuples or iterables")
+
+                _zl, _lopen = _zip_materialize(left)
+                _zr, _ropen = _zip_materialize(right)
+                if _lopen:
+                    _zl = "(void*)" + _zl[len("(void*)"):]
+                out.append(f"    {_name(result)}=piton_zip_new({_zl},{_zr});")
+                if _lopen:
+                    out.append("    }")
+                if _ropen:
+                    out.append("    }")
                 self._iter_source[result] = left
                 self._iter_source_r[result] = right
             elif builtin in {"map", "filter"}:
@@ -9152,7 +9187,17 @@ class LinuxCEmitter:
                 # distingue del key= porque alli values[0] es list/tuple.
                 # Fold de comparaciones tipadas, misma regla que el caso
                 # binario (mezclas fallan cerradas).
-                if len(values) >= 3 and types.get(values[0]) not in {"list", "tuple"}:
+                # MINMAX_KWARGS_FIRST_V1: la forma (coleccion, default, clave,
+                # reversa) de `min(x, default=..., key=...)` trae 4 valores y su
+                # primero es una coleccion o un iterador. La rama variadica de
+                # escalares se la comia antes (heapq: nsmallest con el atajo de
+                # n==1). Un min/max de 4 escalares NO es coleccion, asi que
+                # sigue yendo por la rama variadica.
+                _mm_kwargs = len(values) == 4 and (
+                    types.get(values[0]) in {"list", "tuple"}
+                    or str(types.get(values[0], "")).startswith("iterator:")
+                )
+                if len(values) >= 3 and types.get(values[0]) not in {"list", "tuple"} and not _mm_kwargs:
                     _vts = [types.get(v, "int") for v in values]
                     if len(set(_vts)) != 1 or _vts[0] not in {"str", "float", "int", "bool"}:
                         raise NativeBuildError(
