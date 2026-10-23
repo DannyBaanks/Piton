@@ -625,6 +625,42 @@ def _stage_worker(path_str: str) -> dict:
                 "detail": f"{type(exc).__name__}: {exc}"[:300]}
 
 
+_TOOLS_DIR = str(Path(__file__).resolve().parent)
+
+
+def isolated_stage(path_str: str, timeout: float = 120.0) -> dict:
+    """CORPUS_ISOLATE_V1: compila UN archivo en un proceso hijo.
+
+    La emision puede abortar el proceso (stack del interprete, allocator);
+    dentro del pool eso mata al worker y se pierde el lote entero. Aislado,
+    el fallo queda como un registro CRASH y el corpus sigue.
+    """
+    import subprocess as _subprocess
+
+    code = ("import json,sys;"
+            "sys.path.insert(0,sys.argv[1]);"
+            "import parity_corpus_v4 as m;"
+            "print(json.dumps(m._stage_worker(sys.argv[2])))")
+    try:
+        proc = _subprocess.run(
+            [sys.executable, "-c", code, _TOOLS_DIR, path_str],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except _subprocess.TimeoutExpired:
+        return {"path": path_str, "reached": None, "stage_fail": "TIMEOUT",
+                "detail": f"supero {timeout}s"}
+    lines = [line for line in (proc.stdout or "").splitlines() if line.strip()]
+    if proc.returncode != 0 or not lines:
+        tail = (proc.stderr or "").strip().splitlines()[-1:] or [""]
+        return {"path": path_str, "reached": None, "stage_fail": "CRASH",
+                "detail": f"exit={proc.returncode} {tail[0]}"[:300]}
+    try:
+        return json.loads(lines[-1])
+    except Exception as exc:
+        return {"path": path_str, "reached": None,
+                "stage_fail": "INSTRUMENT_ERROR", "detail": str(exc)[:300]}
+
+
 def _run_worker(args) -> dict:
     path_str, timeout = args
     try:
@@ -651,7 +687,11 @@ def _funnel(records: list[dict]) -> dict:
         if fail:
             fails[fail] = fails.get(fail, 0) + 1
     passed: dict[str, int] = {}
-    remaining = total
+    # CORPUS_ISOLATE_V1: una clase de fallo que no pertenece a ninguna etapa
+    # (CRASH de proceso, TIMEOUT) NO puede contarse como exito: se resta de
+    # todas las etapas. Fail-closed.
+    known = {STAGE_FAIL[stage] for stage in STAGES}
+    remaining = total - sum(n for k, n in fails.items() if k not in known)
     for stage in STAGES:
         remaining -= fails.get(STAGE_FAIL[stage], 0)
         passed[stage] = remaining
@@ -868,20 +908,36 @@ def render_markdown(meta: dict, tier_a: dict, tier_b_funnel: dict,
     return "\n".join(lines)
 
 
-def cmd_run(tier: str, out: str | None, markdown: str | None, workers: int) -> int:
+def cmd_run(tier: str, out: str | None, markdown: str | None, workers: int,
+            recursive: bool = False, exclude: tuple[str, ...] = (),
+            isolate: bool = False) -> int:
     meta = {"date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "oracle": f"CPython {platform.python_version()}",
             "platform": platform.platform(), "git_sha": _git_sha(),
-            "tool": "tools/parity_corpus_v4.py", "tiers": tier}
+            "tool": "tools/parity_corpus_v4.py", "tiers": tier,
+            "recursive": recursive, "exclude": list(exclude),
+            "isolate": isolate}
     results: dict[str, dict] = {}
 
     if tier in {"a", "all"}:
-        files = sorted(str(p) for p in STDLIB_DIR.glob("*.py"))
+        # CORPUS_LARGE_V1: --recursive recorre subpaquetes (json/, email/,
+        # asyncio/...); --exclude descarta subcadenas del path (tests/,
+        # __pycache__/) para que el corpus siga siendo biblioteca real.
+        pattern = "**/*.py" if recursive else "*.py"
+        files = sorted(str(p) for p in STDLIB_DIR.glob(pattern))
+        if exclude:
+            files = [f for f in files if not any(token in f for token in exclude)]
         if not files:
-            raise SystemExit(f"tier A: no *.py in {STDLIB_DIR}")
-        print(f"tier A: {len(files)} archivos stdlib...")
-        with ProcessPoolExecutor(max_workers=workers) as pool:
-            records = list(pool.map(_stage_worker, files, chunksize=4))
+            raise SystemExit(f"tier A: no *.py in {STDLIB_DIR} (recursive={recursive})")
+        print(f"tier A: {len(files)} archivos stdlib"
+              f"{' (recursivo)' if recursive else ''}...")
+        if isolate:
+            from concurrent.futures import ThreadPoolExecutor as _ThreadPool
+            with _ThreadPool(max_workers=workers) as pool:
+                records = list(pool.map(isolated_stage, files))
+        else:
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                records = list(pool.map(_stage_worker, files, chunksize=4))
         results["tier_a"] = {"funnel": _funnel(records), "records": records}
         fa = results["tier_a"]["funnel"]
         print(f"  adapt {fa['pct']['adapt']}% | parse {fa['pct']['parse']}% | "
@@ -932,10 +988,18 @@ def main(argv: list[str]) -> int:
     run.add_argument("--markdown", default=str(REPO / "docs" /
                      f"parity_corpus_v4_report_{datetime.now():%Y-%m-%d}.md"))
     run.add_argument("--workers", type=int, default=8)
+    run.add_argument("--recursive", action="store_true",
+                     help="tier A: incluye subpaquetes de la stdlib")
+    run.add_argument("--exclude", action="append", default=[],
+                     metavar="SUBSTR",
+                     help="descarta rutas que contengan SUBSTR (repetible)")
+    run.add_argument("--isolate", action="store_true",
+                     help="tier A: compila cada archivo en un proceso hijo")
     args = parser.parse_args(argv)
     if args.cmd == "fetch":
         return cmd_fetch()
-    return cmd_run(args.tier, args.out, args.markdown, args.workers)
+    return cmd_run(args.tier, args.out, args.markdown, args.workers,
+                   args.recursive, tuple(args.exclude), args.isolate)
 
 
 if __name__ == "__main__":

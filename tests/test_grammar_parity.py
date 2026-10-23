@@ -1857,5 +1857,174 @@ class CalliterElemGatesV1(unittest.TestCase):
         )
 
 
+class GlobalsNsGatesV1(unittest.TestCase):
+    """GLOBALS_NS_V1 / SUBSCRIPT_STORE_SEED_V1 / SLOT_TRUTH_V1 / REVERSED_RANGE_V1.
+
+    Cada caso sale de un BUILD_FAIL real del corpus stdlib (hashlib, heapq,
+    warnings) y fija el comportamiento observado contra CPython.
+    """
+
+    def test_globals_namespace_set_and_get(self):
+        # GLOBALS_NS_V1: globals() es un dict lazy real; leer lo que se
+        # escribio devuelve el valor (hashlib: globals()[name] = ...).
+        _assert_matches(
+            self,
+            "g = globals ()\n"
+            "g ['x'] = 7\n"
+            "imprimir (g ['x'] )\n",
+        )
+
+    def test_subscript_store_marks_param_as_list(self):
+        # SUBSCRIPT_STORE_SEED_V1: `h[i] = v` sobre un parametro prueba que
+        # h es list (str no admite asignacion por indice) -> heapq.
+        _assert_matches(
+            self,
+            "funcion _empujar (h , i ):\n"
+            "    h [i ] = 99\n"
+            "funcion construir (h ):\n"
+            "    n = longitud (h )\n"
+            "    _empujar (h , n -1 )\n"
+            "    devolver h [n -1 ]\n"
+            "imprimir (construir ([1 ,2 ,3] ))\n",
+        )
+
+    def test_param_type_propagates_to_caller(self):
+        # PARAM_TYPE_PROPAGATION_V1: el tipo confirmado viaja callee->caller.
+        _assert_matches(
+            self,
+            "funcion tocar (h ):\n"
+            "    h [0 ] = 5\n"
+            "funcion envolver (h ):\n"
+            "    tocar (h )\n"
+            "    devolver h [0 ]\n"
+            "imprimir (envolver ([1 ,2] ))\n",
+        )
+
+    def test_slot_truth_in_condition(self):
+        # SLOT_TRUTH_V1: `a o b` con brazos int/str deja un slot ETIQUETADO;
+        # la verdad de ese slot la decide su kind, no el bits crudo.
+        _assert_matches(
+            self,
+            "funcion f (n ):\n"
+            "    x = n o ''\n"
+            "    devolver 1 si no x sino 0\n"
+            "imprimir (f (0 ))\n"
+            "imprimir (f (5 ))\n",
+        )
+
+    def test_slot_truth_with_and(self):
+        _assert_matches(
+            self,
+            "funcion f (n ):\n"
+            "    x = n y 'vacio'\n"
+            "    devolver 1 si no x sino 0\n"
+            "imprimir (f (0 ))\n"
+            "imprimir (f (5 ))\n",
+        )
+
+    def test_reversed_range_loop(self):
+        # REVERSED_RANGE_V1: reversed(range(...)) se materializa respetando
+        # start/step y se entrega como iterador (heapq).
+        _assert_matches(
+            self,
+            "para i en reversed (rango (4 )):\n"
+            "    imprimir (i )\n",
+        )
+
+    def test_reversed_range_with_step(self):
+        _assert_matches(
+            self,
+            "para i en reversed (rango (2 ,7 ,2 )):\n"
+            "    imprimir (i )\n",
+        )
+
+    def test_list_of_reversed_range(self):
+        _assert_matches(
+            self,
+            "imprimir (lista (reversed (rango (3 ))))\n",
+        )
+
+
+class CorpusBuildFailGatesV1(unittest.TestCase):
+    """BUILD_FAIL del corpus grande (517 archivos stdlib) -> capacidades.
+
+    STR_C_LITERAL_V1, STR_FROM_SEQ_V1, BUILTIN_BASE_INIT_V1, LEN_DYNAMIC_V1,
+    LIST_FROM_ITER_V1. Cada caso viene de un archivo real que no compilaba.
+    """
+
+    def test_non_bmp_string_literal(self):
+        # STR_C_LITERAL_V1: json.dumps emitia \ud835\udd04 (surrogate), que C
+        # rechaza. html/entities.py esta lleno de literales non-BMP.
+        _assert_matches(self, "imprimir ('\U0001D504' )\n")
+
+    def test_control_char_in_literal(self):
+        _assert_matches(self, "imprimir ('a\tb' )\n")
+
+    def test_accented_literal(self):
+        _assert_matches(self, "imprimir ('caf\u00e9' )\n")
+
+    def test_str_of_list_is_its_repr(self):
+        # STR_FROM_SEQ_V1: str()/`%s` de una secuencia (el helper no existia:
+        # declaracion implicita + enlace roto cuando quedaba viva).
+        _assert_matches(self, "imprimir (str ([1 ,[2 ,3] ,'x' ]))\n")
+
+    def test_percent_s_with_collection(self):
+        _assert_matches(self, "imprimir ('%s' % [1 ,2] )\n")
+
+    def test_exception_init_on_subclass(self):
+        # BUILTIN_BASE_INIT_V1: `Exception.__init__(self, msg)` llama al
+        # builtin; el fallback por candidatos emitia una llamada a
+        # MiError__init__ desde su propio cuerpo (recursion + aridad).
+        _assert_matches(
+            self,
+            "clase MiError (Exception ):\n"
+            "    funcion __init__ (self , msg ):\n"
+            "        self . mensaje = msg\n"
+            "        Exception .__init__ (self , msg )\n"
+            "    funcion texto (self ):\n"
+            "        devolver self . mensaje\n"
+            "e = MiError ('boom' )\n"
+            "imprimir (e . texto ())\n",
+        )
+
+    def test_object_init_is_noop(self):
+        _assert_matches(
+            self,
+            "clase Punto :\n"
+            "    funcion __init__ (self , x ):\n"
+            "        object .__init__ (self )\n"
+            "        self . x = x\n"
+            "p = Punto (3 )\n"
+            "imprimir (p . x )\n",
+        )
+
+    def test_len_of_untyped_attribute(self):
+        # LEN_DYNAMIC_V1: len() de un valor sin tipo estatico decide en
+        # runtime (protocols.py: len(self._drain_waiter)).
+        _assert_matches(
+            self,
+            "clase B :\n"
+            "    funcion __init__ (self ):\n"
+            "        self . cola = []\n"
+            "    funcion tam (self ):\n"
+            "        devolver len (self . cola )\n"
+            "b = B ()\n"
+            "b . cola = [1 ,2 ,3 ]\n"
+            "imprimir (b . tam ())\n",
+        )
+
+    def test_len_of_int_raises_type_error(self):
+        _assert_matches(self, "imprimir (len (5 ))\n")
+
+    def test_len_type_error_is_catchable(self):
+        _assert_matches(
+            self,
+            "intentar :\n"
+            "    imprimir (len (5 ))\n"
+            "excepto TypeError :\n"
+            "    imprimir ('capturado' )\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
