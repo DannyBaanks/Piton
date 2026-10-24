@@ -5982,8 +5982,8 @@ class LinuxCEmitter:
             if default_value is None:
                 # DEFAULT_NONE_V1: el ABI nativo pasa longs sin kind, asi que un
                 # None NO es distinguible de un 0: rellenarlo seria pasar un
-                # entero donde CPython pasa None (b es Nada daria falso y
-                # imprimir mostraria 0). Fail-closed explicito, no divergencia.
+                # entero donde CPython pasa None. El default habria que
+                # materializarlo DENTRO del caliente; hasta entonces, fail-closed.
                 raise NativeBuildError(
                     f"Linux {function_name}() called without its None default: the "
                     f"native ABI cannot distinguish None from 0"
