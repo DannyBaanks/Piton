@@ -4238,8 +4238,13 @@ class LinuxCEmitter:
         _vararg = self.function_varargs.get(function_name)
         _kwarg = self.function_kwargs.get(function_name)
         _n_fixed = len(_params) - (1 if _vararg is not None else 0) - (1 if _kwarg is not None else 0)
-        _fixed = list(_defaults)[:max(0, _n_fixed)]
-        _min_args = max(0, sum(1 for d in _fixed if d is None))
+        # DEFAULT_NONE_V1: `function_defaults` solo contiene los parametros que
+        # TIENEN default (y su valor, que puede ser None). El minimo de
+        # argumentos es entonces los fijos MENOS los que tienen default. Antes se
+        # contaban "los None", que es al reves: `def f(a, b=None)` pedia 2
+        # argumentos y rechazaba `f(1)` con un TypeError que CPython no lanza.
+        _n_defaults = len(_defaults) if isinstance(_defaults, dict) else len(list(_defaults))
+        _min_args = max(0, _n_fixed - _n_defaults)
         _max_args = len(_params) if _vararg is None and _kwarg is None else None
         _too_few = len(values) < _min_args
         _too_many = _max_args is not None and len(values) > _max_args
@@ -5964,13 +5969,25 @@ class LinuxCEmitter:
         return "0"
 
     def _complete_call_args(self, function_name: str, values: list[Any]) -> list[Any]:
+        # DEFAULT_NONE_V1: un parametro cuyo default es None se rellena con None
+        # (el default mas comun: `def __init__(self, file=None)`). Antes se
+        # cortaba el bucle y la llamada se emitia con un argumento menos, lo que
+        # ni siquiera compilaba ("too few arguments to function ..."). El
+        # centinela de "no hay mas info" es la lista vacia, no un None.
         defaults = self.function_defaults.get(function_name)
         if not defaults:
             return values
         while len(values) < len(defaults):
             default_value = defaults[len(values)]
             if default_value is None:
-                break
+                # DEFAULT_NONE_V1: el ABI nativo pasa longs sin kind, asi que un
+                # None NO es distinguible de un 0: rellenarlo seria pasar un
+                # entero donde CPython pasa None (b es Nada daria falso y
+                # imprimir mostraria 0). Fail-closed explicito, no divergencia.
+                raise NativeBuildError(
+                    f"Linux {function_name}() called without its None default: the "
+                    f"native ABI cannot distinguish None from 0"
+                )
             values.append(default_value)
         return values
 
