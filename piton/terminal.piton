@@ -1,0 +1,104 @@
+"""Módulo terminal para PITON (implementación en PITON para pi run).
+
+Provee la misma API que el backend nativo pero usando termios/fcntl de Python.
+"""
+
+importar sys
+importar os
+importar termios
+importar fcntl
+importar struct
+
+
+_original_termios = Nada
+_inicializado = Falso
+
+
+funcion init() -> entero:
+    """Inicializa la terminal en modo raw."""
+    global _original_termios, _inicializado
+    
+    si _inicializado:
+        devolver 1
+    
+    si no sys.stdin.isatty() o no sys.stdout.isatty():
+        devolver 0
+    
+    intentar:
+        _original_termios = termios.tcgetattr(sys.stdin.fileno())
+    excepto termios.error:
+        devolver 0
+    
+    raw = termios.tcgetattr(sys.stdin.fileno())
+    raw[3] = raw[3] & ~(termios.ECHO | termios.ICANON | termios.ISIG | termios.IEXTEN)
+    raw[0] = raw[0] & ~(termios.IXON | termios.ICRNL | termios.BRKINT | termios.INPCK | termios.ISTRIP)
+    raw[1] = raw[1] & ~(termios.OPOST)
+    raw[2] = raw[2] | (termios.CS8)
+    raw[6][termios.VMIN] = 0
+    raw[6][termios.VTIME] = 0
+    
+    intentar:
+        termios.tcsetattr(sys.stdin.fileno(), termios.TCSAFLUSH, raw)
+    excepto termios.error:
+        devolver 0
+    
+    # Alternate screen buffer + hide cursor
+    sys.stdout.write("\033[?1049h\033[?25l")
+    sys.stdout.flush()
+    
+    _inicializado = Verdadero
+    devolver 1
+
+
+funcion cleanup() -> entero:
+    """Restaura la terminal a modo normal."""
+    global _inicializado
+    
+    si no _inicializado:
+        devolver 1
+    
+    # Show cursor + exit alternate screen
+    sys.stdout.write("\033[?25h\033[?1049l")
+    sys.stdout.flush()
+    
+    si _original_termios no es Nada:
+        intentar:
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSAFLUSH, _original_termios)
+        excepto termios.error:
+            devolver 0
+    
+    _inicializado = Falso
+    devolver 1
+
+
+funcion write(texto: texto) -> entero:
+    """Escribe texto a la terminal."""
+    sys.stdout.write(texto)
+    sys.stdout.flush()
+    devolver 1
+
+
+funcion read(max_bytes: entero) -> texto:
+    """Lee de la terminal (no bloqueante)."""
+    intentar:
+        fd = sys.stdin.fileno()
+        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        
+        data = sys.stdin.read(max_bytes)
+        
+        fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+        
+        devolver data si data sino ""
+    excepto (OSError, IOError):
+        devolver ""
+
+
+funcion get_size() -> tupla[entero, entero]:
+    """Obtiene el tamaño de la terminal como (filas, columnas)."""
+    intentar:
+        fd = sys.stdout.fileno()
+        size = struct.unpack('HH', fcntl.ioctl(fd, termios.TIOCGWINSZ, b'\0\0\0\0'))
+        devolver (size[0], size[1])
+    excepto (OSError, IOError, struct.error):
+        devolver (24, 80)

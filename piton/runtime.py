@@ -10,6 +10,8 @@ from .translator import traducir_archivo, traducir_fuente
 
 def ejecutar_archivo(ruta: str | Path, argumentos: list[str] | None = None, estricto: bool = False) -> None:
     ruta = Path(ruta).resolve()
+    from .import_hook import instalar_hook
+    instalar_hook()
     traducido = traducir_archivo(ruta, estricto=estricto)
     codigo = compile(traducido, str(ruta), "exec")
     argv_anterior = sys.argv
