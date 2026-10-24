@@ -2703,5 +2703,69 @@ class PctTupleRepeatAndInputGatesV1(unittest.TestCase):
         self.assertEqual(nat.returncode, ora.returncode)
 
 
+class NoneDefaultGatesV1(unittest.TestCase):
+    """Contrato ACTUAL de None y el rediseño pendiente, con la medicion que lo
+    justifica. Ver docs/branch-unification... y el RESULT del bridge.
+
+    Estado: None se representa como el entero 0. Eso es correcto para todo lo
+    que NO cruza el ABI de funcion (variables, constantes, colecciones), y por
+    eso estos gates pasan. Lo que NO funciona es un PARAMETRO con default None:
+    el ABI pasa longs sin kind, asi que `b es Nada` se emite como
+    ((b==0) && PK_INT==PK_NONE) — falso por construccion — y el emisor lo deja
+    fail-closed en vez de divergir.
+
+    Rediseño pendiente (medido en la tanda de investigacion): dar a None una
+    direccion propia (singleton) resuelve la identidad por valor, pero hay que
+    auditar ANTES todos los sitios que detectan None como 0. Medidos y
+    pendientes: print multi-argumento (imprimia el contenido del singleton, que
+    era literalmente "NONEVAL"), fspath(None) (debe ser TypeError), el
+    protocolo `with` (__exit__ que devuelve None debe NO suprimir) y la llamada
+    dinamica con kwargs. Sembrar el tipo en el parametro se descarto: el
+    backend asigna UN tipo por parametro, no uno por llamada, asi que
+    `C(7).x` con default None pasaba a imprimir None."""
+
+    def test_none_prints_as_none(self):
+        _assert_matches(self, "x = Nada" + NL + "imprimir (x )" + NL)
+
+    def test_none_identity_is_true(self):
+        _assert_matches(self, "x = Nada" + NL + "imprimir (1 si x es Nada sino 0)" + NL)
+
+    def test_zero_is_not_none(self):
+        _assert_matches(self, "imprimir (1 si 0 es Nada sino 0)" + NL)
+
+    def test_none_in_collection(self):
+        _assert_matches(self, "imprimir ([Nada ,1 ])" + NL)
+
+    def test_missing_none_default_is_fail_closed(self):
+        # Contrato actual: no se adivina. El rediseño del singleton es la via.
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            compare_native_to_cpython(
+                "funcion f (a ,b =Nada ):" + NL
+                + "    devolver b" + NL
+                + "imprimir (f (1 ))" + NL
+            )
+
+    def test_netrc_needs_the_none_redesign(self):
+        from piton.x86 import NativeBuildError
+        import pathlib as _pl
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from parity_corpus_v4 import python_to_piton as _tp
+        from piton.parser import parse
+        from piton.lower import lower_cst_to_hir
+        from piton.mir import lower_hir_to_mir
+        from piton.linux_x86 import LinuxCEmitter
+        path = _pl.Path("/usr/lib/python3.12/netrc.py")
+        if not path.exists():
+            self.skipTest("netrc.py no presente en este host")
+        src = _tp(path.read_text(encoding="utf-8", errors="replace"))
+        try:
+            LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(src))))
+        except NativeBuildError:
+            return  # fail-closed: el contrato actual, documentado
+        self.skipTest("netrc compila: el rediseño de None ya aterrizó")
+
+
 if __name__ == "__main__":
     unittest.main()

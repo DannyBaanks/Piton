@@ -3377,7 +3377,7 @@ class LinuxCEmitter:
                 if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
                     lines.append(f"static long {_name(function.name)}(PitonGenerator *piton_gen);")
                     continue
-                params = "long *frame" if function.frame_abi else ", ".join(f"long {_name(param)}" for param in function.params) or "void"
+                params = "long *__piton_frame" if function.frame_abi else ", ".join(f"long {_name(param)}" for param in function.params) or "void"
                 lines.append(f"static long {_name(function.name)}({params});")
         if self._shared_globals:
             # GLOBAL_DECL_V1: module-level names shared cross-function live
@@ -3438,7 +3438,7 @@ class LinuxCEmitter:
         if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
             return self._emit_generator_function(function)
         is_main = function.name == "<module>"
-        params = "long *frame" if function.frame_abi else ", ".join(f"long {_name(param)}" for param in function.params) or "void"
+        params = "long *__piton_frame" if function.frame_abi else ", ".join(f"long {_name(param)}" for param in function.params) or "void"
         signature = "long piton_main(void)" if is_main else f"static long {_name(function.name)}({params})"
         slots = set(function.params)
         for block in function.blocks:
@@ -3553,7 +3553,7 @@ class LinuxCEmitter:
             types[function.params[2]] = "str"
         if function.frame_abi:
             for index, param in enumerate(function.params):
-                lines.append(f"    {_name(param)}=frame[{index}];")
+                lines.append(f"    {_name(param)}=__piton_frame[{index}];")
         bigint_slots: list[str] = []
         for _block_index, block in enumerate(function.blocks):
             self._cur_block = _block_index
@@ -5078,7 +5078,12 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"Linux str.{method}() requires no or one argument")
             mode = {"strip": 0, "lstrip": 1, "rstrip": 2}[method]
             if call_args and types.get(call_args[0]) == "str":
-                out.append(f"    {_name(result)}=(long)piton_str_strip_chrs((const char*){operand},{self._value(call_args[0])},{mode});")
+                # STRIP_CHRS_CAST_V1: el chars es un long (temp o literal con
+                # cast); pasarlo directo a `const char*` no compila.
+                out.append(
+                    f"    {_name(result)}=(long)piton_str_strip_chrs((const char*){operand},"
+                    f"(const char*)(long){self._value(call_args[0])},{mode});"
+                )
             else:
                 require_count(0, "no arguments")
                 out.append(f"    {_name(result)}=(long)piton_str_strip((const char*){operand},{mode});")
@@ -5285,7 +5290,16 @@ class LinuxCEmitter:
                         pieces.append(f'const char*_pf{index}="None";')
                     else:
                         raise NativeBuildError(f"Linux str.format() does not support {arg_type} arguments")
-                names = ",".join(f"_pf{index}" for index in range(len(call_args))) or "_pf0"
+                if not pieces:
+                    # FMT_NOFIELD_V1: idem, plantilla dinamica (todos los
+                    # campos nombrados): array vacio y argc 0.
+                    out.append(
+                        f"    {{const char*_fa[]={{0}};"
+                        f" {_name(result)}=(long)piton_str_format((const char*){self._value(obj)},0,_fa);}}"
+                    )
+                    types[result] = "str"
+                    return out
+                names = ",".join(f"_pf{index}" for index in range(len(call_args)))
                 out.append(
                     f"    {{{''.join(pieces)}const char*_fa[]={{{names}}};"
                     f" {_name(result)}=(long)piton_str_format((const char*){self._value(obj)},{len(call_args)},_fa);}}"
@@ -5449,13 +5463,19 @@ class LinuxCEmitter:
                 else:
                     pieces.append(f"const char*_pf{index}=(const char*){converted};")
             out.extend(pre_lines)
-            if not call_args:
-                # no placeholders: pass a one-element dummy array (the
-                # engine never indexes it; n=0) so the C declaration is valid
-                pieces.append('const char*_pf0="";')
-            names = ",".join(f"_pf{index}" for index in range(len(call_args))) or "_pf0"
-            out.append(f"    {{{''.join(pieces)}const char*_fa[]={{{names}}}; {_name(result)}=(long)piton_str_format((const char*){_str_c_literal(simplified)},{len(call_args)},_fa);}}")
-            types[result] = "str"
+            if not pieces:
+                # FMT_NOFIELD_V1: sin campos que sustituir. CPython ignora los
+                # argumentos extra: argc 0 y array vacio. Antes se emitia
+                # `_fa[]={_pf0}` sin declarar _pf0 cuando HABIA argumentos pero
+                # ningun campo, y ese C no compilaba (warnings.py).
+                out.append(
+                    f"    {{const char*_fa[]={{0}}; {_name(result)}=(long)piton_str_format((const char*){_str_c_literal(simplified)},0,_fa);}}"
+                )
+                types[result] = "str"
+            else:
+                names = ",".join(f"_pf{index}" for index in range(len(call_args)))
+                out.append(f"    {{{''.join(pieces)}const char*_fa[]={{{names}}}; {_name(result)}=(long)piton_str_format((const char*){_str_c_literal(simplified)},{len(call_args)},_fa);}}")
+                types[result] = "str"
         elif method in {"isalpha", "isdigit", "isalnum", "isspace", "istitle", "isupper", "islower"}:
             # STR_PREDS_V1: per-kind predicates (ASCII subset). Empty
             # strings are False for all of them; isupper/islower/istitle
