@@ -1189,12 +1189,12 @@ static int piton_dict_eq(PitonDict*a,PitonDict*b){
 }
 static void piton_print_set(PitonSet*s){if(s->kind==PK_SET&&s->length==0){piton_write(piton_print_fd,"set()",5);return;}piton_write(piton_print_fd,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(piton_print_fd,", ",2);piton_print_slot_repr(s->items[i]);}piton_write(piton_print_fd,"}",1);}
 static long piton_object_repr_hook(long obj,const char*cls);
-static void piton_print_slot(PitonSlot v){switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_repr_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
+static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_repr_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
 /* SEQ_ELEM_REPR_V1: los elementos de una coleccion se imprimen con el
    repr completo de CPython (escapes de backslash/comillas); el camino
    viejo escribia el str raw dentro de [ ] y print(["a\\b"]) divergiaba.
    El print top-level de str queda intacto. */
-static void piton_print_slot_repr(PitonSlot v){if(v.kind==PK_STR){PitonStrBuf b;sb_init(&b);piton_str_repr_into(&b,(const char*)v.bits);piton_write(piton_print_fd,b.d,(usize)b.len);return;}piton_print_slot(v);}
+static void piton_print_slot_repr(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(v.kind==PK_STR){PitonStrBuf b;sb_init(&b);piton_str_repr_into(&b,(const char*)v.bits);piton_write(piton_print_fd,b.d,(usize)b.len);return;}piton_print_slot(v);}
 /* COMP_DICT_ITER_V1: the i-th KEY of a dict / the i-th element of a set,
  * for a comprehension's index loop. Explicit subscripts keep using
  * piton_dict_get, which raises KeyError as CPython does. */
@@ -1308,7 +1308,7 @@ static int piton_maybe_ptr(long bits){
 /* OS_FSPATH_V1: nombre del tipo dinamico de un valor `bits` (misma politica
    que piton_isinstance_dynamic: puntero con cabecera -> secuencia/dict/
    set/objeto; puntero imprimible -> str; doble -> float; resto -> int). */
-static const char* piton_dynamic_type_name(long bits){
+static const char* piton_dynamic_type_name(long bits){if(bits==(long)&piton_none_singleton)return "NoneType";
   if(!bits)return "NoneType";
   if(piton_is_double_bits(bits))return "float";
   if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
@@ -1326,7 +1326,7 @@ static const char* piton_dynamic_type_name(long bits){
    imprimible -> str, cabecera de coleccion -> su repr, doble -> float,
    enteros crudos -> int). Un valor que no cae en ninguno de esos casos se
    reporta con raise_set, no se imprime como puntero basura. */
-static const char* piton_str_of_value(long bits){
+static const char* piton_str_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";
   if(!bits)return "None";
   if(piton_is_double_bits(bits))return (const char*)piton_str_from_float(bits);
   if(piton_maybe_ptr(bits)){
@@ -1348,7 +1348,7 @@ static const char* piton_str_of_value(long bits){
    como long es indistinguible de 0/1 y sale "1"/"0" — la misma
    representacion de bools que usa el resto del backend. dict/set/bytes
    dinamicos fallan cerrado (exit 2) en vez de divergir. */
-static const char* piton_repr_of_value(long bits){
+static const char* piton_repr_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";
   if(!bits)return "None";
   if(piton_is_double_bits(bits))return (const char*)piton_str_from_float(bits);
   /* el str va ANTES de la cabecera: un literal de rodata no siempre pasa
@@ -1366,7 +1366,7 @@ static const char* piton_repr_of_value(long bits){
    if(b2>=0x400000L&&b2<0x480000L)return "None";}
   return (const char*)piton_str_from_int(bits);
 }
-static void piton_print_int_safe(long bits){
+static void piton_print_int_safe(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}
   /* PRINT_INT_V1: un entero cuyo tipo estático es int pero que en runtime es
    * un puntero (huecos de inferencia) se imprime como string; si no, como int.
    * PRINT_DYNAMIC_KIND_V1: si el puntero lleva cabecera de coleccion (el valor
@@ -1379,7 +1379,7 @@ static void piton_print_int_safe(long bits){
   }
   piton_write_int(bits);
 }
-static void piton_print_auto(long bits){if(bits==0){piton_write(piton_print_fd,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
+static void piton_print_auto(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(bits==0){piton_write(piton_print_fd,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
 /* SLOT_GUESS_V1: la kind de un valor que cruza un ABI sin slot (un metodo
    ligado builtin recibe `long`). Se deriva de la cabecera con la misma
    politica que piton_dynamic_type_name; el resto es int. NO inventa un tipo:
@@ -1538,7 +1538,7 @@ static PitonFile* piton_file_open(const char*path,const char*mode){
    devuelve os.path.expanduser). Si x no es un str, CPython levanta TypeError:
    aqui se hace lo mismo, no se desreferencia un entero. */
 static PitonFile* piton_file_open_dyn(long bits,const char*mode){
-  if(!bits){piton_raise_set("TypeError","expected str, not NoneType");piton_report_unhandled();piton_exit(1);return 0;}
+  if(!bits||bits==(long)&piton_none_singleton){piton_raise_set("TypeError","expected str, not NoneType");piton_report_unhandled();piton_exit(1);return 0;}
   if(piton_maybe_ptr(bits)){
     long*ptr=(long*)bits;
     if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_MEMORYVIEW){
@@ -3341,6 +3341,10 @@ class LinuxCEmitter:
         )
         lines = [
             "typedef long i64; typedef unsigned long usize; typedef unsigned long long u64; typedef unsigned __int128 u128;",
+            "/* NONE_SINGLETON_V2: None tiene direccion PROPIA (16 bytes: los inspectores de valor leen ptr[1] para el kind; con 8 bytes leian fuera del array). Antes None era el entero 0: el ABI pasa longs sin kind, asi que `b es Nada` sobre un parametro sin tipo era falso por construccion e `imprimir(None)` mostraba 0. La identidad de None es su direccion. */",
+            "static const char piton_none_singleton[16]={'N','O','N','E','V','A','L',0,0,0,0,0,0,0,0,0};",
+            "#define PITON_NONE ((long)&piton_none_singleton)",
+
             "static long piton_write(long fd,const void*buf,usize n){long r;__asm__ volatile(\"syscall\":\"=a\"(r):\"a\"(1L),\"D\"(fd),\"S\"(buf),\"d\"(n):\"rcx\",\"r11\",\"memory\");return r;}",
             "__attribute__((noreturn)) static void piton_exit(long code){__asm__ volatile(\"syscall\"::\"a\"(60L),\"D\"(code):\"rcx\",\"r11\",\"memory\");__builtin_unreachable();}",
             "static usize piton_strlen(const char*s){usize n=0;while(s[n])++n;return n;}",
@@ -3352,9 +3356,9 @@ class LinuxCEmitter:
             # nombres escritos a traves de globals()[...]; los globales del
             # modulo compilados como static long no se reflejan.
             "static long piton_globals_ns=0;",
-            "static void piton_print_str_raw(const char*s){if(!s){piton_write(piton_print_fd,\"None\",4);return;}piton_write(piton_print_fd,s,piton_strlen(s));}",
-            "static void piton_print_str(const char*s){piton_print_str_raw(s);piton_write(piton_print_fd,\"\\n\",1);}",
-            "static void piton_print_dynamic(long bits){if(!bits){piton_write(piton_print_fd,\"None\",4);}else{piton_write(piton_print_fd,(const char*)bits,piton_strlen((const char*)bits));}}",
+            "static void piton_print_str_raw(const char*s){if(s==(const char*)&piton_none_singleton){piton_write(piton_print_fd,\"None\",4);return;}if(!s){piton_write(piton_print_fd,\"None\",4);return;}piton_write(piton_print_fd,s,piton_strlen(s));}",
+            "static void piton_print_str(const char*s){if(s==(const char*)&piton_none_singleton){piton_write(piton_print_fd,\"None\",4);return;}piton_print_str_raw(s);piton_write(piton_print_fd,\"\\n\",1);}",
+            "static void piton_print_dynamic(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,\"None\",4);return;}if(!bits){piton_write(piton_print_fd,\"None\",4);}else{piton_write(piton_print_fd,(const char*)bits,piton_strlen((const char*)bits));}}",
             "static void piton_write_int(i64 number){char b[32];usize i=sizeof(b);unsigned long value;if(number<0){piton_write(piton_print_fd,\"-\",1);value=0-(unsigned long)number;}else value=(unsigned long)number;do{b[--i]=(char)(\'0\'+value%10);value/=10;}while(value);piton_write(piton_print_fd,b+i,sizeof(b)-i);}",
             "static void piton_print_int_raw(i64 number){piton_write_int(number);}",
             "static void piton_print_int(i64 number){piton_print_int_raw(number);piton_write(piton_print_fd,\"\\n\",1);}",
@@ -3676,7 +3680,11 @@ class LinuxCEmitter:
         """
         raw = self._value(value)
         if vtype in {"int", "bool"}:
-            return f"({raw}!=0)"
+            # NONE_SINGLETON_V2: un valor de tipo desconocido/int puede ser
+            # None; el singleton no es 0, sin esta exclusion `si x:` sobre un
+            # None seria verdadero (y un __exit__ que devuelve None suprimiria
+            # la excepcion).
+            return f"(({raw})!=0&&({raw})!=PITON_NONE)"
         if vtype == "float":
             return f"(piton_bits_double({raw})!=0.0)"
         if vtype == "complex":
@@ -3815,7 +3823,10 @@ class LinuxCEmitter:
         if isinstance(value, bytearray):
             return f"(long)piton_bytearray_new({len(value)},(const unsigned char*){_bytes_c_literal(bytes(value))})"
         if value is None:
-            return "0"
+            # NONE_SINGLETON_V2: None ya no es el entero 0. Los placeholders
+            # internos (dynamic_call, handlers) NO pasan por aqui: el emisor
+            # los traduce a "0" explicito en su propio sitio.
+            return "PITON_NONE"
         if isinstance(value, bool):
             return str(int(value))
         if isinstance(value, int):
@@ -4171,6 +4182,13 @@ class LinuxCEmitter:
         if t in "dxXobfeEgGFgn%s":
             return spec[:-1]
         return spec
+
+    @staticmethod
+    def _is_none_side(value: Any, types: dict[str, str]) -> bool:
+        """NONE_SINGLETON_V2: True si un lado de una identidad es None."""
+        if isinstance(value, str) and value.startswith("%"):
+            return types.get(value) == "none"
+        return value is None
 
     @staticmethod
     def _percent_literal_type(value) -> str:
@@ -6017,15 +6035,9 @@ class LinuxCEmitter:
             return values
         while len(values) < len(defaults):
             default_value = defaults[len(values)]
-            if default_value is None:
-                # DEFAULT_NONE_V1: el ABI nativo pasa longs sin kind, asi que un
-                # None NO es distinguible de un 0: rellenarlo seria pasar un
-                # entero donde CPython pasa None. El default habria que
-                # materializarlo DENTRO del caliente; hasta entonces, fail-closed.
-                raise NativeBuildError(
-                    f"Linux {function_name}() called without its None default: the "
-                    f"native ABI cannot distinguish None from 0"
-                )
+            # NONE_SINGLETON_V2: el argumento omitido viaja como la direccion
+            # del singleton. `b es Nada` lo reconoce por identidad sin
+            # depender del kind del parametro, y imprimirlo muestra None.
             values.append(default_value)
         return values
 
@@ -8536,10 +8548,19 @@ class LinuxCEmitter:
                 # says False. Compare raw bits: for the untagged model that is
                 # identity for the value types it can represent, and the
                 # differing static types are identity-different anyway.
-                identity = (
-                    f"(({self._value(left)})==({self._value(right)}))"
-                    f"&&{self._kind(types.get(left,'int'))}=={self._kind(types.get(right,'int'))}"
-                )
+                # NONE_SINGLETON_V2: contra None la identidad es la direccion
+                # del singleton, sin kinds. Los kinds impedian el caso central:
+                # un parametro sin tipo estatico daba PK_INT a la izquierda y
+                # PK_NONE a la derecha, falso por construccion. Para cualquier
+                # otro par se mantiene la regla (que distingue `1 es
+                # Verdadero`).
+                if self._is_none_side(left, types) or self._is_none_side(right, types):
+                    identity = f"(({self._value(left)})==({self._value(right)}))"
+                else:
+                    identity = (
+                        f"(({self._value(left)})==({self._value(right)}))"
+                        f"&&{self._kind(types.get(left,'int'))}=={self._kind(types.get(right,'int'))}"
+                    )
                 # IS_IDENTITY_V1: `x no es y` is the negation of identity, and it
                 # had no dispatch branch at all, so the operator name reached the
                 # C source and the compile failed.
@@ -10141,9 +10162,14 @@ class LinuxCEmitter:
             # DYNAMIC_CALL_V1: llamada a un callable desconocido en build time;
             # el runtime arma el frame con los args y el dict de keywords.
             callee, pos_seq, star_seq, kwargs_dict = args[0], args[1], args[2], args[3]
+            # NONE_SINGLETON_V2: estos None del MIR significan "ausente" (sin
+            # star args, sin kwargs), no el valor None del usuario. El runtime
+            # usa 0 como centinela de ausencia; un singleton aqui seria
+            # desreferenciado como seq/dict.
+            _dyn = lambda v: "0" if v is None else self._value(v)
             out.append(
                 f"    {_name(result)}=piton_call_dynamic({self._value(callee)},"
-                f"{self._value(pos_seq)},{self._value(star_seq)},{self._value(kwargs_dict)});"
+                f"{_dyn(pos_seq)},{_dyn(star_seq)},{_dyn(kwargs_dict)});"
             )
             types[result] = "int"
             self._emit_exc_check(out, function, args[4] if len(args) > 4 else None)
@@ -10976,7 +11002,7 @@ class LinuxCEmitter:
                 # piton_isinstance_dynamic (imprimible -> str).
                 out.append(
                     f"    {{long _fpv={_fp};"
-                    f"if(piton_maybe_ptr(_fpv)&&piton_is_printable_str((const char*)_fpv))"
+                    f"if(_fpv!=PITON_NONE&&piton_maybe_ptr(_fpv)&&piton_is_printable_str((const char*)_fpv))"
                     f"{{{_name(result)}=_fpv;}}"
                     f"else{{piton_raise_fspath_type(_fpv);}}"
                     f"}}"

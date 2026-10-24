@@ -2703,26 +2703,23 @@ class PctTupleRepeatAndInputGatesV1(unittest.TestCase):
         self.assertEqual(nat.returncode, ora.returncode)
 
 
-class NoneDefaultGatesV1(unittest.TestCase):
-    """Contrato ACTUAL de None y el rediseño pendiente, con la medicion que lo
-    justifica. Ver docs/branch-unification... y el RESULT del bridge.
+class NoneSingletonGatesV2(unittest.TestCase):
+    """NONE_SINGLETON_V2: None tiene direccion propia (16 bytes en el runtime,
+    nadie mas la comparte), no es el entero 0.
 
-    Estado: None se representa como el entero 0. Eso es correcto para todo lo
-    que NO cruza el ABI de funcion (variables, constantes, colecciones), y por
-    eso estos gates pasan. Lo que NO funciona es un PARAMETRO con default None:
-    el ABI pasa longs sin kind, asi que `b es Nada` se emite como
-    ((b==0) && PK_INT==PK_NONE) — falso por construccion — y el emisor lo deja
-    fail-closed en vez de divergir.
+    Antes, el ABI (longs sin kind) hacia que un parametro con default None
+    fuera indistinguible de un 0: `si b es Nada` se emitia como
+    ((b==0) && PK_INT==PK_NONE) — falso por construccion — y `imprimir(None)`
+    mostraba 0. La identidad de None es ahora su direccion, y la comparacion
+    contra None se resuelve por valor sin kinds.
 
-    Rediseño pendiente (medido en la tanda de investigacion): dar a None una
-    direccion propia (singleton) resuelve la identidad por valor, pero hay que
-    auditar ANTES todos los sitios que detectan None como 0. Medidos y
-    pendientes: print multi-argumento (imprimia el contenido del singleton, que
-    era literalmente "NONEVAL"), fspath(None) (debe ser TypeError), el
-    protocolo `with` (__exit__ que devuelve None debe NO suprimir) y la llamada
-    dinamica con kwargs. Sembrar el tipo en el parametro se descarto: el
-    backend asigna UN tipo por parametro, no uno por llamada, asi que
-    `C(7).x` con default None pasaba a imprimir None."""
+    La auditoria previa identifico los sitios que detectaban None como 0 y se
+    arreglaron en esta misma tanda: los 8 printers dinamicos (print multi-arg
+    imprimia el contenido del singleton, literalmente "NONEVAL"), fspath(None)
+    (debe ser TypeError), el protocolo `with` (los tres argumentos de
+    __exit__ en el camino normal son None) y los placeholders internos de
+    dynamic_call (sin star/kwargs), que siguen siendo 0 porque significan
+    "ausente", no None."""
 
     def test_none_prints_as_none(self):
         _assert_matches(self, "x = Nada" + NL + "imprimir (x )" + NL)
@@ -2731,23 +2728,66 @@ class NoneDefaultGatesV1(unittest.TestCase):
         _assert_matches(self, "x = Nada" + NL + "imprimir (1 si x es Nada sino 0)" + NL)
 
     def test_zero_is_not_none(self):
+        # La razon de ser del singleton: 0 ya no se confunde con None.
         _assert_matches(self, "imprimir (1 si 0 es Nada sino 0)" + NL)
 
     def test_none_in_collection(self):
         _assert_matches(self, "imprimir ([Nada ,1 ])" + NL)
 
-    def test_missing_none_default_is_fail_closed(self):
-        # Contrato actual: no se adivina. El rediseño del singleton es la via.
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError):
-            compare_native_to_cpython(
-                "funcion f (a ,b =Nada ):" + NL
-                + "    devolver b" + NL
-                + "imprimir (f (1 ))" + NL
-            )
+    def test_none_truthiness(self):
+        _assert_matches(self, "si Nada :" + NL + "    imprimir ('si')" + NL + "sino :" + NL + "    imprimir ('no')" + NL)
 
-    def test_netrc_needs_the_none_redesign(self):
-        from piton.x86 import NativeBuildError
+    def test_missing_arg_fills_none_default(self):
+        _assert_matches(
+            self,
+            "funcion f (a ,b =Nada ):" + NL
+            + "    si b es Nada :" + NL
+            + "        devolver 'nada'" + NL
+            + "    devolver 'valor'" + NL
+            + "imprimir (f (1 ))" + NL,
+        )
+
+    def test_present_arg_is_not_none(self):
+        _assert_matches(
+            self,
+            "funcion f (a ,b =Nada ):" + NL
+            + "    si b es Nada :" + NL
+            + "        devolver 'nada'" + NL
+            + "    devolver 'valor'" + NL
+            + "imprimir (f (1 ,2 ))" + NL,
+        )
+
+    def test_ctor_none_default_mixed_calls(self):
+        # El caso que descarto sembrar el tipo: UN tipo por parametro, no uno
+        # por llamada. Con el singleton no hace falta sembrar nada.
+        _assert_matches(
+            self,
+            "clase C :" + NL
+            + "    funcion __init__ (self ,v =Nada ):" + NL
+            + "        self . x = v" + NL
+            + "c = C (7 )" + NL
+            + "imprimir (c . x )" + NL
+            + "d = C ()" + NL
+            + "imprimir (d . x )" + NL,
+        )
+
+    def test_fspath_of_none_is_type_error(self):
+        _assert_matches(self, "importar os" + NL + "imprimir (os .fspath (Nada ))" + NL)
+
+    def test_with_exit_none_not_suppressing(self):
+        _assert_matches(
+            self,
+            "clase Cm :" + NL
+            + "    funcion __enter__ (self ):" + NL
+            + "        devolver self" + NL
+            + "    funcion __exit__ (self ,t ,m ,tb ):" + NL
+            + "        imprimir ('exit' ,t )" + NL
+            + "        devolver Falso" + NL
+            + "con Cm () :" + NL
+            + "    imprimir ('cuerpo')" + NL,
+        )
+
+    def test_netrc_file_compiles(self):
         import pathlib as _pl
         import sys as _sys
         _sys.path.insert(0, "tools")
@@ -2760,11 +2800,22 @@ class NoneDefaultGatesV1(unittest.TestCase):
         if not path.exists():
             self.skipTest("netrc.py no presente en este host")
         src = _tp(path.read_text(encoding="utf-8", errors="replace"))
-        try:
-            LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(src))))
-        except NativeBuildError:
-            return  # fail-closed: el contrato actual, documentado
-        self.skipTest("netrc compila: el rediseño de None ya aterrizó")
+        LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(src))))
+
+    def test_warnings_file_compiles(self):
+        import pathlib as _pl
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from parity_corpus_v4 import python_to_piton as _tp
+        from piton.parser import parse
+        from piton.lower import lower_cst_to_hir
+        from piton.mir import lower_hir_to_mir
+        from piton.linux_x86 import LinuxCEmitter
+        path = _pl.Path("/usr/lib/python3.12/warnings.py")
+        if not path.exists():
+            self.skipTest("warnings.py no presente en este host")
+        src = _tp(path.read_text(encoding="utf-8", errors="replace"))
+        LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(src))))
 
 
 if __name__ == "__main__":
