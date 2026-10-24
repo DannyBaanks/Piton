@@ -47,7 +47,7 @@ Pitón **no es**:
   el objetivo es correcto, no rápido.
 - Self-hosted: el compilador está escrito en Python, no en Pitón.
 
-## Qué SÍ hace (estado verificado 2026-10-20)
+## Qué SÍ hace (estado verificado 2026-10-24)
 
 - **Traduce superficie español → Python ordinario** (source-to-source,
   líneas 1:1) y lo ejecuta con CPython: `piton ejecutar`, `piton traducir`,
@@ -68,15 +68,33 @@ Pitón **no es**:
     `docs/parity_corpus_v3_report_2026-10-10.md`.
   - **corpus v4 (stdlib real de CPython 3.12)**: embudo sobre 167 archivos de
     `/usr/lib/python3.12/` — adapt 167/167 (100%), parse 167/167 (100%),
-    MIR 24/167 (14.4%), build 18/167 (10.8%); `MIR_FAIL` 143, `BUILD_FAIL` 6.
-    El cuello restante son los **módulos de la stdlib que el backend no
-    provee** (el corpus compila cada archivo *aislado*, así que un módulo
-    importado tiene que estar en el binario) y 7 archivos "alcanzables" que
-    piden features de runtime: `globals()` como dict real, clases dinámicas
-    (`type`), objetos de archivo, el metaclass de `abc`, `print(file=)` y el
-    `except` con una excepción de usuario. Reporte vivo:
-    `docs/parity_corpus_v4_report_2026-10-20_after-cell-order-v1.{json,md}`
-    (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier all`).
+    MIR 27/167 (16.2%), build 23/167 (13.8%); `MIR_FAIL` 140, `BUILD_FAIL` 4.
+    El cuello restante, medido el 2026-10-24: 82 de los 140 MIR_FAIL siguen
+    siendo **módulos de la stdlib ausentes** (el corpus compila cada archivo
+    *aislado*, así que un módulo importado tiene que estar en el binario) y
+    4 archivos ya alcanzan el build y fallan por gaps del emisor que el muro
+    de imports ocultaba (`conjunto()` de entero en `bdb`, `input()` con
+    prompt no-str en `cmd`, `pickle()` con un parámetro usado como str en
+    `copyreg`, `tupla()` de un `map` en `operator`). Reporte vivo:
+    `docs/parity_corpus_v4_report_2026-10-24.{json,md}`
+    (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier a`).
+
+- **Biblioteca nativa empaquetada** (`piton/stdlib_piton/`, 60 módulos):
+  módulos escritos **en Pitón** que se compilan e inlinean cuando el
+  programa los importa (el corpus es aislado: un módulo importado tiene que
+  estar en el binario). Dos clases, y la distinción es explícita:
+  - **Reales** (verificados contra CPython por gates): `posixpath`
+    (join/split/splitext/normpath/splitdrive), `string` (constantes +
+    capwords), `re` (escape real, flags con los valores de CPython), `io`
+    (open→abrir, SEEK_*, DEFAULT_BUFFER_SIZE).
+  - **Stubs fail-closed**: compilan y, al ejecutarse, levantan
+    `NotImplementedError` — nunca divergen en silencio. `re` (no hay motor
+    de regex), `time` (sin syscall de reloj), `abc` y los módulos de
+    plataforma (`socket`, `struct`, `collections`, `types`, `builtins`,
+    `hashlib`, `itertools`, `importlib.util`...).
+  Aparte, `None` tiene identidad propia (`NONE_SINGLETON_V2`: un valor
+  distinguible de `0`, que era el muro de `netrc.py` y `warnings.py`, los
+  dos compilan punta a punta).
 - **Falla cerrado** (regla de oro): compatibilidad demostrada o error de
   compilación; nunca semántica aproximada silenciosa.
 
