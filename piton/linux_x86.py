@@ -1611,6 +1611,24 @@ static long piton_str_join_dyn(const char*sep,long bits){
   piton_raise_set("TypeError","can only join an iterable");piton_report_unhandled();piton_exit(1);
   return 0;
 }
+/* INPUT_V1: input([prompt]) nativo. El prompt se escribe a stdout (sin
+   salto de linea, como CPython) y se lee UNA linea del fd 0. EOF sin datos
+   levanta EOFError (exit 1); la linea devuelta no lleva el '\\n' final. */
+static const char* piton_input_read(const char*prompt){
+  if(prompt&&*prompt)piton_write(piton_print_fd,prompt,piton_strlen(prompt));
+  static char inbuf[16384];
+  long total=0;long got=0;
+  for(;;){
+    char c;long n=piton_sys_read(0,&c,1);
+    if(n<=0)break;
+    got=1;
+    if(c=='\n')break;
+    if(total<(long)sizeof(inbuf)-1)inbuf[total++]=c;
+  }
+  inbuf[total]=0;
+  if(!got){piton_raise_set("EOFError","EOF when reading a line");piton_report_unhandled();piton_exit(1);}
+  return inbuf;
+}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 /* RAISE_VALUE_V1: `raise <instancia>` — el valor Levantado viaja al runtime
    (el backend solo llevaba el NOMBRE del tipo y el mensaje). */
@@ -8209,6 +8227,23 @@ class LinuxCEmitter:
                     seq_side, times = (left, right) if left_type == "tuple" else (right, left)
                     out.append(f"    {_name(result)}=(long)piton_seq_repeat_n((PitonSeq*){self._value(seq_side)},{self._value(times)});")
                     types[result] = "tuple"
+                    # TUPLE_REPEAT_LEN_V1: la tupla repetida hereda longitud
+                    # (n * len) y elementos del original. Sin esto
+                    # `"%s() x %s()" % ((name,)*2)` fallaba en build con "tuple
+                    # of statically known length": el formato necesita la
+                    # aridad, y la repeticion la dejaba sin registrar.
+                    _base = self._tuple_elems.get(seq_side)
+                    if _base is None:
+                        _base = self._tuple_elems.get(aliases.get(seq_side, seq_side))
+                    _times = self._fn_consts.get(times)
+                    if not isinstance(_times, int) or isinstance(_times, bool):
+                        _times = None
+                    if _base is not None and result:
+                        _n = len(_base) * _times if (_times is not None and _times > 0) else (
+                            0 if (_times is not None and _times <= 0) else None
+                        )
+                        if _n is not None:
+                            self._tuple_elems[result] = tuple(_base) * _n
                     return out
                 self._runtime_type_error(out, "unsupported operand type(s) for " + f"{operator}" + ": '" + f"{left_type}" + "' and '" + f"{right_type}" + "'")
                 types[result] = "int"
@@ -8971,6 +9006,22 @@ class LinuxCEmitter:
                 # Call handler not available here, but for `con abrir` there's
                 # no try/except handler anyway.
                 return out
+            elif function_name in {"input", "entrada"}:
+                # INPUT_V1: input([prompt]) nativo. Sin argumento o con un
+                # prompt str; cualquier otro tipo de prompt es el TypeError de
+                # CPython (que requiere str, no int).
+                if len(values) > 1:
+                    raise NativeBuildError("Linux input() takes at most one argument")
+                _prompt = '"' + '"'
+                if values:
+                    _pt = types.get(values[0], "int")
+                    if _pt != "str":
+                        raise NativeBuildError(
+                            f"Linux input() requires a str prompt, not {_pt}"
+                        )
+                    _prompt = f"(const char*){self._value(values[0])}"
+                out.append(f"    {_name(result)}=(long)piton_input_read({_prompt});")
+                types[result] = "str"
             elif function_name == "abs":
                 if len(values) != 1:
                     raise NativeBuildError("Linux abs requires one argument")

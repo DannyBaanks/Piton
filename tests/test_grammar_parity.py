@@ -2643,5 +2643,65 @@ class JoinDynamicGatesV1(unittest.TestCase):
         )
 
 
+class PctTupleRepeatAndInputGatesV1(unittest.TestCase):
+    """TUPLE_REPEAT_LEN_V1 + INPUT_V1: los dos bloqueos que le quedaban a
+    _sitebuiltins.py dentro del corpus."""
+
+    def test_percent_format_with_repeated_tuple(self):
+        # _sitebuiltins.py: "Type %s() to see the full %s text" % ((name,)*2)
+        _assert_matches(
+            self,
+            "clase Q :" + NL
+            + "    funcion __repr__ (self ):" + NL
+            + "        devolver 'Type %s() to see %s()' % ((self .nombre ,)*2 )" + NL
+            + "q = Q ()" + NL
+            + "q . nombre = 'Quitter'" + NL
+            + "imprimir (repr (q ))" + NL,
+        )
+
+    def test_percent_format_repeated_tuple_three(self):
+        _assert_matches(
+            self,
+            "imprimir ('%s-%s-%s' % (('a' ,)*3 ))" + NL,
+        )
+
+    def test_percent_format_repeated_tuple_empty(self):
+        _assert_matches(
+            self,
+            "imprimir ('%s' % ((1 ,)*0 ))" + NL,
+        )
+
+    def _run_with_stdin(self, source: str, stdin: str):
+        import subprocess
+        import tempfile
+        from piton.linux_x86 import compile_native_linux as _c
+        from piton.translator import traducir_fuente
+        with tempfile.TemporaryDirectory() as d:
+            exe = _c(source, pathlib.Path(d) / "p")
+            nat = subprocess.run([str(exe)], input=stdin.encode(),
+                                 capture_output=True, timeout=30)
+            ora = subprocess.run(
+                ["python3", "-c", traducir_fuente(source, "<gate>")],
+                input=stdin.encode(), capture_output=True, timeout=30,
+            )
+            return nat, ora
+
+    def test_input_without_prompt(self):
+        nat, ora = self._run_with_stdin("x = input ()" + NL + "imprimir (len (x ))" + NL, "mundo" + NL)
+        self.assertEqual(nat.stdout, ora.stdout)
+        self.assertEqual(nat.returncode, ora.returncode)
+
+    def test_input_with_prompt(self):
+        nat, ora = self._run_with_stdin(
+            "x = input ('dime: ')" + NL + "imprimir ('hola ' +x )" + NL, "mundo" + NL
+        )
+        self.assertEqual(nat.stdout, ora.stdout)
+        self.assertEqual(nat.returncode, ora.returncode)
+
+    def test_input_eof_is_eof_error(self):
+        nat, ora = self._run_with_stdin("x = input ()" + NL + "imprimir (x )" + NL, "")
+        self.assertEqual(nat.returncode, ora.returncode)
+
+
 if __name__ == "__main__":
     unittest.main()
