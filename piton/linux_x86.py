@@ -1494,6 +1494,123 @@ static long piton_list_of_dynamic(long bits){
   piton_raise_set("TypeError","'int' object is not iterable");
   return 0;
 }
+typedef struct{long magic;const char*path;const char*mode;long fd;PitonBytes*data;long pos;long closed;}PitonFile;
+#define PITON_FILE_MAGIC 0x50495446566CL
+/* syscalls: open(2) = 2, read = 0, write = 1, close = 3 (x86-64 freestanding). */
+static long piton_sys_open(const char*path,long flags,long mode){long r;__asm__ volatile("syscall":"=a"(r):"a"(2L),"D"(path),"S"(flags),"d"(mode):"rcx","r11","memory");return r;}
+static long piton_sys_close(long fd){long r;__asm__ volatile("syscall":"=a"(r):"a"(3L),"D"(fd):"rcx","r11","memory");return r;}
+static long piton_sys_read(long fd,void*buf,long n){long r;__asm__ volatile("syscall":"=a"(r):"a"(0L),"D"(fd),"S"(buf),"d"(n):"rcx","r11","memory");return r;}
+static long piton_sys_lseek(long fd,long off,long whence){long r;__asm__ volatile("syscall":"=a"(r):"a"(8L),"D"(fd),"S"(off),"d"(whence):"rcx","r11","memory");return r;}
+static long piton_unlink(const char*path){return 0;}
+static PitonFile* piton_file_new(const char*path,const char*mode,long fd,PitonBytes*data){
+  PitonFile*f=(PitonFile*)piton_alloc(sizeof(PitonFile));
+  f->magic=PITON_FILE_MAGIC;f->path=path;f->mode=mode;f->fd=fd;f->data=data;f->pos=0;f->closed=0;return f;}
+/* FILE_OPEN_V1: abre de verdad. Devuelve el handle o levanta el OSError de
+   CPython (IsADirectoryError / PermissionError / FileNotFoundError) con el
+   errno en el mensaje: el runtime no tiene strerror, pero el numero de errno
+   si viaja. */
+static PitonFile* piton_file_open(const char*path,const char*mode){
+  int write=0,create=0,truncate=0,append=0;
+  for(const char*p=mode;*p;++p){if(*p=='w'){write=1;create=1;truncate=1;}else if(*p=='a'){write=1;create=1;append=1;}
+    else if(*p=='+'){piton_write(2,"ValueError: mode '+' is not supported in the native subset\n",62);piton_exit(1);}
+    else if(*p=='r'){write=0;}else if(*p=='b'||*p=='t'){}else{piton_write(2,"ValueError: invalid mode\n",26);piton_exit(1);}}
+  long flags=(write?1L:0L)|(create?0100L:0L)|(truncate?01000L:0L)|(append?02000L:0L);
+  long fd=piton_sys_open(path,flags,0644);
+  if(fd<0){
+    if(fd==-2){piton_raise_set("FileNotFoundError","[Errno 2] No such file or directory");}
+    else if(fd==-13){piton_raise_set("PermissionError","[Errno 13] Permission denied");}
+    else if(fd==-21){piton_raise_set("IsADirectoryError","[Errno 21] Is a directory");}
+    else{piton_raise_set("OSError","[Errno] open failed");}
+    piton_report_unhandled();piton_exit(1);return 0;}
+  PitonBytes*data=0;
+  if(!write){
+    long end=piton_sys_lseek(fd,0,2);if(end<0)end=0;
+    piton_sys_lseek(fd,0,0);
+    usize cap=(usize)(end>0?end:16);
+    char*buf=(char*)piton_alloc(cap+1);long total=0;
+    for(;;){long n=piton_sys_read(fd,buf+total,(long)(cap-(usize)total));if(n<=0)break;total+=n;}
+    buf[total>0?total:0]=0;
+    data=(PitonBytes*)piton_bytes_new((usize)(total>0?total:0),buf);
+  }
+  return piton_file_new(path,mode,fd,data);
+}
+/* FILE_OPEN_DYN_V1: `abrir(x)` con x sin tipo estatico (netrc: la ruta que
+   devuelve os.path.expanduser). Si x no es un str, CPython levanta TypeError:
+   aqui se hace lo mismo, no se desreferencia un entero. */
+static PitonFile* piton_file_open_dyn(long bits,const char*mode){
+  if(!bits){piton_raise_set("TypeError","expected str, not NoneType");piton_report_unhandled();piton_exit(1);return 0;}
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;
+    if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_MEMORYVIEW){
+      piton_raise_set("TypeError","expected str, not a collection");piton_report_unhandled();piton_exit(1);return 0;}
+    if(piton_is_printable_str((const char*)bits))return piton_file_open((const char*)bits,mode);
+  }
+  if(piton_is_double_bits(bits)){piton_raise_set("TypeError","expected str, not float");piton_report_unhandled();piton_exit(1);}
+  piton_raise_set("TypeError","expected str, not int");piton_report_unhandled();piton_exit(1);
+  return 0;
+}
+static usize piton_file_size(PitonFile*f){return f->data?(usize)f->data->length:0;}
+/* FILE_READ_V1: read() sin argumento lee todo lo que queda; read(n) n BYTES.
+   El modo por defecto es texto (como CPython), asi que devuelve str: el mismo
+   criterio NUL-terminado que usa el resto del subconjunto (un NUL embebido
+   truncaria, limitacion documentada, no divergencia silenciosa). */
+static const char* piton_file_read(PitonFile*f,long n){
+  if(!f||f->closed||!f->data){piton_raise_set("ValueError","I/O operation on closed file");piton_report_unhandled();piton_exit(1);}
+  usize avail=piton_file_size(f)-(usize)f->pos;
+  usize want=n<0?avail:((usize)n<avail?(usize)n:avail);
+  char*out=(char*)piton_alloc(want+1);
+  for(usize i=0;i<want;++i)out[i]=((char*)(long)f->data->data)[f->pos++];
+  out[want]=0;
+  return out;
+}
+/* FILE_READLINE_V1: hasta '\n' inclusivo (o EOF). */
+static const char* piton_file_readline(PitonFile*f){
+  if(!f||f->closed||!f->data){piton_raise_set("ValueError","I/O operation on closed file");piton_report_unhandled();piton_exit(1);}
+  usize total=piton_file_size(f);
+  const char*base=(const char*)(long)f->data->data;
+  usize start=(usize)f->pos,i=start;
+  while(i<total&&base[i]!='\n')++i;
+  if(i<total)++i;
+  usize want=i-(usize)f->pos;
+  char*out=(char*)piton_alloc(want+1);
+  for(usize k=0;k<want;++k)out[k]=base[(usize)f->pos+k];
+  out[want]=0;f->pos=(long)i;
+  return out;
+}
+/* FILE_CLOSE_V1 / FILE_WRITE_V1 / FILE_ITER_*: cierre, escritura por descriptor
+   e iteracion linea a linea como CPython. */
+static void piton_file_close(PitonFile*f){if(!f||f->closed)return;if(f->fd>=0&&f->mode&&(f->mode[0]=='w'||f->mode[0]=='a'))piton_sys_close(f->fd);f->closed=1;}
+static long piton_file_write(PitonFile*f,const char*s){
+  if(!f||f->closed){piton_raise_set("ValueError","I/O operation on closed file");piton_report_unhandled();piton_exit(1);}
+  if(!f->mode||(f->mode[0]!='w'&&f->mode[0]!='a')){piton_raise_set("io.UnsupportedOperation","not writable");piton_report_unhandled();piton_exit(1);}
+  usize n=piton_strlen(s);long w=piton_write(f->fd,s,n);return(long)w;}
+static long piton_file_has_more(PitonFile*f){return f&&f->data&&!f->closed&&(usize)f->pos<piton_file_size(f);}
+static const char* piton_file_next_line(PitonFile*f){return piton_file_readline(f);}
+static const char* piton_file_to_str(PitonFile*f){return f->path;}
+/* JOIN_OF_DYNAMIC_V1: `sep.join(x)` con x sin tipo estatico. CPython acepta
+   cualquier iterable: una lista o tupla se une directo; un str se parte en
+   caracteres y se une (",".join("ab") == "a,b"); cualquier otra cosa levanta el
+   TypeError de CPython. dict/set/range (que CPython tambien recorre) fallan
+   cerrados con exit 2: su orden de iteracion no es el de una secuencia. */
+static long piton_str_join_dyn(const char*sep,long bits){
+  if(!bits){piton_raise_set("TypeError","can only join an iterable");piton_report_unhandled();piton_exit(1);return 0;}
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;
+    if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_MEMORYVIEW){
+      if(ptr[1]==PK_LIST||ptr[1]==PK_TUPLE)return piton_str_join(sep,(PitonSeq*)bits);
+      piton_write(2,"TypeError: join of a dynamically typed collection is not supported in the native subset\n",99);
+      piton_exit(2);return 0;
+    }
+    if(piton_is_printable_str((const char*)bits)){
+      const char*src=(const char*)bits;usize n=piton_strlen(src);
+      PitonSeq*parts=piton_seq_new(PK_LIST,n);
+      for(usize i=0;i<n;++i){char*c=(char*)piton_alloc(2);c[0]=src[i];c[1]=0;piton_seq_put(parts,i,(PitonSlot){(long)c,PK_STR});}
+      return piton_str_join(sep,parts);
+    }
+  }
+  piton_raise_set("TypeError","can only join an iterable");piton_report_unhandled();piton_exit(1);
+  return 0;
+}
 static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
 /* RAISE_VALUE_V1: `raise <instancia>` — el valor Levantado viaja al runtime
    (el backend solo llevaba el NOMBRE del tipo y el mensaje). */
@@ -3067,6 +3184,7 @@ class LinuxCEmitter:
         self._calliter_elem: dict[str, str] = {}
         # CALLITER_ELEM_V1: closure -> funcion de origen (para el tipo de retorno).
         self._closure_origin: dict[str, str] = {}
+        self._files: dict[str, bool] = {}
         self._builtin_bound: dict[str, str] = {}
         # builtins that are only ever CALLED (never a value): marking them
         # as a builtin value broke `suma = 0` as an ordinary variable.
@@ -4725,6 +4843,60 @@ class LinuxCEmitter:
             else:
                 raise NativeBuildError(f"Linux set.{method}() is not supported")
 
+    def _emit_file_method(self, out: list[str], result: Any, method: str, obj: Any,
+                          call_args: list[Any], types: dict[str, str]) -> None:
+        """FILE_IO_V1: metodos del handle de fichero devuelto por abrir()."""
+        operand = self._value(obj)
+
+        def arity(counts, what):
+            if len(call_args) not in counts:
+                raise NativeBuildError("Linux file." + method + "() requires " + what)
+
+        if method == "read":
+            arity((0, 1), "no arguments or one int")
+            num = self._value(call_args[0]) if call_args else "-1"
+            out.append("    " + _name(result) + "=(long)piton_file_read((PitonFile*)" + operand + "," + num + ");")
+            types[result] = "str"
+        elif method == "readline":
+            arity((0,), "no arguments")
+            out.append("    " + _name(result) + "=(long)piton_file_readline((PitonFile*)" + operand + ");")
+            types[result] = "str"
+        elif method == "readlines":
+            arity((0,), "no arguments")
+            out.append("    {PitonSeq*_fl=piton_seq_new(PK_LIST,0);")
+            out.append("     while(piton_file_has_more((PitonFile*)" + operand + "))")
+            out.append("         {const char*_ln=piton_file_next_line((PitonFile*)" + operand + ");")
+            out.append("          piton_seq_append(_fl,(PitonSlot){(long)_ln,PK_STR});}")
+            out.append("     " + _name(result) + "=(long)_fl;}")
+            types[result] = "list"
+            self._coll_elems[result] = "str"
+        elif method == "close":
+            arity((0,), "no arguments")
+            out.append("    piton_file_close((PitonFile*)" + operand + ");")
+            types[result] = "none"
+        elif method == "write":
+            arity((1,), "exactly one str argument")
+            out.append("    " + _name(result) + "=piton_file_write((PitonFile*)" + operand + ",(const char*)" + self._value(call_args[0]) + ");")
+            types[result] = "int"
+        elif method == "__enter__":
+            arity((0,), "no arguments")
+            out.append("    " + _name(result) + "=(long)" + operand + ";")
+            types[result] = "file"
+        elif method == "__exit__":
+            arity((0, 3), "no arguments or three")
+            out.append("    piton_file_close((PitonFile*)" + operand + ");" + _name(result) + "=0;")
+            types[result] = "int"
+        elif method == "fileno":
+            arity((0,), "no arguments")
+            out.append("    " + _name(result) + "=((PitonFile*)" + operand + ")->fd;")
+            types[result] = "int"
+        elif method in {"flush", "seek", "tell", "truncate", "detach", "isatty"}:
+            # FILE_IO_GAP_V1: CPython si las soporta; el subconjunto no tiene
+            # buffers ni descriptores posicionables. Fail-closed.
+            raise NativeBuildError("Linux file." + method + "() is not available in the native subset")
+        else:
+            raise NativeBuildError("Linux file." + method + "() is not supported")
+
     def _emit_bytes_method(self, out: list[str], result: Any, method: str, obj: Any,
                            call_args: list[Any], is_bytearray: bool, types: dict[str, str]) -> None:
         operand = self._value(obj)
@@ -5048,6 +5220,13 @@ class LinuxCEmitter:
                 out.append(
                     f"    {_name(result)}=(long)piton_str_join((const char*){operand},_jl);}}"
                 )
+                types[result] = "str"
+                return out
+            if types.get(call_args[0]) in {"", "int", "none"}:
+                # JOIN_OF_DYNAMIC_V1: el argumento no tiene tipo estatico; el
+                # runtime acepta lista/tupla/str y levanta el TypeError de
+                # CPython para el resto.
+                out.append(f"    {_name(result)}=piton_str_join_dyn((const char*){operand},{self._value(call_args[0])});")
                 types[result] = "str"
                 return out
             if types.get(call_args[0]) not in {"list", "tuple"}:
@@ -6711,6 +6890,18 @@ class LinuxCEmitter:
             elif source_type == "generator":
                 out.append(f"    {_name(result)}={self._value(source)};")
                 types[result] = "generator"
+                return out
+            elif source_type == "file":
+                # FILE_ITER_V1: iterar un fichero da sus lineas restantes (como
+                # CPython). Se materializa la lista de lineas y se envuelve en
+                # el iterador generico, reusando todo el camino de `para`.
+                out.append(
+                    f"    {{PitonSeq*_fil=piton_seq_new(PK_LIST,0);"
+                    f" while(piton_file_has_more((PitonFile*){self._value(source)}))"
+                    f" {{piton_seq_append(_fil,(PitonSlot){{(long)piton_file_next_line((PitonFile*){self._value(source)}),PK_STR}});}}"
+                    f" {_name(result)}=piton_iterator_new_any((void*)_fil,PK_LIST);}}"
+                )
+                types[result] = "iterator:list"
                 return out
             elif source_type.startswith("iterator:"):
                 # ITER_PASSTHROUGH_V1: iter(x) on an iterator returns x
@@ -8730,25 +8921,36 @@ class LinuxCEmitter:
                 # file or a non-literal path fails closed: claiming
                 # FileNotFoundError there would be a lie, and silently
                 # "opening" it would be worse.
-                if len(values) != 1:
-                    raise NativeBuildError(f"Linux {function_name} requires one argument (filename)")
+                if not values or len(values) > 2:
+                    raise NativeBuildError(f"Linux {function_name} requires one or two positional arguments")
+                # FILE_IO_V1: el modo es posicional (abrir(ruta[, modo])).
+                # `encoding=`/`buffering=` por keyword siguen fail-closed: el
+                # MIR todavia no transporta kwargs en llamadas a builtins.
+                mode_expr = '"r"'
+                if len(values) == 2:
+                    _mv = self._fn_consts.get(values[1])
+                    if not isinstance(_mv, str):
+                        raise NativeBuildError("Linux abrir(mode) requires a literal mode")
+                    if any(c in _mv for c in "x+"):
+                        raise NativeBuildError(f"Linux abrir(mode={_mv!r}) is not supported in the native subset")
+                    mode_expr = json.dumps(_mv)
                 path_type = types.get(values[0], "int")
                 if path_type != "str":
-                    raise NativeBuildError(f"Linux {function_name} requires a str filename, not {path_type}")
-                literal = self._fn_consts.get(values[0])
-                if not isinstance(literal, str):
-                    raise NativeBuildError(
-                        f"Linux {function_name} cannot open files in the native subset "
-                        "(path is not a static literal)"
-                    )
-                if os.path.exists(literal):
-                    raise NativeBuildError(
-                        f"Linux {function_name} cannot open files in the native subset"
-                    )
-                out.append(f"    piton_raise_set(\"FileNotFoundError\", \"[Errno 2] No such file or directory\");")
-                out.append(f"    piton_report_unhandled();")
-                out.append(f"    piton_exit(1);")
-                types[result] = "int"
+                    if path_type not in {"", "int", "none"}:
+                        raise NativeBuildError(f"Linux {function_name} requires a str filename, not {path_type}")
+                    # FILE_IO_V1: ruta sin tipo estatico (netrc: la que devuelve
+                    # expanduser). El runtime comprueba que sea str y levanta el
+                    # TypeError de CPython si no lo es.
+                    out.append(f"    {_name(result)}=(long)piton_file_open_dyn({self._value(values[0])},{mode_expr});")
+                    types[result] = "file"
+                    self._files[result] = True
+                    return out
+                # FILE_IO_V1: modo. 'r' (defecto) lee; 'w'/'a' escriben por
+                # descriptor. 'x', '+' y los modos mixtos fallan cerrados en el
+                # runtime: no hay syscalls para ellos y no se divergen.
+                out.append(f"    {_name(result)}=(long)piton_file_open((const char*){self._value(values[0])},{mode_expr});")
+                types[result] = "file"
+                self._files[result] = True
                 # Call handler not available here, but for `con abrir` there's
                 # no try/except handler anyway.
                 return out
@@ -10363,6 +10565,12 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}={_name(_mod_target)}({_vals_c});")
                     types[result] = "int"
                     return out
+                if owner_type == "file":
+                    # FILE_IO_V1: metodos del handle de fichero. Lo que CPython
+                    # tiene y aqui no existe (seek/tell/flush, lectura por
+                    # lineas con limite, truncate) falla cerrado, nunca diverge.
+                    self._emit_file_method(out, result, method, obj, list(call_args), types)
+                    return out
                 if owner_type == "str":
                     # STR_METHODS_V1: builtin str methods bind statically here;
                     # anything not in the table fails closed.
@@ -11505,6 +11713,14 @@ class LinuxCEmitter:
                 out.append("        piton_report_unhandled();piton_exit(1);")
             out.append("    }")
         elif op == "gen_close":
+            # FILE_IO_V1: el lowerer manda `.close()` a gen_close; sobre un
+            # handle de fichero es `piton_file_close` (cerrar el descriptor),
+            # no el cierre de un generador.
+            _gc_type = types.get(args[0], "")
+            if _gc_type == "file" or aliases.get(args[0], "") in self._files:
+                out.append(f"    piton_file_close((PitonFile*){self._value(args[0])});{_name(result)}=0;")
+                types[result] = "int"
+                return out
             out.append(f"    {_name(result)}=piton_gen_close({self._value(args[0])});")
             types[result] = "int"
         elif op == "coro_run":

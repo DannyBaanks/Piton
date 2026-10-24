@@ -24,6 +24,8 @@ una regresion diferencial del fusionado correcto de `no en`.
 """
 from __future__ import annotations
 
+import json
+import pathlib
 import sys
 import unittest
 
@@ -2520,6 +2522,125 @@ class ConcatChainGatesV1(unittest.TestCase):
         out = _pl.Path("/tmp/opencode/topics_native")
         _compile(_to_piton(path.read_text(encoding="utf-8", errors="replace")), out)
         self.assertTrue(out.exists() and out.stat().st_size > 0)
+
+
+_NL = chr(10)
+NL = _NL
+
+
+class FileIoGatesV1(unittest.TestCase):
+    """FILE_IO_V1: `abrir()` abre ficheros de verdad (syscalls), lee, itera,
+    escribe y respeta `with`. Lo que el subconjunto nativo no puede hacer
+    (buffering, seek/tell, modos 'x'/'+', encoding por keyword) falla cerrado."""
+
+    def _fixture(self) -> str:
+        import tempfile
+        d = pathlib.Path(tempfile.mkdtemp(prefix="piton-fio-"))
+        p = d / "datos.txt"
+        p.write_text("linea uno" + NL + "linea dos" + NL + "linea tres" + NL, encoding="utf-8")
+        return str(p)
+
+    def _ruta(self) -> str:
+        return "'" + self._fixture() + "'"
+
+    def test_read_whole_file(self):
+        _assert_matches(
+            self,
+            ("fp = abrir (" + self._ruta() + ")" + NL
+             + "imprimir (fp . read ())" + NL
+             + "fp . close ()" + NL),
+        )
+
+    def test_readline(self):
+        _assert_matches(
+            self,
+            ("fp = abrir (" + self._ruta() + ")" + NL
+             + "imprimir (fp . readline ())" + NL
+             + "fp . close ()" + NL),
+        )
+
+    def test_readlines(self):
+        _assert_matches(
+            self,
+            ("fp = abrir (" + self._ruta() + ")" + NL
+             + "imprimir (len (fp . readlines ()))" + NL
+             + "fp . close ()" + NL),
+        )
+
+    def test_iterate_lines(self):
+        _assert_matches(
+            self,
+            ("fp = abrir (" + self._ruta() + ")" + NL
+             + "para l en fp :" + NL
+             + "    imprimir (l ,end ='' )" + NL
+             + "fp . close ()" + NL),
+        )
+
+    def test_with_open(self):
+        _assert_matches(
+            self,
+            ("con abrir (" + self._ruta() + ") como fp :" + NL
+             + "    imprimir (fp . readline ())" + NL),
+        )
+
+    def test_missing_file_raises_file_not_found(self):
+        _assert_matches(
+            self,
+            "fp = abrir ('/tmp/piton-fio-no-existe.txt')" + NL
+            + "imprimir (fp . read ())" + NL,
+        )
+
+    def test_write_and_read_back(self):
+        import tempfile
+        out = str(pathlib.Path(tempfile.mkdtemp(prefix="piton-fio-")) / "salida.txt")
+        _assert_matches(
+            self,
+            ("fp = abrir (" + '\'' + out + '\'' + " ,'w')" + NL
+             + "fp . write ('hola desde piton')" + NL
+             + "fp . close ()" + NL
+             + "fp2 = abrir (" + '\'' + out + '\'' + ")" + NL
+             + "imprimir (fp2 . read ())" + NL),
+        )
+
+    def test_unsupported_mode_fails_closed(self):
+        from piton.x86 import NativeBuildError
+        with self.assertRaises(NativeBuildError):
+            _assert_matches(
+                self,
+                "fp = abrir (" + self._ruta() + " ,'x')" + NL + "fp . close ()" + NL,
+            )
+
+
+class JoinDynamicGatesV1(unittest.TestCase):
+    """JOIN_OF_DYNAMIC_V1: `sep.join(x)` con x sin tipo estatico."""
+
+    def test_join_of_untyped_list(self):
+        _assert_matches(
+            self,
+            "d = { }" + NL
+            + "d ['a' ] = ['x' ,'y' ,'z' ]" + NL
+            + "xs = d ['a']" + NL
+            + "imprimir (','. join (xs ))" + NL,
+        )
+
+    def test_join_of_untyped_str_explodes_characters(self):
+        # CPython: ",".join("ab") == "a,b"
+        _assert_matches(
+            self,
+            "d = { }" + NL
+            + "d ['a' ] = 'ab'" + NL
+            + "t = d ['a']" + NL
+            + "imprimir (','. join (t ))" + NL,
+        )
+
+    def test_join_of_untyped_int_is_type_error(self):
+        _assert_matches(
+            self,
+            "d = { }" + NL
+            + "d ['a' ] = 5" + NL
+            + "n = d ['a']" + NL
+            + "imprimir (','. join (n ))" + NL,
+        )
 
 
 if __name__ == "__main__":
