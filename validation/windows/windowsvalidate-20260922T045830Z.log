@@ -1,0 +1,564 @@
+﻿### python-version [PASS] exit=0
+Python 3.12.10
+### windows-focused-corpus [PASS] exit=0
+test_t2_base_exception (tests.test_windows_validate.WindowsValidation.test_t2_base_exception) ... ok
+test_t2_raise_from_and_exception_chain (tests.test_windows_validate.WindowsValidation.test_t2_raise_from_and_exception_chain) ... ok
+test_t2_raise_from_none (tests.test_windows_validate.WindowsValidation.test_t2_raise_from_none) ... ok
+test_t5_math_floor_ceil (tests.test_windows_validate.WindowsValidation.test_t5_math_floor_ceil) ... ok
+test_t5_math_trig_log (tests.test_windows_validate.WindowsValidation.test_t5_math_trig_log) ... ok
+test_t5_os_name (tests.test_windows_validate.WindowsValidation.test_t5_os_name) ... ok
+test_t5_sys_argv_length (tests.test_windows_validate.WindowsValidation.test_t5_sys_argv_length) ... ok
+test_t5_sys_exit (tests.test_windows_validate.WindowsValidation.test_t5_sys_exit) ... ok
+test_dashboard_has_no_hidden_native_claims (tests.test_phase14.Phase14Dashboard.test_dashboard_has_no_hidden_native_claims) ... ok
+test_dashboard_is_complete_and_fail_closed (tests.test_phase14.Phase14Dashboard.test_dashboard_is_complete_and_fail_closed) ... ok
+test_native_subset_milestone_requires_a_passing_receipt (tests.test_phase14.Phase14Dashboard.test_native_subset_milestone_requires_a_passing_receipt) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 25.929s
+
+OK
+### windows-regression-suite [FAIL] exit=1
+======================================================================
+ERROR: test_x86_bare_reraise_from_catchall_rejected (tests.test_phase5.Phase5Gates.test_x86_bare_reraise_from_catchall_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2145, in compile_native
+    mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2607, in lower_hir_to_mir
+    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 529, in lower
+    self._lower_statements(module, [
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1038, in _lower_statement
+    self._lower_try(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1426, in _lower_try
+    self._lower_statements(builder, handler.body)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1042, in _lower_statement
+    self._lower_raise(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1590, in _lower_raise
+    self._lower_reraise(builder)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1633, in _lower_reraise
+    raise MIRLoweringError(
+piton.mir.MIRLoweringError: native bare re-raise from a catch-all (excepto Exception) handler is not supported yet
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 733, in test_x86_bare_reraise_from_catchall_rejected
+    executable = compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2147, in compile_native
+    raise NativeBuildError(str(error)) from error
+piton.x86.NativeBuildError: native bare re-raise from a catch-all (excepto Exception) handler is not supported yet
+
+======================================================================
+ERROR: test_x86_iter_callable_sentinel (tests.test_phase5.Phase5Gates.test_x86_iter_callable_sentinel)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2145, in compile_native
+    mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2607, in lower_hir_to_mir
+    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 529, in lower
+    self._lower_statements(module, [
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 954, in _lower_statement
+    value = self._lower_expr(builder, node.value)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1842, in _lower_expr
+    raise MIRLoweringError("native iter requires one positional argument")
+piton.mir.MIRLoweringError: native iter requires one positional argument
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 122, in test_x86_iter_callable_sentinel
+    result = compare_native_to_cpython(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 47, in compare_native_to_cpython
+    executable = _compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 41, in _compile_native
+    return compile_native(source, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2147, in compile_native
+    raise NativeBuildError(str(error)) from error
+piton.x86.NativeBuildError: native iter requires one positional argument
+
+======================================================================
+ERROR: test_x86_math_tier1_v1 (tests.test_phase5.Phase5Gates.test_x86_math_tier1_v1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2145, in compile_native
+    mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2607, in lower_hir_to_mir
+    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 529, in lower
+    self._lower_statements(module, [
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1057, in _lower_statement
+    self._lower_expr(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2171, in _lower_expr
+    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2171, in <genexpr>
+    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2089, in _lower_expr
+    raise MIRLoweringError(f"native math.{attr} is not supported or requires one positional argument")
+piton.mir.MIRLoweringError: native math.trunc is not supported or requires one positional argument
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 823, in test_x86_math_tier1_v1
+    result = compare_native_to_cpython(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 47, in compare_native_to_cpython
+    executable = _compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 41, in _compile_native
+    return compile_native(source, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2147, in compile_native
+    raise NativeBuildError(str(error)) from error
+piton.x86.NativeBuildError: native math.trunc is not supported or requires one positional argument
+
+======================================================================
+ERROR: test_x86_next_with_default (tests.test_phase5.Phase5Gates.test_x86_next_with_default)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2145, in compile_native
+    mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2607, in lower_hir_to_mir
+    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 529, in lower
+    self._lower_statements(module, [
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1057, in _lower_statement
+    self._lower_expr(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2171, in _lower_expr
+    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2171, in <genexpr>
+    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1849, in _lower_expr
+    raise MIRLoweringError("native next requires one positional argument")
+piton.mir.MIRLoweringError: native next requires one positional argument
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 138, in test_x86_next_with_default
+    result = compare_native_to_cpython(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 47, in compare_native_to_cpython
+    executable = _compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 41, in _compile_native
+    return compile_native(source, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2147, in compile_native
+    raise NativeBuildError(str(error)) from error
+piton.x86.NativeBuildError: native next requires one positional argument
+
+======================================================================
+ERROR: test_x86_relative_two_levels_up_supported (tests.test_phase5.Phase5Gates.test_x86_relative_two_levels_up_supported)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 1797, in test_x86_relative_two_levels_up_supported
+    executable = compile_native_files(entry, root / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2403, in compile_native_files
+    modules, from_imports, module_meta = _scan_native_modules(entry_path)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2306, in _scan_native_modules
+    scan_module_hir(hir, dotted, package_ctx)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2260, in scan_module_hir
+    raise NativeBuildError(
+piton.x86.NativeBuildError: native relative imports beyond one level ('desde .. importar ...') are not supported yet
+
+======================================================================
+ERROR: test_bare_reraise_from_catchall_handler (tests.test_phase5.WithProtocolNativeV1.test_bare_reraise_from_catchall_handler)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2145, in compile_native
+    mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2607, in lower_hir_to_mir
+    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 529, in lower
+    self._lower_statements(module, [
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1038, in _lower_statement
+    self._lower_try(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1401, in _lower_try
+    self._lower_statements(builder, node.body)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1038, in _lower_statement
+    self._lower_try(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1426, in _lower_try
+    self._lower_statements(builder, handler.body)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1042, in _lower_statement
+    self._lower_raise(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1590, in _lower_raise
+    self._lower_reraise(builder)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1633, in _lower_reraise
+    raise MIRLoweringError(
+piton.mir.MIRLoweringError: native bare re-raise from a catch-all (excepto Exception) handler is not supported yet
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3610, in test_bare_reraise_from_catchall_handler
+    result = compare_native_to_cpython(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 47, in compare_native_to_cpython
+    executable = _compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 41, in _compile_native
+    return compile_native(source, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2147, in compile_native
+    raise NativeBuildError(str(error)) from error
+piton.x86.NativeBuildError: native bare re-raise from a catch-all (excepto Exception) handler is not supported yet
+
+======================================================================
+ERROR: test_with_multiple_items_fails_closed (tests.test_phase5.WithProtocolNativeV1.test_with_multiple_items_fails_closed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2145, in compile_native
+    mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2607, in lower_hir_to_mir
+    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 529, in lower
+    self._lower_statements(module, [
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1040, in _lower_statement
+    self._lower_with(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1490, in _lower_with
+    raise MIRLoweringError(
+piton.mir.MIRLoweringError: native with supports a single context manager for now
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3438, in test_with_multiple_items_fails_closed
+    executable = compile_native(
+                 ^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2147, in compile_native
+    raise NativeBuildError(str(error)) from error
+piton.x86.NativeBuildError: native with supports a single context manager for now
+
+======================================================================
+ERROR: test_with_multiple_suppress_and_propagate (tests.test_phase5.WithProtocolNativeV1.test_with_multiple_suppress_and_propagate)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2145, in compile_native
+    mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 2607, in lower_hir_to_mir
+    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 529, in lower
+    self._lower_statements(module, [
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1038, in _lower_statement
+    self._lower_try(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1401, in _lower_try
+    self._lower_statements(builder, node.body)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 933, in _lower_statements
+    self._lower_statement(builder, statement)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1040, in _lower_statement
+    self._lower_with(builder, node)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\mir.py", line 1490, in _lower_with
+    raise MIRLoweringError(
+piton.mir.MIRLoweringError: native with supports a single context manager for now
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3450, in test_with_multiple_suppress_and_propagate
+    result = compare_native_to_cpython(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 47, in compare_native_to_cpython
+    executable = _compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 41, in _compile_native
+    return compile_native(source, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2147, in compile_native
+    raise NativeBuildError(str(error)) from error
+piton.x86.NativeBuildError: native with supports a single context manager for now
+
+======================================================================
+ERROR: test_x86_class_delattr_hook (tests.test_phase5.WithProtocolNativeV1.test_x86_class_delattr_hook)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3496, in test_x86_class_delattr_hook
+    result = compare_native_to_cpython(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 47, in compare_native_to_cpython
+    executable = _compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 41, in _compile_native
+    return compile_native(source, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2148, in compile_native
+    return _compile_native_mir(mir, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2426, in _compile_native_mir
+    assembly.write_text(emit_nasm(mir), encoding="ascii")
+                        ^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2130, in emit_nasm
+    return Win64NasmEmitter().emit(module)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 187, in emit
+    self._emit_function(function)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 285, in _emit_function
+    self._emit_instruction(instruction, labels)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 1142, in _emit_instruction
+    raise NativeBuildError(
+piton.x86.NativeBuildError: native del on 'x' is not a property of a natively-typed object
+
+======================================================================
+ERROR: test_x86_class_is_identity (tests.test_phase5.WithProtocolNativeV1.test_x86_class_is_identity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3534, in test_x86_class_is_identity
+    result = compare_native_to_cpython(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 47, in compare_native_to_cpython
+    executable = _compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 41, in _compile_native
+    return compile_native(source, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2148, in compile_native
+    return _compile_native_mir(mir, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2426, in _compile_native_mir
+    assembly.write_text(emit_nasm(mir), encoding="ascii")
+                        ^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2130, in emit_nasm
+    return Win64NasmEmitter().emit(module)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 187, in emit
+    self._emit_function(function)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 285, in _emit_function
+    self._emit_instruction(instruction, labels)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 795, in _emit_instruction
+    condition = {"==": "e", "!=": "ne", "<": "l", "<=": "le", ">": "g", ">=": "ge"}[operator]
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+KeyError: 'es'
+
+======================================================================
+ERROR: test_x86_class_len_dispatch (tests.test_phase5.WithProtocolNativeV1.test_x86_class_len_dispatch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3558, in test_x86_class_len_dispatch
+    result = compare_native_to_cpython(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 47, in compare_native_to_cpython
+    executable = _compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 41, in _compile_native
+    return compile_native(source, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2148, in compile_native
+    return _compile_native_mir(mir, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2426, in _compile_native_mir
+    assembly.write_text(emit_nasm(mir), encoding="ascii")
+                        ^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2130, in emit_nasm
+    return Win64NasmEmitter().emit(module)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 187, in emit
+    self._emit_function(function)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 285, in _emit_function
+    self._emit_instruction(instruction, labels)
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 1506, in _emit_instruction
+    raise NativeBuildError("native len currently requires one collection")
+piton.x86.NativeBuildError: native len currently requires one collection
+
+======================================================================
+FAIL: test_finalizer_runs_at_exit (tests.test_phase5.FinalizersNativeV1.test_finalizer_runs_at_exit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3657, in test_finalizer_runs_at_exit
+    self.assert_native_matches(
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3654, in assert_native_matches
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'listo\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'listo\r\ncerrado\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_finalizer_runs_once_for_self_cycle (tests.test_phase5.FinalizersNativeV1.test_finalizer_runs_once_for_self_cycle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3666, in test_finalizer_runs_once_for_self_cycle
+    self.assert_native_matches(
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3654, in assert_native_matches
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'ok\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'ok\r\ndel\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_builtins_core_v2 (tests.test_phase5.Phase5Gates.test_x86_builtins_core_v2)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 789, in test_x86_builtins_core_v2
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=3221225477, stdout=b'', stderr=b''), oracle=Observation(returncode=0, stdout=b'65\r\n241\r\na\r\n-0b111\r\n0b111\r\n1024\r\n15.625\r\n0.5\r\nTrue\r\nFalse\r\nFalse\r\nTrue\r\n2\r\n4\r\n-2\r\n7\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_builtins_core_v2_fail_closed_catchable (tests.test_phase5.Phase5Gates.test_x86_builtins_core_v2_fail_closed_catchable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 863, in test_x86_builtins_core_v2_fail_closed_catchable
+    output, _ = self.build_run(
+                ^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 23, in build_run
+    self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
+AssertionError: 3221225477 != 0 : 
+
+======================================================================
+FAIL: test_x86_closure_arity_fail_closed (tests.test_phase5.Phase5Gates.test_x86_closure_arity_fail_closed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 344, in test_x86_closure_arity_fail_closed
+    self.assertEqual(completed.returncode, 2)
+AssertionError: 0 != 2
+
+======================================================================
+FAIL: test_x86_generator_return_value_completes (tests.test_phase5.Phase5Gates.test_x86_generator_return_value_completes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 1193, in test_x86_generator_return_value_completes
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=1, stdout=b'1\r\n', stderr=b'StopIteration\r\n'), oracle=Observation(returncode=0, stdout=b'1\r\n7\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_generator_yield_from_fails_closed (tests.test_phase5.Phase5Gates.test_x86_generator_yield_from_fails_closed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 1151, in test_x86_generator_yield_from_fails_closed
+    with self.assertRaisesRegex(Exception, "not supported yet"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Exception not raised
+
+======================================================================
+FAIL: test_x86_relative_import_beyond_one_level_fails_closed (tests.test_phase5.Phase5Gates.test_x86_relative_import_beyond_one_level_fails_closed)
+----------------------------------------------------------------------
+piton.x86.NativeBuildError: native relative imports beyond one level ('desde .. importar ...') are not supported yet
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 1771, in test_x86_relative_import_beyond_one_level_fails_closed
+    with self.assertRaisesRegex(Exception, "escapes the package"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "escapes the package" does not match "native relative imports beyond one level ('desde .. importar ...') are not supported yet"
+
+======================================================================
+FAIL: test_x86_type_conversion_fail_closed_catchable (tests.test_phase5.Phase5Gates.test_x86_type_conversion_fail_closed_catchable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 842, in test_x86_type_conversion_fail_closed_catchable
+    output, _ = self.build_run(
+                ^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 23, in build_run
+    self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
+AssertionError: 3221225477 != 0 : 
+
+======================================================================
+FAIL: test_x86_type_conversion_v1 (tests.test_phase5.Phase5Gates.test_x86_type_conversion_v1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 819, in test_x86_type_conversion_v1
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=3221225477, stdout=b'', stderr=b''), oracle=Observation(returncode=0, stdout=b'42\r\n-17\r\n2\r\n-2\r\n1\r\n42\r\n2.5\r\n3.0\r\n15.625\r\nTrue\r\nNone\r\nhola\r\n3.0\r\n-0.5\r\n1.0\r\nFalse\r\nTrue\r\nFalse\r\nFalse\r\nTrue\r\nFalse\r\nFalse\r\nTrue\r\nFalse\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_yield_from_delegates_subgen_values (tests.test_phase5.Phase5Gates.test_x86_yield_from_delegates_subgen_values)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 1169, in test_x86_yield_from_delegates_subgen_values
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=1, stdout=b'1\r\n2\r\n', stderr=b'StopIteration\r\n'), oracle=Observation(returncode=0, stdout=b'1\r\n2\r\n9\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_raise_from_chain_visible_unhandled (tests.test_phase5.WithProtocolNativeV1.test_raise_from_chain_visible_unhandled)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3600, in test_raise_from_chain_visible_unhandled
+    self.assertIn("TypeError", stderr)
+AssertionError: 'TypeError' not found in 'ValueError: externo\r\n'
+
+======================================================================
+FAIL: test_x86_class_call_routes_to_call (tests.test_phase5.WithProtocolNativeV1.test_x86_class_call_routes_to_call)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3516, in test_x86_class_call_routes_to_call
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=3221225477, stdout=b'', stderr=b''), oracle=Observation(returncode=0, stdout=b'31\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_class_eq_custom_dispatch (tests.test_phase5.WithProtocolNativeV1.test_x86_class_eq_custom_dispatch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3531, in test_x86_class_eq_custom_dispatch
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'False\r\nFalse\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'True\r\nFalse\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_class_getattr_hook_missing (tests.test_phase5.WithProtocolNativeV1.test_x86_class_getattr_hook_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3470, in test_x86_class_getattr_hook_missing
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'0\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'99\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_class_setattr_hook (tests.test_phase5.WithProtocolNativeV1.test_x86_class_setattr_hook)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3493, in test_x86_class_setattr_hook
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'', stderr=b''), oracle=Observation(returncode=0, stdout=b'5\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_class_str_dispatch (tests.test_phase5.WithProtocolNativeV1.test_x86_class_str_dispatch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3555, in test_x86_class_str_dispatch
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'3146422439152\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'caja\r\n', stderr=b''))
+
+----------------------------------------------------------------------
+Ran 307 tests in 861.311s
+
+FAILED (failures=17, errors=11)

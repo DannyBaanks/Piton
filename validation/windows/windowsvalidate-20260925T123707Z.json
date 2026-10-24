@@ -1,0 +1,51 @@
+﻿{
+    "schema":  "piton-windows-validation-v1",
+    "run_id":  "20260925T123707Z",
+    "status":  "FAIL",
+    "host":  {
+                 "computer":  "DANNY",
+                 "os":  "Microsoft Windows NT 10.0.26200.0",
+                 "architecture":  "AMD64"
+             },
+    "repository":  {
+                       "commit":  "d1629723980fbc8bdd8a487f496c203d27797d44",
+                       "worktree_dirty":  true
+                   },
+    "python":  "C:\\Users\\progr\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe",
+    "tools":  {
+                  "git":  "git version 2.55.0.windows.2",
+                  "nasm":  "NASM version 3.01 compiled on Jul 29 2026",
+                  "gcc":  "gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r4) 16.1.0"
+              },
+    "commands":  [
+                     {
+                         "name":  "python-version",
+                         "command":  "C:\\Users\\progr\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe -3.12 --version",
+                         "exit_code":  0,
+                         "status":  "PASS",
+                         "duration_seconds":  0.053,
+                         "output":  "Python 3.12.10"
+                     },
+                     {
+                         "name":  "windows-focused-corpus",
+                         "command":  "C:\\Users\\progr\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe -3.12 -m unittest tests.test_windows_validate tests.test_phase14 -v",
+                         "exit_code":  0,
+                         "status":  "PASS",
+                         "duration_seconds":  41.786,
+                         "output":  "test_t2_base_exception (tests.test_windows_validate.WindowsValidation.test_t2_base_exception) ... ok\ntest_t2_raise_from_and_exception_chain (tests.test_windows_validate.WindowsValidation.test_t2_raise_from_and_exception_chain) ... ok\ntest_t2_raise_from_none (tests.test_windows_validate.WindowsValidation.test_t2_raise_from_none) ... ok\ntest_t5_math_floor_ceil (tests.test_windows_validate.WindowsValidation.test_t5_math_floor_ceil) ... ok\ntest_t5_math_trig_log (tests.test_windows_validate.WindowsValidation.test_t5_math_trig_log) ... ok\ntest_t5_os_name (tests.test_windows_validate.WindowsValidation.test_t5_os_name) ... ok\ntest_t5_sys_argv_length (tests.test_windows_validate.WindowsValidation.test_t5_sys_argv_length) ... ok\ntest_t5_sys_exit (tests.test_windows_validate.WindowsValidation.test_t5_sys_exit) ... ok\ntest_dashboard_has_no_hidden_native_claims (tests.test_phase14.Phase14Dashboard.test_dashboard_has_no_hidden_native_claims) ... ok\ntest_dashboard_is_complete_and_fail_closed (tests.test_phase14.Phase14Dashboard.test_dashboard_is_complete_and_fail_closed) ... ok\ntest_native_subset_milestone_requires_a_passing_receipt (tests.test_phase14.Phase14Dashboard.test_native_subset_milestone_requires_a_passing_receipt) ... ok\n\n----------------------------------------------------------------------\nRan 11 tests in 41.430s\n\nOK"
+                     },
+                     {
+                         "name":  "windows-regression-suite",
+                         "command":  "C:\\Users\\progr\\AppData\\Local\\Programs\\Python\\Launcher\\py.exe -3.12 -m unittest tests.test_phase5 tests.test_phase14 -q",
+                         "exit_code":  1,
+                         "status":  "FAIL",
+                         "duration_seconds":  1428.602,
+                         "output":  "======================================================================\nERROR: test_x86_type_conversion_v1 (tests.test_phase5.Phase5Gates.test_x86_type_conversion_v1)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"C:\\Development\\ISyCo Git\\PITON-windows-lineage\\tests\\test_phase5.py\", line 968, in test_x86_type_conversion_v1\n    result = compare_native_to_cpython(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Development\\ISyCo Git\\PITON-windows-lineage\\piton\\native_differential.py\", line 84, in compare_native_to_cpython\n    executable = _compile_native(source, Path(directory) / \"program.exe\")\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Development\\ISyCo Git\\PITON-windows-lineage\\piton\\native_differential.py\", line 78, in _compile_native\n    return compile_native(source, output)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Development\\ISyCo Git\\PITON-windows-lineage\\piton\\x86.py\", line 2792, in compile_native\n    return _compile_native_mir(mir, output)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Development\\ISyCo Git\\PITON-windows-lineage\\piton\\x86.py\", line 3109, in _compile_native_mir\n    raise NativeBuildError(linked.stderr or linked.stdout)\npiton.x86.NativeBuildError: C:/Users/progr/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/../../../../x86_64-w64-mingw32/bin/ld.exe: cannot open output file C:\\Users\\progr\\AppData\\Local\\Temp\\piton-native-diff-15ke9ip9\\program.exe: No such file or directory\ncollect2.exe: error: ld returned 1 exit status\n\n\n----------------------------------------------------------------------\nRan 325 tests in 1428.199s\n\nFAILED (errors=1)"
+                     }
+                 ],
+    "notes":  [
+                  "Windows results are authoritative only for this host and commit.",
+                  "A PASS here does not claim Linux parity; combine with the Linux receipt.",
+                  "The script never stages implementation files, only validation/windows/*."
+              ]
+}

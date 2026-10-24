@@ -1,0 +1,46 @@
+﻿### python-version [PASS] exit=0
+Python 3.12.10
+### windows-focused-corpus [PASS] exit=0
+test_t2_base_exception (tests.test_windows_validate.WindowsValidation.test_t2_base_exception) ... ok
+test_t2_raise_from_and_exception_chain (tests.test_windows_validate.WindowsValidation.test_t2_raise_from_and_exception_chain) ... ok
+test_t2_raise_from_none (tests.test_windows_validate.WindowsValidation.test_t2_raise_from_none) ... ok
+test_t5_math_floor_ceil (tests.test_windows_validate.WindowsValidation.test_t5_math_floor_ceil) ... ok
+test_t5_math_trig_log (tests.test_windows_validate.WindowsValidation.test_t5_math_trig_log) ... ok
+test_t5_os_name (tests.test_windows_validate.WindowsValidation.test_t5_os_name) ... ok
+test_t5_sys_argv_length (tests.test_windows_validate.WindowsValidation.test_t5_sys_argv_length) ... ok
+test_t5_sys_exit (tests.test_windows_validate.WindowsValidation.test_t5_sys_exit) ... ok
+test_dashboard_has_no_hidden_native_claims (tests.test_phase14.Phase14Dashboard.test_dashboard_has_no_hidden_native_claims) ... ok
+test_dashboard_is_complete_and_fail_closed (tests.test_phase14.Phase14Dashboard.test_dashboard_is_complete_and_fail_closed) ... ok
+test_native_subset_milestone_requires_a_passing_receipt (tests.test_phase14.Phase14Dashboard.test_native_subset_milestone_requires_a_passing_receipt) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 41.430s
+
+OK
+### windows-regression-suite [FAIL] exit=1
+======================================================================
+ERROR: test_x86_type_conversion_v1 (tests.test_phase5.Phase5Gates.test_x86_type_conversion_v1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 968, in test_x86_type_conversion_v1
+    result = compare_native_to_cpython(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 84, in compare_native_to_cpython
+    executable = _compile_native(source, Path(directory) / "program.exe")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\native_differential.py", line 78, in _compile_native
+    return compile_native(source, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 2792, in compile_native
+    return _compile_native_mir(mir, output)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\piton\x86.py", line 3109, in _compile_native_mir
+    raise NativeBuildError(linked.stderr or linked.stdout)
+piton.x86.NativeBuildError: C:/Users/progr/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/16.1.0/../../../../x86_64-w64-mingw32/bin/ld.exe: cannot open output file C:\Users\progr\AppData\Local\Temp\piton-native-diff-15ke9ip9\program.exe: No such file or directory
+collect2.exe: error: ld returned 1 exit status
+
+
+----------------------------------------------------------------------
+Ran 325 tests in 1428.199s
+
+FAILED (errors=1)

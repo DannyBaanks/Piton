@@ -1,0 +1,139 @@
+﻿### python-version [PASS] exit=0
+Python 3.12.10
+### windows-focused-corpus [PASS] exit=0
+test_t2_base_exception (tests.test_windows_validate.WindowsValidation.test_t2_base_exception) ... ok
+test_t2_raise_from_and_exception_chain (tests.test_windows_validate.WindowsValidation.test_t2_raise_from_and_exception_chain) ... ok
+test_t2_raise_from_none (tests.test_windows_validate.WindowsValidation.test_t2_raise_from_none) ... ok
+test_t5_math_floor_ceil (tests.test_windows_validate.WindowsValidation.test_t5_math_floor_ceil) ... ok
+test_t5_math_trig_log (tests.test_windows_validate.WindowsValidation.test_t5_math_trig_log) ... ok
+test_t5_os_name (tests.test_windows_validate.WindowsValidation.test_t5_os_name) ... ok
+test_t5_sys_argv_length (tests.test_windows_validate.WindowsValidation.test_t5_sys_argv_length) ... ok
+test_t5_sys_exit (tests.test_windows_validate.WindowsValidation.test_t5_sys_exit) ... ok
+test_dashboard_has_no_hidden_native_claims (tests.test_phase14.Phase14Dashboard.test_dashboard_has_no_hidden_native_claims) ... ok
+test_dashboard_is_complete_and_fail_closed (tests.test_phase14.Phase14Dashboard.test_dashboard_is_complete_and_fail_closed) ... ok
+test_native_subset_milestone_requires_a_passing_receipt (tests.test_phase14.Phase14Dashboard.test_native_subset_milestone_requires_a_passing_receipt) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 25.461s
+
+OK
+### windows-regression-suite [FAIL] exit=1
+======================================================================
+FAIL: test_finalizer_runs_at_exit (tests.test_phase5.FinalizersNativeV1.test_finalizer_runs_at_exit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3657, in test_finalizer_runs_at_exit
+    self.assert_native_matches(
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3654, in assert_native_matches
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'listo\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'listo\r\ncerrado\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_finalizer_runs_once_for_self_cycle (tests.test_phase5.FinalizersNativeV1.test_finalizer_runs_once_for_self_cycle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3666, in test_finalizer_runs_once_for_self_cycle
+    self.assert_native_matches(
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3654, in assert_native_matches
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'ok\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'ok\r\ndel\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_descriptors_del_non_property_fails_closed (tests.test_phase5.Phase5Gates.test_descriptors_del_non_property_fails_closed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3038, in test_descriptors_del_non_property_fails_closed
+    with self.assertRaisesRegex(NativeBuildError, "is not a property"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: NativeBuildError not raised
+
+======================================================================
+FAIL: test_x86_builtins_core_v2 (tests.test_phase5.Phase5Gates.test_x86_builtins_core_v2)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 789, in test_x86_builtins_core_v2
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=3221225477, stdout=b'', stderr=b''), oracle=Observation(returncode=0, stdout=b'65\r\n241\r\na\r\n-0b111\r\n0b111\r\n1024\r\n15.625\r\n0.5\r\nTrue\r\nFalse\r\nFalse\r\nTrue\r\n2\r\n4\r\n-2\r\n7\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_builtins_core_v2_fail_closed_catchable (tests.test_phase5.Phase5Gates.test_x86_builtins_core_v2_fail_closed_catchable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 863, in test_x86_builtins_core_v2_fail_closed_catchable
+    output, _ = self.build_run(
+                ^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 23, in build_run
+    self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
+AssertionError: 3221225477 != 0 : 
+
+======================================================================
+FAIL: test_x86_math_tier1_v1 (tests.test_phase5.Phase5Gates.test_x86_math_tier1_v1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 837, in test_x86_math_tier1_v1
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'3.0\r\n2\r\n-3\r\n3\r\n-2\r\n0\r\n3.5\r\n6\r\n7\r\n3141\r\n271\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'3.0\r\n2\r\n-3\r\n3\r\n-2\r\n-2\r\n3.5\r\n6\r\n7\r\n3141\r\n271\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_type_conversion_fail_closed_catchable (tests.test_phase5.Phase5Gates.test_x86_type_conversion_fail_closed_catchable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 842, in test_x86_type_conversion_fail_closed_catchable
+    output, _ = self.build_run(
+                ^^^^^^^^^^^^^^^
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 23, in build_run
+    self.assertEqual(completed.returncode, 0, completed.stderr.decode(errors="replace"))
+AssertionError: 3221225477 != 0 : 
+
+======================================================================
+FAIL: test_x86_type_conversion_v1 (tests.test_phase5.Phase5Gates.test_x86_type_conversion_v1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 819, in test_x86_type_conversion_v1
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=3221225477, stdout=b'', stderr=b''), oracle=Observation(returncode=0, stdout=b'42\r\n-17\r\n2\r\n-2\r\n1\r\n42\r\n2.5\r\n3.0\r\n15.625\r\nTrue\r\nNone\r\nhola\r\n3.0\r\n-0.5\r\n1.0\r\nFalse\r\nTrue\r\nFalse\r\nFalse\r\nTrue\r\nFalse\r\nFalse\r\nTrue\r\nFalse\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_class_call_routes_to_call (tests.test_phase5.WithProtocolNativeV1.test_x86_class_call_routes_to_call)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3516, in test_x86_class_call_routes_to_call
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=3221225477, stdout=b'', stderr=b''), oracle=Observation(returncode=0, stdout=b'31\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_class_eq_custom_dispatch (tests.test_phase5.WithProtocolNativeV1.test_x86_class_eq_custom_dispatch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3531, in test_x86_class_eq_custom_dispatch
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'False\r\nFalse\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'True\r\nFalse\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_class_getattr_hook_missing (tests.test_phase5.WithProtocolNativeV1.test_x86_class_getattr_hook_missing)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3470, in test_x86_class_getattr_hook_missing
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'0\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'99\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_class_setattr_hook (tests.test_phase5.WithProtocolNativeV1.test_x86_class_setattr_hook)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3493, in test_x86_class_setattr_hook
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'', stderr=b''), oracle=Observation(returncode=0, stdout=b'5\r\n', stderr=b''))
+
+======================================================================
+FAIL: test_x86_class_str_dispatch (tests.test_phase5.WithProtocolNativeV1.test_x86_class_str_dispatch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Development\ISyCo Git\PITON-windows-lineage\tests\test_phase5.py", line 3555, in test_x86_class_str_dispatch
+    self.assertTrue(result.equivalent, result)
+AssertionError: False is not true : DifferentialResult(native=Observation(returncode=0, stdout=b'3066597362928\r\n', stderr=b''), oracle=Observation(returncode=0, stdout=b'caja\r\n', stderr=b''))
+
+----------------------------------------------------------------------
+Ran 307 tests in 883.481s
+
+FAILED (failures=13)
