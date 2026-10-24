@@ -1,0 +1,47 @@
+clase COMMENT :
+    pasar
+
+
+clase DEDENT :
+    pasar
+
+
+clase ENCODING :
+    pasar
+
+
+clase INDENT :
+    pasar
+
+
+clase NAME :
+    pasar
+
+
+clase NEWLINE :
+    pasar
+
+
+clase NL :
+    pasar
+
+
+clase TokenError :
+    pasar
+
+
+funcion detect_encoding (*args ) :
+    lanzar NotImplementedError ('tokenize.detect_encoding no esta implementado en el backend nativo')
+
+
+funcion generate_tokens (*args ) :
+    lanzar NotImplementedError ('tokenize.generate_tokens no esta implementado en el backend nativo')
+
+
+funcion open (*args ) :
+    lanzar NotImplementedError ('tokenize.open no esta implementado en el backend nativo')
+
+
+funcion tokenize (*args ) :
+    lanzar NotImplementedError ('tokenize.tokenize no esta implementado en el backend nativo')
+

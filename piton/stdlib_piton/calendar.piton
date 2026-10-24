@@ -1,0 +1,19 @@
+day_abbr = 0
+
+
+day_name = 0
+
+
+month_abbr = 0
+
+
+month_name = 0
+
+
+funcion isleap (*args ) :
+    lanzar NotImplementedError ('calendar.isleap no esta implementado en el backend nativo')
+
+
+funcion timegm (*args ) :
+    lanzar NotImplementedError ('calendar.timegm no esta implementado en el backend nativo')
+

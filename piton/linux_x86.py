@@ -9022,11 +9022,23 @@ class LinuxCEmitter:
                 mode_expr = '"r"'
                 if len(values) == 2:
                     _mv = self._fn_consts.get(values[1])
-                    if not isinstance(_mv, str):
+                    if isinstance(_mv, str):
+                        if any(c in _mv for c in "x+"):
+                            raise NativeBuildError(f"Linux abrir(mode={_mv!r}) is not supported in the native subset")
+                        mode_expr = json.dumps(_mv)
+                    elif types.get(values[1], "int") in {"str", "int", "none", ""}:
+                        # FILE_IO_DYNMODE_V1: el modo viaja como valor (un
+                        # wrapper de stdlib_piton lo recibe como parametro y
+                        # aqui llega sin ser constante). piton_file_open
+                        # parsea el mode string EN RUNTIME, asi que el valor
+                        # dinamico es tan correcto como el literal: los modos
+                        # no soportados (x/+) siguen siendo ValueError en C.
+                        # El None viaja como el singleton y piton_file_open
+                        # lo rechazaria: no puede ocurrir con `abrir(f, m)`
+                        # de un wrapper que ya valido su default.
+                        mode_expr = f"(const char*)(long){self._value(values[1])}"
+                    else:
                         raise NativeBuildError("Linux abrir(mode) requires a literal mode")
-                    if any(c in _mv for c in "x+"):
-                        raise NativeBuildError(f"Linux abrir(mode={_mv!r}) is not supported in the native subset")
-                    mode_expr = json.dumps(_mv)
                 path_type = types.get(values[0], "int")
                 if path_type != "str":
                     if path_type not in {"", "int", "none"}:

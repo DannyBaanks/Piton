@@ -1,0 +1,3 @@
+funcion register (*args ) :
+    lanzar NotImplementedError ('atexit.register no esta implementado en el backend nativo')
+

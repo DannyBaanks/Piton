@@ -1,0 +1,46 @@
+funcion time ():
+    lanzar NotImplementedError ('time.time no esta implementado en el backend nativo: no hay syscall de reloj')
+
+
+funcion gmtime (segundos =Nada ):
+    lanzar NotImplementedError ('time.gmtime no esta implementado en el backend nativo')
+
+
+funcion localtime (segundos =Nada ):
+    lanzar NotImplementedError ('time.localtime no esta implementado en el backend nativo')
+
+
+funcion strftime (formato , t =Nada ):
+    lanzar NotImplementedError ('time.strftime no esta implementado en el backend nativo')
+
+
+funcion strptime (cadena , formato ='%a %b %d %H:%M:%S %Y' ):
+    lanzar NotImplementedError ('time.strptime no esta implementado en el backend nativo')
+
+
+funcion asctime (t =Nada ):
+    lanzar NotImplementedError ('time.asctime no esta implementado en el backend nativo')
+
+
+funcion ctime (segundos =Nada ):
+    lanzar NotImplementedError ('time.ctime no esta implementado en el backend nativo')
+
+
+funcion mktime (t ):
+    lanzar NotImplementedError ('time.mktime no esta implementado en el backend nativo')
+
+
+funcion sleep (segundos ):
+    lanzar NotImplementedError ('time.sleep no esta implementado en el backend nativo')
+
+
+funcion process_time ():
+    lanzar NotImplementedError ('time.process_time no esta implementado en el backend nativo')
+
+
+funcion perf_counter ():
+    lanzar NotImplementedError ('time.perf_counter no esta implementado en el backend nativo')
+
+
+funcion monotonic ():
+    lanzar NotImplementedError ('time.monotonic no esta implementado en el backend nativo')

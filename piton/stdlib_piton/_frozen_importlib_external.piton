@@ -1,0 +1,7 @@
+funcion _unpack_uint16 (*args ) :
+    lanzar NotImplementedError ('_frozen_importlib_external._unpack_uint16 no esta implementado en el backend nativo')
+
+
+funcion _unpack_uint32 (*args ) :
+    lanzar NotImplementedError ('_frozen_importlib_external._unpack_uint32 no esta implementado en el backend nativo')
+

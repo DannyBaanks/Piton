@@ -1,0 +1,43 @@
+clase TIMEOUT_MAX :
+    pasar
+
+
+_is_main_interpreter = 0
+
+
+_set_sentinel = 0
+
+
+allocate_lock = 0
+
+
+daemon_threads_allowed = 0
+
+
+error = 0
+
+
+get_native_id = 0
+
+
+stack_size = 0
+
+
+start_new_thread = 0
+
+
+funcion Lock (*args ) :
+    lanzar NotImplementedError ('_thread.Lock no esta implementado en el backend nativo')
+
+
+funcion RLock (*args ) :
+    lanzar NotImplementedError ('_thread.RLock no esta implementado en el backend nativo')
+
+
+funcion _thread_allocate_lock (*args ) :
+    lanzar NotImplementedError ('_thread._thread_allocate_lock no esta implementado en el backend nativo')
+
+
+funcion get_ident (*args ) :
+    lanzar NotImplementedError ('_thread.get_ident no esta implementado en el backend nativo')
+

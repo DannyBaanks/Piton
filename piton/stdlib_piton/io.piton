@@ -1,0 +1,62 @@
+DEFAULT_BUFFER_SIZE = 8192
+SEEK_SET = 0
+SEEK_CUR = 1
+SEEK_END = 2
+
+
+funcion open (archivo , modo ='r' ):
+    si modo es Nada :
+        devolver abrir (archivo )
+    devolver abrir (archivo , modo )
+
+
+funcion open_code (archivo ):
+    devolver abrir (archivo , 'rb' )
+
+
+funcion text_encoding (codificacion ,*args ):
+    si codificacion es Nada :
+        devolver 'utf-8'
+    devolver codificacion
+
+
+clase IOBase :
+    pasar
+
+
+clase RawIOBase :
+    pasar
+
+
+clase BufferedIOBase :
+    pasar
+
+
+clase TextIOBase :
+    pasar
+
+
+clase TextIOWrapper :
+    pasar
+
+
+clase BufferedWriter :
+    pasar
+
+
+clase BufferedReader :
+    pasar
+
+
+clase UnsupportedOperation :
+    pasar
+
+
+clase StringIO :
+    funcion __init__ (self , inicial ='' ):
+        lanzar NotImplementedError ('io.StringIO no esta implementado en el backend nativo')
+
+
+clase BytesIO :
+    funcion __init__ (self , inicial =b'' ):
+        lanzar NotImplementedError ('io.BytesIO no esta implementado en el backend nativo')

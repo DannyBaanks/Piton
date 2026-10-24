@@ -1,0 +1,43 @@
+clase MAXYEAR :
+    pasar
+
+
+clase MINYEAR :
+    pasar
+
+
+funcion date (*args ) :
+    lanzar NotImplementedError ('datetime.date no esta implementado en el backend nativo')
+
+
+funcion datetime (*args ) :
+    lanzar NotImplementedError ('datetime.datetime no esta implementado en el backend nativo')
+
+
+funcion datetime_date (*args ) :
+    lanzar NotImplementedError ('datetime.datetime_date no esta implementado en el backend nativo')
+
+
+funcion datetime_timedelta (*args ) :
+    lanzar NotImplementedError ('datetime.datetime_timedelta no esta implementado en el backend nativo')
+
+
+funcion datetime_timezone (*args ) :
+    lanzar NotImplementedError ('datetime.datetime_timezone no esta implementado en el backend nativo')
+
+
+funcion fromtimestamp (*args ) :
+    lanzar NotImplementedError ('datetime.fromtimestamp no esta implementado en el backend nativo')
+
+
+funcion now (*args ) :
+    lanzar NotImplementedError ('datetime.now no esta implementado en el backend nativo')
+
+
+funcion timedelta (*args ) :
+    lanzar NotImplementedError ('datetime.timedelta no esta implementado en el backend nativo')
+
+
+funcion timezone (*args ) :
+    lanzar NotImplementedError ('datetime.timezone no esta implementado en el backend nativo')
+

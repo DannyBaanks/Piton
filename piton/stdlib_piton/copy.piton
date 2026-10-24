@@ -1,0 +1,7 @@
+funcion copy (*args ) :
+    lanzar NotImplementedError ('copy.copy no esta implementado en el backend nativo')
+
+
+funcion deepcopy (*args ) :
+    lanzar NotImplementedError ('copy.deepcopy no esta implementado en el backend nativo')
+

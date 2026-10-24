@@ -1,0 +1,11 @@
+funcion decodebytes (*args ) :
+    lanzar NotImplementedError ('base64.decodebytes no esta implementado en el backend nativo')
+
+
+funcion standard_b64encode (*args ) :
+    lanzar NotImplementedError ('base64.standard_b64encode no esta implementado en el backend nativo')
+
+
+funcion urlsafe_b64encode (*args ) :
+    lanzar NotImplementedError ('base64.urlsafe_b64encode no esta implementado en el backend nativo')
+

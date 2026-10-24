@@ -1,0 +1,22 @@
+clase Mapping :
+    pasar
+
+
+clase MutableMapping :
+    pasar
+
+
+clase MutableSet :
+    pasar
+
+
+clase Sequence :
+    pasar
+
+
+_Sequence = 0
+
+
+funcion _check_methods (*args ) :
+    lanzar NotImplementedError ('_collections_abc._check_methods no esta implementado en el backend nativo')
+

@@ -1,0 +1,15 @@
+clase IS_CHARACTER_JUNK :
+    pasar
+
+
+funcion Differ (*args ) :
+    lanzar NotImplementedError ('difflib.Differ no esta implementado en el backend nativo')
+
+
+funcion context_diff (*args ) :
+    lanzar NotImplementedError ('difflib.context_diff no esta implementado en el backend nativo')
+
+
+funcion unified_diff (*args ) :
+    lanzar NotImplementedError ('difflib.unified_diff no esta implementado en el backend nativo')
+

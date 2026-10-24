@@ -1,0 +1,35 @@
+clase IntEnum :
+    pasar
+
+
+clase IntFlag :
+    pasar
+
+
+clase StrEnum :
+    pasar
+
+
+_Enum = 0
+
+
+_IntEnum = 0
+
+
+_IntFlag = 0
+
+
+global_enum = 0
+
+
+funcion Enum (*args ) :
+    lanzar NotImplementedError ('enum.Enum no esta implementado en el backend nativo')
+
+
+funcion _simple_enum (*args ) :
+    lanzar NotImplementedError ('enum._simple_enum no esta implementado en el backend nativo')
+
+
+funcion auto (*args ) :
+    lanzar NotImplementedError ('enum.auto no esta implementado en el backend nativo')
+

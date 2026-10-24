@@ -1,0 +1,45 @@
+clase BOM_UTF16_BE :
+    pasar
+
+
+clase BOM_UTF16_LE :
+    pasar
+
+
+clase BOM_UTF8 :
+    pasar
+
+
+clase IncrementalDecoder :
+    pasar
+
+
+encode = 0
+
+
+register = 0
+
+
+funcion escape_decode (*args ) :
+    lanzar NotImplementedError ('codecs.escape_decode no esta implementado en el backend nativo')
+
+
+funcion getincrementaldecoder (*args ) :
+    lanzar NotImplementedError ('codecs.getincrementaldecoder no esta implementado en el backend nativo')
+
+
+funcion getincrementalencoder (*args ) :
+    lanzar NotImplementedError ('codecs.getincrementalencoder no esta implementado en el backend nativo')
+
+
+funcion lookup (*args ) :
+    lanzar NotImplementedError ('codecs.lookup no esta implementado en el backend nativo')
+
+
+funcion lookup_error (*args ) :
+    lanzar NotImplementedError ('codecs.lookup_error no esta implementado en el backend nativo')
+
+
+funcion open (*args ) :
+    lanzar NotImplementedError ('codecs.open no esta implementado en el backend nativo')
+

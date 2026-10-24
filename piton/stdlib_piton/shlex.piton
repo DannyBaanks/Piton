@@ -1,0 +1,7 @@
+funcion quote (*args ) :
+    lanzar NotImplementedError ('shlex.quote no esta implementado en el backend nativo')
+
+
+funcion split (*args ) :
+    lanzar NotImplementedError ('shlex.split no esta implementado en el backend nativo')
+

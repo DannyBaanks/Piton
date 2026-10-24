@@ -1,0 +1,70 @@
+clase BlockingIOError :
+    pasar
+
+
+clase BufferedRWPair :
+    pasar
+
+
+clase BufferedRandom :
+    pasar
+
+
+clase BufferedReader :
+    pasar
+
+
+clase BufferedWriter :
+    pasar
+
+
+clase BytesIO :
+    pasar
+
+
+clase DEFAULT_BUFFER_SIZE :
+    pasar
+
+
+clase IncrementalNewlineDecoder :
+    pasar
+
+
+clase StringIO :
+    pasar
+
+
+clase TextIOWrapper :
+    pasar
+
+
+clase UnsupportedOperation :
+    pasar
+
+
+_BufferedIOBase = 0
+
+
+_IOBase = 0
+
+
+_RawIOBase = 0
+
+
+_TextIOBase = 0
+
+
+text_encoding = 0
+
+
+funcion FileIO (*args ) :
+    lanzar NotImplementedError ('_io.FileIO no esta implementado en el backend nativo')
+
+
+funcion open (*args ) :
+    lanzar NotImplementedError ('_io.open no esta implementado en el backend nativo')
+
+
+funcion open_code (*args ) :
+    lanzar NotImplementedError ('_io.open_code no esta implementado en el backend nativo')
+

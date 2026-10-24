@@ -1,0 +1,7 @@
+funcion _check_arg_types (*args ) :
+    lanzar NotImplementedError ('genericpath._check_arg_types no esta implementado en el backend nativo')
+
+
+funcion _splitext (*args ) :
+    lanzar NotImplementedError ('genericpath._splitext no esta implementado en el backend nativo')
+

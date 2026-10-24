@@ -1,0 +1,143 @@
+clase AF_INET :
+    pasar
+
+
+clase AF_INET6 :
+    pasar
+
+
+clase AF_UNIX :
+    pasar
+
+
+clase IPPROTO_TCP :
+    pasar
+
+
+clase May :
+    pasar
+
+
+clase Return :
+    pasar
+
+
+clase Returns :
+    pasar
+
+
+clase SHUT_RDWR :
+    pasar
+
+
+clase SHUT_WR :
+    pasar
+
+
+clase SOCK_DGRAM :
+    pasar
+
+
+clase SOCK_STREAM :
+    pasar
+
+
+clase SOL_SOCKET :
+    pasar
+
+
+clase SO_REUSEADDR :
+    pasar
+
+
+clase SO_REUSEPORT :
+    pasar
+
+
+clase SO_TYPE :
+    pasar
+
+
+clase TCP_NODELAY :
+    pasar
+
+
+_GLOBAL_DEFAULT_TIMEOUT = 0
+
+
+error = 0
+
+
+gaierror = 0
+
+
+h = 0
+
+
+funcion accept (*args ) :
+    lanzar NotImplementedError ('socket.accept no esta implementado en el backend nativo')
+
+
+funcion bind (*args ) :
+    lanzar NotImplementedError ('socket.bind no esta implementado en el backend nativo')
+
+
+funcion close (*args ) :
+    lanzar NotImplementedError ('socket.close no esta implementado en el backend nativo')
+
+
+funcion create_connection (*args ) :
+    lanzar NotImplementedError ('socket.create_connection no esta implementado en el backend nativo')
+
+
+funcion create_server (*args ) :
+    lanzar NotImplementedError ('socket.create_server no esta implementado en el backend nativo')
+
+
+funcion fileno (*args ) :
+    lanzar NotImplementedError ('socket.fileno no esta implementado en el backend nativo')
+
+
+funcion getfqdn (*args ) :
+    lanzar NotImplementedError ('socket.getfqdn no esta implementado en el backend nativo')
+
+
+funcion gethostbyname (*args ) :
+    lanzar NotImplementedError ('socket.gethostbyname no esta implementado en el backend nativo')
+
+
+funcion gethostname (*args ) :
+    lanzar NotImplementedError ('socket.gethostname no esta implementado en el backend nativo')
+
+
+funcion getservbyname (*args ) :
+    lanzar NotImplementedError ('socket.getservbyname no esta implementado en el backend nativo')
+
+
+funcion getsockname (*args ) :
+    lanzar NotImplementedError ('socket.getsockname no esta implementado en el backend nativo')
+
+
+funcion gettimeout (*args ) :
+    lanzar NotImplementedError ('socket.gettimeout no esta implementado en el backend nativo')
+
+
+funcion listen (*args ) :
+    lanzar NotImplementedError ('socket.listen no esta implementado en el backend nativo')
+
+
+funcion recvfrom (*args ) :
+    lanzar NotImplementedError ('socket.recvfrom no esta implementado en el backend nativo')
+
+
+funcion sendto (*args ) :
+    lanzar NotImplementedError ('socket.sendto no esta implementado en el backend nativo')
+
+
+funcion setsockopt (*args ) :
+    lanzar NotImplementedError ('socket.setsockopt no esta implementado en el backend nativo')
+
+
+funcion socket (*args ) :
+    lanzar NotImplementedError ('socket.socket no esta implementado en el backend nativo')
+

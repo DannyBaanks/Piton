@@ -1,0 +1,7 @@
+funcion formatter_field_name_split (*args ) :
+    lanzar NotImplementedError ('_string.formatter_field_name_split no esta implementado en el backend nativo')
+
+
+funcion formatter_parser (*args ) :
+    lanzar NotImplementedError ('_string.formatter_parser no esta implementado en el backend nativo')
+

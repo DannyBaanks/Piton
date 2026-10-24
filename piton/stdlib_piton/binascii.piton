@@ -1,0 +1,30 @@
+html = 0
+
+
+funcion Error (*args ) :
+    lanzar NotImplementedError ('binascii.Error no esta implementado en el backend nativo')
+
+
+funcion a2b_base64 (*args ) :
+    lanzar NotImplementedError ('binascii.a2b_base64 no esta implementado en el backend nativo')
+
+
+funcion a2b_uu (*args ) :
+    lanzar NotImplementedError ('binascii.a2b_uu no esta implementado en el backend nativo')
+
+
+funcion b2a_base64 (*args ) :
+    lanzar NotImplementedError ('binascii.b2a_base64 no esta implementado en el backend nativo')
+
+
+funcion b2a_uu (*args ) :
+    lanzar NotImplementedError ('binascii.b2a_uu no esta implementado en el backend nativo')
+
+
+funcion hexlify (*args ) :
+    lanzar NotImplementedError ('binascii.hexlify no esta implementado en el backend nativo')
+
+
+funcion unhexlify (*args ) :
+    lanzar NotImplementedError ('binascii.unhexlify no esta implementado en el backend nativo')
+

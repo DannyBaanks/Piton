@@ -1,0 +1,91 @@
+clase CELL :
+    pasar
+
+
+clase DEF_ANNOT :
+    pasar
+
+
+clase DEF_BOUND :
+    pasar
+
+
+clase DEF_GLOBAL :
+    pasar
+
+
+clase DEF_IMPORT :
+    pasar
+
+
+clase DEF_LOCAL :
+    pasar
+
+
+clase DEF_NONLOCAL :
+    pasar
+
+
+clase DEF_PARAM :
+    pasar
+
+
+clase FREE :
+    pasar
+
+
+clase GLOBAL_EXPLICIT :
+    pasar
+
+
+clase GLOBAL_IMPLICIT :
+    pasar
+
+
+clase LOCAL :
+    pasar
+
+
+clase SCOPE_MASK :
+    pasar
+
+
+clase SCOPE_OFF :
+    pasar
+
+
+clase TYPE_ANNOTATION :
+    pasar
+
+
+clase TYPE_CLASS :
+    pasar
+
+
+clase TYPE_FUNCTION :
+    pasar
+
+
+clase TYPE_MODULE :
+    pasar
+
+
+clase TYPE_TYPE_ALIAS :
+    pasar
+
+
+clase TYPE_TYPE_PARAM :
+    pasar
+
+
+clase TYPE_TYPE_VAR_BOUND :
+    pasar
+
+
+clase USE :
+    pasar
+
+
+funcion symtable (*args ) :
+    lanzar NotImplementedError ('_symtable.symtable no esta implementado en el backend nativo')
+

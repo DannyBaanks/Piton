@@ -1,0 +1,11 @@
+funcion dump (*args ) :
+    lanzar NotImplementedError ('marshal.dump no esta implementado en el backend nativo')
+
+
+funcion load (*args ) :
+    lanzar NotImplementedError ('marshal.load no esta implementado en el backend nativo')
+
+
+funcion loads (*args ) :
+    lanzar NotImplementedError ('marshal.loads no esta implementado en el backend nativo')
+

@@ -1,0 +1,19 @@
+clase COMPILER_FLAG_NAMES :
+    pasar
+
+
+funcion Positions (*args ) :
+    lanzar NotImplementedError ('dis.Positions no esta implementado en el backend nativo')
+
+
+funcion _find_imports (*args ) :
+    lanzar NotImplementedError ('dis._find_imports no esta implementado en el backend nativo')
+
+
+funcion _find_store_names (*args ) :
+    lanzar NotImplementedError ('dis._find_store_names no esta implementado en el backend nativo')
+
+
+funcion findlinestarts (*args ) :
+    lanzar NotImplementedError ('dis.findlinestarts no esta implementado en el backend nativo')
+

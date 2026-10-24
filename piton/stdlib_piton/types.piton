@@ -1,0 +1,115 @@
+clase AsyncGeneratorType :
+    pasar
+
+
+clase BuiltinFunctionType :
+    pasar
+
+
+clase BuiltinMethodType :
+    pasar
+
+
+clase ClassMethodDescriptorType :
+    pasar
+
+
+clase Classes :
+    pasar
+
+
+clase CodeType :
+    pasar
+
+
+clase CoroutineType :
+    pasar
+
+
+clase DynamicClassAttribute :
+    pasar
+
+
+clase EllipsisType :
+    pasar
+
+
+clase Examples :
+    pasar
+
+
+clase For :
+    pasar
+
+
+clase FrameType :
+    pasar
+
+
+clase FunctionType :
+    pasar
+
+
+clase GeneratorType :
+    pasar
+
+
+clase GetSetDescriptorType :
+    pasar
+
+
+clase MemberDescriptorType :
+    pasar
+
+
+clase MethodDescriptorType :
+    pasar
+
+
+clase MethodWrapperType :
+    pasar
+
+
+clase ModuleType :
+    pasar
+
+
+clase NoneType :
+    pasar
+
+
+clase NotImplementedType :
+    pasar
+
+
+clase TracebackType :
+    pasar
+
+
+clase UnionType :
+    pasar
+
+
+clase WrapperDescriptorType :
+    pasar
+
+
+funcion GenericAlias (*args ) :
+    lanzar NotImplementedError ('types.GenericAlias no esta implementado en el backend nativo')
+
+
+funcion MappingProxyType (*args ) :
+    lanzar NotImplementedError ('types.MappingProxyType no esta implementado en el backend nativo')
+
+
+funcion MethodType (*args ) :
+    lanzar NotImplementedError ('types.MethodType no esta implementado en el backend nativo')
+
+
+funcion items (*args ) :
+    lanzar NotImplementedError ('types.items no esta implementado en el backend nativo')
+
+
+funcion new_class (*args ) :
+    lanzar NotImplementedError ('types.new_class no esta implementado en el backend nativo')
+

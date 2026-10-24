@@ -1,0 +1,120 @@
+sep = '/'
+curdir = '.'
+pardir = '..'
+extsep = '.'
+pathsep = ':'
+altsep = Nada
+devnull = '/dev/null'
+defpath = ':/bin:/usr/bin'
+
+
+funcion basename (p ):
+    devolver split (p )[1 ]
+
+
+funcion dirname (p ):
+    devolver split (p )[0 ]
+
+
+funcion isabs (p ):
+    si p y p [0 ] == '/' :
+        devolver Verdadero
+    devolver Falso
+
+
+funcion split (p ):
+    partes = p .rsplit ('/' , 1 )
+    si longitud (partes ) == 1 :
+        devolver (partes [0 ] , '')
+    cabeza = partes [0 ]
+    si cabeza y cabeza != '/' * longitud (cabeza ) :
+        cabeza = cabeza .rstrip ('/' )
+    si no cabeza :
+        cabeza = '/'
+    devolver (cabeza , partes [1 ])
+
+
+funcion splitext (p ):
+    partes = p .rsplit ('.' , 1 )
+    si longitud (partes ) == 2 :
+        si partes [0 ] != '' y '/' no en partes [1 ] :
+            devolver (partes [0 ] , '.' + partes [1 ])
+    devolver (p , '')
+
+
+funcion join (a ,*resto ):
+    ruta = a
+    para b en resto :
+        si b .startswith ('/' ) :
+            ruta = b
+        sino :
+            si no ruta o ruta .endswith ('/' ) :
+                ruta = ruta + b
+            sino :
+                ruta = ruta + '/' + b
+    devolver ruta
+
+
+funcion normcase (s ):
+    devolver s
+
+
+funcion normpath (p ):
+    si p == '' :
+        devolver '.'
+    inicial_slash = p .startswith ('/' )
+    partes = p .split ('/' )
+    pila = []
+    para parte en partes :
+        si parte == '' :
+            continuar
+        si parte == '.' :
+            continuar
+        si parte == '..' :
+            n = longitud (pila )
+            si n > 0 :
+                si pila [n -1 ] != '..' :
+                    pila .pop ()
+            si longitud (pila ) == 0 :
+                si no inicial_slash :
+                    pila .append ('..' )
+            continuar
+        pila .append (parte )
+    ruta = '/' .join (pila )
+    si inicial_slash :
+        ruta = '/' + ruta
+    si no ruta :
+        ruta = '.'
+    devolver ruta
+
+
+funcion splitdrive (p ):
+    devolver ('' , p )
+
+
+funcion isfile (p ):
+    lanzar NotImplementedError ('posixpath.isfile no esta implementado en el backend nativo: no hay syscall de stat')
+
+
+funcion isdir (p ):
+    lanzar NotImplementedError ('posixpath.isdir no esta implementado en el backend nativo: no hay syscall de stat')
+
+
+funcion exists (p ):
+    lanzar NotImplementedError ('posixpath.exists no esta implementado en el backend nativo: no hay syscall de stat')
+
+
+funcion getsize (p ):
+    lanzar NotImplementedError ('posixpath.getsize no esta implementado en el backend nativo')
+
+
+funcion expanduser (p ):
+    lanzar NotImplementedError ('posixpath.expanduser no esta implementado en el backend nativo: no hay entorno')
+
+
+funcion expandvars (p ):
+    lanzar NotImplementedError ('posixpath.expandvars no esta implementado en el backend nativo: no hay entorno')
+
+
+funcion abspath (p ):
+    lanzar NotImplementedError ('posixpath.abspath no esta implementado en el backend nativo: no hay cwd')

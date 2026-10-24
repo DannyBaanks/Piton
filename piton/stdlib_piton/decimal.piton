@@ -1,0 +1,27 @@
+clase Inexact :
+    pasar
+
+
+clase MAX_EMAX :
+    pasar
+
+
+clase MAX_PREC :
+    pasar
+
+
+clase MIN_EMIN :
+    pasar
+
+
+funcion Decimal (*args ) :
+    lanzar NotImplementedError ('decimal.Decimal no esta implementado en el backend nativo')
+
+
+funcion localcontext (*args ) :
+    lanzar NotImplementedError ('decimal.localcontext no esta implementado en el backend nativo')
+
+
+funcion replace (*args ) :
+    lanzar NotImplementedError ('decimal.replace no esta implementado en el backend nativo')
+

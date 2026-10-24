@@ -1,0 +1,19 @@
+clase All :
+    pasar
+
+
+funcion format_exception (*args ) :
+    lanzar NotImplementedError ('traceback.format_exception no esta implementado en el backend nativo')
+
+
+funcion format_exception_only (*args ) :
+    lanzar NotImplementedError ('traceback.format_exception_only no esta implementado en el backend nativo')
+
+
+funcion print_exc (*args ) :
+    lanzar NotImplementedError ('traceback.print_exc no esta implementado en el backend nativo')
+
+
+funcion print_exception (*args ) :
+    lanzar NotImplementedError ('traceback.print_exception no esta implementado en el backend nativo')
+

@@ -1,0 +1,18 @@
+cache = 0
+
+
+funcion checkcache (*args ) :
+    lanzar NotImplementedError ('linecache.checkcache no esta implementado en el backend nativo')
+
+
+funcion getline (*args ) :
+    lanzar NotImplementedError ('linecache.getline no esta implementado en el backend nativo')
+
+
+funcion getlines (*args ) :
+    lanzar NotImplementedError ('linecache.getlines no esta implementado en el backend nativo')
+
+
+funcion lazycache (*args ) :
+    lanzar NotImplementedError ('linecache.lazycache no esta implementado en el backend nativo')
+

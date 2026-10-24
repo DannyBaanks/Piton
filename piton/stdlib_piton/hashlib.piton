@@ -1,0 +1,7 @@
+funcion md5 (*args ) :
+    lanzar NotImplementedError ('hashlib.md5 no esta implementado en el backend nativo')
+
+
+funcion new (*args ) :
+    lanzar NotImplementedError ('hashlib.new no esta implementado en el backend nativo')
+

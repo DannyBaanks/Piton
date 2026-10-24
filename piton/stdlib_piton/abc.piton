@@ -1,0 +1,110 @@
+clase ABC :
+    pasar
+
+
+clase ABCMeta :
+    pasar
+
+
+funcion abstractmethod (funcion_objetivo ):
+    devolver funcion_objetivo
+
+
+clase Awaitable :
+    pasar
+
+
+clase Coroutine :
+    pasar
+
+
+clase AsyncIterable :
+    pasar
+
+
+clase AsyncIterator :
+    pasar
+
+
+clase Hashable :
+    pasar
+
+
+clase Sized :
+    pasar
+
+
+clase Container :
+    pasar
+
+
+clase Callable :
+    pasar
+
+
+clase Iterable :
+    pasar
+
+
+clase Iterator :
+    pasar
+
+
+clase Reversible :
+    pasar
+
+
+clase Generator :
+    pasar
+
+
+clase Collection :
+    pasar
+
+
+clase Mapping :
+    pasar
+
+
+clase MutableMapping :
+    pasar
+
+
+clase Sequence :
+    pasar
+
+
+clase MutableSequence :
+    pasar
+
+
+clase Set :
+    pasar
+
+
+clase MutableSet :
+    pasar
+
+
+clase MappingView :
+    pasar
+
+
+clase KeysView :
+    pasar
+
+
+clase ItemsView :
+    pasar
+
+
+clase ValuesView :
+    pasar
+
+
+clase ContextManager :
+    pasar
+
+
+clase AsyncContextManager :
+    pasar

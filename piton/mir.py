@@ -538,6 +538,7 @@ class MIRLowerer:
         self.async_generators: set[str] = set()
         self.module_aliases: dict[str, str] = {}
         self.decorated_symbols: dict[int, str] = {}
+        self._bundled_hir_cache: dict[str, Any] = {}
 
     def _store_loop_target(self, builder: _Builder, target: str, value: str) -> None:
         """FOR_LOOP_CAPTURE_V1: a captured loop target must cell_store. A
@@ -631,8 +632,18 @@ class MIRLowerer:
                 raise MIRLoweringError(f"native duplicate @property '{method.name}' on '{class_name}'")
             property_methods[method.name] = {"getter": None, "setter": None, "deleter": None}
             return f"{class_name}__{method.name}", "getter", method.name
+        # ABC_DECORATOR_V1: @abstractmethod (desde abc o cualquier modulo) es
+        # un MARCADOR de CPython: la clase no puede instanciarse mientras
+        # queden metodos abstractos. El subset no modela esa comprobacion de
+        # instanciacion: el metodo se baja como ordinario (documentado en
+        # stdlib_piton/abc.piton). Sin esto, `@abc.abstractmethod` caeria en
+        # el clasificador de @<name>.setter/deleter y fallaria cerrado.
+        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) == "abstractmethod":
+            return f"{class_name}__{method.name}", None, method.name
         if decorator.kind == HIRKind.ATTR:
             prop = getattr(decorator, "attr", "")
+            if prop == "abstractmethod" and getattr(getattr(decorator, "value", None), "kind", None) == HIRKind.LOAD:
+                return f"{class_name}__{method.name}", None, method.name
             if getattr(getattr(decorator, "value", None), "kind", None) != HIRKind.LOAD:
                 raise MIRLoweringError(f"native property decorator '@{method.name}.{prop}' must reference the property name")
             if getattr(decorator.value, "name", None) != method.name:
@@ -811,10 +822,16 @@ class MIRLowerer:
                         self.from_import_aliases[_alias.asname or _alias.name] = "gettext.gettext"
             for module_name, imported in sorted(imported_modules.items()):
                 for item in imported.body:
-                    if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM, HIRKind.PASS, HIRKind.ASSIGN}:
+                    if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM,
+                                       HIRKind.PASS, HIRKind.ASSIGN, HIRKind.CLASS_DEF}:
                         # MODULE_STATE_V1: se admite una asignacion a nivel de
                         # modulo (el estado del modulo importado).
-                        raise MIRLoweringError("native imported modules currently support functions, imports, assignments, and pasar only")
+                        # BUNDLED_CLASS_V1: las clases de un modulo EMPAQUETADO
+                        # (piton/stdlib_piton/) se levantan cualificadas; un
+                        # modulo HERMANO sigue fail-closed (el cuerpo se baja
+                        # con el scope del entry y colisionaria).
+                        if item.kind == HIRKind.CLASS_DEF and not _is_bundled_module(module_name):
+                            raise MIRLoweringError("native imported modules currently support functions, imports, assignments, and pasar only")
             module_state_inits: list[tuple[str, Any]] = []
             bundled_functions: list[tuple[str, Any]] = []
             for module_name, imported in sorted(imported_modules.items()):
@@ -838,6 +855,11 @@ class MIRLowerer:
                             # (con nombres cualificados) — el builder del
                             # entry todavia no existe aqui.
                             module_state_inits.append((module_name, item))
+                        elif item.kind == HIRKind.CLASS_DEF:
+                            # BUNDLED_CLASS_V1: la clase del modulo empaquetado
+                            # se registra cualificada (abc__ABC) y sus metodos
+                            # se bajan con ese nombre, igual que las funciones.
+                            self._lower_imported_class(module_name, item)
                 finally:
                     self._module_scope_stack.pop()
             # FUNC_SIG_PRESCAN_V1: registrar las firmas de TODAS las funciones
@@ -1230,6 +1252,76 @@ class MIRLowerer:
                 )
             self.class_mro[name] = mro
 
+    def _lower_imported_class(self, module_name: str, node) -> None:
+        """BUNDLED_CLASS_V1: levanta una clase de un modulo empaquetado con
+        nombre cualificado (abc__ABC). Es la replica del bucle de clases del
+        entry, reducida a lo que un modulo de la stdlib empaquetada usa:
+        metodos simples, atributos de clase y `pasar`. Las bases se validan
+        igual (un base nativo sin definir sigue fail-closed)."""
+        qualified = f"{module_name.replace('.', '__')}__{node.name}"
+        bases = [base.name for base in node.bases if getattr(base, "name", None)]
+        for base in bases:
+            if (base not in self.classes and base not in _BUILTIN_EXCEPTIONS
+                    and base not in _BUILTIN_BASES):
+                raise MIRLoweringError(f"native base class '{base}' must be defined before '{qualified}'")
+        self.classes[qualified] = set()
+        self.class_base_list[qualified] = bases
+        self.class_parents[qualified] = bases[0] if bases else None
+        property_methods: dict[str, dict[str, str | None]] = {}
+        used_symbols: set[str] = set()
+        for method in node.body:
+            if method.kind in (HIRKind.PASS, HIRKind.CONST, HIRKind.ANN_ASSIGN):
+                continue
+            if method.kind == HIRKind.ASSIGN:
+                if not hasattr(self, "class_attrs"):
+                    self.class_attrs = {}
+                for target in method.targets:
+                    if target.kind in (HIRKind.STORE, HIRKind.LOAD):
+                        self.class_attrs.setdefault(qualified, {})[target.name] = method.value
+                continue
+            if method.kind != HIRKind.FUNC_DEF:
+                raise MIRLoweringError(
+                    f"native bundled class '{qualified}' supports methods, class-level assignments and pasar only"
+                )
+            symbol, role, prop_name = self._class_method_symbol(qualified, method, property_methods)
+            if used_symbols and symbol in used_symbols:
+                raise MIRLoweringError(
+                    f"native '{qualified}.{method.name}' collides with another member lowered to symbol '{symbol}'"
+                )
+            used_symbols.add(symbol)
+            method_params = list(getattr(getattr(method, "args", None), "args", []) or [])
+            super_self = method_params[0] if method_params and role != "staticmethod" else None
+            self._lower_function(
+                method, symbol,
+                super_context=(qualified, super_self) if super_self else None,
+            )
+            if role in (None, "staticmethod", "classmethod"):
+                self.classes[qualified].add(method.name)
+            else:
+                self.class_properties.setdefault(qualified, {}).setdefault(prop_name, {})[role] = symbol
+
+    def _bundled_module_const_value(self, module_name: str, attr: str):
+        """BUNDLED_CONSTS_V1: el valor literal de un atributo de nivel de
+        modulo empaquetado (re.MULTILINE = 8). Devuelve (encontrado, valor).
+        Solo CONST del HIR: una expresion no literal no es una constante de
+        modulo y cae al fail-closed del llamador."""
+        hir = self._bundled_hir_cache.get(module_name)
+        if hir is None:
+            hir = _bundled_module_hir(module_name)
+            if hir is None:
+                return False, None
+            self._bundled_hir_cache[module_name] = hir
+        for item in getattr(hir, "body", []) or []:
+            if item.kind != HIRKind.ASSIGN:
+                continue
+            for target in getattr(item, "targets", ()) or ():
+                if getattr(target, "name", None) == attr:
+                    value = getattr(item, "value", None)
+                    if getattr(value, "kind", None) == HIRKind.CONST:
+                        return True, value.value
+                    return False, None
+        return False, None
+
     def _build_module_scope(self, module_name: str, imported: HIRNode) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
         """Per-module name scope for an imported module body: imported module
         bodies are NOT executed, so their functions must resolve same-module
@@ -1245,6 +1337,10 @@ class MIRLowerer:
         base = module_name.rsplit(".", 1)[0] if ("." in module_name and not is_package) else module_name
         for item in imported.body:
             if item.kind == HIRKind.FUNC_DEF:
+                names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
+            elif item.kind == HIRKind.CLASS_DEF:
+                # BUNDLED_CLASS_V1: el nombre de la clase tambien resuelve
+                # dentro del modulo (auto-referencias y herencia interna).
                 names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
             elif item.kind == HIRKind.ASSIGN:
                 # MODULE_STATE_V1: una variable de nivel de modulo de un
@@ -5229,6 +5325,17 @@ class MIRLowerer:
                     result = builder.temp()
                     builder.emit("const", _value, result=result)
                     return result
+                # BUNDLED_CONSTS_V1: atributo-valor de un modulo EMPAQUETADO
+                # (re.MULTILINE, io.SEEK_SET). Solo literales de nivel de
+                # modulo: el estado mutable es MODULE_STATE_V1 y tiene su
+                # propio camino. Si el attr no es un literal, el fail-closed
+                # del final sigue mandando (mensaje claro).
+                if _is_bundled_module(_alias_module):
+                    _bfound, _bvalue = self._bundled_module_const_value(_alias_module, node.attr)
+                    if _bfound:
+                        result = builder.temp()
+                        builder.emit("const", _bvalue, result=result)
+                        return result
                 if _alias_module == "os":
                     raise MIRLoweringError(
                         f"native os.{node.attr} is not supported yet; only os.name is native"

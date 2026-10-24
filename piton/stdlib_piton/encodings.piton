@@ -1,0 +1,6 @@
+aliases = 0
+
+
+funcion normalize_encoding (*args ) :
+    lanzar NotImplementedError ('encodings.normalize_encoding no esta implementado en el backend nativo')
+

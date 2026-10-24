@@ -1,0 +1,22 @@
+clase SCM_RIGHTS :
+    pasar
+
+
+clase SOL_SOCKET :
+    pasar
+
+
+socket = 0
+
+
+funcion CMSG_LEN (*args ) :
+    lanzar NotImplementedError ('_socket.CMSG_LEN no esta implementado en el backend nativo')
+
+
+funcion getaddrinfo (*args ) :
+    lanzar NotImplementedError ('_socket.getaddrinfo no esta implementado en el backend nativo')
+
+
+funcion socketpair (*args ) :
+    lanzar NotImplementedError ('_socket.socketpair no esta implementado en el backend nativo')
+

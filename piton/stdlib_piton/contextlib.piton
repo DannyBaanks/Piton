@@ -1,0 +1,26 @@
+clase AbstractAsyncContextManager :
+    pasar
+
+
+clase AbstractContextManager :
+    pasar
+
+
+contextmanager = 0
+
+
+funcion ExitStack (*args ) :
+    lanzar NotImplementedError ('contextlib.ExitStack no esta implementado en el backend nativo')
+
+
+funcion closing (*args ) :
+    lanzar NotImplementedError ('contextlib.closing no esta implementado en el backend nativo')
+
+
+funcion nullcontext (*args ) :
+    lanzar NotImplementedError ('contextlib.nullcontext no esta implementado en el backend nativo')
+
+
+funcion suppress (*args ) :
+    lanzar NotImplementedError ('contextlib.suppress no esta implementado en el backend nativo')
+

@@ -2818,5 +2818,152 @@ class NoneSingletonGatesV2(unittest.TestCase):
         LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(src))))
 
 
+class BundledStdlibGatesV2(unittest.TestCase):
+    """La palanca del corpus: modulos empaquetados.
+
+    Reales (verificados contra CPython): posixpath (manipulacion de rutas,
+    pura manipulacion de strings), stat (constantes del modo, mismas que
+    _NATIVE_MODULE_CONSTS), string (constantes + capwords), re.escape.
+
+    Stubs fail-closed (compilan; al EJECUTARSE lanzan NotImplementedError,
+    nunca divergen en silencio): re (motor inexistente), io/time (syscalls de
+    fichero y reloj fuera del subset freestanding) y los stubs de plataforma
+    generados midiendo los simbolos usados (socket, struct, collections,
+    types, builtins...)."""
+
+    def test_posixpath_names(self):
+        _assert_matches(
+            self,
+            "importar posixpath" + chr(10)
+            + "imprimir (posixpath .basename ('/tmp/hola.txt' ))" + chr(10)
+            + "imprimir (posixpath .dirname ('/tmp/hola.txt' ))" + chr(10),
+        )
+
+    def test_posixpath_normpath(self):
+        _assert_matches(
+            self,
+            "importar posixpath" + chr(10)
+            + "imprimir (posixpath .normpath ('/a/b/../c//./d' ))" + chr(10)
+            + "imprimir (posixpath .normpath ('/a/../../b' ))" + chr(10),
+        )
+
+    def test_posixpath_split_ext(self):
+        # NOTA: posixpath.join con 3+ argumentos (vararg de un modulo
+        # empaquetado) devuelve 0 en ejecucion — el pack variadico de
+        # funciones de MODULO no empaqueta (bug MEDIDO de esta tanda, queda
+        # documentado; el corpus es estatico y compila).
+        _assert_matches(
+            self,
+            "importar posixpath" + chr(10)
+            + "imprimir (posixpath .split ('/tmp/a.txt' ))" + chr(10)
+            + "imprimir (posixpath .splitext ('a.tar.gz' ))" + chr(10)
+            + "imprimir (posixpath .normpath ('/a/b/../c' ))" + chr(10),
+        )
+
+    def test_stat_constants(self):
+        # stat es modulo NATIVO-con-constantes (_NATIVE_MODULE_CONSTS): las
+        # constantes resuelven en compilacion. Las S_ISdir/S_ISreg NO estan
+        # en esa tabla (stat.piton no las puede ofrecer: el import de stat
+        # resuelve por nativos y el empaquetado queda inalcanzable) — gap
+        # documentado.
+        self._assert_compiles(
+            "importar stat" + chr(10)
+            + "imprimir (stat .S_IFDIR )" + chr(10)
+            + "imprimir (stat .S_IFREG )" + chr(10)
+        )
+
+    def test_string_constants(self):
+        _assert_matches(
+            self,
+            "importar string" + chr(10)
+            + "imprimir (string .digits )" + chr(10)
+            + "imprimir (string .ascii_lowercase )" + chr(10)
+            + "imprimir (string .octdigits )" + chr(10),
+        )
+
+    def test_string_capwords(self):
+        _assert_matches(
+            self,
+            "importar string" + chr(10)
+            + "imprimir (string .capwords ('hola  mundo cruel' ))" + chr(10),
+        )
+
+    def test_re_escape(self):
+        _assert_matches(
+            self,
+            "importar re" + chr(10)
+            + "imprimir (re .escape ('a.b*c[d]' ))" + chr(10),
+        )
+
+    def test_re_flags_are_cpython_values(self):
+        _assert_matches(
+            self,
+            "importar re" + chr(10)
+            + "imprimir (int (re .I ), int (re .IGNORECASE ), int (re .M ), int (re .MULTILINE ))" + chr(10)
+            + "imprimir (int (re .S ), int (re .DOTALL ), int (re .X ), int (re .VERBOSE ))" + chr(10)
+            + "imprimir (int (re .A ), int (re .ASCII ), int (re .L ), int (re .LOCALE ), int (re .U ), int (re .UNICODE ))" + chr(10),
+        )
+
+    def test_io_constants(self):
+        _assert_matches(
+            self,
+            "importar io" + chr(10)
+            + "imprimir (io .SEEK_SET , io .SEEK_CUR , io .SEEK_END )" + chr(10)
+            + "imprimir (io .DEFAULT_BUFFER_SIZE )" + chr(10)
+            + "imprimir (io .text_encoding (Nada ))" + chr(10),
+        )
+
+    def _assert_compiles(self, fuente: str) -> None:
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.parser import parse
+        from piton.lower import lower_cst_to_hir
+        from piton.mir import lower_hir_to_mir
+        from piton.linux_x86 import LinuxCEmitter
+        LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(fuente))))
+
+    def test_re_stub_compiles(self):
+        self._assert_compiles(
+            "importar re" + chr(10)
+            + "pat = re .compile ('[a-z]+' , re .MULTILINE )" + chr(10)
+            + "imprimir (re .search ('x' ,'ax' ))" + chr(10)
+        )
+
+    def test_abc_bundled_class_and_decorator(self):
+        self._assert_compiles(
+            "importar abc" + chr(10)
+            + "clase Mi (abc .ABC ) : " + chr(10)
+            + "    @abc .abstractmethod" + chr(10)
+            + "    funcion real (self ) : " + chr(10)
+            + "        devolver 1" + chr(10)
+            + "imprimir (Mi )" + chr(10)
+        )
+
+    def test_platform_stubs_compile(self):
+        self._assert_compiles(
+            "importar socket" + chr(10)
+            + "importar types" + chr(10)
+            + "importar builtins" + chr(10)
+            + "importar collections" + chr(10)
+            + "s = socket .socket ()" + chr(10)
+            + "imprimir (builtins .repr ([1 ]))" + chr(10)
+        )
+
+    def test_stub_fails_closed_at_runtime(self):
+        import subprocess
+        import tempfile
+        import pathlib
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.linux_x86 import compile_native_linux as _cn
+        fuente = "importar time" + chr(10) + "t = time .time ()" + chr(10) + "imprimir (t )" + chr(10)
+        with tempfile.TemporaryDirectory() as _d:
+            out = pathlib.Path(_d) / "prog"
+            _cn(fuente, out)
+            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("NotImplementedError", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

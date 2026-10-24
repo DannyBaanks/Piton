@@ -1,0 +1,75 @@
+clase EACCES :
+    pasar
+
+
+clase EAGAIN :
+    pasar
+
+
+clase EBADF :
+    pasar
+
+
+clase ECHILD :
+    pasar
+
+
+clase EEXIST :
+    pasar
+
+
+clase EINVAL :
+    pasar
+
+
+clase EISDIR :
+    pasar
+
+
+clase ELOOP :
+    pasar
+
+
+clase ENODATA :
+    pasar
+
+
+clase ENOENT :
+    pasar
+
+
+clase ENOSPC :
+    pasar
+
+
+clase ENOSYS :
+    pasar
+
+
+clase ENOTCONN :
+    pasar
+
+
+clase ENOTDIR :
+    pasar
+
+
+clase ENOTSOCK :
+    pasar
+
+
+clase ENOTSUP :
+    pasar
+
+
+clase EPERM :
+    pasar
+
+
+clase EROFS :
+    pasar
+
+
+clase ESPIPE :
+    pasar
+

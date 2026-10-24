@@ -1,0 +1,25 @@
+ascii_letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+ascii_lowercase = 'abcdefghijklmnopqrstuvwxyz'
+ascii_uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+digits = '0123456789'
+hexdigits = '0123456789abcdefABCDEF'
+octdigits = '01234567'
+punctuation = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
+printable = digits + ascii_letters + punctuation + ' '
+whitespace = ' \t\n\r\x0b\x0c'
+
+
+funcion capwords (s , sep =Nada ):
+    si sep es Nada :
+        piezas = s .split ()
+    sino :
+        piezas = s .split (sep )
+    partes = []
+    para pieza en piezas :
+        si pieza :
+            partes .append (pieza [0 ] .upper () + pieza [1 :] )
+        sino :
+            partes .append ('')
+    si sep es Nada :
+        devolver ' ' .join (partes )
+    devolver sep .join (partes )

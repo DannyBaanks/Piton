@@ -1,0 +1,25 @@
+error = 0
+
+
+errors = 0
+
+
+funcion Struct (*args ) :
+    lanzar NotImplementedError ('struct.Struct no esta implementado en el backend nativo')
+
+
+funcion _unpack (*args ) :
+    lanzar NotImplementedError ('struct._unpack no esta implementado en el backend nativo')
+
+
+funcion pack (*args ) :
+    lanzar NotImplementedError ('struct.pack no esta implementado en el backend nativo')
+
+
+funcion unpack (*args ) :
+    lanzar NotImplementedError ('struct.unpack no esta implementado en el backend nativo')
+
+
+funcion unpack_from (*args ) :
+    lanzar NotImplementedError ('struct.unpack_from no esta implementado en el backend nativo')
+

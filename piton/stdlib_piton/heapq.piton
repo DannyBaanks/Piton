@@ -1,0 +1,18 @@
+nlargest = 0
+
+
+funcion _nlargest (*args ) :
+    lanzar NotImplementedError ('heapq._nlargest no esta implementado en el backend nativo')
+
+
+funcion heapify (*args ) :
+    lanzar NotImplementedError ('heapq.heapify no esta implementado en el backend nativo')
+
+
+funcion heappop (*args ) :
+    lanzar NotImplementedError ('heapq.heappop no esta implementado en el backend nativo')
+
+
+funcion heappush (*args ) :
+    lanzar NotImplementedError ('heapq.heappush no esta implementado en el backend nativo')
+

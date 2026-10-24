@@ -1,0 +1,163 @@
+clase CO_ASYNC_GENERATOR :
+    pasar
+
+
+clase CO_COROUTINE :
+    pasar
+
+
+clase CO_GENERATOR :
+    pasar
+
+
+clase CO_VARARGS :
+    pasar
+
+
+clase CO_VARKEYWORDS :
+    pasar
+
+
+clase Parameter :
+    pasar
+
+
+funcion classify_class_attrs (*args ) :
+    lanzar NotImplementedError ('inspect.classify_class_attrs no esta implementado en el backend nativo')
+
+
+funcion cleandoc (*args ) :
+    lanzar NotImplementedError ('inspect.cleandoc no esta implementado en el backend nativo')
+
+
+funcion formatargvalues (*args ) :
+    lanzar NotImplementedError ('inspect.formatargvalues no esta implementado en el backend nativo')
+
+
+funcion get_annotations (*args ) :
+    lanzar NotImplementedError ('inspect.get_annotations no esta implementado en el backend nativo')
+
+
+funcion getabsfile (*args ) :
+    lanzar NotImplementedError ('inspect.getabsfile no esta implementado en el backend nativo')
+
+
+funcion getargvalues (*args ) :
+    lanzar NotImplementedError ('inspect.getargvalues no esta implementado en el backend nativo')
+
+
+funcion getattr_static (*args ) :
+    lanzar NotImplementedError ('inspect.getattr_static no esta implementado en el backend nativo')
+
+
+funcion getclasstree (*args ) :
+    lanzar NotImplementedError ('inspect.getclasstree no esta implementado en el backend nativo')
+
+
+funcion getcomments (*args ) :
+    lanzar NotImplementedError ('inspect.getcomments no esta implementado en el backend nativo')
+
+
+funcion getfile (*args ) :
+    lanzar NotImplementedError ('inspect.getfile no esta implementado en el backend nativo')
+
+
+funcion getinnerframes (*args ) :
+    lanzar NotImplementedError ('inspect.getinnerframes no esta implementado en el backend nativo')
+
+
+funcion getmembers (*args ) :
+    lanzar NotImplementedError ('inspect.getmembers no esta implementado en el backend nativo')
+
+
+funcion getmodule (*args ) :
+    lanzar NotImplementedError ('inspect.getmodule no esta implementado en el backend nativo')
+
+
+funcion getmro (*args ) :
+    lanzar NotImplementedError ('inspect.getmro no esta implementado en el backend nativo')
+
+
+funcion getsourcefile (*args ) :
+    lanzar NotImplementedError ('inspect.getsourcefile no esta implementado en el backend nativo')
+
+
+funcion getsourcelines (*args ) :
+    lanzar NotImplementedError ('inspect.getsourcelines no esta implementado en el backend nativo')
+
+
+funcion isasyncgenfunction (*args ) :
+    lanzar NotImplementedError ('inspect.isasyncgenfunction no esta implementado en el backend nativo')
+
+
+funcion isbuiltin (*args ) :
+    lanzar NotImplementedError ('inspect.isbuiltin no esta implementado en el backend nativo')
+
+
+funcion isclass (*args ) :
+    lanzar NotImplementedError ('inspect.isclass no esta implementado en el backend nativo')
+
+
+funcion iscode (*args ) :
+    lanzar NotImplementedError ('inspect.iscode no esta implementado en el backend nativo')
+
+
+funcion iscoroutinefunction (*args ) :
+    lanzar NotImplementedError ('inspect.iscoroutinefunction no esta implementado en el backend nativo')
+
+
+funcion isdatadescriptor (*args ) :
+    lanzar NotImplementedError ('inspect.isdatadescriptor no esta implementado en el backend nativo')
+
+
+funcion isframe (*args ) :
+    lanzar NotImplementedError ('inspect.isframe no esta implementado en el backend nativo')
+
+
+funcion isfunction (*args ) :
+    lanzar NotImplementedError ('inspect.isfunction no esta implementado en el backend nativo')
+
+
+funcion isgetsetdescriptor (*args ) :
+    lanzar NotImplementedError ('inspect.isgetsetdescriptor no esta implementado en el backend nativo')
+
+
+funcion ismemberdescriptor (*args ) :
+    lanzar NotImplementedError ('inspect.ismemberdescriptor no esta implementado en el backend nativo')
+
+
+funcion ismethod (*args ) :
+    lanzar NotImplementedError ('inspect.ismethod no esta implementado en el backend nativo')
+
+
+funcion ismethoddescriptor (*args ) :
+    lanzar NotImplementedError ('inspect.ismethoddescriptor no esta implementado en el backend nativo')
+
+
+funcion ismethodwrapper (*args ) :
+    lanzar NotImplementedError ('inspect.ismethodwrapper no esta implementado en el backend nativo')
+
+
+funcion ismodule (*args ) :
+    lanzar NotImplementedError ('inspect.ismodule no esta implementado en el backend nativo')
+
+
+funcion isroutine (*args ) :
+    lanzar NotImplementedError ('inspect.isroutine no esta implementado en el backend nativo')
+
+
+funcion istraceback (*args ) :
+    lanzar NotImplementedError ('inspect.istraceback no esta implementado en el backend nativo')
+
+
+funcion signature (*args ) :
+    lanzar NotImplementedError ('inspect.signature no esta implementado en el backend nativo')
+
+
+funcion stack (*args ) :
+    lanzar NotImplementedError ('inspect.stack no esta implementado en el backend nativo')
+
+
+funcion unwrap (*args ) :
+    lanzar NotImplementedError ('inspect.unwrap no esta implementado en el backend nativo')
+

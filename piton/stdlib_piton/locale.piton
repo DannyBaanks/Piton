@@ -1,0 +1,19 @@
+clase LC_TIME :
+    pasar
+
+
+clase This :
+    pasar
+
+
+funcion getencoding (*args ) :
+    lanzar NotImplementedError ('locale.getencoding no esta implementado en el backend nativo')
+
+
+funcion getlocale (*args ) :
+    lanzar NotImplementedError ('locale.getlocale no esta implementado en el backend nativo')
+
+
+funcion getpreferredencoding (*args ) :
+    lanzar NotImplementedError ('locale.getpreferredencoding no esta implementado en el backend nativo')
+
