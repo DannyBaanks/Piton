@@ -1,0 +1,22 @@
+clase QueueListener :
+    pasar
+
+
+clase MemoryHandler :
+    pasar
+
+
+clase QueueHandler :
+    pasar
+
+
+clase BufferingHandler :
+    pasar
+
+
+clase SMTPHandler :
+    pasar
+
+
+clase SysLogHandler :
+    pasar

@@ -3062,5 +3062,85 @@ class RecursiveStdlibGatesV2(unittest.TestCase):
         self.assertIn("NotImplementedError", r.stderr)
 
 
+class SubmoduleBundledGatesV1(unittest.TestCase):
+    """SUBMODULE_BUNDLED_V1: `desde email.message importar Message` resuelve
+    al empaquetado `piton/stdlib_piton/email__message.piton` — un archivo por
+    submódulo, con el punto sustituido por doble guion bajo (la misma
+    convencion que usa el levantamiento de modulos hermanos).
+
+    Mide del corpus recursivo 2026-10-24 (15 submódulos): mir 82 -> 85
+    (14.5%). El camino que NO se cubrio queda MEDIDO y documentado:
+    `importar email.message` + `email.message.Message()` (attr-chain de
+    submódulo) termina en SIGSEGV — requiere resolver la cadena de
+    atributos de paquete, no un stub.
+
+    Los submódulos son stubs fail-closed salvo las constantes POSIX/estandar
+    que si se pueden fijar (xml.sax.handler features, http.client puertos,
+    xml.dom codigos de error, importlib.machinery sufijos)."""
+
+    def test_from_import_submodule_constant(self):
+        _assert_matches(
+            self,
+            "desde xml .sax .handler importar feature_namespaces" + chr(10)
+            + "imprimir (feature_namespaces )" + chr(10),
+        )
+
+    def test_submodule_class_compiles(self):
+        # collections.abc como BASE: las clases de submódulo se levantan
+        # cualificadas (collections_abc__Callable).
+        self._assert_compiles(
+            "desde collections .abc importar Callable" + chr(10)
+            + "clase Mi (Callable ) :" + chr(10)
+            + "    funcion __call__ (self ) :" + chr(10)
+            + "        devolver 1" + chr(10)
+            + "imprimir (Mi ()())" + chr(10)
+        )
+
+    def test_submodule_constants(self):
+        _assert_matches(
+            self,
+            "desde http .client importar HTTP_PORT , HTTPS_PORT" + chr(10)
+            + "imprimir (HTTP_PORT , HTTPS_PORT )" + chr(10)
+            + "desde importlib .machinery importar SOURCE_SUFFIXES" + chr(10)
+            + "imprimir (SOURCE_SUFFIXES )" + chr(10),
+        )
+
+    def test_submodule_dom_errors_are_classes(self):
+        # CPython 3.12: los codigos de error de xml.dom son CLASES de la
+        # jerarquia DOMException, no enteros (medido contra el oraculo).
+        self._assert_compiles(
+            "desde xml .dom importar NotFoundErr , IndexSizeErr" + chr(10)
+            + "clase Err (NotFoundErr ) :" + chr(10)
+            + "    pasar" + chr(10)
+        )
+
+    def test_submodule_stub_fails_closed(self):
+        import subprocess
+        import tempfile
+        import pathlib
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.linux_x86 import compile_native_linux as _cn
+        fuente = (
+            "desde email .utils importar formatdate" + chr(10)
+            + "imprimir (formatdate ())" + chr(10)
+        )
+        with tempfile.TemporaryDirectory() as _d:
+            out = pathlib.Path(_d) / "prog"
+            _cn(fuente, out)
+            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("NotImplementedError", r.stderr)
+
+    def _assert_compiles(self, fuente: str) -> None:
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.parser import parse
+        from piton.lower import lower_cst_to_hir
+        from piton.mir import lower_hir_to_mir
+        from piton.linux_x86 import LinuxCEmitter
+        LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(fuente))))
+
+
 if __name__ == "__main__":
     unittest.main()

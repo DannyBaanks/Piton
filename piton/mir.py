@@ -524,6 +524,18 @@ def _bundled_module_hir(name: str):
     return lower_cst_to_hir(parse(source))
 
 
+def _bundled_submodule_hir(dotted: str):
+    """SUBMODULE_BUNDLED_V1: el HIR de un SUBMODULO empaquetado
+    (`email.message` -> `piton/stdlib_piton/email__message.piton`), o None.
+
+    El bundled es flat: un archivo por nombre con el punto del submódulo
+    sustituido por doble guion bajo, la misma convencion que usa el
+    levantamiento de modulos hermanos para el nombre CUALIFICADO."""
+    if "." not in dotted:
+        return None
+    return _bundled_module_hir(dotted.replace(".", "__"))
+
+
 class MIRLowerer:
     def __init__(self):
         self.functions: List[MIRFunction] = []
@@ -747,6 +759,14 @@ class MIRLowerer:
                         if "." in alias.name:
                             top = alias.name.split(".")[0]
                             if top not in imported_modules:
+                                _sub = _bundled_submodule_hir(alias.name)
+                                if _sub is not None:
+                                    imported_modules[alias.name] = _sub
+                                    from piton.bundled_stdlib import bundled_module_path as _bmp
+                                    _bp = _bmp(alias.name.replace(".", "__"))
+                                    if _bp is not None and module_meta is not None:
+                                        module_meta[alias.name] = (_bp, False)
+                                    continue
                                 raise MIRLoweringError(f"native module not supplied: {alias.name}")
                             if alias.asname:
                                 self.module_aliases[alias.asname] = alias.name
@@ -783,6 +803,18 @@ class MIRLowerer:
                         # OS_TIER1_V1: `from os import name` resolves to the builtin
                         # os.name attribute. A supplied real `os` module still wins;
                         # every other absent module keeps failing closed.
+                        if mod_name not in imported_modules and "." in mod_name:
+                            # SUBMODULE_BUNDLED_V1: `desde email.message
+                            # importar Message` — el submódulo empaquetado se
+                            # carga con su nombre punteado; el levantamiento
+                            # cualifica reemplazando el punto (email_message_).
+                            _subf = _bundled_submodule_hir(mod_name)
+                            if _subf is not None:
+                                imported_modules[mod_name] = _subf
+                                from piton.bundled_stdlib import bundled_module_path as _bmpf
+                                _bpf = _bmpf(mod_name.replace(".", "__"))
+                                if _bpf is not None and module_meta is not None:
+                                    module_meta[mod_name] = (_bpf, False)
                         if mod_name not in imported_modules:
                             # BUNDLED_STDLIB_V1: modulo empaquetado en PITON.
                             _bundled = _bundled_module_hir(mod_name)
@@ -800,7 +832,23 @@ class MIRLowerer:
                             raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                         for alias in node.names:
                             local = alias.asname or alias.name
-                            if mod_name in {"asyncio", "math", "terminal"} or (
+                            # SUBMODULE_CONSTS_V1: si el simbolo importado es
+                            # una ASIGNACION de nivel de modulo (una
+                            # constante), su nombre real NO es el de funcion
+                            # cualificada sino el de estado (module__var__X).
+                            _mod_hir = self.imported_modules.get(mod_name) if isinstance(mod_name, str) else None
+                            _es_constante = False
+                            if _mod_hir is not None:
+                                for _it in getattr(_mod_hir, "body", []) or []:
+                                    if _it.kind == HIRKind.ASSIGN and any(
+                                        getattr(_t, "name", None) == alias.name
+                                        for _t in getattr(_it, "targets", ())
+                                    ):
+                                        _es_constante = True
+                                        break
+                            if _es_constante:
+                                self.from_import_aliases[local] = _module_state_name(mod_name, alias.name)
+                            elif mod_name in {"asyncio", "math", "terminal"} or (
                                 mod_name == "os" and mod_name not in imported_modules
                             ) or mod_name in _NATIVE_MODULE_CONSTS:
                                 self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
@@ -820,6 +868,38 @@ class MIRLowerer:
                 for _alias in _nested.names:
                     if _alias.name == "gettext":
                         self.from_import_aliases[_alias.asname or _alias.name] = "gettext.gettext"
+            # SUBMODULE_TRANSITIVE_V1: un modulo empaquetado puede importar
+            # OTRO empaquetado (os.path re-exporta posixpath; test.support
+            # usa functools). Los dos bucles de abajo hacen snapshot de
+            # imported_modules, asi que aqui se cierra la transitividad
+            # ANTES: cualquier import de un modulo empaquetado (o submódulo
+            # punteado) se carga hasta que el conjunto deje de crecer.
+            _antes = -1
+            while len(imported_modules) != _antes:
+                _antes = len(imported_modules)
+                for _mn, _imp in list(imported_modules.items()):
+                    _cargar = []
+                    for _item in getattr(_imp, "body", []) or []:
+                        if _item.kind == HIRKind.IMPORT:
+                            for _al in _item.names:
+                                if (_al.name not in {"asyncio", "math", "sys", "os", "terminal"}
+                                        and _al.name not in _NATIVE_MODULE_CONSTS):
+                                    _cargar.append(_al.name)
+                        elif _item.kind == HIRKind.IMPORT_FROM:
+                            _m2 = getattr(_item, "module", None)
+                            if _m2 and _m2 not in {"asyncio", "math", "sys", "os", "terminal"}:
+                                _cargar.append(_m2)
+                    for _target in _cargar:
+                        if _target in imported_modules:
+                            continue
+                        _bt = _bundled_submodule_hir(_target) or _bundled_module_hir(_target)
+                        if _bt is None:
+                            continue
+                        imported_modules[_target] = _bt
+                        from piton.bundled_stdlib import bundled_module_path as _btr
+                        _pt = _btr(_target.replace(".", "__"))
+                        if _pt is not None and module_meta is not None:
+                            module_meta[_target] = (_pt, False)
             for module_name, imported in sorted(imported_modules.items()):
                 for item in imported.body:
                     if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM,
@@ -901,6 +981,11 @@ class MIRLowerer:
                 if getattr(node, "decorators", None):
                     self.decorated_classes.add(node.name)
                 bases = [base.name for base in node.bases if getattr(base, "name", None)]
+                # SUBMODULE_FROMIMPORT_BASE_V1: `clase Mi(Callable)` con
+                # Callable salido de `desde collections.abc importar Callable`:
+                # el nombre LOCAL se traduce al cualificado del from-import,
+                # que es el que el levantamiento de modulos registro.
+                bases = [self.from_import_aliases.get(_b, _b) for _b in bases]
                 for base in bases:
                     # BASE_BUILTIN_V1: `object` es no-op semantico puro en
                     # CPython (toda clase ya lo hereda); `classmethod` lo pide
@@ -1425,6 +1510,18 @@ class MIRLowerer:
                             names[item2.name] = f"{prefix}{item2.name}"
                     continue
                 if mod_name:
+                    # SUBMODULE_BUNDLED_V1: el body de un modulo importado
+                    # puede importar OTRO empaquetado (o un submódulo): sin
+                    # esto, `desde functools importar reduce` dentro de un
+                    # modulo bundled fallaba (solo el entry cargaba).
+                    if mod_name not in self.imported_modules:
+                        _bsub = _bundled_submodule_hir(mod_name) or _bundled_module_hir(mod_name)
+                        if _bsub is not None:
+                            self.imported_modules[mod_name] = _bsub
+                            from piton.bundled_stdlib import bundled_module_path as _bmps
+                            _bmps_path = _bmps(mod_name.replace(".", "__"))
+                            if _bmps_path is not None and self.module_meta is not None:
+                                self.module_meta[mod_name] = (_bmps_path, False)
                     if mod_name not in self.imported_modules:
                         raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                     for alias in item.names:

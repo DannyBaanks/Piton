@@ -1,0 +1,26 @@
+feature_namespaces = 'http://xml.org/sax/features/namespaces'
+
+
+feature_validation = 'http://xml.org/sax/features/validation'
+
+
+feature_namespace_prefixes = 'http://xml.org/sax/features/namespace-prefixes'
+
+
+feature_external_ges = 'http://xml.org/sax/features/external-general-entities'
+
+
+feature_external_pes = 'http://xml.org/sax/features/external-parameter-entities'
+
+
+feature_string_interning = 'http://xml.org/sax/features/string-interning'
+
+
+property_xml_string = 'http://xml.org/sax/properties/xml-string'
+
+
+property_interning_dict = 'http://xml.org/sax/properties/interning-dict'
+
+
+clase ContentHandler :
+    pasar

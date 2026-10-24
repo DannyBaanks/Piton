@@ -1,0 +1,18 @@
+clase Message :
+    pasar
+
+
+clase EmailMessage :
+    pasar
+
+
+funcion message_from_string (*args ) :
+    lanzar NotImplementedError ('email.message.message_from_string no esta implementado en el backend nativo')
+
+
+funcion message_from_bytes (*args ) :
+    lanzar NotImplementedError ('email.message.message_from_bytes no esta implementado en el backend nativo')
+
+
+clase MIMEPart :
+    pasar

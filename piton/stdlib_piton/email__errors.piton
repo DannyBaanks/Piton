@@ -1,0 +1,14 @@
+clase HeaderParseError :
+    pasar
+
+
+clase HeaderDefect :
+    pasar
+
+
+clase HeaderWriteError :
+    pasar
+
+
+clase MessageDefect :
+    pasar

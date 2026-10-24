@@ -1,0 +1,59 @@
+clase NotFoundErr :
+    pasar
+
+
+
+clase HierarchyRequestErr :
+    pasar
+
+
+
+clase IndexSizeErr :
+    pasar
+
+
+
+clase NoModificationAllowedErr :
+    pasar
+
+
+
+clase NotSupportedErr :
+    pasar
+
+
+
+clase NamespaceErr :
+    pasar
+
+
+
+clase WrongDocumentErr :
+    pasar
+
+
+
+clase InuseAttributeErr :
+    pasar
+
+
+
+clase InvalidAccessErr :
+    pasar
+
+
+
+clase ValidationErr :
+    pasar
+
+
+
+XMLNS_NAMESPACE = 'http://www.w3.org/2000/xmlns/'
+
+
+clase Node :
+    pasar
+
+
+clase UserDataHandler :
+    pasar

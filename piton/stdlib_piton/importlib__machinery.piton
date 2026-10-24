@@ -1,0 +1,53 @@
+clase ModuleSpec :
+    pasar
+
+
+clase FileFinder :
+    pasar
+
+
+clase PathFinder :
+    pasar
+
+
+clase SourceFileLoader :
+    pasar
+
+
+clase ExtensionFileLoader :
+    pasar
+
+
+clase SourcelessFileLoader :
+    pasar
+
+
+clase BuiltinImporter :
+    pasar
+
+
+clase FrozenImporter :
+    pasar
+
+
+clase WindowsRegistryFinder :
+    pasar
+
+
+EXTENSION_SUFFIXES = []
+
+
+SOURCE_SUFFIXES = ['.py']
+
+
+BYTECODE_SUFFIXES = ['.pyc']
+
+
+funcion all_suffixes (*args ) :
+    lanzar NotImplementedError ('importlib.machinery.all_suffixes no esta implementado en el backend nativo')
+
+
+DEBUG_BYTECODE_SUFFIXES = []
+
+
+OPTIMIZED_BYTECODE_SUFFIXES = []

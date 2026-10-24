@@ -1,0 +1,46 @@
+funcion urlparse (*args ) :
+    lanzar NotImplementedError ('urllib.parse.urlparse no esta implementado en el backend nativo')
+
+
+funcion unquote (*args ) :
+    lanzar NotImplementedError ('urllib.parse.unquote no esta implementado en el backend nativo')
+
+
+funcion quote (*args ) :
+    lanzar NotImplementedError ('urllib.parse.quote no esta implementado en el backend nativo')
+
+
+funcion urlsplit (*args ) :
+    lanzar NotImplementedError ('urllib.parse.urlsplit no esta implementado en el backend nativo')
+
+
+funcion urlunparse (*args ) :
+    lanzar NotImplementedError ('urllib.parse.urlunparse no esta implementado en el backend nativo')
+
+
+funcion parse_qsl (*args ) :
+    lanzar NotImplementedError ('urllib.parse.parse_qsl no esta implementado en el backend nativo')
+
+
+funcion unquote_to_bytes (*args ) :
+    lanzar NotImplementedError ('urllib.parse.unquote_to_bytes no esta implementado en el backend nativo')
+
+
+funcion urljoin (*args ) :
+    lanzar NotImplementedError ('urllib.parse.urljoin no esta implementado en el backend nativo')
+
+
+funcion urlunsplit (*args ) :
+    lanzar NotImplementedError ('urllib.parse.urlunsplit no esta implementado en el backend nativo')
+
+
+funcion parse_qs (*args ) :
+    lanzar NotImplementedError ('urllib.parse.parse_qs no esta implementado en el backend nativo')
+
+
+funcion urlencode (*args ) :
+    lanzar NotImplementedError ('urllib.parse.urlencode no esta implementado en el backend nativo')
+
+
+funcion _splituser (*args ) :
+    lanzar NotImplementedError ('urllib.parse._splituser no esta implementado en el backend nativo')

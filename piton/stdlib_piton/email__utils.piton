@@ -1,0 +1,30 @@
+funcion _has_surrogates (*args ) :
+    lanzar NotImplementedError ('email.utils._has_surrogates no esta implementado en el backend nativo')
+
+
+funcion formatdate (*args ) :
+    lanzar NotImplementedError ('email.utils.formatdate no esta implementado en el backend nativo')
+
+
+funcion parseaddr (*args ) :
+    lanzar NotImplementedError ('email.utils.parseaddr no esta implementado en el backend nativo')
+
+
+funcion getaddresses (*args ) :
+    lanzar NotImplementedError ('email.utils.getaddresses no esta implementado en el backend nativo')
+
+
+funcion collapse_rfc2231_value (*args ) :
+    lanzar NotImplementedError ('email.utils.collapse_rfc2231_value no esta implementado en el backend nativo')
+
+
+funcion parsedate_to_datetime (*args ) :
+    lanzar NotImplementedError ('email.utils.parsedate_to_datetime no esta implementado en el backend nativo')
+
+
+funcion localtime (*args ) :
+    lanzar NotImplementedError ('email.utils.localtime no esta implementado en el backend nativo')
+
+
+funcion formataddr (*args ) :
+    lanzar NotImplementedError ('email.utils.formataddr no esta implementado en el backend nativo')

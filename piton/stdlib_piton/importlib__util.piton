@@ -1,0 +1,29 @@
+funcion cache_from_source (*args ) :
+    lanzar NotImplementedError ('importlib.util.cache_from_source no esta implementado en el backend nativo')
+
+
+funcion find_spec (*args ) :
+    lanzar NotImplementedError ('importlib.util.find_spec no esta implementado en el backend nativo')
+
+
+funcion source_hash (*args ) :
+    lanzar NotImplementedError ('importlib.util.source_hash no esta implementado en el backend nativo')
+
+
+funcion spec_from_file_location (*args ) :
+    lanzar NotImplementedError ('importlib.util.spec_from_file_location no esta implementado en el backend nativo')
+
+
+funcion resolve_name (*args ) :
+    lanzar NotImplementedError ('importlib.util.resolve_name no esta implementado en el backend nativo')
+
+
+MAGIC_NUMBER = b'\xcb\r\r\n'
+
+
+funcion source_from_cache (*args ) :
+    lanzar NotImplementedError ('importlib.util.source_from_cache no esta implementado en el backend nativo')
+
+
+funcion _find_spec_from_path (*args ) :
+    lanzar NotImplementedError ('importlib.util._find_spec_from_path no esta implementado en el backend nativo')

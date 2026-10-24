@@ -1,0 +1,3 @@
+desde functools importar reduce
+funcion usar (xs ):
+    devolver functools__reduce__marker

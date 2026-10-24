@@ -1,0 +1,47 @@
+clase Future :
+    pasar
+
+
+clase ThreadPoolExecutor :
+    pasar
+
+
+clase ProcessPoolExecutor :
+    pasar
+
+
+clase Executor :
+    pasar
+
+
+clase CancelledError :
+    pasar
+
+
+clase TimeoutError :
+    pasar
+
+
+clase InvalidStateError :
+    pasar
+
+
+clase BrokenExecutor :
+    pasar
+
+
+FIRST_COMPLETED = 'FIRST_COMPLETED'
+
+
+FIRST_EXCEPTION = 'FIRST_EXCEPTION'
+
+
+ALL_COMPLETED = 'ALL_COMPLETED'
+
+
+funcion wait (*args ) :
+    lanzar NotImplementedError ('concurrent.futures.wait no esta implementado en el backend nativo')
+
+
+funcion as_completed (*args ) :
+    lanzar NotImplementedError ('concurrent.futures.as_completed no esta implementado en el backend nativo')

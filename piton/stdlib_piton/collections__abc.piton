@@ -1,0 +1,66 @@
+clase Callable :
+    pasar
+
+
+clase Iterable :
+    pasar
+
+
+clase MutableMapping :
+    pasar
+
+
+clase Mapping :
+    pasar
+
+
+clase Sequence :
+    pasar
+
+
+clase MutableSequence :
+    pasar
+
+
+clase Set :
+    pasar
+
+
+clase MutableSet :
+    pasar
+
+
+clase Iterator :
+    pasar
+
+
+clase ByteString :
+    pasar
+
+
+clase Coroutine :
+    pasar
+
+
+clase Awaitable :
+    pasar
+
+
+clase Hashable :
+    pasar
+
+
+clase Sized :
+    pasar
+
+
+clase Container :
+    pasar
+
+
+clase Reversible :
+    pasar
+
+
+clase Generator :
+    pasar

@@ -1,0 +1,40 @@
+HTTP_PORT = 80
+
+
+HTTPS_PORT = 443
+
+
+clase HTTPConnection :
+    pasar
+
+
+clase HTTPSConnection :
+    pasar
+
+
+clase HTTPResponse :
+    pasar
+
+
+clase HTTPMessage :
+    pasar
+
+
+clase ResponseNotReady :
+    pasar
+
+
+clase LineTooLong :
+    pasar
+
+
+clase HTTPException :
+    pasar
+
+
+funcion parse_headers (*args ) :
+    lanzar NotImplementedError ('http.client.parse_headers no esta implementado en el backend nativo')
+
+
+funcion _create_https_context (*args ) :
+    lanzar NotImplementedError ('http.client._create_https_context no esta implementado en el backend nativo')

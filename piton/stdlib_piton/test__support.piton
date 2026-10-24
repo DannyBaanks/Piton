@@ -1,0 +1,30 @@
+funcion os_helper (*args ) :
+    lanzar NotImplementedError ('test.support.os_helper no esta implementado en el backend nativo')
+
+
+funcion asyncore (*args ) :
+    lanzar NotImplementedError ('test.support.asyncore no esta implementado en el backend nativo')
+
+
+funcion import_helper (*args ) :
+    lanzar NotImplementedError ('test.support.import_helper no esta implementado en el backend nativo')
+
+
+funcion threading_helper (*args ) :
+    lanzar NotImplementedError ('test.support.threading_helper no esta implementado en el backend nativo')
+
+
+funcion warnings_helper (*args ) :
+    lanzar NotImplementedError ('test.support.warnings_helper no esta implementado en el backend nativo')
+
+
+funcion script_helper (*args ) :
+    lanzar NotImplementedError ('test.support.script_helper no esta implementado en el backend nativo')
+
+
+funcion socket_helper (*args ) :
+    lanzar NotImplementedError ('test.support.socket_helper no esta implementado en el backend nativo')
+
+
+funcion asynchat (*args ) :
+    lanzar NotImplementedError ('test.support.asynchat no esta implementado en el backend nativo')
