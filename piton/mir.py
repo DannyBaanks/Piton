@@ -10,6 +10,77 @@ from piton.hir import BoolOp, Call, ExceptHandler, HIRKind, HIRNode, Keyword, Wi
 
 
 _BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError", "KeyError", "IndexError", "AttributeError", "NameError", "ZeroDivisionError", "OverflowError", "NotImplementedError"}
+# EXC_HIERARCHY_V1: builtins cuya madre NO es Exception. Se declaran aparte
+# para no aplanar la jerarquia (un `excepto UserWarning` NO debe atrapar un
+# Warning pelado). warnings.py usa Warning como default y los construye.
+_BUILTIN_EXCEPTION_PARENTS = {
+    "Warning": "Exception",
+    "UserWarning": "Warning",
+    "DeprecationWarning": "Warning",
+    "PendingDeprecationWarning": "Warning",
+    "SyntaxWarning": "Warning",
+    "RuntimeWarning": "Warning",
+    "FutureWarning": "Warning",
+    "ImportWarning": "Warning",
+    "UnicodeWarning": "Warning",
+    "BytesWarning": "Warning",
+    "ResourceWarning": "Warning",
+    "EncodingWarning": "Warning",
+}
+_BUILTIN_EXCEPTIONS |= set(_BUILTIN_EXCEPTION_PARENTS)
+# EXC_OSError_V1: raise/except de la familia OSError — el backend solo ve el
+# nombre como string (piton_raise_set + strcmp en handlers), asi que no
+# requiere runtime nuevo. IOError/EnvironmentError son aliases de OSError.
+_BUILTIN_EXCEPTIONS |= {"OSError", "IOError", "EnvironmentError"}
+# EXC_BUILTIN_FULL_V1: el resto de excepciones builtin de CPython. El
+# backend las maneja por NOMBRE (piton_raise_set + comparacion en el
+# handler), asi que no hace falta runtime nuevo: sin esta lista,
+# `raise SystemExit(code)` (sitebuiltins.Quitter) fallaba cerrado por
+# "unsupported native exception type".
+_BUILTIN_EXCEPTIONS |= {
+    "SystemExit", "KeyboardInterrupt", "StopAsyncIteration", "UserWarning",
+    "DeprecationWarning", "RuntimeWarning", "FutureWarning", "PendingDeprecationWarning",
+    "ArithmeticError", "FloatingPointError", "LookupError",
+    "ReferenceError", "BufferError", "MemoryError", "RecursionError",
+    "ImportError", "ModuleNotFoundError", "EOFError",
+    "SyntaxError", "IndentationError", "TabError",
+    "UnicodeError", "UnicodeDecodeError", "UnicodeEncodeError", "UnicodeTranslateError",
+    "FileNotFoundError", "FileExistsError", "IsADirectoryError", "NotADirectoryError",
+    "PermissionError", "ProcessLookupError", "TimeoutError", "ConnectionError",
+    "BrokenPipeError", "ChildProcessError", "BlockingIOError", "InterruptedError",
+}
+# BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
+# BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
+# `staticmethod` (abc) y `property` son del mismo tipo: no aportan metodos
+# de usuario, asi que un super() hacia ellas es un no-op.
+_BUILTIN_BASES = {"object", "classmethod", "staticmethod", "property"}
+# NATIVE_MODULE_CONSTS_V1: modulos de la stdlib que el backend provee con
+# sus CONSTANTES (no con codigo): `stat.S_IFDIR`, `__future__.division`...
+# Los valores son los POSIX/estandar, no los del host. OJO: en CPython los
+# `stat.S_IS*` son FUNCIONES (S_ISDIR(mode)) y los `__future__.*` son
+# objetos _Feature — no son constantes, asi que no se proveen aqui (el
+# backend falla cerrado al usarlos).
+_NATIVE_MODULE_CONSTS: dict[str, dict[str, Any]] = {
+    "stat": {
+        "S_IFDIR": 0o040000, "S_IFCHR": 0o020000, "S_IFBLK": 0o060000,
+        "S_IFREG": 0o100000, "S_IFIFO": 0o010000, "S_IFLNK": 0o120000,
+        "S_IFSOCK": 0o140000, "S_IFMT": 0o170000, "S_ISUID": 0o4000,
+        "S_ISGID": 0o2000, "S_ISVTX": 0o1000, "S_IRWXU": 0o700,
+        "S_IRUSR": 0o400, "S_IWUSR": 0o200, "S_IXUSR": 0o100,
+        "S_IRWXG": 0o070, "S_IRGRP": 0o040, "S_IWGRP": 0o020,
+        "S_IXGRP": 0o010, "S_IRWXO": 0o007, "S_IROTH": 0o004,
+        "S_IWOTH": 0o002, "S_IXOTH": 0o001, "S_IMODE": 0o7777,
+    },
+    "__future__": {
+        "division": True, "absolute_import": True, "with_statement": True,
+        "print_function": True, "unicode_literals": True, "generator_stop": True,
+        "nested_scopes": True, "generators": True, "annotations": True,
+        "barry_as_FLUFL": False, "braces": False, "all_feature_names": False,
+    },
+}
+# Builtins con schema FIJO de keywords (el resto de una llamada con
+# keywords a un nombre desconocido baja como DYNAMIC_CALL_V1).
+_BUILTIN_KEYWORD_SCHEMAS = {"sorted", "ordenar", "min", "max", "print", "imprimir"}
 
 
 def _os_name_const() -> str:
@@ -131,6 +202,8 @@ class MIRModule:
     classes: dict = field(default_factory=dict)
     class_parents: dict = field(default_factory=dict)
     class_mro: dict = field(default_factory=dict)
+    # CLASS_BASES_V1: las bases DIRECTAS de cada clase (`cls.__bases__`).
+    class_bases: dict = field(default_factory=dict)
     class_properties: dict = field(default_factory=dict)
     static_methods: set = field(default_factory=set)
     class_methods: set = field(default_factory=set)
@@ -181,12 +254,23 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "jump": "PURE", "branch": "PURE", "return": "PURE",
     "branch_exc": "OPAQUE",
     "binary": "PURE", "unary": "PURE", "compare": "PURE",
+    # GETTEXT_IDENTITY_V1: gettext.gettext es la identidad (sin efectos).
+    "gettext_identity": "PURE",
     "math_sqrt": "PURE",
     "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE",
     "math_floor": "PURE", "math_ceil": "PURE", "math_trunc": "PURE",
     "math_fabs": "PURE", "math_gcd": "PURE",
     "terminal_init": "PURE", "terminal_size": "PURE", "terminal_write": "PURE",
     "object_new": "PURE", "closure_new": "PURE", "cell_new": "PURE",
+    # DYNAMIC_CALL_V1: llamada a un callable desconocido (el frame lo arma
+    # el runtime; no hay efecto observable en build).
+    "dynamic_call": "PURE",
+    # OS_FSPATH_V1 / OS_PATHLIKE_V1: valores nativos de `os`.
+    "os_fspath": "PURE", "builtin_class": "PURE",
+    # RAISE_VALUE_V1: levantar una instancia (no una clase).
+    "raise_value": "OPAQUE",
+    # PRINT_FD_V1: fijar/restaurar el descriptor de salida de print.
+    "print_set_fd": "PURE", "print_restore_fd": "PURE",
     "build_collection": "PURE", "genexpr_new": "PURE", "gen_init": "PURE",
     "gather_new": "PURE",
     # READ
@@ -325,6 +409,7 @@ class _Builder:
         self._loop_stack: list[tuple[str, str, str | None]] = []
         self.module_aliases: dict[str, str] = {}
         self.from_import_aliases: dict[str, str] = {}
+        self.module_state_vars: dict[str, str] = {}
         self.super_class: str | None = None
         self.super_self: str | None = None
         self.is_async = False
@@ -363,6 +448,82 @@ def _active_handler(builder: "_Builder") -> str | None:
     return list(group)
 
 
+def _iter_nested_statements(items: Any):
+    """GETTEXT_IDENTITY_V1: recorre las sentencias ANIDADAS de un modulo
+    (cuerpos de try/except, if/else, while, for, with) buscando imports que
+    el scan de nivel de modulo no ve.
+
+    Los imports anidados son legitimos en Python (getopt mete
+    `from gettext import gettext as _` dentro de un try/except de bootstrap)
+    y el scan de nivel de modulo los ignora, dejando el nombre sin resolver.
+    """
+    for node in items or ():
+        yield node
+        for attr in ("body", "orelse", "finalbody"):
+            sub = getattr(node, attr, None)
+            if isinstance(sub, list):
+                yield from _iter_nested_statements(sub)
+        for handler in getattr(node, "handlers", ()) or ():
+            hbody = getattr(handler, "body", None)
+            if isinstance(hbody, list):
+                yield from _iter_nested_statements(hbody)
+
+
+def _module_level_defs(module_body: list) -> list:
+    """FUNC_SIG_PRESCAN_V1: las definiciones de NIVEL DE MODULO, incluidas
+    las que viven en el cuerpo de un try/except o de un if (quopri define
+    los fallbacks de binascii dentro de un `except ImportError`, y el
+    modulo los llama con keywords).
+
+    No se baja dentro de los cuerpos de FUNCION: esas defs son closures
+    (se levantan como `padre__hijo`), no funciones de modulo.
+    """
+    found: list = []
+    for node in module_body or ():
+        if getattr(node, "kind", None) == HIRKind.FUNC_DEF:
+            found.append(node)
+            continue
+        for attr in ("body", "orelse", "finalbody"):
+            sub = getattr(node, attr, None)
+            if isinstance(sub, list):
+                found.extend(_module_level_defs(sub))
+        for handler in getattr(node, "handlers", ()) or ():
+            hbody = getattr(handler, "body", None)
+            if isinstance(hbody, list):
+                found.extend(_module_level_defs(hbody))
+    return found
+
+
+def _is_bundled_module(module_name: str) -> bool:
+    """True si el modulo viene del bundled stdlib (piton/stdlib_piton/)."""
+    from piton.bundled_stdlib import bundled_module_source
+    return bundled_module_source(module_name) is not None
+
+
+def _module_state_name(module_name: str, var_name: str) -> str:
+    """MODULE_STATE_V1: el nombre CUALIFICADO de una variable de nivel de
+    modulo de un modulo importado ("warnings__var__filtros"). El prefijo
+    `var__` lo separa del de las funciones del modulo, para que una
+    variable y una funcion homonimas no choquen en C."""
+    return f"{module_name.replace('.', '__')}__var__{var_name}"
+
+
+def _bundled_module_hir(name: str):
+    """BUNDLED_STDLIB_V1: el HIR de un modulo de la stdlib empaquetado en
+    PITON (piton/stdlib_piton/<nombre>.piton), o None si no existe.
+
+    El corpus compila cada archivo AISLADO, asi que un modulo importado
+    tiene que estar en el binario: estos fuentes se compilan e inlinean.
+    """
+    from piton.bundled_stdlib import bundled_module_source
+    source = bundled_module_source(name)
+    if source is None:
+        return None
+    from piton.lower import lower_cst_to_hir
+    from piton.parser import parse
+    return lower_cst_to_hir(parse(source))
+
+
 class MIRLowerer:
     def __init__(self):
         self.functions: List[MIRFunction] = []
@@ -389,11 +550,21 @@ class MIRLowerer:
 
     def _store(self, builder: _Builder, target: HIRNode, value: str) -> None:
         if target.kind == HIRKind.STORE:
-            if target.name in builder.cell_params:
+            # MODULE_STATE_V1: una variable de nivel de modulo de un modulo
+            # importado se guarda con su nombre CUALIFICADO (el global que
+            # comparte con el resto del programa).
+            _state_name = (getattr(builder, "module_state_vars", None) or {}).get(target.name)
+            if _state_name:
+                builder.emit("store", _state_name, value)
+            elif target.name in builder.cell_params:
                 builder.emit("cell_store", target.name, value)
             else:
                 builder.emit("store", target.name, value)
-        elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
+        elif target.kind == HIRKind.ATTR:
+            # ATTR_CHAIN_STORE_V1: el dueño puede ser cualquier expresion, no
+            # solo un LOAD (`self._module.filters = x` es ATTR(ATTR(self,
+            # _module), filters) y caia al runtime_call set_target, que el
+            # backend no implementa).
             owner = self._lower_expr(builder, target.value)
             builder.emit("set_attr", owner, target.attr, value)
         elif target.kind == HIRKind.SUBSCR:
@@ -422,6 +593,15 @@ class MIRLowerer:
                 return
             idx = self._lower_expr(builder, target.slice)
             builder.emit("subscript_store", obj, idx, value)
+        elif target.kind == HIRKind.LOAD:
+            # UNPACK_TARGET_LOAD_V1: el for-target de un genexpr baja como
+            # LOAD (`for (k, v) in ...` en _compat_pickle) — es un nombre, se
+            # guarda igual que STORE. Antes caia al runtime_call set_target,
+            # que el backend no implementa.
+            if target.name in builder.cell_params:
+                builder.emit("cell_store", target.name, value)
+            else:
+                builder.emit("store", target.name, value)
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -468,6 +648,33 @@ class MIRLowerer:
                 raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
             return f"{class_name}__{method.name}__{prop}", prop, method.name
         raise MIRLoweringError(f"native class methods support only @property, @staticmethod, @classmethod, @<name>.setter, @<name>.deleter")
+
+    @staticmethod
+    def _fold_str_concat(function: MIRFunction) -> None:
+        """STR_CONCAT_FOLD_V1: pliega `const + const` (str) en un solo const.
+
+        Reemplaza la instruccion `binary(+, l, r)` por `const(folded)` y
+        registra el resultado para que la concatenacion siguiente tambien se
+        pliegue (la cadena es izquierda, asi que un unico recorrido basta)."""
+        consts: dict[str, Any] = {}
+        for block in function.blocks:
+            for index, instruction in enumerate(block.instructions):
+                if instruction.op == "const":
+                    consts[instruction.result] = instruction.args[0]
+                elif (
+                    instruction.op == "binary"
+                    and len(instruction.args) >= 3
+                    and instruction.args[0] == "+"
+                ):
+                    left, right = instruction.args[1], instruction.args[2]
+                    if isinstance(consts.get(left), str) and isinstance(consts.get(right), str):
+                        folded = consts[left] + consts[right]
+                        # La instruccion es frozen: se reemplaza conservando
+                        # efectos/token (binary y const son PURE).
+                        block.instructions[index] = replace(
+                            instruction, op="const", args=(folded,)
+                        )
+                        consts[instruction.result] = folded
 
     def lower(
         self, hir: HIRNode, modules: dict[str, HIRNode] | None = None,
@@ -520,7 +727,10 @@ class MIRLowerer:
             for node in module_body:
                 if node.kind == HIRKind.IMPORT:
                     for alias in node.names:
-                        if alias.name in {"asyncio", "math", "sys", "os", "terminal"}:
+                        if (
+                            alias.name in {"asyncio", "math", "sys", "os", "terminal"}
+                            or alias.name in _NATIVE_MODULE_CONSTS
+                        ):
                             self.module_aliases[alias.asname or alias.name] = alias.name
                             continue
                         if "." in alias.name:
@@ -534,7 +744,15 @@ class MIRLowerer:
                                 self.module_aliases[top] = top
                             continue
                         if alias.name not in imported_modules:
-                            raise MIRLoweringError(f"native module not supplied: {alias.name}")
+                            # BUNDLED_STDLIB_V1: modulo empaquetado en PITON.
+                            _bundled = _bundled_module_hir(alias.name)
+                            if _bundled is None:
+                                raise MIRLoweringError(f"native module not supplied: {alias.name}")
+                            imported_modules[alias.name] = _bundled
+                            from piton.bundled_stdlib import bundled_module_path
+                            _path = bundled_module_path(alias.name)
+                            if _path is not None and module_meta is not None:
+                                module_meta[alias.name] = (_path, False)
                         self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
@@ -554,34 +772,107 @@ class MIRLowerer:
                         # OS_TIER1_V1: `from os import name` resolves to the builtin
                         # os.name attribute. A supplied real `os` module still wins;
                         # every other absent module keeps failing closed.
-                        if mod_name not in imported_modules and mod_name not in {"asyncio", "math", "sys", "os"}:
+                        if mod_name not in imported_modules:
+                            # BUNDLED_STDLIB_V1: modulo empaquetado en PITON.
+                            _bundled = _bundled_module_hir(mod_name)
+                            if _bundled is not None:
+                                imported_modules[mod_name] = _bundled
+                                from piton.bundled_stdlib import bundled_module_path
+                                _path = bundled_module_path(mod_name)
+                                if _path is not None and module_meta is not None:
+                                    module_meta[mod_name] = (_path, False)
+                        if (
+                            mod_name not in imported_modules
+                            and mod_name not in {"asyncio", "math", "sys", "os"}
+                            and mod_name not in _NATIVE_MODULE_CONSTS
+                        ):
                             raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                         for alias in node.names:
                             local = alias.asname or alias.name
                             if mod_name in {"asyncio", "math", "terminal"} or (
                                 mod_name == "os" and mod_name not in imported_modules
-                            ):
+                            ) or mod_name in _NATIVE_MODULE_CONSTS:
                                 self.from_import_aliases[local] = f"{mod_name}.{alias.name}"
                             else:
                                 self.from_import_aliases[local] = f"{mod_name.replace('.', '__')}__{alias.name}"
+            # GETTEXT_IDENTITY_V1: `from gettext import gettext as X` — el
+            # import suele estar ANIDADO (getopt lo mete en un try/except de
+            # bootstrap), asi que el scan de imports de modulo no lo ve.
+            # gettext.gettext es la IDENTIDAD en CPython (devuelve su
+            # argumento sin cambios cuando no hay traduccion instalada), asi
+            # que la llamada se puede lowerar como identidad.
+            for _nested in _iter_nested_statements(module_body):
+                if _nested.kind != HIRKind.IMPORT_FROM:
+                    continue
+                if getattr(_nested, "module", None) != "gettext":
+                    continue
+                for _alias in _nested.names:
+                    if _alias.name == "gettext":
+                        self.from_import_aliases[_alias.asname or _alias.name] = "gettext.gettext"
             for module_name, imported in sorted(imported_modules.items()):
                 for item in imported.body:
-                    if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM, HIRKind.PASS}:
-                        raise MIRLoweringError("native imported modules currently support functions, imports, and pasar only")
+                    if item.kind not in {HIRKind.FUNC_DEF, HIRKind.IMPORT, HIRKind.IMPORT_FROM, HIRKind.PASS, HIRKind.ASSIGN}:
+                        # MODULE_STATE_V1: se admite una asignacion a nivel de
+                        # modulo (el estado del modulo importado).
+                        raise MIRLoweringError("native imported modules currently support functions, imports, assignments, and pasar only")
+            module_state_inits: list[tuple[str, Any]] = []
+            bundled_functions: list[tuple[str, Any]] = []
             for module_name, imported in sorted(imported_modules.items()):
-                scope_names, scope_modules = self._build_module_scope(module_name, imported)
-                self._module_scope_stack.append((scope_names, scope_modules))
+                scope_names, scope_modules, scope_vars = self._build_module_scope(module_name, imported)
+                self._module_scope_stack.append((scope_names, scope_modules, scope_vars))
                 try:
                     for item in imported.body:
                         if item.kind == HIRKind.FUNC_DEF:
-                            self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
+                            if _is_bundled_module(module_name):
+                                # MODULE_STATE_V1: los modulos empaquetados se
+                                # bajan DESPUES del cuerpo del modulo
+                                # principal (ver mas abajo): asi el tipo de
+                                # sus params llega por el call-site (un
+                                # `para x en param` necesita el tipo).
+                                bundled_functions.append((module_name, item))
+                            else:
+                                self._lower_function(item, f"{module_name.replace('.', '__')}__{item.name}")
+                        elif item.kind == HIRKind.ASSIGN:
+                            # MODULE_STATE_V1: el estado del modulo importado
+                            # se inicializa en el entry del modulo principal
+                            # (con nombres cualificados) — el builder del
+                            # entry todavia no existe aqui.
+                            module_state_inits.append((module_name, item))
                 finally:
                     self._module_scope_stack.pop()
+            # FUNC_SIG_PRESCAN_V1: registrar las firmas de TODAS las funciones
+            # de nivel modulo ANTES de bajar cualquier cuerpo — los de las
+            # clases tambien (warnings: `catch_warnings.__exit__` llama a
+            # `simplefilter(*self._filter)`, y simplefilter esta definida
+            # DESPUES de la clase: sin el pre-scan el call no resolvia).
+            self._prescan_module_signatures(module_body)
+            # MODULE_STATE_V1: el pre-scan tambien cubre los modulos
+            # importados (empaquetados o hermanos): su firma (params, *args,
+            # **kwargs) debe estar registrada ANTES de bajar el cuerpo del
+            # modulo principal, para que una llamada variadica se baje por el
+            # camino variadico y no por el directo.
+            for _imp_name, _imp in sorted(imported_modules.items()):
+                self._prescan_module_signatures(
+                    list(getattr(_imp, "body", []) or []),
+                    name_prefix=f"{_imp_name.replace('.', '__')}__",
+                )
             for node in module_body:
                 if node.kind != HIRKind.CLASS_DEF:
                     continue
-                if node.keywords or any(
-                    item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS, HIRKind.ASSIGN, HIRKind.ANN_ASSIGN}
+                # METACLASS_KEYWORD_V1: `class ABC(metaclass=ABCMeta)` — el
+                # metaclass no aporta metodos de usuario al subset (los metodos
+                # propios del metaclass fallan cerrados al invocarse), asi que
+                # el keyword se acepta y se ignora.
+                _meta_keywords = [
+                    kw for kw in (getattr(node, "keywords", None) or [])
+                    if getattr(kw, "arg", None) not in {"metaclass", "metaclase"}
+                ]
+                if _meta_keywords or any(
+                    # CLASS_DOCSTRING_V1: el docstring baja como CONST directo
+                    # en el body; CPython lo guarda en __doc__ y el subset no lo
+                    # observa, asi que se descarta (abc/types/warnings/__hello__).
+                    item.kind not in {HIRKind.FUNC_DEF, HIRKind.PASS, HIRKind.ASSIGN,
+                                      HIRKind.ANN_ASSIGN, HIRKind.CONST}
                     for item in node.body
                 ):
                     raise MIRLoweringError("native classes currently support methods and class-level assignments only")
@@ -589,7 +880,13 @@ class MIRLowerer:
                     self.decorated_classes.add(node.name)
                 bases = [base.name for base in node.bases if getattr(base, "name", None)]
                 for base in bases:
-                    if base not in self.classes and base not in _BUILTIN_EXCEPTIONS:
+                    # BASE_BUILTIN_V1: `object` es no-op semantico puro en
+                    # CPython (toda clase ya lo hereda); `classmethod` lo pide
+                    # abc.py:28. El subset no modela herencia de metodos
+                    # heredados de estas bases (dunder de object divergiria si
+                    # se usara) — el walk de resolucion se detiene en la clase.
+                    if (base not in self.classes and base not in _BUILTIN_EXCEPTIONS
+                            and base not in _BUILTIN_BASES):
                         raise MIRLoweringError(f"native base class '{base}' must be defined before '{node.name}'")
                 self.classes[node.name] = set()
                 self.class_base_list[node.name] = bases
@@ -598,6 +895,10 @@ class MIRLowerer:
                 used_symbols: set[str] = set()
                 for method in node.body:
                     if method.kind == HIRKind.PASS:
+                        continue
+                    if method.kind == HIRKind.CONST:
+                        # CLASS_DOCSTRING_V1: docstring de miembro (const en el
+                        # body) — descartado como el de modulo.
                         continue
                     if method.kind == HIRKind.ASSIGN:
                         # CLASS_ATTR_V1: record class-level assignments; they
@@ -667,6 +968,9 @@ class MIRLowerer:
                 and getattr(node, "is_async", False)
                 and self._contains_kind(node.body, {HIRKind.YIELD, HIRKind.YIELD_FROM})
             }
+            # FUNC_SIG_PRESCAN_V1: el pre-scan ya corrio antes de bajar los
+            # cuerpos (ver mas arriba: las firmas se registran antes que las
+            # clases, para que un call desde un metodo de clase resuelva).
             for node in module_body:
                 if node.kind == HIRKind.FUNC_DEF:
                     is_gen = node.name in self.generators
@@ -723,15 +1027,62 @@ class MIRLowerer:
                     self._class_attr_temps.setdefault(cls_name, {})[attr_name] = val
                 module_builder.emit("store", cls_name, cls_obj)
             self._lower_module_metadata(module, entry_file, module_meta)
+            # MODULE_STATE_V1: el estado de los modulos importados se
+            # inicializa aqui (en el entry del modulo principal, con nombres
+            # cualificados) — antes de que corra el codigo del principal.
+            for _mod_name, _state_item in module_state_inits:
+                _imported = imported_modules.get(_mod_name)
+                if _imported is None:
+                    continue
+                _scope_names, _scope_modules, _scope_vars = self._build_module_scope(_mod_name, _imported)
+                _saved_aliases = module.module_aliases
+                _saved_from = module.from_import_aliases
+                module.module_aliases = dict(_scope_modules)
+                module.from_import_aliases = dict(_scope_names)
+                try:
+                    for _target in getattr(_state_item, "targets", ()) or ():
+                        _tname = getattr(_target, "name", None)
+                        if not isinstance(_tname, str):
+                            continue
+                        _value = self._lower_expr(module, _state_item.value)
+                        _qualified = _module_state_name(_mod_name, _tname)
+                        module.emit("store", _qualified, _value)
+                finally:
+                    module.module_aliases = _saved_aliases
+                    module.from_import_aliases = _saved_from
             self._lower_statements(module, [
                 node for node in module_body
                 if node.kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF} or getattr(node, "decorators", None)
             ])
+            # MODULE_STATE_V1: los modulos empaquetados se bajan DESPUES del
+            # cuerpo principal: asi el tipo de sus params llega por el
+            # call-site (un `para x en param` necesita el tipo del param).
+            for _bmod_name, _bfunc in bundled_functions:
+                _bimported = imported_modules.get(_bmod_name)
+                if _bimported is None:
+                    continue
+                _bnames, _bmodules, _bvars = self._build_module_scope(_bmod_name, _bimported)
+                self._module_scope_stack.append((_bnames, _bmodules, _bvars))
+                try:
+                    self._lower_function(
+                        _bfunc, f"{_bmod_name.replace('.', '__')}__{_bfunc.name}"
+                    )
+                finally:
+                    self._module_scope_stack.pop()
             self.functions.insert(0, module.function)
         else:
             builder = _Builder("<module>")
             self._lower_statement(builder, hir)
             self.functions.append(builder.function)
+        # STR_CONCAT_FOLD_V1: `'a' + 'b' + ...` con TODOS los operandos
+        # literales se pliega en UN constante, como el peephole de CPython.
+        # Sin esto, una cadena larga se concatena en runtime contra el buffer
+        # fijo de 64 KB (piton_concat_buf) con coste cuadratico y termina en
+        # SIGSEGV: pydoc_data/topics.py tiene 17.254 concatenaciones en una
+        # sola expresion. Los operandos no literales (variables, llamadas)
+        # impiden el pliegue, asi que la semantica de CPython se preserva.
+        for function in self.functions:
+            self._fold_str_concat(function)
         module = MIRModule(self.functions)
         module.classes = dict(self.classes)
         module.class_parents = dict(self.class_parents)
@@ -804,6 +1155,10 @@ class MIRLowerer:
         module.injected_attr_types = {k: v for k, v in _injected.items() if k not in _injected_conflicts}
         self._finalize_mro()
         module.class_mro = dict(self.class_mro)
+        # CLASS_BASES_V1: las bases directas (para `cls.__bases__`).
+        module.class_bases = {
+            name: list(bases) for name, bases in self.class_base_list.items()
+        }
         module.class_properties = dict(self.class_properties)
         module.static_methods = set(self.static_methods)
         module.class_methods = set(self.class_methods)
@@ -875,7 +1230,7 @@ class MIRLowerer:
                 )
             self.class_mro[name] = mro
 
-    def _build_module_scope(self, module_name: str, imported: HIRNode) -> tuple[dict[str, str], dict[str, str]]:
+    def _build_module_scope(self, module_name: str, imported: HIRNode) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
         """Per-module name scope for an imported module body: imported module
         bodies are NOT executed, so their functions must resolve same-module
         names, from-imports and module aliases against the module's OWN context
@@ -884,15 +1239,30 @@ class MIRLowerer:
         -> dotted module."""
         names: dict[str, str] = {}
         modules: dict[str, str] = {}
+        state_vars: dict[str, str] = {}
         meta = self.module_meta.get(module_name)
         is_package = bool(meta and meta[1])
         base = module_name.rsplit(".", 1)[0] if ("." in module_name and not is_package) else module_name
         for item in imported.body:
             if item.kind == HIRKind.FUNC_DEF:
                 names[item.name] = f"{module_name.replace('.', '__')}__{item.name}"
+            elif item.kind == HIRKind.ASSIGN:
+                # MODULE_STATE_V1: una variable de nivel de modulo de un
+                # modulo importado es un global con NOMBRE CUALIFICADO
+                # ("warnings__filtros") — sin cualificar chocaria con el
+                # global homonimo del modulo principal.
+                for _target in getattr(item, "targets", ()) or ():
+                    _tname = getattr(_target, "name", None)
+                    if isinstance(_tname, str):
+                        _qualified = _module_state_name(module_name, _tname)
+                        names[_tname] = _qualified
+                        state_vars[_tname] = _qualified
             elif item.kind == HIRKind.IMPORT:
                 for alias in item.names:
-                    if alias.name in {"asyncio", "math", "sys", "os", "terminal"}:
+                    if (
+                            alias.name in {"asyncio", "math", "sys", "os", "terminal"}
+                            or alias.name in _NATIVE_MODULE_CONSTS
+                        ):
                         modules[alias.asname or alias.name] = alias.name
                         continue
                     if "." in alias.name:
@@ -957,7 +1327,7 @@ class MIRLowerer:
                         raise MIRLoweringError(f"native from-import module not supplied: {mod_name}")
                     for alias in item.names:
                         names[alias.asname or alias.name] = f"{mod_name.replace('.', '__')}__{alias.name}"
-        return names, modules
+        return names, modules, state_vars
 
     def _lower_module_metadata(
         self, builder: "_Builder", entry_file: str | None, module_meta: dict[str, tuple[str, bool]] | None
@@ -1018,6 +1388,20 @@ class MIRLowerer:
         frame_abi: bool = False, is_generator: bool = False,
     ) -> None:
         args = getattr(node, "args", None)
+        # LAMBDA_VARARG_FAILCLOSED_V1: el dispatcher de closures con vararg
+        # solo se enlaza para funciones (function_varargs + call-sites); una
+        # lambda `*args` construia el closure con has_vararg=0 y el runtime
+        # reventaba en `piton_closure_call6` con un TypeError divergente
+        # (hallado por el gate LambdaStarV1 del corpus v4). Antes de que el
+        # parser aceptara `lambda *args` esto era inalcanzable; ahora falla
+        # cerrado en MIR, como dict-merge.
+        if (
+            getattr(node, "kind", None) == HIRKind.LAMBDA
+            and (getattr(args, "vararg", None) or getattr(args, "kwarg", None))
+        ):
+            raise MIRLoweringError(
+                "lambda *args/**kwargs is not supported in the native subset yet"
+            )
         posonly_params = list(getattr(args, "posonlyargs", []) or []) if args else []
         params = list(getattr(args, "args", []) or []) if args else []
         kwonly_params = list(getattr(args, "kwonlyargs", []) or []) if args else []
@@ -1035,9 +1419,11 @@ class MIRLowerer:
         builder.function.is_coroutine = builder.is_async
         builder.function.is_async_generator = (qualified_name or node.name) in self.async_generators
         if self._module_scope_stack:
-            scope_names, scope_modules = self._module_scope_stack[-1]
+            scope_names, scope_modules = self._module_scope_stack[-1][0], self._module_scope_stack[-1][1]
+            scope_vars = self._module_scope_stack[-1][2]
             builder.module_aliases = dict(scope_modules)
             builder.from_import_aliases = dict(scope_names)
+            builder.module_state_vars = dict(scope_vars)
         else:
             builder.module_aliases = dict(self.module_aliases)
             builder.from_import_aliases = dict(self.from_import_aliases)
@@ -1054,15 +1440,17 @@ class MIRLowerer:
             raw_defaults = list(getattr(args, "defaults", []) or [])
             default_params = positional_params[-len(raw_defaults):] if raw_defaults else []
             for param, default_node in zip(default_params, raw_defaults):
-                if default_node.kind != HIRKind.CONST:
+                # M6 STATIC_CONST_EVAL_V1: CONST y literales compuestos de
+                # consts ((), [], (a, b)) se evaluan a valor estatico; Name /
+                # Attribute / exprs siguen fail-closed (el binding de modulo
+                # no es const en definicion).
+                if not self._static_default_value(default_node, defaults_map, param):
                     raise MIRLoweringError("native function defaults currently support constant values only")
-                defaults_map[param] = default_node.value
             for param, default_node in zip(kwonly_params, getattr(args, "kw_defaults", []) or []):
                 if default_node is None:
                     continue
-                if default_node.kind != HIRKind.CONST:
+                if not self._static_default_value(default_node, defaults_map, param):
                     raise MIRLoweringError("native function defaults currently support constant values only")
-                defaults_map[param] = default_node.value
         total_params = len(positional_params) + len(kwonly_params) + int(bool(vararg_name)) + int(bool(kwarg_name))
         use_frame_abi = frame_abi or total_params > 4
         if vararg_name:
@@ -1159,18 +1547,196 @@ class MIRLowerer:
             builder.function.cell_vars = list(cell_vars)
         self.functions.append(builder.function)
 
-    def _walk(self, value: Any):
-        if isinstance(value, HIRNode):
-            yield value
-            if value.kind == HIRKind.FUNC_DEF:
-                return
-            for descriptor in fields(value):
-                if descriptor.name in {"kind", "line", "col", "annotations"}:
+    def _static_default_value(self, node: HIRNode, defaults_map: dict[str, Any], param: str) -> bool:
+        """M6 STATIC_CONST_EVAL_V1: evalua el HIR de un default a valor
+        estatico. Acepta CONST y TUPLE/LIST cuyos elementos sean todos
+        evaluables (incluidos vacios: getopt `output=[]`, warnings
+        `warn(..., ())`). Devuelve False para cualquier otro HIR (Name,
+        Attribute, ops): el binding no es const en el momento de definicion
+        y el subset no modela evaluacion diferida.
+
+        NON_CONST_DEFAULT_V1: un default que es un NOMBRE se acepta como
+        referencia: se materializa en el call-site (con el valor que tenga
+        el nombre ahi) y falla cerrado si el nombre no esta en alcance.
+        Cubre `category=Warning` (excepcion builtin: el backend compara
+        por NOMBRE) y `output=output` (variable de la funcion que envuelve
+        a la closure)."""
+        if node.kind == HIRKind.CONST:
+            defaults_map[param] = node.value
+            return True
+        if node.kind in (HIRKind.TUPLE, HIRKind.LIST):
+            elts = list(getattr(node, "elts", None) or [])
+            values: list[Any] = []
+            for elt in elts:
+                if elt.kind != HIRKind.CONST:
+                    return False
+                values.append(elt.value)
+            defaults_map[param] = tuple(values) if node.kind == HIRKind.TUPLE else values
+            return True
+        if node.kind == HIRKind.LOAD and isinstance(getattr(node, "name", None), str):
+            # NON_CONST_DEFAULT_V1: referencia por nombre.
+            defaults_map[param] = ("__name__", node.name)
+            return True
+        if node.kind == HIRKind.ATTR:
+            # NON_CONST_DEFAULT_V1 (atributo): `sys.version_info` como default
+            # (warnings: _deprecated(..., _version=sys.version_info)) — el
+            # backend lo materializa como el valor nativo del modulo.
+            value = getattr(node, "value", None)
+            attr = getattr(node, "attr", None)
+            if (
+                isinstance(attr, str)
+                and getattr(value, "kind", None) == HIRKind.LOAD
+                and isinstance(getattr(value, "name", None), str)
+            ):
+                defaults_map[param] = ("__attr__", value.name, attr)
+                return True
+        # CONST_EXPR_DEFAULT_V1: una expresion CONSTANTE (hashlib:
+        # `_bufsize=2**18`) se evalua en build time — el subset no modela
+        # la evaluacion diferida de defaults, pero una expresion de
+        # literales si es determinista.
+        folded = self._fold_const_expr(node)
+        if folded is not None:
+            defaults_map[param] = folded
+            return True
+        return False
+
+    def _fold_const_expr(self, node: HIRNode) -> Any | None:
+        """CONST_EXPR_DEFAULT_V1: evalua una expresion de literales a un
+        valor estatico (para los defaults de funcion). Devuelve None si la
+        expresion no es determinista.
+
+        Cubre: constantes, `a ** b`, `a * b`, `a + b`, `a - b`, `a // b`,
+        `a << b`, `a | b`, `a & b` y el menos unario — solo con operandos
+        enteros/booleanos (hashlib: `_bufsize=2**18`).
+        """
+        kind = getattr(node, "kind", None)
+        if kind == HIRKind.CONST:
+            value = getattr(node, "value", None)
+            if isinstance(value, bool) or isinstance(value, int):
+                return value
+            return None
+        if kind == HIRKind.BINOP:
+            left = self._fold_const_expr(getattr(node, "left", None))
+            right = self._fold_const_expr(getattr(node, "right", None))
+            if left is None or right is None:
+                return None
+            op = getattr(node, "op", "")
+            try:
+                if op == "**":
+                    return left ** right
+                if op == "*":
+                    return left * right
+                if op == "+":
+                    return left + right
+                if op == "-":
+                    return left - right
+                if op == "//":
+                    return left // right
+                if op == "<<":
+                    return left << right
+                if op == "|":
+                    return left | right
+                if op == "&":
+                    return left & right
+            except Exception:
+                return None
+            return None
+        if kind == HIRKind.UNOP:
+            operand = self._fold_const_expr(getattr(node, "operand", None))
+            if operand is None:
+                return None
+            op = getattr(node, "op", "")
+            if op == "-":
+                return -operand
+            if op == "+":
+                return operand
+            if op == "~":
+                return ~operand
+            return None
+        return None
+
+    def _prescan_module_signatures(self, module_body: list, name_prefix: str = "") -> None:
+        """FUNC_SIG_PRESCAN_V1: registra params/defaults/varargs/posonly/
+        kwonly/frame_abi de TODAS las funciones de nivel modulo ANTES de
+        bajar cuerpos (bisect: insort_right, definida en la linea 4, llama
+        con key= a bisect_right, definida en la linea 21 — el registro
+        tardio por _lower_function hacia fallar el keyword call forward).
+        Alcance fail-closed: solo funciones sin decoradores (el symbol
+        decorado se registra bajo __decorated__X y su resolucion de calls
+        no cambia) y con TODOS los defaults estaticos (los no estaticos
+        siguen rechazados identicamente al bajar la funcion). El orden de
+        params replica _lower_function: [*posonly, *pos, vararg?, *kwonly,
+        kwarg?]. _lower_function re-registra los mismos valores al bajar,
+        por lo que el pre-scan es idempotente."""
+        for node in _module_level_defs(module_body):
+            if node.kind != HIRKind.FUNC_DEF:
+                continue
+            if list(getattr(node, "decorators", None) or []):
+                continue
+            args = getattr(node, "args", None)
+            posonly_params = list(getattr(args, "posonlyargs", []) or []) if args else []
+            positional_params = list(getattr(args, "args", []) or []) if args else []
+            kwonly_params = list(getattr(args, "kwonlyargs", []) or []) if args else []
+            vararg_name = getattr(args, "vararg", None) if args else None
+            kwarg_name = getattr(args, "kwarg", None) if args else None
+            defaults_map: dict[str, Any] = {}
+            if args:
+                raw_defaults = list(getattr(args, "defaults", []) or [])
+                default_params = positional_params[-len(raw_defaults):] if raw_defaults else []
+                ok = True
+                for param, default_node in zip(default_params, raw_defaults):
+                    if not self._static_default_value(default_node, defaults_map, param):
+                        ok = False
+                        break
+                if ok:
+                    for param, default_node in zip(kwonly_params, getattr(args, "kw_defaults", []) or []):
+                        if default_node is None:
+                            continue
+                        if not self._static_default_value(default_node, defaults_map, param):
+                            ok = False
+                            break
+                if not ok:
                     continue
-                yield from self._walk(getattr(value, descriptor.name))
-        elif isinstance(value, (list, tuple)):
-            for item in value:
-                yield from self._walk(item)
+            name = f"{name_prefix}{node.name}" if name_prefix else node.name
+            params = [*posonly_params, *positional_params]
+            if vararg_name:
+                params.append(vararg_name)
+            params.extend(kwonly_params)
+            if kwarg_name:
+                params.append(kwarg_name)
+            self.function_params[name] = list(params)
+            self.function_defaults[name] = dict(defaults_map)
+            self.function_varargs[name] = vararg_name
+            self.function_kwargs[name] = kwarg_name
+            self.function_posonly[name] = posonly_params
+            self.function_kwonly[name] = kwonly_params
+            total_params = (
+                len(positional_params) + len(kwonly_params)
+                + int(bool(vararg_name)) + int(bool(kwarg_name))
+            )
+            self.function_frame_abi[name] = total_params > 4
+
+    def _walk(self, value: Any):
+        # BINOP_CHAIN_ITER_V1 (mir): el recorrido es ITERATIVO con pila
+        # explicita. El `yield from` recursivo reventaba con cadenas izquierdas
+        # largas (pydoc_data/topics.py: 17.254 concatenaciones en una
+        # expresion), igual que el lowering antes de su arreglo. El orden de
+        # visita se conserva: preorden con los campos en su orden de declaracion.
+        stack = [value]
+        while stack:
+            current = stack.pop()
+            if isinstance(current, HIRNode):
+                yield current
+                if current.kind == HIRKind.FUNC_DEF:
+                    continue
+                children = []
+                for descriptor in fields(current):
+                    if descriptor.name in {"kind", "line", "col", "annotations"}:
+                        continue
+                    children.append(getattr(current, descriptor.name))
+                stack.extend(reversed(children))
+            elif isinstance(current, (list, tuple)):
+                stack.extend(reversed(current))
 
     _SCOPE_STOP = {
         HIRKind.FUNC_DEF, HIRKind.CLASS_DEF, HIRKind.LAMBDA,
@@ -1419,7 +1985,8 @@ class MIRLowerer:
                     capture_ops.append(capture)
                 current = builder.temp()
                 has_vararg = 1 if lifted_name in getattr(self, "variadic_functions", set()) else 0
-                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg, result=current)
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=current)
                 for decorator in reversed(decorators):
                     dec_val = self._lower_expr(builder, decorator)
                     applied = builder.temp()
@@ -1580,7 +2147,10 @@ class MIRLowerer:
             # backends resolve loads/stores of declared names to the shared
             # variable instead of function locals (pure metadata op).
             for name in node.names:
-                builder.emit("global_decl", name)
+                # MODULE_STATE_V1: el `global` de una variable de estado del
+                # modulo importado usa el nombre cualificado.
+                _state_name = (getattr(builder, "module_state_vars", None) or {}).get(name)
+                builder.emit("global_decl", _state_name if _state_name else name)
         elif kind == HIRKind.IF:
             self._lower_if(builder, node)
         elif kind == HIRKind.WHILE:
@@ -1596,6 +2166,18 @@ class MIRLowerer:
         elif kind == HIRKind.RAISE:
             self._lower_raise(builder, node)
         elif kind == HIRKind.IMPORT:
+            # FUNC_IMPORT_ALIAS_V1: `importar sys` dentro de una funcion
+            # (getopt.py: main hace `import sys` y luego sys.argv[1:])
+            # registra el alias en el builder para que los patrones de
+            # modulo (sys.argv -> op sys_argv) apliquen igual que a nivel
+            # de modulo. El import en runtime es no-op: los modulos builtin
+            # ya viven en el binario.
+            for alias in getattr(node, "names", ()) or ():
+                if (
+                            alias.name in {"asyncio", "math", "sys", "os", "terminal"}
+                            or alias.name in _NATIVE_MODULE_CONSTS
+                        ):
+                    builder.module_aliases[alias.asname or alias.name] = alias.name
             return
         elif kind == HIRKind.IMPORT_FROM:
             return
@@ -1693,7 +2275,19 @@ class MIRLowerer:
         if not starred:
             builder.emit("unpack_check", value, len(elts), _active_handler(builder))
             for index, element in enumerate(elts):
-                if element.kind not in (HIRKind.STORE, HIRKind.ATTR):
+                # UNPACK_NESTED_V1: `a, (b, c) = ...` — el sub-target tupla se
+                # materializa con get_item y se recorre (heapq/_compat_pickle).
+                # El unpack_check de cada nivel valida su propia longitud; el
+                # caso de error 'subvalor no-secuencia' queda divergente (nativo
+                # ValueError vs CPython TypeError) y documentado.
+                if element.kind == HIRKind.TUPLE:
+                    index_temp = builder.temp()
+                    builder.emit("const", index, result=index_temp)
+                    element_value = builder.temp()
+                    builder.emit("get_item", value, index_temp, result=element_value)
+                    self._store_tuple_target(builder, element, element_value)
+                    continue
+                if element.kind not in (HIRKind.STORE, HIRKind.ATTR, HIRKind.SUBSCR, HIRKind.LOAD):
                     raise MIRLoweringError(
                         "desempaquetado solo soporta nombres y atributos (tuplas anidadas pendientes)"
                     )
@@ -1731,10 +2325,13 @@ class MIRLowerer:
         else:
             upper = None
         middle = builder.temp()
+        # STARRED_SLICE_LIST_V1: el `*medio` de un desempaquetado es SIEMPRE
+        # lista en CPython; el flag as_list le dice al backend que convierta
+        # (un slice de tupla vuelve tupla — divergia contra el oracle).
         if upper is None:
-            builder.emit("get_slice", value, lower, None, result=middle)
+            builder.emit("get_slice", value, lower, None, None, "as_list", result=middle)
         else:
-            builder.emit("get_slice", value, lower, upper, result=middle)
+            builder.emit("get_slice", value, lower, upper, None, "as_list", result=middle)
         self._store(builder, elts[si].value, middle)
         total = len(elts) - 1
         for offset, element in enumerate(after):
@@ -1742,7 +2339,15 @@ class MIRLowerer:
 
     def _store_indexed_element(self, builder: _Builder, element: HIRNode, value: str, index: int) -> None:
         """Store one unpacked element fetched by (possibly negative) position."""
-        if element.kind not in (HIRKind.STORE, HIRKind.ATTR):
+        # UNPACK_NESTED_V1: sub-target tupla tambien en el camino con star.
+        if element.kind == HIRKind.TUPLE:
+            index_temp = builder.temp()
+            builder.emit("const", index, result=index_temp)
+            element_value = builder.temp()
+            builder.emit("get_item", value, index_temp, result=element_value)
+            self._store_tuple_target(builder, element, element_value)
+            return
+        if element.kind not in (HIRKind.STORE, HIRKind.ATTR, HIRKind.SUBSCR, HIRKind.LOAD):
             raise MIRLoweringError(
                 "desempaquetado solo soporta nombres y atributos (tuplas anidadas pendientes)"
             )
@@ -1960,6 +2565,13 @@ class MIRLowerer:
         builder.current = increment_block
         builder.emit("jump", condition_block.label)
         builder.current = end_block
+        # FOR_EXIT_CLEAR_V1: el iter_next salta aqui con el StopIteration de
+        # agotamiento (exc_flag=1). En <module> nadie revisa el flag, pero en
+        # funciones el caller lo revisa tras el call y reportaba un
+        # 'StopIteration' fantasma (rc 1 sin salida): todo `para x en xs`
+        # dentro de una funcion moria al volver. El end_block solo recibe
+        # el agotamiento y breaks, asi que limpiar aqui es correcto.
+        builder.emit("catch_clear")
         builder._loop_stack.pop()
         if has_else:
             flag_val = builder.temp()
@@ -2057,9 +2669,17 @@ class MIRLowerer:
                     raise MIRLoweringError("native except does not support except* yet")
                 h_accepted = None
                 if handler.type_ is not None:
-                    if handler.type_.kind != HIRKind.LOAD:
+                    # EXCEPT_TUPLE_V1: `excepto (A, B):` — se guarda la lista
+                    # de nombres; se expande a N pares (accepted, label) al
+                    # MISMO bloque al volcar exception_handlers (hashlib.py:140).
+                    if handler.type_.kind == HIRKind.LOAD:
+                        h_accepted = handler.type_.name
+                    elif (handler.type_.kind == HIRKind.TUPLE
+                          and getattr(handler.type_, "elts", None)
+                          and all(e.kind == HIRKind.LOAD for e in handler.type_.elts)):
+                        h_accepted = [e.name for e in handler.type_.elts]
+                    else:
                         raise MIRLoweringError("native except type must be a builtin exception name")
-                    h_accepted = handler.type_.name
                 handlers.append((handler, h_accepted, builder.new_block(), handler.name))
             handlers_meta = handlers
         else:
@@ -2074,7 +2694,12 @@ class MIRLowerer:
         handler_block = handlers_meta[0][2] if handlers_meta else None
         accepted = handlers_meta[0][1] if handlers_meta else None
         if handlers_meta:
-            builder.exception_handlers.append([(acc, block.label) for _, acc, block, _ in handlers_meta])
+            # EXCEPT_TUPLE_V1: un handler con N nombres ocupa N pares.
+            handler_pairs = []
+            for _, acc, block, _ in handlers_meta:
+                names = acc if isinstance(acc, list) else [acc]
+                handler_pairs.extend((name, block.label) for name in names)
+            builder.exception_handlers.append(handler_pairs)
         elif finally_body:
             # FINALBODY_UNWIND_V1: an exception escaping the try still runs
             # the finally block first, instead of skipping it.
@@ -2113,7 +2738,11 @@ class MIRLowerer:
             builder.emit("catch_clear")
             previous_reraise_type = builder.reraise_type
             previous_in_handler = builder.in_except_handler
-            builder.reraise_type = handler_accepted
+            # EXCEPT_TUPLE_V1: con lista de nombres el reraise estatico usa
+            # el primero (el tipo live real lo conserva piton_reraise_save).
+            builder.reraise_type = (
+                handler_accepted[0] if isinstance(handler_accepted, list) else handler_accepted
+            )
             builder.in_except_handler = True
             previous_bindings = builder.exception_bindings
             builder.exception_bindings = previous_bindings | ({bind_name} if bind_name else set())
@@ -2211,7 +2840,10 @@ class MIRLowerer:
             # El kind va PRIMERO: si expr es un Load (con xobj), expr.func no
             # existe y el orden invertido lanzaba AttributeError en vez del
             # MIRLoweringError "direct call".
-            if expr.kind == HIRKind.CALL and expr.func.name in {"abrir", "open"}:
+            if (
+                expr.kind == HIRKind.CALL
+                and getattr(expr.func, "name", None) in {"abrir", "open"}
+            ):
                 var = item.optional_vars
                 if getattr(expr, "args", None):
                     file_expr = self._lower_expr(builder, expr.args[0])
@@ -2503,6 +3135,14 @@ class MIRLowerer:
             return
         if node.exc.kind == HIRKind.LOAD and (node.exc.name in _BUILTIN_EXCEPTIONS or node.exc.name in self.classes):
             node = replace(node, exc=Call(kind=HIRKind.CALL, func=node.exc, args=[], keywords=[]))
+        elif node.exc.kind == HIRKind.LOAD:
+            # RAISE_VALUE_V1: `raise <instancia>` — el nombre no es una clase
+            # ni una excepcion builtin: se levanta el VALOR (warnings:
+            # `raise message` con un Warning instanciado). El runtime deriva
+            # el tipo del class_name del objeto.
+            value = self._lower_expr(builder, node.exc)
+            builder.emit("raise_value", value, _active_handler(builder))
+            return
         if node.exc.kind != HIRKind.CALL or node.exc.func.kind != HIRKind.LOAD:
             raise MIRLoweringError("native raise requires a call to an exception constructor")
         exception_type = node.exc.func.name
@@ -2597,7 +3237,9 @@ class MIRLowerer:
             chain.append(current)
             if current == "BaseException":
                 break
-            if current in _BUILTIN_EXCEPTIONS:
+            if current in _BUILTIN_EXCEPTION_PARENTS:
+                current = _BUILTIN_EXCEPTION_PARENTS[current]
+            elif current in _BUILTIN_EXCEPTIONS:
                 current = "Exception" if current != "Exception" else "BaseException"
             else:
                 mro = self._mro_memo.get(current) or self._compute_mro(current)
@@ -2640,9 +3282,28 @@ class MIRLowerer:
         chain = self._exception_chain(exception_type)
         for entries in reversed(builder.exception_handlers):
             for accepted, label in entries:
-                if accepted is None or accepted in {"Exception", "BaseException"} or accepted in chain:
+                # EXCEPT_TUPLE_V1: accepted puede ser la lista de nombres de
+                # un handler en tupla; matchea si cualquiera esta en la chain.
+                names = accepted if isinstance(accepted, list) else [accepted]
+                if any(
+                    name is None or name in {"Exception", "BaseException"} or name in chain
+                    for name in names
+                ):
                     return label
         return None
+
+    @staticmethod
+    def _native_module_const(qualified: str | None) -> tuple[bool, Any]:
+        """NATIVE_MODULE_CONSTS_V1: resuelve "mod.attr" de un modulo nativo
+        con CONSTANTES (stat.S_IFDIR, __future__.division). Devuelve
+        (encontrado, valor)."""
+        if not qualified or "." not in qualified:
+            return False, None
+        _mod, _attr = qualified.split(".", 1)
+        _consts = _NATIVE_MODULE_CONSTS.get(_mod)
+        if not _consts or _attr not in _consts:
+            return False, None
+        return True, _consts[_attr]
 
     def _lower_super_call(self, builder: _Builder, attr: str, user_args: tuple) -> str:
         if not builder.super_class:
@@ -2691,6 +3352,17 @@ class MIRLowerer:
                     raise MIRLoweringError("native super().__delattr__ requires exactly one argument")
                 builder.emit("del_attr", receiver, args[0])
                 return None
+            # SUPER_BUILTIN_BASE_V1: la base siguiente en el MRO es una clase
+            # BUILTIN (abc: `class abstractclassmethod(classmethod)`), que no
+            # aporta un __init__ de usuario. En CPython la llamada resuelve
+            # contra type.__init__ (sin efecto observable) -> la llamada es un
+            # no-op, no un error de build.
+            if attr == "__init__" and any(
+                cls in _BUILTIN_BASES for cls in mro if cls != current_class
+            ):
+                _none = builder.temp()
+                builder.emit("const", None, result=_none)
+                return _none
             raise MIRLoweringError(
                 f"native super().{attr}: no base class in MRO of '{current_class}' defines '{attr}'"
             )
@@ -2745,7 +3417,8 @@ class MIRLowerer:
                     builder.emit("load", capture_name, result=capture)
                     capture_ops.append(capture)
                 result = builder.temp()
-                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), result=result)
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=result)
                 return result
             if node.name in builder.cell_params:
                 result = builder.temp()
@@ -2774,7 +3447,28 @@ class MIRLowerer:
             builder.emit("load", node.name, result=result)
             return result
         if kind == HIRKind.BINOP:
-            return self._binary(builder, node.op, self._lower_expr(builder, node.left), self._lower_expr(builder, node.right))
+            # BINOP_CHAIN_ITER_V1 (mir): una cadena IZQUIERDA del mismo operador
+            # (`((((a+b)+c)+d)...)`) se baja en bucle, no en recursion.
+            # pydoc_data/topics.py tiene 17.254 concatenaciones en UNA expresion
+            # y el camino recursivo reventaba la pila (RecursionError, que en el
+            # subproceso aislado del corpus se veia como exit -9). El orden de
+            # evaluacion de CPython (izquierda a derecha) se preserva.
+            rights = []
+            walk = node
+            while (
+                walk.left is not None
+                and walk.left.kind == HIRKind.BINOP
+                and walk.left.op == node.op
+            ):
+                rights.append(walk.right)
+                walk = walk.left
+            rights.append(walk.right)
+            value = self._lower_expr(builder, walk.left)
+            for right_node in rights:
+                value = self._binary(
+                    builder, node.op, value, self._lower_expr(builder, right_node)
+                )
+            return value
         if kind == HIRKind.UNOP:
             operand = self._lower_expr(builder, node.operand)
             result = builder.temp()
@@ -2797,7 +3491,8 @@ class MIRLowerer:
                 builder.emit("cell_new", capture, result=cell)
                 capture_ops.append(cell)
             result = builder.temp()
-            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), result=result)
+            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=result)
             return result
         if kind == HIRKind.CALL:
             # GENEXP_ARG_V1: `sum(x para x en ...)` — a bare generator
@@ -2947,6 +3642,20 @@ class MIRLowerer:
             # Handle from-imported builtins (e.g. `desde math importar sqrt; sqrt(16)`)
             if node.func.kind == HIRKind.LOAD and node.func.name in builder.from_import_aliases:
                 qualified = builder.from_import_aliases[node.func.name]
+                if qualified == "gettext.gettext":
+                    # GETTEXT_IDENTITY_V1: gettext.gettext es la identidad
+                    # (CPython devuelve el argumento sin cambios si no hay
+                    # traduccion instalada) -> la llamada se lowera como
+                    # identidad y el backend conserva la plantilla literal
+                    # para el operador `%`.
+                    if len(node.args) != 1 or node.keywords:
+                        raise MIRLoweringError(
+                            "native gettext.gettext requires exactly one positional argument"
+                        )
+                    value = self._lower_expr(builder, node.args[0])
+                    result = builder.temp()
+                    builder.emit("gettext_identity", value, result=result)
+                    return result
                 _MATH_FUNCS = {
                     "math.sqrt": "math_sqrt", "math.floor": "math_floor",
                     "math.ceil": "math_ceil", "math.trunc": "math_trunc",
@@ -3007,7 +3716,16 @@ class MIRLowerer:
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
                     function = builder.temp()
                     builder.emit("load", symbol, result=function)
-                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                    # VARIADIC_MODULE_CALL_V1: una funcion de modulo con
+                    # *args/**kwargs baja por el camino variadico (el empaquetado
+                    # de la tupla del vararg lo hace el MIR).
+                    if (
+                        self.function_varargs.get(symbol) is not None
+                        or self.function_kwargs.get(symbol) is not None
+                    ):
+                        args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
+                    else:
+                        args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                     result = builder.temp()
                     builder.emit("call", function, args, result=result)
                     return result
@@ -3154,9 +3872,26 @@ class MIRLowerer:
                     result = builder.temp()
                     builder.emit("sys_exit", code, result=result)
                     return result
+                _symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                if _symbol == "os__fspath":
+                    # OS_FSPATH_V1: os.fspath(x) devuelve la ruta como str
+                    # (el backend no tiene objetos PathLike: si el valor no
+                    # es un str, el runtime levanta TypeError como CPython).
+                    if len(node.args) != 1 or node.keywords:
+                        raise MIRLoweringError("native os.fspath() takes exactly one argument")
+                    _fspath_arg = self._lower_expr(builder, node.args[0])
+                    result = builder.temp()
+                    builder.emit("os_fspath", _fspath_arg, result=result)
+                    return result
                 function = builder.temp()
-                builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
-                args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                builder.emit("load", _symbol, result=function)
+                if (
+                    self.function_varargs.get(_symbol) is not None
+                    or self.function_kwargs.get(_symbol) is not None
+                ):
+                    args = self._lower_variadic_call(builder, _symbol, node.args, node.keywords)
+                else:
+                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
                 builder.emit("call", function, args, result=result)
                 return result
@@ -3165,8 +3900,59 @@ class MIRLowerer:
                 # cualquier otro metodo con kwargs sigue fail-closed (el
                 # backend acepta kw solo en dict.update; receiver distinto:
                 # build error, nunca semantica aproximada silenciosa).
-                if node.keywords and node.func.attr != "update":
-                    raise MIRLoweringError("native method calls do not support keyword arguments yet")
+                # SPLIT_MAXSPLIT_KW_V1: `s.split(sep, maxsplit=n)` expande el
+                # kwarg a posicional (nturl2path:70) — unica firma builtin
+                # adicional cuyo backend consume posicionalmente.
+                # DYNAMIC_METHOD_CALL_V1 primero: un metodo con unpacking en
+                # runtime (o con keywords sobre un receiver dinamico) no puede
+                # bajar por el dispatch estatico — el callee se resuelve en
+                # runtime y el frame lo arma el runtime.
+                _starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
+                _has_star = any(id(arg) in _starred_ids for arg in node.args)
+                _has_kwstar = any(k.arg is None for k in (node.keywords or ()))
+                if _has_star or _has_kwstar:
+                    return self._lower_dynamic_method_call(builder, node, owner)
+                if (
+                    node.keywords
+                    and node.func.attr != "update"
+                    and not (
+                        node.func.attr == "split"
+                        and len(node.keywords) == 1
+                        and node.keywords[0].arg == "maxsplit"
+                        and len(node.args) == 1
+                    )
+                    and not (
+                        node.func.attr == "sort"
+                        and len(node.keywords) == 1
+                        and node.keywords[0].arg == "reverse"
+                        and not node.args
+                    )
+                    and node.func.attr != "format"
+                ):
+                    raise MIRLoweringError(
+                        f"native method calls do not support keyword arguments yet "
+                        f"(method '{node.func.attr}')"
+                    )
+                if (
+                    node.keywords
+                    and node.func.attr == "split"
+                    and len(node.keywords) == 1
+                    and node.keywords[0].arg == "maxsplit"
+                    and len(node.args) == 1
+                ):
+                    node.args = (*node.args, node.keywords[0].value)
+                    node.keywords = ()
+                if (
+                    node.keywords
+                    and node.func.attr == "sort"
+                    and len(node.keywords) == 1
+                    and node.keywords[0].arg == "reverse"
+                    and not node.args
+                ):
+                    # SORT_REVERSE_KW_V1: `lista.sort(reverse=True)` — el kwarg
+                    # se expande a un flag posicional (heapq:560).
+                    node.args = (node.keywords[0].value,)
+                    node.keywords = ()
                 super_call = node.func.value if node.func.value.kind == HIRKind.CALL else None
                 if (
                     super_call is not None
@@ -3206,7 +3992,25 @@ class MIRLowerer:
             closure = builder.closures.get(node.func.name) if node.func.kind == HIRKind.LOAD else None
             if closure:
                 if node.keywords:
-                    raise MIRLoweringError("native closure calls do not support keyword arguments yet")
+                    # DYNAMIC_CALL_V1: una closure llamada con keywords no
+                    # puede mapearlos a slots posicionales (la firma no se
+                    # conoce en el call-site) -> call dinamico: los keywords
+                    # viajan como dict y el runtime lo coloca en el slot
+                    # **kwargs del callee.
+                    _lifted, _capture_names, _n_args = closure
+                    _capture_ops = []
+                    for _capture_name in _capture_names:
+                        _capture = builder.temp()
+                        builder.emit("load", _capture_name, result=_capture)
+                        _capture_ops.append(_capture)
+                    _callee = builder.temp()
+                    _has_vararg = 1 if _lifted in getattr(self, "variadic_functions", set()) else 0
+                    builder.emit(
+                        "closure_new", _lifted, _n_args, tuple(_capture_ops), _has_vararg,
+                        1 if self.function_kwargs.get(_lifted) else 0,
+                        result=_callee,
+                    )
+                    return self._lower_dynamic_call_with_callee(builder, node, _callee)
                 lifted_name, capture_names, _ = closure
                 # LAMBDA_DEFAULT_V1: fill missing args from recorded lambda
                 # defaults, mirroring named-function calls.
@@ -3246,6 +4050,20 @@ class MIRLowerer:
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
             elif node.func.kind == HIRKind.LOAD and node.keywords:
+                if node.func.name in {"print", "imprimir"}:
+                    # PRINT_FILE_KW_V1: `print(a, b, file=X)` — el kwarg fija
+                    # el descriptor de salida (warnings: print(msg,
+                    # file=sys.stderr)). El resto de keywords no se modelan.
+                    return self._lower_print_call(builder, node)
+                if (
+                    node.func.name not in self.function_params
+                    and node.func.name not in _BUILTIN_KEYWORD_SCHEMAS
+                ):
+                    # DYNAMIC_CALL_V1: keyword call a un callee que no se
+                    # conoce en build time (hashlib: f(usedforsecurity=False)
+                    # con f = getattr(_hashlib, ...)). Los keywords viajan
+                    # como dict al runtime.
+                    return self._lower_dynamic_call(builder, node)
                 args = self._resolve_call_args(builder, node.func.name, node.args, node.keywords)
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
@@ -3379,6 +4197,17 @@ class MIRLowerer:
                     raise MIRLoweringError("native super().__delattr__ requires exactly one argument")
                 builder.emit("del_attr", receiver, args[0])
                 return None
+            # SUPER_BUILTIN_BASE_V1: la base siguiente en el MRO es una clase
+            # BUILTIN (abc: `class abstractclassmethod(classmethod)`), que no
+            # aporta un __init__ de usuario. En CPython la llamada resuelve
+            # contra type.__init__ (sin efecto observable) -> la llamada es un
+            # no-op, no un error de build.
+            if attr == "__init__" and any(
+                cls in _BUILTIN_BASES for cls in mro if cls != current_class
+            ):
+                _none = builder.temp()
+                builder.emit("const", None, result=_none)
+                return _none
             raise MIRLoweringError(
                 f"native super().{attr}: no base class in MRO of '{current_class}' defines '{attr}'"
             )
@@ -3436,7 +4265,8 @@ class MIRLowerer:
                 # VARIADIC_CLOSURE_V1: variadic lifted functions mark the
                 # closure so the dispatcher packs extras into a tuple.
                 has_vararg = 1 if self.function_varargs.get(lifted_name) else 0
-                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg, result=result)
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=result)
                 return result
             if node.name in builder.cell_params:
                 result = builder.temp()
@@ -3454,6 +4284,12 @@ class MIRLowerer:
             # OS_TIER1_V1 / SYS_ARGV_V1: attributes reached through a
             # `desde ... importar ...` alias are values, not backend symbols.
             alias_qual = builder.from_import_aliases.get(node.name)
+            if alias_qual == "os.PathLike":
+                # OS_PATHLIKE_V1: os.PathLike es una clase builtin (protocolo
+                # de ruta); el backend la representa como objeto de clase.
+                result = builder.temp()
+                builder.emit("builtin_class", "PathLike", result=result)
+                return result
             if alias_qual == "os.name":
                 result = builder.temp()
                 builder.emit("const", _os_name_const(), result=result)
@@ -3462,6 +4298,13 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("sys_argv", result=result)
                 return result
+            if alias_qual is not None:
+                # NATIVE_MODULE_CONSTS_V1: constante de un modulo nativo.
+                _found, _value = self._native_module_const(alias_qual)
+                if _found:
+                    result = builder.temp()
+                    builder.emit("const", _value, result=result)
+                    return result
             if alias_qual is not None and alias_qual.startswith("os."):
                 raise MIRLoweringError(
                     f"native os.{alias_qual[3:]} is not supported yet; only os.name is native"
@@ -3474,7 +4317,28 @@ class MIRLowerer:
             builder.emit("load", node.name, result=result)
             return result
         if kind == HIRKind.BINOP:
-            return self._binary(builder, node.op, self._lower_expr(builder, node.left), self._lower_expr(builder, node.right))
+            # BINOP_CHAIN_ITER_V1 (mir): una cadena IZQUIERDA del mismo operador
+            # (`((((a+b)+c)+d)...)`) se baja en bucle, no en recursion.
+            # pydoc_data/topics.py tiene 17.254 concatenaciones en UNA expresion
+            # y el camino recursivo reventaba la pila (RecursionError, que en el
+            # subproceso aislado del corpus se veia como exit -9). El orden de
+            # evaluacion de CPython (izquierda a derecha) se preserva.
+            rights = []
+            walk = node
+            while (
+                walk.left is not None
+                and walk.left.kind == HIRKind.BINOP
+                and walk.left.op == node.op
+            ):
+                rights.append(walk.right)
+                walk = walk.left
+            rights.append(walk.right)
+            value = self._lower_expr(builder, walk.left)
+            for right_node in rights:
+                value = self._binary(
+                    builder, node.op, value, self._lower_expr(builder, right_node)
+                )
+            return value
         if kind == HIRKind.UNOP:
             operand = self._lower_expr(builder, node.operand)
             result = builder.temp()
@@ -3586,7 +4450,8 @@ class MIRLowerer:
                 builder.emit("cell_new", capture, result=cell)
                 capture_ops.append(cell)
             result = builder.temp()
-            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0, result=result)
+            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0,
+                            1 if self.function_kwargs.get(lifted_name) else 0, result=result)
             return result
         if kind == HIRKind.CALL:
             # GENEXP_ARG_V1: `sum(x para x en ...)` — a bare generator
@@ -3627,7 +4492,14 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("iter_new", value, result=result)
                 return result
-            if node.func.kind == HIRKind.LOAD and node.func.name in {"next", "siguiente"}:
+            if (
+                node.func.kind == HIRKind.LOAD
+                and node.func.name in {"next", "siguiente"}
+                # NEXT_SHADOW_V1: `next()` con cero args no puede ser el
+                # builtin (requiere >=1); heapq hace `next = it.__next__`
+                # y llama `next()` — baja como bound-method call normal.
+                and (len(node.args) in {1, 2} or node.keywords)
+            ):
                 if len(node.args) not in {1, 2} or node.keywords:
                     raise MIRLoweringError("native next requires one iterator and optional default")
                 iterator = self._lower_expr(builder, node.args[0])
@@ -3655,6 +4527,27 @@ class MIRLowerer:
                 builder.emit("jump", end.label)
                 builder.current = end
                 return result
+            if (
+                node.func.kind == HIRKind.ATTR
+                and node.func.value.kind == HIRKind.LOAD
+                and node.func.value.name in builder.module_aliases
+                and builder.module_aliases[node.func.value.name] == "os"
+                and node.func.attr == "fspath"
+            ):
+                # OS_FSPATH_V1: `os.fspath(x)` devuelve la ruta como str.
+                # Se intercepta ANTES de la rama generica de method-call
+                # porque esa rama evalua el receiver (`load os`) y el modulo
+                # `os` no existe como objeto en el runtime: el nombre
+                # quedaria sin resolver (NameError).
+                if node.keywords:
+                    raise MIRLoweringError("native os.fspath() does not support keyword arguments")
+                if len(node.args) != 1:
+                    raise MIRLoweringError("native os.fspath() takes exactly one argument")
+                _fspath_arg = self._lower_expr(builder, node.args[0])
+                _fspath_res = builder.temp()
+                builder.emit("os_fspath", _fspath_arg, _active_handler(builder), result=_fspath_res)
+                return _fspath_res
+
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.LOAD:
                 attr_name = node.func.attr
                 owner = self._lower_expr(builder, node.func.value)
@@ -3759,6 +4652,20 @@ class MIRLowerer:
             # Handle from-imported builtins (e.g. `desde math importar sqrt; sqrt(16)`)
             if node.func.kind == HIRKind.LOAD and node.func.name in builder.from_import_aliases:
                 qualified = builder.from_import_aliases[node.func.name]
+                if qualified == "gettext.gettext":
+                    # GETTEXT_IDENTITY_V1: gettext.gettext es la identidad
+                    # (CPython devuelve el argumento sin cambios si no hay
+                    # traduccion instalada) -> la llamada se lowera como
+                    # identidad y el backend conserva la plantilla literal
+                    # para el operador `%`.
+                    if len(node.args) != 1 or node.keywords:
+                        raise MIRLoweringError(
+                            "native gettext.gettext requires exactly one positional argument"
+                        )
+                    value = self._lower_expr(builder, node.args[0])
+                    result = builder.temp()
+                    builder.emit("gettext_identity", value, result=result)
+                    return result
                 _MATH_FUNCS = {
                     "math.sqrt": "math_sqrt", "math.floor": "math_floor",
                     "math.ceil": "math_ceil", "math.trunc": "math_trunc",
@@ -3967,8 +4874,18 @@ class MIRLowerer:
                     builder.emit("sys_exit", code, result=result)
                     return result
                 function = builder.temp()
-                builder.emit("load", f"{module_name.replace('.', '__')}__{node.func.attr}", result=function)
-                args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                _symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                builder.emit("load", _symbol, result=function)
+                # VARIADIC_MODULE_CALL_V1: una funcion de modulo con
+                # *args/**kwargs baja por el camino variadico (el empaquetado
+                # de la tupla del vararg lo hace el MIR).
+                if (
+                    self.function_varargs.get(_symbol) is not None
+                    or self.function_kwargs.get(_symbol) is not None
+                ):
+                    args = self._lower_variadic_call(builder, _symbol, node.args, node.keywords)
+                else:
+                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
                 builder.emit("call", function, args, _active_handler(builder), result=result)
                 return result
@@ -3977,8 +4894,59 @@ class MIRLowerer:
                 # cualquier otro metodo con kwargs sigue fail-closed (el
                 # backend acepta kw solo en dict.update; receiver distinto:
                 # build error, nunca semantica aproximada silenciosa).
-                if node.keywords and node.func.attr != "update":
-                    raise MIRLoweringError("native method calls do not support keyword arguments yet")
+                # SPLIT_MAXSPLIT_KW_V1: `s.split(sep, maxsplit=n)` expande el
+                # kwarg a posicional (nturl2path:70) — unica firma builtin
+                # adicional cuyo backend consume posicionalmente.
+                # DYNAMIC_METHOD_CALL_V1 primero: un metodo con unpacking en
+                # runtime (o con keywords sobre un receiver dinamico) no puede
+                # bajar por el dispatch estatico — el callee se resuelve en
+                # runtime y el frame lo arma el runtime.
+                _starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
+                _has_star = any(id(arg) in _starred_ids for arg in node.args)
+                _has_kwstar = any(k.arg is None for k in (node.keywords or ()))
+                if _has_star or _has_kwstar:
+                    return self._lower_dynamic_method_call(builder, node, owner)
+                if (
+                    node.keywords
+                    and node.func.attr != "update"
+                    and not (
+                        node.func.attr == "split"
+                        and len(node.keywords) == 1
+                        and node.keywords[0].arg == "maxsplit"
+                        and len(node.args) == 1
+                    )
+                    and not (
+                        node.func.attr == "sort"
+                        and len(node.keywords) == 1
+                        and node.keywords[0].arg == "reverse"
+                        and not node.args
+                    )
+                    and node.func.attr != "format"
+                ):
+                    raise MIRLoweringError(
+                        f"native method calls do not support keyword arguments yet "
+                        f"(method '{node.func.attr}')"
+                    )
+                if (
+                    node.keywords
+                    and node.func.attr == "split"
+                    and len(node.keywords) == 1
+                    and node.keywords[0].arg == "maxsplit"
+                    and len(node.args) == 1
+                ):
+                    node.args = (*node.args, node.keywords[0].value)
+                    node.keywords = ()
+                if (
+                    node.keywords
+                    and node.func.attr == "sort"
+                    and len(node.keywords) == 1
+                    and node.keywords[0].arg == "reverse"
+                    and not node.args
+                ):
+                    # SORT_REVERSE_KW_V1: `lista.sort(reverse=True)` — el kwarg
+                    # se expande a un flag posicional (heapq:560).
+                    node.args = (node.keywords[0].value,)
+                    node.keywords = ()
                 super_call = node.func.value if node.func.value.kind == HIRKind.CALL else None
                 if (
                     super_call is not None
@@ -4018,7 +4986,25 @@ class MIRLowerer:
             closure = builder.closures.get(node.func.name) if node.func.kind == HIRKind.LOAD else None
             if closure:
                 if node.keywords:
-                    raise MIRLoweringError("native closure calls do not support keyword arguments yet")
+                    # DYNAMIC_CALL_V1: una closure llamada con keywords no
+                    # puede mapearlos a slots posicionales (la firma no se
+                    # conoce en el call-site) -> call dinamico: los keywords
+                    # viajan como dict y el runtime lo coloca en el slot
+                    # **kwargs del callee.
+                    _lifted, _capture_names, _n_args = closure
+                    _capture_ops = []
+                    for _capture_name in _capture_names:
+                        _capture = builder.temp()
+                        builder.emit("load", _capture_name, result=_capture)
+                        _capture_ops.append(_capture)
+                    _callee = builder.temp()
+                    _has_vararg = 1 if _lifted in getattr(self, "variadic_functions", set()) else 0
+                    builder.emit(
+                        "closure_new", _lifted, _n_args, tuple(_capture_ops), _has_vararg,
+                        1 if self.function_kwargs.get(_lifted) else 0,
+                        result=_callee,
+                    )
+                    return self._lower_dynamic_call_with_callee(builder, node, _callee)
                 lifted_name, capture_names, _ = closure
                 # LAMBDA_DEFAULT_V1: fill missing args from recorded lambda
                 # defaults, mirroring named-function calls.
@@ -4058,6 +5044,20 @@ class MIRLowerer:
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
             elif node.func.kind == HIRKind.LOAD and node.keywords:
+                if node.func.name in {"print", "imprimir"}:
+                    # PRINT_FILE_KW_V1: `print(a, b, file=X)` — el kwarg fija
+                    # el descriptor de salida (warnings: print(msg,
+                    # file=sys.stderr)). El resto de keywords no se modelan.
+                    return self._lower_print_call(builder, node)
+                if (
+                    node.func.name not in self.function_params
+                    and node.func.name not in _BUILTIN_KEYWORD_SCHEMAS
+                ):
+                    # DYNAMIC_CALL_V1: keyword call a un callee que no se
+                    # conoce en build time (hashlib: f(usedforsecurity=False)
+                    # con f = getattr(_hashlib, ...)). Los keywords viajan
+                    # como dict al runtime.
+                    return self._lower_dynamic_call(builder, node)
                 args = self._resolve_call_args(builder, node.func.name, node.args, node.keywords)
                 function = builder.temp()
                 builder.emit("load", node.func.name, result=function)
@@ -4106,6 +5106,13 @@ class MIRLowerer:
             builder.emit("build_collection", kind.name.lower(), items, result=result)
             return result
         if kind == HIRKind.DICT:
+            # DICT_MERGE_V1: el parser baja `{**a, **b}` con clave None, pero
+            # no existe op de merge de runtime — fail-closed con mensaje
+            # claro (sin esto _lower_expr(None) petaba sin diagnosticar).
+            if any(key is None for key in node.keys):
+                raise MIRLoweringError(
+                    "dict literal merge {**a, **b} is not implemented natively"
+                )
             items = tuple(
                 (self._lower_expr(builder, key), self._lower_expr(builder, value))
                 for key, value in zip(node.keys, node.values)
@@ -4202,6 +5209,11 @@ class MIRLowerer:
             # objects with fields but values of the platform runtime.
             if node.value.kind == HIRKind.LOAD and node.value.name in builder.module_aliases:
                 _alias_module = builder.module_aliases[node.value.name]
+                if _alias_module == "os" and node.attr == "PathLike":
+                    # OS_PATHLIKE_V1: la clase builtin del protocolo de ruta.
+                    result = builder.temp()
+                    builder.emit("builtin_class", "PathLike", result=result)
+                    return result
                 if _alias_module == "os" and node.attr == "name":
                     result = builder.temp()
                     builder.emit("const", _os_name_const(), result=result)
@@ -4209,6 +5221,13 @@ class MIRLowerer:
                 if _alias_module == "sys" and node.attr == "argv":
                     result = builder.temp()
                     builder.emit("sys_argv", result=result)
+                    return result
+                # NATIVE_MODULE_CONSTS_V1: constante de un modulo nativo
+                # (stat.S_IFDIR, __future__.division).
+                _found, _value = self._native_module_const(f"{_alias_module}.{node.attr}")
+                if _found:
+                    result = builder.temp()
+                    builder.emit("const", _value, result=result)
                     return result
                 if _alias_module == "os":
                     raise MIRLoweringError(
@@ -4449,6 +5468,157 @@ class MIRLowerer:
                     return True
         return False
 
+    def _lower_dynamic_call(self, builder: _Builder, node: HIRNode) -> str:
+        """DYNAMIC_CALL_V1: baja una llamada cuyo callee no se conoce en
+        build time — `f(*args, **kw)` o `f(k=v)` donde `f` es una variable,
+        el resultado de otra llamada o un atributo dinamico.
+
+        El runtime (piton_call_dynamic) arma el frame:
+          - los posicionales planos se pasan como tupla;
+          - el `*seq` se pasa como la secuencia en runtime;
+          - los keywords con nombre se pasan como dict literal (el runtime
+            lo entrega al param **kwargs del callee, si lo tiene);
+          - el `**mapping` se pasa como el dict en runtime.
+        El callee se evalua como cualquier otra expresion.
+        """
+        func = node.func
+        if func.kind == HIRKind.LOAD and func.name in self.function_params:
+            raise MIRLoweringError(
+                "native dynamic call unpacking requires a statically-known function"
+            )
+        callee = self._lower_expr(builder, func)
+        return self._lower_dynamic_call_with_callee(builder, node, callee)
+
+    def _lower_dynamic_call_with_callee(self, builder: _Builder, node: HIRNode, callee: str) -> str:
+        """DYNAMIC_CALL_V1 (parte comun): arma el call dinamico con el
+        callee ya bajado — los posicionales planos como tupla, la secuencia
+        del `*args` y el dict de keywords (nombres conocidos o mapping de
+        runtime)."""
+        starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
+        plain = [arg for arg in node.args if id(arg) not in starred_ids]
+        starred = [arg for arg in node.args if id(arg) in starred_ids]
+        pos_values = tuple(self._lower_expr(builder, arg) for arg in plain)
+        # los posicionales planos -> una tupla que el runtime lee
+        pos_tuple = builder.temp()
+        builder.emit("build_collection", "tuple", pos_values, result=pos_tuple)
+        # el `*seq` -> la secuencia en runtime (una sola secuencia: el
+        # backend no modela varios `*args` en la misma llamada)
+        star_seq = None
+        if starred:
+            if len(starred) > 1:
+                raise MIRLoweringError("native dynamic call supports one *args sequence")
+            star_seq = self._lower_expr(builder, starred[0])
+        # los keywords -> dict literal; el `**mapping` -> el dict en runtime
+        kw_pairs: list[tuple[Any, Any]] = []
+        kw_runtime = None
+        for keyword in node.keywords or ():
+            if keyword.arg is None:
+                if kw_runtime is not None:
+                    raise MIRLoweringError("native dynamic call supports one **mapping")
+                kw_runtime = self._lower_expr(builder, keyword.value)
+            else:
+                kw_pairs.append((keyword.arg, self._lower_expr(builder, keyword.value)))
+        if kw_pairs:
+            kwargs_dict = builder.temp()
+            builder.emit(
+                "build_collection", "dict",
+                tuple((key, value) for key, value in kw_pairs),
+                result=kwargs_dict,
+            )
+        else:
+            kwargs_dict = kw_runtime
+        result = builder.temp()
+        builder.emit(
+            "dynamic_call", callee, pos_tuple, star_seq, kwargs_dict,
+            _active_handler(builder), result=result,
+        )
+        return result
+
+    def _lower_dynamic_method_call(self, builder: _Builder, node: HIRNode, owner: str) -> str:
+        """DYNAMIC_METHOD_CALL_V1: `recv.attr(*args, **kw)` con el receiver
+        dinamico — el callee es el valor del atributo, resuelto en runtime, y
+        el frame lo arma el runtime (DYNAMIC_CALL_V1).
+
+        El receiver se pasa como ARGUMENTO (no como self implicito): en
+        CPython `cls.__new__(cls, ...)` es una llamada DESBOUND al atributo.
+        """
+        attr = node.func.attr
+        callee = builder.temp()
+        builder.emit("get_attr", owner, attr, result=callee)
+        starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
+        plain = [arg for arg in node.args if id(arg) not in starred_ids]
+        starred = [arg for arg in node.args if id(arg) in starred_ids]
+        pos_values = tuple(self._lower_expr(builder, arg) for arg in plain)
+        pos_tuple = builder.temp()
+        builder.emit("build_collection", "tuple", pos_values, result=pos_tuple)
+        star_seq = None
+        if starred:
+            if len(starred) > 1:
+                raise MIRLoweringError("native dynamic call supports one *args sequence")
+            star_seq = self._lower_expr(builder, starred[0])
+        kw_pairs: list[tuple[Any, Any]] = []
+        kw_runtime = None
+        for keyword in node.keywords or ():
+            if keyword.arg is None:
+                if kw_runtime is not None:
+                    raise MIRLoweringError("native dynamic call supports one **mapping")
+                kw_runtime = self._lower_expr(builder, keyword.value)
+            else:
+                kw_pairs.append((keyword.arg, self._lower_expr(builder, keyword.value)))
+        if kw_pairs:
+            kwargs_dict = builder.temp()
+            builder.emit(
+                "build_collection", "dict",
+                tuple((key, value) for key, value in kw_pairs),
+                result=kwargs_dict,
+            )
+        else:
+            kwargs_dict = kw_runtime
+        result = builder.temp()
+        builder.emit(
+            "dynamic_call", callee, pos_tuple, star_seq, kwargs_dict,
+            _active_handler(builder), result=result,
+        )
+        return result
+
+    def _lower_print_call(self, builder: _Builder, node: HIRNode) -> str:
+        """PRINT_FILE_KW_V1 / PRINT_END_KW_V1: `print(a, b, file=X, end=Y)`.
+
+        - `file=` fija el descriptor de salida de la impresion (el runtime
+          lo restaura al terminar).
+        - `end=` es el terminador (por defecto "\\n"). `sep=` no se modela
+          (fail-closed).
+        """
+        _kw_file = None
+        _kw_end = None
+        for kw in (node.keywords or ()):
+            if kw.arg is None or kw.arg not in {"file", "end"}:
+                raise MIRLoweringError(
+                    "native print() supports only the file= and end= keywords"
+                )
+            if kw.arg == "file":
+                if _kw_file is not None:
+                    raise MIRLoweringError("native print() accepts one file= keyword")
+                _kw_file = kw.value
+            else:
+                if _kw_end is not None:
+                    raise MIRLoweringError("native print() accepts one end= keyword")
+                _kw_end = kw.value
+        values = [self._lower_expr(builder, arg) for arg in node.args]
+        if _kw_file is not None:
+            file_value = self._lower_expr(builder, _kw_file)
+            builder.emit("print_set_fd", file_value)
+        end_value = None
+        if _kw_end is not None:
+            end_value = self._lower_expr(builder, _kw_end)
+        callee = builder.temp()
+        builder.emit("load", "print", result=callee)
+        result = builder.temp()
+        builder.emit("call", callee, tuple(values), None, end_value, result=result)
+        if _kw_file is not None:
+            builder.emit("print_restore_fd")
+        return result
+
     def _lower_call_unpack(self, builder: _Builder, node: HIRNode) -> str:
         """CALL_UNPACKING_DYNAMIC4_V1: lower runtime `*seq` / `**mapping`
         unpacking for a statically-known callee with a plain signature.
@@ -4459,12 +5629,15 @@ class MIRLowerer:
             no keyword-only marker, no *args, no **kwargs;
           - `*seq` requires a statically sequence-typed operand at emit time
             (list/tuple), `**mapping` a string-keyed dict literal lineage.
+
+        DYNAMIC_CALL_V1: si el callee NO se conoce en build time (una
+        variable, el resultado de otra llamada, un atributo de un objeto
+        dinamico), la llamada baja como call dinamico: el runtime arma el
+        frame con los args y el dict de keywords resueltos en runtime.
         """
         func = node.func
         if func.kind != HIRKind.LOAD or func.name not in self.function_params:
-            raise MIRLoweringError(
-                "native dynamic call unpacking requires a statically-known function"
-            )
+            return self._lower_dynamic_call(builder, node)
         name = func.name
         params = self.function_params[name]
         if len(params) > 4:
@@ -4534,7 +5707,14 @@ class MIRLowerer:
 
     def _compare(self, builder: _Builder, op: str, left: Any, right: Any) -> str:
         result = builder.temp()
-        builder.emit("compare", op, left, right, result=result)
+        if op in {"en", "no en", "in"}:
+            # IN_GUARD_V1: la pertenencia en str puede levantar TypeError en
+            # runtime (needle no-str); el handler del intentar activo viaja en
+            # el op para que sea capturable, igual que en `//`/`%`/`<<`.
+            builder.emit("compare", op, left, right, _active_handler(builder),
+                         result=result)
+        else:
+            builder.emit("compare", op, left, right, result=result)
         return result
 
     def _lower_variadic_call(
@@ -4638,14 +5818,31 @@ class MIRLowerer:
         if params is None and func_name in {"min", "max"}:
             # MINMAX_KEY_V1: min/max con `key=` (mismo alcance: la clave se
             # baja pero el orden nativo no la aplica — hueco conocido).
+            # MINMAX_DEFAULT_V1: `default=` añade el valor por defecto que
+            # se devuelve si la coleccion esta vacia. Se codifica con 4
+            # valores (coleccion, default, clave, reversa) para no chocar
+            # con la variante de clave (3 valores) ni con min(a, b).
             if len(positional) not in (1, 2) or any(kw.arg not in {"key", "default"} for kw in (keywords or ())):
                 raise MIRLoweringError("native min/max keyword schema violated")
             values = [self._lower_expr(builder, arg) for arg in positional]
+            _key_value: str | None = None
+            _default_value: str | None = None
             for kw in keywords or ():
-                if kw.arg == "default":
-                    raise MIRLoweringError("native min/max default= is not supported yet")
+                if kw.arg == "key":
+                    _key_value = self._lower_expr(builder, kw.value)
+                else:
+                    _default_value = self._lower_expr(builder, kw.value)
             from piton.hir import Const as _HIRConstFalse2
-            values.append(self._lower_expr(builder, keywords[0].value))
+            if _default_value is not None:
+                values.append(_default_value)
+                values.append(_key_value)
+                values.append(self._lower_expr(builder, _HIRConstFalse2(kind=HIRKind.CONST, value=False)))
+                return tuple(values)
+            values.append(
+                _key_value
+                if _key_value is not None
+                else self._lower_expr(builder, _HIRConstFalse2(kind=HIRKind.CONST, value=False))
+            )
             values.append(self._lower_expr(builder, _HIRConstFalse2(kind=HIRKind.CONST, value=False)))
             return tuple(values)
         if params is None:

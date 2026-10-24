@@ -231,7 +231,6 @@ class PercentSpecsP14(unittest.TestCase):
             "imprimir('%.3c' % 65)\n",
             "imprimir('%x' % 3.5)\n",
             "imprimir('%d' % 'a')\n",
-            "funcion f(x):\n    imprimir('%s' % (x,))\nf(1)\n",
             "k = 'a'\nd = {k: 1}\nimprimir('%(a)s' % d)\n",
         ):
             try:
@@ -240,6 +239,16 @@ class PercentSpecsP14(unittest.TestCase):
                 pass
             else:
                 self.fail(f"not closed: {source}")
+
+    def test_unknown_param_percent_s(self):
+        # PCT_UNKNOWN_ARG_V1: '%s' con un param de tipo DESCONOCIDO ya no
+        # falla cerrado — CPython aplica str(x), y el backend resuelve el
+        # tipo del valor en runtime (copyreg.py cerro BUILD con este caso).
+        _assert_matches(self, "funcion f(key):\n    imprimir('key %s' % key)\nf('a')\n")
+        _assert_matches(self, "funcion f(n):\n    imprimir('n %s' % n)\nf(42)\n")
+        _assert_matches(self, "funcion f(x):\n    imprimir('%s' % x)\nf(None)\n")
+        # dos operands escalares sin tipo conocido
+        _assert_matches(self, "funcion f(k, c):\n    imprimir('%s %s' % (k, c))\nf('a', 2)\n")
 
 
 if __name__ == "__main__":

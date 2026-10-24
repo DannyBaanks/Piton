@@ -480,12 +480,18 @@ class BuiltinMarkerV1(unittest.TestCase):
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("imprimir(reversed([1, 2]))\n")
 
-    def test_abrir_fail_closed(self):
-        # An EXISTING file still fails closed: the native subset cannot
-        # open files (only a provably-missing literal path gets an
-        # honest runtime FileNotFoundError).
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("abrir('tests/test_p0_parity.py')\n")
+    def test_abrir_opens_existing_file(self):
+        # FILE_IO_V1: desde el commit de E/S real, `abrir` abre el fichero de
+        # verdad (syscalls). Un literal que EXISTE ya no falla en build: se lee
+        # y da el mismo contenido que CPython. El gate viejo esperaba el build
+        # error del subconjunto sin ficheros.
+        result = compare_native_to_cpython(
+            "fp = abrir('tests/test_p0_parity.py')\n"
+            "imprimir(len(fp.read()) > 0)\n"
+            "fp.close()\n"
+        )
+        self.assertEqual(result.native.returncode, 0)
+        self.assertEqual(result.native.stdout, result.oracle.stdout)
 
     def test_abrir_missing_is_runtime_error(self):
         # A provably-missing literal path is an honest runtime

@@ -1,0 +1,1511 @@
+{
+  "meta": {
+    "date": "2026-10-18T10:38:09+00:00",
+    "oracle": "CPython 3.12.3",
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "git_sha": "7b9e17d",
+    "tool": "tools/parity_corpus_v4.py",
+    "tiers": "all"
+  },
+  "results": {
+    "tier_a": {
+      "funnel": {
+        "total": 167,
+        "passed": {
+          "adapt": 167,
+          "parse": 167,
+          "mir": 17,
+          "build": 13
+        },
+        "pct": {
+          "adapt": 100.0,
+          "parse": 100.0,
+          "mir": 10.2,
+          "build": 7.8
+        },
+        "fail_classes": {
+          "MIR_FAIL": 150,
+          "BUILD_FAIL": 4
+        },
+        "read_failed": 0
+      },
+      "records": [
+        {
+          "path": "/usr/lib/python3.12/__future__.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.57,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/__hello__.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.182,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_aix_support.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: sysconfig",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_collections_abc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_compat_pickle.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux diccionario() cannot convert a 'genexpr' value",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_compression.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: io",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_distutils_system_mod.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: distutils.sysconfig",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_markupbase.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_osx_support.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_py_abc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: _weakrefset",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_pydatetime.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: time",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_pydecimal.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: numbers",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_pyio.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_pylong.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_sitebuiltins.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unsupported native exception type 'SystemExit'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_strptime.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: time",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_sysconfigdata__linux_x86_64-linux-gnu.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 3.899,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_sysconfigdata__x86_64-linux-gnu.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 2.219,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_threading_local.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: weakref",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_weakrefset.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: _weakref",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/abc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().__init__: no base class in MRO of 'abstractclassmethod' defines '__init__'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/aifc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: struct",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/antigravity.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: webbrowser",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/argparse.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ast.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 1266\ncolumna: 20\n\nPython rechazó la traducción:\ninvalid syntax\n\n        elif value es ...:"
+        },
+        {
+          "path": "/usr/lib/python3.12/base64.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/bdb.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: fnmatch",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/bisect.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.177,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/bz2.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/cProfile.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: _lsprof",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/calendar.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: datetime",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/cgi.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: io",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/cgitb.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: inspect",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/chunk.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: warnings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/cmd.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: string",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/code.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: traceback",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/codecs.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/codeop.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: __future__",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/colorsys.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.167,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/compileall.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: importlib.util",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/configparser.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: collections.abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/contextlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/contextvars.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: _contextvars",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/copy.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: types",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 279\ncolumna: 16\n\nPython rechazó la traducción:\ninvalid syntax\n\n                and [key ]=value "
+        },
+        {
+          "path": "/usr/lib/python3.12/copyreg.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native dynamic call unpacking requires a statically-known function",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/crypt.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: errno",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/csv.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/dataclasses.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/datetime.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.188,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/decimal.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.176,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/difflib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: heapq",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/dis.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: types",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/doctest.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: __future__",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/enum.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/filecmp.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: stat",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/fileinput.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: io",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/fnmatch.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: posixpath",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/fractions.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: decimal",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ftplib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: socket",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/functools.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/genericpath.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: stat",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/getopt.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux slice not supported for int",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/getpass.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: contextlib",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/gettext.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: operator",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/glob.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: contextlib",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/graphlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: types",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/gzip.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: struct",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/hashlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native keyword call requires known function: f",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/heapq.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native min/max default= is not supported yet",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/hmac.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: warnings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/imaplib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: binascii",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/imghdr.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: warnings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/inspect.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/io.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: _io",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ipaddress.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: functools",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/keyword.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.187,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/linecache.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: functools",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/locale.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: encodings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/lzma.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/mailbox.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: time",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/mailcap.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: warnings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/mimetypes.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: posixpath",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/modulefinder.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: dis",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/netrc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: stat",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/nntplib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ntpath.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: stat",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/nturl2path.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux method receiver class is not statically known",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/numbers.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/opcode.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.879,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/operator.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/optparse.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: textwrap",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/os.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pathlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: fnmatch",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pdb.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: io",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pickle.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: types",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pickletools.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: codecs",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pipes.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pkgutil.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: collections",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/platform.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: collections",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/plistlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: binascii",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/poplib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: errno",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/posixpath.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: stat",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pprint.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: collections",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/profile.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: importlib.machinery",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pstats.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: time",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pty.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: select",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/py_compile.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: enum",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pyclbr.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: ast",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pydoc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: __future__",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 1709\ncolumna: 10\n\nPython rechazó la traducción:\ninvalid syntax\n\n        (if nextmodule :module ,n )=(nextmodule ,n +1 )"
+        },
+        {
+          "path": "/usr/lib/python3.12/queue.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: threading",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/quopri.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native function defaults currently support constant values only",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/random.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: warnings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/reprlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/rlcompleter.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: atexit",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/runpy.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: importlib.machinery",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sched.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: time",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/secrets.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: base64",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/selectors.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/shelve.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: pickle",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/shlex.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/shutil.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: stat",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/signal.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: _signal",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/site.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sitecustomize.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux method receiver class is not statically known",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/smtplib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: socket",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sndhdr.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: warnings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/socket.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: _socket",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/socketserver.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: socket",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sre_compile.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: warnings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sre_constants.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: warnings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sre_parse.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: warnings",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ssl.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: collections",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/stat.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.215,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/statistics.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: numbers",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/string.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: _string",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/stringprep.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: unicodedata",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/struct.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native star import module not supplied: _struct",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/subprocess.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sunau.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: collections",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/symtable.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: _symtable",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sysconfig.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: threading",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tabnanny.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: tokenize",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tarfile.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/telnetlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: socket",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tempfile.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: functools",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/textwrap.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: re",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/this.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.334,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/threading.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: _thread",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/timeit.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: gc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/token.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.085,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tokenize.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: builtins",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/trace.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: io",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/traceback.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: collections.abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tracemalloc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: collections.abc",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tty.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native star import module not supplied: termios",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/turtle.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: tkinter",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/types.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native dynamic call unpacking requires a statically-known function",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/typing.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: abc",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 88\ncolumna: 16\n\nPython rechazó la traducción:\ninvalid syntax\n\n    return arg es ...o isinstance (arg ,(tuple ,list ,ParamSpec"
+        },
+        {
+          "path": "/usr/lib/python3.12/uu.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: binascii",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 137\ncolumna: 17\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\n            if (out_file .startsw"
+        },
+        {
+          "path": "/usr/lib/python3.12/uuid.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: enum",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/warnings.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native function defaults currently support constant values only",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/wave.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: collections",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/weakref.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native from-import module not supplied: _weakref",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/webbrowser.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: shlex",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/xdrlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: struct",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/zipapp.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: contextlib",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/zipimport.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module not supplied: _frozen_importlib_external",
+          "build_seconds": null,
+          "roundtrip": true
+        }
+      ]
+    },
+    "tier_b": {
+      "funnel": {
+        "total": 11,
+        "passed": {
+          "adapt": 11,
+          "parse": 11,
+          "mir": 5,
+          "build": 2
+        },
+        "pct": {
+          "adapt": 100.0,
+          "parse": 100.0,
+          "mir": 45.5,
+          "build": 18.2
+        },
+        "fail_classes": {
+          "MIR_FAIL": 6,
+          "BUILD_FAIL": 3
+        },
+        "read_failed": 0
+      },
+      "run": {
+        "total": 11,
+        "by_bucket": {
+          "MIR_FAIL": 6,
+          "BUILD_FAIL": 3,
+          "EQUIV": 1,
+          "DIVERGENT_MISMATCH": 1
+        },
+        "pct_equiv": 9.1,
+        "pct_honest_native": 9.1,
+        "pct_divergent": 9.1
+      },
+      "records": [
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/classes.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux method receiver class is not statically known",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 12\ncolumna: 1\n\nPython rechazó la traducción:\nexpected an indented block after 'try' statement on line 11\n\n(    x .r ,x .i )",
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/controlflow.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native keyword call requires known function: function",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "MIR_FAIL"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/datastructures.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native dynamic call unpacking requires a statically-known function",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "MIR_FAIL"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/errors.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unsupported native exception type 'ExceptionGroup'",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "MIR_FAIL"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/inputoutput.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native method calls do not support keyword arguments yet",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "MIR_FAIL"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/interpreter.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.124,
+          "roundtrip": true,
+          "native_rc": 0,
+          "oracle_rc": 0,
+          "bucket": "EQUIV"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/introduction.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux round(x, ndigits) requires a float first argument",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/modules.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux method receiver class is not statically known",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native math.log is not supported or requires 1 positional argument",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "MIR_FAIL"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib2.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native method calls do not support keyword arguments yet",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "MIR_FAIL"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/venv.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out= err=AttributeError || oracle rc=0 out= err=",
+          "build_seconds": 0.114,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        }
+      ]
+    }
+  }
+}

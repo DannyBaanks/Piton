@@ -65,7 +65,12 @@ _math_fn_map = {
     "math_log": "piton_float_log",
 }
 
-PITON_GEN_MAX_SLOTS = 64
+# GEN_SLOTS_V1: el backend persiste TODOS los temps del cuerpo de un
+# generador (no solo los que viven a traves de un yield — la liveness
+# exacta no se modela), asi que el tope es un limite de implementacion, no
+# semantico. 256 slots cubren los generadores de la stdlib (heapq.merge
+# necesita 180).
+PITON_GEN_MAX_SLOTS = 256
 PITON_GEN_LOCAL_BASE = 48
 # ASYNC_GENERATOR_V1: the LAST persisted slot of every PitonGenerator object is
 # reserved as the "await marker" flag for async-generator driving. A data yield
@@ -2069,7 +2074,9 @@ class Win64NasmEmitter:
                 raise NativeBuildError(f"unsupported unary operator: {operator}")
             self.lines.append(f"    mov {self._address(result)}, rax")
         elif op == "compare":
-            operator, left, right = args
+            # IN_GUARD_V1: el MIR puede adjuntar un 4to arg (handler del
+            # intentar activo) en las comparaciones de pertenencia.
+            operator, left, right = args[0], args[1], args[2]
             left_type = self.types.get(left, "int")
             right_type = self.types.get(right, "int")
             if operator in {"en", "no en"}:

@@ -312,9 +312,27 @@ class Lowerer:
         return Const(kind=HIRKind.CONST, value=cst.value)
 
     def _lower_binop(self, cst: CSTBinOp):
-        left = self.lower(cst.left)
-        right = self.lower(cst.right)
-        return BinOp(kind=HIRKind.BINOP, left=left, op=cst.op, right=right)
+        # BINOP_CHAIN_ITER_V1: una cadena IZQUIERDA del mismo operador
+        # (`((((a+b)+c)+d)...)`) se aplana en iterativo y se baja en bucle.
+        # El camino recursivo reventaba la pila con cadenas largas:
+        # pydoc_data/topics.py tiene 17.254 concatenaciones en UNA expresion y
+        # moria con RecursionError (que en el subproceso aislado del corpus se
+        # veia como exit -9). El parser ya es iterativo, asi que el arbol llega
+        # profundo; solo el lowering necesitaba el bucle.
+        node = cst
+        chain = []
+        while node.type is CSTNodeType.BIN_OP and node.op == cst.op:
+            chain.append(node.right)
+            node = node.left
+        left = self.lower(node)
+        for right_cst in chain:
+            left = BinOp(
+                kind=HIRKind.BINOP,
+                left=left,
+                op=cst.op,
+                right=self.lower(right_cst),
+            )
+        return left
 
     def _lower_unaryop(self, cst: CSTUnaryOp):
         operand = self.lower(cst.operand)
@@ -332,18 +350,34 @@ class Lowerer:
     def _lower_fstring(self, cst: CSTFString):
         # FSTRINGS_V1: f'...' with plain expressions lowers to
         # '<template>'.format(arg, ...) — reusing STR_METHODS_V1 in both
-        # backends with zero mir/backend work. Conversions (!r !s !a) and
-        # format specs fail closed (LoweringError, wrapped to
-        # NativeBuildError at the compile entry points).
+        # backends with zero mir/backend work. FSTRING_CONVERSION_V1: !r/!a
+        # envuelven el arg en repr()/ascii() (builtins con emision en el
+        # backend linux C) y el placeholder sigue '{}'; !s y sin conversion
+        # quedan como estaban; otras conversiones y format specs dinamicos
+        # fallan cerrados (LoweringError, wrapped to NativeBuildError at the
+        # compile entry points).
         template_parts: List[str] = []
         args = []
         for part in cst.parts:
             if isinstance(part, CSTFStringPart):
                 template_parts.append(part.value)
             elif isinstance(part, CSTFStringExpr):
-                if part.conversion not in (-1, ord('s')):
+                if part.conversion not in (-1, ord('s'), ord('r'), ord('a')):
                     raise LoweringError(
-                        "f-string conversion must be !s or omitted here"
+                        "f-string conversion must be !s, !r, !a or omitted here"
+                    )
+                arg = self.lower(part.value)
+                if part.conversion == ord('r'):
+                    arg = Call(
+                        kind=HIRKind.CALL,
+                        func=Load(kind=HIRKind.LOAD, name="repr"),
+                        args=[arg],
+                    )
+                elif part.conversion == ord('a'):
+                    arg = Call(
+                        kind=HIRKind.CALL,
+                        func=Load(kind=HIRKind.LOAD, name="ascii"),
+                        args=[arg],
                     )
                 placeholder = "{}"
                 if part.format_spec is not None:
@@ -355,7 +389,7 @@ class Lowerer:
                     else:
                         raise LoweringError("f-string format_spec dynamic expressions are unsupported")
                 template_parts.append(placeholder)
-                args.append(self.lower(part.value))
+                args.append(arg)
             else:
                 raise LoweringError(
                     f"f-string with unexpected part {type(part).__name__} is not supported"

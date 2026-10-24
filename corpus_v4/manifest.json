@@ -1,0 +1,90 @@
+[
+  {
+    "page": "introduction",
+    "url": "https://docs.python.org/3.12/tutorial/introduction.html",
+    "html_sha256": "63d76a1173c4a909d060bd144c8d4f27340032907d41c2ba38f3bb4763ce28ff",
+    "examples": 114,
+    "examples_dropped": 10,
+    "bytes": 8425
+  },
+  {
+    "page": "controlflow",
+    "url": "https://docs.python.org/3.12/tutorial/controlflow.html",
+    "html_sha256": "427b9a7efd964a059824fd290770e1e51c1160e7d065fc2b3e6705aaf70d91e5",
+    "examples": 69,
+    "examples_dropped": 25,
+    "bytes": 3693
+  },
+  {
+    "page": "datastructures",
+    "url": "https://docs.python.org/3.12/tutorial/datastructures.html",
+    "html_sha256": "da391aa509c1609bf291925c9a96ac4e7edf2172632e9deb8e6e8b40010a1342",
+    "examples": 135,
+    "examples_dropped": 23,
+    "bytes": 8923
+  },
+  {
+    "page": "modules",
+    "url": "https://docs.python.org/3.12/tutorial/modules.html",
+    "html_sha256": "777bbc075de875d592bca8b1624a3cceead80c0e72ca41a76e651bdc33cc69ef",
+    "examples": 30,
+    "examples_dropped": 0,
+    "bytes": 2283
+  },
+  {
+    "page": "inputoutput",
+    "url": "https://docs.python.org/3.12/tutorial/inputoutput.html",
+    "html_sha256": "dfd790d5034d2bf51f33dab1043ca70674aaa68acbbf7dfd4774b72658a35a78",
+    "examples": 76,
+    "examples_dropped": 8,
+    "bytes": 5796
+  },
+  {
+    "page": "errors",
+    "url": "https://docs.python.org/3.12/tutorial/errors.html",
+    "html_sha256": "812f08c04914c5d8d42991d89d59b741d78195a70cd137347b4af7cc6b2fec92",
+    "examples": 33,
+    "examples_dropped": 22,
+    "bytes": 1099
+  },
+  {
+    "page": "classes",
+    "url": "https://docs.python.org/3.12/tutorial/classes.html",
+    "html_sha256": "3e82b879f4d08cc226bb034986369da5192a24d65ee58734aa330a823f2b711a",
+    "examples": 48,
+    "examples_dropped": 4,
+    "bytes": 3612
+  },
+  {
+    "page": "stdlib",
+    "url": "https://docs.python.org/3.12/tutorial/stdlib.html",
+    "html_sha256": "e44b16728e02179b59e3281827f4f6cc346da5330c07b917388afb5f7bbdb00d",
+    "examples": 55,
+    "examples_dropped": 3,
+    "bytes": 4567
+  },
+  {
+    "page": "stdlib2",
+    "url": "https://docs.python.org/3.12/tutorial/stdlib2.html",
+    "html_sha256": "fa371c2495d35e82b877a5bee3701c0d38005a64f0eaab92d7eaae785f6d8952",
+    "examples": 63,
+    "examples_dropped": 3,
+    "bytes": 5763
+  },
+  {
+    "page": "interpreter",
+    "url": "https://docs.python.org/3.12/tutorial/interpreter.html",
+    "html_sha256": "17c6accfe225ccf64cd5016e7ca6c5ff44ca04975d2134b5707a91551b753f1f",
+    "examples": 2,
+    "examples_dropped": 1,
+    "bytes": 472
+  },
+  {
+    "page": "venv",
+    "url": "https://docs.python.org/3.12/tutorial/venv.html",
+    "html_sha256": "5084bc3c3f878a6986a8bd1034db1acd74ae69443ce8b13c4780fd732ed3c474",
+    "examples": 2,
+    "examples_dropped": 0,
+    "bytes": 501
+  }
+]

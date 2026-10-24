@@ -206,6 +206,17 @@ NUMBER_START = set("0123456789")
 IDENTIFIER_RE = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
 
 
+def _word_char_after(source: str, index: int) -> bool:
+    """NOT_IN_BND_V1: ¿source[index] continua un identificador?
+
+    Se usa para no fundir 'no en'/'no es' cuando lo que sigue es la cola de
+    un nombre ('no enum_class' -> NO + NAME(enum_class), no NOT_IN)."""
+    if index >= len(source):
+        return False
+    ch = source[index]
+    return ch == "_" or ch.isalnum()
+
+
 class Lexer:
     def __init__(self, source: str, filename: str = "<source>"):
         self.source = source
@@ -433,13 +444,27 @@ class Lexer:
         # Operadores de comparación que son keywords en Python
         if value == "en":
             return self._make_token(TokenType.IN, value)
-        if value == "no" and self._peek() == " " and self.source.startswith("en", self.pos + 1):
+        # NOT_IN_BND_V1: fusionar 'no en'/'no es' solo si lo que sigue a
+        # 'en'/'es' NO continua un identificador. Sin esto, 'si no enum_class'
+        # se leia como NOT_IN('no en') + NAME('um_class') y rompia cualquier
+        # 'no <nombre que empiece por en/es>' (corpus v4: enum/netrc/pathlib).
+        if (
+            value == "no"
+            and self._peek() == " "
+            and self.source.startswith("en", self.pos + 1)
+            and not _word_char_after(self.source, self.pos + 3)
+        ):
             self._advance()  # consume space
             self._advance(2)  # consume "en"
             return self._make_token(TokenType.NOT_IN, "no en")
         if value == "es":
             return self._make_token(TokenType.IS, value)
-        if value == "no" and self._peek() == " " and self.source.startswith("es", self.pos + 1):
+        if (
+            value == "no"
+            and self._peek() == " "
+            and self.source.startswith("es", self.pos + 1)
+            and not _word_char_after(self.source, self.pos + 3)
+        ):
             self._advance()  # consume space
             self._advance(2)  # consume "es"
             return self._make_token(TokenType.IS_NOT, "no es")
@@ -455,8 +480,15 @@ class Lexer:
         start_pos = self.pos
         start_line = self.line
         start_col = self.col
+        prefix = ""
         if prefix_len:
+            prefix = self.source[self.pos:self.pos + prefix_len]
             self._advance(prefix_len)
+        # FSTRING_QUOTE_REUSE_V1 (PEP 701, CPython 3.12): dentro del
+        # replacement field de un f-string la quote del delimitador NO
+        # cierra el token; los strings internos se escanean como bloques
+        # (turtle:3820 f'({', '.join(call_args)})', traceback:681).
+        is_fstring = "f" in prefix.lower()
 
         quote = self._peek()
         is_triple = self.source.startswith(quote * 3, self.pos)
@@ -464,6 +496,7 @@ class Lexer:
         self._advance(len(delimiter))
 
         content_start = self.pos
+        depth = 0
         while self.pos < len(self.source):
             ch = self._peek()
             if ch == "\0":
@@ -473,13 +506,59 @@ class Lexer:
             while p >= content_start and self.source[p] == "\\":
                 bs += 1
                 p -= 1
-            if bs % 2 == 0:
-                if is_triple and self.source.startswith(delimiter, self.pos):
-                    self._advance(len(delimiter))
-                    break
-                elif not is_triple and ch == quote:
+            if bs % 2 == 1:
+                self._advance(1)
+                continue
+            if is_fstring:
+                if depth > 0:
+                    if ch in "\"'":
+                        # string interno del replacement field: bloque
+                        # completo (respetando \\ y su propia quote).
+                        q2 = ch
+                        is_tri2 = self.source.startswith(q2 * 3, self.pos)
+                        d2 = q2 * 3 if is_tri2 else q2
+                        self._advance(len(d2))
+                        while self.pos < len(self.source):
+                            c2 = self._peek()
+                            if c2 == "\0":
+                                break
+                            b2 = 0
+                            p2 = self.pos - 1
+                            while p2 >= content_start and self.source[p2] == "\\":
+                                b2 += 1
+                                p2 -= 1
+                            if b2 % 2 == 1:
+                                self._advance(1)
+                                continue
+                            if self.source.startswith(d2, self.pos):
+                                self._advance(len(d2))
+                                break
+                            if not is_tri2 and c2 == "\n":
+                                break
+                            self._advance(1)
+                        continue
+                    if ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
                     self._advance(1)
-                    break
+                    continue
+                if ch == "{":
+                    if self._peek(2) == "{":
+                        self._advance(2)
+                        continue
+                    depth = 1
+                    self._advance(1)
+                    continue
+                if ch == "}" and self._peek(2) == "}":
+                    self._advance(2)
+                    continue
+            if is_triple and self.source.startswith(delimiter, self.pos):
+                self._advance(len(delimiter))
+                break
+            elif not is_triple and ch == quote:
+                self._advance(1)
+                break
             if not is_triple and ch == "\n":
                 break
             self._advance(1)

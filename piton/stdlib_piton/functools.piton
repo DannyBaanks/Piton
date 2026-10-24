@@ -1,0 +1,23 @@
+funcion reduce (funcion , iterable ,*inicial ) :
+    acumulador = Nada
+    primero = Verdadero
+    para x en inicial :
+        acumulador = x
+        primero = Falso
+    para x en iterable :
+        si primero :
+            acumulador = x
+            primero = Falso
+        sino :
+            acumulador = funcion (acumulador , x )
+    devolver acumulador
+
+
+funcion wraps (envuelta ) :
+    funcion envoltorio (f ) :
+        devolver f
+    devolver envoltorio
+
+
+funcion total_ordering (clase ) :
+    devolver clase

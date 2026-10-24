@@ -199,9 +199,14 @@ class ContainsV1(unittest.TestCase):
     def test_str_in_dict_keys(self):
         _assert_matches(self, "imprimir('a' in {'a': 1}, 'z' in {'a': 1})\n")
 
-    def test_int_needle_in_str_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir(2 in 'abc')\n")
+    def test_int_needle_in_str_raises_like_cpython(self):
+        # IN_STR_DYNAMIC_V1: `2 in 'abc'` ya no es un fallo de build. El tipo
+        # del needle lo decide el runtime (piton_str_contains_dynamic) y
+        # levanta el MISMO TypeError que CPython, capturable por
+        # intentar/excepto; sin handler termina con exit 1 como CPython.
+        # El fail-closed de build sigue donde no hay forma sonora de
+        # comparar (float/objects: ver test_float_needle_fails_closed).
+        compare_native_to_cpython("imprimir(2 in 'abc')\n")
 
     def test_float_needle_fails_closed(self):
         # slot bit-equality would be silent approximation for floats

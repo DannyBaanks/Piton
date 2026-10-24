@@ -5,17 +5,15 @@ The probe case `n = 3; imprimir(f'n={n}')` died in lowering
 parser-adjacent lowering nor MIR handled them). Now: f-strings with plain
 expressions lower in lower.py straight to `'<template>'.format(arg, ...)`
 — reusing STR_METHODS_V1 in both backends with zero mir/backend work.
-Conversions (!r !s !a) and format specs fail closed (LoweringError,
+Conversions !r !a lower to repr()/ascii() (FSTRING_CONVERSION_V1,
+tests/test_grammar_parity.py); format specs fail closed (LoweringError,
 wrapped to NativeBuildError at the compile entry points).
 """
 from __future__ import annotations
 
 import unittest
 
-import pytest
-
 from piton.native_differential import compare_native_to_cpython
-from piton.x86 import NativeBuildError
 
 
 def _assert_matches(testcase: unittest.TestCase, source: str) -> None:
@@ -54,9 +52,10 @@ class FStringsV1(unittest.TestCase):
     def test_method_call_inside(self):
         _assert_matches(self, "imprimir(f\"{'a'.upper()}\")\n")
 
-    def test_conversion_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("x = 1\nimprimir(f'{x!r}')\n")
+    def test_r_conversion_supported(self):
+        # FSTRING_CONVERSION_V1: !r ya baja a repr() en vez de fallar (era
+        # NativeBuildError); ver tambien tests/test_grammar_parity.py.
+        _assert_matches(self, "x = 1\nimprimir(f'{x!r}')\n")
 
     def test_format_spec(self):
         # P36: f-string format_spec lowers to the .format() placeholder.

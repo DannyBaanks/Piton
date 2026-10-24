@@ -1,0 +1,71 @@
+funcion fnmatch (nombre , patron ):
+    devolver fnmatchcase (nombre , patron )
+
+
+funcion fnmatchcase (nombre , patron ):
+    n = longitud (nombre )
+    m = longitud (patron )
+    r = _fnmatch_coincide (nombre , patron , 0 , 0 , n , m )
+    devolver r == n
+
+
+funcion _fnmatch_coincide (nombre , patron , i , j , n , m ):
+    si j >= m :
+        devolver i
+    c = patron [j ]
+    si c == '*' :
+        k = i
+        mientras k <= n :
+            r = _fnmatch_coincide (nombre , patron , k , j + 1 , n , m )
+            si r >= 0 :
+                devolver r
+            k = k + 1
+        devolver -1
+    si i >= n :
+        devolver -1
+    si c == '?' :
+        devolver _fnmatch_coincide (nombre , patron , i + 1 , j + 1 , n , m )
+    si c == '[' :
+        f = j + 1
+        mientras f < m :
+            si patron [f ] == ']' :
+                romper
+            f = f + 1
+        si f >= m :
+            si nombre [i ] == '[' :
+                devolver _fnmatch_coincide (nombre , patron , i + 1 , j + 1 , n , m )
+            devolver -1
+        si _fnmatch_en_clase (nombre [i ] , patron , j , f ) :
+            devolver _fnmatch_coincide (nombre , patron , i + 1 , f + 1 , n , m )
+        devolver -1
+    si nombre [i ] == c :
+        devolver _fnmatch_coincide (nombre , patron , i + 1 , j + 1 , n , m )
+    devolver -1
+
+
+funcion _fnmatch_en_clase (c , patron , inicio , fin ):
+    i = inicio + 1
+    negate = Falso
+    si i < fin :
+        si patron [i ] == '!' :
+            negate = Verdadero
+            i = i + 1
+    encontrado = Falso
+    mientras i < fin :
+        ch = patron [i ]
+        rango = Falso
+        si i + 2 < fin :
+            si patron [i + 1 ] == '-' :
+                rango = Verdadero
+        si rango :
+            si c >= ch y c <= patron [i + 2 ] :
+                encontrado = Verdadero
+            i = i + 3
+        sino :
+            si c == ch :
+                encontrado = Verdadero
+            i = i + 1
+    si negate :
+        devolver no encontrado
+    devolver encontrado
+
