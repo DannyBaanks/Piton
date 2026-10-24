@@ -312,9 +312,27 @@ class Lowerer:
         return Const(kind=HIRKind.CONST, value=cst.value)
 
     def _lower_binop(self, cst: CSTBinOp):
-        left = self.lower(cst.left)
-        right = self.lower(cst.right)
-        return BinOp(kind=HIRKind.BINOP, left=left, op=cst.op, right=right)
+        # BINOP_CHAIN_ITER_V1: una cadena IZQUIERDA del mismo operador
+        # (`((((a+b)+c)+d)...)`) se aplana en iterativo y se baja en bucle.
+        # El camino recursivo reventaba la pila con cadenas largas:
+        # pydoc_data/topics.py tiene 17.254 concatenaciones en UNA expresion y
+        # moria con RecursionError (que en el subproceso aislado del corpus se
+        # veia como exit -9). El parser ya es iterativo, asi que el arbol llega
+        # profundo; solo el lowering necesitaba el bucle.
+        node = cst
+        chain = []
+        while node.type is CSTNodeType.BIN_OP and node.op == cst.op:
+            chain.append(node.right)
+            node = node.left
+        left = self.lower(node)
+        for right_cst in chain:
+            left = BinOp(
+                kind=HIRKind.BINOP,
+                left=left,
+                op=cst.op,
+                right=self.lower(right_cst),
+            )
+        return left
 
     def _lower_unaryop(self, cst: CSTUnaryOp):
         operand = self.lower(cst.operand)

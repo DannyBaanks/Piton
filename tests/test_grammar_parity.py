@@ -2469,5 +2469,58 @@ class ListDynamicGatesV1(unittest.TestCase):
         )
 
 
+class ConcatChainGatesV1(unittest.TestCase):
+    """BINOP_CHAIN_ITER_V1 + STR_CONCAT_FOLD_V1.
+
+    pydoc_data/topics.py tenia 17.254 concatenaciones en UNA expresion: el
+    lowering recursivo reventaba la pila (RecursionError, que en el subproceso
+    aislado del corpus se veia como exit -9) y, una vez compilado, la cadena se
+    materializaba contra el buffer fijo de 64 KB (piton_concat_buf) con coste
+    cuadratico -> SIGSEGV. Ahora la cadena baja en bucle y los operandos
+    literales se pliegan en un solo constante, como el peephole de CPython."""
+
+    def test_concat_chain_order_is_preserved(self):
+        # El orden importa: `+` de enteros es conmutativo y ocultaba un pliegue
+        # invertido; con strings se ve.
+        _assert_matches(
+            self,
+            "x = 'aa'+'bb'+'cc'+'dd'\n"
+            "imprimir (x )\n",
+        )
+
+    def test_long_concat_chain_folds(self):
+        # 600 concatenaciones: plegadas, ni recursion ni buffer de 64 KB.
+        parts = "+".join(f"'s{i}'" for i in range(600))
+        _assert_matches(self, f"x = {parts}\nimprimir (len (x ))\n")
+
+    def test_long_sum_chain_still_folds(self):
+        parts = "+".join(str(i) for i in range(1, 400))
+        _assert_matches(self, f"imprimir ({parts})\n")
+
+    def test_chain_with_variable_is_not_folded(self):
+        # Un operando no literal impide el pliegue (igual que CPython): el
+        # tramo final se concatena en runtime y debe dar lo mismo.
+        parts = "+".join(f"'s{i:02d}'" for i in range(120))
+        _assert_matches(
+            self,
+            f"v = 'X'\nx = {parts} + v\nimprimir (len (x ))\nimprimir (x [-1 :])\n",
+        )
+
+    def test_topics_stdlib_file_compiles(self):
+        # El archivo real: 1.3 MB con 17.254 concatenaciones en una expresion.
+        # Antes moria con exit -9 (RecursionError en el subproceso aislado).
+        import pathlib as _pl
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from parity_corpus_v4 import python_to_piton as _to_piton
+        from piton.linux_x86 import compile_native_linux as _compile
+        path = _pl.Path("/usr/lib/python3.12/pydoc_data/topics.py")
+        if not path.exists():
+            self.skipTest("topics.py no presente en este host")
+        out = _pl.Path("/tmp/opencode/topics_native")
+        _compile(_to_piton(path.read_text(encoding="utf-8", errors="replace")), out)
+        self.assertTrue(out.exists() and out.stat().st_size > 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -649,6 +649,33 @@ class MIRLowerer:
             return f"{class_name}__{method.name}__{prop}", prop, method.name
         raise MIRLoweringError(f"native class methods support only @property, @staticmethod, @classmethod, @<name>.setter, @<name>.deleter")
 
+    @staticmethod
+    def _fold_str_concat(function: MIRFunction) -> None:
+        """STR_CONCAT_FOLD_V1: pliega `const + const` (str) en un solo const.
+
+        Reemplaza la instruccion `binary(+, l, r)` por `const(folded)` y
+        registra el resultado para que la concatenacion siguiente tambien se
+        pliegue (la cadena es izquierda, asi que un unico recorrido basta)."""
+        consts: dict[str, Any] = {}
+        for block in function.blocks:
+            for index, instruction in enumerate(block.instructions):
+                if instruction.op == "const":
+                    consts[instruction.result] = instruction.args[0]
+                elif (
+                    instruction.op == "binary"
+                    and len(instruction.args) >= 3
+                    and instruction.args[0] == "+"
+                ):
+                    left, right = instruction.args[1], instruction.args[2]
+                    if isinstance(consts.get(left), str) and isinstance(consts.get(right), str):
+                        folded = consts[left] + consts[right]
+                        # La instruccion es frozen: se reemplaza conservando
+                        # efectos/token (binary y const son PURE).
+                        block.instructions[index] = replace(
+                            instruction, op="const", args=(folded,)
+                        )
+                        consts[instruction.result] = folded
+
     def lower(
         self, hir: HIRNode, modules: dict[str, HIRNode] | None = None,
         from_imports: dict | None = None,
@@ -1047,6 +1074,15 @@ class MIRLowerer:
             builder = _Builder("<module>")
             self._lower_statement(builder, hir)
             self.functions.append(builder.function)
+        # STR_CONCAT_FOLD_V1: `'a' + 'b' + ...` con TODOS los operandos
+        # literales se pliega en UN constante, como el peephole de CPython.
+        # Sin esto, una cadena larga se concatena en runtime contra el buffer
+        # fijo de 64 KB (piton_concat_buf) con coste cuadratico y termina en
+        # SIGSEGV: pydoc_data/topics.py tiene 17.254 concatenaciones en una
+        # sola expresion. Los operandos no literales (variables, llamadas)
+        # impiden el pliegue, asi que la semantica de CPython se preserva.
+        for function in self.functions:
+            self._fold_str_concat(function)
         module = MIRModule(self.functions)
         module.classes = dict(self.classes)
         module.class_parents = dict(self.class_parents)
@@ -1681,17 +1717,26 @@ class MIRLowerer:
             self.function_frame_abi[name] = total_params > 4
 
     def _walk(self, value: Any):
-        if isinstance(value, HIRNode):
-            yield value
-            if value.kind == HIRKind.FUNC_DEF:
-                return
-            for descriptor in fields(value):
-                if descriptor.name in {"kind", "line", "col", "annotations"}:
+        # BINOP_CHAIN_ITER_V1 (mir): el recorrido es ITERATIVO con pila
+        # explicita. El `yield from` recursivo reventaba con cadenas izquierdas
+        # largas (pydoc_data/topics.py: 17.254 concatenaciones en una
+        # expresion), igual que el lowering antes de su arreglo. El orden de
+        # visita se conserva: preorden con los campos en su orden de declaracion.
+        stack = [value]
+        while stack:
+            current = stack.pop()
+            if isinstance(current, HIRNode):
+                yield current
+                if current.kind == HIRKind.FUNC_DEF:
                     continue
-                yield from self._walk(getattr(value, descriptor.name))
-        elif isinstance(value, (list, tuple)):
-            for item in value:
-                yield from self._walk(item)
+                children = []
+                for descriptor in fields(current):
+                    if descriptor.name in {"kind", "line", "col", "annotations"}:
+                        continue
+                    children.append(getattr(current, descriptor.name))
+                stack.extend(reversed(children))
+            elif isinstance(current, (list, tuple)):
+                stack.extend(reversed(current))
 
     _SCOPE_STOP = {
         HIRKind.FUNC_DEF, HIRKind.CLASS_DEF, HIRKind.LAMBDA,
@@ -3402,7 +3447,28 @@ class MIRLowerer:
             builder.emit("load", node.name, result=result)
             return result
         if kind == HIRKind.BINOP:
-            return self._binary(builder, node.op, self._lower_expr(builder, node.left), self._lower_expr(builder, node.right))
+            # BINOP_CHAIN_ITER_V1 (mir): una cadena IZQUIERDA del mismo operador
+            # (`((((a+b)+c)+d)...)`) se baja en bucle, no en recursion.
+            # pydoc_data/topics.py tiene 17.254 concatenaciones en UNA expresion
+            # y el camino recursivo reventaba la pila (RecursionError, que en el
+            # subproceso aislado del corpus se veia como exit -9). El orden de
+            # evaluacion de CPython (izquierda a derecha) se preserva.
+            rights = []
+            walk = node
+            while (
+                walk.left is not None
+                and walk.left.kind == HIRKind.BINOP
+                and walk.left.op == node.op
+            ):
+                rights.append(walk.right)
+                walk = walk.left
+            rights.append(walk.right)
+            value = self._lower_expr(builder, walk.left)
+            for right_node in rights:
+                value = self._binary(
+                    builder, node.op, value, self._lower_expr(builder, right_node)
+                )
+            return value
         if kind == HIRKind.UNOP:
             operand = self._lower_expr(builder, node.operand)
             result = builder.temp()
@@ -4251,7 +4317,28 @@ class MIRLowerer:
             builder.emit("load", node.name, result=result)
             return result
         if kind == HIRKind.BINOP:
-            return self._binary(builder, node.op, self._lower_expr(builder, node.left), self._lower_expr(builder, node.right))
+            # BINOP_CHAIN_ITER_V1 (mir): una cadena IZQUIERDA del mismo operador
+            # (`((((a+b)+c)+d)...)`) se baja en bucle, no en recursion.
+            # pydoc_data/topics.py tiene 17.254 concatenaciones en UNA expresion
+            # y el camino recursivo reventaba la pila (RecursionError, que en el
+            # subproceso aislado del corpus se veia como exit -9). El orden de
+            # evaluacion de CPython (izquierda a derecha) se preserva.
+            rights = []
+            walk = node
+            while (
+                walk.left is not None
+                and walk.left.kind == HIRKind.BINOP
+                and walk.left.op == node.op
+            ):
+                rights.append(walk.right)
+                walk = walk.left
+            rights.append(walk.right)
+            value = self._lower_expr(builder, walk.left)
+            for right_node in rights:
+                value = self._binary(
+                    builder, node.op, value, self._lower_expr(builder, right_node)
+                )
+            return value
         if kind == HIRKind.UNOP:
             operand = self._lower_expr(builder, node.operand)
             result = builder.temp()
