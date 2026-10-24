@@ -1,0 +1,2 @@
+funcion comando_no_operativo (*args ):
+    lanzar NotImplementedError ('distutils no esta implementado en el backend nativo')

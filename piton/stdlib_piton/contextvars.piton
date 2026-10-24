@@ -1,0 +1,15 @@
+clase ContextVar :
+    funcion __init__ (self ,nombre ,*resto ):
+        self .nombre = nombre
+
+
+clase Context :
+    pasar
+
+
+clase Token :
+    pasar
+
+
+funcion copy_context ():
+    lanzar NotImplementedError ('contextvars.copy_context no esta implementado en el backend nativo')

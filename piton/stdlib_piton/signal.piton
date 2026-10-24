@@ -1,0 +1,63 @@
+SIGHUP = 1
+SIGINT = 2
+SIGQUIT = 3
+SIGILL = 4
+SIGTRAP = 5
+SIGABRT = 6
+SIGBUS = 7
+SIGFPE = 8
+SIGKILL = 9
+SIGUSR1 = 10
+SIGSEGV = 11
+SIGUSR2 = 12
+SIGPIPE = 13
+SIGALRM = 14
+SIGTERM = 15
+SIGCHLD = 17
+SIGCONT = 18
+SIGSTOP = 19
+SIGTSTP = 20
+SIGTTIN = 21
+SIGTTOU = 22
+SIGURG = 23
+SIGXCPU = 24
+SIGXFSZ = 25
+SIGVTALRM = 26
+SIGPROF = 27
+SIGWINCH = 28
+SIGIO = 29
+SIGSYS = 31
+SIG_DFL = 0
+SIG_IGN = 1
+
+
+funcion getsignal (numero ):
+    lanzar NotImplementedError ('signal.getsignal no esta implementado en el backend nativo')
+
+
+funcion signal (numero ,handler ):
+    lanzar NotImplementedError ('signal.signal no esta implementado en el backend nativo: no hay syscall de senales')
+
+
+funcion set_wakeup_fd (fd ):
+    lanzar NotImplementedError ('signal.set_wakeup_fd no esta implementado en el backend nativo')
+
+
+funcion siginterrupt (numero ,bandera ):
+    lanzar NotImplementedError ('signal.siginterrupt no esta implementado en el backend nativo')
+
+
+funcion pthread_sigmask (como ,senales ):
+    lanzar NotImplementedError ('signal.pthread_sigmask no esta implementado en el backend nativo')
+
+
+funcion alarm (segundos ):
+    lanzar NotImplementedError ('signal.alarm no esta implementado en el backend nativo')
+
+
+funcion sigpending ():
+    lanzar NotImplementedError ('signal.sigpending no esta implementado en el backend nativo')
+
+
+funcion default_int_handler (numero ,frame ):
+    lanzar NotImplementedError ('signal.default_int_handler no esta implementado en el backend nativo')

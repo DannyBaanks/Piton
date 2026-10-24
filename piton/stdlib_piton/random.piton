@@ -1,0 +1,38 @@
+clase Random :
+    pasar
+
+
+clase SystemRandom :
+    pasar
+
+
+clase _Random :
+    pasar
+
+
+clase _SystemRandom :
+    pasar
+
+
+funcion seed (*resto ):
+    lanzar NotImplementedError ('random.seed no esta implementado en el backend nativo: no hay fuente de entropia')
+
+
+funcion random ():
+    lanzar NotImplementedError ('random.random no esta implementado en el backend nativo')
+
+
+funcion randrange (a ,b =Nada ,c =Nada ):
+    lanzar NotImplementedError ('random.randrange no esta implementado en el backend nativo')
+
+
+funcion randint (a ,b ):
+    lanzar NotImplementedError ('random.randint no esta implementado en el backend nativo')
+
+
+funcion getrandbits (k ):
+    lanzar NotImplementedError ('random.getrandbits no esta implementado en el backend nativo')
+
+
+funcion gauss (mu ,sigma ):
+    lanzar NotImplementedError ('random.gauss no esta implementado en el backend nativo')

@@ -1,0 +1,7 @@
+funcion compile_command (fuente ,*resto ):
+    lanzar NotImplementedError ('codeop.compile_command no esta implementado en el backend nativo')
+
+
+clase CommandCompiler :
+    funcion __call__ (self ,*resto ):
+        lanzar NotImplementedError ('codeop.CommandCompiler no esta implementado en el backend nativo')

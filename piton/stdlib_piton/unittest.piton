@@ -1,0 +1,57 @@
+clase SkipTest :
+    pasar
+
+
+funcion skip (razon ):
+    funcion decorador (funcion_objetivo ):
+        devolver funcion_objetivo
+    devolver decorador
+
+
+funcion skipIf (condicion ,razon ):
+    funcion decorador (funcion_objetivo ):
+        devolver funcion_objetivo
+    devolver decorador
+
+
+funcion skipUnless (condicion ,razon ):
+    funcion decorador (funcion_objetivo ):
+        devolver funcion_objetivo
+    devolver decorador
+
+
+funcion skipIf_placeholder ():
+    devolver
+
+
+clase TestCase :
+    pasar
+
+
+clase TestSuite :
+    pasar
+
+
+clase TestLoader :
+    pasar
+
+
+clase TextTestRunner :
+    pasar
+
+
+clase TextTestResult :
+    pasar
+
+
+clase BaseTestSuite :
+    pasar
+
+
+clase TestResult :
+    pasar
+
+
+funcion main (*args ):
+    lanzar NotImplementedError ('unittest.main no esta implementado en el backend nativo')
+

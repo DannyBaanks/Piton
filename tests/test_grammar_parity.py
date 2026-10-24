@@ -2965,5 +2965,102 @@ class BundledStdlibGatesV2(unittest.TestCase):
         self.assertIn("NotImplementedError", r.stderr)
 
 
+class RecursiveStdlibGatesV2(unittest.TestCase):
+    """Modulos para el corpus RECURSIVO (medido el 2026-10-24).
+
+    Reales: itertools (V1 MATERIALIZA — CPython es perezoso; el gate consume
+    con list()), typing.cast (identidad), signal (constantes POSIX).
+    Stubs fail-closed: subprocess, weakref, pathlib, queue, random, shutil,
+    contextvars, distutils, codeop, getopt (se intento real y se MEDIO
+    SIGSEGV: quedo fail-closed), importlib, ast, logging, reprlib, unittest."""
+
+    def test_itertools_chain_materializes(self):
+        _assert_matches(
+            self,
+            "importar itertools" + chr(10)
+            + "imprimir (list (itertools .chain ([1 ,2 ] ,[3 ,4 ])))" + chr(10),
+        )
+
+    def test_itertools_islice_repeat_filterfalse(self):
+        _assert_matches(
+            self,
+            "importar itertools" + chr(10)
+            + "imprimir (list (itertools .islice ([10 ,20 ,30 ,40 ] ,1 ,3 )))" + chr(10)
+            + "imprimir (list (itertools .repeat ('x' ,2 )))" + chr(10),
+        )
+
+    def test_itertools_filterfalse(self):
+        _assert_matches(
+            self,
+            "importar itertools" + chr(10)
+            + "funcion es_par (n ):" + chr(10)
+            + "    devolver n % 2 == 0" + chr(10)
+            + "imprimir (list (itertools .filterfalse (es_par ,[1 ,2 ,3 ,4 ])))" + chr(10),
+        )
+
+    def test_typing_cast_is_identity(self):
+        _assert_matches(
+            self,
+            "importar typing" + chr(10)
+            + "imprimir (typing .cast (int ,7 ))" + chr(10)
+            + "imprimir (typing .cast (str ,'hola' ))" + chr(10),
+        )
+
+    def test_signal_constants(self):
+        _assert_matches(
+            self,
+            "importar signal" + chr(10)
+            + "imprimir (signal .SIGINT , signal .SIGTERM , signal .SIGKILL )" + chr(10)
+            + "imprimir (signal .SIG_DFL , signal .SIG_IGN )" + chr(10),
+        )
+
+    def _assert_compiles(self, fuente: str) -> None:
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.parser import parse
+        from piton.lower import lower_cst_to_hir
+        from piton.mir import lower_hir_to_mir
+        from piton.linux_x86 import LinuxCEmitter
+        LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(fuente))))
+
+    def test_platform_stubs_compile(self):
+        for mod, linea in (
+            ("subprocess", "p = subprocess .PIPE" + chr(10) + "imprimir (p )" + chr(10)),
+            ("weakref", "w = weakref .ref ([1 ])" + chr(10)),
+            ("pathlib", "p = pathlib .Path ('/tmp' )" + chr(10)),
+            ("queue", "q = queue .Queue ()" + chr(10)),
+            ("random", "r = random .Random ()" + chr(10)),
+            ("shutil", "imprimir (shutil .which ('ls' ))" + chr(10)),
+            ("contextvars", "c = contextvars .ContextVar ('x' )" + chr(10)),
+            ("getopt", "imprimir (getopt .getopt (['-a' ],'a' ))" + chr(10)),
+            ("importlib", "m = importlib .import_module ('os' )" + chr(10)),
+            ("logging", "imprimir (logging .DEBUG )" + chr(10)),
+            ("reprlib", "imprimir (reprlib .recursive_repr () )" + chr(10)),
+            ("unittest", "imprimir (unittest .skipIf (True , 'r' ))" + chr(10)),
+            ("ast", "importar ast" + chr(10)),
+        ):
+            with self.subTest(mod=mod):
+                self._assert_compiles("importar " + mod + chr(10) + linea)
+
+    def test_stubs_fail_closed_at_runtime(self):
+        import subprocess
+        import tempfile
+        import pathlib
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.linux_x86 import compile_native_linux as _cn
+        fuente = (
+            "importar subprocess" + chr(10)
+            + "s = subprocess .run (['ls' ])" + chr(10)
+            + "imprimir (s )" + chr(10)
+        )
+        with tempfile.TemporaryDirectory() as _d:
+            out = pathlib.Path(_d) / "prog"
+            _cn(fuente, out)
+            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("NotImplementedError", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

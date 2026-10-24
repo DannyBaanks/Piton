@@ -1,0 +1,22 @@
+clase PurePath :
+    pasar
+
+
+clase PurePosixPath :
+    pasar
+
+
+clase PureWindowsPath :
+    pasar
+
+
+clase Path :
+    pasar
+
+
+clase PosixPath :
+    pasar
+
+
+clase WindowsPath :
+    pasar

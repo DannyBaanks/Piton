@@ -1,0 +1,47 @@
+CRITICAL = 50
+ERROR = 40
+WARNING = 30
+WARN = 30
+INFO = 20
+DEBUG = 10
+NOTSET = 0
+
+
+clase Handler :
+    pasar
+
+
+clase Formatter :
+    pasar
+
+
+clase Filter :
+    pasar
+
+
+clase LoggerAdapter :
+    pasar
+
+
+clase LogRecord :
+    pasar
+
+
+clase NullHandler :
+    pasar
+
+
+funcion getLogger (nombre =Nada ):
+    lanzar NotImplementedError ('logging.getLogger no esta implementado en el backend nativo')
+
+
+funcion basicConfig (*args ,**opciones ):
+    lanzar NotImplementedError ('logging.basicConfig no esta implementado en el backend nativo')
+
+
+funcion _acquireLock ():
+    devolver
+
+
+funcion _releaseLock ():
+    devolver

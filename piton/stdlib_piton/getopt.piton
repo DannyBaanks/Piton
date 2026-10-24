@@ -1,0 +1,10 @@
+clase GetoptError (Exception ) :
+    pasar
+
+
+funcion getopt (args ,opciones ,argumentos_largos =[] ):
+    lanzar NotImplementedError ('getopt.getopt no esta implementado en el backend nativo (V1 real MEDIDA con SIGSEGV: revertida a fail-closed)')
+
+
+funcion gnu_getopt (args ,opciones ,argumentos_largos =[] ):
+    lanzar NotImplementedError ('getopt.gnu_getopt no esta implementado en el backend nativo')

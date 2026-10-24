@@ -1,0 +1,13 @@
+funcion recursive_repr (relleno ='...'):
+    funcion decorador (funcion_objetivo ):
+        devolver funcion_objetivo
+    devolver decorador
+
+
+funcion repr (x ):
+    lanzar NotImplementedError ('reprlib.recursive_repr con fillvalue por llamada no esta implementado')
+
+
+clase Repr :
+    pasar
+

@@ -1,0 +1,26 @@
+funcion ref (objeto ,*resto ):
+    lanzar NotImplementedError ('weakref.ref no esta implementado en el backend nativo: no hay recolector')
+
+
+clase WeakKeyDictionary :
+    pasar
+
+
+clase WeakValueDictionary :
+    pasar
+
+
+clase WeakSet :
+    pasar
+
+
+clase WeakMethod :
+    pasar
+
+
+clase finalize :
+    pasar
+
+
+funcion proxy (objeto ,*resto ):
+    lanzar NotImplementedError ('weakref.proxy no esta implementado en el backend nativo')

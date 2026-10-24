@@ -1,0 +1,22 @@
+funcion which (comando ,*resto ):
+    lanzar NotImplementedError ('shutil.which no esta implementado en el backend nativo: no hay PATH del entorno')
+
+
+funcion copyfileobj (origen ,destino ,*resto ):
+    lanzar NotImplementedError ('shutil.copyfileobj no esta implementado en el backend nativo')
+
+
+funcion rmtree (*args ,**opciones ):
+    lanzar NotImplementedError ('shutil.rmtree no esta implementado en el backend nativo')
+
+
+funcion copyfile (origen ,destino ,*resto ):
+    lanzar NotImplementedError ('shutil.copyfile no esta implementado en el backend nativo')
+
+
+funcion copymode (origen ,destino ,*resto ):
+    lanzar NotImplementedError ('shutil.copymode no esta implementado en el backend nativo')
+
+
+funcion copy2 (origen ,destino ,*resto ):
+    lanzar NotImplementedError ('shutil.copy2 no esta implementado en el backend nativo')

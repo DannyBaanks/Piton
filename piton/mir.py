@@ -1319,6 +1319,12 @@ class MIRLowerer:
                     value = getattr(item, "value", None)
                     if getattr(value, "kind", None) == HIRKind.CONST:
                         return True, value.value
+                    if getattr(value, "kind", None) == HIRKind.UNOP:
+                        _operand = getattr(value, "operand", None)
+                        if getattr(_operand, "kind", None) == HIRKind.CONST and isinstance(
+                            _operand.value, int
+                        ):
+                            return True, -(_operand.value)
                     return False, None
         return False, None
 

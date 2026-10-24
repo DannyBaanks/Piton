@@ -1,0 +1,22 @@
+clase Empty :
+    pasar
+
+
+clase Full :
+    pasar
+
+
+clase Queue :
+    pasar
+
+
+clase SimpleQueue :
+    pasar
+
+
+clase PriorityQueue :
+    pasar
+
+
+clase LifoQueue :
+    pasar

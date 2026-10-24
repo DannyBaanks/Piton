@@ -1,0 +1,90 @@
+funcion chain (*iterables ):
+    out = []
+    para it en iterables :
+        out = out + list (it )
+    devolver out
+
+
+funcion repeat (obj ,veces =Nada ):
+    si veces es Nada :
+        lanzar NotImplementedError ('itertools.repeat sin limite es infinito: el subset materializa y colgaria')
+    out = []
+    i = 0
+    mientras i < veces :
+        out .append (obj )
+        i = i + 1
+    devolver out
+
+
+funcion islice (it ,inicio =0 ,fin =Nada ,paso =1 ):
+    items = list (it )
+    si fin es Nada :
+        si inicio == 0 :
+            devolver items
+        devolver items [inicio :]
+    devolver items [inicio :fin :paso ]
+
+
+funcion filterfalse (pred ,items ):
+    out = []
+    para x en items :
+        si no pred (x ) :
+            out .append (x )
+    devolver out
+
+
+funcion starmap (funcion_objetivo ,pares ):
+    out = []
+    para par en pares :
+        out .append (funcion_objetivo (*par ))
+    devolver out
+
+
+funcion zip_longest (*iterables ):
+    if_iguales = list (iterables )
+    n = 0
+    para it en if_iguales :
+        m = list (it )
+        si longitud (m ) > n :
+            n = longitud (m )
+    out = []
+    k = 0
+    mientras k < n :
+        fila = []
+        para it en if_iguales :
+            m = list (it )
+            si k < longitud (m ) :
+                fila .append (m [k ])
+            sino :
+                fila .append (Nada )
+        k = k + 1
+        out .append (tuple (fila ))
+    devolver out
+
+
+funcion tee (it ,n =2 ):
+    lanzar NotImplementedError ('itertools.tee no esta implementado en el backend nativo: el materializado compartiria estado')
+
+
+funcion count (inicio =0 ,paso =1 ):
+    lanzar NotImplementedError ('itertools.count es infinito: el subset materializa y colgaria')
+
+
+funcion cycle (it ):
+    lanzar NotImplementedError ('itertools.cycle es infinito: el subset materializa y colgaria')
+
+
+funcion groupby (it ,clave =Nada ):
+    lanzar NotImplementedError ('itertools.groupby no esta implementado en el backend nativo')
+
+
+funcion permutations (it ,r =Nada ):
+    lanzar NotImplementedError ('itertools.permutations no esta implementado en el backend nativo')
+
+
+funcion combinations (it ,r ):
+    lanzar NotImplementedError ('itertools.combinations no esta implementado en el backend nativo')
+
+
+funcion product (*iterables ,**opciones ):
+    lanzar NotImplementedError ('itertools.product no esta implementado en el backend nativo')

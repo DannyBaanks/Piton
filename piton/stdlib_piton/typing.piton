@@ -1,0 +1,142 @@
+funcion cast (tipo ,valor ):
+    devolver valor
+
+
+funcion TypeVar (nombre ,*resto ):
+    lanzar NotImplementedError ('typing.TypeVar no esta implementado en el backend nativo')
+
+
+funcion NewType (nombre ,tipo ):
+    lanzar NotImplementedError ('typing.NewType no esta implementado en el backend nativo')
+
+
+funcion overload (funcion_objetivo ):
+    devolver funcion_objetivo
+
+
+funcion no_type_check (arg ):
+    si es_llamable (arg ) :
+        devolver arg
+    devolver identidad
+
+
+funcion identidad (arg ):
+    devolver arg
+
+
+funcion es_llamable (x ):
+    si x :
+        devolver Verdadero
+    devolver Falso
+
+
+clase Any :
+    pasar
+
+
+clase Optional :
+    pasar
+
+
+clase Union :
+    pasar
+
+
+clase List :
+    pasar
+
+
+clase Dict :
+    pasar
+
+
+clase Tuple :
+    pasar
+
+
+clase Set :
+    pasar
+
+
+clase FrozenSet :
+    pasar
+
+
+clase Iterable :
+    pasar
+
+
+clase Iterator :
+    pasar
+
+
+clase Callable :
+    pasar
+
+
+clase Generator :
+    pasar
+
+
+clase Sequence :
+    pasar
+
+
+clase Mapping :
+    pasar
+
+
+clase MutableMapping :
+    pasar
+
+
+clase MutableSequence :
+    pasar
+
+
+clase Type :
+    pasar
+
+
+clase BinaryIO :
+    pasar
+
+
+clase TextIO :
+    pasar
+
+
+clase IO :
+    pasar
+
+
+clase Pattern :
+    pasar
+
+
+clase Match :
+    pasar
+
+
+clase Protocol :
+    pasar
+
+
+clase runtime_checkable_placeholder :
+    pasar
+
+
+funcion runtime_checkable (cls ):
+    devolver cls
+
+
+funcion get_type_hints (obj ):
+    lanzar NotImplementedError ('typing.get_type_hints no esta implementado en el backend nativo')
+
+
+funcion get_args (tp ):
+    devolver ()
+
+
+funcion get_origin (tp ):
+    devolver Nada

@@ -1,0 +1,10 @@
+funcion import_module (nombre ,paquete =Nada ):
+    lanzar NotImplementedError ('importlib.import_module no esta implementado en el backend nativo')
+
+
+funcion invalidate_caches ():
+    devolver
+
+
+funcion reload (modulo ):
+    lanzar NotImplementedError ('importlib.reload no esta implementado en el backend nativo')

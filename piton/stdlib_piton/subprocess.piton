@@ -1,0 +1,40 @@
+PIPE = -1
+STDOUT = -2
+DEVNULL = -3
+
+
+clase CalledProcessError :
+    pasar
+
+
+clase SubprocessError :
+    pasar
+
+
+clase STARTUPINFO :
+    pasar
+
+
+clase Popen :
+    funcion __init__ (self ,*args ,**opciones ):
+        lanzar NotImplementedError ('subprocess.Popen no esta implementado en el backend nativo: no hay fork/exec')
+
+
+funcion run (*args ,**opciones ):
+    lanzar NotImplementedError ('subprocess.run no esta implementado en el backend nativo')
+
+
+funcion check_output (*args ,**opciones ):
+    lanzar NotImplementedError ('subprocess.check_output no esta implementado en el backend nativo')
+
+
+funcion check_call (*args ,**opciones ):
+    lanzar NotImplementedError ('subprocess.check_call no esta implementado en el backend nativo')
+
+
+funcion getoutput (comando ):
+    lanzar NotImplementedError ('subprocess.getoutput no esta implementado en el backend nativo')
+
+
+funcion getstatusoutput (comando ):
+    lanzar NotImplementedError ('subprocess.getstatusoutput no esta implementado en el backend nativo')

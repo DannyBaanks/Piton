@@ -68,16 +68,24 @@ Pitón **no es**:
     `docs/parity_corpus_v3_report_2026-10-10.md`.
   - **corpus v4 (stdlib real de CPython 3.12)**: embudo sobre 167 archivos de
     `/usr/lib/python3.12/` — adapt 167/167 (100%), parse 167/167 (100%),
-    MIR 27/167 (16.2%), build 23/167 (13.8%); `MIR_FAIL` 140, `BUILD_FAIL` 4.
-    El cuello restante, medido el 2026-10-24: 82 de los 140 MIR_FAIL siguen
-    siendo **módulos de la stdlib ausentes** (el corpus compila cada archivo
-    *aislado*, así que un módulo importado tiene que estar en el binario) y
-    4 archivos ya alcanzan el build y fallan por gaps del emisor que el muro
-    de imports ocultaba (`conjunto()` de entero en `bdb`, `input()` con
-    prompt no-str en `cmd`, `pickle()` con un parámetro usado como str en
-    `copyreg`, `tupla()` de un `map` en `operator`). Reporte vivo:
+    MIR 28/167 (16.8%), build 23/167 (13.8%); `MIR_FAIL` 139, `BUILD_FAIL` 5.
+    El cuello restante, medido el 2026-10-24: 64 de los 139 MIR_FAIL siguen
+    siendo **módulos de la stdlib ausentes** y 5 archivos ya alcanzan el build
+    y fallan por gaps del emisor que el muro de imports ocultaba
+    (`conjunto()` de entero en `bdb`, `input()` con prompt no-str en `cmd`,
+    `pickle()` con un parámetro usado como str en `copyreg`, `tupla()` de un
+    `map` en `operator`). Reporte vivo:
     `docs/parity_corpus_v4_report_2026-10-24.{json,md}`
     (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier a`).
+  - **corpus v4 recursivo** (`--recursive`, stdlib completa con subpaquetes,
+    588 archivos): adapt 99.8%, parse 97.8%, **mir 82 (13.9%), build 71
+    (12.1%)**; `MIR_FAIL` 493, `PARSE_FAIL` 12 (anotaciones `match/case`,
+    star-unpacking), `BUILD_FAIL` 11, `CRASH` 1 (`pydoc_data/topics.py`:
+    el compilador agota memoria — el único CRASH). 261 MIR_FAIL son módulos
+    ausentes. Medición y palanca: `docs/corpus-recursivo-2026-10-24.md`
+    (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier a
+    --recursive --workers 1 --isolate` — **`--isolate` es obligatorio**: sin
+    él un archivo mata el worker del pool y la corrida muere siempre).
 
 - **Biblioteca nativa empaquetada** (`piton/stdlib_piton/`, 60 módulos):
   módulos escritos **en Pitón** que se compilan e inlinean cuando el
