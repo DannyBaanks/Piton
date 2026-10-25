@@ -7298,8 +7298,20 @@ class LinuxCEmitter:
                 self._iter_source[result] = left
                 self._iter_source_r[result] = right
             elif builtin in {"map", "filter"}:
-                if types.get(source) not in {"list", "tuple"}:
-                    raise NativeBuildError("native map/filter require a list or tuple")
+                _st = types.get(source)
+                if _st in {"list", "tuple"}:
+                    _src_expr = self._value(source)
+                    _map_filter_dyn = False
+                else:
+                    # MAP_FILTER_ANY_SOURCE_V1: aceptar cualquier iterable
+                    # (incluido tipo desconocido por unpacking de tupla).
+                    # Materializar en runtime; si no es iterable, TypeError.
+                    _mat = f"_mfmat{len(out)}"
+                    out.append(
+                        f"    {{PitonSeq*{_mat}=(PitonSeq*)piton_collect_any_iter({self._value(source)});"
+                    )
+                    _src_expr = _mat
+                    _map_filter_dyn = True
                 if types.get(start) == "builtin" or start in self._typeobj_names:
                     # REPR_MAP_V1: map(repr, seq) / map(ascii, seq) usan el
                     # iterador especializado que aplica piton_slot_repr a
@@ -7327,7 +7339,9 @@ class LinuxCEmitter:
                         f"native {builtin} requires a user function callback, not a builtin name"
                     )
                 callback = self._value(start)
-                out.append(f"    {_name(result)}=piton_callback_iterator_new((void*){self._value(source)},(long){callback},{1 if builtin == 'filter' else 0});")
+                out.append(f"    {_name(result)}=piton_callback_iterator_new((void*){_src_expr},(long){callback},{1 if builtin == 'filter' else 0});")
+                if _map_filter_dyn:
+                    out.append("    }")
             elif builtin == "sorted":
                 _st = types.get(source)
                 if _st in {"list", "tuple"}:
