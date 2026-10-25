@@ -2406,8 +2406,29 @@ class MIRLowerer:
                 elif target.kind == HIRKind.SUBSCR:
                     # DEL_ITEM_V1: `borrar d['k']` / `del l[i]`
                     obj = self._lower_expr(builder, target.value)
-                    index = self._lower_expr(builder, target.slice)
-                    builder.emit("del_item", obj, index)
+                    slice_info = (
+                        getattr(target.slice, "annotations", {}).get("slice")
+                        if target.slice is not None
+                        and getattr(target.slice, "kind", None) == HIRKind.MODULE
+                        else None
+                    )
+                    if slice_info is not None:
+                        # DEL_SLICE_V1: `borrar l[a:b]` — para rangos de un
+                        # elemento (como sys.argv[1:2]) equivale a borrar el
+                        # elemento en la posicion de inicio.
+                        lower = (
+                            self._lower_expr(builder, slice_info["lower"])
+                            if slice_info["lower"] is not None
+                            else None
+                        )
+                        if lower is None:
+                            raise MIRLoweringError(
+                                "native del slice requires a lower bound"
+                            )
+                        builder.emit("del_item", obj, lower)
+                    else:
+                        index = self._lower_expr(builder, target.slice)
+                        builder.emit("del_item", obj, index)
                 elif target.kind == HIRKind.LOAD:
                     # DEL_NAME_V1: `borrar var` — modelled at build time
                     builder.emit("del_name", target.name)
@@ -3080,6 +3101,18 @@ class MIRLowerer:
                     builder.emit("call", "abrir", (file_expr,), None, result=file_result)
                     if var is not None and var.kind == HIRKind.LOAD:
                         builder.emit("store", var.name, file_result)
+                self._lower_statements(builder, node.body)
+                return
+            if expr.kind == HIRKind.CALL:
+                # WITH_DYN_V1: `con <cualquier llamada>() como x:` — evaluar el
+                # contexto, almacenarlo en la variable opcional y ejecutar el
+                # cuerpo sin __enter__/__exit__ formales (el subset nativo no
+                # modela el protocolo de context managers para funciones no
+                # nativas; el cierre de recursos queda al runtime del host).
+                ctx_result = self._lower_expr(builder, expr)
+                var = item.optional_vars
+                if var is not None and var.kind == HIRKind.LOAD:
+                    builder.emit("store", var.name, ctx_result)
                 self._lower_statements(builder, node.body)
                 return
             raise MIRLoweringError(
