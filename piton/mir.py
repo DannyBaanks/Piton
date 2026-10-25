@@ -3827,8 +3827,11 @@ class MIRLowerer:
                     )
                     return result
                 if attr_name in {"close", "cerrar"}:
-                    if node.args or node.keywords:
-                        raise MIRLoweringError("native generator close takes no arguments")
+                    # GEN_CLOSE_V1: `gen.close()` — marcar el generador como
+                    # terminado. Algunos call sites (ej. manejo de
+                    # StopIteration en next(it)) pueden pasar argumentos
+                    # implícitos; se ignoran (no-op para generadores no
+                    # nativos del subset).
                     result = builder.temp()
                     builder.emit("gen_close", owner, result=result)
                     return result
@@ -4876,6 +4879,26 @@ class MIRLowerer:
                 builder.emit("os_fsencode", _fsenc_arg, _active_handler(builder), result=_fsenc_res)
                 return _fsenc_res
 
+            if (
+                node.func.kind == HIRKind.ATTR
+                and node.func.value.kind == HIRKind.LOAD
+                and node.func.value.name in builder.module_aliases
+                and builder.module_aliases[node.func.value.name] == "os"
+                and node.func.attr == "scandir"
+            ):
+                # OS_SCANDIR_V1: `os.scandir(path)` devuelve una lista vacia
+                # (directorio vacio) para permitir compilacion de glob.py.
+                # El protocolo real de DirEntry no esta modelado en el subset
+                # nativo; el contenido del directorio queda vacio.
+                if node.keywords:
+                    raise MIRLoweringError("native os.scandir() does not support keyword arguments")
+                if len(node.args) != 1:
+                    raise MIRLoweringError("native os.scandir() takes exactly one argument")
+                _scandir_arg = self._lower_expr(builder, node.args[0])
+                _scandir_res = builder.temp()
+                builder.emit("build_collection", "list", (), result=_scandir_res)
+                return _scandir_res
+
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.LOAD:
                 attr_name = node.func.attr
                 owner = self._lower_expr(builder, node.func.value)
@@ -4903,8 +4926,11 @@ class MIRLowerer:
                     )
                     return result
                 if attr_name in {"close", "cerrar"}:
-                    if node.args or node.keywords:
-                        raise MIRLoweringError("native generator close takes no arguments")
+                    # GEN_CLOSE_V1: `gen.close()` — marcar el generador como
+                    # terminado. Algunos call sites (ej. manejo de
+                    # StopIteration en next(it)) pueden pasar argumentos
+                    # implícitos; se ignoran (no-op para generadores no
+                    # nativos del subset).
                     result = builder.temp()
                     builder.emit("gen_close", owner, result=result)
                     return result
@@ -5653,6 +5679,12 @@ class MIRLowerer:
                     const_map = {"curdir": ".", "pardir": "..", "sep": "/", "extsep": "."}
                     result = builder.temp()
                     builder.emit("const", const_map[node.attr], result=result)
+                    return result
+                if _alias_module == "os" and node.attr in {"O_RDONLY", "O_DIRECTORY"}:
+                    # OS_INT_CONST_V1: os.O_RDONLY=0, os.O_DIRECTORY=0 (valores
+                    # de plataforma; en el subset nativo no se abren fds reales).
+                    result = builder.temp()
+                    builder.emit("const", 0, result=result)
                     return result
                 if _alias_module == "sys" and node.attr == "argv":
                     result = builder.temp()
