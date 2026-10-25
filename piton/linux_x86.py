@@ -1002,6 +1002,17 @@ typedef struct{long magic,index;PitonSeq*seq;long(*callback)(long);}PitonCallbac
 static long piton_callback_invoke(long,long);
 static long piton_callback_iterator_new(void*raw,long callback,long filter){PitonSeq*s=(PitonSeq*)raw;if(!s||!callback||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map/filter requires an iterable and unary callback\n",62);piton_exit(1);}PitonCallbackIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL|(filter?1:0);i->seq=s;i->callback=(long(*)(long))callback;return(long)i;}
 static long piton_callback_iterator_next(long raw){PitonCallbackIterator*i=(PitonCallbackIterator*)raw;if(!i||((i->magic&~1L)!=0x5049544E17E2LL)){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}while(i->index<i->seq->length){long value=i->seq->items[i->index++].bits;long mapped=piton_callback_invoke((long)i->callback,value);if((i->magic&1)&&!mapped)continue;return(i->magic&1)?value:mapped;}piton_raise_set("StopIteration","");return 0;}
+/* REPR_ITER_V1: map(repr, seq) / map(ascii, seq) — aplica piton_slot_repr a
+ * cada elemento usando su kind real (no solo bits), que es lo que repr necesita.
+ * El resultado es siempre str. */
+typedef struct{long magic,index;PitonSeq*seq;}PitonReprIterator;
+static long piton_repr_iterator_next(long raw){PitonReprIterator*i=(PitonReprIterator*)raw;if(!i||i->magic!=0x5049544E17E3LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];return piton_slot_repr(item.bits,item.kind);}
+static long piton_repr_iterator_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map(repr/ascii) requires a list or tuple\n",53);piton_exit(1);}PitonReprIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E3LL;i->index=0;i->seq=s;return(long)i;}
+/* LEN_ITER_V1: map(len, seq) — aplica len() a cada elemento usando su kind
+ * real. Devuelve ints. */
+typedef struct{long magic,index;PitonSeq*seq;}PitonLenIterator;
+static long piton_len_iterator_next(long raw){PitonLenIterator*i=(PitonLenIterator*)raw;if(!i||i->magic!=0x5049544E17E4LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];long l;if(item.kind==PK_LIST||item.kind==PK_TUPLE)l=((PitonSeq*)item.bits)->length;else if(item.kind==PK_STR)l=piton_strlen((const char*)item.bits);else if(item.kind==PK_DICT)l=((PitonDict*)item.bits)->length;else if(item.kind==PK_SET||item.kind==PK_FROZENSET)l=((PitonSet*)item.bits)->length;else if(item.kind==PK_BYTES||item.kind==PK_BYTEARRAY)l=((PitonBytes*)item.bits)->length;else if(item.kind==PK_RANGE)l=piton_range_len((PitonRange*)item.bits);else{piton_raise_set("TypeError","object of type has no len()");return 0;}return l;}
+static long piton_len_iterator_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map(len) requires a list or tuple\n",45);piton_exit(1);}PitonLenIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E4LL;i->index=0;i->seq=s;return(long)i;}
 typedef struct{long magic,callback,sentinel;}PitonCallIter;
 static long piton_closure_call_frame(long,long,long*);
 static long piton_calliter_new(long callback,long sentinel){PitonCallIter*i=piton_alloc(sizeof(*i));i->magic=0x50495443414C4954LL;i->callback=callback;i->sentinel=sentinel;return(long)i;}
@@ -1799,7 +1810,7 @@ static long piton_divmod_bigint(long a,long b,int a_big,int b_big){
 }
 static long piton_divmod_xy(long a,long b){if(!b){piton_raise_set("ZeroDivisionError","integer division or modulo by zero");return 0;}long q=a/b,r=a%b;if(r&&((r<0)!=(b<0))){q-=1;r+=b;}PitonSeq*p=piton_seq_new(PK_TUPLE,2);p->items[0]=(PitonSlot){q,PK_INT};p->items[1]=(PitonSlot){r,PK_INT};return(long)p;}
 static PitonSlot piton_str_minmax(const char*s,int want_min){if(!s||!*s){piton_raise_set("ValueError","min() arg is an empty sequence");return (PitonSlot){0,PK_STR};}unsigned char best=(unsigned char)s[0];for(long i=1;s[i];++i){unsigned char c=(unsigned char)s[i];if(want_min?c<best:c>best)best=c;}char*r=piton_alloc(2);r[0]=(char)best;r[1]=0;return (PitonSlot){(long)r,PK_STR};}
-static long piton_collect(int which,long raw,int elemkind){PitonSeq*s=piton_seq_new(PK_LIST,0);if(!s)return 0;for(;;){long v;if(which==0)v=piton_enumerate_next(raw);else if(which==1)v=piton_reversed_next(raw);else if(which==2)v=piton_callback_iterator_next(raw);else if(which==3)v=piton_zip_next(raw);else if(which==4)v=piton_gen_next(raw);else{piton_raise_set("TypeError","collect");return 0;}if(piton_exc_flag){if(piton_exc_type&&piton_strcmp(piton_exc_type,"StopIteration")==0){piton_catch_clear();break;}return 0;}piton_seq_append(s,(PitonSlot){v,elemkind});}return(long)s;}
+static long piton_collect(int which,long raw,int elemkind){PitonSeq*s=piton_seq_new(PK_LIST,0);if(!s)return 0;for(;;){long v;if(which==0)v=piton_enumerate_next(raw);else if(which==1)v=piton_reversed_next(raw);else if(which==2)v=piton_callback_iterator_next(raw);else if(which==3)v=piton_zip_next(raw);else if(which==4)v=piton_gen_next(raw);else if(which==5)v=piton_repr_iterator_next(raw);else if(which==6)v=piton_len_iterator_next(raw);else{piton_raise_set("TypeError","collect");return 0;}if(piton_exc_flag){if(piton_exc_type&&piton_strcmp(piton_exc_type,"StopIteration")==0){piton_catch_clear();break;}return 0;}piton_seq_append(s,(PitonSlot){v,elemkind});}return(long)s;}
 static PitonSeq* piton_collect_gen(long raw){return (PitonSeq*)piton_collect(4,raw,PK_INT);}
 static long piton_collect_any_iter(long raw){PitonSeq*s=piton_seq_new(PK_LIST,0);for(;;){long v=piton_iterator_next_any(raw);if(piton_exc_flag){if(piton_exc_type&&piton_strcmp(piton_exc_type,"StopIteration")==0){piton_catch_clear();break;}return 0;}PitonSlot it={v,PK_INT};piton_seq_append(s,it);}return(long)s;}
 static long piton_collect_via_next_fn(long raw,long(*fn)(long)){PitonSeq*s=piton_seq_new(PK_LIST,0);for(;;){long v=fn(raw);if(piton_exc_flag){if(piton_exc_type&&piton_strcmp(piton_exc_type,"StopIteration")==0){piton_catch_clear();break;}return 0;}PitonSlot it={v,PK_INT};piton_seq_append(s,it);}return(long)s;}
@@ -3335,6 +3346,10 @@ class LinuxCEmitter:
         # sobre la instancia (`self._call = func`). Un atributo asi puede ser
         # un callable en runtime aunque no sea un metodo de la clase.
         self._instance_attr_names: dict[str, set[str]] = {}
+        # BUILTIN_LOAD_TEMP_V1: {temp_nombre: nombre_builtin} — rastrea qué
+        # temp carga cada builtin (repr, ascii, etc.) para poder usarlos
+        # como callback en map/filter sin dirección de función C.
+        self._builtin_loads: dict[str, str] = {}
         # CELL_TYPE_V1: el tipo de una variable CAPTURADA por una closure
         # (la celda) — sin el, la carga de la celda decae a "int" y las
         # operaciones sobre ella (un `+` de tuplas, un slice) fallan.
@@ -5383,6 +5398,19 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_str_join_dyn((const char*){operand},{self._value(call_args[0])});")
                 types[result] = "str"
                 return out
+            if types.get(call_args[0]) in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter", "iterator:repr", "generator", "genexpr"}:
+                # JOIN_OF_ITER_V1: `sep.join(iterator)` materializa el
+                # iterador a lista antes de unir (CPython acepta cualquier
+                # iterable). Los elementos deben ser str.
+                _jwhich = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3, "iterator:repr": 5, "generator": 4, "genexpr": 4}[types.get(call_args[0])]
+                out.append(
+                    f"    {{PitonSeq*_jl=(PitonSeq*)piton_collect({_jwhich},{self._value(call_args[0])},PK_STR);"
+                )
+                out.append(
+                    f"    {_name(result)}=(long)piton_str_join((const char*){operand},_jl);}}"
+                )
+                types[result] = "str"
+                return out
             if types.get(call_args[0]) not in {"list", "tuple"}:
                 raise NativeBuildError("Linux str.join() requires one list or tuple argument")
             out.append(f"    {_name(result)}=(long)piton_str_join((const char*){operand},(PitonSeq*){self._value(call_args[0])});")
@@ -7173,7 +7201,7 @@ class LinuxCEmitter:
             elif builtin == "enumerate":
                 _enum_type = types.get(source)
                 start_value = self._value(start) if start is not None else "0"
-                if _enum_type not in {"list", "tuple", "str"} and isinstance(_enum_type, str) and _enum_type.startswith("iterator:"):
+                if _enum_type not in {"list", "tuple", "str"} and isinstance(_enum_type, str) and (_enum_type.startswith("iterator:") or _enum_type == "int"):
                     # ENUM_MATERIALIZE_V1: enumerate sobre un ITERADOR nativo
                     # lo materializa primero con piton_collect_any_iter
                     # (heapq: `enumerate(map(iter, iterables))`).
@@ -7265,6 +7293,23 @@ class LinuxCEmitter:
                 if types.get(source) not in {"list", "tuple"}:
                     raise NativeBuildError("native map/filter require a list or tuple")
                 if types.get(start) == "builtin" or start in self._typeobj_names:
+                    # REPR_MAP_V1: map(repr, seq) / map(ascii, seq) usan el
+                    # iterador especializado que aplica piton_slot_repr a
+                    # cada elemento con su kind real. Otros builtins no tienen
+                    # direccion de funcion C y fallan cerrado.
+                    _builtin_cb = self._builtin_loads.get(start)
+                    if builtin == "map" and _builtin_cb in {"repr", "ascii"}:
+                        out.append(
+                            f"    {_name(result)}=piton_repr_iterator_new((void*){self._value(source)});"
+                        )
+                        types[result] = "iterator:repr"
+                        return out
+                    if builtin == "map" and _builtin_cb == "len":
+                        out.append(
+                            f"    {_name(result)}=piton_len_iterator_new((void*){self._value(source)});"
+                        )
+                        types[result] = "iterator:len"
+                        return out
                     # ITER_PASSTHROUGH_V1 guard: a builtin NAME has no native
                     # function address — passing its uninitialized marker as
                     # the callback would jump through garbage (crash).
@@ -7312,7 +7357,7 @@ class LinuxCEmitter:
                 method_class = self._resolve_method(class_name, "__next__")
                 out.append(f"    {_name(result)}={_name(method_class+'__'+'__next__')}({self._value(iterator)});")
             else:
-                next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
+                next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:repr": "piton_repr_iterator_next", "iterator:len": "piton_len_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
                 out.append(f"    {_name(result)}={next_helper}({self._value(iterator)});")
             # DICT_KEY_TYPE_V1: a dict iterator yields its KEYS, whose static
             # type comes from the dict it was built from. Only when it is
@@ -7626,6 +7671,7 @@ class LinuxCEmitter:
                 # other consumer fails closed instead of reading an
                 # uninitialized C variable (previously: SIGSEGV / garbage).
                 types[result] = "builtin"
+                self._builtin_loads[result] = source
                 return out
             # Module owners are lowered before their specialized attribute
             # call is recognized. They are only a marker here, not C values.
@@ -8689,6 +8735,17 @@ class LinuxCEmitter:
                     )
                     self._emit_exc_check(out, function, handler_label)
                 expression = f"({self._value(left)} {operator} {self._value(right)})"
+            elif operator == "@":
+                # MATMUL_V1: `@` no tiene sentido para int/float en el subset
+                # nativo. Fallar cerrado en runtime con TypeError, como
+                # CPython para tipos que no definen __matmul__. operator.py
+                # define matmul/imatmul pero no las llama internamente.
+                self._runtime_type_error(
+                    out,
+                    f"unsupported operand type(s) for @: '{left_type}' and '{right_type}'",
+                )
+                types[result] = "int"
+                return out
             else:
                 raise NativeBuildError(f"Linux binary operator not supported: {operator}")
             out.append(f"    {_name(result)}={expression};")
@@ -9762,30 +9819,42 @@ class LinuxCEmitter:
                     _et = self._coll_elems.get(values[0], "int")
                     types[result] = _et if _et and "|" not in _et else "int"
                     return out
-                if len(values) == 1 and types.get(values[0]) in {"list", "tuple", "str"}:
-                    # MINMAX_ITER_V1: min()/max() of a single iterable. The
-                    # element type rides along so the result prints correctly;
-                    # heterogeneous or empty inputs raise through the helper.
-                    # A str is exploded to its 1-char list first (a raw char*
-                    # is not a PitonSeq*).
-                    want_min = 1 if function_name == "min" else 0
-                    if types.get(values[0]) == "str":
-                        out.append(f"    {{PitonSlot _mm=piton_str_minmax((const char*){self._value(values[0])},{want_min});")
-                    else:
-                        out.append(f"    {{PitonSlot _mm=piton_seq_minmax((PitonSeq*){self._value(values[0])},{want_min});")
-                    elem_type = self._coll_elems.get(values[0], "int")
-                    if types.get(values[0]) == "str":
-                        elem_type = "str"
-                    if "|" in elem_type:
-                        # heterogeneous collection: the winner's kind is only
-                        # known at runtime, so hand out a tagged slot.
-                        out.append(f"    PitonSlot*_mmp=piton_alloc(sizeof(PitonSlot));*_mmp=_mm; {_name(result)}=(long)_mmp;}}")
-                        types[result] = "slot"
-                    else:
-                        out.append(f"    {_name(result)}=_mm.bits;}}")
-                        types[result] = elem_type
-                    self._emit_exc_check(out, function, call_handler)
-                    return out
+                if len(values) == 1:
+                    _vt = types.get(values[0])
+                    if _vt in {"list", "tuple", "str"}:
+                        # MINMAX_ITER_V1: min()/max() de un solo iterable.
+                        # El tipo de elemento viaja junto para que el
+                        # resultado se imprima correctamente.
+                        # Entradas heterogéneas o vacías lanzan por el helper.
+                        want_min = 1 if function_name == "min" else 0
+                        if types.get(values[0]) == "str":
+                            out.append(f"    {{PitonSlot _mm=piton_str_minmax((const char*){self._value(values[0])},{want_min});")
+                        else:
+                            out.append(f"    {{PitonSlot _mm=piton_seq_minmax((PitonSeq*){self._value(values[0])},{want_min});")
+                        elem_type = self._coll_elems.get(values[0], "int")
+                        if types.get(values[0]) == "str":
+                            elem_type = "str"
+                        if "|" in elem_type:
+                            # heterogeneous collection: the winner's kind is only
+                            # known at runtime, so hand out a tagged slot.
+                            out.append(f"    PitonSlot*_mmp=piton_alloc(sizeof(PitonSlot));*_mmp=_mm; {_name(result)}=(long)_mmp;}}")
+                            types[result] = "slot"
+                        else:
+                            out.append(f"    {_name(result)}=_mm.bits;}}")
+                            types[result] = elem_type
+                        self._emit_exc_check(out, function, call_handler)
+                        return out
+                    if isinstance(_vt, str) and _vt.startswith("iterator:"):
+                        # MINMAX_ITER_V1: min()/max() de un iterador nativo
+                        # (map/repr/len/enumerate/etc). Materializa a lista
+                        # primero, luego aplica min/max.
+                        _mwhich = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3, "iterator:repr": 5, "iterator:len": 6}[_vt]
+                        out.append(f"    {{PitonSeq*_mmc=(PitonSeq*)piton_collect({_mwhich},{self._value(values[0])},PK_INT);")
+                        want_min = 1 if function_name == "min" else 0
+                        out.append(f"    PitonSlot _mm=piton_seq_minmax(_mmc,{want_min});}}")
+                        self._emit_exc_check(out, function, call_handler)
+                        types[result] = "int"
+                        return out
                 if len(values) != 2:
                     raise NativeBuildError("Linux min/max requires two arguments")
                 # MINMAX_TYPES_V1 (mirrors Windows): the winner keeps its
@@ -10006,9 +10075,14 @@ class LinuxCEmitter:
                         types[result] = "list"
                     self._coll_elems[result] = "int"
                     return out
-                if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter"} and seq_kind in {"PK_LIST", "PK_TUPLE"}:
-                    _which = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3}[source_type]
-                    _elemkind = "PK_TUPLE" if source_type in {"iterator:enumerate", "iterator:zip"} else "PK_INT"
+                if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter", "iterator:repr", "iterator:len"} and seq_kind in {"PK_LIST", "PK_TUPLE"}:
+                    _which = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3, "iterator:repr": 5, "iterator:len": 6}[source_type]
+                    if source_type == "iterator:repr":
+                        _elemkind = "PK_STR"
+                    elif source_type == "iterator:len":
+                        _elemkind = "PK_INT"
+                    else:
+                        _elemkind = "PK_TUPLE" if source_type in {"iterator:enumerate", "iterator:zip"} else "PK_INT"
                     _it_tmp = f"(long)piton_collect({_which},{self._value(values[0])},{_elemkind})"
                     if seq_kind == "PK_TUPLE":
                         # TUPLE_OF_ITER_V1: tupla(map(...)) — 2 archivos del
@@ -10018,7 +10092,7 @@ class LinuxCEmitter:
                     else:
                         out.append(f"    {_name(result)}={_it_tmp};")
                         types[result] = "list"
-                    self._coll_elems[result] = "tuple" if source_type in {"iterator:enumerate", "iterator:zip"} else "int"
+                    self._coll_elems[result] = "str" if source_type == "iterator:repr" else ("int" if source_type == "iterator:len" else ("tuple" if source_type in {"iterator:enumerate", "iterator:zip"} else "int"))
                     return out
                 if source_type == "none" and alias in {"lista", "list", "tuple", "tupla"}:
                     # CONV_NONE_V1: lista(none) — si la llamada que produjo
@@ -10618,6 +10692,8 @@ class LinuxCEmitter:
                     "iterator:zip": "piton_zip_next",
                     "iterator:map": "piton_callback_iterator_next",
                     "iterator:filter": "piton_callback_iterator_next",
+                    "iterator:repr": "piton_repr_iterator_next",
+                    "iterator:len": "piton_len_iterator_next",
                     "iterator:calliter": "piton_calliter_next",
                 }.get(owner_type, "piton_iterator_next_any")
                 out.append(
@@ -12087,12 +12163,17 @@ class LinuxCEmitter:
                 _which = {
                     "iterator:enumerate": 0, "iterator:reversed": 1,
                     "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3,
-                    "generator": 4, "genexpr": 4,
+                    "iterator:repr": 5, "iterator:len": 6, "generator": 4, "genexpr": 4,
                 }.get(collection_type)
                 if _which is None:
                     raise NativeBuildError(f"Linux collection_len requires a collection (not {collection_type})")
                 _tuple_items = collection_type in {"iterator:enumerate", "iterator:zip"}
-                _elemkind = "PK_TUPLE" if _tuple_items else "PK_INT"
+                if collection_type == "iterator:repr":
+                    _elemkind = "PK_STR"
+                elif collection_type == "iterator:len":
+                    _elemkind = "PK_INT"
+                else:
+                    _elemkind = "PK_TUPLE" if _tuple_items else "PK_INT"
                 # the loop condition re-evaluates this every iteration: a
                 # static flag keeps the materialization a ONE-TIME event.
                 _mat = "_piton_mat" + re.sub(r"[^A-Za-z0-9]", "", _name(coll))
