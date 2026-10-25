@@ -1042,9 +1042,17 @@ class MIRLowerer:
                     method_params = list(getattr(getattr(method, "args", None), "args", []) or [])
                     method_params = [*list(getattr(getattr(method, "args", None), "posonlyargs", []) or []), *method_params]
                     super_self = method_params[0] if method_params and role != "staticmethod" else None
+                    # GENERATOR_METHOD_V1: `yield` inside a class method (e.g.
+                    # __iter__) marks it as a generator so gen_yield lowers
+                    # correctly. The _has_yield scan above only covers module-
+                    # level functions.
+                    if self._contains_kind(method.body, {HIRKind.YIELD, HIRKind.YIELD_FROM}):
+                        self.generators[symbol] = True
+                    is_gen_method = symbol in self.generators
                     self._lower_function(
                         method, symbol,
                         super_context=(node.name, super_self) if super_self else None,
+                        is_generator=is_gen_method,
                     )
                     if role in (None, "staticmethod", "classmethod"):
                         self.classes[node.name].add(method.name)

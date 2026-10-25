@@ -1469,6 +1469,24 @@ static const char* piton_repr_of_value(long bits){if(bits==(long)&piton_none_sin
    if(b2>=0x400000L&&b2<0x480000L)return "None";}
   return (const char*)piton_str_from_int(bits);
 }
+/* LEN_OF_VALUE_V1: len() de un valor en runtime (para map(len, xs)).
+   bits es el campo bits de un PitonSlot. Retorna la longitud como long
+   (bits de un int PK_INT). */
+static long piton_len_of_value(long bits){
+  if(bits==(long)&piton_none_singleton)return 0;
+  if(bits==(long)&piton_ellipsis_singleton)return 0;
+  if(piton_is_double_bits(bits))return 0;
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;
+    if(ptr[0]>0&&ptr[0]<1000000L){
+      long k=ptr[1];
+      if((k>=PK_LIST&&k<=PK_SET)||k==PK_BYTES||k==PK_BYTEARRAY)return ptr[2];
+      /* asume string: puntero imprimible */
+      if(piton_is_printable_str((const char*)bits))return piton_strlen((const char*)bits);
+    }
+  }
+  return -1;
+}
 static void piton_print_int_safe(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(bits==(long)&piton_ellipsis_singleton){piton_write(piton_print_fd,"Ellipsis",8);return;}
   /* PRINT_INT_V1: un entero cuyo tipo estático es int pero que en runtime es
    * un puntero (huecos de inferencia) se imprime como string; si no, como int.
@@ -3840,6 +3858,11 @@ class LinuxCEmitter:
         to compile and must not become a new build error here.
         """
         raw = self._value(value)
+        # CLASS_TYPE_V1: builtin types stored as values (e.g. _types.py:
+        # `Pos = int`) have type "class:int"; normalize to plain kind for
+        # truthiness checks.
+        if vtype.startswith("class:"):
+            vtype = vtype.split(":", 1)[1]
         if vtype in {"int", "bool"}:
             # NONE_SINGLETON_V2: un valor de tipo desconocido/int puede ser
             # None; el singleton no es 0, sin esta exclusion `si x:` sobre un
@@ -4480,6 +4503,11 @@ class LinuxCEmitter:
             )
             if isinstance(_pd, (list, tuple, str)) and not _pd_is_marker and isinstance(_val, str):
                 _pt = types.get(_val)
+                # CLASS_ARG_V1: class/exception arguments (class:Foo) are
+                # passed by reference and never conflict with a
+                # collection/string default — allow them through.
+                if _pt is not None and _pt.startswith("class:"):
+                    _pt = None
                 _allowed = (
                     {"list"} if isinstance(_pd, list)
                     else {"tuple"} if isinstance(_pd, tuple)
@@ -4801,6 +4829,12 @@ class LinuxCEmitter:
                 _ek = self._coll_elems.get(obj)
                 if _ek is not None:
                     self._coll_elems[result] = _ek
+            elif method == "close":
+                # LIST_CLOSE_V1: no-op on a list (validate.py wraps list-like
+                # iterators; close() releases nothing in the native subset).
+                require_count((0,), "no arguments")
+                out.append("    /* list.close() no-op */")
+                types[result] = "none"
             else:
                 raise NativeBuildError(f"Linux list.{method}() is not supported")
         elif coll_type == "tuple":
@@ -7343,6 +7377,12 @@ class LinuxCEmitter:
                     if str(vtype).startswith("iterator:"):
                         out.append(f"    {{PitonSeq*{name}=(PitonSeq*)piton_collect_any_iter({self._value(value)});")
                         return f"(void*){name}", True
+                    # ZIP_ATTR_V1: un atributo con tipo estatico desconocido
+                    # (ej. exc.exceptions de un parametro) se asume secuencia
+                    # (test/support/testcase.py: zip(exc.exceptions,
+                    # template.exceptions)) y se usa directo como PitonSeq*.
+                    if vtype in ("", "int") or vtype.startswith(("object:", "class:", "slot")):
+                        return f"(void*){self._value(value)}", False
                     raise NativeBuildError("native zip requires two lists, tuples or iterables")
 
                 _zl, _lopen = _zip_materialize(left)
@@ -7369,6 +7409,8 @@ class LinuxCEmitter:
                         callback = "piton_str_of_value"
                     elif _builtin_name == "repr":
                         callback = "piton_repr_of_value"
+                    elif _builtin_name == "len":
+                        callback = "piton_len_of_value"
                     else:
                         raise NativeBuildError(
                             f"native {builtin} requires a user function callback, not a builtin name"
@@ -7813,10 +7855,13 @@ class LinuxCEmitter:
             return out
         elif op == "store":
             if types.get(args[1]) == "builtin":
-                # BUILTIN_MARKER_V1 (kept first: it applies to globals too).
-                raise NativeBuildError(
-                    f"Linux native store of builtin '{aliases.get(args[1], args[1])}' as a value is not supported"
-                )
+                # BUILTIN_MARKER_V1: almacenar un builtin como valor (ej.
+                # _types.py: `Pos = int`). El valor del builtin ya fue
+                # computado en una instruccion previa y vive en un temporal;
+                # usar su nombre C directamente y asignar tipo "int".
+                out.append(f"    {_name(args[0])}={self._value(args[1])};")
+                types[args[0]] = "int"
+                return out
             if (
                 args[0] in self._shared_globals
                 and (function.name == "<module>" or args[0] in self._func_globals.get(function.name, ()))
@@ -8026,6 +8071,8 @@ class LinuxCEmitter:
                 # rejected).
                 operand = args[1]
                 vtype = types.get(operand, "int")
+                if vtype.startswith("class:"):
+                    vtype = vtype.split(":", 1)[1]
                 if vtype in {"int", "bool"}:
                     out.append(f"    {_name(result)}=({self._value(operand)}==0);")
                 elif vtype == "float":
@@ -8034,6 +8081,10 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=1;")
                 elif vtype == "str":
                     out.append(f"    {_name(result)}=(piton_strlen((const char*){self._value(operand)})==0);")
+                elif vtype == "bytes":
+                    out.append(f"    {_name(result)}=(((PitonBytes*){self._value(operand)})->length==0);")
+                elif vtype == "bytearray":
+                    out.append(f"    {_name(result)}=(((PitonByteArray*){self._value(operand)})->length==0);")
                 elif vtype in {"list", "tuple"}:
                     out.append(f"    {_name(result)}=(((PitonSeq*){self._value(operand)})->length==0);")
                 elif vtype == "dict":
@@ -9901,30 +9952,46 @@ class LinuxCEmitter:
                     _et = self._coll_elems.get(values[0], "int")
                     types[result] = _et if _et and "|" not in _et else "int"
                     return out
-                if len(values) == 1 and types.get(values[0]) in {"list", "tuple", "str"}:
-                    # MINMAX_ITER_V1: min()/max() of a single iterable. The
-                    # element type rides along so the result prints correctly;
-                    # heterogeneous or empty inputs raise through the helper.
-                    # A str is exploded to its 1-char list first (a raw char*
-                    # is not a PitonSeq*).
-                    want_min = 1 if function_name == "min" else 0
-                    if types.get(values[0]) == "str":
-                        out.append(f"    {{PitonSlot _mm=piton_str_minmax((const char*){self._value(values[0])},{want_min});")
-                    else:
-                        out.append(f"    {{PitonSlot _mm=piton_seq_minmax((PitonSeq*){self._value(values[0])},{want_min});")
-                    elem_type = self._coll_elems.get(values[0], "int")
-                    if types.get(values[0]) == "str":
-                        elem_type = "str"
-                    if "|" in elem_type:
-                        # heterogeneous collection: the winner's kind is only
-                        # known at runtime, so hand out a tagged slot.
-                        out.append(f"    PitonSlot*_mmp=piton_alloc(sizeof(PitonSlot));*_mmp=_mm; {_name(result)}=(long)_mmp;}}")
-                        types[result] = "slot"
-                    else:
-                        out.append(f"    {_name(result)}=_mm.bits;}}")
-                        types[result] = elem_type
-                    self._emit_exc_check(out, function, call_handler)
-                    return out
+                if len(values) == 1:
+                    _coll_type = types.get(values[0], "")
+                    if _coll_type in {"list", "tuple", "str"} or _coll_type.startswith("iterator:"):
+                        # MINMAX_ITER_V1: min()/max() of a single iterable. The
+                        # element type rides along so the result prints correctly;
+                        # heterogeneous or empty inputs raise through the helper.
+                        # Iterators are collected to a list first.
+                        want_min = 1 if function_name == "min" else 0
+                        _coll = values[0]
+                        _iter_tmp = False
+                        if _coll_type.startswith("iterator:"):
+                            out.append(f"    {{PitonSeq*_mmc=(PitonSeq*)piton_collect_any_iter({self._value(_coll)});")
+                            _coll_ref = "_mmc"
+                            _iter_tmp = True
+                        elif types.get(values[0]) == "str":
+                            _coll_ref = f"(const char*){self._value(values[0])}"
+                        else:
+                            _coll_ref = f"(PitonSeq*){self._value(values[0])}"
+                        # Brace balance: the iterator path already opened a block
+                        # above, so its PitonSlot line must NOT open another; the
+                        # non-iterator path needs the opening brace here.
+                        _open = "" if _iter_tmp else "{"
+                        _helper = "piton_str_minmax" if types.get(values[0]) == "str" else "piton_seq_minmax"
+                        out.append(f"    {_open}PitonSlot _mm={_helper}({_coll_ref},{want_min});")
+                        elem_type = self._coll_elems.get(values[0], "int")
+                        if types.get(values[0]) == "str":
+                            elem_type = "str"
+                        if "|" in elem_type:
+                            # heterogeneous collection: the winner's kind is only
+                            # known at runtime, so hand out a tagged slot.
+                            out.append(f"    PitonSlot*_mmp=piton_alloc(sizeof(PitonSlot));*_mmp=_mm; {_name(result)}=(long)_mmp;}}")
+                            types[result] = "slot"
+                        else:
+                            out.append(f"    {_name(result)}=_mm.bits;}}")
+                            types[result] = elem_type
+                        self._emit_exc_check(out, function, call_handler)
+                        return out
+                    # Unsupported single-arg types fall through to the
+                    # historical "requires two arguments" error (unchanged
+                    # behavior for min(5) etc.).
                 if len(values) != 2:
                     raise NativeBuildError("Linux min/max requires two arguments")
                 # MINMAX_TYPES_V1 (mirrors Windows): the winner keeps its
