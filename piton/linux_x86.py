@@ -1082,6 +1082,11 @@ static PitonObject*piton_object_new_finalized(const char*name,const char*parent,
 static PitonObject*piton_object_new(const char*name,const char*parent){return piton_object_new_finalized(name,parent,0);}
 static void piton_finalize_objects(void){PitonObject*o=piton_all_objects;while(o){if(o->finalizer&&!o->finalizer_called){o->finalizer_called=1;((long(*)(long))o->finalizer)((long)o);}o=o->next_all;}}
 static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].value=v;return;}if(o->length>=32){piton_write(2,"AttributeError\n",15);piton_exit(1);}o->attrs[o->length].name=name;o->attrs[o->length++].value=v;}
+/* DEL_ATTR_DEFAULT_V1: `del obj.attr` sobre objeto nativo sin __delattr__
+   definido — CPython elimina de __dict__ (object.__delattr__). Levanta
+   AttributeError si el atributo no existe, para que el handler de try/excepto
+   lo capture. */
+static void piton_object_del(PitonObject*o,const char*name){if(!o){piton_raise_set("AttributeError","null object");return;}if(o->kind!=PK_OBJECT){piton_raise_set("TypeError","can't delete attributes of built-in type");return;}for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){for(long j=i;j+1<o->length;++j)o->attrs[j]=o->attrs[j+1];--o->length;return;}piton_raise_set("AttributeError",name);}
 static PitonSlot piton_object_get(PitonObject*o,const char*name){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;piton_write(2,"AttributeError\n",15);piton_exit(1);}
 static long piton_object_lookup(PitonObject*o,const char*name,long fallback){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;return ((long(*)(long,long))fallback)((long)o,(long)name);}
 static long piton_hasattr(long raw,const char*name){if(!raw||!name)return 0;PitonObject*o=(PitonObject*)raw;if(o->kind==PK_OBJECT){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return 1;}return 0;}
@@ -10642,6 +10647,15 @@ class LinuxCEmitter:
                 current_is_hook = function.name.endswith("__delattr__") and hook is not None
                 if hook is not None and not current_is_hook:
                     out.append(f'    ((long(*)(long,long))(long)&{_name(hook+"__"+"__delattr__")})({self._value(obj)},(long){json.dumps(attr)});')
+                elif owner_type not in {"str", "float", "complex", "none", "bytes", "bytearray", "bigint", "range", "list", "tuple", "dict", "set", "set:frozen"}:
+                    # DEL_ATTR_DEFAULT_V1: `del obj.attr` sobre un objeto cuyo
+                    # tipo es desconocido o es un objeto nativo (object:Clase)
+                    # sin __delattr__ definido. CPython elimina de __dict__
+                    # (object.__delattr__). En PITON, piton_object_del verifica
+                    # en runtime que sea realmente un PK_OBJECT; si no, lanza
+                    # TypeError como CPython.
+                    out.append(f'    piton_object_del((PitonObject*){self._value(obj)},{json.dumps(attr)});')
+                    self._emit_exc_check(out, function, None)
                 else:
                     raise NativeBuildError(
                         f"native del on '{attr}' is not a property of a natively-typed object"
