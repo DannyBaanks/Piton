@@ -4366,7 +4366,14 @@ class LinuxCEmitter:
                     continue
             if _iut == "str" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
-                if _ipt is not None and _ipt not in {"str", "int", "bool", "none"}:
+                if _ipt is not None and _ipt not in {"str", "int", "bool", "none", "builtin"} and not _ipt.startswith("object:"):
+                    # USED_AS_STR_V1: un parametro usado como str acepta
+                    # objetos/clases (tipo object:...) — se usan como clave de
+                    # dict (copyreg.dispatch_table[ob_type]) o en otros
+                    # contextos donde CPython acepta cualquier objeto hashable.
+                    # El runtime maneja la operación; si el uso real es como
+                    # str en una operacion de string, fallara en runtime con
+                    # TypeError, nunca silenciosamente.
                     raise NativeBuildError(
                         f"Linux {function_name}() param '{_iparam}' is used as str; a {_ipt} argument is rejected (fail closed)"
                     )
