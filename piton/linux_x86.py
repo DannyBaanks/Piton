@@ -7755,7 +7755,12 @@ class LinuxCEmitter:
                 aliases[result] = source
                 out.append(f"    {_name(result)}=0;")
                 return out
-            if source in _BUILTINS and source not in function.params and source not in _FUNC_ONLY_BUILTINS:
+            if (
+                source in _BUILTINS
+                and source not in function.params
+                and source not in getattr(self, "_cur_slots", set())
+                and source not in _FUNC_ONLY_BUILTINS
+            ):
                 # BUILTIN_MARKER_V1: this load emits NO C code — the builtin is
                 # only resolved by the call dispatch. Mark the operand so any
                 # other consumer fails closed instead of reading an
