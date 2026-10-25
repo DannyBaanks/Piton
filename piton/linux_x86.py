@@ -4695,6 +4695,17 @@ class LinuxCEmitter:
                 require_count((1,), "exactly one argument")
                 out.append(f"    piton_seq_append((PitonSeq*){operand},{self._slot(call_args[0], types)});")
                 types[result] = "none"
+            elif method == "get":
+                # LIST_GET_V1: `environ.get(k)` donde environ se tipa como
+                # "list" por analisis flow-insensitive pero es un dict en
+                # runtime. Cast a PitonDict* y usar piton_dict_get_d.
+                require_count((1, 2), "one or two arguments (key[, default])")
+                if len(call_args) == 2:
+                    default = self._slot(call_args[1], types)
+                    out.append(f"    {_name(result)}=piton_dict_get_d((PitonDict*){operand},{self._slot(call_args[0], types)},{default}).bits;")
+                else:
+                    out.append(f"    {{PitonSlot*_gp=piton_alloc(sizeof(PitonSlot));*_gp=piton_dict_get_1((PitonDict*){operand},{self._slot(call_args[0], types)}); {_name(result)}=(long)_gp;}}")
+                types[result] = "int"
             elif method == "pop":
                 require_count((0, 1), "zero or one int argument")
                 if call_args and types.get(call_args[0]) not in {"int", "bool"}:
@@ -10587,8 +10598,15 @@ class LinuxCEmitter:
             coll_type = types.get(collection, "")
             if coll_type in {"list", "tuple"}:
                 if types.get(index, "") not in {"int", "bool"}:
-                    raise NativeBuildError("Linux subscript store requires an int index")
-                out.append(f"    piton_seq_set((PitonSeq*){self._value(collection)},{self._value(index)},{self._slot(value, types)});")
+                    # SUBSCRIPT_STORE_DYNAMIC_V1: `environ[k] = v` donde environ
+                    # se tipa como "list" por flow-insensitive pero es un dict
+                    # en runtime. Cast a PitonDict* y usar piton_dict_set.
+                    if types.get(index, "") == "str":
+                        out.append(f"    piton_dict_set((PitonDict*){self._value(collection)},{self._slot(index, types)},{self._slot(value, types)});")
+                    else:
+                        raise NativeBuildError("Linux subscript store requires an int index")
+                else:
+                    out.append(f"    piton_seq_set((PitonSeq*){self._value(collection)},{self._value(index)},{self._slot(value, types)});")
             elif coll_type in {"dict", "dict:module"}:
                 out.append(f"    piton_dict_set((PitonDict*){self._value(collection)},{self._slot(index, types)},{self._slot(value, types)});")
             elif coll_type == "bytearray":
