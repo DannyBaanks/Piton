@@ -7273,7 +7273,10 @@ class LinuxCEmitter:
                     if vtype in {"iterator:genexpr", "genexpr"}:
                         out.append(f"    {{PitonSeq*{name}=(PitonSeq*)piton_genexpr_to_list({self._value(value)});")
                         return f"(void*){name}", True
-                    if str(vtype).startswith("iterator:"):
+                    if str(vtype).startswith("iterator:") or vtype == "int":
+                        # ZIP_DYNAMIC_V1: tipo desconocido ("int") se
+                        # materializa en runtime; si no es iterable,
+                        # TypeError como CPython.
                         out.append(f"    {{PitonSeq*{name}=(PitonSeq*)piton_collect_any_iter({self._value(value)});")
                         return f"(void*){name}", True
                     raise NativeBuildError("native zip requires two lists, tuples or iterables")
@@ -9274,17 +9277,14 @@ class LinuxCEmitter:
                 return out
             elif function_name in {"input", "entrada"}:
                 # INPUT_V1: input([prompt]) nativo. Sin argumento o con un
-                # prompt str; cualquier otro tipo de prompt es el TypeError de
-                # CPython (que requiere str, no int).
+                # prompt str; el tipo estatico puede ser desconocido para
+                # atributos de clase (cmd.Cmd.prompt = PROMPT), asi que no se
+                # rechaza en build: el valor se pasa tal cual y el runtime
+                # lo usa como C string (CPython daría TypeError si no es str).
                 if len(values) > 1:
                     raise NativeBuildError("Linux input() takes at most one argument")
-                _prompt = '"' + '"'
+                _prompt = '""'
                 if values:
-                    _pt = types.get(values[0], "int")
-                    if _pt != "str":
-                        raise NativeBuildError(
-                            f"Linux input() requires a str prompt, not {_pt}"
-                        )
                     _prompt = f"(const char*){self._value(values[0])}"
                 out.append(f"    {_name(result)}=(long)piton_input_read({_prompt});")
                 types[result] = "str"
@@ -11381,6 +11381,46 @@ class LinuxCEmitter:
                     f"{_dtuple},0,{_kdict});"
                 )
                 types[result] = "int"
+                return out
+            # DYNAMIC_METHOD_FALLBACK_V1: el metodo no esta en la MRO de la
+            # clase ni es un atributo de instancia con closure. Puede estar
+            # heredado de una clase no compilada (unittest.TestCase.fail,
+            # etc.). Emitir llamada dinamica via getattr en runtime.
+            _method_in_mro = any(
+                method in self.classes.get(_c, set())
+                for _c in self.class_mro.get(cls_name, [cls_name])
+            )
+            if (
+                isinstance(method, str)
+                and not method.startswith("%")
+                and not _method_in_mro
+                and method not in self._instance_attr_names.get(cls_name, set())
+            ):
+                _dargs = [obj] + list(call_args)
+                _dparts = [f"{{PitonSeq*_dpa=piton_seq_new(PK_TUPLE,{len(_dargs)});"]
+                for _di, _dv in enumerate(_dargs):
+                    _dparts.append(
+                        f"    _dpa->items[{_di}]=piton_slot({self._value(_dv)},PK_INT);"
+                    )
+                _dparts.append("_dpa;}")
+                _dtuple = f"(long)({''.join(_dparts)})"
+                if kw_args:
+                    _kparts = [f"{{PitonDict*_dpk=piton_dict_new({len(kw_args)});"]
+                    for _kn, _kv in kw_args:
+                        _kparts.append(
+                            f'    piton_dict_append(_dpk,piton_slot((long){json.dumps(_kn)},PK_STR),{self._slot(_kv, types)});'
+                        )
+                    _kparts.append("    }")
+                    _kdict = f"(long)({''.join(_kparts)})"
+                else:
+                    _kdict = "0"
+                out.append(
+                    f"    {_name(result)}=piton_call_dynamic("
+                    f'piton_object_get((PitonObject*){self._value(obj)},"{method}").bits,'
+                    f"{_dtuple},0,{_kdict});"
+                )
+                types[result] = "int"
+                self._emit_exc_check(out, function, None)
                 return out
             cls_name = self._resolve_method(cls_name, method)
             target = f"{cls_name}__{method}"
