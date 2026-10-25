@@ -558,6 +558,35 @@ static long piton_bytes_concat_dyn(PitonSlot slot,PitonBytes*b){
   piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'bytes'");
   piton_report_unhandled();piton_exit(1);return 0;
 }
+/* PCT_DYN_V1: `str % arg` con plantilla no literal (variable/atributo).
+   Convierte ambos a str y sustituye el unico %s. Solo valido si la plantilla
+   contiene exactamente un %s; si no, TypeError en runtime. */
+static long piton_str_percent_dyn(long template_val,long arg_val){
+  const char*tmpl=(const char*)template_val;
+  const char*arg=(const char*)arg_val;
+  if(!tmpl||!arg){piton_raise_set("TypeError","%s argument must be str");piton_report_unhandled();piton_exit(1);return 0;}
+  /* Contar %s y verificar que no haya otros especificadores. */
+  long n_pct=0;const char*pct=0;
+  for(const char*p=tmpl;*p;++p){
+    if(*p=='%'){
+      if(*(p+1)=='s'){++n_pct;pct=p;}
+      else if(*(p+1)!='%'){piton_raise_set("TypeError","str % formatting: non-literal template con especificador no soportado");piton_report_unhandled();piton_exit(1);return 0;}
+    }
+  }
+  if(n_pct!=1){piton_raise_set("TypeError","str % formatting: non-literal template con !=1 %%s");piton_report_unhandled();piton_exit(1);return 0;}
+  /* Calcular longitud total: antes + arg + despues */
+  usize before=pct-tmpl;
+  usize arglen=piton_strlen(arg);
+  usize after=piton_strlen(pct+2);
+  usize total=before+arglen+after;
+  char*buf=(char*)piton_alloc(total+1);
+  usize o=0;
+  piton_memcpy(buf+o,tmpl,before);o+=before;
+  piton_memcpy(buf+o,arg,arglen);o+=arglen;
+  piton_memcpy(buf+o,pct+2,after);o+=after;
+  buf[o]=0;
+  return(long)buf;
+}
 /* BYTES_JOIN_V1: `sep.join(list_of_bytes)` como en CPython. Cada elemento
    debe ser bytes (PK_BYTES con .data/.length en PitonBytes). Devuelve un
    PitonBytes* con los datos concatenados. */
@@ -5391,6 +5420,17 @@ class LinuxCEmitter:
                 )
                 types[result] = "str"
                 return out
+            if types.get(call_args[0]) in {"iterator:map", "iterator:filter"}:
+                # JOIN_ITER_V1: `sep.join(map(f, xs))` materializa el iterador
+                # antes de unir (como hace CPython internamente).
+                out.append(
+                    f"    {{PitonSeq*_jl=(PitonSeq*)piton_collect_any_iter({self._value(call_args[0])});"
+                )
+                out.append(
+                    f"    {_name(result)}=(long)piton_str_join((const char*){operand},_jl);}}"
+                )
+                types[result] = "str"
+                return out
             if types.get(call_args[0]) in {"", "int", "none", "str"}:
                 # JOIN_OF_DYNAMIC_V1: el argumento no tiene tipo estatico; el
                 # runtime acepta lista/tupla/str y levanta el TypeError de
@@ -7288,13 +7328,20 @@ class LinuxCEmitter:
                 if types.get(source) not in {"list", "tuple"}:
                     raise NativeBuildError("native map/filter require a list or tuple")
                 if types.get(start) == "builtin":
-                    # ITER_PASSTHROUGH_V1 guard: a builtin NAME has no native
-                    # function address — passing its uninitialized marker as
-                    # the callback would jump through garbage (crash).
-                    raise NativeBuildError(
-                        f"native {builtin} requires a user function callback, not a builtin name"
-                    )
-                callback = self._value(start)
+                    # BUILTIN_CALLBACK_V1: `map(str, xs)` y similares: el
+                    # nombre builtin no tiene direccion de funcion nativa, pero
+                    # `str` se resuelve a piton_str_of_value (convierte cada
+                    # elemento a str, como CPython). Otros builtins fallan
+                    # cerrado.
+                    _builtin_name = aliases.get(start, start)
+                    if _builtin_name == "str":
+                        callback = "piton_str_of_value"
+                    else:
+                        raise NativeBuildError(
+                            f"native {builtin} requires a user function callback, not a builtin name"
+                        )
+                else:
+                    callback = self._value(start)
                 out.append(f"    {_name(result)}=piton_callback_iterator_new((void*){self._value(source)},(long){callback},{1 if builtin == 'filter' else 0});")
             elif builtin == "sorted":
                 if types.get(source) not in {"list", "tuple"}:
@@ -8162,6 +8209,25 @@ class LinuxCEmitter:
                         # llamada con un literal — la plantilla es ese literal.
                         template = self._identity_templates.get(left)
                     if not isinstance(template, str):
+                        # PCT_DYNAMIC_TEMPLATE_V1: plantilla no literal
+                        # (variable, atributo, etc.). Usar piton_str_percent_dyn
+                        # en runtime: solo valido si la plantilla tiene solo %s
+                        # y el argumento (o primer elemento de tupla) es str;
+                        # si no, TypeError claro en runtime.
+                        _right_val = self._value(right)
+                        _right_type = types.get(right, "")
+                        if _right_type == "tuple":
+                            # Tupla de un elemento: extraer el primero en runtime.
+                            _right_val = f"piton_seq_get((PitonSeq*){_right_val},0).bits"
+                            _right_type = "str"
+                        if types.get(left) in {"str", ""} and _right_type in {"str", "", "int", "bool", "none"}:
+                            out.append(f"    {{const char*_tmpl=(const char*){self._value(left)};")
+                            out.append(f"    const char*_arg=(const char*)piton_str_of_value({_right_val});")
+                            out.append(f"    if(!_tmpl||!_arg){{piton_raise_set(\"TypeError\",\"%s argument must be str\");piton_report_unhandled();piton_exit(1);}}")
+                            out.append(f"    {_name(result)}=(long)piton_str_percent_dyn((long)_tmpl,(long)_arg);")
+                            out.append("    }")
+                            types[result] = "str"
+                            return out
                         raise NativeBuildError("Linux str % formatting requires a literal template")
                     translated, fields = self._parse_percent_template(template)
                     has_map = any(field[0] is not None for field in fields)
@@ -9627,6 +9693,10 @@ class LinuxCEmitter:
                         # STR_SEQ_V1 (mismo camino que '%s'): el str() de una
                         # secuencia es su repr, como en CPython.
                         out.append(f"    {_name(result)}=piton_str_from_seq((PitonSeq*){operand});")
+                    elif arg_type is None or arg_type == "":
+                        # STR_DYNAMIC_V1: tipo desconocido (parametro, bloque
+                        # emitido fuera de orden) -> str() de runtime.
+                        out.append(f"    {_name(result)}=(long)piton_str_of_value({operand});")
                     else:
                         raise NativeBuildError("Linux str() requires int/float/bool/None/str (M14 v1)")
                     types[result] = "str"

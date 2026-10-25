@@ -106,8 +106,11 @@ class PercentFormatV1(unittest.TestCase):
             compare_native_to_cpython("imprimir('%d' % 'x')\n")
 
     def test_non_literal_template_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("f = '%s'\nimprimir(f % 1)\n")
+        # PCT_DYNAMIC_TEMPLATE_V1: plantillas no literales se resuelven en
+        # runtime con piton_str_percent_dyn (solo %s, argumento str-compatible).
+        result = compare_native_to_cpython("f = '%s'\nimprimir(f % 1)\n")
+        self.assertEqual(result.native.returncode, 0)
+        self.assertEqual(result.native.stdout, result.oracle.stdout)
 
     def test_unknown_length_tuple_fails_closed(self):
         with pytest.raises(NativeBuildError):
