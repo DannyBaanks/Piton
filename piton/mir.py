@@ -2250,9 +2250,10 @@ class MIRLowerer:
                         _dmap[_pn] = _dn.value
                     self.lambda_var_defaults[(builder.function.name, node.targets[0].name)] = (_pnames, _dmap)
             for target in node.targets:
-                if target.kind == HIRKind.TUPLE:
+                if target.kind in (HIRKind.TUPLE, HIRKind.LIST):
                     # PARITY_P2_V1: tuple-target assignment unpacks
-                    # element-wise (CPython: a, b = pair), now with starred
+                    # element-wise (CPython: a, b = pair). LIST targets
+                    # (`[a, b] = x`) van al mismo desempacador. Con starred
                     # support (`a, *resto = ...`). See _store_tuple_target.
                     self._store_tuple_target(builder, target, value)
                 else:

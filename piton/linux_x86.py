@@ -7799,9 +7799,11 @@ class LinuxCEmitter:
             if operator not in {"+", "-", "~", "!"}:
                 raise NativeBuildError(f"Linux unary operator not supported: {operator}")
             if types.get(args[1]) == "none" and operator in {"+", "-", "~"}:
-                raise NativeBuildError(
-                    f"Linux unary {operator} with None is not supported (CPython raises TypeError)"
-                )
+                # UNARY_NONE_V1: `-None`, `+None`, `~None` — CPython levanta
+                # TypeError en runtime (mensaje exacto), no error de build.
+                out.append(f'    piton_raise_set("TypeError","bad operand type for unary {operator}: \'NoneType\'");')
+                self._emit_exc_check(out, function, None)
+                return out
             if operator == "-" and types.get(args[1]) == "bigint":
                 out.append(f"    {_name(result)}=(long)piton_bigint_negate((void*){_name(args[1])});")
                 types[result] = "bigint"
@@ -9908,6 +9910,26 @@ class LinuxCEmitter:
                     self._coll_elems[result] = "int"
                     self._emit_exc_check(out, function, call_handler)
                     return out
+                if source_type in {"", "int", "bool", "float"} and alias in {"tupla", "tuple", "conjunto", "set"}:
+                    # TUPLE/SET_OF_DYNAMIC_V1: `tupla(5)`, `conjunto(5)` —
+                    # CPython levanta TypeError en runtime para no-iterables;
+                    # se materializa a lista (el helper ya lanza el TypeError
+                    # exacto) y se convierte al destino. Si el helper falla
+                    # (piton_exc_flag), no se convierte (evita SIGSEGV).
+                    _dyn = f"piton_list_of_dynamic({self._value(values[0])})"
+                    _tmp = f"_{_name(result)}_tmp"
+                    out.append(f"    long {_tmp}={_dyn};")
+                    out.append(f"    if(!piton_exc_flag){{")
+                    if alias in {"tupla", "tuple"}:
+                        out.append(f"        {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{{_tmp},PK_LIST}});")
+                        types[result] = "tuple"
+                    else:
+                        out.append(f"        {_name(result)}=(long)piton_conv_set((PitonSlot){{{_tmp},PK_LIST}});")
+                        types[result] = "set"
+                    out.append("    }")
+                    self._coll_elems[result] = "int"
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 if source_type not in {"list", "tuple", "str", "set", "dict", "range"}:
                     raise NativeBuildError(f"Linux {alias}() cannot convert a '{source_type}' value")
                 # COLL_ELEM_TYPE_V1: a conversion preserves the element kind, so
@@ -10299,6 +10321,28 @@ class LinuxCEmitter:
                 out.append(f"    piton_memoryview_set((PitonMemoryView*){self._value(collection)},{self._value(index)},{self._value(value)});")
             elif coll_type == "bytes":
                 raise NativeBuildError("'bytes' object does not support item assignment")
+            elif coll_type == "int":
+                # SUBSCRIPT_STORE_INT_V1: `x[0]=v` con x estaticamente int.
+                # CPython levanta TypeError en runtime, no error de build.
+                # Chequeamos en runtime: si es lista/tupla se asigna (el
+                # sistema de tipos pudo equivocarse); si no, TypeError con el
+                # mensaje exacto de CPython. Afecta _parseaddr.py y
+                # colorchooser.py del corpus recursivo.
+                out.append("    {")
+                out.append(f"        long _ss_coll={self._value(collection)};")
+                out.append("        int _ss_ok=0;")
+                out.append("        if(_ss_coll&&piton_maybe_ptr(_ss_coll)){")
+                out.append("            long*_ss_p=(long*)_ss_coll;long _ss_k=_ss_p[1];")
+                out.append("            _ss_ok=(_ss_k==PK_LIST||_ss_k==PK_TUPLE);")
+                out.append("        }")
+                out.append("        if(_ss_ok){")
+                out.append(f"            piton_seq_set((PitonSeq*)_ss_coll,{self._value(index)},{self._slot(value, types)});")
+                self._emit_exc_check(out, function, None)
+                out.append("        } else {")
+                out.append('        piton_raise_set("TypeError","\'int\' object does not support item assignment");')
+                self._emit_exc_check(out, function, None)
+                out.append("        }")
+                out.append("    }")
             else:
                 raise NativeBuildError(f"Linux subscript store not supported for {coll_type}")
         elif op == "set_attr":
