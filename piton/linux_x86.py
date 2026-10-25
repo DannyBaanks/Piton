@@ -1795,6 +1795,33 @@ static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_
   /* EXC_ARGS_MULTI_V1: piton_exc_args NO se limpia aqui — el cuerpo del
    * handler lee e.args despues del clear. Cada raise lo re-setea. */
 }
+/* SEQ_EXTEND_V1: extiende dst con todos los elementos de src (cualquier iterable).
+   Usado para `[*a, b]` donde a es un iterable (starred en lista/tupla/conjunto). */
+static void piton_seq_extend_any(PitonSeq*dst,long src_bits){
+  if(!piton_maybe_ptr(src_bits))return;
+  long*ptr=(long*)src_bits;long k=ptr[1];
+  if(k==PK_LIST||k==PK_TUPLE){
+    PitonSeq*s=(PitonSeq*)src_bits;
+    for(long i=0;i<s->length;++i)piton_seq_append(dst,s->items[i]);
+  }else if(k==PK_SET){
+    PitonSet*st=(PitonSet*)src_bits;
+    for(long i=0;i<st->length;++i)piton_seq_append(dst,st->items[i]);
+  }else{
+    /* Iterador generico para otros tipos (range, objetos con __iter__, etc.) */
+    long it=piton_iterator_new_any((void*)src_bits,k);
+    for(;;){
+      long v=piton_iterator_next_any(it);
+      if(piton_exc_flag){
+        if(piton_exc_type&&piton_strcmp(piton_exc_type,"StopIteration")==0){
+          piton_catch_clear();
+          break;
+        }
+        return;
+      }
+      piton_seq_append(dst,(PitonSlot){v,PK_INT});
+    }
+  }
+}
 static void piton_seq_set(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0||i>=s->length){piton_raise_set("IndexError","seq index out of range");return;}s->items[i]=v;}
 static void piton_dict_set(PitonDict*d,PitonSlot k,PitonSlot v){if(!d)return;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){d->items[i].value=v;return;}piton_dict_append(d,k,v);}
 static void piton_dict_update(PitonDict*d,PitonDict*src){if(!d||!src)return;for(long i=0;i<src->length;++i)piton_dict_set(d,src->items[i].key,src->items[i].value);}
@@ -4050,8 +4077,11 @@ class LinuxCEmitter:
                     else:
                         flags |= 2
                     i += 1
-                if i < n and template[i] in "+ #":
-                    raise NativeBuildError("str % +, space and # flags are not supported")
+                if i < n and template[i] == "#":
+                    flags |= 4  # PCT_ALT_FLAG_V1: forma alternativa (0x, 0o, etc.)
+                    i += 1
+                if i < n and template[i] in "+ ":
+                    raise NativeBuildError("str % + and space flags are not supported")
                 width = -1
                 if i < n and template[i] == "*":
                     raise NativeBuildError("str % dynamic width (*) is not supported")
@@ -8402,7 +8432,18 @@ class LinuxCEmitter:
                             if arg_type not in {"int", "bool"}:
                                 raise NativeBuildError(f"Linux str %{spec} requires an int, not {arg_type}")
                             base_num = 16 if spec in {"x", "X"} else 8
-                            base = f"piton_str_from_int_base({operand},{base_num},{1 if spec == 'X' else 0})"
+                            base_inner = f"piton_str_from_int_base({operand},{base_num},{1 if spec == 'X' else 0})"
+                            # PCT_ALT_FLAG_V1: bandera # agrega prefijo 0x/0X/0o
+                            if flags & 4:
+                                if spec == "o":
+                                    prefix = '"0o"'
+                                elif spec == "x":
+                                    prefix = '"0x"'
+                                else:
+                                    prefix = '"0X"'
+                                base = f"(const char*)piton_str_concat({prefix},(const char*){base_inner})"
+                            else:
+                                base = base_inner
                         else:
                             raise NativeBuildError(f"Linux str %{spec} is not supported")
                         bases.append(f"const char*_pb{index}=(const char*){base};")
@@ -11708,6 +11749,12 @@ class LinuxCEmitter:
             else:
                 raise NativeBuildError(f"Linux collection kind not supported: {kind}")
             types[result] = kind
+        elif op == "collection_extend":
+            # COLLECTION_EXTEND_V1: extender coleccion con iterable (starred en
+            # LIST/TUPLE/SET: `[*a, b]`). dst es un PitonSeq*, src es cualquier
+            # iterable.
+            dst, src = args[0], args[1]
+            out.append(f"    piton_seq_extend_any((PitonSeq*){_name(dst)},{self._value(src)});")
         elif op == "truth_test":
             # BOOL_SHORT_V1 / TRUTHY_FIX_V1: full truthiness per static kind
             # (CPython bool()): int/bool != 0, float bits != 0.0, str

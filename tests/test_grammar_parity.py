@@ -362,12 +362,8 @@ class StarListV1(unittest.TestCase):
         self.assertIsNotNone(parse("x =[1 ,2 ,]\n"))
 
     def test_star_list_fails_closed_at_backend(self):
-        # El parse sube, pero el backend C no emite extend para Starred-en-list
-        # y falla cerrado con 'runtime operation not supported'.
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError) as ctx:
-            compare_native_to_cpython("a =[1 ,2 ]\nimprimir ([*a ,3 ])\n")
-        self.assertIn("not supported", str(ctx.exception))
+        # STARRED_V1: `*iterable` en listas ahora SÍ se soporta.
+        _assert_matches(self, "a =[1 ,2 ]\nimprimir ([*a ,3 ])\n")
 
 
 class LambdaStarV1(unittest.TestCase):

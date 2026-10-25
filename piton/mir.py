@@ -283,6 +283,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
     "del_item": "WRITE", "del_name": "PURE",
     "set_add": "WRITE",
+    "collection_extend": "WRITE",
     "try_push": "WRITE", "try_pop": "WRITE", "subscript_store": "WRITE",
     "slice_store": "WRITE",
     "catch_bind": "WRITE", "catch_clear": "WRITE", "reraise_save": "WRITE",
@@ -5453,9 +5454,29 @@ class MIRLowerer:
                 builder.emit("call", function, args, _active_handler(builder), result=result)
             return result
         if kind in {HIRKind.LIST, HIRKind.TUPLE, HIRKind.SET}:
-            items = tuple(self._lower_expr(builder, item) for item in node.elts)
+            has_starred = any(e.kind == HIRKind.STARRED for e in node.elts)
+            if not has_starred:
+                items = tuple(self._lower_expr(builder, item) for item in node.elts)
+                result = builder.temp()
+                builder.emit("build_collection", kind.name.lower(), items, result=result)
+                return result
+            # STARRED: construir vacío y luego agregar/extender en el orden
+            # original de los elementos, para que [*a, 3] dé [1, 2, 3] y no
+            # [3, 1, 2] (el orden de aparición debe preservarse).
             result = builder.temp()
-            builder.emit("build_collection", kind.name.lower(), items, result=result)
+            builder.emit("build_collection", kind.name.lower(), (), result=result)
+            for item in node.elts:
+                if item.kind == HIRKind.STARRED:
+                    v = self._lower_expr(builder, item.value)
+                    builder.emit("collection_extend", result, v)
+                else:
+                    v = self._lower_expr(builder, item)
+                    if kind == HIRKind.LIST:
+                        builder.emit("list_append", result, v)
+                    elif kind == HIRKind.SET:
+                        builder.emit("set_add", result, v)
+                    else:
+                        raise MIRLoweringError("starred in tuple literal is not supported")
             return result
         if kind == HIRKind.DICT:
             # DICT_MERGE_V1: el parser baja `{**a, **b}` con clave None, pero
@@ -5647,6 +5668,11 @@ class MIRLowerer:
             return self._lower_dictcomp(builder, node)
         if kind == HIRKind.GEN_EXPR:
             return self._lower_genexpr(builder, node)
+        if kind == HIRKind.STARRED:
+            # STARRED_V1: `*iterable` dentro de una coleccion — el desempacado
+            # se resuelve en el nivel de la coleccion (LIST/TUPLE/SET), no
+            # aqui. Solo evaluamos el operando interno.
+            return self._lower_expr(builder, node.value)
         result = builder.temp()
         builder.emit("runtime_call", "unsupported", kind.name, result=result)
         return result

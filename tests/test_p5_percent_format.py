@@ -222,7 +222,7 @@ class PercentSpecsP14(unittest.TestCase):
         for source in (
             "imprimir('%+d' % 5)\n",
             "imprimir('% d' % 5)\n",
-            "imprimir('%#x' % 5)\n",
+            # '%#x' now supported (PCT_ALT_FLAG_V1):
             "imprimir('%*d' % (5, 42))\n",
             "imprimir('%.*s' % (3, 'abcdef'))\n",
             "imprimir('%ld' % 5)\n",
