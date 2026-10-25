@@ -1,0 +1,15 @@
+clase INSTALL_SCHEMES :
+    pasar
+
+
+funcion _inject_headers (*args ) :
+    lanzar NotImplementedError ('distutils.command.install._inject_headers no esta implementado en el backend nativo')
+
+
+funcion _load_schemes (*args ) :
+    lanzar NotImplementedError ('distutils.command.install._load_schemes no esta implementado en el backend nativo')
+
+
+funcion install (*args ) :
+    lanzar NotImplementedError ('distutils.command.install.install no esta implementado en el backend nativo')
+

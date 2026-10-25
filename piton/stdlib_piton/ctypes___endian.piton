@@ -1,0 +1,15 @@
+clase BigEndianStructure :
+    pasar
+
+
+clase BigEndianUnion :
+    pasar
+
+
+clase LittleEndianStructure :
+    pasar
+
+
+clase LittleEndianUnion :
+    pasar
+

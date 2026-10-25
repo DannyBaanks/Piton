@@ -1,0 +1,27 @@
+clase ContentHandler :
+    pasar
+
+
+clase ErrorHandler :
+    pasar
+
+
+funcion _exceptions (*args ) :
+    lanzar NotImplementedError ('xml.sax._exceptions no esta implementado en el backend nativo')
+
+
+funcion handler (*args ) :
+    lanzar NotImplementedError ('xml.sax.handler no esta implementado en el backend nativo')
+
+
+funcion make_parser (*args ) :
+    lanzar NotImplementedError ('xml.sax.make_parser no esta implementado en el backend nativo')
+
+
+funcion saxutils (*args ) :
+    lanzar NotImplementedError ('xml.sax.saxutils no esta implementado en el backend nativo')
+
+
+funcion xmlreader (*args ) :
+    lanzar NotImplementedError ('xml.sax.xmlreader no esta implementado en el backend nativo')
+

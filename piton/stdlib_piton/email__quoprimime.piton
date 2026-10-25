@@ -1,0 +1,15 @@
+funcion _max_append (*args ) :
+    lanzar NotImplementedError ('email.quoprimime._max_append no esta implementado en el backend nativo')
+
+
+funcion body_encode (*args ) :
+    lanzar NotImplementedError ('email.quoprimime.body_encode no esta implementado en el backend nativo')
+
+
+funcion header_decode (*args ) :
+    lanzar NotImplementedError ('email.quoprimime.header_decode no esta implementado en el backend nativo')
+
+
+funcion header_length (*args ) :
+    lanzar NotImplementedError ('email.quoprimime.header_length no esta implementado en el backend nativo')
+

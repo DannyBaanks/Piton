@@ -1,0 +1,7 @@
+funcion addclosehook (*args ) :
+    lanzar NotImplementedError ('urllib.response.addclosehook no esta implementado en el backend nativo')
+
+
+funcion addinfourl (*args ) :
+    lanzar NotImplementedError ('urllib.response.addinfourl no esta implementado en el backend nativo')
+

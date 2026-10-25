@@ -1,0 +1,15 @@
+clase Compat32 :
+    pasar
+
+
+clase Policy :
+    pasar
+
+
+funcion _extend_docstrings (*args ) :
+    lanzar NotImplementedError ('email._policybase._extend_docstrings no esta implementado en el backend nativo')
+
+
+funcion compat32 (*args ) :
+    lanzar NotImplementedError ('email._policybase.compat32 no esta implementado en el backend nativo')
+

@@ -1,7 +1,7 @@
 # Parity corpus report v4 — CODIGO REAL (stdlib + tutorial CPython)
 
 - instrumento: `tools/parity_corpus_v4.py` | backend medido: **linux_x86**
-- oracle: CPython 3.12.3 | git: `a31c003` | fecha: 2026-10-24T21:34:14+00:00
+- oracle: CPython 3.12.3 | git: `910d02d` | fecha: 2026-10-25T05:54:41+00:00
 - tier A (stdlib real, estatico, sin ejecucion): **588** archivos
 - tier B (tutorial oficial, ejecucional): **0** scripts
 
@@ -13,21 +13,21 @@ Poblacion SIN seleccion: todos los .py de nivel superior. Solo embudo estatico (
 |---|---|---|
 | adapt | 587 | 99.8% |
 | parse | 575 | 97.8% |
-| mir | 86 | 14.6% |
-| build | 71 | 12.1% |
+| mir | 92 | 15.6% |
+| build | 73 | 12.4% |
 
-**Build completo (potencialmente ejecutable): 12.1%**
+**Build completo (potencialmente ejecutable): 12.4%**
 
 ### Clases de fallo por etapa
 
 | etapa fallida | n |
 |---|---|
-| MIR_FAIL | 489 |
-| BUILD_FAIL | 15 |
+| MIR_FAIL | 483 |
+| BUILD_FAIL | 19 |
 | PARSE_FAIL | 12 |
 | CRASH | 1 |
 
-De los fallos MIR, **241** son `native module not supplied` (imports de la stdlib real de CPython: el backend nativo solo resuelve modulos propios de PITON).
+De los fallos MIR, **219** son `native module not supplied` (imports de la stdlib real de CPython: el backend nativo solo resuelve modulos propios de PITON).
 
 ### Motivos de PARSE_FAIL (top)
 

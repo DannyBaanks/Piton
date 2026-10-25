@@ -766,6 +766,20 @@ class MIRLowerer:
                                     _bp = _bmp(alias.name.replace(".", "__"))
                                     if _bp is not None and module_meta is not None:
                                         module_meta[alias.name] = (_bp, False)
+                                    # SUBMODULE_ALIAS_V1: sin esto, `xml.dom`
+                                    # quedaba cargado pero `importar xml.dom`
+                                    # no registraba el alias, y `xml.dom.X(...)`
+                                    # baja como get_attr sobre un load('xml')
+                                    # que no existe -> NameError en runtime.
+                                    # El chain de llamadas resuelve el symbol
+                                    # (`xml__dom__X`) con el alias del top.
+                                    if alias.asname:
+                                        self.module_aliases[alias.asname] = alias.name
+                                    else:
+                                        if alias.name not in self.module_aliases:
+                                            self.module_aliases[alias.name] = alias.name
+                                        if top not in self.module_aliases:
+                                            self.module_aliases[top] = alias.name
                                     continue
                                 raise MIRLoweringError(f"native module not supplied: {alias.name}")
                             if alias.asname:
@@ -3912,6 +3926,13 @@ class MIRLowerer:
                         raise MIRLoweringError("native module calls do not support keyword arguments yet")
                     alias_name, attrs = chain
                     module_name = builder.module_aliases[alias_name]
+                    # SUBMODULE_ALIAS_V1: si el alias resolvio a un SUBMODULO
+                    # (`importar xml.dom`: alias "xml" -> "xml.dom"), el chain
+                    # trae el segmento del submódulo DUPLICADO. Se descartan
+                    # los primeros (diferencia de profundidad) attrs.
+                    _profundidad_extra = len(module_name.split(".")) - len(alias_name.split("."))
+                    if _profundidad_extra > 0:
+                        attrs = attrs[_profundidad_extra:]
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
                     function = builder.temp()
                     builder.emit("load", symbol, result=function)
@@ -4922,6 +4943,13 @@ class MIRLowerer:
                         raise MIRLoweringError("native module calls do not support keyword arguments yet")
                     alias_name, attrs = chain
                     module_name = builder.module_aliases[alias_name]
+                    # SUBMODULE_ALIAS_V1: si el alias resolvio a un SUBMODULO
+                    # (`importar xml.dom`: alias "xml" -> "xml.dom"), el chain
+                    # trae el segmento del submódulo DUPLICADO. Se descartan
+                    # los primeros (diferencia de profundidad) attrs.
+                    _profundidad_extra = len(module_name.split(".")) - len(alias_name.split("."))
+                    if _profundidad_extra > 0:
+                        attrs = attrs[_profundidad_extra:]
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
                     function = builder.temp()
                     builder.emit("load", symbol, result=function)

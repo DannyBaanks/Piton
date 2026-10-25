@@ -1,0 +1,67 @@
+clase ACK :
+    pasar
+
+
+clase BEL :
+    pasar
+
+
+clase BS :
+    pasar
+
+
+clase DEL :
+    pasar
+
+
+clase DLE :
+    pasar
+
+
+clase ENQ :
+    pasar
+
+
+clase EOT :
+    pasar
+
+
+clase FF :
+    pasar
+
+
+clase NL :
+    pasar
+
+
+clase SI :
+    pasar
+
+
+clase SO :
+    pasar
+
+
+clase SOH :
+    pasar
+
+
+clase SP :
+    pasar
+
+
+clase STX :
+    pasar
+
+
+clase VT :
+    pasar
+
+
+funcion ascii (*args ) :
+    lanzar NotImplementedError ('curses.ascii.ascii no esta implementado en el backend nativo')
+
+
+funcion isprint (*args ) :
+    lanzar NotImplementedError ('curses.ascii.isprint no esta implementado en el backend nativo')
+

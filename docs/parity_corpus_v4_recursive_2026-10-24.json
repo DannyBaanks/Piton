@@ -1,9 +1,9 @@
 {
   "meta": {
-    "date": "2026-10-24T21:34:14+00:00",
+    "date": "2026-10-25T05:54:41+00:00",
     "oracle": "CPython 3.12.3",
     "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
-    "git_sha": "a31c003",
+    "git_sha": "910d02d",
     "tool": "tools/parity_corpus_v4.py",
     "tiers": "a",
     "recursive": true,
@@ -17,18 +17,18 @@
         "passed": {
           "adapt": 587,
           "parse": 575,
-          "mir": 86,
-          "build": 71
+          "mir": 92,
+          "build": 73
         },
         "pct": {
           "adapt": 99.8,
           "parse": 97.8,
-          "mir": 14.6,
-          "build": 12.1
+          "mir": 15.6,
+          "build": 12.4
         },
         "fail_classes": {
-          "MIR_FAIL": 489,
-          "BUILD_FAIL": 15,
+          "MIR_FAIL": 483,
+          "BUILD_FAIL": 19,
           "PARSE_FAIL": 12,
           "CRASH": 1
         },
@@ -40,7 +40,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.365,
+          "build_seconds": 0.377,
           "roundtrip": true
         },
         {
@@ -48,7 +48,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.117,
+          "build_seconds": 0.119,
           "roundtrip": true
         },
         {
@@ -56,7 +56,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.115,
+          "build_seconds": 0.111,
           "roundtrip": true
         },
         {
@@ -64,7 +64,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.109,
+          "build_seconds": 0.114,
           "roundtrip": true
         },
         {
@@ -88,7 +88,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.19,
+          "build_seconds": 0.174,
           "roundtrip": true
         },
         {
@@ -103,7 +103,7 @@
           "path": "/usr/lib/python3.12/_distutils_system_mod.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: distutils.sysconfig",
+          "detail": "MIRLoweringError: native super().initialize_options: no base class in MRO of 'install' defines 'initialize_options'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -168,7 +168,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.498,
+          "build_seconds": 0.467,
           "roundtrip": true
         },
         {
@@ -184,7 +184,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 2.053,
+          "build_seconds": 2.079,
           "roundtrip": true
         },
         {
@@ -192,7 +192,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 2.085,
+          "build_seconds": 2.048,
           "roundtrip": true
         },
         {
@@ -216,7 +216,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.124,
+          "build_seconds": 0.121,
           "roundtrip": true
         },
         {
@@ -280,7 +280,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.249,
+          "build_seconds": 0.248,
           "roundtrip": true
         },
         {
@@ -304,7 +304,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.063,
+          "build_seconds": 0.069,
           "roundtrip": true
         },
         {
@@ -360,7 +360,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.066,
+          "build_seconds": 0.07,
           "roundtrip": true
         },
         {
@@ -384,7 +384,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.126,
+          "build_seconds": 0.127,
           "roundtrip": true
         },
         {
@@ -392,7 +392,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.076,
+          "build_seconds": 0.078,
           "roundtrip": true
         },
         {
@@ -537,7 +537,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.121,
+          "build_seconds": 0.12,
           "roundtrip": true
         },
         {
@@ -641,7 +641,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.122,
+          "build_seconds": 0.124,
           "roundtrip": true
         },
         {
@@ -657,15 +657,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.107,
+          "build_seconds": 0.106,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/concurrent/futures/__init__.py",
-          "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: concurrent.futures._base",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.12,
           "roundtrip": true
         },
         {
@@ -849,7 +849,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.119,
+          "build_seconds": 0.117,
           "roundtrip": true
         },
         {
@@ -881,7 +881,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.11,
+          "build_seconds": 0.107,
           "roundtrip": true
         },
         {
@@ -961,14 +961,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.129,
+          "build_seconds": 0.126,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/email/charset.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: email.base64mime",
+          "detail": "MIRLoweringError: native from-import module not supplied: email",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -976,7 +976,7 @@
           "path": "/usr/lib/python3.12/email/contentmanager.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: email.charset",
+          "detail": "MIRLoweringError: native from-import module not supplied: email",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1016,7 +1016,7 @@
           "path": "/usr/lib/python3.12/email/header.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: email.quoprimime",
+          "detail": "MIRLoweringError: native from-import module not supplied: email",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1049,7 +1049,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.106,
+          "build_seconds": 0.109,
           "roundtrip": true
         },
         {
@@ -1095,8 +1095,8 @@
         {
           "path": "/usr/lib/python3.12/email/mime/multipart.py",
           "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: email.mime.base",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: native method not found: MIMEMultipart.attach",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1112,7 +1112,7 @@
           "path": "/usr/lib/python3.12/email/mime/text.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: email.mime.nonmultipart",
+          "detail": "MIRLoweringError: native method calls do not support keyword arguments yet (method '__init__')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1128,7 +1128,7 @@
           "path": "/usr/lib/python3.12/email/policy.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: email._policybase",
+          "detail": "MIRLoweringError: native from-import module not supplied: email.headerregistry",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1144,7 +1144,7 @@
           "path": "/usr/lib/python3.12/email/utils.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: email._parseaddr",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1161,7 +1161,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.628,
+          "build_seconds": 0.648,
           "roundtrip": true
         },
         {
@@ -2128,7 +2128,7 @@
           "path": "/usr/lib/python3.12/ensurepip/__init__.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: os.path",
+          "detail": "MIRLoweringError: native module calls do not support keyword arguments yet",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -2217,7 +2217,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.518,
+          "build_seconds": 0.528,
           "roundtrip": true
         },
         {
@@ -2265,7 +2265,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.199,
+          "build_seconds": 0.189,
           "roundtrip": true
         },
         {
@@ -2273,7 +2273,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.097,
+          "build_seconds": 0.099,
           "roundtrip": true
         },
         {
@@ -2297,7 +2297,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 5.569,
+          "build_seconds": 5.484,
           "roundtrip": true
         },
         {
@@ -2313,7 +2313,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.405,
+          "build_seconds": 0.413,
           "roundtrip": true
         },
         {
@@ -2377,7 +2377,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.112,
+          "build_seconds": 0.105,
           "roundtrip": true
         },
         {
@@ -2441,7 +2441,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.112,
+          "build_seconds": 0.108,
           "roundtrip": true
         },
         {
@@ -2609,7 +2609,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.106,
+          "build_seconds": 0.117,
           "roundtrip": true
         },
         {
@@ -2625,7 +2625,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.113,
+          "build_seconds": 0.123,
           "roundtrip": true
         },
         {
@@ -2648,7 +2648,7 @@
           "path": "/usr/lib/python3.12/logging/__init__.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native super().attr is only supported as super().attr(...) (a call)",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -2713,7 +2713,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.06,
+          "build_seconds": 0.068,
           "roundtrip": true
         },
         {
@@ -2897,7 +2897,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.509,
+          "build_seconds": 0.519,
           "roundtrip": true
         },
         {
@@ -2921,7 +2921,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.117,
+          "build_seconds": 0.114,
           "roundtrip": true
         },
         {
@@ -2937,7 +2937,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.707,
+          "build_seconds": 0.756,
           "roundtrip": true
         },
         {
@@ -2960,7 +2960,7 @@
           "path": "/usr/lib/python3.12/os.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: os.path",
+          "detail": "MIRLoweringError: native with context must be a direct call to a native class constructor",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -3008,7 +3008,7 @@
           "path": "/usr/lib/python3.12/pkgutil.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: os.path",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -3080,7 +3080,7 @@
           "path": "/usr/lib/python3.12/py_compile.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: os.path",
+          "detail": "MIRLoweringError: native module calls do not support keyword arguments yet",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -3105,7 +3105,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.113,
+          "build_seconds": 0.109,
           "roundtrip": true
         },
         {
@@ -3151,7 +3151,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.405,
+          "build_seconds": 0.393,
           "roundtrip": true
         },
         {
@@ -3271,14 +3271,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.063,
+          "build_seconds": 0.068,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/smtplib.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: email.generator",
+          "detail": "MIRLoweringError: native module not supplied: hmac",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -3336,7 +3336,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.128,
+          "build_seconds": 0.123,
           "roundtrip": true
         },
         {
@@ -3376,7 +3376,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.146,
+          "build_seconds": 0.142,
           "roundtrip": true
         },
         {
@@ -3439,7 +3439,7 @@
           "path": "/usr/lib/python3.12/sysconfig.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: os.path",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -3480,15 +3480,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.111,
+          "build_seconds": 0.11,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/test/__main__.py",
-          "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: test.libregrtest.main",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.143,
           "roundtrip": true
         },
         {
@@ -3496,7 +3496,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.109,
+          "build_seconds": 0.113,
           "roundtrip": true
         },
         {
@@ -3547,7 +3547,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.132,
+          "build_seconds": 0.133,
           "roundtrip": true
         },
         {
@@ -3629,7 +3629,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.121,
+          "build_seconds": 0.12,
           "roundtrip": true
         },
         {
@@ -3659,8 +3659,8 @@
         {
           "path": "/usr/lib/python3.12/test/regrtest.py",
           "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: test.libregrtest.main",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: native del item target of type 'int' is not supported",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -3789,7 +3789,7 @@
           "path": "/usr/lib/python3.12/test/support/script_helper.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: os.path",
+          "detail": "MIRLoweringError: native module not supplied: py_compile",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -3805,7 +3805,7 @@
           "path": "/usr/lib/python3.12/test/support/socket_helper.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: os.path",
+          "detail": "MIRLoweringError: native with context must be a direct call to a native class constructor",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -3888,7 +3888,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.109,
+          "build_seconds": 0.114,
           "roundtrip": true
         },
         {
@@ -3896,7 +3896,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.107,
+          "build_seconds": 0.11,
           "roundtrip": true
         },
         {
@@ -3904,7 +3904,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.106,
+          "build_seconds": 0.107,
           "roundtrip": true
         },
         {
@@ -3928,7 +3928,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.137,
+          "build_seconds": 0.134,
           "roundtrip": true
         },
         {
@@ -3952,7 +3952,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.208,
+          "build_seconds": 0.204,
           "roundtrip": true
         },
         {
@@ -3984,14 +3984,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.073,
+          "build_seconds": 0.071,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/tkinter/colorchooser.py",
           "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: tkinter.commondialog",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux subscript store not supported for int",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4000,7 +4000,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.113,
+          "build_seconds": 0.12,
           "roundtrip": true
         },
         {
@@ -4047,7 +4047,7 @@
           "path": "/usr/lib/python3.12/tkinter/messagebox.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: tkinter.commondialog",
+          "detail": "MIRLoweringError: CALL_UNPACKING_DYNAMIC4_V1 supports callees with at most four parameters",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4055,7 +4055,7 @@
           "path": "/usr/lib/python3.12/tkinter/scrolledtext.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: tkinter.constants",
+          "detail": "MIRLoweringError: native base class 'tkinter__Text' must be defined before 'ScrolledText'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4088,7 +4088,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.24,
+          "build_seconds": 0.227,
           "roundtrip": true
         },
         {
@@ -4152,7 +4152,7 @@
           "path": "/usr/lib/python3.12/tracemalloc.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: os.path",
+          "detail": "MIRLoweringError: native module not supplied: pickle",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4168,7 +4168,7 @@
           "path": "/usr/lib/python3.12/turtle.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: os.path",
+          "detail": "MIRLoweringError: native base class 'tuple' must be defined before 'Vec2D'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4287,8 +4287,8 @@
         {
           "path": "/usr/lib/python3.12/unittest/util.py",
           "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: os.path",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux tupla() cannot convert a 'iterator:map' value",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4297,14 +4297,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.106,
+          "build_seconds": 0.105,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/urllib/error.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: urllib.response",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4369,7 +4369,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.068,
+          "build_seconds": 0.067,
           "roundtrip": true
         },
         {
@@ -4377,7 +4377,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.432,
+          "build_seconds": 0.427,
           "roundtrip": true
         },
         {
@@ -4409,7 +4409,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.105,
+          "build_seconds": 0.114,
           "roundtrip": true
         },
         {
@@ -4432,7 +4432,7 @@
           "path": "/usr/lib/python3.12/wsgiref/simple_server.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: http.server",
+          "detail": "MIRLoweringError: native from-import module not supplied: wsgiref.handlers",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4473,7 +4473,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.113,
+          "build_seconds": 0.114,
           "roundtrip": true
         },
         {
@@ -4481,7 +4481,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.115,
+          "build_seconds": 0.114,
           "roundtrip": true
         },
         {
@@ -4504,7 +4504,7 @@
           "path": "/usr/lib/python3.12/xml/dom/expatbuilder.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: xml.parsers",
+          "detail": "MIRLoweringError: native from-import module not supplied: xml.dom.minidom",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4528,7 +4528,7 @@
           "path": "/usr/lib/python3.12/xml/dom/pulldom.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: xml.sax",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4536,7 +4536,7 @@
           "path": "/usr/lib/python3.12/xml/dom/xmlbuilder.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: xml.dom.NodeFilter",
+          "detail": "MIRLoweringError: native raise requires a call to an exception constructor",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4570,7 +4570,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.11,
+          "build_seconds": 0.113,
           "roundtrip": true
         },
         {
@@ -4586,7 +4586,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.108,
+          "build_seconds": 0.11,
           "roundtrip": true
         },
         {
@@ -4650,14 +4650,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.111,
+          "build_seconds": 0.109,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/xmlrpc/client.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: xml.parsers",
+          "detail": "MIRLoweringError: exception constructors with keyword arguments are unsupported",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -4690,7 +4690,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.069,
+          "build_seconds": 0.067,
           "roundtrip": true
         },
         {

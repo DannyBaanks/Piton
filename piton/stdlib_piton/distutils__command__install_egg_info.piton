@@ -1,0 +1,15 @@
+funcion install_egg_info (*args ) :
+    lanzar NotImplementedError ('distutils.command.install_egg_info.install_egg_info no esta implementado en el backend nativo')
+
+
+funcion safe_name (*args ) :
+    lanzar NotImplementedError ('distutils.command.install_egg_info.safe_name no esta implementado en el backend nativo')
+
+
+funcion safe_version (*args ) :
+    lanzar NotImplementedError ('distutils.command.install_egg_info.safe_version no esta implementado en el backend nativo')
+
+
+funcion to_filename (*args ) :
+    lanzar NotImplementedError ('distutils.command.install_egg_info.to_filename no esta implementado en el backend nativo')
+

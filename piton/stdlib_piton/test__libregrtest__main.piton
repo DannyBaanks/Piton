@@ -1,0 +1,3 @@
+funcion main (*args ) :
+    lanzar NotImplementedError ('test.libregrtest.main.main no esta implementado en el backend nativo')
+

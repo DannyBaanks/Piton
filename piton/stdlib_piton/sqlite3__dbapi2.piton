@@ -1,0 +1,11 @@
+funcion _deprecated_names (*args ) :
+    lanzar NotImplementedError ('sqlite3.dbapi2._deprecated_names no esta implementado en el backend nativo')
+
+
+funcion _deprecated_version (*args ) :
+    lanzar NotImplementedError ('sqlite3.dbapi2._deprecated_version no esta implementado en el backend nativo')
+
+
+funcion _deprecated_version_info (*args ) :
+    lanzar NotImplementedError ('sqlite3.dbapi2._deprecated_version_info no esta implementado en el backend nativo')
+

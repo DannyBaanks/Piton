@@ -1,0 +1,3 @@
+funcion _sin_uso_observado () :
+    lanzar NotImplementedError ('email.mime.audio no tiene uso observable en el corpus')
+

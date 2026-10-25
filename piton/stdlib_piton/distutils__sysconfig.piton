@@ -1,0 +1,3 @@
+funcion _posix_lib (*args ) :
+    lanzar NotImplementedError ('distutils.sysconfig._posix_lib no esta implementado en el backend nativo')
+

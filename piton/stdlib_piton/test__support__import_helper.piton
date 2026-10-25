@@ -1,0 +1,7 @@
+funcion import_module (*args ) :
+    lanzar NotImplementedError ('test.support.import_helper.import_module no esta implementado en el backend nativo')
+
+
+funcion make_legacy_pyc (*args ) :
+    lanzar NotImplementedError ('test.support.import_helper.make_legacy_pyc no esta implementado en el backend nativo')
+

@@ -1,0 +1,15 @@
+clase BaseHTTPRequestHandler :
+    pasar
+
+
+clase DEFAULT_ERROR_CONTENT_TYPE :
+    pasar
+
+
+clase DEFAULT_ERROR_MESSAGE :
+    pasar
+
+
+clase HTTPServer :
+    pasar
+

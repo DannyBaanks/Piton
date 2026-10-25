@@ -78,11 +78,11 @@ Pitón **no es**:
     `docs/parity_corpus_v4_report_2026-10-24.{json,md}`
     (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier a`).
   - **corpus v4 recursivo** (`--recursive`, stdlib completa con subpaquetes,
-    588 archivos): adapt 99.8%, parse 97.8%, **mir 82 (13.9%), build 71
-    (12.1%)**; `MIR_FAIL` 493, `PARSE_FAIL` 12 (anotaciones `match/case`,
-    star-unpacking), `BUILD_FAIL` 11, `CRASH` 1 (`pydoc_data/topics.py`:
-    el compilador agota memoria — el único CRASH). 261 MIR_FAIL son módulos
-    ausentes. Medición y palanca: `docs/corpus-recursivo-2026-10-24.md`
+    588 archivos): adapt 99.8%, parse 97.8%, **mir 92 (15.6%), build 73
+    (12.4%)**; `MIR_FAIL` 483, `PARSE_FAIL` 12 (anotaciones `match/case`,
+    star-unpacking), `BUILD_FAIL` 19, `CRASH` 1 (`pydoc_data/topics.py`:
+    el compilador agota memoria — el único CRASH). Medición y palanca:
+    `docs/corpus-recursivo-2026-10-24.md`
     (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier a
     --recursive --workers 1 --isolate` — **`--isolate` es obligatorio**: sin
     él un archivo mata el worker del pool y la corrida muere siempre).

@@ -3142,5 +3142,74 @@ class SubmoduleBundledGatesV1(unittest.TestCase):
         LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(fuente))))
 
 
+class SubmoduleChainGatesV1(unittest.TestCase):
+    """SUBMODULE_ALIAS_V1: `importar xml.dom` + `xml.dom.X(...)` — el
+    attr-chain de submódulo.
+
+    Antes, el submódulo quedaba cargado pero el import no registraba el
+    alias: `xml.dom.X(...)` baja como get_attr sobre un load('xml') que no
+    existe (NameError en runtime). El chain de llamadas resuelve ahora el
+    symbol (`xml__dom__X`), y el segmento del submódulo del chain se
+    descarta una sola vez (alias 'xml' -> modulo 'xml.dom').
+
+    MEDIDO Y ABIERTO: la llamada con 2+ argumentos posicionales desde un
+    módulo empaquetado cae en el gap del pack variadico (el mismo que
+    `functools.reduce` no toca porque recibe colecciones): devuelve 0, no
+    diverge en silencio. Por eso los gates ejecutan los caminos de 1
+    argumento y compilan el resto."""
+
+    def test_submodule_chain_call(self):
+        _assert_matches(
+            self,
+            "importar xml .dom" + chr(10)
+            + "n = xml .dom .Node ()" + chr(10)
+            + "imprimir (1 )" + chr(10),
+        )
+
+    def test_submodule_chain_os_path(self):
+        _assert_matches(
+            self,
+            "importar os .path" + chr(10)
+            + "imprimir (os .path .basename ('/x/y.txt' ))" + chr(10)
+            + "imprimir (os .path .split ('/a/b' ))" + chr(10),
+        )
+
+    def test_submodule_chain_fails_closed(self):
+        # el stub lanza NotImplementedError al ejecutarse; compilar es solo
+        # el embudo estático.
+        import subprocess
+        import tempfile
+        import pathlib
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.linux_x86 import compile_native_linux as _cn
+        fuente = (
+            "importar email .utils" + chr(10)
+            + "imprimir (email .utils .getaddresses (['a'] ))" + chr(10)
+        )
+        with tempfile.TemporaryDirectory() as _d:
+            out = pathlib.Path(_d) / "prog"
+            _cn(fuente, out)
+            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("NotImplementedError", r.stderr)
+
+    def test_submodule_chain_compiles_two_args(self):
+        # el gap del pack variadico es de EJECUCION: compilar si compila.
+        self._assert_compiles(
+            "importar os .path" + chr(10)
+            + "imprimir (os .path .join ('/tmp' ,'b' ))" + chr(10)
+        )
+
+    def _assert_compiles(self, fuente: str) -> None:
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.parser import parse
+        from piton.lower import lower_cst_to_hir
+        from piton.mir import lower_hir_to_mir
+        from piton.linux_x86 import LinuxCEmitter
+        LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(fuente))))
+
+
 if __name__ == "__main__":
     unittest.main()
