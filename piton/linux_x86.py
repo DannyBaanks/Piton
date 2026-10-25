@@ -1359,6 +1359,17 @@ static long piton_math_fabs_bits(long bits){return bits&0x7FFFFFFFFFFFFFFFL;}
 static long piton_math_gcd(long a,long b){if(a<0)a=-a;if(b<0)b=-b;while(b){long t=a%b;a=b;b=t;}return a;}
 static int piton_is_printable_str(const char*s){if(!s)return 0;int has=0;for(int i=0;i<256;++i){char c=s[i];if(c==0)return has;if((unsigned char)c<9||((unsigned char)c>13&&(unsigned char)c<32))return 0;has=1;}return 0;}
 static int piton_is_double_bits(long bits){unsigned long u=(unsigned long)bits;unsigned long exp=(u>>52)&0x7FF;return(exp>=0x3CC&&exp<=0x434&&(u&0xFFFFFFFFFFFFFUL)!=0);}
+/* INT_OF_VALUE_V1: int(x) con tipo estatico desconocido (_aix_support.py:
+   int(build_date) donde build_date sale de sysconfig.get_config_var).
+   Despacha por kind en runtime: double -> truncado, str -> parse, int ->
+   identidad; cualquier otra cosa -> TypeError como CPython. */
+static long piton_int_of_value(long bits){
+  if(piton_is_double_bits(bits))return (long)piton_bits_double(piton_bits_double(bits));
+  if(piton_maybe_ptr(bits)&&piton_is_printable_str((const char*)bits))return piton_int_from_str((const char*)bits);
+  if(!piton_maybe_ptr(bits))return bits;
+  piton_raise_set("TypeError","int() argument must be a string, a bytes-like object or a number");
+  return 0;
+}
 static long piton_isinstance_dynamic(long bits,int kind){if(!bits)return(kind==PK_NONE);if(piton_is_double_bits(bits))return(kind==PK_FLOAT);if(bits>0x400000L&&bits<0x7FFFFFFFFFFFL){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){return(k==kind);}if(piton_is_printable_str((const char*)bits)){return(kind==PK_STR);}}return(kind==PK_INT);}
 /* SEQ_CMP_V1: comparación lexicográfica elemento a elemento (CPython). */
 static long piton_seq_cmp(PitonSeq*a,PitonSeq*b){
@@ -1659,11 +1670,14 @@ static PitonFile* piton_file_new(const char*path,const char*mode,long fd,PitonBy
    errno en el mensaje: el runtime no tiene strerror, pero el numero de errno
    si viaja. */
 static PitonFile* piton_file_open(const char*path,const char*mode){
-  int write=0,create=0,truncate=0,append=0;
+  int write=0,create=0,truncate=0,append=0,plus=0;
   for(const char*p=mode;*p;++p){if(*p=='w'){write=1;create=1;truncate=1;}else if(*p=='a'){write=1;create=1;append=1;}
-    else if(*p=='+'){piton_write(2,"ValueError: mode '+' is not supported in the native subset\n",62);piton_exit(1);}
+    else if(*p=='+'){plus=1;}
+    else if(*p=='x'){create=1;}
     else if(*p=='r'){write=0;}else if(*p=='b'||*p=='t'){}else{piton_write(2,"ValueError: invalid mode\n",26);piton_exit(1);}}
-  long flags=(write?1L:0L)|(create?0100L:0L)|(truncate?01000L:0L)|(append?02000L:0L);
+  /* FILE_PLUS_V1: '+' abre lectura+escritura (O_RDWR=2), no solo escritura
+     (_aix_support.py: abrir(path,'w+b')). */
+  long flags=(plus?2L:(write?1L:0L))|(create?0100L:0L)|(truncate?01000L:0L)|(append?02000L:0L);
   long fd=piton_sys_open(path,flags,0644);
   if(fd<0){
     if(fd==-2){piton_raise_set("FileNotFoundError","[Errno 2] No such file or directory");}
@@ -9367,7 +9381,9 @@ class LinuxCEmitter:
                 if len(values) == 2:
                     _mv = self._fn_consts.get(values[1])
                     if isinstance(_mv, str):
-                        if any(c in _mv for c in "x+"):
+                        if "x" in _mv:
+                            # FILE_MODE_V1: 'x' (creacion exclusiva) sigue
+                            # fail-closed; '+' ya es O_RDWR en el runtime.
                             raise NativeBuildError(f"Linux abrir(mode={_mv!r}) is not supported in the native subset")
                         mode_expr = json.dumps(_mv)
                     elif types.get(values[1], "int") in {"str", "int", "none", ""}:
@@ -9779,7 +9795,11 @@ class LinuxCEmitter:
                     else:
                         out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
                 else:
-                    raise NativeBuildError("Linux int() requires int, float or str (M14 v1)")
+                    # INT_OF_VALUE_V1: tipo estatico desconocido — despacha en
+                    # runtime (str -> parse, double -> truncado; el resto es
+                    # TypeError con el texto de CPython).
+                    out.append(f"    {_name(result)}=piton_int_of_value({operand});")
+                    self._emit_exc_check(out, function, call_handler)
                 types[result] = "int"
             elif function_name in {"decimal", "float"}:
                 if len(values) != 1:
@@ -10718,6 +10738,27 @@ class LinuxCEmitter:
                 self._emit_exc_check(out, function, None)
                 out.append("        } else {")
                 out.append('        piton_raise_set("TypeError","\'int\' object does not support item assignment");')
+                self._emit_exc_check(out, function, None)
+                out.append("        }")
+                out.append("    }")
+            elif coll_type in ("", "int", "slot", "builtin") or coll_type.startswith(("object:", "class:")):
+                # SUBSCRIPT_STORE_UNKNOWN_V1: el tipo estatico del target no
+                # se conoce (pipes.py: list[-1][-1] = x sobre elem de lista
+                # heterogenea). Misma politica que SUBSCRIPT_STORE_INT_V1:
+                # chequeo en runtime — si el puntero es lista/tupla se
+                # asigna; si no, TypeError con el texto de CPython.
+                out.append("    {")
+                out.append(f"        long _ss_coll={self._value(collection)};")
+                out.append("        int _ss_ok=0;")
+                out.append("        if(_ss_coll&&piton_maybe_ptr(_ss_coll)){")
+                out.append("            long*_ss_p=(long*)_ss_coll;long _ss_k=_ss_p[1];")
+                out.append("            _ss_ok=(_ss_k==PK_LIST||_ss_k==PK_TUPLE);")
+                out.append("        }")
+                out.append("        if(_ss_ok){")
+                out.append(f"            piton_seq_set((PitonSeq*)_ss_coll,{self._value(index)},{self._slot(value, types)});")
+                self._emit_exc_check(out, function, None)
+                out.append("        } else {")
+                out.append('        piton_raise_set("TypeError","object does not support item assignment");')
                 self._emit_exc_check(out, function, None)
                 out.append("        }")
                 out.append("    }")
