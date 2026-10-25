@@ -9074,18 +9074,20 @@ class LinuxCEmitter:
                 return out
             elif function_name in {"input", "entrada"}:
                 # INPUT_V1: input([prompt]) nativo. Sin argumento o con un
-                # prompt str; cualquier otro tipo de prompt es el TypeError de
-                # CPython (que requiere str, no int).
+                # prompt str; cualquier otro tipo de prompt se convierte con
+                # str() en runtime (como CPython), nunca falla cerrado en build.
                 if len(values) > 1:
                     raise NativeBuildError("Linux input() takes at most one argument")
-                _prompt = '"' + '"'
+                _prompt = '""'
                 if values:
                     _pt = types.get(values[0], "int")
-                    if _pt != "str":
-                        raise NativeBuildError(
-                            f"Linux input() requires a str prompt, not {_pt}"
-                        )
-                    _prompt = f"(const char*){self._value(values[0])}"
+                    if _pt == "str":
+                        _prompt = f"(const char*){self._value(values[0])}"
+                    else:
+                        # INPUT_DYNAMIC_PROMPT_V1: input(5) / input(Nada) —
+                        # CPython aplica str() al prompt. piton_str_of_value
+                        # cubre int, bool, none, etc. con el texto exacto.
+                        _prompt = f"piton_str_of_value({self._value(values[0])})"
                 out.append(f"    {_name(result)}=(long)piton_input_read({_prompt});")
                 types[result] = "str"
             elif function_name == "abs":
