@@ -385,29 +385,75 @@ static long piton_str_endswith(const char*s,const char*p){usize hl=piton_strlen(
 static long piton_str_startswith_at(const char*s,const char*p,long start){usize hl=piton_strlen(s),nl=piton_strlen(p);if(start<0)start=0;if((usize)start>hl)return 0;if(nl>hl-(usize)start)return 0;for(usize i=0;i<nl;++i)if(s[start+i]!=p[i])return 0;return 1;}
 static long piton_str_endswith_at(const char*s,const char*p,long start){usize hl=piton_strlen(s),nl=piton_strlen(p);if(start<0)start=0;if((usize)start>hl)return 0;if(nl>hl-(usize)start)return 0;for(usize i=0;i<nl;++i)if(s[hl-nl+i]!=p[i])return 0;return 1;}
 /* STR_TRANSLATE_V1: translate(dict) — cada carácter se sustituye por el
- * mapeo; una clave ausente deja el carácter; valor None/'' borra (V1: valor
- * string vacío). */
+ * mapeo; una clave ausente deja el carácter; valor None/'' borra; valor int
+ * se escribe como su codepoint UTF-8 (rot_13 y str.maketrans usan enteros);
+ * valor str se inserta tal cual. Otro tipo de valor es TypeError (CPython).
+ * La version anterior solo aceptaba valores str y reservaba n*4+1 bytes:
+ * un reemplazo mas largo desbordaba el buffer. */
+static int piton_translate_value(PitonSlot v,char*dst,usize*out){
+  if(v.kind==PK_NONE){*out=0;return 0;}
+  if(v.kind==PK_STR){
+    const char*t=(const char*)v.bits;
+    /* un slot str sin puntero no es Python valido; la V1 lo trataba como
+     * borrado y aqui se conserva ese comportamiento (nunca deref NULL). */
+    if(!t){*out=0;return 0;}
+    usize l=piton_strlen(t);
+    if(dst)piton_memcpy(dst,t,l);
+    *out=l;return 0;
+  }
+  if(v.kind==PK_INT){
+    long cp=v.bits;
+    if(cp<0||cp>0x10FFFF){piton_raise_set("ValueError","character mapping must be in range(0x110000)");return -1;}
+    unsigned long u=(unsigned long)cp;usize l;
+    if(u<0x80)l=1;else if(u<0x800)l=2;else if(u<0x10000)l=3;else l=4;
+    if(dst){
+      if(l==1)dst[0]=(char)u;
+      else if(l==2){dst[0]=(char)(0xC0|(u>>6));dst[1]=(char)(0x80|(u&0x3F));}
+      else if(l==3){dst[0]=(char)(0xE0|(u>>12));dst[1]=(char)(0x80|((u>>6)&0x3F));dst[2]=(char)(0x80|(u&0x3F));}
+      else{dst[0]=(char)(0xF0|(u>>18));dst[1]=(char)(0x80|((u>>12)&0x3F));dst[2]=(char)(0x80|((u>>6)&0x3F));dst[3]=(char)(0x80|(u&0x3F));}
+    }
+    *out=l;return 0;
+  }
+  piton_raise_set("TypeError","character mapping must return integer, None or str");
+  return -1;
+}
 static long piton_str_translate(const char*s,PitonDict*map){
   if(!s)return 0;
+  /* UNBOUND_TRANSLATE_V1: en la forma desbound `str.translate(x, m)` el mapa
+   * puede llegar sin tipo estatico; validar el puntero antes de leer
+   * ->length (un valor que no es dict debe dar TypeError, no UB). */
+  {long _mb=(long)map;int _ok=0;
+   if(_mb>0x400000L&&_mb<0x7FFFFFFFFFFFL){long*_mp=(long*)_mb;if(_mp[0]>0&&_mp[0]<1000000L&&_mp[1]==PK_DICT)_ok=1;}
+   if(!_ok){piton_raise_set("TypeError","str.translate() argument must be a mapping");return 0;}}
   usize n=piton_strlen(s);
-  char*p=piton_alloc(n*4+1);usize o=0;
+  /* CPython: las claves son enteros (ord); una clave cadena de longitud 1
+   * NO sustituye (str.maketrans usa ord como clave). */
+  usize total=0;
   for(usize i=0;i<n;){
     unsigned char c=(unsigned char)s[i];
     if(c<0x80){
-      long found=0;
-      /* CPython: las claves son enteros (ord); una clave cadena de longitud 1
-       * NO sustituye (str.maketrans usa ord como clave). */
-      if(map)for(long j=0;j<map->length;++j){
-        if(map->items[j].key.kind==PK_INT&&map->items[j].key.bits==(long)c){
-          const char*v=(const char*)map->items[j].value.bits;
-          if(v){usize vl=piton_strlen(v);piton_memcpy(p+o,v,vl);o+=vl;}
-          found=1;break;
-        }
-      }
-      if(!found)p[o++]=(char)c;
+      PitonDictEntry*e=0;
+      for(long j=0;j<map->length;++j)
+        if(map->items[j].key.kind==PK_INT&&map->items[j].key.bits==(long)c){e=&map->items[j];break;}
+      if(e){usize add=0;if(piton_translate_value(e->value,0,&add)!=0)return 0;total+=add;}
+      else total+=1;
       ++i;continue;
     }
     /* multibyte: se copia tal cual (las claves del mapa son ASCII) */
+    int k;if((c&0xE0)==0xC0)k=2;else if((c&0xF0)==0xE0)k=3;else if((c&0xF8)==0xF0)k=4;else k=1;
+    total+=(usize)k;i+=(usize)k;
+  }
+  char*p=piton_alloc(total+1);usize o=0;
+  for(usize i=0;i<n;){
+    unsigned char c=(unsigned char)s[i];
+    if(c<0x80){
+      PitonDictEntry*e=0;
+      for(long j=0;j<map->length;++j)
+        if(map->items[j].key.kind==PK_INT&&map->items[j].key.bits==(long)c){e=&map->items[j];break;}
+      if(e){usize add=0;if(piton_translate_value(e->value,p+o,&add)!=0)return 0;o+=add;}
+      else p[o++]=(char)c;
+      ++i;continue;
+    }
     int k;if((c&0xE0)==0xC0)k=2;else if((c&0xF0)==0xE0)k=3;else if((c&0xF8)==0xF0)k=4;else k=1;
     piton_memcpy(p+o,s+i,(usize)k);o+=(usize)k;i+=(usize)k;
   }
@@ -3119,6 +3165,29 @@ _STANDARD_BUILTIN_CLASSES = frozenset({
     "diccionario", "set", "conjunto", "range", "rango", "complex", "complejo",
     "object", "objeto", "slice", "rebanada", "frozenset", "conjunto_inmutable",
 })
+# BUILTIN_TYPE_VALUE_V1: nombre de tipo builtin -> nombre canonico. Un tipo
+# usado como VALOR (no como callee) es un objeto de tipo, igual que en
+# CPython: `imprimir(int)` da "<class 'int'>" y `tipo(1) == int` compara el
+# mismo texto. Antes el load era un MARCADOR sin valor C
+# (BUILTIN_MARKER_V1) y pasar `complex` como argumento fallaba cerrado
+# (copyreg: `pickle(complex, ...)`).
+_BUILTIN_TYPE_VALUES = {
+    "int": "int", "entero": "int",
+    "str": "str", "texto": "str",
+    "float": "float", "decimal": "float",
+    "bool": "bool", "booleano": "bool",
+    "list": "list", "lista": "list",
+    "tuple": "tuple", "tupla": "tuple",
+    "set": "set", "conjunto": "set",
+    "range": "range", "rango": "range",
+    "complex": "complex", "complejo": "complex",
+    "frozenset": "frozenset", "memoryview": "memoryview",
+    "type": "type", "tipo": "type",
+}
+# BUILTIN_TYPE_VALUE_V1: repr de un valor que ES una union de tipos
+# (`int | str`, PEP 604) — CPython imprime "int | str" y tipo() da
+# <class 'types.UnionType'>.
+_TYPE_UNION_REPR = "<class 'types.UnionType'>"
 # USAGE_PARAM_TYPE_V1: metodos que SOLO existen en str. Si todos los usos de
 # un param como receiver son de este set (y ninguno de collection), el param
 # se tipa str por uso (nturl2path url.replace, getopt args.startswith).
@@ -3274,6 +3343,11 @@ class LinuxCEmitter:
         # plantilla literal.
         self._identity_params: dict[str, int] = {}
         self._identity_templates: dict[str, str] = {}
+        # BUILTIN_TYPE_VALUE_V1: temps que contienen un TIPO builtin como
+        # valor (repr "<class 'X'>") y temps que contienen una union de tipos
+        # (`int | str`). tipo()/callable() los distinguen de un str normal.
+        self._typeobj_names: dict[str, str] = {}
+        self._union_type_temps: set[str] = set()
         self.function_params = {function.name: list(function.params) for function in module.functions}
         self.function_varargs = {function.name: function.vararg for function in module.functions}
         self.function_kwargs = {function.name: function.kwarg for function in module.functions}
@@ -3442,6 +3516,12 @@ class LinuxCEmitter:
         return "\n".join(lines) + "\n"
 
     def _emit_function(self, function: MIRFunction) -> list[str]:
+        # BUILTIN_TYPE_VALUE_V1: las marcas de tipo son POR FUNCION — los
+        # temporarios (%N) se renumeran en cada funcion, y una marca de
+        # <module> (%18 = complex) no debe alcanzar al %18 de otra funcion
+        # (_reconstructor: base.__init__).
+        self._typeobj_names = {}
+        self._union_type_temps = set()
         if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
             return self._emit_generator_function(function)
         is_main = function.name == "<module>"
@@ -3879,6 +3959,21 @@ class LinuxCEmitter:
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
         return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
+
+    def _inherit_typeobj(self, target: str, value: Any) -> None:
+        """BUILTIN_TYPE_VALUE_V1: un nombre que copia un tipo/union conserva
+        la marca (modelo flow-insensitive, igual que `types`). Un store de
+        otro valor borra la marca: `x = int; x = 1; tipo(x)` no es 'type'."""
+        _tname = self._typeobj_names.get(value)
+        if _tname is None:
+            self._typeobj_names.pop(target, None)
+            self._union_type_temps.discard(target)
+            return
+        self._typeobj_names[target] = _tname
+        if value in self._union_type_temps:
+            self._union_type_temps.add(target)
+        else:
+            self._union_type_temps.discard(target)
 
     @staticmethod
     def _parse_percent_template(template: str) -> tuple[str, list[tuple]]:
@@ -5157,6 +5252,9 @@ class LinuxCEmitter:
             if types.get(call_args[0], "") != "dict":
                 raise NativeBuildError("Linux str.translate() requires a dict argument")
             out.append(f"    {_name(result)}=piton_str_translate((const char*){operand},(PitonDict*){self._value(call_args[0])});")
+            # UNBOUND_TRANSLATE_V1: el helper valida el mapa en runtime; una
+            # excepcion ahi (argumento no-dict) debe cortar el proceso.
+            out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
             types[result] = "str"
         elif method == "zfill":
             require_count(1, "exactly one int argument")
@@ -5554,6 +5652,9 @@ class LinuxCEmitter:
             if types.get(call_args[0], "") != "dict":
                 raise NativeBuildError("Linux str.translate() requires a dict argument")
             out.append(f"    {_name(result)}=piton_str_translate((const char*){operand},(PitonDict*){self._value(call_args[0])});")
+            # UNBOUND_TRANSLATE_V1: el helper valida el mapa en runtime; una
+            # excepcion ahi (argumento no-dict) debe cortar el proceso.
+            out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
             types[result] = "str"
         elif method == "zfill":
             # STR_PADS_V1: sign-aware zero fill ('-5'.zfill(3) -> '-05').
@@ -7159,10 +7260,12 @@ class LinuxCEmitter:
             elif builtin in {"map", "filter"}:
                 if types.get(source) not in {"list", "tuple"}:
                     raise NativeBuildError("native map/filter require a list or tuple")
-                if types.get(start) == "builtin":
+                if types.get(start) == "builtin" or start in self._typeobj_names:
                     # ITER_PASSTHROUGH_V1 guard: a builtin NAME has no native
                     # function address — passing its uninitialized marker as
                     # the callback would jump through garbage (crash).
+                    # BUILTIN_TYPE_VALUE_V1: un tipo builtin es un str en
+                    # runtime; tampoco es un callback nativo.
                     raise NativeBuildError(
                         f"native {builtin} requires a user function callback, not a builtin name"
                     )
@@ -7427,6 +7530,12 @@ class LinuxCEmitter:
                 self._tuple_elems[result] = self._tuple_elems[source]
             if source in self._chr_results:
                 self._chr_results.add(result)
+            # BUILTIN_TYPE_VALUE_V1: un load de un nombre que contiene un
+            # tipo/union hereda la marca (x = int; tipo(x) -> <class 'type'>).
+            if source in self._typeobj_names:
+                self._typeobj_names[result] = self._typeobj_names[source]
+                if source in self._union_type_temps:
+                    self._union_type_temps.add(result)
             if source in self._dict_val_types:
                 self._dict_val_types[result] = self._dict_val_types[source]
             # ELEM_KIND_V1: al cargar un param list con elem-kind conocido,
@@ -7495,6 +7604,17 @@ class LinuxCEmitter:
                 types[result] = f"class:{_cn}"
                 aliases[result] = source
                 out.append(f"    {_name(result)}=0;")
+                return out
+            if source in _BUILTIN_TYPE_VALUES and source not in function.params and source not in _FUNC_ONLY_BUILTINS:
+                # BUILTIN_TYPE_VALUE_V1: el nombre de un tipo builtin usado
+                # como VALOR es un objeto de tipo con repr estable — el mismo
+                # texto que devuelve tipo(x), asi `tipo(1) == int` es cierto.
+                # Como CALLEE el dispatch sigue resolviendolo por aliases
+                # (el load tambien emite un valor real, no un marcador).
+                _tname = _BUILTIN_TYPE_VALUES[source]
+                out.append(f"    {_name(result)}=(long){json.dumps(f'<class {_tname!r}>')};")
+                types[result] = "str"
+                self._typeobj_names[result] = _tname
                 return out
             if source in _BUILTINS and source not in function.params and source not in _FUNC_ONLY_BUILTINS:
                 # BUILTIN_MARKER_V1: this load emits NO C code — the builtin is
@@ -7621,6 +7741,7 @@ class LinuxCEmitter:
                     raise NativeBuildError(f"Linux global '{args[0]}' inside generators is not supported yet")
                 out.append(f"    {_name(args[0])}={self._value(args[1])};")
                 types[args[0]] = types.get(args[1], "int")
+                self._inherit_typeobj(args[0], args[1])
                 if args[1] in self._tuple_elems:
                     self._tuple_elems[args[0]] = self._tuple_elems[args[1]]
                 if args[1] in self._dict_elems:
@@ -7644,6 +7765,7 @@ class LinuxCEmitter:
                 return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
+            self._inherit_typeobj(args[0], args[1])
             # CALLITER_ELEM_V1: el nombre hereda el tipo de ELEMENTO del
             # iterador (`fiter = iter(f, sent)` -> `fiter` entrega el retorno
             # de f).
@@ -7928,6 +8050,23 @@ class LinuxCEmitter:
             is_aug = len(args) > 4 and args[4] == "aug"
             left_type = types.get(left, "int")
             right_type = types.get(right, "int")
+            if (
+                operator == "|"
+                and left in self._typeobj_names
+                and (right in self._typeobj_names or types.get(right) == "none")
+            ):
+                # TYPE_UNION_VALUE_V1: `int | str` (PEP 604) es un VALOR de
+                # tipo union, no un OR de punteros. CPython lo imprime como
+                # "int | str" y tipo() devuelve <class 'types.UnionType'>;
+                # sin esto el `|` caia al TypeError de str en runtime.
+                _lname = self._typeobj_names[left]
+                _rname = self._typeobj_names.get(right, "None")
+                _uname = f"{_lname} | {_rname}"
+                out.append(f"    {_name(result)}=(long){json.dumps(_uname)};")
+                types[result] = "str"
+                self._typeobj_names[result] = _uname
+                self._union_type_temps.add(result)
+                return out
             if operator == "+" and is_aug and left_type.startswith("object:"):
                 # CPython prueba __iadd__ ANTES de __add__/__radd__ en
                 # augmented assignment; sin __iadd__ cae al flujo normal.
@@ -9213,7 +9352,11 @@ class LinuxCEmitter:
                     raise NativeBuildError("Linux callable requires one argument")
                 vtype = types.get(values[0], "int")
                 name = aliases.get(values[0], values[0]) if isinstance(values[0], str) else ""
-                if vtype == "builtin" or vtype.startswith("class:") or vtype == "closure":
+                if values[0] in self._typeobj_names:
+                    # BUILTIN_TYPE_VALUE_V1: un tipo builtin como valor es
+                    # callable (callable(int) es True), aunque su repr sea str.
+                    out.append(f"    {_name(result)}=1;")
+                elif vtype == "builtin" or vtype.startswith("class:") or vtype == "closure":
                     out.append(f"    {_name(result)}=1;")
                 elif vtype.startswith("object:"):
                     cls = vtype.split(":", 1)[1]
@@ -9957,6 +10100,18 @@ class LinuxCEmitter:
             elif function_name in {"type", "tipo"}:
                 if len(values) != 1:
                     raise NativeBuildError("Linux type requires one argument")
+                if values[0] in self._typeobj_names:
+                    # BUILTIN_TYPE_VALUE_V1: tipo(int) es <class 'type'> (no
+                    # el <class 'str'> que sugiere la repr); tipo(int | str)
+                    # es <class 'types.UnionType'>.
+                    _trepr = (
+                        _TYPE_UNION_REPR
+                        if values[0] in self._union_type_temps
+                        else "<class 'type'>"
+                    )
+                    out.append(f"    {_name(result)}=(long){json.dumps(_trepr)};")
+                    types[result] = "str"
+                    return out
                 value_type = types.get(values[0], "int")
                 if value_type.startswith("object:"):
                     # TIPO_OBJ_V1: `tipo(instancia)` must name the class, not the
@@ -10777,6 +10932,72 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}={_name(_mod_target)}({_vals_c});")
                     types[result] = "int"
                     return out
+                if obj in self._typeobj_names and not owner_type.startswith("object:"):
+                    # UNBOUND_BUILTIN_METHOD_V1: `str.translate(x, d)` es la
+                    # forma DESBOUND de CPython (el primer argumento es el
+                    # self). Se reescribe a `x.translate(d)` y se despacha
+                    # por el tipo real del self. `__new__` y los metodos que
+                    # no existen en la instancia no tienen equivalente nativo
+                    # -> fail closed con mensaje propio (antes el receiver
+                    # era un marcador NULL que compilaba y divergia).
+                    _tname = self._typeobj_names[obj]
+                    if not call_args:
+                        raise NativeBuildError(
+                            f"Linux unbound {_tname}.{method}() requires the instance as first argument"
+                        )
+                    _self_obj, _rest = call_args[0], list(call_args[1:])
+                    if method == "__new__":
+                        # UNBOUND_BUILTIN_NEW_V1: `int.__new__(cls, v)` sobre
+                        # una subclase builtin (http.HTTPStatus) no tiene
+                        # equivalente nativo. El cuerpo compila (antes:
+                        # NativeBuildError, o la resolucion al propio
+                        # `__new__` de la clase -> recursion infinita en
+                        # runtime) y la instanciacion falla cerrada.
+                        self._runtime_type_error(
+                            out,
+                            f"{_tname}.__new__() with a builtin subclass is not supported",
+                        )
+                        types[result] = _tname
+                        return out
+                    if _tname == "str":
+                        if (
+                            method == "translate"
+                            and len(_rest) == 1
+                            and not kw_args
+                            and types.get(_rest[0], "") in {"dict", "int"}
+                        ):
+                            # UNBOUND_TRANSLATE_V1: `str.translate(x, m)` con
+                            # `m` sin tipo estatico (rot_13: tabla creada por
+                            # codecs.make_identity_dict). El helper valida el
+                            # mapa en runtime: un no-dict da TypeError, nunca
+                            # lee memoria invalida.
+                            out.append(
+                                f"    {_name(result)}=piton_str_translate((const char*){self._value(_self_obj)},"
+                                f"(PitonDict*){self._value(_rest[0])});"
+                            )
+                            out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
+                            types[result] = "str"
+                            return out
+                        self._emit_str_method(
+                            out, result, method, _self_obj, _rest, types,
+                            tuple(kw_args) if kw_args else (),
+                        )
+                        return out
+                    if _tname in {"list", "tuple", "dict", "set"}:
+                        self._emit_collection_method(
+                            out, result, method, _self_obj, _rest, _tname, types, aliases
+                        )
+                        return out
+                    if _tname in {"bytes", "bytearray"}:
+                        self._emit_bytes_method(
+                            out, result, method, _self_obj, _rest,
+                            _tname == "bytearray", types,
+                        )
+                        return out
+                    raise NativeBuildError(
+                        f"Linux unbound {_tname}.{method}() is not supported "
+                        "(builtin type methods bind to instances, not to the type)"
+                    )
                 if owner_type == "file":
                     # FILE_IO_V1: metodos del handle de fichero. Lo que CPython
                     # tiene y aqui no existe (seek/tell/flush, lectura por

@@ -502,13 +502,38 @@ class BuiltinMarkerV1(unittest.TestCase):
         assert result.oracle.returncode == 1
         assert b"FileNotFoundError" in result.oracle.stderr
 
-    def test_store_builtin_fail_closed(self):
+    def test_store_builtin_function_fail_closed(self):
+        # BUILTIN_MARKER_V1 sigue vigente para las FUNCIONES builtin: `len`
+        # como valor no tiene representacion nativa (CPython imprimiria
+        # <built-in function len>).
         with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("x = rango\nimprimir(1)\n")
+            compare_native_to_cpython("x = longitud\nimprimir(1)\n")
 
-    def test_return_builtin_fail_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("funcion f():\n    devolver rango\nimprimir(1)\n")
+    def test_store_builtin_type_value_matches_cpython(self):
+        # BUILTIN_TYPE_VALUE_V1: un TIPO builtin si es un valor (CPython
+        # imprime su repr); el nativo debe coincidir, no fallar cerrado.
+        _assert_matches(self, "x = rango\nimprimir(x)\n")
+
+    def test_return_builtin_type_value_matches_cpython(self):
+        _assert_matches(self, "funcion f():\n    devolver rango\nimprimir(f())\n")
+
+    @unittest.skipIf(
+        sys.platform.startswith("win32"),
+        "UNBOUND_BUILTIN_NEW_V1 is implemented in the Linux backend only",
+    )
+    def test_unbound_builtin_new_fails_closed_at_runtime(self):
+        # UNBOUND_BUILTIN_NEW_V1: `int.__new__(cls, v)` inside a builtin
+        # subclass body (http.HTTPStatus) has no native equivalent. The
+        # body must compile and fail closed when called; before, the call
+        # resolved to the class's own __new__ (infinite recursion).
+        result = compare_native_to_cpython(
+            "clase MiInt:\n"
+            "    funcion __new__(cls, valor):\n"
+            "        devolver int.__new__(cls, valor)\n"
+            "imprimir(MiInt.__new__(MiInt, 3))\n"
+        )
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
 
     def test_print_generator_fail_closed(self):
         # a generator object prints as <generator ... at 0x...> in CPython —

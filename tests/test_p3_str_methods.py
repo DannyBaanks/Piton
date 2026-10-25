@@ -382,5 +382,48 @@ class StrMethodsP23(unittest.TestCase):
             compare_native_to_cpython("imprimir('a'.center())\n")
 
 
+@unittest.skipIf(
+    sys.platform.startswith("win32"),
+    "STR_TRANSLATE_V1 is implemented in the Linux backend only",
+)
+class StrTranslateV1(unittest.TestCase):
+    """STR_TRANSLATE_V1: translate(dict) with ord keys.
+
+    Values: str inserted as-is, int as its UTF-8 codepoint (rot_13 builds
+    int-valued tables via codecs.make_identity_dict), None deletes. The old
+    helper only accepted str values and sized the buffer at n*4+1, so a
+    longer replacement wrote past the allocation.
+    """
+
+    def test_int_values_are_codepoints(self):
+        _assert_matches(self, "imprimir('AB'.translate({65: 78, 66: 79}))\n")
+
+    def test_none_value_deletes(self):
+        _assert_matches(self, "imprimir('abc'.translate({98: None}))\n")
+
+    def test_str_value_longer_than_source(self):
+        # regression: n*4+1 buffer overflow with a long replacement
+        _assert_matches(self, "imprimir('a'.translate({97: 'reemplazo-largo'}))\n")
+
+    def test_unbound_form_with_dynamic_map(self):
+        # rot_13: `str.translate(input, rot13_map)` with a map whose static
+        # type is unknown (built by an external helper).
+        _assert_matches(
+            self,
+            "funcion aplicar(dato, tabla):\n"
+            "    devolver str.translate(dato, tabla)\n"
+            "imprimir(aplicar('AB', {65: 78}))\n",
+        )
+
+    def test_non_dict_map_fails_closed_at_runtime(self):
+        result = compare_native_to_cpython(
+            "funcion aplicar(dato, tabla):\n"
+            "    devolver str.translate(dato, tabla)\n"
+            "imprimir(aplicar('AB', 5))\n"
+        )
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
