@@ -3887,7 +3887,10 @@ class MIRLowerer:
                 return result
             if node.func.kind == HIRKind.LOAD and node.func.name in self.generators:
                 func_name = node.func.name
-                arg_vals = tuple(self._lower_expr(builder, a) for a in node.args)
+                # GEN_KW_V1: keyword args en una llamada a generador se ubican
+                # en la posicion de su parametro (gen_init empaqueta slot por
+                # slot, no es una C call posicional). Defaults no soportados.
+                arg_vals = self._gen_call_args(builder, func_name, node)
                 result = builder.temp()
                 builder.emit("gen_init", func_name, arg_vals, result=result)
                 return result
@@ -4986,7 +4989,10 @@ class MIRLowerer:
                 return result
             if node.func.kind == HIRKind.LOAD and node.func.name in self.generators:
                 func_name = node.func.name
-                arg_vals = tuple(self._lower_expr(builder, a) for a in node.args)
+                # GEN_KW_V1: keyword args en una llamada a generador se ubican
+                # en la posicion de su parametro (gen_init empaqueta slot por
+                # slot, no es una C call posicional). Defaults no soportados.
+                arg_vals = self._gen_call_args(builder, func_name, node)
                 result = builder.temp()
                 builder.emit("gen_init", func_name, arg_vals, result=result)
                 return result
@@ -5779,6 +5785,33 @@ class MIRLowerer:
         result = builder.temp()
         builder.emit("runtime_call", "unsupported", kind.name, result=result)
         return result
+
+    def _gen_call_args(self, builder: _Builder, func_name: str, node: HIRNode) -> tuple[str, ...]:
+        """GEN_KW_V1: argumentos de una llamada a generador, con keywords
+        ubicados en la posicion de su parametro. Sin defaults: cada parametro
+        debe quedar cubierto por un posicional o un keyword."""
+        params = self.function_params.get(func_name, [])
+        if not node.keywords:
+            return tuple(self._lower_expr(builder, a) for a in node.args)
+        slots: list[Any] = [None] * len(params)
+        for i, arg in enumerate(node.args):
+            if i >= len(params):
+                raise MIRLoweringError(
+                    f"native generator '{func_name}' called with wrong number of arguments"
+                )
+            slots[i] = self._lower_expr(builder, arg)
+        for kw in node.keywords:
+            if kw.arg not in params:
+                raise MIRLoweringError(
+                    f"native generator '{func_name}' got an unexpected keyword argument '{kw.arg}'"
+                )
+            slots[params.index(kw.arg)] = self._lower_expr(builder, kw.value)
+        if any(s is None for s in slots):
+            missing = params[slots.index(None)]
+            raise MIRLoweringError(
+                f"native generator '{func_name}' missing argument '{missing}' (defaults not supported yet)"
+            )
+        return tuple(slots)
 
     def _lower_comp_generators(self, builder: _Builder, generators: list, body_fn):
         """Lower chained comprehension generators recursively.

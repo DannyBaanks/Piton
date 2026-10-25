@@ -3412,6 +3412,11 @@ class LinuxCEmitter:
         # funcion — el call-site lo consulta para rechazar (fail-closed)
         # argumentos de tipo conocido contradictorio.
         self._usage_param_types: dict[str, dict[str, str]] = {f.name: {} for f in module.functions}
+        # CALL_SEED_V1: tipo de param sembrado desde un call-site (CALL_ARG_TYPE_V1)
+        # — best-effort, NO es contrato fail-closed: el cuerpo del callee puede
+        # no usar el param en absoluto (re.compile es un stub), y otro call-site
+        # con un tipo distinto (re.compile(b'...')) no debe rechazarse.
+        self._param_seeds: dict[str, dict[str, str]] = {f.name: {} for f in module.functions}
         # ELEM_KIND_V1: elemento de una lista parametrica deducido por uso
         # (ej. getopt: args[0].startswith -> elem str).
         self._usage_param_elems: dict[str, dict[str, str]] = {f.name: {} for f in module.functions}
@@ -3724,8 +3729,12 @@ class LinuxCEmitter:
             ):
                 types[_cparam] = _ctype
                 # el tipo del call-site pasa a ser seed: lo protege el
-                # SEED_KEEP_V1 frente a stores de valor sin tipo.
-                self._usage_param_types.setdefault(function.name, {})[_cparam] = _ctype
+                # SEED_KEEP_V1 frente a stores de valor sin tipo. NO se
+                # escribe en _usage_param_types: ese dict es el contrato
+                # "usado como" derivado del CUERPO del callee; un seed de
+                # call-site no debe convertirse en rechazo fail-closed
+                # (glob: re.compile(str) seguido de re.compile(bytes)).
+                self._param_seeds.setdefault(function.name, {})[_cparam] = _ctype
         if function.self_class and function.params:
             types[function.params[0]] = f"object:{function.self_class}"
         # WITH_PROTOCOL_V1: __exit__(self, tipo, mensaje, tb) receives the
@@ -7807,14 +7816,12 @@ class LinuxCEmitter:
                 # (opcode/stat del corpus: lectura de constantes de modulo
                 # dentro de funciones; la escritura sigue exigiendo
                 # `global` para no volverse silenciosamente local).
-                if (
-                    getattr(function, "is_generator", False)
-                    or getattr(function, "is_coroutine", False)
-                    or getattr(function, "is_async_generator", False)
-                ):
-                    raise NativeBuildError(
-                        f"Linux global '{source}' inside generators is not supported yet"
-                    )
+                # MODULE_GLOBAL_GEN_V1: leer un global de modulo dentro de un
+                # generador es valido y CORRECTO: el C lee la variable de
+                # ambito de archivo en cada ejecucion del body, igual que
+                # CPython ve el valor vivo al reanudar. El guard previo era
+                # conservador (solo aplicaba a la escritura, que sigue
+                # exigiendo `global`).
                 out.append(f"    {_name(result)}={_name(source)};")
                 types[result] = self._module_types.get(source, types.get(source, "int"))
                 if source in self._tuple_elems:
@@ -7950,7 +7957,9 @@ class LinuxCEmitter:
             # `opts, args = do_longs(...)` y `has_arg, opt = long_has_args(..)`
             # degradaban los params a int y sus usos (args[0][1:],
             # opt.index('=')) fallaban cerrado.
-            _seed_keep = (self._usage_param_types.get(function.name) or {}).get(args[0])
+            _seed_keep = (self._usage_param_types.get(function.name) or {}).get(args[0]) or (
+                self._param_seeds.get(function.name) or {}
+            ).get(args[0])
             if (
                 _seed_keep
                 and _seed_keep != "int"
@@ -12337,8 +12346,9 @@ class LinuxCEmitter:
                         f"native generator '{func_name}' called with wrong number of arguments "
                         "(defaults not supported yet)"
                     )
-                if len(gen_args) > 4:
-                    raise NativeBuildError("native generator calls with more than four arguments are not supported yet")
+                # GEN_ARGS_N_V1: los argumentos se empaquetan slot por slot
+                # (ver _emit_gen_args), no hay límite de registros — el
+                # guard de >4 args era conservador.
             else:
                 if len(gen_args) < len(_named2):
                     raise NativeBuildError(
