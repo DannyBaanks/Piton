@@ -541,6 +541,35 @@ static long piton_str_split_max(const char*s,const char*sep,long maxsplit){if(!s
 static long piton_str_split(const char*s,const char*sep){return piton_str_split_max(s,sep,-1);}
 static long piton_str_strip(const char*s,int mode){usize n=piton_strlen(s),a=0,b=n;if(mode!=2){while(a<n&&piton_ws((unsigned char)s[a]))++a;}if(mode!=1){while(b>a&&piton_ws((unsigned char)s[b-1]))--b;}char*p=piton_alloc(b-a+1);piton_memcpy(p,s+a,b-a);p[b-a]=0;return(long)p;}
 static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(sep);usize total=0;long cnt=items?items->length:0;for(long i=0;i<cnt;++i){if(items->items[i].kind!=PK_STR){piton_write(2,"TypeError: sequence item is not a string\n",41);piton_exit(1);}total+=piton_strlen((const char*)items->items[i].bits);}total+=sl*(usize)(cnt>0?cnt-1:0);char*p=piton_alloc(total+1);usize o=0;for(long i=0;i<cnt;++i){if(i){piton_memcpy(p+o,sep,sl);o+=sl;}usize el=piton_strlen((const char*)items->items[i].bits);piton_memcpy(p+o,(const char*)items->items[i].bits,el);o+=el;}p[o]=0;return(long)p;}
+/* BYTES_JOIN_V1: `sep.join(list_of_bytes)` como en CPython. Cada elemento
+   debe ser bytes (PK_BYTES con .data/.length en PitonBytes). Devuelve un
+   PitonBytes* con los datos concatenados. */
+static long piton_bytes_join(void*sep_obj,void*raw){
+  PitonBytes*sep=(PitonBytes*)sep_obj;
+  PitonSeq*items=(PitonSeq*)raw;
+  if(!items){piton_raise_set("TypeError","can only join an iterable");piton_exit(1);return 0;}
+  usize sl=sep->length;
+  usize total=0;long cnt=items->length;
+  for(long i=0;i<cnt;++i){
+    PitonSlot v=items->items[i];
+    if(v.kind!=PK_BYTES){
+      piton_raise_set("TypeError","sequence item is not a bytes");piton_exit(1);return 0;
+    }
+    PitonBytes*b=(PitonBytes*)v.bits;
+    total+=b->length;
+  }
+  total+=sl*(usize)(cnt>0?cnt-1:0);
+  unsigned char*out=(unsigned char*)piton_alloc(total+1);usize o=0;
+  for(long i=0;i<cnt;++i){
+    if(i){piton_memcpy(out+o,sep->data,sl);o+=sl;}
+    PitonBytes*b=(PitonBytes*)items->items[i].bits;
+    piton_memcpy(out+o,b->data,b->length);o+=b->length;
+  }
+  out[o]=0;
+  PitonBytes*result=(PitonBytes*)piton_alloc(sizeof(PitonBytes));
+  result->refcount=1;result->kind=PK_BYTES;result->length=total;result->data=out;
+  return(long)result;
+}
 /* CHR_NUL_V1: encoded length of a chr() result. strlen stops at NUL, so
  * `chr(0)` measured 0. A chr() result is always exactly one character; the
  * leading byte determines its UTF-8 width, and a leading NUL means chr(0)
@@ -5002,6 +5031,13 @@ class LinuxCEmitter:
             require_count((1,), "exactly one argument")
             out.append(f"    {_name(result)}=piton_bytes_endswith((void*){operand},{self._slot(call_args[0], types)});")
             types[result] = "bool"
+        elif method == "join":
+            # BYTES_JOIN_V1: `sep.join(list_of_bytes)` como en CPython.
+            require_count((1,), "exactly one argument")
+            if types.get(call_args[0]) not in {"list", "tuple"}:
+                raise NativeBuildError("Linux bytes.join() requires a list or tuple argument")
+            out.append(f"    {_name(result)}=(long)piton_bytes_join((void*){operand},(void*){self._value(call_args[0])});")
+            types[result] = "bytes"
         elif method == "append" and is_bytearray:
             require_count((1,), "exactly one int argument")
             out.append(f"    piton_bytearray_append((PitonByteArray*){operand},{self._value(call_args[0])});")
