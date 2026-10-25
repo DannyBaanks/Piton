@@ -7328,14 +7328,15 @@ class LinuxCEmitter:
                 if types.get(source) not in {"list", "tuple"}:
                     raise NativeBuildError("native map/filter require a list or tuple")
                 if types.get(start) == "builtin":
-                    # BUILTIN_CALLBACK_V1: `map(str, xs)` y similares: el
-                    # nombre builtin no tiene direccion de funcion nativa, pero
-                    # `str` se resuelve a piton_str_of_value (convierte cada
-                    # elemento a str, como CPython). Otros builtins fallan
-                    # cerrado.
+                    # BUILTIN_CALLBACK_V1: `map(str, xs)`, `map(repr, xs)` etc.
+                    # el nombre builtin no tiene direccion de funcion nativa,
+                    # pero se resuelve a un helper de runtime. Otros builtins
+                    # fallan cerrado.
                     _builtin_name = aliases.get(start, start)
                     if _builtin_name == "str":
                         callback = "piton_str_of_value"
+                    elif _builtin_name == "repr":
+                        callback = "piton_repr_of_value"
                     else:
                         raise NativeBuildError(
                             f"native {builtin} requires a user function callback, not a builtin name"
@@ -8755,6 +8756,19 @@ class LinuxCEmitter:
                     )
                     self._emit_exc_check(out, function, handler_label)
                 expression = f"({self._value(left)} {operator} {self._value(right)})"
+            elif operator == "@":
+                # MATMUL_V1: a @ b -> a.__matmul__(b) via dynamic dispatch.
+                # Resuelve el metodo en runtime; si no existe, AttributeError.
+                _matmul_expr = (
+                    f'    {{PitonObject*_m_obj=(PitonObject*){self._value(left)};'
+                    f'    long _m_meth=piton_object_get(_m_obj,"__matmul__").bits;'
+                    f'    PitonSeq*_m_args=piton_seq_new(PK_TUPLE,1);'
+                    f'    _m_args->items[0]=piton_slot({self._value(right)},PK_INT);'
+                    f'    {_name(result)}=piton_call_dynamic(_m_meth,(long)_m_args,0,0);}}'
+                )
+                out.append(_matmul_expr)
+                types[result] = "int"
+                return out
             else:
                 raise NativeBuildError(f"Linux binary operator not supported: {operator}")
             out.append(f"    {_name(result)}={expression};")
