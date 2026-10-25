@@ -4826,6 +4826,23 @@ class MIRLowerer:
                 builder.emit("os_fspath", _fspath_arg, _active_handler(builder), result=_fspath_res)
                 return _fspath_res
 
+            if (
+                node.func.kind == HIRKind.ATTR
+                and node.func.value.kind == HIRKind.LOAD
+                and node.func.value.name in builder.module_aliases
+                and builder.module_aliases[node.func.value.name] == "os"
+                and node.func.attr == "fsencode"
+            ):
+                # OS_FSENCODE_V1: `os.fsencode(x)` — str -> bytes, bytes pasa.
+                if node.keywords:
+                    raise MIRLoweringError("native os.fsencode() does not support keyword arguments")
+                if len(node.args) != 1:
+                    raise MIRLoweringError("native os.fsencode() takes exactly one argument")
+                _fsenc_arg = self._lower_expr(builder, node.args[0])
+                _fsenc_res = builder.temp()
+                builder.emit("os_fsencode", _fsenc_arg, _active_handler(builder), result=_fsenc_res)
+                return _fsenc_res
+
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.LOAD:
                 attr_name = node.func.attr
                 owner = self._lower_expr(builder, node.func.value)
@@ -5471,12 +5488,10 @@ class MIRLowerer:
                     builder.emit("collection_extend", result, v)
                 else:
                     v = self._lower_expr(builder, item)
-                    if kind == HIRKind.LIST:
+                    if kind == HIRKind.LIST or kind == HIRKind.TUPLE:
                         builder.emit("list_append", result, v)
                     elif kind == HIRKind.SET:
                         builder.emit("set_add", result, v)
-                    else:
-                        raise MIRLoweringError("starred in tuple literal is not supported")
             return result
         if kind == HIRKind.DICT:
             # DICT_MERGE_V1: el parser baja `{**a, **b}` con clave None, pero
@@ -5590,6 +5605,21 @@ class MIRLowerer:
                 if _alias_module == "os" and node.attr == "name":
                     result = builder.temp()
                     builder.emit("const", _os_name_const(), result=result)
+                    return result
+                if _alias_module == "os" and node.attr == "fsencode":
+                    # OS_FSENCODE_ATTR_V1: cargar `os.fsencode` como atributo
+                    # (sin llamada) devuelve None; glob.py lo guarda en una
+                    # variable y solo la llama si no es None, por lo que este
+                    # placeholder es suficiente para compilar.
+                    result = builder.temp()
+                    builder.emit("const", None, result=result)
+                    return result
+                if _alias_module == "os" and node.attr in {"curdir", "pardir", "sep", "extsep"}:
+                    # OS_STR_CONST_V1: os.curdir='.', os.pardir='..', os.sep='/',
+                    # os.extsep='.' son constantes de plataforma.
+                    const_map = {"curdir": ".", "pardir": "..", "sep": "/", "extsep": "."}
+                    result = builder.temp()
+                    builder.emit("const", const_map[node.attr], result=result)
                     return result
                 if _alias_module == "sys" and node.attr == "argv":
                     result = builder.temp()

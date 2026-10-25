@@ -750,6 +750,8 @@ static long piton_range_get(PitonRange*r,long i){long n=piton_range_len(r);
 
 /* SLICE_VALUE_V1: slice(a,b,c) con bounds ausentes marcados (CPython usa None). */
 static long piton_strdup(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);piton_memcpy(p,s,n+1);return(long)p;}
+/* FS_ENCODE_V1: os.fsencode(str) -> bytes (UTF-8 copy of the str). */
+static PitonBytes* piton_str_to_bytes(const char*s){usize n=piton_strlen(s);PitonBytes*b=(PitonBytes*)piton_alloc(sizeof(PitonBytes));b->refcount=1;b->kind=PK_BYTES;b->length=(long)n;b->data=(unsigned char*)piton_alloc(n+1);piton_memcpy(b->data,s,n+1);return b;}
 /* MEMORYVIEW_V1: constructores y operaciones sobre la vista. */
 static unsigned char* piton_mv_buf(PitonMemoryView*m){
   if(m->is_bytearray)return ((PitonByteArray*)m->buf)->data;
@@ -11453,6 +11455,26 @@ class LinuxCEmitter:
                 self._emit_exc_check(out, function, _fph)
             types[result] = "str"
             return out
+        elif op == "os_fsencode":
+            # OS_FSENCODE_V1: os.fsencode(x) — str -> bytes, bytes pasa.
+            _fp = self._value(args[0])
+            _fpt = types.get(args[0], "")
+            _fph = args[1] if len(args) > 1 else None
+            if _fpt == "str":
+                out.append(f"    {_name(result)}=(long)piton_str_to_bytes((const char*){_fp});")
+            elif _fpt == "bytes":
+                out.append(f"    {_name(result)}={_fp};")
+            else:
+                out.append(
+                    f"    {{long _fpv={_fp};"
+                    f"if(_fpv!=PITON_NONE&&piton_maybe_ptr(_fpv)&&piton_is_printable_str((const char*)_fpv))"
+                    f"{{{_name(result)}=(long)piton_str_to_bytes((const char*)_fpv);}}"
+                    f"else{{piton_raise_set(\"TypeError\",\"expected str, bytes or os.PathLike object, not int\");{_name(result)}=0;}}"
+                    f"}}"
+                )
+                self._emit_exc_check(out, function, _fph)
+            types[result] = "bytes"
+            return out
         elif op == "print_set_fd":
             # PRINT_FD_V1: print(..., file=X) — el descriptor de salida activo.
             out.append(f"    piton_print_fd={self._value(args[0])};")
@@ -12208,8 +12230,8 @@ class LinuxCEmitter:
         elif op == "list_append":
             coll, value = args
             collection_type = types.get(coll)
-            if collection_type != "list":
-                raise NativeBuildError("Linux list_append requires a list")
+            if collection_type not in ("list", "tuple"):
+                raise NativeBuildError("Linux list_append requires a list or tuple")
             out.append(f'    {{PitonSeq*_c=(PitonSeq*){self._value(coll)};PitonSlot _s;_s.bits={self._value(value)};_s.kind={self._kind(types.get(value, "int"))};piton_seq_append(_c,_s);}}')
             # LIST_APPEND_ELEM_V1: el valor appendido define el elem-kind de
             # la lista (getopt: la comprension `[o for o in longopts]` deja
