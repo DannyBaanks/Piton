@@ -8332,7 +8332,11 @@ class LinuxCEmitter:
                             else:
                                 raise NativeBuildError(f"Linux str %s does not support {arg_type} arguments")
                         elif spec == "d":
-                            if arg_type in {"int", "bool"}:
+                            if arg_type in {"int", "bool", ""}:
+                                # PCT_UNKNOWN_ARG_V1: tipo desconocido ->
+                                # piton_str_from_int asume que el valor es
+                                # int-compatible en runtime (CPython lanza
+                                # TypeError si no lo es).
                                 base = f"piton_str_from_int({operand})"
                             elif arg_type == "float":
                                 base = f"piton_str_from_int((long)piton_bits_double({operand}))"
@@ -8340,7 +8344,7 @@ class LinuxCEmitter:
                                 raise NativeBuildError(f"Linux str %d requires a real number, not {arg_type}")
                         elif spec in {"f", "F", "e", "E", "g", "G"}:
                             precv = prec if prec >= 0 else 6
-                            if arg_type not in {"float", "int", "bool"}:
+                            if arg_type not in {"float", "int", "bool", ""}:
                                 raise NativeBuildError(f"Linux %{spec} requires int or float, not {arg_type}")
                             _foldv = f"({operand})" if arg_type == "float" else f"piton_double_bits((double){operand})"
                             if spec in {"f", "F"}:
