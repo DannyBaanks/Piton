@@ -11286,7 +11286,48 @@ class LinuxCEmitter:
                     raise NativeBuildError(
                         f"native property '{method}' of '{cls_name}' object is not a method (calling a property is unsupported)"
                     )
-            cls_name = self._resolve_method(cls_name, method)
+            try:
+                cls_name = self._resolve_method(cls_name, method)
+            except NativeBuildError:
+                # METHOD_NOT_FOUND_V1: el metodo no esta definido estaticamente
+                # en ninguna clase conocida (p.ej. heredado de una clase de
+                # CPython real no empaquetada). Fallback a llamada dinamica en
+                # runtime: resuelve el atributo con getattr y lo llama.
+                # Si el atributo no existe o no es callable, el runtime
+                # lanza AttributeError/TypeError como CPython.
+                _attr_expr = (
+                    f'(const char*){self._value(method)}'
+                    if isinstance(method, str) and method.startswith('%')
+                    else f'"{method}"'
+                )
+                _dargs = []
+                if not isinstance(obj, str) or not obj.startswith("%"):
+                    _dargs.append(obj)
+                _dargs.extend(call_args)
+                _dparts = [f"{{PitonSeq*_dpa=piton_seq_new(PK_TUPLE,{len(_dargs)});"]
+                for _di, _dv in enumerate(_dargs):
+                    _dparts.append(
+                        f"    _dpa->items[{_di}]=piton_slot({self._value(_dv)},PK_INT);"
+                    )
+                _dparts.append("_dpa;}")
+                _dtuple = f"(long)({''.join(_dparts)})"
+                if kw_args:
+                    _kparts = [f"{{PitonDict*_dpk=piton_dict_new({len(kw_args)});"]
+                    for _kn, _kv in kw_args:
+                        _kparts.append(
+                            f'    piton_dict_append(_dpk,piton_slot((long){json.dumps(_kn)},PK_STR),{self._slot(_kv, types)});'
+                        )
+                    _kparts.append("    }")
+                    _kdict = f"(long)({''.join(_kparts)})"
+                else:
+                    _kdict = "0"
+                out.append(
+                    f"    {_name(result)}=piton_call_dynamic("
+                    f"piton_object_get((PitonObject*){self._value(obj)},{_attr_expr}).bits,"
+                    f"{_dtuple},0,{_kdict});"
+                )
+                types[result] = "int"
+                return out
             target = f"{cls_name}__{method}"
             if target in self.static_methods:
                 all_values = self._complete_call_args(target, list(call_args))
