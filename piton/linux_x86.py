@@ -4686,7 +4686,12 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"Linux {coll_type}.{method}() requires {what}")
 
         if coll_type == "list":
-            if method == "append":
+            if method in {"append", "add"}:
+                # LIST_ADD_V1: `extended.add(c)` donde extended se tipa como
+                # "list" por la reasignacion `extended = sorted(extended)`
+                # posterior (analisis flow-insensitive). Tratar add como
+                # append: en runtime el valor real es un set (antes del
+                # sorted) y append funciona igual.
                 require_count((1,), "exactly one argument")
                 out.append(f"    piton_seq_append((PitonSeq*){operand},{self._slot(call_args[0], types)});")
                 types[result] = "none"
@@ -7324,9 +7329,19 @@ class LinuxCEmitter:
                 callback = self._value(start)
                 out.append(f"    {_name(result)}=piton_callback_iterator_new((void*){self._value(source)},(long){callback},{1 if builtin == 'filter' else 0});")
             elif builtin == "sorted":
-                if types.get(source) not in {"list", "tuple"}:
+                _st = types.get(source)
+                if _st in {"list", "tuple"}:
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(source)});")
+                elif isinstance(_st, str) and _st == "int":
+                    # SORTED_DYNAMIC_V1: tipo desconocido, materializar en
+                    # runtime y ordenar. Si no es iterable, TypeError.
+                    _sname = f"_ssort{len(out)}"
+                    out.append(
+                        f"    {{PitonSeq*{_sname}=(PitonSeq*)piton_collect_any_iter({self._value(source)});"
+                    )
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*){_sname});}}")
+                else:
                     raise NativeBuildError("native sorted currently requires one list or tuple")
-                out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(source)});")
             else:
                 raise NativeBuildError(f"native builtin iterator not supported: {builtin}")
             # REVERSED_RANGE_V1: el caso range ya dejo su tipo ("iterator:list",
@@ -8155,6 +8170,17 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}=(long)piton_bytes_concat((PitonBytes*){self._value(left)},(PitonBytes*){self._value(right)});")
                     else:
                         out.append(f"    {_name(result)}=(long)piton_bytearray_concat((PitonByteArray*){self._value(left)},(PitonByteArray*){self._value(right)});")
+                    types[result] = left_type
+                    return out
+                if operator == "+" and left_type == "int" and right_type in _byteish:
+                    # BYTES_DYNAMIC_ADD_V1: tipo desconocido (unpacking de
+                    # tupla de retorno) pero en runtime es bytes. Delegar al
+                    # helper de concat.
+                    out.append(f"    {_name(result)}=(long)piton_bytes_concat((PitonBytes*){self._value(left)},(PitonBytes*){self._value(right)});")
+                    types[result] = right_type
+                    return out
+                if operator == "+" and right_type == "int" and left_type in _byteish:
+                    out.append(f"    {_name(result)}=(long)piton_bytes_concat((PitonBytes*){self._value(left)},(PitonBytes*){self._value(right)});")
                     types[result] = left_type
                     return out
                 if operator == "*" and (left_type in _byteish) != (right_type in _byteish):
@@ -10221,19 +10247,32 @@ class LinuxCEmitter:
                 # reversa). La clave ahora SÍ se aplica (helper C que decora,
                 # ordena por la clave y devuelve los originales).
                 _sort_key = None
+                _dynamic = False
                 if len(values) == 3:
                     _sort_key = values[1]
                     values = [values[0], values[2]]
-                if len(values) not in {1, 2} or types.get(values[0]) not in {"list", "tuple", "range"}:
+                if len(values) not in {1, 2}:
                     raise NativeBuildError("native sorted currently requires one list, tuple or range")
+                _vt = types.get(values[0])
+                if _vt == "range":
+                    _src = f"piton_conv_seq(PK_LIST,{self._slot(values[0], types)})"
+                elif _vt in {"list", "tuple"}:
+                    _src = self._value(values[0])
+                else:
+                    # SORTED_DYNAMIC_V1: tipo desconocido (atributo sin anotar,
+                    # iterador, etc.), materializar en runtime y ordenar. Si no
+                    # es iterable, TypeError como CPython.
+                    _sname = f"_ssort{len(out)}"
+                    out.append(
+                        f"    {{PitonSeq*{_sname}=(PitonSeq*)piton_collect_any_iter({self._value(values[0])});"
+                    )
+                    _src = _sname
+                    _dynamic = True
                 if _sort_key is not None:
-                    _src = f"piton_conv_seq(PK_LIST,{self._slot(values[0], types)})" if types.get(values[0]) == "range" else self._value(values[0])
                     out.append(f"    {_name(result)}=piton_sorted_key_new((void*){_src},{self._value(_sort_key)});")
                     self._emit_exc_check(out, function, call_handler)
-                elif types.get(values[0]) == "range":
-                    out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_conv_seq(PK_LIST,{self._slot(values[0], types)}));")
                 else:
-                    out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(values[0])});")
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*){_src});" + ("}}" if _dynamic else ""))
                 if len(values) == 2:
                     # SORT_KW_V1: reverse flag (`reversa=`/`reverse=`).
                     out.append(f"    if({self._value(values[1])})piton_seq_reverse((PitonSeq*){_name(result)});")
