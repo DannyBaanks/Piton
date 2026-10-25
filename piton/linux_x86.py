@@ -10656,6 +10656,12 @@ class LinuxCEmitter:
                 out.append(f"    piton_dict_del((PitonDict*){self._value(obj)},{self._slot(index, types)});")
             elif owner_type == "set":
                 out.append(f"    piton_set_discard((PitonSet*){self._value(obj)},{self._slot(index, types)});")
+            elif owner_type == "int":
+                # DEL_ITEM_INT_V1: `borrar x[0]` con x estaticamente int.
+                # CPython SIEMPRE lanza TypeError: 'int' object is not
+                # subscriptable (un int no es subscriptable, nunca se borra).
+                out.append('    piton_raise_set("TypeError","\'int\' object is not subscriptable");')
+                self._emit_exc_check(out, function, None)
             else:
                 raise NativeBuildError(f"native del item target of type '{owner_type}' is not supported")
             return out
