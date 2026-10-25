@@ -3924,7 +3924,9 @@ class MIRLowerer:
                 chain = self._module_attr_chain(builder, node.func)
                 if chain is not None:
                     if node.keywords:
-                        raise MIRLoweringError("native module calls do not support keyword arguments yet")
+                        # KWRG_MODULE_V1: allow kwargs if function supports varargs/kwargs; otherwise fail-closed later
+                        # raise MIRLoweringError("native module calls do not support keyword arguments yet")
+                        pass
                     alias_name, attrs = chain
                     module_name = builder.module_aliases[alias_name]
                     # SUBMODULE_ALIAS_V1: si el alias resolvio a un SUBMODULO
@@ -3935,18 +3937,22 @@ class MIRLowerer:
                     if _profundidad_extra > 0:
                         attrs = attrs[_profundidad_extra:]
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
-                    # MODVAR_CALLEE_V1: el call lleva el NOMBRE del symbol
-                    # (antes era load+call(temp): el emisor no resolvia el
-                    # function_name y NO empaquetaba *args — `join(a,b,c)`
-                    # pasaba 3 argumentos a una firma de 2). Cuando hay
-                    # *args/**kwargs el empaquetado de la tupla lo hace el
-                    # MIR; el emisor solo empaqueta cuando la llamada vino
-                    # por el camino directo (values < params).
-                    if (
-                        self.function_varargs.get(symbol) is not None
-                        or self.function_kwargs.get(symbol) is not None
-                    ):
-                        args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
+                    # KWRG_MODULE_V1: kwargs van siempre por
+                    # _lower_variadic_call (match a parametros nombrados,
+                    # falla cerrado si no hay **kwargs). Solo para symbols
+                    # registrados como funciones de modulo nativo; si no esta
+                    # registrado (funcion PITON de submódulo), se deja pasar al
+                    # descenso normal de atributos.
+                    if symbol in self.function_params or symbol in self.function_varargs or symbol in self.function_kwargs:
+                        if node.keywords:
+                            args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
+                        elif (
+                            self.function_varargs.get(symbol) is not None
+                            or self.function_kwargs.get(symbol) is not None
+                        ):
+                            args = self._lower_variadic_call(builder, symbol, node.args, ())
+                        else:
+                            args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                     else:
                         args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                     result = builder.temp()
@@ -3957,9 +3963,19 @@ class MIRLowerer:
                 and node.func.value.kind == HIRKind.LOAD
                 and node.func.value.name in builder.module_aliases
             ):
-                if node.keywords:
-                    raise MIRLoweringError("native module calls do not support keyword arguments yet")
                 module_name = builder.module_aliases[node.func.value.name]
+                # KWRG_MODULE_V1: kwargs via _lower_variadic_call (match a
+                # parametros nombrados; "unexpected keyword argument" si no hay
+                # **kwargs). asyncio se excluye: sus gates propios rechazan
+                # keywords. Solo para symbols registrados como funciones de
+                # modulo nativo.
+                if node.keywords and module_name != "asyncio":
+                    symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                    if symbol in self.function_params or symbol in self.function_varargs or symbol in self.function_kwargs:
+                        args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
+                        result = builder.temp()
+                        builder.emit("call", symbol, args, result=result)
+                        return result
                 if module_name == "asyncio" and node.func.attr == "run":
                     if len(node.args) != 1 or node.keywords or node.args[0].kind != HIRKind.CALL:
                         raise MIRLoweringError("native asyncio.run requires one direct coroutine call")
@@ -4139,6 +4155,7 @@ class MIRLowerer:
                 if (
                     node.keywords
                     and node.func.attr != "update"
+                    and node.func.attr != "format"
                     and not (
                         node.func.attr == "split"
                         and len(node.keywords) == 1
@@ -4151,8 +4168,29 @@ class MIRLowerer:
                         and node.keywords[0].arg == "reverse"
                         and not node.args
                     )
-                    and node.func.attr != "format"
                 ):
+                    # KWRG_METHOD_V1: los metodos nativos con kwargs bajan por
+                    # `method_call` que ya transporta kw (dict.update, format).
+                    # Para metodos con firma declarada, _lower_variadic_call hace
+                    # match a parametros nombrados y falla cerrado si no hay
+                    # **kwargs.
+                    if (
+                        node.func.value.kind == HIRKind.LOAD
+                        and node.func.value.name in builder.module_aliases
+                    ):
+                        module_name = builder.module_aliases[node.func.value.name]
+                        _msymbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                        if (
+                            _msymbol in self.function_params
+                            or _msymbol in self.function_varargs
+                            or _msymbol in self.function_kwargs
+                        ):
+                            args = self._lower_variadic_call(
+                                builder, _msymbol, node.args, node.keywords
+                            )
+                            result = builder.temp()
+                            builder.emit("call", _msymbol, args, result=result)
+                            return result
                     raise MIRLoweringError(
                         f"native method calls do not support keyword arguments yet "
                         f"(method '{node.func.attr}')"
@@ -4944,7 +4982,9 @@ class MIRLowerer:
                 chain = self._module_attr_chain(builder, node.func)
                 if chain is not None:
                     if node.keywords:
-                        raise MIRLoweringError("native module calls do not support keyword arguments yet")
+                        # KWRG_MODULE_V1: allow kwargs if function supports varargs/kwargs; otherwise fail-closed later
+                        # raise MIRLoweringError("native module calls do not support keyword arguments yet")
+                        pass
                     alias_name, attrs = chain
                     module_name = builder.module_aliases[alias_name]
                     # SUBMODULE_ALIAS_V1: si el alias resolvio a un SUBMODULO
@@ -4955,18 +4995,20 @@ class MIRLowerer:
                     if _profundidad_extra > 0:
                         attrs = attrs[_profundidad_extra:]
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
-                    # MODVAR_CALLEE_V1: el call lleva el NOMBRE del symbol
-                    # (antes era load+call(temp): el emisor no resolvia el
-                    # function_name y NO empaquetaba *args — `join(a,b,c)`
-                    # pasaba 3 argumentos a una firma de 2). Cuando hay
-                    # *args/**kwargs el empaquetado de la tupla lo hace el
-                    # MIR; el emisor solo empaqueta cuando la llamada vino
-                    # por el camino directo (values < params).
-                    if (
-                        self.function_varargs.get(symbol) is not None
-                        or self.function_kwargs.get(symbol) is not None
-                    ):
-                        args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
+                    # MODVAR_CALLEE_V1 + KWRG_MODULE_V1: kwargs van por
+                    # _lower_variadic_call (match a parametros nombrados, falla
+                    # cerrado si no hay **kwargs). Solo para symbols registrados
+                    # como funciones de modulo nativo.
+                    if symbol in self.function_params or symbol in self.function_varargs or symbol in self.function_kwargs:
+                        if node.keywords:
+                            args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
+                        elif (
+                            self.function_varargs.get(symbol) is not None
+                            or self.function_kwargs.get(symbol) is not None
+                        ):
+                            args = self._lower_variadic_call(builder, symbol, node.args, ())
+                        else:
+                            args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                     else:
                         args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                     result = builder.temp()
@@ -4977,9 +5019,19 @@ class MIRLowerer:
                 and node.func.value.kind == HIRKind.LOAD
                 and node.func.value.name in builder.module_aliases
             ):
-                if node.keywords:
-                    raise MIRLoweringError("native module calls do not support keyword arguments yet")
                 module_name = builder.module_aliases[node.func.value.name]
+                # KWRG_MODULE_V1: kwargs via _lower_variadic_call (match a
+                # parametros nombrados; "unexpected keyword argument" si no hay
+                # **kwargs). asyncio se excluye: sus gates propios rechazan
+                # keywords. Solo para symbols registrados como funciones de
+                # modulo nativo.
+                if node.keywords and module_name != "asyncio":
+                    symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                    if symbol in self.function_params or symbol in self.function_varargs or symbol in self.function_kwargs:
+                        args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
+                        result = builder.temp()
+                        builder.emit("call", symbol, args, result=result)
+                        return result
                 if module_name == "asyncio" and node.func.attr == "run":
                     if len(node.args) != 1 or node.keywords or node.args[0].kind != HIRKind.CALL:
                         raise MIRLoweringError("native asyncio.run requires one direct coroutine call")
@@ -5151,6 +5203,7 @@ class MIRLowerer:
                 if (
                     node.keywords
                     and node.func.attr != "update"
+                    and node.func.attr != "format"
                     and not (
                         node.func.attr == "split"
                         and len(node.keywords) == 1
@@ -5163,8 +5216,29 @@ class MIRLowerer:
                         and node.keywords[0].arg == "reverse"
                         and not node.args
                     )
-                    and node.func.attr != "format"
                 ):
+                    # KWRG_METHOD_V1: los metodos nativos con kwargs bajan por
+                    # `method_call` que ya transporta kw (dict.update, format).
+                    # Para metodos con firma declarada, _lower_variadic_call hace
+                    # match a parametros nombrados y falla cerrado si no hay
+                    # **kwargs.
+                    if (
+                        node.func.value.kind == HIRKind.LOAD
+                        and node.func.value.name in builder.module_aliases
+                    ):
+                        module_name = builder.module_aliases[node.func.value.name]
+                        _msymbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                        if (
+                            _msymbol in self.function_params
+                            or _msymbol in self.function_varargs
+                            or _msymbol in self.function_kwargs
+                        ):
+                            args = self._lower_variadic_call(
+                                builder, _msymbol, node.args, node.keywords
+                            )
+                            result = builder.temp()
+                            builder.emit("call", _msymbol, args, result=result)
+                            return result
                     raise MIRLoweringError(
                         f"native method calls do not support keyword arguments yet "
                         f"(method '{node.func.attr}')"

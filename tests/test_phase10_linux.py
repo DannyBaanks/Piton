@@ -1519,20 +1519,21 @@ class Phase10LinuxGates(unittest.TestCase):
                 compile_native_linux_files(entry, root / "program")
 
     def test_linux_module_attr_chain_keyword_args_fails_closed(self):
+        # KWRG_MODULE_V1: kwargs en llamadas de modulo nativo se resuelven por
+        # _lower_variadic_call (match a parametros nombrados). `mimod.suma(a=1,b=2)`
+        # compila y ejecuta igual que CPython; un kwarg inesperado falla cerrado.
         with tempfile.TemporaryDirectory(prefix="piton-linux-module-kw-") as directory:
             root = Path(directory)
-            pkg_dir = root / "pkg"
-            pkg_dir.mkdir()
-            (pkg_dir / "__init__.piton").write_text("", encoding="utf-8")
-            (pkg_dir / "numeros.piton").write_text(
+            (root / "mimod.piton").write_text(
                 "funcion suma(a, b):\n    devolver a + b\n", encoding="utf-8"
             )
             entry = root / "main.piton"
             entry.write_text(
-                "importar pkg\nimprimir(pkg.numeros.suma(a=1, b=2))\n", encoding="utf-8"
+                "importar mimod\nimprimir(mimod.suma(a=1, b=2))\n", encoding="utf-8"
             )
-            with self.assertRaisesRegex(Exception, "keyword arguments"):
-                compile_native_linux_files(entry, root / "program")
+            executable = compile_native_linux_files(entry, root / "program")
+            run = subprocess.run([str(executable)], capture_output=True, check=False)
+            self.assertEqual((run.returncode, run.stdout), (0, b"3\n"))
 
     # ── IMPORT_STAR_V1 (Linux mirror) ───────────────────────────────────
 
