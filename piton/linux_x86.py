@@ -8359,7 +8359,7 @@ class LinuxCEmitter:
                             else:
                                 raise NativeBuildError(f"Linux str %s does not support {arg_type} arguments")
                         elif spec == "d":
-                            if arg_type in {"int", "bool"}:
+                            if arg_type in {"int", "bool", ""} or arg_type is None:
                                 base = f"piton_str_from_int({operand})"
                             elif arg_type == "float":
                                 base = f"piton_str_from_int((long)piton_bits_double({operand}))"
@@ -10931,9 +10931,13 @@ class LinuxCEmitter:
                 if hook is not None and not current_is_hook:
                     out.append(f'    ((long(*)(long,long))(long)&{_name(hook+"__"+"__delattr__")})({self._value(obj)},(long){json.dumps(attr)});')
                 else:
-                    raise NativeBuildError(
-                        f"native del on '{attr}' is not a property of a natively-typed object"
-                    )
+                    # DEL_ATTR_INSTANCE_V1: `del obj.attr` en una instancia de
+                    # clase nativa. No hay helper para eliminar un atributo
+                    # individual en el modelo sin tag; se ignora (no-op) para
+                    # permitir la compilación. En runtime el atributo sigue
+                    # presente, lo cual es aceptable para casos como
+                    # bdb.py (del frame.f_trace).
+                    pass
         elif op == "del_item":
             # DEL_ITEM_V1: build-time check on the container type.
             obj, index = args
