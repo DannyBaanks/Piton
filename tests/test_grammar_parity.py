@@ -259,11 +259,15 @@ class EllipsisV1(unittest.TestCase):
     def test_ellipsis_in_call_parses(self):
         self.assertIsNotNone(parse("imprimir (...)\n"))
 
-    def test_backend_fails_closed(self):
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError) as ctx:
-            compare_native_to_cpython("imprimir (type (...))\n")
-        self.assertIn("Ellipsis", str(ctx.exception))
+    def test_backend_encodes_ellipsis(self):
+        # ELLIPSIS_SINGLETON_V1: `...` ya NO es fail-closed — baja como el
+        # singleton del runtime (identidad propia, impresion "Ellipsis",
+        # truthy), verificado contra CPython.
+        _assert_matches(self, "imprimir (...)\n")
+
+    def test_type_of_ellipsis_is_faithful(self):
+        # tipo(...) imprime `<class 'ellipsis'>`, igual que CPython.
+        _assert_matches(self, "imprimir (type (...))\n")
 
 
 class CallTrailingCommaV1(unittest.TestCase):

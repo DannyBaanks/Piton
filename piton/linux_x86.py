@@ -1308,7 +1308,7 @@ static int piton_maybe_ptr(long bits){
 /* OS_FSPATH_V1: nombre del tipo dinamico de un valor `bits` (misma politica
    que piton_isinstance_dynamic: puntero con cabecera -> secuencia/dict/
    set/objeto; puntero imprimible -> str; doble -> float; resto -> int). */
-static const char* piton_dynamic_type_name(long bits){if(bits==(long)&piton_none_singleton)return "NoneType";
+static const char* piton_dynamic_type_name(long bits){if(bits==(long)&piton_none_singleton)return "NoneType";if(bits==(long)&piton_ellipsis_singleton)return "ellipsis";
   if(!bits)return "NoneType";
   if(piton_is_double_bits(bits))return "float";
   if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
@@ -1326,7 +1326,7 @@ static const char* piton_dynamic_type_name(long bits){if(bits==(long)&piton_none
    imprimible -> str, cabecera de coleccion -> su repr, doble -> float,
    enteros crudos -> int). Un valor que no cae en ninguno de esos casos se
    reporta con raise_set, no se imprime como puntero basura. */
-static const char* piton_str_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";
+static const char* piton_str_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";if(bits==(long)&piton_ellipsis_singleton)return "Ellipsis";
   if(!bits)return "None";
   if(piton_is_double_bits(bits))return (const char*)piton_str_from_float(bits);
   if(piton_maybe_ptr(bits)){
@@ -1348,7 +1348,7 @@ static const char* piton_str_of_value(long bits){if(bits==(long)&piton_none_sing
    como long es indistinguible de 0/1 y sale "1"/"0" — la misma
    representacion de bools que usa el resto del backend. dict/set/bytes
    dinamicos fallan cerrado (exit 2) en vez de divergir. */
-static const char* piton_repr_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";
+static const char* piton_repr_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";if(bits==(long)&piton_ellipsis_singleton)return "Ellipsis";
   if(!bits)return "None";
   if(piton_is_double_bits(bits))return (const char*)piton_str_from_float(bits);
   /* el str va ANTES de la cabecera: un literal de rodata no siempre pasa
@@ -1366,7 +1366,7 @@ static const char* piton_repr_of_value(long bits){if(bits==(long)&piton_none_sin
    if(b2>=0x400000L&&b2<0x480000L)return "None";}
   return (const char*)piton_str_from_int(bits);
 }
-static void piton_print_int_safe(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}
+static void piton_print_int_safe(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(bits==(long)&piton_ellipsis_singleton){piton_write(piton_print_fd,"Ellipsis",8);return;}
   /* PRINT_INT_V1: un entero cuyo tipo estático es int pero que en runtime es
    * un puntero (huecos de inferencia) se imprime como string; si no, como int.
    * PRINT_DYNAMIC_KIND_V1: si el puntero lleva cabecera de coleccion (el valor
@@ -1379,7 +1379,7 @@ static void piton_print_int_safe(long bits){if(bits==(long)&piton_none_singleton
   }
   piton_write_int(bits);
 }
-static void piton_print_auto(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(bits==0){piton_write(piton_print_fd,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
+static void piton_print_auto(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(bits==(long)&piton_ellipsis_singleton){piton_write(piton_print_fd,"Ellipsis",8);return;}if(bits==0){piton_write(piton_print_fd,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
 /* SLOT_GUESS_V1: la kind de un valor que cruza un ABI sin slot (un metodo
    ligado builtin recibe `long`). Se deriva de la cabecera con la misma
    politica que piton_dynamic_type_name; el resto es int. NO inventa un tipo:
@@ -3343,6 +3343,9 @@ class LinuxCEmitter:
             "typedef long i64; typedef unsigned long usize; typedef unsigned long long u64; typedef unsigned __int128 u128;",
             "/* NONE_SINGLETON_V2: None tiene direccion PROPIA (16 bytes: los inspectores de valor leen ptr[1] para el kind; con 8 bytes leian fuera del array). Antes None era el entero 0: el ABI pasa longs sin kind, asi que `b es Nada` sobre un parametro sin tipo era falso por construccion e `imprimir(None)` mostraba 0. La identidad de None es su direccion. */",
             "static const char piton_none_singleton[16]={'N','O','N','E','V','A','L',0,0,0,0,0,0,0,0,0};",
+            "/* ELLIPSIS_SINGLETON_V1: `...` (Ellipsis) es otro singleton con identidad propia: antes el emisor no podia codificarlo y cualquier archivo que lo usara (types.py, _types.py) era fail-closed en build. Misma politica que None: la identidad es la direccion y la impresion da 'Ellipsis'. A diferencia de None, Ellipsis ES truthy en CPython — la verdad de unknown ya lo trata como verdadero (puntero no nulo). */",
+            "static const char piton_ellipsis_singleton[16]={'E','L','L','I','P','S','I','S',0,0,0,0,0,0,0,0};",
+            "#define PITON_ELLIPSIS ((long)&piton_ellipsis_singleton)",
             "#define PITON_NONE ((long)&piton_none_singleton)",
 
             "static long piton_write(long fd,const void*buf,usize n){long r;__asm__ volatile(\"syscall\":\"=a\"(r):\"a\"(1L),\"D\"(fd),\"S\"(buf),\"d\"(n):\"rcx\",\"r11\",\"memory\");return r;}",
@@ -3358,7 +3361,7 @@ class LinuxCEmitter:
             "static long piton_globals_ns=0;",
             "static void piton_print_str_raw(const char*s){if(s==(const char*)&piton_none_singleton){piton_write(piton_print_fd,\"None\",4);return;}if(!s){piton_write(piton_print_fd,\"None\",4);return;}piton_write(piton_print_fd,s,piton_strlen(s));}",
             "static void piton_print_str(const char*s){if(s==(const char*)&piton_none_singleton){piton_write(piton_print_fd,\"None\",4);return;}piton_print_str_raw(s);piton_write(piton_print_fd,\"\\n\",1);}",
-            "static void piton_print_dynamic(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,\"None\",4);return;}if(!bits){piton_write(piton_print_fd,\"None\",4);}else{piton_write(piton_print_fd,(const char*)bits,piton_strlen((const char*)bits));}}",
+            "static void piton_print_dynamic(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,\"None\",4);return;}if(bits==(long)&piton_ellipsis_singleton){piton_write(piton_print_fd,\"Ellipsis\",8);return;}if(!bits){piton_write(piton_print_fd,\"None\",4);}else{piton_write(piton_print_fd,(const char*)bits,piton_strlen((const char*)bits));}}",
             "static void piton_write_int(i64 number){char b[32];usize i=sizeof(b);unsigned long value;if(number<0){piton_write(piton_print_fd,\"-\",1);value=0-(unsigned long)number;}else value=(unsigned long)number;do{b[--i]=(char)(\'0\'+value%10);value/=10;}while(value);piton_write(piton_print_fd,b+i,sizeof(b)-i);}",
             "static void piton_print_int_raw(i64 number){piton_write_int(number);}",
             "static void piton_print_int(i64 number){piton_print_int_raw(number);piton_write(piton_print_fd,\"\\n\",1);}",
@@ -3827,6 +3830,9 @@ class LinuxCEmitter:
             # internos (dynamic_call, handlers) NO pasan por aqui: el emisor
             # los traduce a "0" explicito en su propio sitio.
             return "PITON_NONE"
+        if value is Ellipsis:
+            # ELLIPSIS_SINGLETON_V1: `...` tambien tiene direccion propia.
+            return "PITON_ELLIPSIS"
         if isinstance(value, bool):
             return str(int(value))
         if isinstance(value, int):
@@ -5268,7 +5274,7 @@ class LinuxCEmitter:
                 )
                 types[result] = "str"
                 return out
-            if types.get(call_args[0]) in {"", "int", "none"}:
+            if types.get(call_args[0]) in {"", "int", "none", "str"}:
                 # JOIN_OF_DYNAMIC_V1: el argumento no tiene tipo estatico; el
                 # runtime acepta lista/tupla/str y levanta el TypeError de
                 # CPython para el resto.
@@ -5784,7 +5790,7 @@ class LinuxCEmitter:
         if (
             haystack_type != "str"
             and needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex",
-                                    "tuple", "list"}
+                                    "tuple", "list", "none"}
             and not needle_type.startswith(("object:", "class:"))
         ):
             # IN_STR_DYNAMIC_V1: con haystack str el needle lo decide el
@@ -7369,6 +7375,11 @@ class LinuxCEmitter:
                     kinds = {_seq_elem_kind(item) for item in value}
                     if len(kinds) == 1:
                         self._coll_elems[result] = kinds.pop()
+            elif value is Ellipsis:
+                # ELLIPSIS_SINGLETON_V1: `...` baja como el singleton del
+                # runtime (identidad propia, igual que None).
+                out.append(f"    {_name(result)}=PITON_ELLIPSIS;")
+                types[result] = "ellipsis"
             else:
                 raise NativeBuildError(f"Linux backend cannot encode constant {value!r}")
         elif op == "load":
@@ -9818,27 +9829,46 @@ class LinuxCEmitter:
                         types[result] = "list"
                         self._coll_elems[result] = "int"
                         return out
-                if source_type == "generator" and seq_kind == "PK_LIST":
+                if source_type == "generator" and seq_kind in {"PK_LIST", "PK_TUPLE"}:
                     # CONV_GEN_V1: lista(generador) materializa en el runtime.
-                    out.append(f"    {_name(result)}=piton_collect_gen({self._value(values[0])});")
-                    types[result] = "list"
+                    # TUPLE_OF_ITER_V1: tupla(g()) — se materializa igual y se
+                    # convierte a la kind de destino (CPython: tuple(g())).
+                    _gen_tmp = f"(long)piton_collect_gen({self._value(values[0])})"
+                    if seq_kind == "PK_TUPLE":
+                        out.append(f"    {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{{_gen_tmp},PK_LIST}});")
+                        types[result] = "tuple"
+                    else:
+                        out.append(f"    {_name(result)}={_gen_tmp};")
+                        types[result] = "list"
                     self._coll_elems[result] = "int"
                     return out
-                if source_type == "iterator:calliter" and seq_kind == "PK_LIST":
+                if source_type == "iterator:calliter" and seq_kind in {"PK_LIST", "PK_TUPLE"}:
                     # CALLITER_LIST_V1: lista(iter(f, centinela)) materializa
                     # vía piton_calliter_next — el centinela levanta
                     # StopIteration (fin normal) y cualquier otra excepción
                     # del callable propaga (CPython: el excepción sale de
                     # list()).
-                    out.append(f"    {_name(result)}=piton_collect_via_next_fn({self._value(values[0])},piton_calliter_next);")
-                    types[result] = "list"
+                    _ci_tmp = f"(long)piton_collect_via_next_fn({self._value(values[0])},piton_calliter_next)"
+                    if seq_kind == "PK_TUPLE":
+                        out.append(f"    {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{{_ci_tmp},PK_LIST}});")
+                        types[result] = "tuple"
+                    else:
+                        out.append(f"    {_name(result)}={_ci_tmp};")
+                        types[result] = "list"
                     self._coll_elems[result] = "int"
                     return out
-                if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter"} and seq_kind == "PK_LIST":
+                if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter"} and seq_kind in {"PK_LIST", "PK_TUPLE"}:
                     _which = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3}[source_type]
                     _elemkind = "PK_TUPLE" if source_type in {"iterator:enumerate", "iterator:zip"} else "PK_INT"
-                    out.append(f"    {_name(result)}=piton_collect({_which},{self._value(values[0])},{_elemkind});")
-                    types[result] = "list"
+                    _it_tmp = f"(long)piton_collect({_which},{self._value(values[0])},{_elemkind})"
+                    if seq_kind == "PK_TUPLE":
+                        # TUPLE_OF_ITER_V1: tupla(map(...)) — 2 archivos del
+                        # corpus recursivo (operator.py, util.py) caian aqui.
+                        out.append(f"    {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{{_it_tmp},PK_LIST}});")
+                        types[result] = "tuple"
+                    else:
+                        out.append(f"    {_name(result)}={_it_tmp};")
+                        types[result] = "list"
                     self._coll_elems[result] = "tuple" if source_type in {"iterator:enumerate", "iterator:zip"} else "int"
                     return out
                 if source_type == "none" and alias in {"lista", "list", "tuple", "tupla"}:
@@ -9917,7 +9947,13 @@ class LinuxCEmitter:
                     literal = json.dumps(f"<class '__main__.{class_name}'>")
                     out.append(f"    {_name(result)}=(long){literal};")
                 else:
-                    out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
+                    if value_type == "ellipsis":
+                        # ELLIPSIS_SINGLETON_V1: tipo(...) imprime
+                        # `<class 'ellipsis'>` como CPython (antes salia
+                        # 'object' por el default — divergencia silenciosa).
+                        out.append(f"    {_name(result)}=(long)" + json.dumps("<class 'ellipsis'>") + ";")
+                    else:
+                        out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
                 types[result] = "str"
             elif function_name in {"sorted", "ordenar"}:
                 # SORTED_STR_V1: a str sorts like its list of 1-char strings.

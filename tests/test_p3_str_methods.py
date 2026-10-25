@@ -155,9 +155,16 @@ class JoinV1(unittest.TestCase):
         self.assertEqual(result.native.returncode, 1)
         self.assertIn(b"TypeError", result.native.stderr)
 
-    def test_join_non_collection_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir(','.join('ab'))\n")
+    def test_join_over_str_joins_chars(self):
+        # CPython acepta cualquier iterable: '-'.join('ab') une los caracteres.
+        _assert_matches(self, "imprimir(','.join('ab'))\n")
+
+    def test_join_over_int_raises_at_runtime(self):
+        # un no-iterable NO es fail-closed en build: el helper de runtime
+        # levanta el TypeError de CPython (mensaje propio del subset).
+        r = compare_native_to_cpython("imprimir(','.join(5))\n")
+        self.assertNotEqual(r.native.returncode, 0)
+        self.assertIn("TypeError", r.native.stderr.decode())
 
 
 class FormatV1(unittest.TestCase):

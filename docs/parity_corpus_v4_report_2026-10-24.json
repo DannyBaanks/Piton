@@ -1,9 +1,9 @@
 {
   "meta": {
-    "date": "2026-10-24T20:35:00+00:00",
+    "date": "2026-10-25T08:18:34+00:00",
     "oracle": "CPython 3.12.3",
     "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
-    "git_sha": "1effd06",
+    "git_sha": "fd6e0c5",
     "tool": "tools/parity_corpus_v4.py",
     "tiers": "a",
     "recursive": false,
@@ -38,7 +38,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.538,
+          "build_seconds": 0.476,
           "roundtrip": true
         },
         {
@@ -46,7 +46,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.137,
+          "build_seconds": 0.161,
           "roundtrip": true
         },
         {
@@ -70,7 +70,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.242,
+          "build_seconds": 0.199,
           "roundtrip": true
         },
         {
@@ -85,7 +85,7 @@
           "path": "/usr/lib/python3.12/_distutils_system_mod.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: distutils.sysconfig",
+          "detail": "MIRLoweringError: native super().initialize_options: no base class in MRO of 'install' defines 'initialize_options'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -150,7 +150,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.591,
+          "build_seconds": 0.533,
           "roundtrip": true
         },
         {
@@ -166,7 +166,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 2.911,
+          "build_seconds": 3.221,
           "roundtrip": true
         },
         {
@@ -174,7 +174,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 2.43,
+          "build_seconds": 2.146,
           "roundtrip": true
         },
         {
@@ -198,7 +198,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.194,
+          "build_seconds": 0.123,
           "roundtrip": true
         },
         {
@@ -254,7 +254,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.128,
+          "build_seconds": 0.163,
           "roundtrip": true
         },
         {
@@ -269,7 +269,7 @@
           "path": "/usr/lib/python3.12/cProfile.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: importlib.machinery",
+          "detail": "MIRLoweringError: native module not supplied: profile",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -277,7 +277,7 @@
           "path": "/usr/lib/python3.12/calendar.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native base class 'IntEnum' must be defined before 'Month'",
+          "detail": "MIRLoweringError: native classes currently support methods and class-level assignments only",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -285,7 +285,7 @@
           "path": "/usr/lib/python3.12/cgi.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: collections.abc",
+          "detail": "MIRLoweringError: native module not supplied: html",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -342,14 +342,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.191,
+          "build_seconds": 0.185,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/compileall.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: importlib.util",
+          "detail": "MIRLoweringError: native module not supplied: py_compile",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -357,7 +357,7 @@
           "path": "/usr/lib/python3.12/configparser.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: collections.abc",
+          "detail": "MIRLoweringError: native method calls do not support keyword arguments yet (method 'get')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -422,7 +422,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.215,
+          "build_seconds": 0.171,
           "roundtrip": true
         },
         {
@@ -430,7 +430,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.187,
+          "build_seconds": 0.115,
           "roundtrip": true
         },
         {
@@ -461,7 +461,7 @@
           "path": "/usr/lib/python3.12/enum.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native base class 'DynamicClassAttribute' must be defined before 'property'",
+          "detail": "MIRLoweringError: native base class 'dict' must be defined before '_EnumDict'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -526,7 +526,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.765,
+          "build_seconds": 0.746,
           "roundtrip": true
         },
         {
@@ -574,7 +574,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.359,
+          "build_seconds": 0.308,
           "roundtrip": true
         },
         {
@@ -582,7 +582,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.119,
+          "build_seconds": 0.11,
           "roundtrip": true
         },
         {
@@ -613,7 +613,7 @@
           "path": "/usr/lib/python3.12/inspect.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: collections.abc",
+          "detail": "MIRLoweringError: native module not supplied: token",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -638,7 +638,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.164,
+          "build_seconds": 0.125,
           "roundtrip": true
         },
         {
@@ -685,7 +685,7 @@
           "path": "/usr/lib/python3.12/mimetypes.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: urllib.parse",
+          "detail": "MIRLoweringError: native with context must be a direct call to a native class constructor",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -693,7 +693,7 @@
           "path": "/usr/lib/python3.12/modulefinder.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: importlib._bootstrap_external",
+          "detail": "MIRLoweringError: native with context must be a direct call to a native class constructor",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -702,7 +702,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.764,
+          "build_seconds": 0.674,
           "roundtrip": true
         },
         {
@@ -726,7 +726,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.185,
+          "build_seconds": 0.175,
           "roundtrip": true
         },
         {
@@ -742,14 +742,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.982,
+          "build_seconds": 0.808,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/operator.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux tupla() cannot convert a 'iterator:map' value",
+          "detail": "NativeBuildError: native method not found: attrgetter._call",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -765,7 +765,7 @@
           "path": "/usr/lib/python3.12/os.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: os.path",
+          "detail": "MIRLoweringError: native with context must be a direct call to a native class constructor",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -773,7 +773,7 @@
           "path": "/usr/lib/python3.12/pathlib.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: urllib.parse",
+          "detail": "MIRLoweringError: native with context must be a direct call to a native class constructor",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -813,7 +813,7 @@
           "path": "/usr/lib/python3.12/pkgutil.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: os.path",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -861,7 +861,7 @@
           "path": "/usr/lib/python3.12/profile.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: importlib.machinery",
+          "detail": "MIRLoweringError: native classes currently support methods and class-level assignments only",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -885,7 +885,7 @@
           "path": "/usr/lib/python3.12/py_compile.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: importlib._bootstrap_external",
+          "detail": "MIRLoweringError: native module calls do not support keyword arguments yet",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -893,7 +893,7 @@
           "path": "/usr/lib/python3.12/pyclbr.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: importlib.util",
+          "detail": "MIRLoweringError: native super() method calls support at most 3 user arguments",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -933,7 +933,7 @@
           "path": "/usr/lib/python3.12/reprlib.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux str.join() requires one list or tuple argument",
+          "detail": "NativeBuildError: runtime operation not supported in Linux native subset: unsupported",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -949,7 +949,7 @@
           "path": "/usr/lib/python3.12/runpy.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: importlib.machinery",
+          "detail": "MIRLoweringError: unsupported native exception type 'error'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -973,7 +973,7 @@
           "path": "/usr/lib/python3.12/selectors.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: collections.abc",
+          "detail": "MIRLoweringError: native module not supplied: select",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1022,14 +1022,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.113,
+          "build_seconds": 0.065,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/smtplib.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: email.utils",
+          "detail": "MIRLoweringError: native module not supplied: hmac",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1094,7 +1094,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.165,
+          "build_seconds": 0.229,
           "roundtrip": true
         },
         {
@@ -1157,7 +1157,7 @@
           "path": "/usr/lib/python3.12/sysconfig.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: os.path",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)')",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1206,7 +1206,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.231,
+          "build_seconds": 0.332,
           "roundtrip": true
         },
         {
@@ -1230,7 +1230,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.276,
+          "build_seconds": 0.395,
           "roundtrip": true
         },
         {
@@ -1253,7 +1253,7 @@
           "path": "/usr/lib/python3.12/traceback.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native module not supplied: collections.abc",
+          "detail": "MIRLoweringError: native base class 'list' must be defined before 'StackSummary'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1261,7 +1261,7 @@
           "path": "/usr/lib/python3.12/tracemalloc.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: collections.abc",
+          "detail": "MIRLoweringError: native module not supplied: pickle",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1277,7 +1277,7 @@
           "path": "/usr/lib/python3.12/turtle.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native from-import module not supplied: os.path",
+          "detail": "MIRLoweringError: native base class 'tuple' must be defined before 'Vec2D'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1318,7 +1318,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.531,
+          "build_seconds": 0.47,
           "roundtrip": true
         },
         {

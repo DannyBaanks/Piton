@@ -1,7 +1,7 @@
 # Parity corpus report v4 — CODIGO REAL (stdlib + tutorial CPython)
 
 - instrumento: `tools/parity_corpus_v4.py` | backend medido: **linux_x86**
-- oracle: CPython 3.12.3 | git: `67b5459` | fecha: 2026-10-25T07:24:53+00:00
+- oracle: CPython 3.12.3 | git: `fd6e0c5` | fecha: 2026-10-25T08:18:58+00:00
 - tier A (stdlib real, estatico, sin ejecucion): **588** archivos
 - tier B (tutorial oficial, ejecucional): **0** scripts
 
@@ -14,16 +14,16 @@ Poblacion SIN seleccion: todos los .py de nivel superior. Solo embudo estatico (
 | adapt | 587 | 99.8% |
 | parse | 575 | 97.8% |
 | mir | 92 | 15.6% |
-| build | 73 | 12.4% |
+| build | 75 | 12.8% |
 
-**Build completo (potencialmente ejecutable): 12.4%**
+**Build completo (potencialmente ejecutable): 12.8%**
 
 ### Clases de fallo por etapa
 
 | etapa fallida | n |
 |---|---|
 | MIR_FAIL | 483 |
-| BUILD_FAIL | 19 |
+| BUILD_FAIL | 17 |
 | PARSE_FAIL | 12 |
 | CRASH | 1 |
 
