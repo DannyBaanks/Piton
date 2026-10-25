@@ -3331,6 +3331,10 @@ class LinuxCEmitter:
         # metodos (warnings: self._filters[:] — sin el tipo, el slice de un
         # valor sin tipo falla cerrado).
         self._instance_attr_types: dict[str, dict[str, str]] = {}
+        # CALLABLE_INSTANCE_ATTR_V1: nombres de atributos que la clase asigna
+        # sobre la instancia (`self._call = func`). Un atributo asi puede ser
+        # un callable en runtime aunque no sea un metodo de la clase.
+        self._instance_attr_names: dict[str, set[str]] = {}
         # CELL_TYPE_V1: el tipo de una variable CAPTURADA por una closure
         # (la celda) — sin el, la carga de la celda decae a "int" y las
         # operaciones sobre ella (un `+` de tuplas, un slice) fallan.
@@ -10518,6 +10522,8 @@ class LinuxCEmitter:
                     _vt = types.get(val, "")
                     if _vt and _vt not in {"int", "bool"}:
                         self._instance_attr_types.setdefault(_cls, {}).setdefault(attr, _vt)
+                    if isinstance(attr, str) and not attr.startswith("%"):
+                        self._instance_attr_names.setdefault(_cls, set()).add(attr)
                 # ATTRIBUTE_LOOKUP_V2: __setattr__ hook routes normal stores;
                 # the hook body itself stores raw (bypass, mirror of Win).
                 hook = None
@@ -11258,6 +11264,48 @@ class LinuxCEmitter:
                     raise NativeBuildError(
                         f"native property '{method}' of '{cls_name}' object is not a method (calling a property is unsupported)"
                     )
+            # CALLABLE_INSTANCE_ATTR_V1: un atributo de instancia que guarda
+            # un closure (`self._call = func` en operator.attrgetter) no es un
+            # metodo de la clase. Se emite la llamada dinamica al VALOR del
+            # atributo, con los argumentos del call-site (el closure no lleva
+            # self). Un nombre que no es atributo de instancia sigue fallando
+            # cerrado abajo.
+            if (
+                isinstance(cls_name, str)
+                and not cls_name.startswith("%")
+                and isinstance(method, str)
+                and not method.startswith("%")
+                and not any(
+                    method in self.classes.get(_c, set())
+                    for _c in self.class_mro.get(cls_name, [cls_name])
+                )
+                and method in self._instance_attr_names.get(cls_name, set())
+            ):
+                _dargs = list(call_args)
+                _dparts = [f"{{PitonSeq*_dpa=piton_seq_new(PK_TUPLE,{len(_dargs)});"]
+                for _di, _dv in enumerate(_dargs):
+                    _dparts.append(
+                        f"    _dpa->items[{_di}]=piton_slot({self._value(_dv)},PK_INT);"
+                    )
+                _dparts.append("_dpa;}")
+                _dtuple = f"(long)({''.join(_dparts)})"
+                if kw_args:
+                    _kparts = [f"{{PitonDict*_dpk=piton_dict_new({len(kw_args)});"]
+                    for _kn, _kv in kw_args:
+                        _kparts.append(
+                            f'    piton_dict_append(_dpk,piton_slot((long){json.dumps(_kn)},PK_STR),{self._slot(_kv, types)});'
+                        )
+                    _kparts.append("    }")
+                    _kdict = f"(long)({''.join(_kparts)})"
+                else:
+                    _kdict = "0"
+                out.append(
+                    f"    {_name(result)}=piton_call_dynamic("
+                    f'piton_object_get((PitonObject*){self._value(obj)},"{method}").bits,'
+                    f"{_dtuple},0,{_kdict});"
+                )
+                types[result] = "int"
+                return out
             cls_name = self._resolve_method(cls_name, method)
             target = f"{cls_name}__{method}"
             if target in self.static_methods:

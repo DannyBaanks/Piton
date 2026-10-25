@@ -554,6 +554,45 @@ class BuiltinMarkerV1(unittest.TestCase):
         _assert_matches(self, "para x en [10, 20]:\n    imprimir(x, x)\n")
 
 
+@unittest.skipIf(
+    sys.platform.startswith("win32"),
+    "CALLABLE_INSTANCE_ATTR_V1 is implemented in the Linux backend only",
+)
+class CallableInstanceAttrV1(unittest.TestCase):
+    """CALLABLE_INSTANCE_ATTR_V1: calling a callable stored on the instance.
+
+    `self._call(obj)` (operator.attrgetter) is not a method of the class;
+    CPython resolves the attribute value at runtime. The emitter now emits a
+    dynamic call when the class assigns that attribute, instead of rejecting
+    the build with "native method not found".
+    """
+
+    def test_closure_attribute_call(self):
+        _assert_matches(
+            self,
+            "clase F:\n"
+            "    funcion __init__(self):\n"
+            "        funcion doble(x):\n"
+            "            devolver x + x\n"
+            "        self.f = doble\n"
+            "    funcion aplicar(self, x):\n"
+            "        devolver self.f(x)\n"
+            "imprimir(F().aplicar(3))\n",
+        )
+
+    def test_non_callable_attribute_fails_at_runtime(self):
+        result = compare_native_to_cpython(
+            "clase F:\n"
+            "    funcion __init__(self):\n"
+            "        self.f = 1\n"
+            "    funcion aplicar(self, x):\n"
+            "        devolver self.f(x)\n"
+            "imprimir(F().aplicar(3))\n"
+        )
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"TypeError", result.native.stderr)
+
+
 class IntOvfGuardV1(unittest.TestCase):
     """INTOVF_GUARD_V1: CPython promotes int arithmetic to arbitrary precision.
 
