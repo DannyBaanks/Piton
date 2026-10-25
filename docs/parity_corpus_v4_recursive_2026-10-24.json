@@ -1,9 +1,9 @@
 {
   "meta": {
-    "date": "2026-10-25T05:54:41+00:00",
+    "date": "2026-10-25T07:24:53+00:00",
     "oracle": "CPython 3.12.3",
     "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
-    "git_sha": "910d02d",
+    "git_sha": "67b5459",
     "tool": "tools/parity_corpus_v4.py",
     "tiers": "a",
     "recursive": true,
@@ -40,7 +40,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.377,
+          "build_seconds": 0.39,
           "roundtrip": true
         },
         {
@@ -48,7 +48,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.119,
+          "build_seconds": 0.122,
           "roundtrip": true
         },
         {
@@ -56,7 +56,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.111,
+          "build_seconds": 0.125,
           "roundtrip": true
         },
         {
@@ -64,7 +64,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.114,
+          "build_seconds": 0.124,
           "roundtrip": true
         },
         {
@@ -88,7 +88,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.174,
+          "build_seconds": 0.198,
           "roundtrip": true
         },
         {
@@ -168,7 +168,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.467,
+          "build_seconds": 0.5,
           "roundtrip": true
         },
         {
@@ -184,7 +184,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 2.079,
+          "build_seconds": 2.202,
           "roundtrip": true
         },
         {
@@ -192,7 +192,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 2.048,
+          "build_seconds": 2.209,
           "roundtrip": true
         },
         {
@@ -216,7 +216,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.121,
+          "build_seconds": 0.197,
           "roundtrip": true
         },
         {
@@ -280,7 +280,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.248,
+          "build_seconds": 0.271,
           "roundtrip": true
         },
         {
@@ -304,7 +304,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.069,
+          "build_seconds": 0.074,
           "roundtrip": true
         },
         {
@@ -384,7 +384,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.127,
+          "build_seconds": 0.14,
           "roundtrip": true
         },
         {
@@ -392,7 +392,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.078,
+          "build_seconds": 0.083,
           "roundtrip": true
         },
         {
@@ -537,7 +537,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.12,
+          "build_seconds": 0.123,
           "roundtrip": true
         },
         {
@@ -641,7 +641,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.124,
+          "build_seconds": 0.132,
           "roundtrip": true
         },
         {
@@ -657,7 +657,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.106,
+          "build_seconds": 0.112,
           "roundtrip": true
         },
         {
@@ -665,7 +665,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.12,
+          "build_seconds": 0.119,
           "roundtrip": true
         },
         {
@@ -809,7 +809,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.135,
+          "build_seconds": 0.143,
           "roundtrip": true
         },
         {
@@ -849,7 +849,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.117,
+          "build_seconds": 0.125,
           "roundtrip": true
         },
         {
@@ -873,7 +873,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.108,
+          "build_seconds": 0.136,
           "roundtrip": true
         },
         {
@@ -881,7 +881,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.107,
+          "build_seconds": 0.135,
           "roundtrip": true
         },
         {
@@ -889,7 +889,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.107,
+          "build_seconds": 0.128,
           "roundtrip": true
         },
         {
@@ -921,7 +921,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.116,
+          "build_seconds": 0.129,
           "roundtrip": true
         },
         {
@@ -961,7 +961,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.126,
+          "build_seconds": 0.135,
           "roundtrip": true
         },
         {
@@ -1049,7 +1049,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.109,
+          "build_seconds": 0.117,
           "roundtrip": true
         },
         {
@@ -1161,7 +1161,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.648,
+          "build_seconds": 0.672,
           "roundtrip": true
         },
         {
@@ -2217,7 +2217,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.528,
+          "build_seconds": 0.559,
           "roundtrip": true
         },
         {
@@ -2265,7 +2265,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.189,
+          "build_seconds": 0.203,
           "roundtrip": true
         },
         {
@@ -2273,7 +2273,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.099,
+          "build_seconds": 0.103,
           "roundtrip": true
         },
         {
@@ -2297,7 +2297,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 5.484,
+          "build_seconds": 6.257,
           "roundtrip": true
         },
         {
@@ -2313,7 +2313,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.413,
+          "build_seconds": 0.511,
           "roundtrip": true
         },
         {
@@ -2377,7 +2377,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.105,
+          "build_seconds": 0.174,
           "roundtrip": true
         },
         {
@@ -2441,7 +2441,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.108,
+          "build_seconds": 0.113,
           "roundtrip": true
         },
         {
@@ -2609,7 +2609,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.117,
+          "build_seconds": 0.116,
           "roundtrip": true
         },
         {
@@ -2625,7 +2625,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.123,
+          "build_seconds": 0.139,
           "roundtrip": true
         },
         {
@@ -2713,7 +2713,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.068,
+          "build_seconds": 0.067,
           "roundtrip": true
         },
         {
@@ -2897,7 +2897,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.519,
+          "build_seconds": 0.654,
           "roundtrip": true
         },
         {
@@ -2921,7 +2921,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.114,
+          "build_seconds": 0.118,
           "roundtrip": true
         },
         {
@@ -2937,7 +2937,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.756,
+          "build_seconds": 0.782,
           "roundtrip": true
         },
         {
@@ -3105,7 +3105,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.109,
+          "build_seconds": 0.199,
           "roundtrip": true
         },
         {
@@ -3151,7 +3151,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.393,
+          "build_seconds": 2.301,
           "roundtrip": true
         },
         {
@@ -3271,7 +3271,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.068,
+          "build_seconds": 0.064,
           "roundtrip": true
         },
         {
@@ -3336,7 +3336,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.123,
+          "build_seconds": 0.148,
           "roundtrip": true
         },
         {
@@ -3376,7 +3376,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.142,
+          "build_seconds": 0.16,
           "roundtrip": true
         },
         {
@@ -3480,7 +3480,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.11,
+          "build_seconds": 0.115,
           "roundtrip": true
         },
         {
@@ -3488,7 +3488,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.143,
+          "build_seconds": 0.153,
           "roundtrip": true
         },
         {
@@ -3547,7 +3547,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.133,
+          "build_seconds": 0.147,
           "roundtrip": true
         },
         {
@@ -3629,7 +3629,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.12,
+          "build_seconds": 0.124,
           "roundtrip": true
         },
         {
@@ -3846,7 +3846,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.108,
+          "build_seconds": 0.113,
           "roundtrip": true
         },
         {
@@ -3888,7 +3888,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.114,
+          "build_seconds": 0.13,
           "roundtrip": true
         },
         {
@@ -3896,7 +3896,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.11,
+          "build_seconds": 0.141,
           "roundtrip": true
         },
         {
@@ -3904,7 +3904,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.107,
+          "build_seconds": 0.135,
           "roundtrip": true
         },
         {
@@ -3912,7 +3912,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.108,
+          "build_seconds": 0.121,
           "roundtrip": true
         },
         {
@@ -3928,7 +3928,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.134,
+          "build_seconds": 0.144,
           "roundtrip": true
         },
         {
@@ -3952,7 +3952,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.204,
+          "build_seconds": 0.212,
           "roundtrip": true
         },
         {
@@ -3984,7 +3984,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.071,
+          "build_seconds": 0.083,
           "roundtrip": true
         },
         {
@@ -4000,7 +4000,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.12,
+          "build_seconds": 0.138,
           "roundtrip": true
         },
         {
@@ -4008,7 +4008,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.112,
+          "build_seconds": 0.156,
           "roundtrip": true
         },
         {
@@ -4088,7 +4088,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.227,
+          "build_seconds": 0.237,
           "roundtrip": true
         },
         {
@@ -4297,7 +4297,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.105,
+          "build_seconds": 0.112,
           "roundtrip": true
         },
         {
@@ -4369,7 +4369,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.067,
+          "build_seconds": 0.066,
           "roundtrip": true
         },
         {
@@ -4377,7 +4377,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.427,
+          "build_seconds": 0.45,
           "roundtrip": true
         },
         {
@@ -4409,7 +4409,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.114,
+          "build_seconds": 0.112,
           "roundtrip": true
         },
         {
@@ -4473,7 +4473,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.114,
+          "build_seconds": 0.119,
           "roundtrip": true
         },
         {
@@ -4481,7 +4481,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.114,
+          "build_seconds": 0.123,
           "roundtrip": true
         },
         {
@@ -4570,7 +4570,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.113,
+          "build_seconds": 0.116,
           "roundtrip": true
         },
         {
@@ -4586,7 +4586,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.11,
+          "build_seconds": 0.108,
           "roundtrip": true
         },
         {
@@ -4610,7 +4610,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.115,
+          "build_seconds": 0.117,
           "roundtrip": true
         },
         {
@@ -4626,7 +4626,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.125,
+          "build_seconds": 0.136,
           "roundtrip": true
         },
         {
@@ -4650,7 +4650,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.109,
+          "build_seconds": 0.112,
           "roundtrip": true
         },
         {
@@ -4690,7 +4690,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.067,
+          "build_seconds": 0.071,
           "roundtrip": true
         },
         {

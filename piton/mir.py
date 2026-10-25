@@ -3920,6 +3920,7 @@ class MIRLowerer:
                     raise MIRLoweringError("native class without __init__ takes no arguments")
                 return result
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.ATTR:
+                print('DEBUG-CHAIN', getattr(node.func, 'attr', None), flush=True)
                 chain = self._module_attr_chain(builder, node.func)
                 if chain is not None:
                     if node.keywords:
@@ -3934,11 +3935,13 @@ class MIRLowerer:
                     if _profundidad_extra > 0:
                         attrs = attrs[_profundidad_extra:]
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
-                    function = builder.temp()
-                    builder.emit("load", symbol, result=function)
-                    # VARIADIC_MODULE_CALL_V1: una funcion de modulo con
-                    # *args/**kwargs baja por el camino variadico (el empaquetado
-                    # de la tupla del vararg lo hace el MIR).
+                    # MODVAR_CALLEE_V1: el call lleva el NOMBRE del symbol
+                    # (antes era load+call(temp): el emisor no resolvia el
+                    # function_name y NO empaquetaba *args — `join(a,b,c)`
+                    # pasaba 3 argumentos a una firma de 2). Cuando hay
+                    # *args/**kwargs el empaquetado de la tupla lo hace el
+                    # MIR; el emisor solo empaqueta cuando la llamada vino
+                    # por el camino directo (values < params).
                     if (
                         self.function_varargs.get(symbol) is not None
                         or self.function_kwargs.get(symbol) is not None
@@ -3947,7 +3950,7 @@ class MIRLowerer:
                     else:
                         args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                     result = builder.temp()
-                    builder.emit("call", function, args, result=result)
+                    builder.emit("call", symbol, args, result=result)
                     return result
             if (
                 node.func.kind == HIRKind.ATTR
@@ -4103,8 +4106,9 @@ class MIRLowerer:
                     result = builder.temp()
                     builder.emit("os_fspath", _fspath_arg, result=result)
                     return result
-                function = builder.temp()
-                builder.emit("load", _symbol, result=function)
+                # MODVAR_CALLEE_V1: idem — el call lleva el nombre del symbol
+                # (from-import: `encadenar(...)` -> mvar__uno__encadenar) para
+                # que el emisor resuelva el function_name y empaquete *args.
                 if (
                     self.function_varargs.get(_symbol) is not None
                     or self.function_kwargs.get(_symbol) is not None
@@ -4113,7 +4117,7 @@ class MIRLowerer:
                 else:
                     args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
-                builder.emit("call", function, args, result=result)
+                builder.emit("call", _symbol, args, result=result)
                 return result
             if node.func.kind == HIRKind.ATTR:
                 # DICT_UPDATE_KW_V1: solo `d.update(k=v)` baja con keywords;
@@ -4951,11 +4955,22 @@ class MIRLowerer:
                     if _profundidad_extra > 0:
                         attrs = attrs[_profundidad_extra:]
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
-                    function = builder.temp()
-                    builder.emit("load", symbol, result=function)
-                    args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                    # MODVAR_CALLEE_V1: el call lleva el NOMBRE del symbol
+                    # (antes era load+call(temp): el emisor no resolvia el
+                    # function_name y NO empaquetaba *args — `join(a,b,c)`
+                    # pasaba 3 argumentos a una firma de 2). Cuando hay
+                    # *args/**kwargs el empaquetado de la tupla lo hace el
+                    # MIR; el emisor solo empaqueta cuando la llamada vino
+                    # por el camino directo (values < params).
+                    if (
+                        self.function_varargs.get(symbol) is not None
+                        or self.function_kwargs.get(symbol) is not None
+                    ):
+                        args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
+                    else:
+                        args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                     result = builder.temp()
-                    builder.emit("call", function, args, _active_handler(builder), result=result)
+                    builder.emit("call", symbol, args, _active_handler(builder), result=result)
                     return result
             if (
                 node.func.kind == HIRKind.ATTR
@@ -5321,6 +5336,27 @@ class MIRLowerer:
                             _extra_args.append(_HIRConst(value=_dmap[_pn], kind=HIRKind.CONST))
                 function = self._lower_expr(builder, node.func)
                 args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))
+            # MODVAR_CALLEE_V1: un from-import de modulo/submódulo deja el
+            # callee como un LOAD del nombre CUALIFICADO; el camino generico
+            # emitia load+call(temp) y el emisor NO resolvia el function_name,
+            # asi que NO empaquetaba *args ("too many arguments"). Si el nombre
+            # resuelto es una funcion conocida CON *args/**kwargs, el call
+            # lleva el symbol y el MIR empaqueta la tupla como en las demas
+            # rutas (el emisor solo empaqueta cuando vienen values < params,
+            # o sea cuando la llamada NO vino por aqui).
+            _sym_from_import = None
+            if node.func.kind == HIRKind.LOAD:
+                _resuelto = self.from_import_aliases.get(node.func.name, node.func.name)
+                if (
+                    self.function_varargs.get(_resuelto) is not None
+                    or self.function_kwargs.get(_resuelto) is not None
+                ):
+                    _sym_from_import = _resuelto
+            if _sym_from_import is not None:
+                args = self._lower_variadic_call(builder, _sym_from_import, node.args, node.keywords)
+                result = builder.temp()
+                builder.emit("call", _sym_from_import, args, _active_handler(builder), result=result)
+                return result
             result = builder.temp()
             if node.func.kind == HIRKind.LOAD and self.function_frame_abi.get(node.func.name, False):
                 builder.emit("frame_call", function, args, result=result)

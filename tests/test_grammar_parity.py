@@ -3211,5 +3211,98 @@ class SubmoduleChainGatesV1(unittest.TestCase):
         LinuxCEmitter().emit(lower_hir_to_mir(lower_cst_to_hir(parse(fuente))))
 
 
+class ModuleVarargGatesV1(unittest.TestCase):
+    """MODVAR_CALLEE_V1: llamadas a funciones de módulo con *args empaquetan.
+
+    El call llevaba load+call(temp): el emisor solo resuelve el
+    function_name para empaquetar *args cuando el callee es el NOMBRE; con
+    un temp no lo resolvía y pasaba los argumentos sueltos — `join(a,b,c)`
+    sobre una firma `(a, *resto)` recibía 3 argumentos (C: "too many
+    arguments"). Ahora el call lleva el symbol y el MIR empaqueta la tupla,
+    igual que en las rutas de módulo ya existentes.
+
+    Para medirlo sin depender de la stdlib, el gate crea un módulo
+    empaquetado temporal (como los stubs de la stdlib) y lo borra."""
+
+    def _modulo_temporal(self, fuente: str) -> None:
+        import pathlib as _pl
+        _p = _pl.Path("piton/stdlib_piton/_vars__mod.piton")
+        _p.write_text(fuente, encoding="utf-8")
+        self.addCleanup(lambda: _p.unlink(missing_ok=True))
+
+    def test_module_vararg_via_chain(self):
+        self._modulo_temporal(
+            "funcion encadenar (a ,*resto ):\n"
+            "    out = a\n"
+            "    para b en resto :\n"
+            "        out = out + '|' + b\n"
+            "    devolver out\n"
+        )
+        import subprocess
+        import tempfile
+        import pathlib
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.linux_x86 import compile_native_linux as _cn
+        fuente = (
+            "importar _vars .mod" + chr(10)
+            + "imprimir (_vars .mod .encadenar ('a' ,'b' ,'c' ))" + chr(10)
+        )
+        with tempfile.TemporaryDirectory() as _d:
+            out = pathlib.Path(_d) / "prog"
+            _cn(fuente, out)
+            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("a|b|c", r.stdout)
+
+    def test_module_vararg_via_from_import(self):
+        self._modulo_temporal(
+            "funcion encadenar (a ,*resto ):\n"
+            "    out = a\n"
+            "    para b en resto :\n"
+            "        out = out + '|' + b\n"
+            "    devolver out\n"
+        )
+        import subprocess
+        import tempfile
+        import pathlib
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.linux_x86 import compile_native_linux as _cn
+        fuente = (
+            "desde _vars .mod importar encadenar" + chr(10)
+            + "imprimir (encadenar ('a' ,'b' ,'c' ))" + chr(10)
+        )
+        with tempfile.TemporaryDirectory() as _d:
+            out = pathlib.Path(_d) / "prog"
+            _cn(fuente, out)
+            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("a|b|c", r.stdout)
+
+    def test_module_fixed_arity_still_works(self):
+        # el camino sin vararg no cambia: 2 argumentos a una firma de 2.
+        self._modulo_temporal(
+            "funcion suma (a ,b ):\n"
+            "    devolver a + b\n"
+        )
+        import subprocess
+        import tempfile
+        import pathlib
+        import sys as _sys
+        _sys.path.insert(0, "tools")
+        from piton.linux_x86 import compile_native_linux as _cn
+        fuente = (
+            "desde _vars .mod importar suma" + chr(10)
+            + "imprimir (suma (2 ,3 ))" + chr(10)
+        )
+        with tempfile.TemporaryDirectory() as _d:
+            out = pathlib.Path(_d) / "prog"
+            _cn(fuente, out)
+            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("5", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

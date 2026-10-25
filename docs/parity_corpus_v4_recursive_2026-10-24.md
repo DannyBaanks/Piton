@@ -1,7 +1,7 @@
 # Parity corpus report v4 — CODIGO REAL (stdlib + tutorial CPython)
 
 - instrumento: `tools/parity_corpus_v4.py` | backend medido: **linux_x86**
-- oracle: CPython 3.12.3 | git: `910d02d` | fecha: 2026-10-25T05:54:41+00:00
+- oracle: CPython 3.12.3 | git: `67b5459` | fecha: 2026-10-25T07:24:53+00:00
 - tier A (stdlib real, estatico, sin ejecucion): **588** archivos
 - tier B (tutorial oficial, ejecucional): **0** scripts
 
