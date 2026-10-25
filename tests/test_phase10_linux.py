@@ -1823,26 +1823,22 @@ class Phase10LinuxGates(unittest.TestCase):
             with self.assertRaisesRegex(NativeBuildError, "duplicate"):
                 compile_native_linux(source, Path(directory) / "program")
 
-    def test_linux_descriptors_del_non_property_fails_closed(self):
+    def test_linux_descriptors_del_non_property(self):
+        # DEL_ATTR_DEFAULT_V1: `del p.campos` sobre un atributo de instancia
+        # no-property elimina el atributo (como object.__delattr__ de CPython),
+        # ya no falla cerrado en build.
         source = (
             'clase P:\n'
             '    funcion __init__(self):\n'
-            '        self.campos = 0\n'
-            '    @property\n'
-            '    funcion x(self):\n'
-            '        devolver self.campos\n'
-            '    @x.setter\n'
-            '    funcion x(self, v):\n'
-            '        self.campos = v\n'
-            '    @x.deleter\n'
-            '    funcion x(self):\n'
-            '        self.campos = -1\n'
+            '        pasar\n'
             'p = P()\n'
+            'p.campos = 5\n'
             'borrar p.campos\n'
+            'imprimir(1)\n'
         )
-        with tempfile.TemporaryDirectory(prefix="piton-linux-del-nonprop-") as directory:
-            with self.assertRaisesRegex(NativeBuildError, "is not a property"):
-                compile_native_linux(source, Path(directory) / "program")
+        rc, native, oracle, stderr = self._run_linux_diff(source)
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(native, oracle)
 
     def test_linux_for_break(self):
         source = (
