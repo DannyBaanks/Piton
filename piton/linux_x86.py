@@ -541,6 +541,23 @@ static long piton_str_split_max(const char*s,const char*sep,long maxsplit){if(!s
 static long piton_str_split(const char*s,const char*sep){return piton_str_split_max(s,sep,-1);}
 static long piton_str_strip(const char*s,int mode){usize n=piton_strlen(s),a=0,b=n;if(mode!=2){while(a<n&&piton_ws((unsigned char)s[a]))++a;}if(mode!=1){while(b>a&&piton_ws((unsigned char)s[b-1]))--b;}char*p=piton_alloc(b-a+1);piton_memcpy(p,s+a,b-a);p[b-a]=0;return(long)p;}
 static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(sep);usize total=0;long cnt=items?items->length:0;for(long i=0;i<cnt;++i){if(items->items[i].kind!=PK_STR){piton_write(2,"TypeError: sequence item is not a string\n",41);piton_exit(1);}total+=piton_strlen((const char*)items->items[i].bits);}total+=sl*(usize)(cnt>0?cnt-1:0);char*p=piton_alloc(total+1);usize o=0;for(long i=0;i<cnt;++i){if(i){piton_memcpy(p+o,sep,sl);o+=sl;}usize el=piton_strlen((const char*)items->items[i].bits);piton_memcpy(p+o,(const char*)items->items[i].bits,el);o+=el;}p[o]=0;return(long)p;}
+/* Forward declarations: definiciones mas abajo. */
+static PitonBytes* piton_bytes_concat(PitonBytes* a,PitonBytes* b);
+static int piton_maybe_ptr(long bits);
+static void piton_report_unhandled(void);
+/* BYTES_CONCAT_DYN_V1: `bytes + X` donde X puede tener tipo estatico int
+   (inferencia de tupla desestructurada) pero ser bytes en runtime. Verifica
+   el tipo real antes de concatenar; si no es bytes, TypeError claro. */
+static long piton_bytes_concat_dyn(PitonSlot slot,PitonBytes*b){
+  if(piton_maybe_ptr(slot.bits)){
+    long*ptr=(long*)slot.bits;
+    if(ptr[1]==PK_BYTES){
+      return(long)piton_bytes_concat((PitonBytes*)slot.bits,b);
+    }
+  }
+  piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'bytes'");
+  piton_report_unhandled();piton_exit(1);return 0;
+}
 /* BYTES_JOIN_V1: `sep.join(list_of_bytes)` como en CPython. Cada elemento
    debe ser bytes (PK_BYTES con .data/.length en PitonBytes). Devuelve un
    PitonBytes* con los datos concatenados. */
@@ -973,7 +990,28 @@ typedef struct{long magic;const char*str;long index;long length;}PitonStrIterato
 static long piton_str_iterator_new(const char*str){if(!str){piton_write(2,"TypeError: 'NoneType' object is not iterable\n",42);piton_exit(1);}PitonStrIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E53545249LL;i->str=str;i->index=0;i->length=piton_strlen(str);return(long)i;}
 static long piton_str_iterator_next(long raw){PitonStrIterator*i=(PitonStrIterator*)raw;if(!i||i->magic!=0x5049544E53545249LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->length){piton_raise_set("StopIteration","");return 0;}unsigned char c=i->str[i->index++];char*p=piton_alloc(2);p[0]=(char)c;p[1]=0;return(long)p;}
 typedef struct{long magic;long index;long start;PitonSeq*seq;}PitonEnumerateIterator;
-static long piton_enumerate_new(PitonSlot src,long start){PitonSeq*s=(PitonSeq*)src.bits;if(src.kind==PK_STR){/* ENUM_STR_V1: enumerate() sobre un str explota 1-char */const char*txt=(const char*)src.bits;usize n=piton_strlen(txt);PitonSeq*l=piton_seq_new(PK_LIST,0);for(usize i=0;i<n;++i){char*q=piton_alloc(2);q[0]=txt[i];q[1]=0;piton_seq_append(l,(PitonSlot){(long)q,PK_STR});}s=l;}if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: enumerate() argument is not iterable\n",48);piton_exit(1);}PitonEnumerateIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->start=start;return(long)i;}
+static long piton_enumerate_new(PitonSlot src,long start){
+    long raw=src.bits;
+    PitonSeq*s=0;
+    if(piton_maybe_ptr(raw)){
+        long*ptr=(long*)raw;long k=ptr[1];
+        if(k==PK_STR){
+            /* ENUM_STR_V1: enumerate() sobre un str explota 1-char */
+            const char*txt=(const char*)raw;usize n=piton_strlen(txt);PitonSeq*l=piton_seq_new(PK_LIST,0);
+            for(usize i=0;i<n;++i){char*q=piton_alloc(2);q[0]=txt[i];q[1]=0;piton_seq_append(l,(PitonSlot){(long)q,PK_STR});}s=l;
+        }else if(k==PK_SET){
+            /* ENUM_SET_V1: enumerate(set) convierte a lista primero. */
+            PitonSet*st=(PitonSet*)raw;PitonSeq*lst=piton_seq_new(PK_LIST,0);
+            for(long i=0;i<st->length;++i)piton_seq_append(lst,st->items[i]);s=lst;
+        }else if(k==PK_LIST||k==PK_TUPLE){
+            s=(PitonSeq*)raw;
+        }
+    }
+    if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){
+        piton_write(2,"TypeError: enumerate() argument is not iterable\n",48);piton_exit(1);
+    }
+    PitonEnumerateIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->start=start;return(long)i;
+}
 static long piton_enumerate_next(long raw){PitonEnumerateIterator*i=(PitonEnumerateIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}long n=i->index++;PitonSeq*p=piton_seq_new(PK_TUPLE,2);piton_seq_put(p,0,(PitonSlot){i->start+n,PK_INT});piton_seq_put(p,1,i->seq->items[n]);return(long)p;}
 typedef struct{long magic,index;PitonSeq*seq;}PitonReversedIterator;
 typedef struct{long magic,index;PitonSeq*left,*right;}PitonZipIterator;
@@ -1491,19 +1529,40 @@ static long piton_str_prefix_dyn(long self,long v,int end){
   const char*msg=end?"endswith":"startswith";
   /* Convencion del modulo (ver el docstring de _emit_str_method): un metodo
      de str reporta y sale, no levanta bandera capturable. */
+  /* Resuelve self: puede ser str (const char*) o bytes (PitonBytes* con .data) */
+  const char*self_data;
+  if(piton_maybe_ptr(self)){
+    long*s=(long*)self;
+    if(s[0]>0&&s[0]<1000000L&&s[1]==PK_BYTES){
+      self_data=(const char*)((PitonBytes*)self)->data;
+    }else{
+      self_data=(const char*)self;
+    }
+  }else{
+    self_data=(const char*)self;
+  }
+  /* Resuelve v: str, bytes (PitonBytes*), o escalar */
+  const char*v_data;
   if(!v){piton_raise_set("TypeError","startswith first arg must be str or a tuple of str, not None");piton_report_unhandled();piton_exit(1);}
   if(!piton_maybe_ptr(v)){
     if(v<0x400000L){piton_raise_set("TypeError","startswith first arg must be str or a tuple of str, not int");piton_report_unhandled();piton_exit(1);}
     if(!piton_is_printable_str((const char*)v)){piton_raise_set("TypeError","startswith first arg must be str or a tuple of str, not int");piton_report_unhandled();piton_exit(1);}
+    v_data=(const char*)v;
   }else{
     long*ptr=(long*)v;
     if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_OBJECT){
       piton_raise_set("TypeError","startswith first arg must be str or a tuple of str, not a collection");
       piton_report_unhandled();piton_exit(1);
     }
+    if(ptr[1]==PK_BYTES){
+      v_data=(const char*)((PitonBytes*)v)->data;
+    }else if(piton_is_printable_str((const char*)v)){
+      v_data=(const char*)v;
+    }else{
+      piton_raise_set("TypeError","startswith first arg must be str or a tuple of str, not bytes");piton_report_unhandled();piton_exit(1);}
   }
-  return end?piton_str_endswith((const char*)self,(const char*)v)
-             :piton_str_startswith((const char*)self,(const char*)v);
+  return end?piton_str_endswith(self_data,v_data)
+             :piton_str_startswith(self_data,v_data);
 }
 /* LIST_OF_DYNAMIC_V1: `lista(x)` con x sin tipo estatico (warnings.py:
    `lista(traceback.extract())` con el retorno desconocido). Se decide por la
@@ -1517,6 +1576,13 @@ static long piton_list_of_dynamic(long bits){
     long*ptr=(long*)bits;long k=ptr[1];
     if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW){
       if(k==PK_LIST||k==PK_TUPLE)return piton_conv_seq(PK_LIST,(PitonSlot){bits,(int)k});
+      if(k==PK_SET){
+        /* LIST_OF_SET_V1: lista(set) y sorted(set) convierten el set a lista. */
+        PitonSet*st=(PitonSet*)bits;
+        PitonSeq*lst=piton_seq_new(PK_LIST,0);
+        for(long i=0;i<st->length;++i)piton_seq_append(lst,st->items[i]);
+        return (long)lst;
+      }
       piton_write(2,"TypeError: list() of a dynamically typed collection is not supported in the native subset\n",99);
       piton_exit(2);
     }
@@ -5098,9 +5164,12 @@ class LinuxCEmitter:
             require_count(1, "exactly one str argument")
             helper = "piton_str_startswith" if method == "startswith" else "piton_str_endswith"
             _p0 = call_args[0]
-            if types.get(_p0) in {"", "int", "none"}:
-                # STR_PREFIX_DYNAMIC_V1: el prefijo no tiene tipo estatico; el
-                # runtime levanta el TypeError de CPython si no es un str.
+            _p0t = types.get(_p0)
+            if _p0t in {"", "int", "none", "bool", "float", "builtin", "bytes", "bytearray"} or (_p0t or "").startswith("object:"):
+                # STR_PREFIX_DYNAMIC_V1: el prefijo no tiene tipo estatico str;
+                # el runtime levanta el TypeError de CPython si no es un str.
+                # Aceptamos bool, float, builtin y objetos — el runtime
+                # intentara str() o fallara con TypeError claro.
                 out.append(
                     f"    {_name(result)}=piton_str_prefix_dyn((const char*){operand},"
                     f"{self._value(_p0)},{1 if method == 'endswith' else 0});"
@@ -7128,10 +7197,21 @@ class LinuxCEmitter:
                         f"    {_name(result)}=piton_enumerate_new(piton_slot((long){_mat},PK_LIST),{start_value});}}"
                     )
                     types[result] = "iterator:enumerate"
-                elif _enum_type not in {"list", "tuple", "str"}:
+                elif _enum_type in {"bool", "none", "float", "complex", "bytes", "bytearray"}:
+                    # ENUM_SCALAR_V1: scalares evidentes no son iterables.
                     raise NativeBuildError("native enumerate currently requires a list or tuple")
                 else:
-                    out.append(f"    {_name(result)}=piton_enumerate_new({self._slot(source, types)},{start_value});")
+                    # ENUM_ANY_V1: enumerate acepta cualquier iterable en CPython.
+                    # set/dict/range/desconocido se convierten a lista en el
+                    # runtime o fallan con TypeError claro.
+                    if types.get(source) == "set":
+                        _tmp = f"_enset{abs(hash(result)) % 100000}"
+                        out.append(f"    long {_tmp}=piton_list_of_dynamic({self._value(source)});")
+                        out.append(f"    if(!piton_exc_flag){{")
+                        out.append(f"        {_name(result)}=piton_enumerate_new(piton_slot((long){_tmp},PK_LIST),{start_value});")
+                        out.append("    }")
+                    else:
+                        out.append(f"    {_name(result)}=piton_enumerate_new({self._slot(source, types)},{start_value});")
                     if _enum_type == "str":
                         # ENUM_STR_V1: el runtime explota el str; el elemento
                         #-yielded sigue siendo str (no un puntero suelto).
@@ -8027,6 +8107,17 @@ class LinuxCEmitter:
                 if operator in {"==", "!=", "<", "<=", ">", ">="} and left_type in _byteish and right_type in _byteish:
                     pass  # handled by the shared comparison path below
                 elif operator not in {"==", "!="}:
+                    # MIXED_BYTE_V1: byteish + desconocido (int por inferencia
+                    # de tupla desestructurada) se resuelve en runtime; el
+                    # helper levanta TypeError si realmente no es byteish.
+                    if left_type == "int" and right_type in _byteish and operator == "+":
+                        out.append(f"    {_name(result)}=(long)piton_bytes_concat_dyn((PitonSlot){{{self._value(left)},PK_INT}},(PitonBytes*){self._value(right)});")
+                        types[result] = "bytes"
+                        return out
+                    if right_type == "int" and left_type in _byteish and operator == "+":
+                        out.append(f"    {_name(result)}=(long)piton_bytes_concat_dyn((PitonBytes*){self._value(left)},(PitonSlot){{{self._value(right)},PK_INT}});")
+                        types[result] = "bytes"
+                        return out
                     raise NativeBuildError(
                         f"Linux unsupported operand type(s) for {operator}: '{left_type}' and '{right_type}'"
                     )
@@ -9517,29 +9608,43 @@ class LinuxCEmitter:
                     raise NativeBuildError("Linux float() requires int, float or str (M14 v1)")
                 types[result] = "float"
             elif function_name in {"texto", "str"}:
-                if len(values) != 1:
-                    raise NativeBuildError("Linux str requires exactly one argument")
-                arg_type = types.get(values[0])
-                operand = self._value(values[0])
-                if arg_type == "int":
-                    out.append(f"    {_name(result)}=piton_str_from_int({operand});")
-                elif arg_type == "float":
-                    out.append(f"    {_name(result)}=piton_str_from_float({operand});")
-                elif arg_type == "bool":
-                    out.append(f"    {_name(result)}=(long)({operand}?\"True\":\"False\");")
-                elif arg_type == "none":
-                    out.append(f"    {_name(result)}=(long)\"None\";")
-                elif arg_type == "str":
-                    out.append(f"    {_name(result)}={operand};")
-                elif arg_type == "complex":
-                    out.append(f"    {_name(result)}=(long)piton_complex_str({operand});")
-                elif arg_type in {"list", "tuple"}:
-                    # STR_SEQ_V1 (mismo camino que '%s'): el str() de una
-                    # secuencia es su repr, como en CPython.
-                    out.append(f"    {_name(result)}=piton_str_from_seq((PitonSeq*){operand});")
+                if len(values) == 1:
+                    arg_type = types.get(values[0])
+                    operand = self._value(values[0])
+                    if arg_type == "int":
+                        out.append(f"    {_name(result)}=piton_str_from_int({operand});")
+                    elif arg_type == "float":
+                        out.append(f"    {_name(result)}=piton_str_from_float({operand});")
+                    elif arg_type == "bool":
+                        out.append(f"    {_name(result)}=(long)({operand}?\"True\":\"False\");")
+                    elif arg_type == "none":
+                        out.append(f"    {_name(result)}=(long)\"None\";")
+                    elif arg_type == "str":
+                        out.append(f"    {_name(result)}={operand};")
+                    elif arg_type == "complex":
+                        out.append(f"    {_name(result)}=(long)piton_complex_str({operand});")
+                    elif arg_type in {"list", "tuple"}:
+                        # STR_SEQ_V1 (mismo camino que '%s'): el str() de una
+                        # secuencia es su repr, como en CPython.
+                        out.append(f"    {_name(result)}=piton_str_from_seq((PitonSeq*){operand});")
+                    else:
+                        raise NativeBuildError("Linux str() requires int/float/bool/None/str (M14 v1)")
+                    types[result] = "str"
+                elif len(values) in {2, 3}:
+                    # STR_DECODE_V1: str(bytes, encoding[, errors]) -> decode
+                    # bytes a str. Si el primer arg es str, se devuelve tal
+                    # cual (CPython ignora encoding para str input).
+                    src_type = types.get(values[0])
+                    enc = self._value(values[1])
+                    if src_type == "str":
+                        out.append(f"    {_name(result)}={self._value(values[0])};")
+                    elif src_type in {"bytes", "bytearray"}:
+                        out.append(f"    {_name(result)}=(long)piton_bytes_decode((void*){self._value(values[0])},(const char*){enc});")
+                    else:
+                        raise NativeBuildError("Linux str(bytes, encoding) requires bytes or str")
+                    types[result] = "str"
                 else:
-                    raise NativeBuildError("Linux str() requires int/float/bool/None/str (M14 v1)")
-                types[result] = "str"
+                    raise NativeBuildError("Linux str requires exactly one argument")
             elif function_name in {"booleano", "bool"}:
                 if len(values) != 1:
                     raise NativeBuildError("Linux bool requires exactly one argument")
@@ -10041,7 +10146,11 @@ class LinuxCEmitter:
                 if len(values) == 3:
                     _sort_key = values[1]
                     values = [values[0], values[2]]
-                if len(values) not in {1, 2} or types.get(values[0]) not in {"list", "tuple", "range"}:
+                if len(values) not in {1, 2} or types.get(values[0]) in {"int", "str", "bool", "none", "float", "complex", "bytes", "bytearray"}:
+                    # SORTED_ANY_ITERABLE_V1: sorted() acepta cualquier
+                    # iterable en CPython, no solo lista/tupla/range. Rechazamos
+                    # solo scalares evidentes; el runtime manejara la conversion
+                    # o fallara con TypeError claro.
                     raise NativeBuildError("native sorted currently requires one list, tuple or range")
                 if _sort_key is not None:
                     _src = f"piton_conv_seq(PK_LIST,{self._slot(values[0], types)})" if types.get(values[0]) == "range" else self._value(values[0])
@@ -10049,6 +10158,13 @@ class LinuxCEmitter:
                     self._emit_exc_check(out, function, call_handler)
                 elif types.get(values[0]) == "range":
                     out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_conv_seq(PK_LIST,{self._slot(values[0], types)}));")
+                elif types.get(values[0]) == "set":
+                    # SORTED_SET_V1: sorted(set) convierte el set a lista antes de ordenar.
+                    _tmp = f"_{_name(result)}_set"
+                    out.append(f"    long {_tmp}=piton_list_of_dynamic({self._value(values[0])});")
+                    out.append(f"    if(!piton_exc_flag){{")
+                    out.append(f"        {_name(result)}=(long)piton_sorted_new((void*){_tmp});")
+                    out.append("    }")
                 else:
                     out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(values[0])});")
                 if len(values) == 2:

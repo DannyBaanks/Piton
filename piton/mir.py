@@ -2665,6 +2665,13 @@ class MIRLowerer:
             self._lower_statements(builder, node.orelse)
             builder.emit("jump", after_else.label)
             builder.current = after_else
+        # FOR_END_BLOCK_LAST_V1: end_block se crea antes del cuerpo (para que
+        # condition/increment puedan referenciar su etiqueta) pero se EMITE
+        # despues del cuerpo. Si se emite antes, el tipo de una variable
+        # modificada en el cuerpo (p.ej. `extended=set()` luego `extended=sorted(...)`)
+        # se sobreecribe por el del bloque de salida y `extended.add()` falla.
+        builder.function.blocks.remove(end_block)
+        builder.function.blocks.append(end_block)
 
     def _lower_for_range(self, builder: _Builder, node: HIRNode) -> None:
         args = node.iter.args
@@ -2800,6 +2807,13 @@ class MIRLowerer:
             self._lower_statements(builder, node.orelse)
             builder.emit("jump", after_else.label)
             builder.current = after_else
+        # FOR_END_BLOCK_LAST_V1: end_block se crea antes del cuerpo (para que
+        # condition/increment puedan referenciar su etiqueta) pero se EMITE
+        # despues del cuerpo. Si se emite antes, el tipo de una variable
+        # modificada en el cuerpo (p.ej. `extended=set()` luego `extended=sorted(...)`)
+        # se sobreecribe por el del bloque de salida y `extended.add()` falla.
+        builder.function.blocks.remove(end_block)
+        builder.function.blocks.append(end_block)
 
     def _lower_async_for(self, builder: _Builder, node: HIRNode) -> None:
         """Lower ``asincrono para x en <async-gen-call>: body`` (plus orelse).
