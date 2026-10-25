@@ -565,6 +565,38 @@ static long piton_str_subrindex(const char*s,const char*n){long i=piton_str_rfin
 static long piton_str_quote(const char*s){usize n=piton_strlen(s);int q=0;for(usize i=0;i<n;++i)if(s[i]=='\'')q=1;char qc=q?'"':'\'';usize extra=0;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'||c=='\n'||c=='\t'||c=='\r'||(unsigned char)c==qc)extra+=1;}char*p=piton_alloc(n+extra+3);usize o=0;p[o++]=qc;for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c=='\\'){p[o++]='\\';p[o++]='\\';}else if(c=='\n'){p[o++]='\\';p[o++]='n';}else if(c=='\t'){p[o++]='\\';p[o++]='t';}else if(c=='\r'){p[o++]='\\';p[o++]='r';}else if(c==qc){p[o++]='\\';p[o++]=c;}else p[o++]=(char)c;}p[o++]=qc;p[o]=0;return(long)p;}
 static long piton_str_single_char(const char*s){if(piton_strlen(s)!=1){piton_raise_set("TypeError","%c requires int or char");return 0;}return(long)s;}
 static long piton_str_format(const char*t,long n,const char**av){usize total=0;int auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){total+=1;i+=2;continue;}usize j=i+1;int idx=-2;int has=0;if(t[j]=='}'){idx=auto_idx++;j+=1;has=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;has=1;}if(has&&t[j]=='}'){j+=1;}else{has=0;}}if(!has){piton_write(2,"ValueError: single '{' in format string\n",40);piton_exit(1);}if(idx<0||idx>=n){piton_write(2,"IndexError: replacement index out of range\n",43);piton_exit(1);}total+=piton_strlen(av[idx]);i=j;}else if(t[i]=='}'){if(t[i+1]=='}'){total+=1;i+=2;}else{piton_write(2,"ValueError: single '}' in format string\n",40);piton_exit(1);}}else{total+=1;i+=1;}}char*p=piton_alloc(total+1);usize o=0;auto_idx=0;for(usize i=0;t[i];){if(t[i]=='{'){if(t[i+1]=='{'){p[o++]='{';i+=2;continue;}usize j=i+1;int idx=-2;if(t[j]=='}'){idx=auto_idx++;j+=1;}else{idx=0;while(t[j]>='0'&&t[j]<='9'){idx=idx*10+(t[j]-'0');j+=1;}j+=1;}usize el=piton_strlen(av[idx]);piton_memcpy(p+o,av[idx],el);o+=el;i=j;}else if(t[i]=='}'){p[o++]='}';i+=2;}else{p[o++]=t[i++];}}p[o]=0;return(long)p;}
+static const char* piton_str_of_value(long bits);
+/* PCT_DYNAMIC_V1: template % sin plantilla estatica conocida (atributo de
+ * instancia, variable, etc.). Convierte %s/%d/%r a placeholders {} y aplica
+ * piton_str_format sobre los argumentos convertidos a str en runtime. */
+static long piton_str_percent_dyn(const char*t,long n,long*av){
+  usize tl=piton_strlen(t);
+  char*fmt=(char*)piton_alloc(tl*2+2);
+  usize fi=0;long ai=0;
+  for(usize i=0;i<tl;i++){
+    if(t[i]=='%'){
+      if(i+1<tl&&t[i+1]=='%'){fmt[fi++]='%';i+=2;continue;}
+      char spec=i+1<tl?t[i+1]:0;
+      if(spec=='s'||spec=='d'||spec=='i'||spec=='r'||spec=='c'){
+        fmt[fi++]='{';
+        long na=ai++;
+        char nb[16];int nl=0;
+        if(na==0){nb[nl++]='0';}else{long tn=na;while(tn>0){nb[nl++]='0'+tn%10;tn/=10;}for(int a=0;a<nl/2;a++){char c=nb[a];nb[a]=nb[nl-1-a];nb[nl-1-a]=c;}}
+        for(int a=0;a<nl;a++)fmt[fi++]=nb[a];
+        fmt[fi++]='}';
+        i+=2;continue;
+      }
+      fmt[fi++]=t[i];continue;
+    }
+    fmt[fi++]=t[i];
+  }
+  fmt[fi]=0;
+  /* convertir argumentos a strings */
+  const char**args=(const char**)piton_alloc(sizeof(char*)*(n?n:1));
+  for(long i=0;i<n;i++)args[i]=(const char*)piton_str_of_value(av[i]);
+  long r=piton_str_format(fmt,n,args);
+  return r;
+}
 
 static long piton_str_split_ws(const char*s){PitonSeq*r=piton_seq_new(PK_LIST,0);usize n=piton_strlen(s),i=0;while(i<n){while(i<n&&piton_ws((unsigned char)s[i]))++i;if(i>=n)break;usize j=i;while(j<n&&!piton_ws((unsigned char)s[j]))++j;usize len=j-i;char*q=piton_alloc(len+1);piton_memcpy(q,s+i,len);q[len]=0;piton_seq_append(r,(PitonSlot){(long)q,PK_STR});i=j;}return(long)r;}
 static long piton_str_rpartition(const char*s,const char*sep){usize n=piton_strlen(s),m=piton_strlen(sep);long at=-1;if(m>0&&m<=n){for(long i=(long)(n-m);i>=0;--i){usize k=0;while(k<m&&s[i+k]==sep[k])++k;if(k==m){at=i;break;}}}PitonSeq*r=piton_seq_new(PK_TUPLE,3);
@@ -1013,6 +1045,11 @@ static long piton_repr_iterator_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(
 typedef struct{long magic,index;PitonSeq*seq;}PitonLenIterator;
 static long piton_len_iterator_next(long raw){PitonLenIterator*i=(PitonLenIterator*)raw;if(!i||i->magic!=0x5049544E17E4LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];long l;if(item.kind==PK_LIST||item.kind==PK_TUPLE)l=((PitonSeq*)item.bits)->length;else if(item.kind==PK_STR)l=piton_strlen((const char*)item.bits);else if(item.kind==PK_DICT)l=((PitonDict*)item.bits)->length;else if(item.kind==PK_SET||item.kind==PK_FROZENSET)l=((PitonSet*)item.bits)->length;else if(item.kind==PK_BYTES||item.kind==PK_BYTEARRAY)l=((PitonBytes*)item.bits)->length;else if(item.kind==PK_RANGE)l=piton_range_len((PitonRange*)item.bits);else{piton_raise_set("TypeError","object of type has no len()");return 0;}return l;}
 static long piton_len_iterator_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map(len) requires a list or tuple\n",45);piton_exit(1);}PitonLenIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E4LL;i->index=0;i->seq=s;return(long)i;}
+/* STR_MAP_ITER_V1: map(str, seq) — aplica piton_str_of_value a cada elemento.
+ * Resultado: str. */
+typedef struct{long magic,index;PitonSeq*seq;}PitonStrMapIterator;
+static long piton_str_map_iterator_next(long raw){PitonStrMapIterator*i=(PitonStrMapIterator*)raw;if(!i||i->magic!=0x5049544E17E5LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];return(long)piton_str_of_value(item.bits);}
+static long piton_str_map_iterator_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map(str) requires a list or tuple\n",45);piton_exit(1);}PitonStrMapIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E5LL;i->index=0;i->seq=s;return(long)i;}
 typedef struct{long magic,callback,sentinel;}PitonCallIter;
 static long piton_closure_call_frame(long,long,long*);
 static long piton_calliter_new(long callback,long sentinel){PitonCallIter*i=piton_alloc(sizeof(*i));i->magic=0x50495443414C4954LL;i->callback=callback;i->sentinel=sentinel;return(long)i;}
@@ -1539,13 +1576,13 @@ static long piton_list_of_dynamic(long bits){
   if(piton_maybe_ptr(bits)){
     long*ptr=(long*)bits;long k=ptr[1];
     if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW){
-      if(k==PK_LIST||k==PK_TUPLE)return piton_conv_seq(PK_LIST,(PitonSlot){bits,(int)k});
+      if(k==PK_LIST||k==PK_TUPLE)return(long)piton_conv_seq(PK_LIST,(PitonSlot){bits,(int)k});
       piton_write(2,"TypeError: list() of a dynamically typed collection is not supported in the native subset\n",99);
       piton_exit(2);
     }
     /* un str imprimible (heap o literal de rodata, que maybe_ptr acepta):
        list('abc') -> ['a','b','c'] conservando la kind. */
-    if(piton_is_printable_str((const char*)bits))return piton_conv_seq(PK_LIST,(PitonSlot){bits,PK_STR});
+    if(piton_is_printable_str((const char*)bits))return(long)piton_conv_seq(PK_LIST,(PitonSlot){bits,PK_STR});
   }
   if(piton_is_double_bits(bits)){piton_raise_set("TypeError","'float' object is not iterable");return 0;}
   piton_raise_set("TypeError","'int' object is not iterable");
@@ -2034,6 +2071,29 @@ static PitonByteArray* piton_bytearray_concat(PitonByteArray* a, PitonByteArray*
     if(lb&&db)piton_memcpy(res->data+la,db,(usize)lb);
     return res;
 }
+/* BYTES_JOIN_V1: sep.join(list_of_bytes) — une una lista de bytes con el
+ * separador. Devuelve un nuevo objeto bytes. */
+static PitonBytes* piton_bytes_join(PitonBytes*sep,PitonSeq*items){
+    long sl=0;const unsigned char*sd=piton_bytes_get_data(sep,&sl);
+    long total=0;long count=items?items->length:0;
+    for(long i=0;i<count;i++){
+        PitonSlot it=items->items[i];
+        if(it.kind!=PK_BYTES){piton_write(2,"TypeError: can only join bytes\n",30);piton_exit(1);}return 0;}
+        long il=0;const unsigned char*id=piton_bytes_get_data((PitonBytes*)it.bits,&il);
+        if(i>0)total+=sl;
+        total+=il;
+    }
+    PitonBytes*res=piton_bytes_new(total,0);
+    long o=0;
+    for(long i=0;i<count;i++){
+        PitonSlot it=items->items[i];
+        long il=0;const unsigned char*id=piton_bytes_get_data((PitonBytes*)it.bits,&il);
+        if(i>0&&sl&&sd){piton_memcpy(res->data+o,sd,(usize)sl);o+=sl;}
+        if(il&&id){piton_memcpy(res->data+o,id,(usize)il);o+=il;}
+    }
+    res->data[o]=0;
+    return res;
+}
 
 static PitonBytes* piton_bytes_repeat(PitonBytes* b, long n){
     if(n<=0)return piton_bytes_new(0,0);
@@ -2370,17 +2430,17 @@ static long piton_slice_dynamic(long bits,long lo,long hi,long has_step,long ste
   if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
     if(ptr[0]>=0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW){
       if(k==PK_LIST||k==PK_TUPLE)
-        return has_step?piton_seq_slice_step((PitonSeq*)bits,lo,hi,step)
-                       :piton_seq_slice((PitonSeq*)bits,lo,hi);
+        return has_step?(long)piton_seq_slice_step((PitonSeq*)bits,lo,hi,step)
+                       :(long)piton_seq_slice((PitonSeq*)bits,lo,hi);
       if(k==PK_BYTES)
-        return has_step?piton_bytes_slice_step((PitonBytes*)bits,lo,hi,step)
+        return has_step?(long)piton_bytes_slice_step((PitonBytes*)bits,lo,hi,step)
                        :(long)piton_bytes_slice((PitonBytes*)bits,lo,hi);
       if(k==PK_BYTEARRAY)
-        return has_step?piton_bytearray_slice_step((PitonByteArray*)bits,lo,hi,step)
+        return has_step?(long)piton_bytearray_slice_step((PitonByteArray*)bits,lo,hi,step)
                        :(long)piton_bytearray_slice((PitonByteArray*)bits,lo,hi);
       if(k==PK_RANGE)
-        return has_step?piton_range_slice_step((PitonRange*)bits,lo,hi,step)
-                       :piton_range_slice((PitonRange*)bits,lo,hi);
+        return has_step?(long)piton_range_slice_step((PitonRange*)bits,lo,hi,step)
+                       :(long)piton_range_slice((PitonRange*)bits,lo,hi);
     }
     if(piton_is_printable_str((const char*)bits)){
       piton_write(2,"TypeError: slice of a dynamically typed str is not supported in the native subset\n",88);
@@ -5128,6 +5188,12 @@ class LinuxCEmitter:
             require_count((1,), "exactly one iterable argument")
             out.append(f"    piton_bytearray_extend((PitonByteArray*){operand},{self._slot(call_args[0], types)});")
             types[result] = "none"
+        elif method == "join":
+            require_count((1,), "exactly one list or tuple argument")
+            if types.get(call_args[0]) not in {"list", "tuple"}:
+                raise NativeBuildError("Linux bytes.join() requires one list or tuple argument")
+            out.append(f"    {_name(result)}=(long)piton_bytes_join((PitonBytes*){operand},(PitonSeq*){self._value(call_args[0])});")
+            types[result] = "bytes"
         else:
             raise NativeBuildError(f"Linux {target_type}.{method}() is not supported")
 
@@ -5148,7 +5214,10 @@ class LinuxCEmitter:
         def require_str(index: int, what: str) -> str:
             if len(call_args) <= index or types.get(call_args[index]) != "str":
                 raise NativeBuildError(f"Linux str.{method}() requires {what}")
-            return self._value(call_args[index])
+            # STR_PTR_CAST_V1: self._value puede devolver un nombre de temp
+            # (%N) que es un long; envolver en (const char*)(long) para que
+            # compile como puntero a C string.
+            return f"(const char*)(long){self._value(call_args[index])}"
 
         def require_count(count: int, what: str) -> None:
             if len(call_args) != count:
@@ -5180,12 +5249,14 @@ class LinuxCEmitter:
             require_count(1, "exactly one str argument")
             helper = "piton_str_startswith" if method == "startswith" else "piton_str_endswith"
             _p0 = call_args[0]
-            if types.get(_p0) in {"", "int", "none"}:
-                # STR_PREFIX_DYNAMIC_V1: el prefijo no tiene tipo estatico; el
-                # runtime levanta el TypeError de CPython si no es un str.
+            if types.get(_p0) in {"", "int", "none", "bytes", "bytearray"}:
+                # STR_PREFIX_DYNAMIC_V1: el prefijo no tiene tipo estatico (o
+                # es bytes cuando el receiver es str — CPython lanza TypeError
+                # en runtime). piton_str_prefix_dyn valida y levanta el error
+                # correspondiente.
                 out.append(
                     f"    {_name(result)}=piton_str_prefix_dyn((const char*){operand},"
-                    f"{self._value(_p0)},{1 if method == 'endswith' else 0});"
+                    f"(long){self._value(_p0)},{1 if method == 'endswith' else 0});"
                 )
             else:
                 out.append(f"    {_name(result)}={helper}((const char*){operand},{require_str(0, 'a str argument')});")
@@ -5414,11 +5485,11 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_str_join_dyn((const char*){operand},{self._value(call_args[0])});")
                 types[result] = "str"
                 return out
-            if types.get(call_args[0]) in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter", "iterator:repr", "generator", "genexpr"}:
+            if types.get(call_args[0]) in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter", "iterator:repr", "iterator:len", "iterator:str", "generator", "genexpr"}:
                 # JOIN_OF_ITER_V1: `sep.join(iterator)` materializa el
                 # iterador a lista antes de unir (CPython acepta cualquier
                 # iterable). Los elementos deben ser str.
-                _jwhich = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3, "iterator:repr": 5, "generator": 4, "genexpr": 4}[types.get(call_args[0])]
+                _jwhich = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3, "iterator:repr": 5, "iterator:len": 6, "iterator:str": 7, "generator": 4, "genexpr": 4}[types.get(call_args[0])]
                 out.append(
                     f"    {{PitonSeq*_jl=(PitonSeq*)piton_collect({_jwhich},{self._value(call_args[0])},PK_STR);"
                 )
@@ -7341,6 +7412,12 @@ class LinuxCEmitter:
                         )
                         types[result] = "iterator:len"
                         return out
+                    if builtin == "map" and _builtin_cb == "str":
+                        out.append(
+                            f"    {_name(result)}=piton_str_map_iterator_new((void*){self._value(source)});"
+                        )
+                        types[result] = "iterator:str"
+                        return out
                     # ITER_PASSTHROUGH_V1 guard: a builtin NAME has no native
                     # function address — passing its uninitialized marker as
                     # the callback would jump through garbage (crash).
@@ -7400,7 +7477,7 @@ class LinuxCEmitter:
                 method_class = self._resolve_method(class_name, "__next__")
                 out.append(f"    {_name(result)}={_name(method_class+'__'+'__next__')}({self._value(iterator)});")
             else:
-                next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:repr": "piton_repr_iterator_next", "iterator:len": "piton_len_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
+                next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:repr": "piton_repr_iterator_next", "iterator:len": "piton_len_iterator_next", "iterator:str": "piton_str_map_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
                 out.append(f"    {_name(result)}={next_helper}({self._value(iterator)});")
             # DICT_KEY_TYPE_V1: a dict iterator yields its KEYS, whose static
             # type comes from the dict it was built from. Only when it is
@@ -7707,6 +7784,7 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=(long){json.dumps(f'<class {_tname!r}>')};")
                 types[result] = "str"
                 self._typeobj_names[result] = _tname
+                self._builtin_loads[result] = source
                 return out
             if source in _BUILTINS and source not in function.params and source not in _FUNC_ONLY_BUILTINS:
                 # BUILTIN_MARKER_V1: this load emits NO C code — the builtin is
@@ -8266,7 +8344,34 @@ class LinuxCEmitter:
                         # llamada con un literal — la plantilla es ese literal.
                         template = self._identity_templates.get(left)
                     if not isinstance(template, str):
-                        raise NativeBuildError("Linux str % formatting requires a literal template")
+                        # PCT_DYNAMIC_V1: template sin plantilla estatica
+                        # (atributo de instancia, variable, etc.). Usar
+                        # piton_str_percent_dyn con conversion de argumentos
+                        # en runtime.
+                        if types.get(right) == "tuple":
+                            known = self._tuple_elems.get(right)
+                            if known is None:
+                                known = self._tuple_elems.get(aliases.get(right, right))
+                            if known is None:
+                                raise NativeBuildError(
+                                    "Linux str % formatting: tuple args must be statically known when template is dynamic"
+                                )
+                            nargs = len(known)
+                            arg_vals = [
+                                f"(long){self._value(item[0])}"
+                                for item in known
+                            ]
+                        else:
+                            nargs = 1
+                            arg_vals = [f"(long){self._value(right)}"]
+                        args_c = ",".join(arg_vals)
+                        out.append(
+                            f"    {{long _pa[]={{{args_c}}};"
+                            f" {_name(result)}=(long)piton_str_percent_dyn("
+                            f"(const char*){self._value(left)},{nargs},_pa);}}"
+                        )
+                        types[result] = "str"
+                        return out
                     translated, fields = self._parse_percent_template(template)
                     has_map = any(field[0] is not None for field in fields)
                     has_pos = any(field[0] is None for field in fields)
@@ -9726,14 +9831,21 @@ class LinuxCEmitter:
                     raise NativeBuildError("Linux str requires exactly one argument")
                 arg_type = types.get(values[0])
                 operand = self._value(values[0])
-                if arg_type == "int":
+                if arg_type is None or arg_type in {"", "none"}:
+                    # STR_DYNAMIC_V1: tipo desconocido o sin anotar (resultado
+                    # de % formatting con template dinámico, variable sin tipo,
+                    # etc.). Usar str() de runtime.
+                    out.append(f"    {_name(result)}=(long)piton_str_of_value({operand});")
+                elif arg_type == "int":
                     out.append(f"    {_name(result)}=piton_str_from_int({operand});")
                 elif arg_type == "float":
                     out.append(f"    {_name(result)}=piton_str_from_float({operand});")
+                elif arg_type in {"", "none"}:
+                    # STR_DYNAMIC_V1: tipo desconocido (resultado de % formatting
+                    # con template dinámico, etc.). Usar str() de runtime.
+                    out.append(f"    {_name(result)}=(long)piton_str_of_value({operand});")
                 elif arg_type == "bool":
                     out.append(f"    {_name(result)}=(long)({operand}?\"True\":\"False\");")
-                elif arg_type == "none":
-                    out.append(f"    {_name(result)}=(long)\"None\";")
                 elif arg_type == "str":
                     out.append(f"    {_name(result)}={operand};")
                 elif arg_type == "complex":
@@ -10126,12 +10238,12 @@ class LinuxCEmitter:
                         types[result] = "list"
                     self._coll_elems[result] = "int"
                     return out
-                if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter", "iterator:repr", "iterator:len"} and seq_kind in {"PK_LIST", "PK_TUPLE"}:
-                    _which = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3, "iterator:repr": 5, "iterator:len": 6}[source_type]
+                if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter", "iterator:repr", "iterator:len", "iterator:str"} and seq_kind in {"PK_LIST", "PK_TUPLE"}:
+                    _which = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3, "iterator:repr": 5, "iterator:len": 6, "iterator:str": 7}[source_type]
                     if source_type == "iterator:repr":
                         _elemkind = "PK_STR"
-                    elif source_type == "iterator:len":
-                        _elemkind = "PK_INT"
+                    elif source_type in {"iterator:len", "iterator:str"}:
+                        _elemkind = "PK_INT" if source_type == "iterator:len" else "PK_STR"
                     else:
                         _elemkind = "PK_TUPLE" if source_type in {"iterator:enumerate", "iterator:zip"} else "PK_INT"
                     _it_tmp = f"(long)piton_collect({_which},{self._value(values[0])},{_elemkind})"
@@ -10143,7 +10255,7 @@ class LinuxCEmitter:
                     else:
                         out.append(f"    {_name(result)}={_it_tmp};")
                         types[result] = "list"
-                    self._coll_elems[result] = "str" if source_type == "iterator:repr" else ("int" if source_type == "iterator:len" else ("tuple" if source_type in {"iterator:enumerate", "iterator:zip"} else "int"))
+                    self._coll_elems[result] = "str" if source_type == "iterator:repr" else ("int" if source_type == "iterator:len" else ("str" if source_type == "iterator:str" else ("tuple" if source_type in {"iterator:enumerate", "iterator:zip"} else "int")))
                     return out
                 if source_type == "none" and alias in {"lista", "list", "tuple", "tupla"}:
                     # CONV_NONE_V1: lista(none) — si la llamada que produjo
@@ -10765,6 +10877,7 @@ class LinuxCEmitter:
                     "iterator:filter": "piton_callback_iterator_next",
                     "iterator:repr": "piton_repr_iterator_next",
                     "iterator:len": "piton_len_iterator_next",
+                    "iterator:str": "piton_str_map_iterator_next",
                     "iterator:calliter": "piton_calliter_next",
                 }.get(owner_type, "piton_iterator_next_any")
                 out.append(
@@ -11496,6 +11609,24 @@ class LinuxCEmitter:
                 )
                 types[result] = "int"
                 self._emit_exc_check(out, function, None)
+                return out
+            # STR_PREFIX_DYNAMIC_V2: receiver sin tipo estatico (parametro de
+            # funcion, etc.) con startswith/endswith. Asumir str en runtime;
+            # piton_str_prefix_dyn levanta TypeError si no lo es.
+            if (
+                isinstance(obj, str)
+                and not obj.startswith("%")
+                and types.get(obj) in {"int", "", None}
+                and method in {"startswith", "endswith"}
+                and len(call_args) == 1
+                and not kw_args
+            ):
+                _end = 1 if method == "endswith" else 0
+                out.append(
+                    f"    {_name(result)}=piton_str_prefix_dyn((const char*){self._value(obj)},"
+                    f"(long){self._value(call_args[0])},{_end});"
+                )
+                types[result] = "bool"
                 return out
             cls_name = self._resolve_method(cls_name, method)
             target = f"{cls_name}__{method}"
@@ -12278,7 +12409,8 @@ class LinuxCEmitter:
                 _which = {
                     "iterator:enumerate": 0, "iterator:reversed": 1,
                     "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3,
-                    "iterator:repr": 5, "iterator:len": 6, "generator": 4, "genexpr": 4,
+                    "iterator:repr": 5, "iterator:len": 6, "iterator:str": 7,
+                    "generator": 4, "genexpr": 4,
                 }.get(collection_type)
                 if _which is None:
                     raise NativeBuildError(f"Linux collection_len requires a collection (not {collection_type})")
@@ -12287,6 +12419,8 @@ class LinuxCEmitter:
                     _elemkind = "PK_STR"
                 elif collection_type == "iterator:len":
                     _elemkind = "PK_INT"
+                elif collection_type == "iterator:str":
+                    _elemkind = "PK_STR"
                 else:
                     _elemkind = "PK_TUPLE" if _tuple_items else "PK_INT"
                 # the loop condition re-evaluates this every iteration: a
