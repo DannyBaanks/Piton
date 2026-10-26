@@ -659,6 +659,19 @@ static long piton_str_slice(const char*s,long lo,long hi){long n=(long)piton_str
    PitonSeq*) -> SIGSEGV. Indice fuera de rango -> IndexError. */
 static long piton_str_get(const char*s,long i){long n=(long)piton_strlen(s);if(i<0)i+=n;if(i<0||i>=n){piton_raise_set("IndexError","string index out of range");return 0;}char*p=piton_alloc(2);p[0]=s[i];p[1]=0;return(long)p;}
 static PitonSlot piton_seq_pop(PitonSeq*s,long i){if(!s||s->length<=0){piton_write(2,"IndexError: pop from empty list\n",32);piton_exit(1);}if(i<0)i+=s->length;if(i<0||i>=s->length){piton_write(2,"IndexError: pop index out of range\n",35);piton_exit(1);}PitonSlot v=s->items[i];for(long j=i;j+1<s->length;++j)s->items[j]=s->items[j+1];--s->length;return v;}
+/* DEL_SLICE_V1: borrar el rango [lo,hi) de una secuencia (CPython
+   del l[a:b]); bounds ausentes = 0 / longitud. datastructures: del a[2:4],
+   del a[:]; imghdr: del sys.argv[1:2]. */
+static void piton_seq_del_range(PitonSeq*s,long lo,long hi){
+  if(!s)return;
+  long n=s->length;
+  if(lo<0)lo+=n;if(hi<0)hi+=n;
+  if(lo<0)lo=0;if(hi>n)hi=n;
+  if(hi<=lo)return;
+  long span=hi-lo;
+  for(long i=lo;i+span<n;++i)s->items[i]=s->items[i+span];
+  s->length-=span;
+}
 static void piton_seq_reverse(PitonSeq*s){if(!s)return;for(long i=0,j=s->length-1;i<j;++i,--j){PitonSlot t=s->items[i];s->items[i]=s->items[j];s->items[j]=t;}}
 static void piton_seq_insert(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0)i=0;if(i>s->length)i=s->length;if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}for(long j=s->length;j>i;--j)s->items[j]=s->items[j-1];s->items[i]=v;++s->length;}
 static long piton_seq_count(PitonSeq*s,PitonSlot v){if(!s)return 0;long n=0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))++n;return n;}
@@ -1868,6 +1881,17 @@ static int piton_set_index_of(PitonSet*s,PitonSlot v){for(long i=0;i<s->length;+
 static void piton_set_discard(PitonSet*s,PitonSlot v){int i=s?piton_set_index_of(s,v):-1;if(i>=0){for(long j=i;j<s->length-1;++j)s->items[j]=s->items[j+1];--s->length;}}
 static void piton_set_remove(PitonSet*s,PitonSlot v){int i=s?piton_set_index_of(s,v):-1;if(i<0){piton_raise_set("KeyError","");return;}for(long j=i;j<s->length-1;++j)s->items[j]=s->items[j+1];--s->length;}
 static long piton_seq_index(PitonSeq*s,PitonSlot v){if(s){for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return i;}piton_raise_set("ValueError","sequence.index(x): x not in sequence");return 0;}
+/* SEQ_INDEX_RANGE_V1: list.index(x[, start[, stop]]) — busqueda en el
+   rango [start, stop) como CPython (datastructures: index(x, 4)). */
+static long piton_seq_index_range(PitonSeq*s,PitonSlot v,long start,long stop){
+  if(!s){piton_raise_set("ValueError","sequence.index(x): x not in sequence");return 0;}
+  long n=s->length;
+  if(start<0)start+=n;if(stop<0)stop+=n;
+  if(start<0)start=0;if(stop>n)stop=n;
+  for(long i=start;i<stop;++i)if(piton_slot_eq(s->items[i],v))return i;
+  piton_raise_set("ValueError","sequence.index(x): x not in sequence");
+  return 0;
+}
 static void piton_dict_clear(PitonDict*d){if(d)d->length=0;}
 static long piton_dict_copy(PitonDict*d){if(!d)return 0;PitonDict*r=piton_dict_new(d->length);r->length=d->length;for(long i=0;i<d->length;++i)r->items[i]=d->items[i];return(long)r;}
 static PitonSlot piton_dict_pop(PitonDict*d,PitonSlot k,int has_def,PitonSlot def_val){if(d){for(long i=0;i<d->length;++i){if(piton_slot_eq(d->items[i].key,k)){PitonSlot val=d->items[i].value;for(long j=i;j+1<d->length;++j)d->items[j]=d->items[j+1];--d->length;return val;}}}if(has_def)return def_val;piton_raise_set("KeyError","");return(PitonSlot){0,PK_NONE};}
@@ -4867,8 +4891,18 @@ class LinuxCEmitter:
                 out.append(f"    piton_seq_clear((PitonSeq*){operand});")
                 types[result] = "none"
             elif method == "index":
-                require_count((1,), "exactly one argument")
-                out.append(f"    {_name(result)}=piton_seq_index((PitonSeq*){operand},{self._slot(call_args[0], types)});")
+                # SEQ_INDEX_RANGE_V1: index(x[, start[, stop]]) como CPython.
+                require_count((1, 2, 3), "one, two or three arguments")
+                _lo = self._value(call_args[1]) if len(call_args) >= 2 else "0"
+                _hi = (
+                    self._value(call_args[2])
+                    if len(call_args) >= 3
+                    else f"((PitonSeq*){operand})->length"
+                )
+                out.append(
+                    f"    {_name(result)}=piton_seq_index_range((PitonSeq*){operand},"
+                    f"{self._slot(call_args[0], types)},{_lo},{_hi});"
+                )
                 types[result] = "int"
             elif method == "copy":
                 require_count((0,), "no arguments")
@@ -4891,8 +4925,18 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_seq_count((PitonSeq*){operand},{self._slot(call_args[0], types)});")
                 types[result] = "int"
             elif method == "index":
-                require_count((1,), "exactly one argument")
-                out.append(f"    {_name(result)}=piton_seq_index((PitonSeq*){operand},{self._slot(call_args[0], types)});")
+                # SEQ_INDEX_RANGE_V1: index(x[, start[, stop]]) como CPython.
+                require_count((1, 2, 3), "one, two or three arguments")
+                _lo = self._value(call_args[1]) if len(call_args) >= 2 else "0"
+                _hi = (
+                    self._value(call_args[2])
+                    if len(call_args) >= 3
+                    else f"((PitonSeq*){operand})->length"
+                )
+                out.append(
+                    f"    {_name(result)}=piton_seq_index_range((PitonSeq*){operand},"
+                    f"{self._slot(call_args[0], types)},{_lo},{_hi});"
+                )
                 types[result] = "int"
             else:
                 raise NativeBuildError(f"Linux tuple.{method}() is not supported")
@@ -11213,6 +11257,25 @@ class LinuxCEmitter:
                     raise NativeBuildError(
                         f"native del on '{attr}' is not a property of a natively-typed object"
                     )
+        elif op == "del_slice":
+            # DEL_SLICE_V1: `borrar l[a:b]` — borrado de rango real. Los bounds
+            # ausentes (None) son 0 / la longitud en runtime (datastructures:
+            # del a[:]); sobre tupla es TypeError (imutabilidad).
+            obj, lower, upper = args
+            owner_type = types.get(obj, "")
+            if owner_type == "tuple":
+                out.append('    piton_raise_set("TypeError","\'tuple\' object does not support item deletion");')
+                self._emit_exc_check(out, function, None)
+                return out
+            if owner_type not in {"list", ""}:
+                raise NativeBuildError(f"native del slice target of type '{owner_type}' is not supported")
+            _lo = self._value(lower) if lower is not None else "0"
+            _hi = (
+                self._value(upper)
+                if upper is not None
+                else f"((PitonSeq*){self._value(obj)})->length"
+            )
+            out.append(f"    piton_seq_del_range((PitonSeq*){self._value(obj)},{_lo},{_hi});")
         elif op == "del_item":
             # DEL_ITEM_V1: build-time check on the container type.
             obj, index = args
@@ -11869,6 +11932,16 @@ class LinuxCEmitter:
                 operand = f"piton_double_bits((double){operand})"
             helper = f"piton_float_{op[5:]}"
             out.append(f'    {_name(result)}={helper}({operand});')
+            types[result] = "float"
+        elif op == "math_log2":
+            # MATH_LOG2_V1: math.log(x, base) = log(x)/log(base) (CPython).
+            left = self._value(args[0])
+            right = self._value(args[1])
+            if types.get(args[0]) != "float":
+                left = f"piton_double_bits((double){left})"
+            if types.get(args[1]) != "float":
+                right = f"piton_double_bits((double){right})"
+            out.append(f'    {_name(result)}=piton_double_bits(piton_log(piton_bits_double({left}))/piton_log(piton_bits_double({right})));')
             types[result] = "float"
         elif op in {"math_floor", "math_ceil", "math_trunc", "math_fabs"}:
             operand = self._value(args[0])

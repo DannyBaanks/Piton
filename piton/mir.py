@@ -257,7 +257,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     # GETTEXT_IDENTITY_V1: gettext.gettext es la identidad (sin efectos).
     "gettext_identity": "PURE",
     "math_sqrt": "PURE",
-    "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE",
+    "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE", "math_log2": "PURE",
     "math_floor": "PURE", "math_ceil": "PURE", "math_trunc": "PURE",
     "math_fabs": "PURE", "math_gcd": "PURE",
     "terminal_init": "PURE", "terminal_size": "PURE", "terminal_write": "PURE",
@@ -281,7 +281,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "load_exc_args": "READ",
     # WRITE
     "cell_store": "WRITE", "dict_put": "WRITE", "list_append": "WRITE",
-    "del_item": "WRITE", "del_name": "PURE",
+    "del_item": "WRITE", "del_name": "PURE", "del_slice": "WRITE",
     "set_add": "WRITE",
     "collection_extend": "WRITE",
     "try_push": "WRITE", "try_pop": "WRITE", "subscript_store": "WRITE",
@@ -2421,19 +2421,20 @@ class MIRLowerer:
                         else None
                     )
                     if slice_info is not None:
-                        # DEL_SLICE_V1: `borrar l[a:b]` — para rangos de un
-                        # elemento (como sys.argv[1:2]) equivale a borrar el
-                        # elemento en la posicion de inicio.
+                        # DEL_SLICE_V1: `borrar l[a:b]` — borrado de rango real
+                        # ([a,b), bounds ausentes = 0 / longitud). datastructures:
+                        # del a[2:4], del a[:]; imghdr: del sys.argv[1:2].
                         lower = (
                             self._lower_expr(builder, slice_info["lower"])
                             if slice_info["lower"] is not None
                             else None
                         )
-                        if lower is None:
-                            raise MIRLoweringError(
-                                "native del slice requires a lower bound"
-                            )
-                        builder.emit("del_item", obj, lower)
+                        upper = (
+                            self._lower_expr(builder, slice_info["upper"])
+                            if slice_info["upper"] is not None
+                            else None
+                        )
+                        builder.emit("del_slice", obj, lower, upper)
                     else:
                         index = self._lower_expr(builder, target.slice)
                         builder.emit("del_item", obj, index)
@@ -3942,6 +3943,13 @@ class MIRLowerer:
                 if qualified in _MATH_FUNCS:
                     op = _MATH_FUNCS[qualified]
                     arity = 2 if op == "math_gcd" else 1
+                    if op == "math_log" and not node.keywords and len(node.args) == 2:
+                        # MATH_LOG2_V1: math.log(x, base) = log(x)/log(base).
+                        _ll = self._lower_expr(builder, node.args[0])
+                        _lr = self._lower_expr(builder, node.args[1])
+                        result = builder.temp()
+                        builder.emit("math_log2", _ll, _lr, _active_handler(builder), result=result)
+                        return result
                     if len(node.args) != arity or node.keywords:
                         raise MIRLoweringError(
                             f"native {qualified} requires {arity} positional argument"
@@ -5044,6 +5052,13 @@ class MIRLowerer:
                 if qualified in _MATH_FUNCS:
                     op = _MATH_FUNCS[qualified]
                     arity = 2 if op == "math_gcd" else 1
+                    if op == "math_log" and not node.keywords and len(node.args) == 2:
+                        # MATH_LOG2_V1: math.log(x, base) = log(x)/log(base).
+                        _ll = self._lower_expr(builder, node.args[0])
+                        _lr = self._lower_expr(builder, node.args[1])
+                        result = builder.temp()
+                        builder.emit("math_log2", _ll, _lr, _active_handler(builder), result=result)
+                        return result
                     if len(node.args) != arity or node.keywords:
                         raise MIRLoweringError(
                             f"native {qualified} requires {arity} positional argument"
@@ -5214,6 +5229,13 @@ class MIRLowerer:
                         "log": "math_log",
                     }.get(attr)
                     arity = 2 if op == "math_gcd" else 1
+                    if op == "math_log" and len(node.args) == 2:
+                        # MATH_LOG2_V1: math.log(x, base) = log(x)/log(base).
+                        _ll = self._lower_expr(builder, node.args[0])
+                        _lr = self._lower_expr(builder, node.args[1])
+                        result = builder.temp()
+                        builder.emit("math_log2", _ll, _lr, _active_handler(builder), result=result)
+                        return result
                     if op is None or len(node.args) != arity:
                         raise MIRLoweringError(
                             f"native math.{attr} is not supported or requires {arity} positional argument"
