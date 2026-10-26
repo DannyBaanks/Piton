@@ -4084,6 +4084,14 @@ class LinuxCEmitter:
     def _slot(self, value: Any, types: dict[str, str]) -> str:
         return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
 
+    def _needle_slot(self, value: Any, types: dict[str, str]) -> str:
+        """NEEDLE_SLOT_V1: el needle de un `in` como expresion C de PitonSlot.
+        Un valor etiquetado (tipo 'slot', ej. la key de un dict iterado con
+        kind desconocida) se desreferencia: *(PitonSlot*)v."""
+        if types.get(value) == "slot":
+            return f"*(PitonSlot*){self._value(value)}"
+        return self._slot(value, types)
+
     @staticmethod
     def _parse_percent_template(template: str) -> tuple[str, list[tuple]]:
         """PCT_FORMAT_V1: translate a %-format template into a {}-template
@@ -4519,7 +4527,7 @@ class LinuxCEmitter:
         # collection; un argumento escalar explicito con tipo conocido en
         # ese param es fail-closed (CPython lo admitiria, pero el subset no
         # puede re-anotar el callee por llamada).
-        for _val, _pd in zip(values, _defaults or []):
+        for _i, (_val, _pd) in enumerate(zip(values, _defaults or [])):
             _pd_is_marker = (
                 isinstance(_pd, tuple) and len(_pd) >= 2
                 and _pd[0] in {"__name__", "__attr__"}
@@ -4876,7 +4884,9 @@ class LinuxCEmitter:
                 require_count((1, 2), "one or two arguments (key[, default])")
                 if len(call_args) == 2:
                     default = self._slot(call_args[1], types)
-                    out.append(f"    {_name(result)}=piton_dict_get_d((PitonDict*){operand},{self._slot(call_args[0], types)},{default}).bits;")
+                    # DICT_GET_SLOT_V1: la emision concreta se difiere hasta
+                    # conocer el tipo del valor (abajo): con tipo conocido se
+                    # emiten los bits; sin el, un slot etiquetado.
                 else:
                     # DICT_VAL_TYPE_V1: a single-arg get yields the dict's
                     # value on hit or None on miss, so the result is a
@@ -4914,8 +4924,26 @@ class LinuxCEmitter:
                     types[result] = "slot"
                     return out
                 if val_type is None:
+                    if len(call_args) == 2:
+                        # DICT_GET_SLOT_V1: tipo del valor desconocido — el
+                        # resultado es un slot etiquetado (el hit da el
+                        # valor, el miss el default; ninguno sabible
+                        # estaticamente). codeop.py: d.get(k, '')
+                        out.append(
+                            f"    {{PitonSlot*_gp=piton_alloc(sizeof(PitonSlot));"
+                            f"*_gp=piton_dict_get_d((PitonDict*){operand},"
+                            f"{self._slot(call_args[0], types)},{default});"
+                            f" {_name(result)}=(long)_gp;}}"
+                        )
+                        types[result] = "slot"
+                        return out
                     raise NativeBuildError(
                         "native dict.get requires a statically known value type"
+                    )
+                if len(call_args) == 2:
+                    out.append(
+                        f"    {_name(result)}=piton_dict_get_d((PitonDict*){operand},"
+                        f"{self._slot(call_args[0], types)},{default}).bits;"
                     )
                 if default_type is not None and default_type != val_type:
                     raise NativeBuildError(
@@ -6036,7 +6064,7 @@ class LinuxCEmitter:
         if (
             haystack_type != "str"
             and needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex",
-                                    "tuple", "list", "none"}
+                                    "tuple", "list", "none", "slot"}
             and not needle_type.startswith(("object:", "class:"))
         ):
             # IN_STR_DYNAMIC_V1: con haystack str el needle lo decide el
@@ -6047,7 +6075,7 @@ class LinuxCEmitter:
                 f"tuple/list/object needle, not {needle_type}"
             )
         if haystack_type in {"bytes", "bytearray"}:
-            expression = f"piton_bytes_contains((void*){self._value(right)},{self._slot(left, types)})"
+            expression = f"piton_bytes_contains((void*){self._value(right)},{self._needle_slot(left, types)})"
             prefix = "!" if negate else ""
             out.append(f"    {_name(result)}={prefix}{expression};")
             if function is not None:
@@ -6074,11 +6102,11 @@ class LinuxCEmitter:
                 return
             expression = f"piton_str_contains((const char*){self._value(right)},(const char*){self._value(left)})"
         elif haystack_type in {"list", "tuple"}:
-            expression = f"piton_seq_contains((PitonSeq*){self._value(right)},{self._slot(left, types)})"
+            expression = f"piton_seq_contains((PitonSeq*){self._value(right)},{self._needle_slot(left, types)})"
         elif haystack_type in {"dict", "dict:module"}:
-            expression = f"piton_dict_contains((PitonDict*){self._value(right)},{self._slot(left, types)})"
+            expression = f"piton_dict_contains((PitonDict*){self._value(right)},{self._needle_slot(left, types)})"
         elif haystack_type == "set":
-            expression = f"piton_set_contains((PitonSet*){self._value(right)},{self._slot(left, types)})"
+            expression = f"piton_set_contains((PitonSet*){self._value(right)},{self._needle_slot(left, types)})"
         elif haystack_type == "range":
             # RANGE_VALUE_V1: CPython answers False for a non-int needle
             # (`'a' in range(3)`) instead of raising, so this is a static False
@@ -6090,9 +6118,9 @@ class LinuxCEmitter:
             expression = f"piton_range_contains((PitonRange*){self._value(right)},{self._value(left)})"
         else:
             if needle_type == "str":
-                expression = f"piton_dict_contains((PitonDict*){self._value(right)},{self._slot(left, types)})"
+                expression = f"piton_dict_contains((PitonDict*){self._value(right)},{self._needle_slot(left, types)})"
             else:
-                expression = f"piton_seq_contains((PitonSeq*){self._value(right)},{self._slot(left, types)})"
+                expression = f"piton_seq_contains((PitonSeq*){self._value(right)},{self._needle_slot(left, types)})"
         prefix = "!" if negate else ""
         out.append(f"    {_name(result)}={prefix}{expression};")
         types[result] = "bool"
@@ -7461,6 +7489,25 @@ class LinuxCEmitter:
             # flag here is stale by construction — live raises route or exit
             # at their own emission site — so clearing on entry is sound.
             out.append("    piton_catch_clear();")
+            # DICT_KEY_SLOT_V1: `para k en d:` sobre un dict cuya key type
+            # estatica se desconoce (graphlib.py: _find_cycle itera
+            # self._node2info). CPython itera keys de cualquier tipo: la
+            # key se empaqueta como SLOT ETIQUETADO con la kind derivada
+            # en runtime (piton_slot_guess, misma politica que los bound
+            # methods nativos) en vez de fallar cerrado. Limitacion
+            # honesta: una key float se deriva como int (sus bits no pasan
+            # maybe_ptr).
+            if (
+                iterator_type == "iterator:dict"
+                and self._dict_key_types.get(iterator) is None
+            ):
+                out.append(
+                    f"    {{PitonSlot*_dk=piton_alloc(sizeof(PitonSlot));"
+                    f"*_dk=piton_slot_guess(piton_iterator_next_any({self._value(iterator)}));"
+                    f" {_name(result)}=(long)_dk;}}"
+                )
+                types[result] = "slot"
+                return out
             if iterator_type in {"genexpr", "iterator:genexpr"}:
                 out.append(f"    {_name(result)}=piton_genexpr_next((PitonGenExpr*){self._value(iterator)});")
             elif iterator_type == "generator":

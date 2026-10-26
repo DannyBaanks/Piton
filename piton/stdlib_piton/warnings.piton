@@ -8,7 +8,7 @@ funcion _warn_accion (categoria ) :
     devolver accion
 
 
-funcion warn (mensaje , categoria ='UserWarning' , pila =1 , origen ='Ninguno' ) :
+funcion warn (mensaje , categoria =Nada , pila =1 , origen ='Ninguno' ) :
     accion = _warn_accion (categoria )
     si accion == 'ignore' :
         devolver
@@ -17,14 +17,14 @@ funcion warn (mensaje , categoria ='UserWarning' , pila =1 , origen ='Ninguno' )
     imprimir (mensaje , file =2 )
 
 
-funcion simplefilter (accion , categoria ='UserWarning' , linea =0 , agregar =Falso ) :
+funcion simplefilter (accion , categoria =Nada , linea =0 , agregar =Falso ) :
     si agregar :
         _warn_filtros .append ([accion , categoria , linea ])
     sino :
         _warn_filtros = [[accion , categoria , linea ]]
 
 
-funcion filterwarnings (accion , mensaje ='' , categoria ='UserWarning' , modulo ='' , linea =0 , agregar =Falso ) :
+funcion filterwarnings (accion , mensaje ='' , categoria =Nada , modulo ='' , linea =0 , agregar =Falso ) :
     si agregar :
         _warn_filtros .append ([accion , categoria , linea ])
     sino :
