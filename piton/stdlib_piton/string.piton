@@ -23,3 +23,14 @@ funcion capwords (s , sep =Nada ):
     si sep es Nada :
         devolver ' ' .join (partes )
     devolver sep .join (partes )
+
+
+clase Template :
+    funcion __init__ (self ,plantilla ):
+        self .plantilla = plantilla
+
+    funcion substitute (self ,*mapas ,**palabras ):
+        lanzar NotImplementedError ('string.Template.substitute no esta implementado en el backend nativo')
+
+    funcion safe_substitute (self ,*mapas ,**palabras ):
+        lanzar NotImplementedError ('string.Template.safe_substitute no esta implementado en el backend nativo')

@@ -77,6 +77,12 @@ _NATIVE_MODULE_CONSTS: dict[str, dict[str, Any]] = {
         "nested_scopes": True, "generators": True, "annotations": True,
         "barry_as_FLUFL": False, "braces": False, "all_feature_names": False,
     },
+    "locale": {
+        # Valores de glibc (Linux); category tags de setlocale.
+        "LC_CTYPE": 0, "LC_NUMERIC": 1, "LC_TIME": 2, "LC_COLLATE": 3,
+        "LC_MONETARY": 4, "LC_MESSAGES": 5, "LC_ALL": 6,
+        "CHAR_MAX": 127,
+    },
 }
 # Builtins con schema FIJO de keywords (el resto de una llamada con
 # keywords a un nombre desconocido baja como DYNAMIC_CALL_V1).
@@ -799,6 +805,15 @@ class MIRLowerer:
                             _path = bundled_module_path(alias.name)
                             if _path is not None and module_meta is not None:
                                 module_meta[alias.name] = (_path, False)
+                            # IMPORT_IN_TRY_V1: un import dentro de un try (o
+                            # cualquier statement anidado) se baja DESPUES del
+                            # prescan de firmas — sin esto, pprint.pprint(...)
+                            # quedaba sin symbol registrado y la llamada caia
+                            # al raise de kwargs.
+                            self._prescan_module_signatures(
+                                list(getattr(_bundled, "body", []) or []),
+                                name_prefix=f"{alias.name.replace('.', '__')}__",
+                            )
                         self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
@@ -929,6 +944,8 @@ class MIRLowerer:
                             raise MIRLoweringError("native imported modules currently support functions, imports, assignments, and pasar only")
             module_state_inits: list[tuple[str, Any]] = []
             bundled_functions: list[tuple[str, Any]] = []
+            self._deferred_bundled_functions = bundled_functions
+            self._deferred_bundled_functions = bundled_functions
             for module_name, imported in sorted(imported_modules.items()):
                 scope_names, scope_modules, scope_vars = self._build_module_scope(module_name, imported)
                 self._module_scope_stack.append((scope_names, scope_modules, scope_vars))
@@ -957,6 +974,20 @@ class MIRLowerer:
                             self._lower_imported_class(module_name, item)
                 finally:
                     self._module_scope_stack.pop()
+            # BUNDLED_CLASS_FROMIMPORT_ALIAS_V1: `desde string importar
+            # Template` deja el alias local apuntando a la clase cualificada
+            # (string__Template) que YA se bajo arriba. Se espeja el nombre
+            # LOCAL en las estructuras de clase para que `Template(...)` baje
+            # como constructor (object_new, tipo object:Template) y los
+            # metodos resuelvan por el MRO al simbolo cualificado
+            # (string.Template.substitute del tutorial stdlib2).
+            for _local, _cqual in list(self.from_import_aliases.items()):
+                if _cqual in self.classes and _local not in self.classes:
+                    self.classes[_local] = self.classes[_cqual]
+                    self.class_parents[_local] = self.class_parents.get(_cqual)
+                    self.class_base_list[_local] = list(self.class_base_list.get(_cqual, []))
+                    self.class_mro[_local] = [_cqual]
+                    self._mro_memo[_local] = [_cqual]
             # FUNC_SIG_PRESCAN_V1: registrar las firmas de TODAS las funciones
             # de nivel modulo ANTES de bajar cualquier cuerpo — los de las
             # clases tambien (warnings: `catch_warnings.__exit__` llama a
@@ -1197,6 +1228,11 @@ class MIRLowerer:
                     self._lower_function(
                         _bfunc, f"{_bmod_name.replace('.', '__')}__{_bfunc.name}"
                     )
+                    for _litem in getattr(_bimported, "body", []) or []:
+                        if _litem.kind == HIRKind.CLASS_DEF:
+                            _lq = f"{_bmod_name.replace('.', '__')}__{_litem.name}"
+                            if _lq not in self.classes:
+                                self._lower_imported_class(_bmod_name, _litem)
                 finally:
                     self._module_scope_stack.pop()
             self.functions.insert(0, module.function)
@@ -2401,8 +2437,92 @@ class MIRLowerer:
                             or alias.name in _NATIVE_MODULE_CONSTS
                         ):
                     builder.module_aliases[alias.asname or alias.name] = alias.name
+                    continue
+                # STMT_IMPORT_BUNDLED_V1: un import EMPAQUETADO dentro de un
+                # statement anidado (try/except del tutorial) se carga aqui:
+                # sin esto, el alias no quedaba y pprint.pprint(..., width=)
+                # caia al raise de kwargs.
+                if alias.name not in self.imported_modules and "." not in alias.name:
+                    _lazy = _bundled_module_hir(alias.name)
+                    if _lazy is not None:
+                        self.imported_modules[alias.name] = _lazy
+                        self._prescan_module_signatures(
+                            list(getattr(_lazy, "body", []) or []),
+                            name_prefix=f"{alias.name.replace('.', '__')}__",
+                        )
+                if alias.name in self.imported_modules:
+                    builder.module_aliases[alias.asname or alias.name] = alias.name
             return
         elif kind == HIRKind.IMPORT_FROM:
+            # STMT_FROMIMPORT_V1: un from-import dentro de un statement anidado
+            # (try del tutorial) registra el alias en el builder; si el simbolo
+            # es una CLASE empaquetada ya bajada, se espeja el nombre local en
+            # las estructuras de clase para que el constructor y los metodos
+            # (Template.substitute) resuelvan (stdlib2.py).
+            mod_name = getattr(node, "module", None)
+            if mod_name and not getattr(node, "is_star", False) and not getattr(node, "level", 0):
+                _nombres = {getattr(_a, "name", None) for _a in (getattr(node, "names", ()) or ())}
+                _pre = _bundled_module_hir(mod_name)
+                if _pre is not None and mod_name not in self.imported_modules:
+                    _cuerpo = getattr(_pre, "body", []) or []
+                    _trae_clase = any(
+                        _it.kind == HIRKind.CLASS_DEF and getattr(_it, "name", None) in _nombres
+                        for _it in _cuerpo
+                    )
+                    _trae_func = any(
+                        _it.kind == HIRKind.FUNC_DEF and getattr(_it, "name", None) in _nombres
+                        for _it in _cuerpo
+                    )
+                    if _trae_clase or _trae_func:
+                        self.imported_modules[mod_name] = _pre
+                        self._prescan_module_signatures(
+                            list(_cuerpo),
+                            name_prefix=f"{mod_name.replace('.', '__')}__",
+                        )
+                        if _trae_clase:
+                            for _it in _cuerpo:
+                                if _it.kind == HIRKind.CLASS_DEF and getattr(_it, "name", None) in _nombres:
+                                    self._lower_imported_class(mod_name, _it)
+                        _sin_deps = (
+                            mod_name in {"array", "pprint", "textwrap", "string"}
+                            and not any(
+                                getattr(_it, "kind", None) in (HIRKind.IMPORT, HIRKind.IMPORT_FROM)
+                                for _it in _cuerpo
+                            )
+                        )
+                        if _sin_deps:
+                            for _it in _cuerpo:
+                                if _it.kind == HIRKind.FUNC_DEF:
+                                    self._deferred_bundled_functions.append((mod_name, _it))
+
+                for alias in getattr(node, "names", ()) or ():
+                    local = alias.asname or alias.name
+                    qualified = None
+                    _mod_hir = self.imported_modules.get(mod_name)
+                    if _mod_hir is not None:
+                        _es_constante = any(
+                            _it.kind == HIRKind.ASSIGN
+                            and any(getattr(_t, "name", None) == alias.name for _t in getattr(_it, "targets", ()))
+                            for _it in getattr(_mod_hir, "body", []) or []
+                        )
+                        if _es_constante:
+                            qualified = _module_state_name(mod_name, alias.name)
+                    if qualified is None:
+                        _cand = f"{mod_name.replace('.', '__')}__{alias.name}"
+                        qualified = _cand if (
+                            _cand in self.function_params
+                            or _cand in self.classes
+                            or _mod_hir is not None
+                        ) else None
+                    if qualified is None:
+                        continue
+                    builder.from_import_aliases[local] = qualified
+                    if qualified in self.classes and local not in self.classes:
+                        self.classes[local] = self.classes[qualified]
+                        self.class_parents[local] = self.class_parents.get(qualified)
+                        self.class_base_list[local] = list(self.class_base_list.get(qualified, []))
+                        self.class_mro[local] = [qualified]
+                        self._mro_memo[local] = [qualified]
             return
         elif kind == HIRKind.EXPR if hasattr(HIRKind, "EXPR") else False:
             self._lower_expr(builder, node)
@@ -4251,21 +4371,43 @@ class MIRLowerer:
                     ):
                         module_name = builder.module_aliases[node.func.value.name]
                         _msymbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
-                        if (
+                        _reg = (
                             _msymbol in self.function_params
                             or _msymbol in self.function_varargs
                             or _msymbol in self.function_kwargs
-                        ):
+                        )
+                        if not _reg:
+                            # LAZY_BUNDLED_IMPORT_V1: modulo empaquetado cuyas
+                            # firmas no quedaron registradas (import en un
+                            # statement anidado, o carga transitiva sin
+                            # pre-scan) — se carga/pre-escanea aqui.
+                            _lazy = self.imported_modules.get(module_name) or _bundled_module_hir(module_name)
+                            if _lazy is not None:
+                                self.imported_modules[module_name] = _lazy
+                                self._prescan_module_signatures(
+                                    list(getattr(_lazy, "body", []) or []),
+                                    name_prefix=f"{module_name.replace('.', '__')}__",
+                                )
+                                _reg = (
+                                    _msymbol in self.function_params
+                                    or _msymbol in self.function_varargs
+                                    or _msymbol in self.function_kwargs
+                                )
+                        if _reg:
                             args = self._lower_variadic_call(
                                 builder, _msymbol, node.args, node.keywords
                             )
                             result = builder.temp()
                             builder.emit("call", _msymbol, args, result=result)
                             return result
-                    raise MIRLoweringError(
-                        f"native method calls do not support keyword arguments yet "
-                        f"(method '{node.func.attr}')"
-                    )
+                        raise MIRLoweringError(
+                            f"native method calls do not support keyword arguments yet "
+                            f"(method '{node.func.attr}')"
+                        )
+                    # KWRG_METHOD_FALLTHROUGH_V1: el receiver NO es un alias de
+                    # modulo (ej. una instancia de clase empaquetada como
+                    # string.Template) — el path general de method_call de
+                    # abajo ya transporta los kwargs (dict.update, format).
                 if (
                     node.keywords
                     and node.func.attr == "split"
@@ -5356,21 +5498,43 @@ class MIRLowerer:
                     ):
                         module_name = builder.module_aliases[node.func.value.name]
                         _msymbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
-                        if (
+                        _reg = (
                             _msymbol in self.function_params
                             or _msymbol in self.function_varargs
                             or _msymbol in self.function_kwargs
-                        ):
+                        )
+                        if not _reg:
+                            # LAZY_BUNDLED_IMPORT_V1: modulo empaquetado cuyas
+                            # firmas no quedaron registradas (import en un
+                            # statement anidado, o carga transitiva sin
+                            # pre-scan) — se carga/pre-escanea aqui.
+                            _lazy = self.imported_modules.get(module_name) or _bundled_module_hir(module_name)
+                            if _lazy is not None:
+                                self.imported_modules[module_name] = _lazy
+                                self._prescan_module_signatures(
+                                    list(getattr(_lazy, "body", []) or []),
+                                    name_prefix=f"{module_name.replace('.', '__')}__",
+                                )
+                                _reg = (
+                                    _msymbol in self.function_params
+                                    or _msymbol in self.function_varargs
+                                    or _msymbol in self.function_kwargs
+                                )
+                        if _reg:
                             args = self._lower_variadic_call(
                                 builder, _msymbol, node.args, node.keywords
                             )
                             result = builder.temp()
                             builder.emit("call", _msymbol, args, result=result)
                             return result
-                    raise MIRLoweringError(
-                        f"native method calls do not support keyword arguments yet "
-                        f"(method '{node.func.attr}')"
-                    )
+                        raise MIRLoweringError(
+                            f"native method calls do not support keyword arguments yet "
+                            f"(method '{node.func.attr}')"
+                        )
+                    # KWRG_METHOD_FALLTHROUGH_V1: el receiver NO es un alias de
+                    # modulo (ej. una instancia de clase empaquetada como
+                    # string.Template) — el path general de method_call de
+                    # abajo ya transporta los kwargs (dict.update, format).
                 if (
                     node.keywords
                     and node.func.attr == "split"

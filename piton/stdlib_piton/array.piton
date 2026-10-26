@@ -1,0 +1,6 @@
+funcion array (codigo ,inicial =Nada ,*resto ,**opciones ):
+    si inicial es Nada :
+        devolver []
+    si type (inicial ) es list :
+        devolver list (inicial )
+    devolver list (inicial )

@@ -1,11 +1,10 @@
-funcion fill (*args ) :
+funcion fill (texto ,*resto ,**opciones ):
     lanzar NotImplementedError ('textwrap.fill no esta implementado en el backend nativo')
 
 
-funcion indent (*args ) :
+funcion indent (texto ,prefijo ,*resto ,**opciones ):
     lanzar NotImplementedError ('textwrap.indent no esta implementado en el backend nativo')
 
 
-funcion wrap (*args ) :
+funcion wrap (texto ,*resto ,**opciones ):
     lanzar NotImplementedError ('textwrap.wrap no esta implementado en el backend nativo')
-

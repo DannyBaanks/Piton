@@ -11347,6 +11347,49 @@ class LinuxCEmitter:
                         tuple(kw_args),
                     )
                     return out
+                # KWRG_METHOD_CLASS_V1: metodo de clase con kwargs sobre una
+                # instancia de tipo conocido (string.Template.substitute(...,
+                # **kw)): se resuelve el simbolo Class__method y se empaquetan
+                # los kwargs en un dict (**kwargs) + los posicionales extra en
+                # una tupla (*args), igual que el ABI variadico de mir.
+                if cls_name is None and not (
+                    method == "update" and owner_type in {"dict", "class:dict", "dict:module"}
+                ):
+                    _kcn = None
+                    if owner_type.startswith(("object:", "class:")):
+                        _kcn = owner_type.split(":", 1)[1]
+                    _khit = None
+                    if _kcn is not None:
+                        for _cand in self.class_mro.get(_kcn, [_kcn]):
+                            if method in self.classes.get(_cand, set()):
+                                _khit = _cand
+                                break
+                    _ksym = f"{_khit}__{method}" if _khit else None
+                    _kkw = self.function_kwargs.get(_ksym) if _ksym else None
+                    if _ksym and _kkw is not None and _ksym in self.function_names:
+                        _kopnd = self._value(obj)
+                        _parts = [f"    {{PitonSeq*_kva=piton_seq_new(PK_TUPLE,{len(call_args)});"]
+                        for _ki, _ka in enumerate(call_args):
+                            _parts.append(
+                                f"piton_seq_put(_kva,{_ki},{self._slot(_ka, types)});"
+                            )
+                        _parts.append(
+                            f"PitonDict*_kvd=piton_dict_new({len(kw_args)});"
+                        )
+                        for _kname, _kval in kw_args:
+                            if _kname is None:
+                                raise NativeBuildError(
+                                    f"Linux {method}() does not accept **kwargs unpacking"
+                                )
+                            _parts.append(
+                                f"piton_dict_append(_kvd,piton_slot((long){json.dumps(_kname)},PK_STR),{self._slot(_kval, types)});"
+                            )
+                        _parts.append(
+                            f"{_name(result)}={_name(_ksym)}({_kopnd},(long)_kva,(long)_kvd);}}"
+                        )
+                        out.append("".join(_parts))
+                        types[result] = "int"
+                        return out
                 if cls_name is not None or method != "update" or owner_type not in {"dict", "class:dict", "dict:module"}:
                     raise NativeBuildError(
                         "native method calls with keyword arguments are supported only for "

@@ -1,0 +1,2 @@
+funcion pprint (objeto ,*resto ,**opciones ):
+    lanzar NotImplementedError ('pprint no esta implementado en el backend nativo: el formateador multi-linea no existe todavia')
