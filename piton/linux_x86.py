@@ -3000,6 +3000,17 @@ static long piton_round_float_nd(long bits,long nd){
   R=bi_round_div(A,D);
   return piton_double_bits(piton_bigint_scaled_to_double(piton_bigint_mul(R,bi_pow_small(10,k)),0,neg));
 }
+/* ROUND_DYN_V1: round(x[, n]) con tipo estatico desconocido (corpus
+   tutorial/introduction.py: round(_, 2) con _ de una expresion previa).
+   Despacha en runtime: double -> redondeo (entero sin ndigits, float con
+   el); int/bits no-puntero -> identidad (CPython: round(int) es int).
+   Cualquier otra cosa -> TypeError con el texto de CPython. */
+static long piton_round_dyn(long bits,long has_nd,long nd){
+  if(piton_is_double_bits(bits))return has_nd?piton_round_float_nd(bits,nd):piton_round_float(bits);
+  if(!piton_maybe_ptr(bits))return bits;
+  piton_raise_set("TypeError","type str doesn't define __round__ method");
+  return 0;
+}
 static long piton_float_pow_v1(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0)return piton_double_bits(1.0);int neg=(x<0.0)&&(y==-1.0||y==1.0);double ax=neg?-x:x;if(y==1.0)return a;if(y==2.0||y==-2.0){double sq=ax*ax;long sb=piton_double_bits(sq);if(piton_double_isinf(sb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}if(y==2.0)return sb;if(x==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/sq;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==-1.0){if(ax==0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}double r=1.0/ax;if(neg)r=-r;long rb=piton_double_bits(r);if(piton_double_isinf(rb)&&piton_double_isfinite(a)){piton_raise_set("OverflowError","numerical result out of range");return 0;}return rb;}if(y==0.5||y==-0.5){if(x<0.0){piton_raise_set("ValueError","negative number cannot be raised to a fractional power");return 0;}if(x==0.0){if(y<0.0){piton_raise_set("ZeroDivisionError","0.0 cannot be raised to a negative power");return 0;}return piton_double_bits(0.0);}long sb=piton_float_sqrt(a);if(y==0.5)return sb;double r=1.0/piton_bits_double(sb);return piton_double_bits(r);}piton_raise_set("ValueError","float ** with non-trivial exponent is not supported in the native subset");return 0;}
 static long piton_float_mod(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float modulo");return 0;}double r=piton_fmod_core(x,y);if(r==0.0)r=(y<0.0?-0.0:0.0);else if((y<0.0)!=(r<0.0))r+=y;return piton_double_bits(r);}
 /* ── COMPLEX_V1: números complejos ────────────────────────────────────
@@ -4246,10 +4257,16 @@ class LinuxCEmitter:
                     token = "{}"
                 else:
                     m_index = re.match(r"^(\d+)\[(-?\d+)\]$", idx_str)
+                    m_key = re.match(r"^(\d+)\[(?:'([^']*)'|\"([^\"]*)\"|([A-Za-z_]\w*))\]$", idx_str)
                     m_attr = re.match(r"^(\d+)\.([A-Za-z_]\w*)$", idx_str)
                     if m_index:
                         idx = int(m_index.group(1))
                         accessor = ("index", int(m_index.group(2)))
+                    elif m_key:
+                        # FMT_KEY_V1: {0[Jack]} / {0['Jack']} — CPython trata
+                        # una key no-entera como string.
+                        idx = int(m_key.group(1))
+                        accessor = ("key", m_key.group(2) or m_key.group(3) or m_key.group(4))
                     elif m_attr:
                         idx = int(m_attr.group(1))
                         accessor = ("attr", m_attr.group(2))
@@ -5190,9 +5207,40 @@ class LinuxCEmitter:
             arity((0,), "no arguments")
             out.append("    " + _name(result) + "=((PitonFile*)" + operand + ")->fd;")
             types[result] = "int"
-        elif method in {"flush", "seek", "tell", "truncate", "detach", "isatty"}:
-            # FILE_IO_GAP_V1: CPython si las soporta; el subconjunto no tiene
-            # buffers ni descriptores posicionables. Fail-closed.
+        elif method == "tell":
+            # FILE_SEEK_V1: la posicion de lectura vive en f->pos sobre el
+            # buffer completo (f->data); tell es esa posicion.
+            arity((0,), "no arguments")
+            out.append(f"    {_name(result)}=((PitonFile*){operand})->pos;")
+            types[result] = "int"
+        elif method == "seek":
+            # FILE_SEEK_V1: seek(offset[, whence]) sobre el buffer. whence 0
+            # (SET), 1 (CUR), 2 (END, requiere piton_file_size). Devuelve la
+            # nueva posicion absoluta, clampada a [0, size] como CPython.
+            arity((1, 2), "one or two arguments")
+            _whence = "0"
+            if len(call_args) == 2:
+                _wt = types.get(call_args[1], "int")
+                if _wt not in {"int", "bool"}:
+                    raise NativeBuildError("Linux file.seek() whence must be an int")
+                _whence = self._value(call_args[1])
+            out.append(
+                f"    {{PitonFile*_sf=(PitonFile*){operand};"
+                f"long _sp=_sf->pos;long _ssz=(long)piton_file_size(_sf);"
+                f"long _so={self._value(call_args[0])};"
+                f"if({_whence}==1)_sp+=_so;else if({_whence}==2)_sp=_ssz+_so;else _sp=_so;"
+                f"if(_sp<0)_sp=0;if(_sp>_ssz)_sp=_ssz;_sf->pos=_sp;"
+                f"{_name(result)}=_sp;}}"
+            )
+            types[result] = "int"
+        elif method == "flush":
+            # FILE_FLUSH_V1: el buffer se escribe al cerrar; flush es no-op.
+            arity((0,), "no arguments")
+            out.append("    /* file.flush() no-op */")
+            types[result] = "none"
+        elif method in {"truncate", "detach", "isatty"}:
+            # FILE_IO_GAP_V1: CPython si las soporta; el subconjunto no las
+            # modela. Fail-closed.
             raise NativeBuildError("Linux file." + method + "() is not available in the native subset")
         else:
             raise NativeBuildError("Linux file." + method + "() is not supported")
@@ -5680,6 +5728,20 @@ class LinuxCEmitter:
                         )
                         elem = self._coll_elems.get(value) or self._tuple_elems.get(value) or "int"
                         resolved_type = elem
+                    elif accessor[0] == "key":
+                        # FMT_KEY_V1: {0[Jack]} sobre un dict — la key string
+                        # se resuelve con piton_dict_get_1 (miss -> None slot,
+                        # que CPython elevaria a KeyError: gap documentado).
+                        if arg_type not in {"dict", "dict:module"}:
+                            raise NativeBuildError(
+                                f"str.format(): key field requires a dict, not {arg_type}"
+                            )
+                        expr = f"_fi{index}"
+                        pre_lines.append(
+                            f"    long {expr}=piton_dict_get_1((PitonDict*){self._value(value)},"
+                            f"piton_slot((long){json.dumps(accessor[1])},PK_STR)).bits;"
+                        )
+                        resolved_type = self._dict_val_types.get(value) or "int"
                     elif accessor[0] == "attr" and accessor[1] == "real":
                         if arg_type not in {"int", "float"}:
                             raise NativeBuildError(
@@ -9803,6 +9865,21 @@ class LinuxCEmitter:
                 self._dict_key_types[result] = "str"
             elif function_name in {"round", "redondear"}:
                 if len(values) == 2:
+                    _r0t = types.get(values[0])
+                    if _r0t in ("", None):
+                        # ROUND_DYN_V1: tipo desconocido -> despacha en runtime
+                        # (int -> identidad, float -> redondeo; TypeError si
+                        # no es numero). introduction.py: round(_, 2).
+                        out.append(f"    {_name(result)}=piton_round_dyn({self._value(values[0])},1,{self._value(values[1])});")
+                        self._emit_exc_check(out, function, call_handler)
+                        types[result] = "int"
+                        return out
+                    if types.get(values[0]) in {"int", "bool"}:
+                        # ROUND_INT_ID_V1: CPython round(int, n) devuelve el
+                        # mismo int (sin conversion a float).
+                        out.append(f"    {_name(result)}={self._value(values[0])};")
+                        types[result] = "int"
+                        return out
                     if types.get(values[0]) != "float":
                         raise NativeBuildError("Linux round(x, ndigits) requires a float first argument")
                     if types.get(values[1]) not in {"int", "bool"}:
@@ -10764,8 +10841,25 @@ class LinuxCEmitter:
                 if types.get(value, "") not in {"int", "bool"}:
                     raise NativeBuildError("Linux memoryview item assignment requires an int value")
                 out.append(f"    piton_memoryview_set((PitonMemoryView*){self._value(collection)},{self._value(index)},{self._value(value)});")
-            elif coll_type == "bytes":
-                raise NativeBuildError("'bytes' object does not support item assignment")
+            elif coll_type == "str":
+                # SUBSCRIPT_STORE_STR_V1: CPython lanza TypeError en runtime
+                # (tutorial/introduction.py: word[0] = 'J' sobre un str, que
+                # el try/except del ejemplo atrapa). Mismo patron que
+                # SUBSCRIPT_STORE_INT_V1: el runtime confirma que el puntero
+                # NO es secuencia y levanta el TypeError exacto de CPython.
+                out.append("    {")
+                out.append(f"        long _ss_coll={self._value(collection)};")
+                out.append("        int _ss_ok=0;")
+                out.append("        if(_ss_coll&&piton_maybe_ptr(_ss_coll)){")
+                out.append("            long*_ss_p=(long*)_ss_coll;long _ss_k=_ss_p[1];")
+                out.append("            _ss_ok=(_ss_k==PK_LIST||_ss_k==PK_TUPLE);")
+                out.append("        }")
+                out.append("        if(_ss_ok){")
+                out.append(f"            piton_seq_set((PitonSeq*)_ss_coll,{self._value(index)},{self._slot(value, types)});")
+                out.append("        } else {")
+                out.append('        piton_raise_set("TypeError","\'str\' object does not support item assignment");')
+                out.append("        }")
+                out.append("    }")
             elif coll_type == "int":
                 # SUBSCRIPT_STORE_INT_V1: `x[0]=v` con x estaticamente int.
                 # CPython levanta TypeError en runtime, no error de build.
