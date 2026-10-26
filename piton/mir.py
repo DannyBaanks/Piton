@@ -4355,9 +4355,8 @@ class MIRLowerer:
                     )
                     and not (
                         node.func.attr == "sort"
-                        and len(node.keywords) == 1
-                        and node.keywords[0].arg == "reverse"
                         and not node.args
+                        and all(k.arg in {"reverse", "reversa", "key"} for k in node.keywords)
                     )
                 ):
                     # KWRG_METHOD_V1: los metodos nativos con kwargs bajan por
@@ -5482,9 +5481,8 @@ class MIRLowerer:
                     )
                     and not (
                         node.func.attr == "sort"
-                        and len(node.keywords) == 1
-                        and node.keywords[0].arg == "reverse"
                         and not node.args
+                        and all(k.arg in {"reverse", "reversa", "key"} for k in node.keywords)
                     )
                 ):
                     # KWRG_METHOD_V1: los metodos nativos con kwargs bajan por

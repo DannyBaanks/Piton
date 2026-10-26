@@ -1537,6 +1537,53 @@ static PitonSlot piton_slot_guess(long bits){
   }
   return (PitonSlot){bits,PK_INT};
 }
+/* SEQ_SORT_KEY_V1: lista.sort(key=f) — decora con la clave (UNA invocación
+   por elemento, como CPython: piton_sorted_key_new), ordena estable por la
+   clave comparando piton_slot_less sobre la kind derivada (str primero, para
+   que las claves string comparen lexicográficamente) y escribe los originales
+   de vuelta en la lista (sort es in-place). */
+static PitonSlot piton_sort_key_slot(long bits){
+  /* Derivacion de kind para una CLAVE de sort: STR primero (un literal de
+     rodata como 'b' tiene bytes basura en ptr[1] que piton_slot_guess leia
+     como kind de coleccion). Luego cabecera de coleccion, luego int. */
+  if(piton_is_double_bits(bits))return (PitonSlot){bits,PK_FLOAT};
+  if(piton_maybe_ptr(bits)){
+    if(piton_is_printable_str((const char*)bits))return (PitonSlot){bits,PK_STR};
+    long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>=0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_MEMORYVIEW)return (PitonSlot){bits,(int)k};
+  }
+  return (PitonSlot){bits,PK_INT};
+}
+static void piton_seq_sort_key(PitonSeq*s,long keyfn){
+  if(!s||s->length<2)return;
+  if(!keyfn){piton_raise_set("TypeError","sort() key must be callable");return;}
+  long n=s->length;
+  PitonSeq*pairs=piton_seq_new(PK_LIST,n*2);
+  for(long i=0;i<n;++i){
+    PitonSlot orig=s->items[i];
+    long k;
+    {long _ka[1];_ka[0]=orig.bits;k=piton_closure_call_frame(keyfn,1,_ka);}
+    if(PITON_EXC_FLAG)return;
+    pairs->items[i*2]=piton_sort_key_slot(k);
+    pairs->items[i*2+1]=orig;
+  }
+  for(long i=1;i<n;++i){
+    PitonSlot kk=pairs->items[i*2],ov=pairs->items[i*2+1];
+    long j=i;
+    while(j>0){
+      int l=piton_slot_less(kk,pairs->items[(j-1)*2]);
+      if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}
+      if(l){pairs->items[j*2]=pairs->items[(j-1)*2];pairs->items[j*2+1]=pairs->items[(j-1)*2+1];--j;}else break;
+    }
+    pairs->items[j*2]=kk;pairs->items[j*2+1]=ov;
+  }
+  for(long i=0;i<n;++i)s->items[i]=pairs->items[i*2+1];
+}
+static void piton_seq_sort_key_rev(PitonSeq*s,long keyfn){
+  piton_seq_sort_key(s,keyfn);
+  if(!s)return;
+  for(long i=0,j=s->length-1;i<j;++i,--j){PitonSlot t=s->items[i];s->items[i]=s->items[j];s->items[j]=t;}
+}
 /* BUILTIN_BOUND_METHOD_V1: `m = xs.append; m(v)` — el metodo ligado de un
    builtin no existia (AttributeError en runtime). El ABI de bound method pasa
    longs, asi que la kind se deriva en runtime. */
@@ -11346,6 +11393,42 @@ class LinuxCEmitter:
                         out, result, method, obj, list(call_args), types,
                         tuple(kw_args),
                     )
+                    return out
+                # SORT_KEY_KW_V1: `lista.sort(key=f[, reverse=r])` — el metodo
+                # sort con kw baja por aqui (mir ya no lo expande a posicional
+                # salvo reverse solo). Se resuelven key (callback de closure)
+                # y reverse (flag) de los kw y se ordena con
+                # piton_seq_sort_key / _rev.
+                if cls_name is None and method == "sort":
+                    _sk_type = types.get(obj, "")
+                    if _sk_type not in {"list", "tuple"}:
+                        raise NativeBuildError(f"Linux sort() requires a list or tuple, not {_sk_type}")
+                    if call_args:
+                        raise NativeBuildError("Linux sort() takes no positional arguments")
+                    _sk_key = None
+                    _sk_rev = None
+                    for _kn, _kv in kw_args:
+                        if _kn == "key":
+                            _sk_key = _kv
+                        elif _kn in {"reverse", "reversa"}:
+                            _sk_rev = _kv
+                        else:
+                            raise NativeBuildError(f"Linux sort() got an unexpected keyword argument '{_kn}'")
+                    if _sk_key is None:
+                        raise NativeBuildError("Linux sort() requires a key= keyword")
+                    _sk_expr = self._value(_sk_key)
+                    if _sk_rev is not None:
+                        _rv = types.get(_sk_rev, "int")
+                        if _rv not in {"int", "bool"}:
+                            raise NativeBuildError("Linux sort(reverse=) requires a bool")
+                        out.append(
+                            f"    if({self._value(_sk_rev)})"
+                            f"{{piton_seq_sort_key_rev((PitonSeq*){self._value(obj)},{_sk_expr});}}"
+                            f"else{{piton_seq_sort_key((PitonSeq*){self._value(obj)},{_sk_expr});}}"
+                        )
+                    else:
+                        out.append(f"    piton_seq_sort_key((PitonSeq*){self._value(obj)},{_sk_expr});")
+                    types[result] = "none"
                     return out
                 # KWRG_METHOD_CLASS_V1: metodo de clase con kwargs sobre una
                 # instancia de tipo conocido (string.Template.substitute(...,
