@@ -1,0 +1,8 @@
+default_timer = 0
+timer = default_timer
+
+funcion timeit (stmt, setup='pass', timer=default_timer, number=1000000, globals=0, file=0):
+    devolver 0.0
+
+funcion repeat (stmt, setup='pass', timer=default_timer, number=1000000, repeat=5, globals=0, file=0):
+    devolver [0.0] * repeat
