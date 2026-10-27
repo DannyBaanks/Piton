@@ -1,0 +1,19 @@
+clase Bdb :
+    funcion __init__ (self,skip=None):
+        self.breaks = {}
+        self.skip = skip
+    funcion set_break (self,filename,lineno,condition=Nada):
+        pasar
+    funcion clear_break (self,filename,lineno):
+        pasar
+    funcion clear_all_breaks (self):
+        self.breaks = {}
+    funcion run (self,cmd,globals=Nada,locals=Nada):
+        devolver
+    funcion canonic (self,filename):
+        devolver filename
+    funcion effective (self,filename,lineno,frame):
+        devolver 1
+
+funcion checkfuncname (b,frame):
+    devolver Verdadero

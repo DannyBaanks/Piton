@@ -11,7 +11,7 @@ funcion repeat (obj ,veces =Nada ):
     out = []
     i = 0
     mientras i < veces :
-        out .append (obj )
+        out.append (obj )
         i = i + 1
     devolver out
 
@@ -29,14 +29,14 @@ funcion filterfalse (pred ,items ):
     out = []
     para x en items :
         si no pred (x ) :
-            out .append (x )
+            out.append (x )
     devolver out
 
 
 funcion starmap (funcion_objetivo ,pares ):
     out = []
     para par en pares :
-        out .append (funcion_objetivo (*par ))
+        out.append (funcion_objetivo (*par ))
     devolver out
 
 
@@ -54,11 +54,11 @@ funcion zip_longest (*iterables ):
         para it en if_iguales :
             m = list (it )
             si k < longitud (m ) :
-                fila .append (m [k ])
+                fila.append (m [k ])
             sino :
-                fila .append (Nada )
+                fila.append (Nada )
         k = k + 1
-        out .append (tuple (fila ))
+        out.append (tuple (fila ))
     devolver out
 
 

@@ -1,0 +1,5 @@
+funcion compile (file,cfile=Nada,dfile=Nada,doraise=Falso,optimize=-1,invalidation_mode=None):
+    devolver 0
+
+funcion main (args=Nada):
+    devolver 0

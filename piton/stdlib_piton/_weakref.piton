@@ -1,18 +1,18 @@
-class ref:
-    funcion __init__ (self, obj, callback=Nada):
+clase ref :
+    funcion __init__ (self,obj,callback=Nada):
         self.obj = obj
     funcion __call__ (self):
         devolver self.obj
     funcion __callback__ (self):
         devolver Nada
-class ProxyType:
-    funcion __init__ (self, obj):
+clase ProxyType :
+    funcion __init__ (self,obj):
         self.obj = obj
-class CallableProxyType (ProxyType):
+clase CallableProxyType (ProxyType) :
     pasar
 funcion getweakrefcount (obj):
     devolver 0
 funcion getweakrefs (obj):
     devolver []
-funcion proxy (obj, callback=Nada):
+funcion proxy (obj,callback=Nada):
     devolver ProxyType(obj)

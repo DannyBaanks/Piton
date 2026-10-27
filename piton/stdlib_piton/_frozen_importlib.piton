@@ -1,0 +1,11 @@
+# Alias para importlib._bootstrap
+importar importlib___bootstrap
+
+__all__ = ['_find_spec','_load_unlocked','_find_and_load','_find_and_load_unlocked','_ModuleLock','_locks']
+
+_find_spec = importlib___bootstrap._find_spec
+_load_unlocked = importlib___bootstrap._load_unlocked
+_find_and_load = importlib___bootstrap._find_and_load
+_find_and_load_unlocked = importlib___bootstrap._find_and_load_unlocked
+_ModuleLock = importlib___bootstrap._ModuleLock
+_locks = importlib___bootstrap._locks

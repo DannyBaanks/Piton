@@ -1,22 +1,22 @@
-funcion fnmatch (nombre , patron ):
-    devolver fnmatchcase (nombre , patron )
+funcion fnmatch (nombre ,patron ):
+    devolver fnmatchcase (nombre ,patron )
 
 
-funcion fnmatchcase (nombre , patron ):
+funcion fnmatchcase (nombre ,patron ):
     n = longitud (nombre )
     m = longitud (patron )
-    r = _fnmatch_coincide (nombre , patron , 0 , 0 , n , m )
+    r = _fnmatch_coincide (nombre ,patron ,0 ,0 ,n ,m )
     devolver r == n
 
 
-funcion _fnmatch_coincide (nombre , patron , i , j , n , m ):
+funcion _fnmatch_coincide (nombre ,patron ,i ,j ,n ,m ):
     si j >= m :
         devolver i
     c = patron [j ]
     si c == '*' :
         k = i
         mientras k <= n :
-            r = _fnmatch_coincide (nombre , patron , k , j + 1 , n , m )
+            r = _fnmatch_coincide (nombre ,patron ,k ,j + 1 ,n ,m )
             si r >= 0 :
                 devolver r
             k = k + 1
@@ -24,7 +24,7 @@ funcion _fnmatch_coincide (nombre , patron , i , j , n , m ):
     si i >= n :
         devolver -1
     si c == '?' :
-        devolver _fnmatch_coincide (nombre , patron , i + 1 , j + 1 , n , m )
+        devolver _fnmatch_coincide (nombre ,patron ,i + 1 ,j + 1 ,n ,m )
     si c == '[' :
         f = j + 1
         mientras f < m :
@@ -33,17 +33,17 @@ funcion _fnmatch_coincide (nombre , patron , i , j , n , m ):
             f = f + 1
         si f >= m :
             si nombre [i ] == '[' :
-                devolver _fnmatch_coincide (nombre , patron , i + 1 , j + 1 , n , m )
+                devolver _fnmatch_coincide (nombre ,patron ,i + 1 ,j + 1 ,n ,m )
             devolver -1
-        si _fnmatch_en_clase (nombre [i ] , patron , j , f ) :
-            devolver _fnmatch_coincide (nombre , patron , i + 1 , f + 1 , n , m )
+        si _fnmatch_en_clase (nombre [i ] ,patron ,j ,f ) :
+            devolver _fnmatch_coincide (nombre ,patron ,i + 1 ,f + 1 ,n ,m )
         devolver -1
     si nombre [i ] == c :
-        devolver _fnmatch_coincide (nombre , patron , i + 1 , j + 1 , n , m )
+        devolver _fnmatch_coincide (nombre ,patron ,i + 1 ,j + 1 ,n ,m )
     devolver -1
 
 
-funcion _fnmatch_en_clase (c , patron , inicio , fin ):
+funcion _fnmatch_en_clase (c ,patron ,inicio ,fin ):
     i = inicio + 1
     negate = Falso
     si i < fin :

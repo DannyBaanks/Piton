@@ -1,0 +1,20 @@
+clase Profile :
+    funcion __init__ (self,timer=Nada,timeunit=0.0):
+        self.timer = timer
+        self.timeunit = timeunit
+    funcion enable (self):
+        pasar
+    funcion disable (self):
+        pasar
+    funcion create_stats (self):
+        pasar
+    funcion print_stats (self,sort=-1):
+        pasar
+    funcion dump_stats (self,file):
+        pasar
+
+funcion run (cmd,globals=Nada,locals=Nada,filename=Nada,sort=-1):
+    devolver
+
+funcion runctx (cmd,globals,locals,filename=Nada,sort=-1):
+    devolver

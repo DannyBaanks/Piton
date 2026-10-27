@@ -2,7 +2,7 @@ funcion gettext (mensaje ):
     devolver mensaje
 
 
-funcion ngettext (singular , plural , n ):
+funcion ngettext (singular ,plural ,n ):
     si n == 1 :
         devolver singular
     devolver plural

@@ -19,66 +19,66 @@ TEMPLATE = 1
 
 funcion escape (s ):
     salida = s
-    salida = salida .replace ('\\', '\\\\')
-    salida = salida .replace ('(', '\\(')
-    salida = salida .replace (')', '\\)')
-    salida = salida .replace ('[', '\\[')
-    salida = salida .replace (']', '\\]')
-    salida = salida .replace ('{', '\\{')
-    salida = salida .replace ('}', '\\}')
-    salida = salida .replace ('?', '\\?')
-    salida = salida .replace ('*', '\\*')
-    salida = salida .replace ('+', '\\+')
-    salida = salida .replace ('-', '\\-')
-    salida = salida .replace ('|', '\\|')
-    salida = salida .replace ('^', '\\^')
-    salida = salida .replace ('$', '\\$')
-    salida = salida .replace ('.', '\\.')
-    salida = salida .replace ('&', '\\&')
-    salida = salida .replace ('~', '\\~')
-    salida = salida .replace ('#', '\\#')
-    salida = salida .replace (' ', '\\ ')
-    salida = salida .replace ('\t', '\\\t')
-    salida = salida .replace ('\n', '\\\n')
-    salida = salida .replace ('\r', '\\\r')
-    salida = salida .replace ('\x0b', '\\\x0b')
-    salida = salida .replace ('\x0c', '\\\x0c')
+    salida = salida.replace ('\\','\\\\')
+    salida = salida.replace ('(','\\(')
+    salida = salida.replace (')','\\)')
+    salida = salida.replace ('[','\\[')
+    salida = salida.replace (']','\\]')
+    salida = salida.replace ('{','\\{')
+    salida = salida.replace ('}','\\}')
+    salida = salida.replace ('?','\\?')
+    salida = salida.replace ('*','\\*')
+    salida = salida.replace ('+','\\+')
+    salida = salida.replace ('-','\\-')
+    salida = salida.replace ('|','\\|')
+    salida = salida.replace ('^','\\^')
+    salida = salida.replace ('$','\\$')
+    salida = salida.replace ('.','\\.')
+    salida = salida.replace ('&','\\&')
+    salida = salida.replace ('~','\\~')
+    salida = salida.replace ('#','\\#')
+    salida = salida.replace (' ','\\ ')
+    salida = salida.replace ('\t','\\\t')
+    salida = salida.replace ('\n','\\\n')
+    salida = salida.replace ('\r','\\\r')
+    salida = salida.replace ('\x0b','\\\x0b')
+    salida = salida.replace ('\x0c','\\\x0c')
     devolver salida
 
 
-funcion compile (patron , banderas =0 ):
+funcion compile (patron ,banderas =0 ):
     lanzar NotImplementedError ('re.compile no esta implementado en el backend nativo: el motor de regex propio no existe todavia')
 
 
-funcion search (patron , cadena , banderas =0 ):
+funcion search (patron ,cadena ,banderas =0 ):
     lanzar NotImplementedError ('re.search no esta implementado en el backend nativo')
 
 
-funcion match (patron , cadena , banderas =0 ):
+funcion match (patron ,cadena ,banderas =0 ):
     lanzar NotImplementedError ('re.match no esta implementado en el backend nativo')
 
 
-funcion fullmatch (patron , cadena , banderas =0 ):
+funcion fullmatch (patron ,cadena ,banderas =0 ):
     lanzar NotImplementedError ('re.fullmatch no esta implementado en el backend nativo')
 
 
-funcion findall (patron , cadena , banderas =0 ):
+funcion findall (patron ,cadena ,banderas =0 ):
     lanzar NotImplementedError ('re.findall no esta implementado en el backend nativo')
 
 
-funcion finditer (patron , cadena , banderas =0 ):
+funcion finditer (patron ,cadena ,banderas =0 ):
     lanzar NotImplementedError ('re.finditer no esta implementado en el backend nativo')
 
 
-funcion sub (patron , reemplazo , cadena , contador =0 , banderas =0 ):
+funcion sub (patron ,reemplazo ,cadena ,contador =0 ,banderas =0 ):
     lanzar NotImplementedError ('re.sub no esta implementado en el backend nativo')
 
 
-funcion subn (patron , reemplazo , cadena , contador =0 , banderas =0 ):
+funcion subn (patron ,reemplazo ,cadena ,contador =0 ,banderas =0 ):
     lanzar NotImplementedError ('re.subn no esta implementado en el backend nativo')
 
 
-funcion split (patron , cadena , maximo =0 , banderas =0 ):
+funcion split (patron ,cadena ,maximo =0 ,banderas =0 ):
     lanzar NotImplementedError ('re.split no esta implementado en el backend nativo')
 
 

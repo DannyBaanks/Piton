@@ -1,0 +1,15 @@
+# filecmp.piton — stub para filecmp (stdlib CPython)
+funcion cmp (f1, f2, shallow=Verdadero):
+    devolver 0
+
+funcion cmpfiles (dir1, dir2, common, shallow=Verdadero):
+    devolver ([], [], [])
+
+funcion dircmp (a, b, ignore=None, hide=None):
+    class Dircmp:
+        funcionar __init__ (self, a, b, ignore, hide):
+            self.left = a
+            self.right = b
+        funcionar report (self):
+            pasar
+    devolver Dircmp(a, b, ignore, hide)

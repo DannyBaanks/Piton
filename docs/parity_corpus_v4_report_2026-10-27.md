@@ -1,7 +1,7 @@
 # Parity corpus report v4 — CODIGO REAL (stdlib + tutorial CPython)
 
 - instrumento: `tools/parity_corpus_v4.py` | backend medido: **linux_x86**
-- oracle: CPython 3.12.3 | git: `632fc4b` | fecha: 2026-10-27T20:16:19+00:00
+- oracle: CPython 3.12.3 | git: `b3f47d6` | fecha: 2026-10-27T20:47:55+00:00
 - tier A (stdlib real, estatico, sin ejecucion): **167** archivos
 - tier B (tutorial oficial, ejecucional): **11** scripts
 
@@ -13,19 +13,19 @@ Poblacion SIN seleccion: todos los .py de nivel superior. Solo embudo estatico (
 |---|---|---|
 | adapt | 167 | 100.0% |
 | parse | 167 | 100.0% |
-| mir | 44 | 26.3% |
-| build | 43 | 25.7% |
+| mir | 45 | 26.9% |
+| build | 44 | 26.3% |
 
-**Build completo (potencialmente ejecutable): 25.7%**
+**Build completo (potencialmente ejecutable): 26.3%**
 
 ### Clases de fallo por etapa
 
 | etapa fallida | n |
 |---|---|
-| MIR_FAIL | 123 |
+| MIR_FAIL | 122 |
 | BUILD_FAIL | 1 |
 
-De los fallos MIR, **30** son `native module not supplied` (imports de la stdlib real de CPython: el backend nativo solo resuelve modulos propios de PITON).
+De los fallos MIR, **17** son `native module not supplied` (imports de la stdlib real de CPython: el backend nativo solo resuelve modulos propios de PITON).
 
 ## Hallazgos verificados (fallos trazados a su linea adaptada)
 
@@ -38,15 +38,16 @@ Cada fila = scripts que PASAN esa etapa.
 |---|---|---|
 | adapt | 11 | 100.0% |
 | parse | 11 | 100.0% |
-| mir | 11 | 100.0% |
-| build | 11 | 100.0% |
+| mir | 10 | 90.9% |
+| build | 10 | 90.9% |
 
 | bucket de ejecucion | n |
 |---|---|
-| DIVERGENT_MISMATCH | 10 |
+| DIVERGENT_MISMATCH | 9 |
 | EQUIV | 1 |
+| MIR_FAIL | 1 |
 
-EQUIV (byte-identico vs CPython): **9.1%** | salida nativa honesta (EQUIV+RAISE_EQ): **9.1%** | DIVERGENT: **90.9%**
+EQUIV (byte-identico vs CPython): **9.1%** | salida nativa honesta (EQUIV+RAISE_EQ): **9.1%** | DIVERGENT: **81.8%**
 
 ## Lectura honesta
 

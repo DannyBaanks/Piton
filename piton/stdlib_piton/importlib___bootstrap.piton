@@ -1,0 +1,24 @@
+# Solo las funciones exportadas que CPython usa
+_bootstrap = 0
+
+funcion _find_spec (name,path=Nada,target=None):
+    devolver Nada
+
+funcion _load_unlocked (spec):
+    devolver 0
+
+funcion _find_and_load (name,import_=None):
+    devolver 0
+
+funcion _find_and_load_unlocked (name,import_=None):
+    devolver 0
+
+clase _ModuleLock :
+    funcion __init__ (self):
+        pasar
+    funcion acquire (self):
+        pasar
+    funcion release (self):
+        pasar
+
+_locks = {}

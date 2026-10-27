@@ -1,11 +1,11 @@
 MISSING = object()
-class KW_ONLY:
+clase KW_ONLY :
     pasar
-class InitVar:
-    funcionar __init__ (self, type):
+clase InitVar :
+    funcion __init__ (self,type):
         self.type = type
-class Field:
-    funcionar __init__ (self, default=MISSING, default_factory=MISSING, init=Verdadero, repr=Verdadero, hash=Nada, compare=Verdadero, metadata=Nada, kw_only=Falso):
+clase Field :
+    funcion __init__ (self,default=MISSING,default_factory=MISSING,init=Verdadero,repr=Verdadero,hash=Nada,compare=Verdadero,metadata=Nada,kw_only=Falso):
         self.default = default
         self.default_factory = default_factory
         self.init = init
@@ -14,19 +14,19 @@ class Field:
         self.compare = compare
         self.metadata = metadata si metadata sino {}
         self.kw_only = kw_only
-funcion field (default=MISSING, default_factory=MISSING, init=Verdadero, repr=Verdadero, hash=Nada, compare=Verdadero, metadata=Nada, kw_only=Falso):
-    devolver Field(default, default_factory, init, repr, hash, compare, metadata, kw_only)
+funcion field (default=MISSING,default_factory=MISSING,init=Verdadero,repr=Verdadero,hash=Nada,compare=Verdadero,metadata=Nada,kw_only=Falso):
+    devolver Field(default,default_factory,init,repr,hash,compare,metadata,kw_only)
 funcion fields (cls):
     devolver []
-funcion asdict (obj, dict_factory=dict):
+funcion asdict (obj,dict_factory=dict):
     devolver dict_factory()
-funcion astuple (obj, tuple_factory=tuple):
+funcion astuple (obj,tuple_factory=tuple):
     devolver tuple_factory()
-funcion dataclass (cls=None, init=Verdadero, repr=Verdadero, eq=Verdadero, order=Falso, unsafe_hash=Falso, frozen=Falso, match_args=Verdadero, kw_only=Falso, slots=Falso):
+funcion dataclass (cls=None,init=Verdadero,repr=Verdadero,eq=Verdadero,order=Falso,unsafe_hash=Falso,frozen=Falso,match_args=Verdadero,kw_only=Falso,slots=Falso):
     si cls es Nada:
         funcion decorator (c):
             devolver c
         devolver decorator
     devolver cls
-class FrozenInstanceError (AttributeError):
+clase FrozenInstanceError (AttributeError) :
     pasar

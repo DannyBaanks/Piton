@@ -86,7 +86,7 @@ funcion close (*args ) :
     lanzar NotImplementedError ('socket.close no esta implementado en el backend nativo')
 
 
-funcion create_connection (address, timeout=_GLOBAL_DEFAULT_TIMEOUT, source_address=Nada):
+funcion create_connection (address,timeout=_GLOBAL_DEFAULT_TIMEOUT,source_address=Nada):
     lanzar NotImplementedError ('socket.create_connection no esta implementado en el backend nativo')
 
 

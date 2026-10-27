@@ -1,0 +1,5 @@
+funcion compress (data,level=6):
+    devolver b""
+
+funcion decompress (data):
+    devolver b""

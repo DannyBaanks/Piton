@@ -1,0 +1,28 @@
+clase ZipFile :
+    funcion __init__ (self,file,mode='r',compression=0,allowZip64=Verdadero):
+        self.mode = mode
+        self.file = file
+    funcion close (self):
+        pasar
+    funcion namelist (self):
+        devolver []
+    funcion getinfo (self,name):
+        class ZipInfo :
+            funcion __init__ (self,name):
+                self.filename = name
+                self.file_size = 0
+                self.compress_size = 0
+        devolver ZipInfo(name)
+    funcion read (self,name):
+        devolver b""
+    funcion open (self,name,mode='r',pwd=Nada):
+        class ZipExtFile :
+            funcion read (self,n=-1):
+                devolver b""
+        devolver ZipExtFile()
+
+funcion is_zipfile (filename):
+    devolver Falso
+
+ZIP_STORED = 0
+ZIP_DEFLATED = 1

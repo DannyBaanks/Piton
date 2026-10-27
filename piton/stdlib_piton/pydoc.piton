@@ -1,0 +1,15 @@
+funcion help (obj):
+    devolver
+
+funcion cli ():
+    pasar
+
+funcion render_doc (obj,title='',maxlen=0):
+    devolver ""
+
+funcion describe (obj):
+    devolver ""
+
+clase ModuleScanner :
+    funcion __init__ (self):
+        pasar

@@ -1,8 +1,8 @@
 funcion md5 (*args):
     lanzar NotImplementedError ('hashlib.md5 no esta implementado en el backend nativo')
 
-funcion new (name, data=b'', usedforsecurity=True):
+funcion new (name,data=b'',usedforsecurity=True):
     lanzar NotImplementedError ('hashlib.new no esta implementado en el backend nativo')
 
-algorithms_guaranteed = ['md5', 'sha1', 'sha256']
+algorithms_guaranteed = ['md5','sha1','sha256']
 algorithms_available = algorithms_guaranteed

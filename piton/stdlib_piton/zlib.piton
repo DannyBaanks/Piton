@@ -1,0 +1,29 @@
+compress = 0
+decompress = 0
+
+funcion compress (data,level=6):
+    devolver b""
+
+funcion decompress (data,wbits=15,bufsize=0):
+    devolver b""
+
+funcion compressobj (level=6,method=8,wbits=15,memLevel=8,strategy=0,zdict=b''):
+    class CompressObj :
+        funcion compress (self,data):
+            devolver b""
+        funcion flush (self,mode=0):
+            devolver b""
+    devolver CompressObj()
+
+funcion decompressobj (wbits=15,zdict=b''):
+    class DecompressObj :
+        funcion decompress (self,data):
+            devolver b""
+        funcion flush (self):
+            devolver b""
+    devolver DecompressObj()
+
+adler32 = 0
+crc32 = 0
+ZLIB_VERSION = ""
+ZLIB_RUNTIME_VERSION = ""

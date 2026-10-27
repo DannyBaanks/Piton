@@ -1,0 +1,23 @@
+clase Pdb :
+    funcion __init__ (self,completekey='tab',stdin=Nada,stdout=Nada):
+        pasar
+    funcion set_trace (self,frame=Nada):
+        pasar
+    funcion set_break (self,filename,lineno,condition=Nada):
+        pasar
+    funcion clear_break (self,bp):
+        pasar
+    funcion run (self,cmd,globals=Nada,locals=Nada):
+        pasar
+
+funcion set_trace ():
+    pasar
+
+funcion run (cmd,globals=Nada,locals=Nada):
+    devolver
+
+funcion post_mortem (t=Nada):
+    pasar
+
+funcion pm ():
+    pasar

@@ -1,6 +1,6 @@
 clase ContextVar :
     funcion __init__ (self ,nombre ,*resto ):
-        self .nombre = nombre
+        self.nombre = nombre
 
 
 clase Context :

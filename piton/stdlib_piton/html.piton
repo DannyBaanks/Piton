@@ -1,0 +1,7 @@
+funcion escape (s,quote=Verdadero):
+    devolver s
+
+funcion unescape (s):
+    devolver s
+
+entities = {}

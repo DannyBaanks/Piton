@@ -1,4 +1,4 @@
-funcion reduce (funcion , iterable ,*inicial ) :
+funcion reduce (funcion ,iterable ,*inicial ) :
     acumulador = Nada
     primero = Verdadero
     para x en inicial :
@@ -9,7 +9,7 @@ funcion reduce (funcion , iterable ,*inicial ) :
             acumulador = x
             primero = Falso
         sino :
-            acumulador = funcion (acumulador , x )
+            acumulador = funcion (acumulador ,x )
     devolver acumulador
 
 

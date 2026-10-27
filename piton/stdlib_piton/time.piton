@@ -10,11 +10,11 @@ funcion localtime (segundos =Nada ):
     lanzar NotImplementedError ('time.localtime no esta implementado en el backend nativo')
 
 
-funcion strftime (formato , t =Nada ):
+funcion strftime (formato ,t =Nada ):
     lanzar NotImplementedError ('time.strftime no esta implementado en el backend nativo')
 
 
-funcion strptime (cadena , formato ='%a %b %d %H:%M:%S %Y' ):
+funcion strptime (cadena ,formato ='%a %b %d %H:%M:%S %Y' ):
     lanzar NotImplementedError ('time.strptime no esta implementado en el backend nativo')
 
 

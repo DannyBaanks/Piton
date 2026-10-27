@@ -12,43 +12,43 @@ EPOLLRDHUP = 4096
 EPOLLONESHOT = 1 << 30
 EPOLLET = 1 << 31
 EPOLL_CLOEXEC = 0o2000000
-funcion select (rlist, wlist, xlist, timeout=Nada):
-    devolver ([], [], [])
+funcion select (rlist,wlist,xlist,timeout=Nada):
+    devolver ([],[],[])
 funcion poll ():
-    class Poll:
-        funcionar register (self, fd, eventmask):
+    class Poll :
+        funcion register (self,fd,eventmask):
             pasar
-        funcionar unregister (self, fd):
+        funcion unregister (self,fd):
             pasar
-        funcionar poll (self, timeout=-1):
+        funcion poll (self,timeout=-1):
             devolver []
     devolver Poll()
 funcion epoll ():
-    class Epoll:
-        funcionar register (self, fd, eventmask):
+    class Epoll :
+        funcion register (self,fd,eventmask):
             pasar
-        funcionar unregister (self, fd):
+        funcion unregister (self,fd):
             pasar
-        funcionar poll (self, timeout=-1, maxevents=-1):
+        funcion poll (self,timeout=-1,maxevents=-1):
             devolver []
-        funcionar close (self):
+        funcion close (self):
             pasar
     devolver Epoll()
 funcion kqueue ():
-    class Kqueue:
-        funcionar control (self, changelist, max_events, timeout=Nada):
+    class Kqueue :
+        funcion control (self,changelist,max_events,timeout=Nada):
             devolver []
-        funcionar close (self):
+        funcion close (self):
             pasar
     devolver Kqueue()
 funcion devpoll ():
-    class Devpoll:
-        funcionar register (self, fd, eventmask):
+    class Devpoll :
+        funcion register (self,fd,eventmask):
             pasar
-        funcionar unregister (self, fd):
+        funcion unregister (self,fd):
             pasar
-        funcionar poll (self, timeout=-1):
+        funcion poll (self,timeout=-1):
             devolver []
-        funcionar close (self):
+        funcion close (self):
             pasar
     devolver Devpoll()

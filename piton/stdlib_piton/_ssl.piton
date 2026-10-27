@@ -1,0 +1,33 @@
+# Solo constantes y funciones basicas para que importe
+SSLContext = 0
+SSL_ERROR_ZERO_RETURN = 0
+SSL_ERROR_WANT_READ = 1
+SSL_ERROR_WANT_WRITE = 2
+SSL_ERROR_WANT_X509_LOOKUP = 3
+SSL_ERROR_SYSCALL = 4
+SSL_ERROR_SSL = 5
+SSL_ERROR_WANT_CONNECT = 6
+SSL_ERROR_EOF = 7
+SSL_ERROR_INVALID_ERROR_CODE = 8
+
+funcion _test ():
+    devolver
+
+clase SSLContext :
+    funcion __init__ (self,protocol):
+        self.protocol = protocol
+    funcion load_cert_chain (self,certfile,keyfile=Nada,password=Nada):
+        pasar
+    funcion load_verify_locations (self,cafile=Nada,capath=Nada,cadata=Nada):
+        pasar
+    funcion set_ciphers (self,ciphers):
+        pasar
+    funcion wrap_socket (self,sock,server_side=Falso,do_handshake_on_connect=Verdadero,suppress_ragged_eofs=Verdadero,server_hostname=Nada):
+        devolver sock
+
+funcion create_default_context (purpose=0):
+    devolver SSLContext(0)
+
+PROTOCOL_TLS_CLIENT = 0
+PROTOCOL_TLS_SERVER = 0
+PROTOCOL_TLS = 0

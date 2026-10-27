@@ -1,0 +1,6 @@
+# Solo usado internamente por pickle para compatibilidad
+funcion whichmodule (obj,name):
+    devolver "__main__"
+
+funcion _getattribute (obj,name):
+    devolver getattr(obj,name)

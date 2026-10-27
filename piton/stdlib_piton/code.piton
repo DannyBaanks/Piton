@@ -1,0 +1,21 @@
+# code.piton — stub para code (stdlib CPython)
+funcion compile_command (source, filename='<input>', symbol='single'):
+    devolver Nada
+
+class InteractiveConsole:
+    funcionar __init__ (self, locals=Nada, filename='<console>'):
+        self.locals = locals si locals sino {}
+    funcionar push (self, line):
+        devolver Falso
+    funcionar runsource (self, source, filename='<input>', symbol='single'):
+        devolver Falso
+
+class InteractiveInterpreter:
+    funcionar __init__ (self, locals=Nada):
+        self.locals = locals si locals sino {}
+    funcionar runcode (self, code):
+        pasar
+    funcionar showsyntaxerror (self, filename=Nada):
+        pasar
+    funcionar showtraceback (self):
+        pasar

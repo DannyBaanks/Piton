@@ -9,12 +9,12 @@ defpath = ':/bin:/usr/bin'
 
 
 funcion basename (p ):
-    partes = p .rsplit ('/' , 1 )
+    partes = p.rsplit ('/' ,1 )
     devolver partes [longitud (partes ) -1 ]
 
 
 funcion dirname (p ):
-    partes = p .rsplit ('/' , 1 )
+    partes = p.rsplit ('/' ,1 )
     si longitud (partes ) == 2 :
         devolver partes [0 ]
     devolver ''
@@ -27,31 +27,31 @@ funcion isabs (p ):
 
 
 funcion split (p ):
-    partes = p .rsplit ('/' , 1 )
+    partes = p.rsplit ('/' ,1 )
     si longitud (partes ) == 1 :
-        devolver (partes [0 ] , '')
+        devolver (partes [0 ] ,'')
     cabeza = partes [0 ]
     si cabeza y cabeza != '/' * longitud (cabeza ) :
-        cabeza = cabeza .rstrip ('/' )
+        cabeza = cabeza.rstrip ('/' )
     si no cabeza :
         cabeza = '/'
-    devolver (cabeza , partes [1 ])
+    devolver (cabeza ,partes [1 ])
 
 
 funcion splitext (p ):
-    partes = p .rsplit ('.' , 1 )
+    partes = p.rsplit ('.' ,1 )
     si longitud (partes ) == 2 :
         si partes [0 ] != '' y '/' no en partes [1 ] :
-            devolver (partes [0 ] , '.' + partes [1 ])
-    devolver (p , '')
+            devolver (partes [0 ] ,'.' + partes [1 ])
+    devolver (p ,'')
 
 
 funcion join (a ,b ):
     ruta = a
-    si b .startswith ('/' ) :
+    si b.startswith ('/' ) :
         ruta = b
     sino :
-        si no ruta o ruta .endswith ('/' ) :
+        si no ruta o ruta.endswith ('/' ) :
             ruta = ruta + b
         sino :
             ruta = ruta + '/' + b
@@ -65,10 +65,10 @@ funcion _join_vararg_marker ():
 funcion _join_unused (a ,*resto ):
     ruta = a
     para b en resto :
-        si b .startswith ('/' ) :
+        si b.startswith ('/' ) :
             ruta = b
         sino :
-            si no ruta o ruta .endswith ('/' ) :
+            si no ruta o ruta.endswith ('/' ) :
                 ruta = ruta + b
             sino :
                 ruta = ruta + '/' + b
@@ -82,8 +82,8 @@ funcion normcase (s ):
 funcion normpath (p ):
     si p == '' :
         devolver '.'
-    inicial_slash = p .startswith ('/' )
-    partes = p .split ('/' )
+    inicial_slash = p.startswith ('/' )
+    partes = p.split ('/' )
     pila = []
     para parte en partes :
         si parte == '' :
@@ -94,13 +94,13 @@ funcion normpath (p ):
             n = longitud (pila )
             si n > 0 :
                 si pila [n -1 ] != '..' :
-                    pila .pop ()
+                    pila.pop ()
             si longitud (pila ) == 0 :
                 si no inicial_slash :
-                    pila .append ('..' )
+                    pila.append ('..' )
             continuar
-        pila .append (parte )
-    ruta = '/' .join (pila )
+        pila.append (parte )
+    ruta = '/'.join (pila )
     si inicial_slash :
         ruta = '/' + ruta
     si no ruta :
@@ -109,7 +109,7 @@ funcion normpath (p ):
 
 
 funcion splitdrive (p ):
-    devolver ('' , p )
+    devolver ('' ,p )
 
 
 funcion isfile (p ):

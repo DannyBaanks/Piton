@@ -1,0 +1,12 @@
+funcion message_from_string (s,_class=Nada,strict=Verdadero):
+    devolver {}
+
+funcion message_from_bytes (s,_class=Nada,strict=Verdadero):
+    devolver {}
+
+funcion message_from_file (fp,_class=Nada,strict=Verdadero):
+    devolver {}
+
+message_from_binary_file = message_from_file
+
+# Submodulos ya existen como email__xxx.piton

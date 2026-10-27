@@ -1,68 +1,68 @@
-funcion add (a , b ) :
+funcion add (a ,b ) :
     devolver a + b
 
 
-funcion sub (a , b ) :
+funcion sub (a ,b ) :
     devolver a - b
 
 
-funcion mul (a , b ) :
+funcion mul (a ,b ) :
     devolver a * b
 
 
-funcion truediv (a , b ) :
+funcion truediv (a ,b ) :
     devolver a / b
 
 
-funcion floordiv (a , b ) :
+funcion floordiv (a ,b ) :
     devolver a // b
 
 
-funcion mod (a , b ) :
+funcion mod (a ,b ) :
     devolver a % b
 
 
-funcion pow (a , b ) :
+funcion pow (a ,b ) :
     devolver a ** b
 
 
-funcion and_ (a , b ) :
+funcion and_ (a ,b ) :
     si a :
         devolver b
     devolver a
 
 
-funcion or_ (a , b ) :
+funcion or_ (a ,b ) :
     si a :
         devolver a
     devolver b
 
 
-funcion xor (a , b ) :
+funcion xor (a ,b ) :
     devolver a ^ b
 
 
-funcion lt (a , b ) :
+funcion lt (a ,b ) :
     devolver a < b
 
 
-funcion le (a , b ) :
+funcion le (a ,b ) :
     devolver a <= b
 
 
-funcion eq (a , b ) :
+funcion eq (a ,b ) :
     devolver a == b
 
 
-funcion ne (a , b ) :
+funcion ne (a ,b ) :
     devolver a != b
 
 
-funcion gt (a , b ) :
+funcion gt (a ,b ) :
     devolver a > b
 
 
-funcion ge (a , b ) :
+funcion ge (a ,b ) :
     devolver a >= b
 
 
@@ -86,15 +86,15 @@ funcion index (a ) :
     devolver a
 
 
-funcion concat (a , b ) :
+funcion concat (a ,b ) :
     devolver a + b
 
 
-funcion contains (a , b ) :
+funcion contains (a ,b ) :
     devolver a en b
 
 
-funcion countOf (a , b ) :
+funcion countOf (a ,b ) :
     n = 0
     para x en a :
         si x == b :
@@ -102,11 +102,11 @@ funcion countOf (a , b ) :
     devolver n
 
 
-funcion delitem (a , b ) :
+funcion delitem (a ,b ) :
     devolver a [b ]
 
 
-funcion getitem (a , b ) :
+funcion getitem (a ,b ) :
     devolver a [b ]
 
 
@@ -118,11 +118,11 @@ funcion itemgetter (indice ) :
 
 funcion attrgetter (nombre ) :
     funcion obtener (obj ) :
-        devolver obj .nombre
+        devolver obj.nombre
     devolver obtener
 
 
 funcion methodcaller (nombre ,*args ) :
     funcion llamar (obj ) :
-        devolver obj .nombre (*args )
+        devolver obj.nombre (*args )
     devolver llamar

@@ -1,0 +1,12 @@
+clase Quitter :
+    funcion __init__ (self,name):
+        pasar
+    funcion __call__ (self,*args):
+        pasar
+
+quit = Quitter("quit")
+exit = Quitter("exit")
+
+copyright = "copyright"
+credits = "credits"
+license = "license"

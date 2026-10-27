@@ -4,14 +4,14 @@ SEEK_CUR = 1
 SEEK_END = 2
 
 
-funcion open (archivo , modo ='r' ):
+funcion open (archivo ,modo ='r' ):
     si modo es Nada :
         devolver abrir (archivo )
-    devolver abrir (archivo , modo )
+    devolver abrir (archivo ,modo )
 
 
 funcion open_code (archivo ):
-    devolver abrir (archivo , 'rb' )
+    devolver abrir (archivo ,'rb' )
 
 
 funcion text_encoding (codificacion ,*args ):
@@ -53,10 +53,10 @@ clase UnsupportedOperation :
 
 
 clase StringIO :
-    funcion __init__ (self , inicial ='' ):
+    funcion __init__ (self ,inicial ='' ):
         lanzar NotImplementedError ('io.StringIO no esta implementado en el backend nativo')
 
 
 clase BytesIO :
-    funcion __init__ (self , inicial =b'' ):
+    funcion __init__ (self ,inicial =b'' ):
         lanzar NotImplementedError ('io.BytesIO no esta implementado en el backend nativo')

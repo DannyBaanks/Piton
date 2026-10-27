@@ -1,5 +1,5 @@
-funcion encode (in_file, out_file, name='', mode=0o666, backtick=Falso):
+funcion encode (in_file,out_file,name='',mode=0o666,backtick=Falso):
     lanzar NotImplementedError ('uu.encode no esta implementado en el backend nativo')
 
-funcion decode (in_file, out_file=None, mode=None, quiet=Falso):
+funcion decode (in_file,out_file=None,mode=None,quiet=Falso):
     lanzar NotImplementedError ('uu.decode no esta implementado en el backend nativo')

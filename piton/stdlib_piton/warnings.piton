@@ -6,25 +6,25 @@ funcion _warn_accion (categoria):
         accion = f[0]
     devolver accion
 
-funcion warn (mensaje, category=Nada, stacklevel=1, source='None'):
+funcion warn (mensaje,category=Nada,stacklevel=1,source='None'):
     accion = _warn_accion(category)
     si accion == 'ignore':
         devolver
     si accion == 'error':
         lanzar UserWarning(mensaje)
-    imprimir(mensaje, file=2)
+    imprimir(mensaje,file=2)
 
-funcion simplefilter (action, category=Nada, lineno=0, append=Falso):
+funcion simplefilter (action,category=Nada,lineno=0,append=Falso):
     si append:
-        _warn_filtros.append([action, category, lineno])
+        _warn_filtros.append([action,category,lineno])
     sino:
-        _warn_filtros = [[action, category, lineno]]
+        _warn_filtros = [[action,category,lineno]]
 
-funcion filterwarnings (action, message='', category=Nada, module='', lineno=0, append=Falso):
+funcion filterwarnings (action,message='',category=Nada,module='',lineno=0,append=Falso):
     si append:
-        _warn_filtros.append([action, category, lineno])
+        _warn_filtros.append([action,category,lineno])
     sino:
-        _warn_filtros = [[action, category, lineno]]
+        _warn_filtros = [[action,category,lineno]]
 
 funcion resetwarnings ():
     _warn_filtros = []
