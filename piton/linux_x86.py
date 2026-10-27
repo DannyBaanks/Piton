@@ -558,6 +558,7 @@ static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(
 static PitonBytes* piton_bytes_concat(PitonBytes* a,PitonBytes* b);
 static int piton_maybe_ptr(long bits);
 static void piton_report_unhandled(void);
+/* piton_strtod_local ya esta declarada en float_repr.h (emitido antes). */
 /* BYTES_CONCAT_DYN_V1: `bytes + X` donde X puede tener tipo estatico int
    (inferencia de tupla desestructurada) pero ser bytes en runtime. Verifica
    el tipo real antes de concatenar; si no es bytes, TypeError claro. */
@@ -1418,6 +1419,74 @@ static long piton_str_maketrans(PitonDict*m){
     piton_dict_set(t,piton_slot(ord,PK_INT),(PitonSlot){vb,vk});
   }
   return(long)t;
+}
+/* INT_FROM_BYTES_V1: int.from_bytes(bytes, byteorder='big', signed=False) —
+ * classmethod. Convierte bytes/bytearray a int (64-bit signed). byteorder:
+ * 'big' | 'little' (default 'big'); signed: bool (default False).
+ * Falla cerrado en runtime si: buffer no bytes/bytearray, byteorder invalido,
+ * overflow 64-bit (CPython usa arbitrary precision; aqui limitamos a 64-bit
+ * igual que el resto del subset nativo). El dispatch pasa PitonSeq*; 
+ * bytearray (PK_BYTEARRAY) tiene campo capacity extra -> data en offset
+ * distinto; distinguimos por kind. */
+static long piton_int_from_bytes(PitonSeq*buf,const char*order,int is_signed){
+  if(!buf||(buf->kind!=PK_BYTES&&buf->kind!=PK_BYTEARRAY)){
+    piton_write(2,"TypeError: int.from_bytes() argument must support the buffer protocol\n",70);piton_exit(1);}
+  if(!order||(piton_strcmp(order,"big")&&piton_strcmp(order,"little"))){
+    piton_write(2,"ValueError: byteorder must be either 'big' or 'little'\n",51);piton_exit(1);}
+  unsigned char*b; long n;
+  if(buf->kind==PK_BYTES){
+    PitonBytes*bb=(PitonBytes*)buf; b=bb->data; n=bb->length;
+  }else{
+    PitonByteArray*ba=(PitonByteArray*)buf; b=ba->data; n=ba->length;
+  }
+  unsigned long long acc=0;
+  if(piton_strcmp(order,"big")==0){
+    for(long i=0;i<n;++i){acc=(acc<<8)|b[i];}}
+  else{
+    for(long i=n-1;i>=0;--i){acc=(acc<<8)|b[i];}}
+  if(is_signed){
+    if(n>0&&(b[0]&0x80)){
+      if(piton_strcmp(order,"big")==0){
+        for(long i=0;i<n;++i)acc|=~0ULL<<(8*(i+1));
+      }else{
+        for(long i=n-1;i>=0;--i)acc|=~0ULL<<(8*(n-i));
+      }
+    }
+    long long sval = (long long)acc;
+    if(sval < -0x8000000000000000LL || sval > 0x7FFFFFFFFFFFFFFFLL){
+      piton_write(2,"OverflowError: int.from_bytes() overflow\n",41);piton_exit(1);}
+    return sval;
+  }else{
+    if(acc>0xFFFFFFFFFFFFFFFFULL){piton_write(2,"OverflowError: int.from_bytes() overflow\n",41);piton_exit(1);}
+    return (long)acc;
+  }
+}
+/* BYTES_MAKETRANS_V1: bytes.maketrans(frm, to) -> 256-byte translation table.
+ * frm y to son bytes/bytearray de igual longitud. Retorna bytes de 256 bytes
+ * donde table[frm[i]] = to[i]. Falla cerrado si longitudes difieren o no son
+ * bytes/bytearray. El dispatch pasa PitonSeq* (el sistema de tipos trata
+ * bytes como secuencia); hacemos cast interno a PitonBytes*. */
+static long piton_bytes_maketrans(PitonSeq*frm,PitonSeq*to){
+  if(!frm||!to||frm->length!=to->length){
+    piton_write(2,"ValueError: bytes.maketrans() arguments must be of equal length\n",58);piton_exit(1);}
+  if(frm->kind!=PK_BYTES||to->kind!=PK_BYTES){
+    piton_write(2,"TypeError: bytes.maketrans() requires bytes arguments\n",51);piton_exit(1);}
+  PitonBytes*bf=(PitonBytes*)frm; PitonBytes*bt=(PitonBytes*)to;
+  unsigned char*t=(unsigned char*)piton_alloc(256);
+  for(int i=0;i<256;++i)t[i]=i;
+  unsigned char*f=bf->data; unsigned char*g=bt->data;
+  for(long i=0;i<frm->length;++i)t[f[i]]=g[i];
+  PitonBytes*r=(PitonBytes*)piton_alloc(sizeof(PitonBytes));
+  r->refcount=1; r->kind=PK_BYTES; r->length=256; r->data=t;
+  return(long)r;
+}
+/* FLOAT_FROMHEX_V1: float.fromhex(str) — classmethod. Hex float parsing
+ * (0x1.23p+4) no esta implementado en piton_strtod_local (solo decimal).
+ * Falla cerrado con mensaje claro en vez de devolver 0.0 silenciosamente. */
+static long piton_float_fromhex(const char*s){
+  if(!s){piton_write(2,"TypeError: float.fromhex() argument must be a string\n",49);piton_exit(1);}
+  piton_write(2,"NotImplementedError: float.fromhex() hex parsing not implemented in native subset\n",73);piton_exit(1);
+  return 0;
 }
 static long piton_bin(long v){char*p=piton_alloc(70);usize o=0;unsigned long m;if(v<0){p[o++]='-';m=(unsigned long)(-(v+1))+1;}else m=(unsigned long)v;p[o++]='0';p[o++]='b';char tmp[64];long n=0;do{tmp[n++]=(char)('0'+(m&1));m>>=1;}while(m);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static long piton_round_float(long bits){double x=piton_bits_double(bits);double ax=x<0?-x:x;if(ax>=9.0e18){piton_raise_set("OverflowError","round() float too large to convert to int");return 0;}long t=(long)ax;double frac=ax-(double)t;long r;if(frac>0.5)r=t+1;else if(frac<0.5)r=t;else r=(t&1)?t+1:t;return x<0?-r:r;}
@@ -11697,6 +11766,73 @@ class LinuxCEmitter:
                     # entrada, igual que en la forma de instancia — declarar un
                     # tipo fijo haria que las dos formas divergieran.
                     types[result] = "dict"
+                    return out
+                # BUILTIN_CLASS_METHODS_V1: classmethods de builtins que
+                # llegan como load('int')/'float'/'bytes' -> builtin + alias.
+                # Sin rama caen a piton_call_dynamic sobre temp sin codigo -> SIGSEGV.
+                # Mismo patron que dict.fromkeys / str.maketrans clase.
+                if method == "from_bytes" and (
+                    owner_type == "class:int"
+                    or (
+                        owner_type == "builtin"
+                        and (aliases.get(obj) if aliases else None) in {"int", "entero"}
+                    )
+                ):
+                    # INT_FROM_BYTES_V1: int.from_bytes(bytes, byteorder='big', signed=False)
+                    if len(call_args) < 1 or len(call_args) > 3:
+                        raise NativeBuildError("Linux int.from_bytes() takes 1-3 arguments")
+                    if types.get(call_args[0], "") not in {"bytes", "octetos", "bytearray", "arreglo_bytes"}:
+                        raise NativeBuildError("Linux int.from_bytes() requires bytes or bytearray")
+                    _ifb_order = "big"
+                    _ifb_signed = 0
+                    if len(call_args) >= 2:
+                        if types.get(call_args[1], "") not in {"str", "texto"}:
+                            raise NativeBuildError("Linux int.from_bytes() byteorder must be str")
+                        _ifb_order = f"(const char*){self._value(call_args[1])}"
+                    if len(call_args) == 3:
+                        if types.get(call_args[2], "") not in {"bool", "int"}:
+                            raise NativeBuildError("Linux int.from_bytes() signed must be bool")
+                        _ifb_signed = self._value(call_args[2])
+                    out.append(
+                        f"    {_name(result)}=(long)piton_int_from_bytes("
+                        f"(PitonSeq*){self._value(call_args[0])},{_ifb_order},{_ifb_signed});"
+                    )
+                    types[result] = "int"
+                    return out
+                if method == "maketrans" and (
+                    owner_type == "class:bytes"
+                    or (
+                        owner_type == "builtin"
+                        and (aliases.get(obj) if aliases else None) in {"bytes", "octetos"}
+                    )
+                ):
+                    # BYTES_MAKETRANS_V1: bytes.maketrans(frm, to) -> 256-byte table
+                    if len(call_args) != 2:
+                        raise NativeBuildError("Linux bytes.maketrans() takes exactly 2 arguments")
+                    if types.get(call_args[0], "") not in {"bytes", "octetos"} or types.get(call_args[1], "") not in {"bytes", "octetos"}:
+                        raise NativeBuildError("Linux bytes.maketrans() requires two bytes arguments")
+                    out.append(
+                        f"    {_name(result)}=(long)piton_bytes_maketrans("
+                        f"(PitonSeq*){self._value(call_args[0])},(PitonSeq*){self._value(call_args[1])});"
+                    )
+                    types[result] = "bytes"
+                    return out
+                if method == "fromhex" and (
+                    owner_type == "class:float"
+                    or (
+                        owner_type == "builtin"
+                        and (aliases.get(obj) if aliases else None) in {"float"}
+                    )
+                ):
+                    # FLOAT_FROMHEX_V1: float.fromhex(str)
+                    if len(call_args) != 1:
+                        raise NativeBuildError("Linux float.fromhex() takes exactly one argument")
+                    if types.get(call_args[0], "") not in {"str", "texto"}:
+                        raise NativeBuildError("Linux float.fromhex() requires a string argument")
+                    out.append(
+                        f"    {_name(result)}=(long)piton_float_fromhex((const char*){self._value(call_args[0])});"
+                    )
+                    types[result] = "float"
                     return out
                 if owner_type in {"bytes", "bytearray"}:
                     self._emit_bytes_method(out, result, method, obj, list(call_args),
