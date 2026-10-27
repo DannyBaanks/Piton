@@ -1,0 +1,21 @@
+class HMAC:
+    funcionar __init__ (self, key, msg=Nada, digestmod=Nada):
+        self.key = key
+        self.digestmod = digestmod
+    funcionar update (self, msg):
+        pasar
+    funcionar copy (self):
+        devolver HMAC(self.key, digestmod=self.digestmod)
+    funcionar digest (self):
+        devolver b""
+    funcionar hexdigest (self):
+        devolver ""
+funcion new (key, msg=Nada, digestmod=Nada):
+    devolver HMAC(key, msg, digestmod)
+funcion digest (key, msg, digestmod):
+    h = HMAC(key, msg, digestmod)
+    devolver h.digest()
+funcion compare_digest (a, b):
+    devolver a == b
+trans_36 = b""
+trans_5C = b""

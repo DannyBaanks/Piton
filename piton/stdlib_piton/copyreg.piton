@@ -1,0 +1,15 @@
+dispatch_table = {}
+funcion constructor (obj):
+    devolver (obj.__class__, obj.__reduce_ex__(2))
+funcion pickle (obj):
+    devolver obj
+funcion pickle_complex (obj):
+    devolver obj
+funcion pickle_union (obj):
+    devolver obj
+funcion add_extension (mod, name, code):
+    pasar
+funcion remove_extension (mod, name):
+    pasar
+funcion clear_extension_cache ():
+    pasar

@@ -1,7 +1,7 @@
 # Parity corpus report v4 — CODIGO REAL (stdlib + tutorial CPython)
 
 - instrumento: `tools/parity_corpus_v4.py` | backend medido: **linux_x86**
-- oracle: CPython 3.12.3 | git: `8f43ed5` | fecha: 2026-10-27T19:44:37+00:00
+- oracle: CPython 3.12.3 | git: `18de9a5` | fecha: 2026-10-27T19:57:28+00:00
 - tier A (stdlib real, estatico, sin ejecucion): **167** archivos
 - tier B (tutorial oficial, ejecucional): **11** scripts
 
@@ -24,7 +24,7 @@ Poblacion SIN seleccion: todos los .py de nivel superior. Solo embudo estatico (
 |---|---|
 | MIR_FAIL | 127 |
 
-De los fallos MIR, **50** son `native module not supplied` (imports de la stdlib real de CPython: el backend nativo solo resuelve modulos propios de PITON).
+De los fallos MIR, **30** son `native module not supplied` (imports de la stdlib real de CPython: el backend nativo solo resuelve modulos propios de PITON).
 
 ## Hallazgos verificados (fallos trazados a su linea adaptada)
 

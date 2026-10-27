@@ -1,0 +1,54 @@
+EPOLLIN = 1
+EPOLLOUT = 4
+EPOLLERR = 8
+EPOLLHUP = 16
+EPOLLRDNORM = 64
+EPOLLRDBAND = 128
+EPOLLWRNORM = 256
+EPOLLWRBAND = 512
+EPOLLMSG = 1024
+EPOLLPRI = 2048
+EPOLLRDHUP = 4096
+EPOLLONESHOT = 1 << 30
+EPOLLET = 1 << 31
+EPOLL_CLOEXEC = 0o2000000
+funcion select (rlist, wlist, xlist, timeout=Nada):
+    devolver ([], [], [])
+funcion poll ():
+    class Poll:
+        funcionar register (self, fd, eventmask):
+            pasar
+        funcionar unregister (self, fd):
+            pasar
+        funcionar poll (self, timeout=-1):
+            devolver []
+    devolver Poll()
+funcion epoll ():
+    class Epoll:
+        funcionar register (self, fd, eventmask):
+            pasar
+        funcionar unregister (self, fd):
+            pasar
+        funcionar poll (self, timeout=-1, maxevents=-1):
+            devolver []
+        funcionar close (self):
+            pasar
+    devolver Epoll()
+funcion kqueue ():
+    class Kqueue:
+        funcionar control (self, changelist, max_events, timeout=Nada):
+            devolver []
+        funcionar close (self):
+            pasar
+    devolver Kqueue()
+funcion devpoll ():
+    class Devpoll:
+        funcionar register (self, fd, eventmask):
+            pasar
+        funcionar unregister (self, fd):
+            pasar
+        funcionar poll (self, timeout=-1):
+            devolver []
+        funcionar close (self):
+            pasar
+    devolver Devpoll()

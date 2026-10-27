@@ -1,0 +1,16 @@
+class WeakSet:
+    funcion __init__ (self, data=Nada):
+        self._data = set(data) si data sino set()
+    funcion __contains__ (self, item):
+        devolver item en self._data
+    funcion add (self, item):
+        self._data.add(item)
+    funcion discard (self, item):
+        self._data.discard(item)
+    funcion __iter__ (self):
+        para x en self._data:
+            producir x
+    funcion __len__ (self):
+        devolver len(self._data)
+funcion ref (obj, callback=Nada):
+    devolver obj

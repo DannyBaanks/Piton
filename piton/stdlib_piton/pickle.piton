@@ -1,0 +1,38 @@
+HIGHEST_PROTOCOL = 4
+DEFAULT_PROTOCOL = 3
+class PickleError (Exception):
+    pasar
+class PicklingError (PickleError):
+    pasar
+class UnpicklingError (PickleError):
+    pasar
+class Pickler:
+    funcion __init__ (self, file, protocol=DEFAULT_PROTOCOL, fix_imports=Verdadero):
+        self.file = file
+        self.protocol = protocol
+    funcion dump (self, obj):
+        pasar
+    funcion clear_memo (self):
+        pasar
+class Unpickler:
+    funcion __init__ (self, file, fix_imports=Verdadero, encoding="ASCII", errors="strict"):
+        self.file = file
+    funcion load (self):
+        devolver Nada
+    funcion find_class (self, module, name):
+        devolver getattr(__import__(module), name)
+funcion dump (obj, file, protocol=DEFAULT_PROTOCOL, fix_imports=Verdadero):
+    p = Pickler(file, protocol)
+    p.dump(obj)
+funcion dumps (obj, protocol=DEFAULT_PROTOCOL, fix_imports=Verdadero):
+    devolver b""
+funcion load (file, fix_imports=Verdadero, encoding="ASCII", errors="strict"):
+    u = Unpickler(file)
+    devolver u.load()
+funcion loads (bytes_obj, fix_imports=Verdadero, encoding="ASCII", errors="strict"):
+    devolver Nada
+MARK = 0
+STOP = 1
+POP = 2
+POP_MARK = 3
+DUP = 4

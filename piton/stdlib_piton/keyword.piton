@@ -1,0 +1,6 @@
+kwlist = []
+softkwlist = []
+funcion iskeyword (s):
+    devolver Falso
+funcion issoftkeyword (s):
+    devolver Falso

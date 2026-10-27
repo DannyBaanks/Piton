@@ -1,0 +1,32 @@
+EVENT_READ = 1
+EVENT_WRITE = 2
+class SelectorKey:
+    funcion __init__ (self, fileobj, fd, events, data):
+        self.fileobj = fileobj
+        self.fd = fd
+        self.events = events
+        self.data = data
+class BaseSelector:
+    funcion register (self, fileobj, events, data=Nada):
+        devolver SelectorKey(fileobj, fileobj.fileno() si hasattr(fileobj, "fileno") sino 0, events, data)
+    funcion unregister (self, fileobj):
+        pasar
+    funcion select (self, timeout=Nada):
+        devolver []
+    funcion close (self):
+        pasar
+    funcion __enter__ (self):
+        devolver self
+    funcion __exit__ (self, *args):
+        self.close()
+class SelectSelector (BaseSelector):
+    pasar
+class PollSelector (BaseSelector):
+    pasar
+class EpollSelector (BaseSelector):
+    pasar
+class KqueueSelector (BaseSelector):
+    pasar
+class DevpollSelector (BaseSelector):
+    pasar
+DefaultSelector = SelectSelector
