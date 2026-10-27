@@ -1,0 +1,167 @@
+{
+  "meta": {
+    "date": "2026-10-27T08:59:50+00:00",
+    "oracle": "CPython 3.12.3",
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "git_sha": "f85d73c",
+    "tool": "tools/parity_corpus_v4.py",
+    "tiers": "b",
+    "recursive": false,
+    "exclude": [],
+    "isolate": false
+  },
+  "results": {
+    "tier_b": {
+      "funnel": {
+        "total": 11,
+        "passed": {
+          "adapt": 11,
+          "parse": 11,
+          "mir": 11,
+          "build": 11
+        },
+        "pct": {
+          "adapt": 100.0,
+          "parse": 100.0,
+          "mir": 100.0,
+          "build": 100.0
+        },
+        "fail_classes": {},
+        "read_failed": 0
+      },
+      "run": {
+        "total": 11,
+        "by_bucket": {
+          "DIVERGENT_MISMATCH": 10,
+          "EQUIV": 1
+        },
+        "pct_equiv": 9.1,
+        "pct_honest_native": 9.1,
+        "pct_divergent": 90.9
+      },
+      "records": [
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/classes.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out= err=NameError: name Complex is not defined || oracle rc=0 out=EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC  err=",
+          "build_seconds": 0.086,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 12\ncolumna: 1\n\nPython rechazó la traducción:\nexpected an indented block after 'try' statement on line 11\n\n(    x .r ,x .i )",
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/controlflow.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out=Please enter an integer: err=EOFError: EOF when reading a line || oracle rc=0 out=Please enter an integer: EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC err=",
+          "build_seconds": 0.159,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/datastructures.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out= err=NameError: name collections__deque is not defined || oracle rc=0 out=EXC | {'pear', 'banana', 'apple', 'orange'} err=",
+          "build_seconds": 0.186,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/errors.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out=EXC err=NameError: name spam is not defined || oracle rc=0 out=EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC err=",
+          "build_seconds": 0.093,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/inputoutput.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out=The value of x is 32.5, and y is 40000... | 'hello, world\\n' | The value of pi is approximately 3.142. | My hovercraft is full of eels. | My hovercraft is full  err=TypeError: 'str' object has no attribute 'format' || oracle rc=0 out=The value of x is 32.5, and y is 40000... | 'hello, world\\n' | The value of pi is approximately 3.142. | My hovercraft is full of eels. | My hovercraf",
+          "build_seconds": 0.52,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/interpreter.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.182,
+          "roundtrip": true,
+          "native_rc": 0,
+          "oracle_rc": 0,
+          "bucket": "EQUIV"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/introduction.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out= err=NameError: name _ is not defined || oracle rc=0 out=EXC | EXC | EXC | First line. | Second line. | C:\\some | ame | C:\\some\\name |     Usage: thingy [OPTIONS] |     -h                        Display this usage mes err=<string>:132: SyntaxWarning: invalid escape sequence '\\s'",
+          "build_seconds": 0.117,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/modules.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out= err=NameError: name fibo is not defined || oracle rc=0 out=EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC err=",
+          "build_seconds": 0.092,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out= err=NameError: name os is not defined || oracle rc=0 out=EXC | Help on module os: |  | NAME |     os - OS routines for NT or Posix depending on what system we're on. |  | MODULE REFERENCE |     https://docs.python.org err=",
+          "build_seconds": 0.096,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib2.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out= err=NameError: name reprlib is not defined || oracle rc=0 out=[[[['black', 'cyan'], |    'white', |    ['green', 'red']], |   [['magenta', 'yellow'], |    'blue']]] | The wrap() method is just like fill() | except that it  err=",
+          "build_seconds": 0.108,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        },
+        {
+          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/venv.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "native rc=1 out= err=AttributeError || oracle rc=0 out= err=",
+          "build_seconds": 0.15,
+          "roundtrip": true,
+          "native_rc": 1,
+          "oracle_rc": 0,
+          "bucket": "DIVERGENT_MISMATCH"
+        }
+      ]
+    }
+  }
+}

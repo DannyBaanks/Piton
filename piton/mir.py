@@ -49,6 +49,17 @@ _BUILTIN_EXCEPTIONS |= {
     "PermissionError", "ProcessLookupError", "TimeoutError", "ConnectionError",
     "BrokenPipeError", "ChildProcessError", "BlockingIOError", "InterruptedError",
 }
+# EXC_GROUP_V1: ExceptionGroup / BaseExceptionGroup se manejan por NOMBRE,
+# igual que el resto de la familia builtin (piton_raise_set_args con la tupla
+# .args completa: mensaje + lista de sub-excepciones). El runtime no modela
+# todavia .exceptions ni el reparto de `except*` (fail-closed en
+# _lower_except); lo observable aqui es el tipo y el mensaje, que es lo que
+# ejercita errors.py (tutorial: raise dentro de try/except BaseException).
+_BUILTIN_EXCEPTION_PARENTS |= {
+    "ExceptionGroup": "Exception",
+    "BaseExceptionGroup": "BaseException",
+}
+_BUILTIN_EXCEPTIONS |= {"ExceptionGroup", "BaseExceptionGroup"}
 # BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
 # BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
 # `staticmethod` (abc) y `property` son del mismo tipo: no aportan metodos
@@ -5910,7 +5921,26 @@ class MIRLowerer:
                     raise MIRLoweringError(
                         f"native os.{node.attr} is not supported yet; only os.name is native"
                     )
-            if self._module_attr_chain(builder, node) is not None:
+            _mchain = self._module_attr_chain(builder, node)
+            if _mchain is not None:
+                # MODULE_FUNC_VALUE_V1: `modulo.func` en posicion de VALOR
+                # (copyreg.py: `return functools.reduce, (operator.or_, ...)`,
+                # el protocolo reduce de pickle devuelve la funcion sin
+                # invocarla). Si el simbolo cualificado es una FIRMA
+                # registrada, la referencia baja como `load` — el mismo op
+                # que `f = doble` — en vez del fail-closed generico. Sin el
+                # cualificado registrado se mantiene el rechazo honesto.
+                _mmod, _mattrs = _mchain
+                if len(_mattrs) == 1:
+                    _mq = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
+                    if (
+                        _mq in self.function_params
+                        or _mq in self.function_varargs
+                        or _mq in self.function_kwargs
+                    ):
+                        result = builder.temp()
+                        builder.emit("load", _mq, result=result)
+                        return result
                 raise MIRLoweringError(
                     "native module attribute value access is not supported yet; "
                     "use module function calls (e.g. 'pkg.sub.fn(...)')"
