@@ -1,5 +1,6 @@
 clase IntEnum :
-    pasar
+    funcion _convert_ (*args ,**kwargs ) :
+        lanzar NotImplementedError ('enum.IntEnum._convert_ no esta implementado en el backend nativo')
 
 
 clase IntFlag :
