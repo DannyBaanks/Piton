@@ -11664,6 +11664,40 @@ class LinuxCEmitter:
                         tuple(kw_args) if kw_args else (),
                     )
                     return out
+                if (
+                    method == "maketrans"
+                    and (
+                        owner_type == "class:str"
+                        # La forma real hoy: `load str` pasa por
+                        # BUILTIN_MARKER_V1 (CLASS_LOAD_V1 solo cubre dict y
+                        # slice), asi que el receiver llega tipado "builtin" y
+                        # el nombre de la clase vive en aliases.
+                        or (
+                            owner_type == "builtin"
+                            and (aliases.get(obj) if aliases else None) in {"str", "texto"}
+                        )
+                    )
+                ):
+                    # STR_MAKETRANS_V1 (forma de clase): en CPython
+                    # str.maketrans es un staticmethod, asi que la llamada
+                    # str.maketrans(dict) lleva la CLASE de receptor y no pasa
+                    # por la tabla de metodos de instancia. Sin esta rama cae
+                    # al piton_call_dynamic generico, que lee un temp sin
+                    # codigo C emitido (SIGSEGV en runtime) y deja el
+                    # resultado sin tipo: el siguiente uso revienta en BUILD.
+                    # Mismo molde que dict.fromkeys sobre la clase.
+                    if len(call_args) != 1:
+                        raise NativeBuildError("Linux str.maketrans() requires exactly one argument")
+                    if types.get(call_args[0], "") != "dict":
+                        raise NativeBuildError("Linux str.maketrans() requires a dict argument")
+                    out.append(
+                        f"    {_name(result)}=(long)piton_str_maketrans((PitonDict*){self._value(call_args[0])});"
+                    )
+                    # Sin _dict_val_types: la tabla mezcla str y None segun la
+                    # entrada, igual que en la forma de instancia — declarar un
+                    # tipo fijo haria que las dos formas divergieran.
+                    types[result] = "dict"
+                    return out
                 if owner_type in {"bytes", "bytearray"}:
                     self._emit_bytes_method(out, result, method, obj, list(call_args),
                                             owner_type == "bytearray", types)
