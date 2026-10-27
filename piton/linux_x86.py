@@ -377,6 +377,19 @@ static void piton_seq_append(PitonSeq*s,PitonSlot v){if(s->length>=s->capacity){
 static int piton_ws(unsigned char c){return c==' '||c=='\t'||c=='\n'||c=='\r'||c=='\v'||c=='\f';}
 static long piton_str_case(const char*s,int upper){usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c>=0x80){piton_write(2,"ValueError: str case conversion on non-ASCII text is not supported in the native subset\n",88);piton_exit(1);}p[i]=(char)(upper?((c>='a'&&c<='z')?c-32:c):((c>='A'&&c<='Z')?c+32:c));}p[n]=0;return(long)p;}
 static long piton_str_find(const char*s,const char*n){usize hl=piton_strlen(s),nl=piton_strlen(n);if(nl==0)return 0;if(nl>hl)return -1;for(usize i=0;i+nl<=hl;++i){usize j=0;while(j<nl&&s[i+j]==n[j])++j;if(j==nl)return(long)i;}return -1;}
+/* STR_FIND_OFFSET_V1: str.find(sub, start) — busqueda desde el offset
+   start con la misma receta que startswith/endswith: negativo se mide
+   desde el final y se recorta a 0; start > len devuelve -1 (CPython). */
+static long piton_str_find_at(const char*s,const char*n,long start){
+  usize hl=piton_strlen(s),nl=piton_strlen(n);
+  long st=start;
+  if(st<0)st=(long)hl+st;
+  if(st<0)st=0;
+  if(st>(long)hl)return -1;
+  if(nl==0)return st;
+  for(usize i=(usize)st;i+nl<=hl;++i){usize k=0;while(k<nl&&s[i+k]==n[k])++k;if(k==nl)return(long)i;}
+  return -1;
+}
 static long piton_str_startswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[i]!=p[i])return 0;return 1;}
 static long piton_str_endswith(const char*s,const char*p){usize hl=piton_strlen(s),nl=piton_strlen(p);if(nl>hl)return 0;for(usize i=0;i<nl;++i)if(s[hl-nl+i]!=p[i])return 0;return 1;}
 /* STR_OFFSET_PREFIX_V1: s.startswith(p, start) / s.endswith(p, start) — la
@@ -5428,6 +5441,18 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=(long)piton_str_case((const char*){operand},{1 if method == 'upper' else 0});")
             types[result] = "str"
         elif method == "find":
+            # STR_FIND_OFFSET_V1: `s.find(sub, start)` — el offset opcional
+            # baja a piton_str_find_at (startswith/endswith ya tenian su
+            # variante _at). _markupbase: `rawdata.find(">", j)`.
+            if len(call_args) == 2:
+                if types.get(call_args[1]) not in {"int", "bool"}:
+                    raise NativeBuildError("Linux str.find() requires an int start offset")
+                out.append(
+                    f"    {_name(result)}=piton_str_find_at((const char*){operand},"
+                    f"{require_str(0, 'a str argument')},{self._value(call_args[1])});"
+                )
+                types[result] = "int"
+                return
             require_count(1, "exactly one str argument")
             out.append(f"    {_name(result)}=piton_str_find((const char*){operand},{require_str(0, 'a str argument')});")
             types[result] = "int"
