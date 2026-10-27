@@ -952,6 +952,24 @@ static long piton_dict_fromkeys(PitonSeq*keys,int has_val,int val_kind,long val)
   }
   return(long)d;
 }
+/* DICT_FROMKEYS_STR_V1: dict.fromkeys(<str>) — CPython acepta cualquier
+ * iterable; el str es el caso real (shlex: dict.fromkeys(punctuation_chars)).
+ * Cada byte es una clave de un caracter, igual que en CPython. El no-ASCII
+ * falla en tiempo de ejecucion: iterar bytes produciria claves distintas de
+ * las de CPython y eso es divergir en silencio. */
+static long piton_dict_fromkeys_str(const char*s,int has_val,int val_kind,long val){
+  usize n=piton_strlen(s);
+  PitonDict*d=piton_dict_new((long)n);
+  d->length=0;
+  for(usize i=0;i<n;++i){
+    unsigned char c=(unsigned char)s[i];
+    if(c>=0x80){piton_write(2,"ValueError: dict.fromkeys() with non-ASCII str keys is not supported in the native subset\n",90);piton_exit(1);}
+    char*k=piton_alloc(2);k[0]=(char)c;k[1]=0;
+    PitonSlot v;v.bits=val;v.kind=val_kind;
+    piton_dict_set(d,piton_slot((long)k,PK_STR),has_val?v:(PitonSlot){0,PK_NONE});
+  }
+  return(long)d;
+}
 /* SLICE_INDICES_V1: (start, stop, step) normalizados a la longitud n. */
 static long piton_slice_indices(PitonSlice*sl,long n){
   long step=sl->has_step?sl->step:1;
@@ -1362,6 +1380,45 @@ static long piton_ord(const char*s){if(!s||!s[0]){piton_raise_set("TypeError","o
 static long piton_chr(long cp);
 static long piton_percent_chr(long cp){if(cp<0||cp>0x10FFFF){piton_raise_set("OverflowError","%c arg not in range(0x110000)");return 0;}return piton_chr(cp);}
 static long piton_chr(long cp){if(cp<0||cp>0x10FFFF){piton_raise_set("ValueError","chr() arg not in range(0x110000)");return 0;}char*p=piton_alloc(5);if(cp<0x80){p[0]=(char)cp;p[1]=0;}else if(cp<0x800){p[0]=(char)(0xC0|(cp>>6));p[1]=(char)(0x80|(cp&0x3F));p[2]=0;}else if(cp<0x10000){p[0]=(char)(0xE0|(cp>>12));p[1]=(char)(0x80|((cp>>6)&0x3F));p[2]=(char)(0x80|(cp&0x3F));p[3]=0;}else{p[0]=(char)(0xF0|(cp>>18));p[1]=(char)(0x80|((cp>>12)&0x3F));p[2]=(char)(0x80|((cp>>6)&0x3F));p[3]=(char)(0x80|(cp&0x3F));p[4]=0;}return(long)p;}
+/* STR_MAKETRANS_V1: str.maketrans(dict) -> tabla int(ord) -> str|None, que
+ * es exactamente lo que piton_str_translate ya consume (claves enteras y
+ * valor NULL = borrar). shlex: wordchars.maketrans(dict.fromkeys(
+ * punctuation_chars)) — claves de un byte y valores None.
+ * CPython acepta claves str de longitud 1 o int, y valores str/None/int
+ * (el int se codifica como UTF-8 con piton_chr). Lo que piton_str_translate
+ * no puede honrar — claves no ASCII, porque solo sustituye posiciones ASCII
+ * — falla aqui en tiempo de ejecucion: no se diverge en silencio. */
+static long piton_str_maketrans(PitonDict*m){
+  PitonDict*t=piton_dict_new(0);
+  if(!m)return(long)t;
+  for(long i=0;i<m->length;++i){
+    PitonSlot k=m->items[i].key;
+    long ord;
+    if(k.kind==PK_STR){
+      const char*ks=(const char*)k.bits;
+      if(!ks||piton_strlen(ks)!=1){piton_write(2,"ValueError: str.maketrans() keys must be single characters\n",59);piton_exit(1);}
+      if((unsigned char)ks[0]>=0x80){piton_write(2,"ValueError: str.maketrans() with non-ASCII keys is not supported in the native subset\n",86);piton_exit(1);}
+      ord=(long)(unsigned char)ks[0];
+    }else if(k.kind==PK_INT){
+      if(k.bits<0||k.bits>=0x80){piton_write(2,"ValueError: str.maketrans() with non-ASCII keys is not supported in the native subset\n",86);piton_exit(1);}
+      ord=k.bits;
+    }else{
+      piton_write(2,"ValueError: str.maketrans() keys must be str or int\n",52);piton_exit(1);
+    }
+    PitonSlot v=m->items[i].value;
+    long vb=0;int vk=PK_NONE;
+    if(v.kind==PK_NONE){vb=0;vk=PK_NONE;}
+    else if(v.kind==PK_STR){vb=v.bits;vk=PK_STR;}
+    else if(v.kind==PK_INT){
+      if(v.bits<0||v.bits>0x10FFFF){piton_write(2,"ValueError: str.maketrans() value out of range\n",47);piton_exit(1);}
+      vb=piton_chr(v.bits);vk=PK_STR;
+    }else{
+      piton_write(2,"ValueError: str.maketrans() value must be str, int or None\n",59);piton_exit(1);
+    }
+    piton_dict_set(t,piton_slot(ord,PK_INT),(PitonSlot){vb,vk});
+  }
+  return(long)t;
+}
 static long piton_bin(long v){char*p=piton_alloc(70);usize o=0;unsigned long m;if(v<0){p[o++]='-';m=(unsigned long)(-(v+1))+1;}else m=(unsigned long)v;p[o++]='0';p[o++]='b';char tmp[64];long n=0;do{tmp[n++]=(char)('0'+(m&1));m>>=1;}while(m);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static long piton_round_float(long bits){double x=piton_bits_double(bits);double ax=x<0?-x:x;if(ax>=9.0e18){piton_raise_set("OverflowError","round() float too large to convert to int");return 0;}long t=(long)ax;double frac=ax-(double)t;long r;if(frac>0.5)r=t+1;else if(frac<0.5)r=t;else r=(t&1)?t+1:t;return x<0?-r:r;}
 /* ROUND_NDIGITS_V1: round(x, n) devuelve FLOAT en CPython y redondea
@@ -5578,6 +5635,17 @@ class LinuxCEmitter:
             require_count(0, "no arguments")
             out.append(f"    {_name(result)}=(long)piton_str_swapcase((const char*){operand});")
             types[result] = "str"
+        elif method == "maketrans":
+            # STR_MAKETRANS_V1: str.maketrans(dict) -> tabla int -> str|None,
+            # que es exactamente la que str.translate ya consume. El dict puede
+            # ser un valor de tiempo de ejecucion (shlex:
+            # dict.fromkeys(punctuation_chars)), asi que la validacion vive en
+            # el helper C, no aqui.
+            require_count(1, "exactly one argument (a dict)")
+            if types.get(call_args[0], "") != "dict":
+                raise NativeBuildError("Linux str.maketrans() requires a dict argument")
+            out.append(f"    {_name(result)}=(long)piton_str_maketrans((PitonDict*){self._value(call_args[0])});")
+            types[result] = "dict"
         elif method == "translate":
             # STR_TRANSLATE_V1: str.translate(dict) — mapeo str -> str/''.
             require_count(1, "exactly one argument (a dict)")
@@ -6000,6 +6068,17 @@ class LinuxCEmitter:
             require_count(0, "no arguments")
             out.append(f"    {_name(result)}=(long)piton_str_swapcase((const char*){operand});")
             types[result] = "str"
+        elif method == "maketrans":
+            # STR_MAKETRANS_V1: str.maketrans(dict) -> tabla int -> str|None,
+            # que es exactamente la que str.translate ya consume. El dict puede
+            # ser un valor de tiempo de ejecucion (shlex:
+            # dict.fromkeys(punctuation_chars)), asi que la validacion vive en
+            # el helper C, no aqui.
+            require_count(1, "exactly one argument (a dict)")
+            if types.get(call_args[0], "") != "dict":
+                raise NativeBuildError("Linux str.maketrans() requires a dict argument")
+            out.append(f"    {_name(result)}=(long)piton_str_maketrans((PitonDict*){self._value(call_args[0])});")
+            types[result] = "dict"
         elif method == "translate":
             # STR_TRANSLATE_V1: str.translate(dict) — mapeo str -> str/''.
             require_count(1, "exactly one argument (a dict)")
@@ -11594,13 +11673,18 @@ class LinuxCEmitter:
                     # claves son los elementos; el valor es el mismo para todas.
                     if len(call_args) not in (1, 2):
                         raise NativeBuildError("Linux dict.fromkeys() requires one or two arguments")
-                    if types.get(call_args[0], "") not in {"list", "tuple"}:
-                        raise NativeBuildError("Linux dict.fromkeys() requires a list or tuple of keys")
+                    _fk_kind0 = types.get(call_args[0], "")
+                    if _fk_kind0 not in {"list", "tuple", "str"}:
+                        raise NativeBuildError("Linux dict.fromkeys() requires a list, tuple or str of keys")
                     _has_val = 1 if len(call_args) == 2 else 0
                     _vkind = self._kind(types.get(call_args[1], "none")) if _has_val else "PK_NONE"
                     _vexpr = self._value(call_args[1]) if _has_val else "0"
+                    # DICT_FROMKEYS_STR_V1: el str no es un PitonSeq y tiene
+                    # helper propio (shlex: dict.fromkeys(punctuation_chars)).
+                    _fk_cast = "(const char*)" if _fk_kind0 == "str" else "(PitonSeq*)"
+                    _fk_fn = "piton_dict_fromkeys_str" if _fk_kind0 == "str" else "piton_dict_fromkeys"
                     out.append(
-                        f"    {_name(result)}=(long)piton_dict_fromkeys((PitonSeq*){self._value(call_args[0])},"
+                        f"    {_name(result)}=(long){_fk_fn}({_fk_cast}{self._value(call_args[0])},"
                         f"{_has_val},{_vkind},{_vexpr});"
                     )
                     types[result] = "dict"

@@ -6623,9 +6623,10 @@ class MIRLowerer:
         simbolo, el emisor no lo reconocia como clase y el resultado quedaba
         tipado `int`, con lo que `parser.add_argument(..., action=...)` moria
         en BUILD por "method calls with keyword arguments". El __init__ baja
-        con el receiver separado (igual que siempre) y los kwargs en el slot
-        kw de method_call: el emisor los empaqueta contra la firma real, asi
-        que un __init__ sin **kwargs sigue fallando cerrado en BUILD.
+        con el receiver separado (igual que siempre); los kwargs se enlazan
+        aqui contra la firma real cuando el __init__ no tiene **kwargs
+        (CONSTRUCTOR_KW_BIND_V1) y viajan en el slot kw de method_call cuando
+        si la tiene, que es lo unico que el emisor sabe empaquetar.
         """
         result = builder.temp()
         parent_name = self.class_parents.get(cls_name)
@@ -6646,6 +6647,31 @@ class MIRLowerer:
                 raise MIRLoweringError(
                     f"native class '{cls_name}' has no __init__ to receive keyword arguments"
                 )
+            return result
+        # CONSTRUCTOR_KW_BIND_V1: `Clase(a, k=b)` con un __init__ SIN
+        # **kwargs. El emisor no puede empaquetar los kw contra una firma
+        # fija (CONSTRUCTOR_KW_V1 falla cerrado en BUILD; shlex.split hace
+        # `shlex(s, posix=posix)`), y aqui la firma es inequivoca: el mismo
+        # dict no ambiguo que usa KWRG_SELF_KW_V1. Se enlaza por nombre y se
+        # rellenan los defaults ANTES de bajar los argumentos, que asi no se
+        # bajan dos veces. Con **kwargs se mantiene el camino del emisor, que
+        # ya funciona. Sin **kwargs y sin firma conocida, el viejo camino
+        # sigue fallando cerrado en BUILD como antes.
+        _inisym = f"{init_class}____init__"
+        if (
+            node.keywords
+            and all(k.arg is not None for k in node.keywords)
+            and _inisym in self.function_params
+            and not self.function_kwargs.get(_inisym)
+        ):
+            _bound = self._lower_variadic_call(
+                builder, _inisym, node.args, node.keywords, receiver=result,
+            )
+            ignored = builder.temp()
+            builder.emit(
+                "method_call", init_class, "__init__", result,
+                tuple(_bound[1:]), result=ignored,
+            )
             return result
         args = tuple(self._lower_expr(builder, arg) for arg in node.args)
         if node.keywords:
@@ -6670,7 +6696,12 @@ class MIRLowerer:
     def _lower_variadic_call(
         self, builder: _Builder, func_name: str,
         positional: Sequence[HIRNode], keywords: Sequence[HIRNode],
+        receiver: str | None = None,
     ) -> tuple[str, ...]:
+        # receiver: temp ya emitido que ocupa params[0] (el self). Cuando se
+        # pasa, `positional` NO incluye el receiver: son solo los argumentos
+        # del call. Lo usa CONSTRUCTOR_KW_BIND_V1, donde el receiver es el
+        # objeto que acaba de crear object_new y no existe como HIRNode.
         positional_only = self.function_posonly[func_name]
         keyword_only = self.function_kwonly[func_name]
         vararg = self.function_varargs[func_name]
@@ -6684,8 +6715,14 @@ class MIRLowerer:
         defaults = self.function_defaults[func_name]
         positional_values: list[str | None] = [None] * len(positional_params)
         keyword_values: list[str | None] = [None] * len(keyword_only)
-        for index, arg in enumerate(positional[:len(positional_params)]):
-            positional_values[index] = self._lower_expr(builder, arg)
+        _recv = 0
+        if receiver is not None:
+            if not positional_params:
+                raise MIRLoweringError(f"native call to {func_name} cannot take a receiver")
+            positional_values[0] = receiver
+            _recv = 1
+        for index, arg in enumerate(positional[:len(positional_params) - _recv]):
+            positional_values[index + _recv] = self._lower_expr(builder, arg)
         extra_keywords: list[HIRNode] = []
         for keyword in keywords:
             if keyword.arg in regular_params:
@@ -6715,7 +6752,7 @@ class MIRLowerer:
                 builder.emit("const", defaults[name], result=default)
                 keyword_values[index] = default
         extra_values = tuple(
-            self._lower_expr(builder, arg) for arg in positional[len(positional_params):]
+            self._lower_expr(builder, arg) for arg in positional[len(positional_params) - _recv:]
         )
         if extra_values and not vararg:
             raise MIRLoweringError(f"too many positional arguments to {func_name}")
