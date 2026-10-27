@@ -558,7 +558,7 @@ static long piton_str_join(const char*sep,PitonSeq*items){usize sl=piton_strlen(
 static PitonBytes* piton_bytes_concat(PitonBytes* a,PitonBytes* b);
 static int piton_maybe_ptr(long bits);
 static void piton_report_unhandled(void);
-/* piton_strtod_local ya esta declarada en float_repr.h (emitido antes). */
+static double piton_strtod_local(const char*,char**);
 /* BYTES_CONCAT_DYN_V1: `bytes + X` donde X puede tener tipo estatico int
    (inferencia de tupla desestructurada) pero ser bytes en runtime. Verifica
    el tipo real antes de concatenar; si no es bytes, TypeError claro. */
@@ -1481,12 +1481,13 @@ static long piton_bytes_maketrans(PitonSeq*frm,PitonSeq*to){
   return(long)r;
 }
 /* FLOAT_FROMHEX_V1: float.fromhex(str) — classmethod. Hex float parsing
- * (0x1.23p+4) no esta implementado en piton_strtod_local (solo decimal).
- * Falla cerrado con mensaje claro en vez de devolver 0.0 silenciosamente. */
+ * (0x1.23p+4) delega a piton_strtod_local (ya implementado). Falla cerrado
+ * si str no es str/bytes o parsing no avanza (formato invalido). */
 static long piton_float_fromhex(const char*s){
   if(!s){piton_write(2,"TypeError: float.fromhex() argument must be a string\n",49);piton_exit(1);}
-  piton_write(2,"NotImplementedError: float.fromhex() hex parsing not implemented in native subset\n",73);piton_exit(1);
-  return 0;
+  char*end=0; double d=piton_strtod_local(s,&end);
+  if(end==s){piton_write(2,"ValueError: float.fromhex() invalid hex format\n",45);piton_exit(1);}
+  return piton_double_bits(d);
 }
 static long piton_bin(long v){char*p=piton_alloc(70);usize o=0;unsigned long m;if(v<0){p[o++]='-';m=(unsigned long)(-(v+1))+1;}else m=(unsigned long)v;p[o++]='0';p[o++]='b';char tmp[64];long n=0;do{tmp[n++]=(char)('0'+(m&1));m>>=1;}while(m);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static long piton_round_float(long bits){double x=piton_bits_double(bits);double ax=x<0?-x:x;if(ax>=9.0e18){piton_raise_set("OverflowError","round() float too large to convert to int");return 0;}long t=(long)ax;double frac=ax-(double)t;long r;if(frac>0.5)r=t+1;else if(frac<0.5)r=t;else r=(t&1)?t+1:t;return x<0?-r:r;}
@@ -3265,9 +3266,62 @@ static long piton_cx_div(PitonComplexVal a,PitonComplexVal b){
 static long piton_cx_neg(long b){PitonComplex*c=(PitonComplex*)b;return(long)piton_complex_new(-c->re,-c->im);}
 static long piton_cx_eq(PitonComplexVal x,PitonComplexVal y){return(x.re==y.re&&x.im==y.im)?1:0;}
 static int piton_cx_truthy_bits(long bits){PitonComplex*c=(PitonComplex*)bits;return(c->re!=0.0||c->im!=0.0)?1:0;}
+/* HEX_FLOAT_V1: parsing de hex floats (0x1.23p+4, -0x1p-2, 0x1.921fb54442d18p+1).
+ * Soporta: prefijo 0x/0X opcional, digitos hex [0-9a-fA-F], punto decimal opcional,
+ * EXPONENTE OBLIGATORIO p/P con signo opcional y digitos decimales (base 2). */
 static double piton_strtod_local(const char*s,char**end){
   const char*p=s;int neg=0;
   if(*p=='+'||*p=='-'){neg=(*p=='-');++p;}
+  /* HEX FLOAT: detecta 0x/0X O p/P exponent (CPython acepta 1.5p+2 sin 0x) */
+  int is_hex = 0;
+  const char* p_save = p;
+  if(*p=='0' && (p[1]=='x' || p[1]=='X')){
+    is_hex = 1; p += 2;
+  } else {
+    /* peek ahead for p/P to decide hex mode */
+    const char* q = p;
+    while((*q>='0'&&*q<='9')||*q=='.')++q;
+    if(*q=='p' || *q=='P') is_hex = 1;
+  }
+  if(is_hex){
+    double mantissa = 0.0; int has_digits = 0;
+    double div = 1.0; /* 16^(-num_frac_digits) */
+    /* parte entera hex */
+    while((*p>='0'&&*p<='9')||(*p>='a'&&*p<='f')||(*p>='A'&&*p<='F')){
+      int d = (*p>='0'&&*p<='9')? *p-'0' : (*p>='a'&&*p<='f')? *p-'a'+10 : *p-'A'+10;
+      mantissa = mantissa * 16.0 + d;
+      has_digits = 1; ++p;
+    }
+    /* parte fraccionaria hex */
+    if(*p == '.'){
+      ++p;
+      while((*p>='0'&&*p<='9')||(*p>='a'&&*p<='f')||(*p>='A'&&*p<='F')){
+        int d = (*p>='0'&&*p<='9')? *p-'0' : (*p>='a'&&*p<='f')? *p-'a'+10 : *p-'A'+10;
+        mantissa = mantissa * 16.0 + d;
+        div *= 16.0; ++p; has_digits = 1;
+      }
+    }
+    if(!has_digits){*end=(char*)s; return 0.0;}
+    mantissa /= div;
+    /* EXPONENTE p/P OBLIGATORIO en hex float */
+    if(*p!='p' && *p!='P'){*end=(char*)s; return 0.0;}
+    ++p;
+    int exp_neg = 0;
+    if(*p=='+' || *p=='-'){exp_neg=(*p=='-'); ++p;}
+    int exp_val = 0; int has_exp = 0;
+    while(*p>='0' && *p<='9'){exp_val = exp_val*10 + (*p-'0'); ++p; has_exp=1;}
+    if(!has_exp){*end=(char*)s; return 0.0;}
+    double result = mantissa;
+    /* aplica exponente 2^exp SIN ldexp (no esta en -nostdlib) */
+    if(exp_neg){
+      while(exp_val--) result *= 0.5;
+    }else{
+      while(exp_val--) result *= 2.0;
+    }
+    *end = (char*)p;
+    return neg ? -result : result;
+  }
+  /* DECIMAL (original) */
   double ip=0.0;int has=0;
   while(*p>='0'&&*p<='9'){ip=ip*10.0+(*p-'0');++p;has=1;}
   if(*p=='.'){++p;double div=1.0;while(*p>='0'&&*p<='9'){ip=ip*10.0+(*p-'0');div*=10.0;++p;has=1;}ip/=div;}
