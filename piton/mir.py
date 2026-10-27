@@ -4160,6 +4160,40 @@ class MIRLowerer:
                     result = builder.temp()
                     builder.emit("call", symbol, args, result=result)
                     return result
+            # MODULE_ATTR_VARIADIC_CALL_V1: `alias.metodo(a, b, c)` donde
+            # `alias` viene de un from-import (no de un import) y el destino
+            # esta declarado VARIADICO. Sin esta rama la llamada bajaba como
+            # method_call generico y el emisor emitia argumentos crudos en un
+            # prototipo `(args, kwargs)` -> "too many arguments to function"
+            # en gcc (signal: `from enum import IntEnum as _IntEnum` +
+            # `_IntEnum._convert_(...)`). El guard es estricto: solo se toma
+            # el camino estatico cuando el PRIMER parametro es el vararg o el
+            # kwarg, es decir cuando la firma no espera receiver ligado — asi
+            # no se puede reordenar un cls/self por accidente. Cualquier otro
+            # caso conserva el comportamiento anterior (falla cerrada).
+            if (
+                node.func.kind == HIRKind.ATTR
+                and node.func.value.kind == HIRKind.LOAD
+                and node.func.value.name in builder.from_import_aliases
+            ):
+                _vqual = builder.from_import_aliases[node.func.value.name].replace(".", "__")
+                _vsym = f"{_vqual}__{node.func.attr}"
+                _vparams = self.function_params.get(_vsym)
+                _vva = self.function_varargs.get(_vsym)
+                _vkw = self.function_kwargs.get(_vsym)
+                if (
+                    _vparams
+                    and (_vva is not None or _vkw is not None)
+                    and _vparams[0] in {_vva, _vkw}
+                ):
+                    _vargs = self._lower_variadic_call(
+                        builder, _vsym, node.args, node.keywords
+                    )
+                    _vres = builder.temp()
+                    builder.emit(
+                        "call", _vsym, _vargs, _active_handler(builder), result=_vres
+                    )
+                    return _vres
             if (
                 node.func.kind == HIRKind.ATTR
                 and node.func.value.kind == HIRKind.LOAD
@@ -4375,6 +4409,47 @@ class MIRLowerer:
                     # Para metodos con firma declarada, _lower_variadic_call hace
                     # match a parametros nombrados y falla cerrado si no hay
                     # **kwargs.
+                    # KWRG_SELF_KW_V1: `self.m(x=1)` con m declarado sobre
+                    # parametros NOMBRADOS. Antes solo existia el empaquetado
+                    # **kwargs del emisor, asi que cualquier metodo de clase de
+                    # usuario con un parametro con default reventaba en BUILD
+                    # (_markupbase: `self.parse_comment(j, report=0)`). El
+                    # receiver es self/cls (un LOAD: bajarlo dos veces no tiene
+                    # efectos), la clase estatica resuelve el simbolo por MRO y
+                    # _lower_variadic_call enlaza por nombre + rellena defaults
+                    # desde el dict no ambiguo (un `None` puede ser default o
+                    # parametro obligatorio; la lista del emisor no distingue).
+                    # El metodo baja SIN kw al path generico, que re-despacha
+                    # por el tipo del receiver.
+                    if (
+                        node.func.value.kind == HIRKind.LOAD
+                        and node.func.value.name in {"self", "cls"}
+                        and builder.super_class
+                        and not any(k.arg is None for k in (node.keywords or ()))
+                    ):
+                        _kwmro = (
+                            self._mro_memo.get(builder.super_class)
+                            or self._compute_mro(builder.super_class)
+                            or [builder.super_class]
+                        )
+                        _kwsym = None
+                        for _kwcls in _kwmro:
+                            _kwtry = f"{_kwcls}__{node.func.attr}"
+                            if _kwtry in self.function_params:
+                                _kwsym = _kwtry
+                                break
+                        if _kwsym is not None:
+                            _kwowner = self._lower_expr(builder, node.func.value)
+                            _kwargs = self._lower_variadic_call(
+                                builder, _kwsym,
+                                (node.func.value, *node.args), node.keywords,
+                            )
+                            _kwresult = builder.temp()
+                            builder.emit(
+                                "method_call", None, node.func.attr, _kwowner,
+                                _kwargs[1:], result=_kwresult,
+                            )
+                            return _kwresult
                     if (
                         node.func.value.kind == HIRKind.LOAD
                         and node.func.value.name in builder.module_aliases
@@ -5287,6 +5362,40 @@ class MIRLowerer:
                     result = builder.temp()
                     builder.emit("call", symbol, args, _active_handler(builder), result=result)
                     return result
+            # MODULE_ATTR_VARIADIC_CALL_V1: `alias.metodo(a, b, c)` donde
+            # `alias` viene de un from-import (no de un import) y el destino
+            # esta declarado VARIADICO. Sin esta rama la llamada bajaba como
+            # method_call generico y el emisor emitia argumentos crudos en un
+            # prototipo `(args, kwargs)` -> "too many arguments to function"
+            # en gcc (signal: `from enum import IntEnum as _IntEnum` +
+            # `_IntEnum._convert_(...)`). El guard es estricto: solo se toma
+            # el camino estatico cuando el PRIMER parametro es el vararg o el
+            # kwarg, es decir cuando la firma no espera receiver ligado — asi
+            # no se puede reordenar un cls/self por accidente. Cualquier otro
+            # caso conserva el comportamiento anterior (falla cerrada).
+            if (
+                node.func.kind == HIRKind.ATTR
+                and node.func.value.kind == HIRKind.LOAD
+                and node.func.value.name in builder.from_import_aliases
+            ):
+                _vqual = builder.from_import_aliases[node.func.value.name].replace(".", "__")
+                _vsym = f"{_vqual}__{node.func.attr}"
+                _vparams = self.function_params.get(_vsym)
+                _vva = self.function_varargs.get(_vsym)
+                _vkw = self.function_kwargs.get(_vsym)
+                if (
+                    _vparams
+                    and (_vva is not None or _vkw is not None)
+                    and _vparams[0] in {_vva, _vkw}
+                ):
+                    _vargs = self._lower_variadic_call(
+                        builder, _vsym, node.args, node.keywords
+                    )
+                    _vres = builder.temp()
+                    builder.emit(
+                        "call", _vsym, _vargs, _active_handler(builder), result=_vres
+                    )
+                    return _vres
             if (
                 node.func.kind == HIRKind.ATTR
                 and node.func.value.kind == HIRKind.LOAD
@@ -5501,6 +5610,47 @@ class MIRLowerer:
                     # Para metodos con firma declarada, _lower_variadic_call hace
                     # match a parametros nombrados y falla cerrado si no hay
                     # **kwargs.
+                    # KWRG_SELF_KW_V1: `self.m(x=1)` con m declarado sobre
+                    # parametros NOMBRADOS. Antes solo existia el empaquetado
+                    # **kwargs del emisor, asi que cualquier metodo de clase de
+                    # usuario con un parametro con default reventaba en BUILD
+                    # (_markupbase: `self.parse_comment(j, report=0)`). El
+                    # receiver es self/cls (un LOAD: bajarlo dos veces no tiene
+                    # efectos), la clase estatica resuelve el simbolo por MRO y
+                    # _lower_variadic_call enlaza por nombre + rellena defaults
+                    # desde el dict no ambiguo (un `None` puede ser default o
+                    # parametro obligatorio; la lista del emisor no distingue).
+                    # El metodo baja SIN kw al path generico, que re-despacha
+                    # por el tipo del receiver.
+                    if (
+                        node.func.value.kind == HIRKind.LOAD
+                        and node.func.value.name in {"self", "cls"}
+                        and builder.super_class
+                        and not any(k.arg is None for k in (node.keywords or ()))
+                    ):
+                        _kwmro = (
+                            self._mro_memo.get(builder.super_class)
+                            or self._compute_mro(builder.super_class)
+                            or [builder.super_class]
+                        )
+                        _kwsym = None
+                        for _kwcls in _kwmro:
+                            _kwtry = f"{_kwcls}__{node.func.attr}"
+                            if _kwtry in self.function_params:
+                                _kwsym = _kwtry
+                                break
+                        if _kwsym is not None:
+                            _kwowner = self._lower_expr(builder, node.func.value)
+                            _kwargs = self._lower_variadic_call(
+                                builder, _kwsym,
+                                (node.func.value, *node.args), node.keywords,
+                            )
+                            _kwresult = builder.temp()
+                            builder.emit(
+                                "method_call", None, node.func.attr, _kwowner,
+                                _kwargs[1:], result=_kwresult,
+                            )
+                            return _kwresult
                     if (
                         node.func.value.kind == HIRKind.LOAD
                         and node.func.value.name in builder.module_aliases
