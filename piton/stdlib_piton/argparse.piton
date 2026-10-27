@@ -1,0 +1,15 @@
+clase ArgumentParser :
+    funcion __init__ (self ,*argumentos ,**palabras ):
+        lanzar NotImplementedError ('argparse.ArgumentParser.__init__ no esta implementado en el backend nativo')
+
+    funcion add_argument (self ,*argumentos ,**palabras ):
+        lanzar NotImplementedError ('argparse.ArgumentParser.add_argument no esta implementado en el backend nativo')
+
+    funcion parse_args (self ,*argumentos ,**palabras ):
+        lanzar NotImplementedError ('argparse.ArgumentParser.parse_args no esta implementado en el backend nativo')
+
+    funcion exit (self ,*argumentos ,**palabras ):
+        lanzar NotImplementedError ('argparse.ArgumentParser.exit no esta implementado en el backend nativo')
+
+    funcion error (self ,*argumentos ,**palabras ):
+        lanzar NotImplementedError ('argparse.ArgumentParser.error no esta implementado en el backend nativo')

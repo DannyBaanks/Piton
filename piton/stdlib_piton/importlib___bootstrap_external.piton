@@ -1,5 +1,15 @@
 clase SourceFileLoader :
-    pasar
+    funcion __init__ (self ,*argumentos ,**palabras ):
+        lanzar NotImplementedError ('importlib._bootstrap_external.SourceFileLoader.__init__ no esta implementado en el backend nativo')
+
+    funcion get_data (self ,*argumentos ,**palabras ):
+        lanzar NotImplementedError ('importlib._bootstrap_external.SourceFileLoader.get_data no esta implementado en el backend nativo')
+
+    funcion source_to_code (self ,*argumentos ,**palabras ):
+        lanzar NotImplementedError ('importlib._bootstrap_external.SourceFileLoader.source_to_code no esta implementado en el backend nativo')
+
+    funcion path_stats (self ,*argumentos ,**palabras ):
+        lanzar NotImplementedError ('importlib._bootstrap_external.SourceFileLoader.path_stats no esta implementado en el backend nativo')
 
 
 clase SourcelessFileLoader :

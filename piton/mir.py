@@ -2461,6 +2461,18 @@ class MIRLowerer:
                             list(getattr(_lazy, "body", []) or []),
                             name_prefix=f"{alias.name.replace('.', '__')}__",
                         )
+                        # CLASS_CTOR_ATTR_V1: las CLASES del modulo bajan aqui
+                        # igual que en el import de nivel modulo (el loop de
+                        # imported_modules ya corrio). Sin esto
+                        # `argparse.ArgumentParser(...)` —import argparse
+                        # DENTRO de `if __name__ == '__main__'` en code.py—
+                        # registraba el simbolo pero no la clase: el objeto
+                        # quedaba tipado int y add_argument(action=...) seguia
+                        # cayendo en KWRG. Solo cuando acaba de cargarse: si el
+                        # modulo se importo arriba, ya esta bajado.
+                        for _it in (getattr(_lazy, "body", []) or []):
+                            if _it.kind == HIRKind.CLASS_DEF:
+                                self._lower_imported_class(alias.name, _it)
                 if alias.name in self.imported_modules:
                     builder.module_aliases[alias.asname or alias.name] = alias.name
             return
@@ -4100,27 +4112,10 @@ class MIRLowerer:
                             builder.emit(op, value, handler, result=result)
                     return result
             if node.func.kind == HIRKind.LOAD and node.func.name in self.classes and node.func.name not in getattr(self, "decorated_classes", set()):
-                if node.keywords:
-                    raise MIRLoweringError("native class constructors do not support keyword arguments yet")
-                result = builder.temp()
-                parent_name = self.class_parents.get(node.func.name)
-                builder.emit("object_new", node.func.name, parent_name, result=result)
-                # CLASS_ATTR_V1: instances get class-level defaults at creation
-                for _attr_name, _val_temp in getattr(self, "_class_attr_temps", {}).get(node.func.name, {}).items():
-                    builder.emit("set_attr", result, _attr_name, _val_temp)
-                mro = self._mro_memo.get(node.func.name) or self._compute_mro(node.func.name)
-                init_class = None
-                for cls in (mro or ()):
-                    if cls in self.classes and "__init__" in self.classes[cls]:
-                        init_class = cls
-                        break
-                if init_class is not None:
-                    args = (result, *(self._lower_expr(builder, arg) for arg in node.args))
-                    ignored = builder.temp()
-                    builder.emit("method_call", init_class, "__init__", result, args[1:], result=ignored)
-                elif node.args:
-                    raise MIRLoweringError("native class without __init__ takes no arguments")
-                return result
+                # CLASS_CTOR_ATTR_V1: el cuerpo vive en _lower_class_construct
+                # (misma semantica; la novedad es que un __init__ con kwargs
+                # se empaqueta en el emisor en vez de fallar aqui).
+                return self._lower_class_construct(builder, node.func.name, node)
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.ATTR:
                 print('DEBUG-CHAIN', getattr(node.func, 'attr', None), flush=True)
                 chain = self._module_attr_chain(builder, node.func)
@@ -4139,6 +4134,12 @@ class MIRLowerer:
                     if _profundidad_extra > 0:
                         attrs = attrs[_profundidad_extra:]
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
+                    # CLASS_CTOR_ATTR_V1: `a.b.Clase(...)` — misma construccion
+                    # que el nombre local (importlib.machinery.SourceFileLoader).
+                    # Guard identico al de la rama de modulo: si la clase no
+                    # declara __init__ se conserva el camino anterior.
+                    if symbol in self.classes and "__init__" in self.classes[symbol]:
+                        return self._lower_class_construct(builder, symbol, node)
                     # KWRG_MODULE_V1: kwargs van siempre por
                     # _lower_variadic_call (match a parametros nombrados,
                     # falla cerrado si no hay **kwargs). Solo para symbols
@@ -4200,6 +4201,15 @@ class MIRLowerer:
                 and node.func.value.name in builder.module_aliases
             ):
                 module_name = builder.module_aliases[node.func.value.name]
+                # CLASS_CTOR_ATTR_V1: `modulo.Clase(...)` es una construccion,
+                # no una llamada a funcion de modulo (si no, el simbolo caia en
+                # el path generico y el resultado quedaba tipado int).
+                # Guard: solo se toma cuando la clase DECLARA __init__; si no,
+                # se conserva el camino generico anterior (hoy construye y el
+                # objeto queda tipado int) — aqui no se decide nada nuevo.
+                _ctor_sym = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                if _ctor_sym in self.classes and "__init__" in self.classes[_ctor_sym]:
+                    return self._lower_class_construct(builder, _ctor_sym, node)
                 # KWRG_MODULE_V1: kwargs via _lower_variadic_call (match a
                 # parametros nombrados; "unexpected keyword argument" si no hay
                 # **kwargs). asyncio se excluye: sus gates propios rechazan
@@ -5305,27 +5315,10 @@ class MIRLowerer:
                             builder.emit(op, value, handler, result=result)
                     return result
             if node.func.kind == HIRKind.LOAD and node.func.name in self.classes and node.func.name not in getattr(self, "decorated_classes", set()):
-                if node.keywords:
-                    raise MIRLoweringError("native class constructors do not support keyword arguments yet")
-                result = builder.temp()
-                parent_name = self.class_parents.get(node.func.name)
-                builder.emit("object_new", node.func.name, parent_name, result=result)
-                # CLASS_ATTR_V1: instances get class-level defaults at creation
-                for _attr_name, _val_temp in getattr(self, "_class_attr_temps", {}).get(node.func.name, {}).items():
-                    builder.emit("set_attr", result, _attr_name, _val_temp)
-                mro = self._mro_memo.get(node.func.name) or self._compute_mro(node.func.name)
-                init_class = None
-                for cls in (mro or ()):
-                    if cls in self.classes and "__init__" in self.classes[cls]:
-                        init_class = cls
-                        break
-                if init_class is not None:
-                    args = (result, *(self._lower_expr(builder, arg) for arg in node.args))
-                    ignored = builder.temp()
-                    builder.emit("method_call", init_class, "__init__", result, args[1:], result=ignored)
-                elif node.args:
-                    raise MIRLoweringError("native class without __init__ takes no arguments")
-                return result
+                # CLASS_CTOR_ATTR_V1: el cuerpo vive en _lower_class_construct
+                # (misma semantica; la novedad es que un __init__ con kwargs
+                # se empaqueta en el emisor en vez de fallar aqui).
+                return self._lower_class_construct(builder, node.func.name, node)
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.ATTR:
                 chain = self._module_attr_chain(builder, node.func)
                 if chain is not None:
@@ -5343,6 +5336,12 @@ class MIRLowerer:
                     if _profundidad_extra > 0:
                         attrs = attrs[_profundidad_extra:]
                     symbol = f"{module_name.replace('.', '__')}__{'__'.join(attrs)}"
+                    # CLASS_CTOR_ATTR_V1: `a.b.Clase(...)` — misma construccion
+                    # que el nombre local (importlib.machinery.SourceFileLoader).
+                    # Guard identico al de la rama de modulo: si la clase no
+                    # declara __init__ se conserva el camino anterior.
+                    if symbol in self.classes and "__init__" in self.classes[symbol]:
+                        return self._lower_class_construct(builder, symbol, node)
                     # MODVAR_CALLEE_V1 + KWRG_MODULE_V1: kwargs van por
                     # _lower_variadic_call (match a parametros nombrados, falla
                     # cerrado si no hay **kwargs). Solo para symbols registrados
@@ -5402,6 +5401,15 @@ class MIRLowerer:
                 and node.func.value.name in builder.module_aliases
             ):
                 module_name = builder.module_aliases[node.func.value.name]
+                # CLASS_CTOR_ATTR_V1: `modulo.Clase(...)` es una construccion,
+                # no una llamada a funcion de modulo (si no, el simbolo caia en
+                # el path generico y el resultado quedaba tipado int).
+                # Guard: solo se toma cuando la clase DECLARA __init__; si no,
+                # se conserva el camino generico anterior (hoy construye y el
+                # objeto queda tipado int) — aqui no se decide nada nuevo.
+                _ctor_sym = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                if _ctor_sym in self.classes and "__init__" in self.classes[_ctor_sym]:
+                    return self._lower_class_construct(builder, _ctor_sym, node)
                 # KWRG_MODULE_V1: kwargs via _lower_variadic_call (match a
                 # parametros nombrados; "unexpected keyword argument" si no hay
                 # **kwargs). asyncio se excluye: sus gates propios rechazan
@@ -6604,6 +6612,59 @@ class MIRLowerer:
                          result=result)
         else:
             builder.emit("compare", op, left, right, result=result)
+        return result
+
+    def _lower_class_construct(self, builder, cls_name: str, node):
+        """CLASS_CTOR_ATTR_V1: cuerpo unico de `Clase(...)`, sea cual sea la
+        forma del callee (nombre local, `modulo.Clase`, `a.b.Clase`).
+
+        Antes solo el nombre local entraba aqui: `import argparse` +
+        `argparse.ArgumentParser(...)` bajaba como una llamada generica al
+        simbolo, el emisor no lo reconocia como clase y el resultado quedaba
+        tipado `int`, con lo que `parser.add_argument(..., action=...)` moria
+        en BUILD por "method calls with keyword arguments". El __init__ baja
+        con el receiver separado (igual que siempre) y los kwargs en el slot
+        kw de method_call: el emisor los empaqueta contra la firma real, asi
+        que un __init__ sin **kwargs sigue fallando cerrado en BUILD.
+        """
+        result = builder.temp()
+        parent_name = self.class_parents.get(cls_name)
+        builder.emit("object_new", cls_name, parent_name, result=result)
+        # CLASS_ATTR_V1: instances get class-level defaults at creation
+        for _attr_name, _val_temp in getattr(self, "_class_attr_temps", {}).get(cls_name, {}).items():
+            builder.emit("set_attr", result, _attr_name, _val_temp)
+        mro = self._mro_memo.get(cls_name) or self._compute_mro(cls_name)
+        init_class = None
+        for cls in (mro or ()):
+            if cls in self.classes and "__init__" in self.classes[cls]:
+                init_class = cls
+                break
+        if init_class is None:
+            if node.args:
+                raise MIRLoweringError("native class without __init__ takes no arguments")
+            if node.keywords:
+                raise MIRLoweringError(
+                    f"native class '{cls_name}' has no __init__ to receive keyword arguments"
+                )
+            return result
+        args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+        if node.keywords:
+            kw = tuple(
+                (k.arg, self._lower_expr(builder, k.value)) for k in node.keywords
+            )
+            if any(kwname is None for kwname, _kwv in kw):
+                raise MIRLoweringError(
+                    "native class constructors do not accept **kwargs unpacking"
+                )
+            ignored = builder.temp()
+            builder.emit(
+                "method_call", init_class, "__init__", result, args, kw, result=ignored
+            )
+        else:
+            ignored = builder.temp()
+            builder.emit(
+                "method_call", init_class, "__init__", result, args, result=ignored
+            )
         return result
 
     def _lower_variadic_call(

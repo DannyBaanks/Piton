@@ -11460,11 +11460,17 @@ class LinuxCEmitter:
                 # **kw)): se resuelve el simbolo Class__method y se empaquetan
                 # los kwargs en un dict (**kwargs) + los posicionales extra en
                 # una tupla (*args), igual que el ABI variadico de mir.
-                if cls_name is None and not (
+                # CONSTRUCTOR_KW_V1: el mismo camino se abre cuando el callee
+                # trae cls_name estatico — es el __init__ de un constructor
+                # (object_new + method_call con kwargs), cuyo receiver ya es la
+                # instancia nueva y cuya clase conoce el MIR.
+                if (cls_name is None or cls_name in self.classes) and not (
                     method == "update" and owner_type in {"dict", "class:dict", "dict:module"}
                 ):
                     _kcn = None
-                    if owner_type.startswith(("object:", "class:")):
+                    if cls_name is not None:
+                        _kcn = cls_name
+                    elif owner_type.startswith(("object:", "class:")):
                         _kcn = owner_type.split(":", 1)[1]
                     _khit = None
                     if _kcn is not None:
@@ -11482,7 +11488,12 @@ class LinuxCEmitter:
                                 f"piton_seq_put(_kva,{_ki},{self._slot(_ka, types)});"
                             )
                         _parts.append(
-                            f"PitonDict*_kvd=piton_dict_new({len(kw_args)});"
+                            # DICT_NEW_APPEND_V1: piton_dict_new(n) deja
+                            # d->length=n (rellena n huecos, ver el literal de
+                            # dict que si rellena por indice). Con append encima
+                            # el dict salia con n huecos None:None de mas —
+                            # len(**kw) daba el doble que en CPython.
+                            f"PitonDict*_kvd=piton_dict_new(0);"
                         )
                         for _kname, _kval in kw_args:
                             if _kname is None:
@@ -11782,7 +11793,7 @@ class LinuxCEmitter:
                             _dparts.append("_dpa;}")
                             _dtuple = f"(long)({''.join(_dparts)})"
                             if kw_args:
-                                _kparts = [f"{{PitonDict*_dpk=piton_dict_new({len(kw_args)});"]
+                                _kparts = [f"{{PitonDict*_dpk=piton_dict_new(0);"]
                                 for _kn, _kv in kw_args:
                                     _kparts.append(
                                         f'    piton_dict_append(_dpk,piton_slot((long){json.dumps(_kn)},PK_STR),{self._slot(_kv, types)});'
@@ -11846,7 +11857,7 @@ class LinuxCEmitter:
                 _dparts.append("_dpa;}")
                 _dtuple = f"(long)({''.join(_dparts)})"
                 if kw_args:
-                    _kparts = [f"{{PitonDict*_dpk=piton_dict_new({len(kw_args)});"]
+                    _kparts = [f"{{PitonDict*_dpk=piton_dict_new(0);"]
                     for _kn, _kv in kw_args:
                         _kparts.append(
                             f'    piton_dict_append(_dpk,piton_slot((long){json.dumps(_kn)},PK_STR),{self._slot(_kv, types)});'
