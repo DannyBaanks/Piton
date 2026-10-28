@@ -283,7 +283,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     # el runtime; no hay efecto observable en build).
     "dynamic_call": "PURE",
     # OS_FSPATH_V1 / OS_PATHLIKE_V1: valores nativos de `os`.
-    "os_fspath": "PURE", "builtin_class": "PURE",
+    "os_fspath": "PURE", "os_fsencode": "PURE", "builtin_class": "PURE",
     # RAISE_VALUE_V1: levantar una instancia (no una clase).
     "raise_value": "OPAQUE",
     # PRINT_FD_V1: fijar/restaurar el descriptor de salida de print.

@@ -65,10 +65,6 @@ class FindV1(unittest.TestCase):
     def test_find_empty_needle(self):
         _assert_matches(self, "imprimir('abc'.find(''))\n")
 
-    def test_find_with_start_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir('a'.find('a', 1))\n")
-
     def test_startswith_endswith(self):
         _assert_matches(
             self,

@@ -8309,12 +8309,11 @@ class LinuxCEmitter:
         elif op == "store":
             if types.get(args[1]) == "builtin":
                 # BUILTIN_MARKER_V1: almacenar un builtin como valor (ej.
-                # _types.py: `Pos = int`). El valor del builtin ya fue
-                # computado en una instruccion previa y vive en un temporal;
-                # usar su nombre C directamente y asignar tipo "int".
-                out.append(f"    {_name(args[0])}={self._value(args[1])};")
-                types[args[0]] = "int"
-                return out
+                # _types.py: `Pos = int`). El backend nativo no permite
+                # almacenar builtins directamente como valores (fail-closed).
+                raise NativeBuildError(
+                    f"native store of builtin '{args[1]}' is not supported"
+                )
             if (
                 args[0] in self._shared_globals
                 and (function.name == "<module>" or args[0] in self._func_globals.get(function.name, ()))
