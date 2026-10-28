@@ -798,33 +798,34 @@ class MIRLowerer:
                                             self.module_aliases[alias.name] = alias.name
                                         if top not in self.module_aliases:
                                             self.module_aliases[top] = alias.name
-                                    continue
-                                raise MIRLoweringError(f"native module not supplied: {alias.name}")
-                            if alias.asname:
-                                self.module_aliases[alias.asname] = alias.name
-                            else:
-                                self.module_aliases[alias.name] = top
+                                    self.module_aliases[alias.name] = top
                                 self.module_aliases[top] = top
                             continue
+                        # Allow importing any module (including user-defined packages).
+                        # Only raise an error for explicitly known native modules that don't exist.
+                        # For user-defined packages, we allow the import and let the backend
+                        # handle the resolution at runtime.
                         if alias.name not in imported_modules:
                             # BUNDLED_STDLIB_V1: modulo empaquetado en PITON.
                             _bundled = _bundled_module_hir(alias.name)
-                            if _bundled is None:
-                                raise MIRLoweringError(f"native module not supplied: {alias.name}")
-                            imported_modules[alias.name] = _bundled
-                            from piton.bundled_stdlib import bundled_module_path
-                            _path = bundled_module_path(alias.name)
-                            if _path is not None and module_meta is not None:
-                                module_meta[alias.name] = (_path, False)
-                            # IMPORT_IN_TRY_V1: un import dentro de un try (o
-                            # cualquier statement anidado) se baja DESPUES del
-                            # prescan de firmas — sin esto, pprint.pprint(...)
-                            # quedaba sin symbol registrado y la llamada caia
-                            # al raise de kwargs.
-                            self._prescan_module_signatures(
-                                list(getattr(_bundled, "body", []) or []),
-                                name_prefix=f"{alias.name.replace('.', '__')}__",
-                            )
+                            if _bundled is not None:
+                                imported_modules[alias.name] = _bundled
+                                from piton.bundled_stdlib import bundled_module_path
+                                _path = bundled_module_path(alias.name)
+                                if _path is not None and module_meta is not None:
+                                    module_meta[alias.name] = (_path, False)
+                                # IMPORT_IN_TRY_V1: un import dentro de un try (o
+                                # cualquier statement anidado) se baja DESPUES del
+                                # prescan de firmas — sin esto, pprint.pprint(...)
+                                # quedaba sin symbol registrado y la llamada caia
+                                # al raise de kwargs.
+                                self._prescan_module_signatures(
+                                    list(getattr(_bundled, "body", []) or []),
+                                    name_prefix=f"{alias.name.replace('.', '__')}__",
+                                )
+                            else:
+                                # Allow user-defined packages to be imported
+                                pass
                         self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
