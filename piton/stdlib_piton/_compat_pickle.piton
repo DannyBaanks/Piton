@@ -1,4 +1,3 @@
-# Solo usado internamente por pickle para compatibilidad
 funcion whichmodule (obj,name):
     devolver "__main__"
 

@@ -1,0 +1,17 @@
+funcion bisect_left (a, x, lo=0, hi=None):
+    devolver 0
+
+funcion bisect_right (a, x, lo=0, hi=None):
+    devolver 0
+
+funcion insort_left (a, x, lo=0, hi=None):
+    pasar
+
+funcion insort_right (a, x, lo=0, hi=None):
+    pasar
+
+funcion bisect (a, x, lo=0, hi=None):
+    devolver 0
+
+funcion insort (a, x, lo=0, hi=None):
+    pasar

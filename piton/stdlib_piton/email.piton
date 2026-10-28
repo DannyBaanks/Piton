@@ -9,4 +9,3 @@ funcion message_from_file (fp,_class=Nada,strict=Verdadero):
 
 message_from_binary_file = message_from_file
 
-# Submodulos ya existen como email__xxx.piton

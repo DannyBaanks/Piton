@@ -1,0 +1,28 @@
+funcion reader (f, dialect):
+    devolver []
+
+funcion writer (f, dialect):
+    clase Writer :
+        "stub"
+    devolver Writer()
+
+_Writer_dummy = Writer()
+
+funcion register_dialect (name, dialect):
+    pasar
+
+funcion unregister_dialect (name):
+    pasar
+
+funcion get_dialect (name):
+    devolver {}
+
+funcion list_dialects ():
+    devolver []
+
+Dialect = 0
+excel = 0
+QUOTE_MINIMAL = 0
+QUOTE_ALL = 1
+QUOTE_NONNUMERIC = 2
+QUOTE_NONE = 3

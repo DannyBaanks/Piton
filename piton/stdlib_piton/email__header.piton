@@ -1,0 +1,10 @@
+funcion decode_header (header):
+    devolver [(b'', 'utf-8')]
+
+funcion make_header (decoded, maxlinelen, charset, continuation_ws):
+    devolver ''
+
+clase Header :
+    "stub"
+
+_Header_dummy = Header()

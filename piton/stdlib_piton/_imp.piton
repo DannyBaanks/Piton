@@ -1,0 +1,13 @@
+# _imp.piton — stub para _imp (stdlib CPython)
+funcion create_builtin (spec):
+    devolver None
+
+funcion create_dynamic (name, initfunc=None):
+    devolver None
+
+funcion reload (module):
+    devolver module
+
+acquire_lock = 0
+release_lock = 0
+lock_held = 0

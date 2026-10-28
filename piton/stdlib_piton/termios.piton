@@ -1,0 +1,26 @@
+TCGETS = 0
+TCSETS = 0
+TCSETSW = 0
+TCSETSF = 0
+TCGETA = 0
+TCSETA = 0
+TCSETAW = 0
+TCSETAF = 0
+
+funcion tcgetattr (fd):
+    devolver [0, 0, 0, 0, 0, 0, b'']
+
+funcion tcsetattr (fd, when, attrs):
+    pasar
+
+funcion tcsendbreak (fd, duration):
+    pasar
+
+funcion tcdrain (fd):
+    pasar
+
+funcion tcflush (fd, queue):
+    pasar
+
+funcion tcflow (fd, action):
+    pasar

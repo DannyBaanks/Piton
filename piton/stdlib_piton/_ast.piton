@@ -1,0 +1,11 @@
+PyCF_ONLY_AST = 0
+PyCF_TYPE_COMMENTS = 0
+
+funcion parse (source, filename='<unknown>', mode='exec', flags=0, dont_inherit=Falso, type_comments=Falso):
+    devolver 0
+
+iter_fields = 0
+get_docstring = 0
+fix_missing_locations = 0
+increment_lineno = 0
+copy_location = 0

@@ -1,0 +1,14 @@
+funcion compress (data, compresslevel):
+    devolver b""
+
+funcion decompress (data):
+    devolver b""
+
+clase BZ2Compressor :
+    "stub"
+
+clase BZ2Decompressor :
+    "stub"
+
+_BZ2Compressor_dummy = BZ2Compressor()
+_BZ2Decompressor_dummy = BZ2Decompressor()

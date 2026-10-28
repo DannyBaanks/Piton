@@ -1,0 +1,7 @@
+clase Fraction :
+    "stub"
+
+funcion Fraction (numerator, denominator):
+    devolver 0
+
+gcd = 0

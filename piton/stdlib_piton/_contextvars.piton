@@ -1,0 +1,11 @@
+clase ContextVar :
+    "stub"
+
+clase Context :
+    "stub"
+
+funcion copy_context ():
+    devolver Context()
+
+_Context_dummy = Context()
+_ContextVar_dummy = ContextVar()

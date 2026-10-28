@@ -1,4 +1,3 @@
-# code.piton — stub para code (stdlib CPython)
 funcion compile_command (source, filename='<input>', symbol='single'):
     devolver Nada
 

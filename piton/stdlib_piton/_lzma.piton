@@ -1,0 +1,27 @@
+funcion compress (data, format, check, preset, filters):
+    devolver b""
+
+funcion decompress (data, format, memlimit, filters):
+    devolver b""
+
+clase LZMACompressor :
+    "stub"
+
+clase LZMADecompressor :
+    "stub"
+
+_LZMACompressor_dummy = LZMACompressor()
+_LZMADecompressor_dummy = LZMADecompressor()
+
+FORMAT_AUTO = 0
+FORMAT_XZ = 1
+FORMAT_ALONE = 2
+FORMAT_RAW = 3
+CHECK_NONE = 0
+CHECK_CRC32 = 1
+CHECK_CRC64 = 2
+CHECK_SHA256 = 3
+CHECK_ID_MAX = 3
+CHECK_UNKNOWN = 4
+PRESET_DEFAULT = 6
+PRESET_EXTREME = 9

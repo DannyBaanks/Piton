@@ -1,0 +1,20 @@
+# _random.piton — stub para _random (stdlib CPython)
+funcion random ():
+    devolver 0
+
+funcion randint (a, b):
+    devolver a
+
+funcion choice (seq):
+    devolver seq[0] si seq sino Nada
+
+funcion shuffle (x):
+    pasar
+
+funcion seed (a=None, version=2):
+    pasar
+
+funcion getrandbits (k):
+    devolver 0
+
+Random = 0

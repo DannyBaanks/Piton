@@ -1,0 +1,13 @@
+funcion pack (fmt, *args):
+    devolver b""
+
+funcion unpack (fmt, buffer):
+    devolver ()
+
+funcion calcsize (fmt):
+    devolver 0
+
+clase Struct :
+    "stub"
+
+_Struct_dummy = Struct()

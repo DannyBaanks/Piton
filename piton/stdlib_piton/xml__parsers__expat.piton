@@ -1,0 +1,22 @@
+# xml.parsers.expat.piton — stub para xml.parsers.expat (stdlib CPython)
+XML_PARAM_ENTITY_PARSING = 0
+XML_PARAM_TARGET_ENCODING = 1
+XML_PARAM_UNICODE = 2
+
+class ParserCreate:
+    funcionar __init__ (self, encoding=None, namespace_separator=None):
+        self.encoding = encoding
+        self.namespace_separator = namespace_separator
+    funcionar Parse (self, data, isFinal=Falso):
+        devolver 0
+    funcionar ParseFile (self, file):
+        devolver 0
+    funcionar SetParamEntityParsing (self, parsing):
+        pasar
+    funcionar SetParamEntityParsing (self, parsing):
+        pasar
+
+funcion ParserCreate (encoding=None, namespace_separator=None):
+    devolver ParserCreate(encoding, namespace_separator)
+
+Error = 0

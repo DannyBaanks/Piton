@@ -1,4 +1,3 @@
-# filecmp.piton — stub para filecmp (stdlib CPython)
 funcion cmp (f1, f2, shallow=Verdadero):
     devolver 0
 

@@ -1,0 +1,25 @@
+funcion lookup (name):
+    devolver ''
+
+funcion name (char):
+    devolver ''
+
+funcion category (char):
+    devolver ''
+
+funcion decimal (char):
+    devolver 0
+
+funcion digit (char):
+    devolver 0
+
+funcion numeric (char):
+    devolver 0
+
+funcion normalize (form, unistr):
+    devolver unistr
+
+bidirectional = 0
+decomposition = 0
+east_asian_width = 0
+mirrored = 0

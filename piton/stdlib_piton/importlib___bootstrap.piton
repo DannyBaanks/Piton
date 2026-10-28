@@ -1,4 +1,3 @@
-# Solo las funciones exportadas que CPython usa
 _bootstrap = 0
 
 funcion _find_spec (name,path=Nada,target=None):

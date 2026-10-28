@@ -1,0 +1,21 @@
+funcion start (nframe):
+    pasar
+
+funcion stop ():
+    pasar
+
+funcion is_tracing ():
+    devolver Falso
+
+funcion take_snapshot ():
+    clase Snapshot :
+        "stub"
+    devolver Snapshot()
+
+_Snapshot_dummy = Snapshot()
+
+funcion get_traces ():
+    devolver []
+
+funcion get_tracemalloc_memory ():
+    devolver 0

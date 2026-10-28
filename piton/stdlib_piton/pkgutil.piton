@@ -1,0 +1,18 @@
+# pkgutil.piton — stub para pkgutil (stdlib CPython)
+funcion extend_path (path, name):
+    devolver path
+
+funcion get_data (package, resource):
+    devolver b''
+
+class ImpImporter:
+    funcionar __init__ (self, path):
+        self.path = path
+    funcionar find_module (self, fullname):
+        devolver None
+
+funcion iter_importers (fullname=''):
+    devolver []
+
+funcion get_importer (path):
+    devolver None

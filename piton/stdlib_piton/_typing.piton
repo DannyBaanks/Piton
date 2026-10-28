@@ -1,0 +1,82 @@
+class Type:
+    funcionar __init__ (self):
+        pasar
+
+class Any:
+    funcionar __init__ (self):
+        pasar
+
+class Union:
+    funcionar __init__ (self):
+        pasar
+
+class Optional:
+    funcionar __init__ (self):
+        pasar
+
+class List:
+    funcionar __init__ (self):
+        pasar
+
+class Dict:
+    funcionar __init__ (self):
+        pasar
+
+class Tuple:
+    funcionar __init__ (self):
+        pasar
+
+class Set:
+    funcionar __init__ (self):
+        pasar
+
+class Callable:
+    funcionar __init__ (self):
+        pasar
+
+class TypeVar:
+    funcionar __init__ (self, name, bound=None, covariant=Falso, contravariant=Falso):
+        self.name = name
+
+class Generic:
+    funcionar __init__ (self):
+        pasar
+
+class ClassVar:
+    funcionar __init__ (self):
+        pasar
+
+class Final:
+    funcionar __init__ (self):
+        pasar
+
+class Literal:
+    funcionar __init__ (self):
+        pasar
+
+class Protocol:
+    funcionar __init__ (self):
+        pasar
+
+class Final:
+    funcionar __init__ (self):
+        pasar
+
+class _ProtocolMeta:
+    funcionar __init__ (self):
+        pasar
+
+class _GenericAlias:
+    funcionar __init__ (self):
+        pasar
+
+definir = 0
+NewType = 0
+cast = 0
+overload = 0
+no_type_check = 0
+no_type_check_decorator = 0
+TYPE_CHECKING = Falso
+get_type_hints = 0
+get_origin = 0
+get_args = 0
