@@ -6075,6 +6075,12 @@ class MIRLowerer:
                         result = builder.temp()
                         builder.emit("const", _bvalue, result=result)
                         return result
+                # __main__.__dict__: acceso al diccionario del modulo principal.
+                # Es un dict mutable compartido; se crea una vez y se reusa.
+                if _alias_module == "__main__" and node.attr == "__dict__":
+                    result = builder.temp()
+                    builder.emit("call", "__main___var____dict__", (), result=result)
+                    return result
                 if _alias_module == "os":
                     raise MIRLoweringError(
                         f"native os.{node.attr} is not supported yet; only os.name is native"
@@ -6086,8 +6092,7 @@ class MIRLowerer:
                 # el protocolo reduce de pickle devuelve la funcion sin
                 # invocarla). Si el simbolo cualificado es una FIRMA
                 # registrada, la referencia baja como `load` — el mismo op
-                # que `f = doble` — en vez del fail-closed generico. Sin el
-                # cualificado registrado se mantiene el rechazo honesto.
+                # que `f = doble` — en vez del fail-closed generico.
                 _mmod, _mattrs = _mchain
                 if len(_mattrs) == 1:
                     _mq = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
@@ -6099,6 +6104,20 @@ class MIRLowerer:
                         result = builder.temp()
                         builder.emit("load", _mq, result=result)
                         return result
+                    # MODULE_STATE_V1: variable de estado de modulo empaquetado
+                    # (ej. keyword.kwlist, warnings.filters). No es funcion,
+                    # pero esta registrada como variable de estado del modulo.
+                    _ms = f"{_mmod.replace('.', '__')}__var__{_mattrs[0]}"
+                    # Verificar si el modulo importado tiene esta variable de estado
+                    _imported = self.imported_modules.get(_mmod)
+                    if _imported is not None:
+                        for _item in getattr(_imported, "body", []) or []:
+                            if _item.kind == HIRKind.ASSIGN:
+                                for _target in getattr(_item, "targets", ()) or ():
+                                    if getattr(_target, "name", None) == _mattrs[0]:
+                                        result = builder.temp()
+                                        builder.emit("load", _ms, result=result)
+                                        return result
                 raise MIRLoweringError(
                     "native module attribute value access is not supported yet; "
                     "use module function calls (e.g. 'pkg.sub.fn(...)')"
