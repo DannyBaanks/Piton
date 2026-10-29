@@ -3683,6 +3683,13 @@ class LinuxCEmitter:
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
         self._gen_counter = 0
+        # MODULE_ATTR_TYPES_V1: tracks types of module attributes set via set_attr
+        self.module_attr_types: dict[str, str] = {
+            "__name__": "str",
+            "__file__": "str",
+            "__package__": "str",
+            "modules": "dict:module",
+        }
 
     def emit(self, module: MIRModule) -> str:
         self.mir_module = module
@@ -11240,6 +11247,11 @@ class LinuxCEmitter:
                     _vt = types.get(val, "")
                     if _vt and _vt not in {"int", "bool"}:
                         self._instance_attr_types.setdefault(_cls, {}).setdefault(attr, _vt)
+                # MODULE_ATTR_TYPES_V1: track module attribute types for get_attr
+                if owner_type == "object:module":
+                    _vt = types.get(val, "")
+                    if _vt and _vt != "none":
+                        self.module_attr_types[attr] = _vt
                 # ATTRIBUTE_LOOKUP_V2: __setattr__ hook routes normal stores;
                 # the hook body itself stores raw (bypass, mirror of Win).
                 hook = None
@@ -11393,7 +11405,6 @@ class LinuxCEmitter:
                     self._builtin_bound[result] = _owner_name
                 return out
             prop_class = self._resolve_property_class(owner_type, attr)
-            module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
             if prop_class is not None:
                 getter = self.class_properties[prop_class][attr]["getter"]
                 out.append(f'    {_name(result)}={_name(getter)}({self._value(obj)});')
@@ -11485,7 +11496,15 @@ class LinuxCEmitter:
                 )
                 out.append(f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},{attr_expr_g}).bits;')
                 if owner_type == "object:module":
-                    types[result] = module_attr_types.get(attr, "int")
+                    types[result] = self.module_attr_types.get(attr, "int")
+                    # Track module name for nested module method calls
+                    parent_name = aliases.get(obj, "")
+                    if parent_name and isinstance(parent_name, str) and "." not in parent_name:
+                        # Parent is a top-level module, child is parent.attr
+                        aliases[result] = f"{parent_name}.{attr}"
+                    elif parent_name and isinstance(parent_name, str) and "." in parent_name:
+                        # Parent is already a nested module
+                        aliases[result] = f"{parent_name}.{attr}"
                 else:
                     types[result] = "int"
                 # INSTANCE_ATTR_TYPES_V1: el tipo del atributo de instancia
@@ -11748,14 +11767,21 @@ class LinuxCEmitter:
                 if owner_type in {"module", "object:module"}:
                     _obj_name = aliases.get(obj, obj)
                     if isinstance(_obj_name, str) and _obj_name:
-                        _cand = f"{_obj_name}__{method}"
+                        # Try nested module pattern first (e.g., pkg2__subpkg__method)
+                        _cand = f"{_obj_name.replace('.', '__')}__{method}"
                         if _cand in self.function_names:
                             _mod_target = _cand
                         else:
-                            _top = _obj_name.split(".")[0]
-                            _cand2 = f"{_top}__{method}"
-                            if _cand2 in self.function_names:
-                                _mod_target = _cand2
+                            # Try original name with dots (e.g., pkg.sub__method)
+                            _cand = f"{_obj_name}__{method}"
+                            if _cand in self.function_names:
+                                _mod_target = _cand
+                            else:
+                                # Fallback: try top-level module only
+                                _top = _obj_name.split(".")[0]
+                                _cand2 = f"{_top}__{method}"
+                                if _cand2 in self.function_names:
+                                    _mod_target = _cand2
                     if _mod_target is None:
                         raise NativeBuildError(
                             f"Linux module method {method}() is not statically known "
@@ -12284,7 +12310,8 @@ class LinuxCEmitter:
             out.append(f"    piton_raise_set_value({self._value(value)});")
             handler_label = args[1] if len(args) > 1 else None
             if handler_label:
-                out.append(f"    goto {_name(function.name + '_' + handler_label)};")
+                # Emit exception check to route to the correct handler based on exception type
+                self._emit_exc_check(out, function, handler_label)
             else:
                 _raise_or_propagate(out, function)
             return out
@@ -12564,6 +12591,18 @@ class LinuxCEmitter:
                     # DICT_VAL_TYPE_V1: an empty literal records no value
                     # kind; the flag lets dict.get fallback to the default.
                     self._dict_empty[result] = True
+                out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
+                for index, (key, value) in enumerate(items):
+                    key_is_str = isinstance(key, str) and not key.startswith("%")
+                    key_kind = "PK_STR" if key_is_str else self._kind(types.get(key, "int"))
+                    out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},piton_slot({self._value(key)},{key_kind}),{self._slot(value, types)});')
+            elif kind == "dict:module":
+                # dict:module is a dict whose values are module objects
+                if result and items:
+                    # All values are module objects
+                    self._dict_val_types[result] = "object:module"
+                    # Keys are strings
+                    self._dict_key_types[result] = "str"
                 out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
                 for index, (key, value) in enumerate(items):
                     key_is_str = isinstance(key, str) and not key.startswith("%")

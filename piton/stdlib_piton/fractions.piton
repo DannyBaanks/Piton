@@ -1,4 +1,6 @@
 clase Fraction :
+    funcion __init__ (self ,*argumentos ,**palabras ):
+        pasar
     "stub"
 
 funcion Fraction (numerator, denominator):

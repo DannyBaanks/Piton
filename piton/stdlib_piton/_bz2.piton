@@ -5,9 +5,13 @@ funcion decompress (data):
     devolver b""
 
 clase BZ2Compressor :
+    funcion __init__ (self ,*argumentos ,**palabras ):
+        pasar
     "stub"
 
 clase BZ2Decompressor :
+    funcion __init__ (self ,*argumentos ,**palabras ):
+        pasar
     "stub"
 
 _BZ2Compressor_dummy = BZ2Compressor()

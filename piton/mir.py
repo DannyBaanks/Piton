@@ -4710,14 +4710,31 @@ class MIRLowerer:
 
     def _module_attr_chain(self, builder: "_Builder", node: Optional[HIRNode]) -> Optional[tuple[str, list[str]]]:
         """Returns ``(alias, [attr, ...])`` when ``node`` is an attribute chain
-        rooted at a module alias load (``pkg.sub``, ``pkg.obj.met``); None otherwise."""
+        rooted at a module alias load (``pkg.sub``, ``pkg.obj.met``); None otherwise.
+        
+        This handles nested packages like ``pkg.subpkg.attr`` where ``pkg.subpkg``
+        is a module alias but appears as an ATTR node in the HIR.
+        """
         attrs: list[str] = []
         current = node
+        # Walk up the attribute chain, collecting attributes
         while getattr(current, "kind", None) == HIRKind.ATTR:
             attrs.append(current.attr)
             current = current.value
+        # Check if the root is a module alias
         if getattr(current, "kind", None) == HIRKind.LOAD and current.name in builder.module_aliases:
             if current.name not in {"asyncio", "math", "sys"}:
+                # Check if the accumulated attributes form a nested module path
+                # e.g., for pkg.subpkg.attr: attrs = ['attr', 'subpkg'], root = pkg
+                # Check if pkg.subpkg is a module alias
+                attrs_reversed = list(reversed(attrs))
+                for i in range(1, len(attrs_reversed) + 1):
+                    candidate = current.name + "." + ".".join(attrs_reversed[:i])
+                    if candidate in builder.module_aliases:
+                        # Found a nested module alias
+                        remaining_attrs = attrs_reversed[i:]
+                        return candidate, list(reversed(remaining_attrs))
+                # Fall back to the root module alias
                 return current.name, list(reversed(attrs))
         return None
 
