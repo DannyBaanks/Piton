@@ -3081,6 +3081,30 @@ class MIRLowerer:
                           and getattr(handler.type_, "elts", None)
                           and all(e.kind == HIRKind.LOAD for e in handler.type_.elts)):
                         h_accepted = [e.name for e in handler.type_.elts]
+                    elif handler.type_.kind == HIRKind.ATTR:
+                        # EXCEPT_MODULE_ATTR_V1: soportar except mod.Error
+                        mchain = self._module_attr_chain(builder, handler.type_)
+                        if mchain:
+                            _mod, _attrs = mchain
+                            # Mapeo mínimo verificable de excepciones de módulo a nombres nativos
+                            _exc_map = {
+                                ("struct", ["error"]): "Exception",
+                                ("re", ["error"]): "Exception",
+                                ("getopt", ["error"]): "GetoptError",
+                                ("tokenize", ["TokenError"]): "TokenError",
+                                ("_hashopenssl", ["UnsupportedDigestmodError"]): "ValueError",
+                                ("subprocess", ["CalledProcessError"]): "OSError",
+                                ("subprocess", ["SubprocessError"]): "OSError",
+                                ("aifc", ["Error"]): "Exception",
+                                ("wave", ["Error"]): "Exception",
+                            }
+                            key = (_mod, _attrs)
+                            if key in _exc_map:
+                                h_accepted = _exc_map[key]
+                            else:
+                                raise MIRLoweringError("native except type must be a builtin exception name")
+                        else:
+                            raise MIRLoweringError("native except type must be a builtin exception name")
                     else:
                         raise MIRLoweringError("native except type must be a builtin exception name")
                 handlers.append((handler, h_accepted, builder.new_block(), handler.name))
