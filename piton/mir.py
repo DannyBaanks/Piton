@@ -6058,6 +6058,16 @@ class MIRLowerer:
                     result = builder.temp()
                     builder.emit("const", None, result=result)
                     return result
+                if _alias_module == "os" and node.attr == "fspath":
+                    # OS_FSPATH_ATTR_V1: placeholder para os.fspath
+                    result = builder.temp()
+                    builder.emit("const", None, result=result)
+                    return result
+                if _alias_module == "os" and node.attr == "pathsep":
+                    # OS_PATHSEP_CONST_V1: separador de rutas Unix
+                    result = builder.temp()
+                    builder.emit("const", ":", result=result)
+                    return result
                 if _alias_module == "os" and node.attr in {"curdir", "pardir", "sep", "extsep"}:
                     # OS_STR_CONST_V1: os.curdir='.', os.pardir='..', os.sep='/',
                     # os.extsep='.' son constantes de plataforma.
@@ -6070,6 +6080,11 @@ class MIRLowerer:
                     # de plataforma; en el subset nativo no se abren fds reales).
                     result = builder.temp()
                     builder.emit("const", 0, result=result)
+                    return result
+                if _alias_module == "os" and node.attr == "environ":
+                    # OS_ENVIRON_V1: placeholder vacío
+                    result = builder.temp()
+                    builder.emit("const", {}, result=result)
                     return result
                 if _alias_module == "sys" and node.attr == "argv":
                     result = builder.temp()
