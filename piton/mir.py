@@ -3072,30 +3072,36 @@ class MIRLowerer:
                     raise MIRLoweringError("native except does not support except* yet")
                 h_accepted = None
                 if handler.type_ is not None:
-                    # EXCEPT_TUPLE_V1: `excepto (A, B):` — se guarda la lista
-                    # de nombres; se expande a N pares (accepted, label) al
-                    # MISMO bloque al volcar exception_handlers (hashlib.py:140).
                     def _resolve_exc(node):
                         if node.kind == HIRKind.LOAD:
                             return node.name
                         if node.kind == HIRKind.ATTR:
+                            # Caso directo sin depender de module_aliases
+                            if node.value.kind == HIRKind.LOAD and node.value.name == "_hashopenssl" and node.attr == "UnsupportedDigestmodError":
+                                return "ValueError"
                             mchain = self._module_attr_chain(builder, node)
-                            if mchain:
-                                _mod, _attrs = mchain
-                                _exc_map = {
-                                    ("struct", ["error"]): "Exception",
-                                    ("re", ["error"]): "Exception",
-                                    ("getopt", ["error"]): "GetoptError",
-                                    ("tokenize", ["TokenError"]): "TokenError",
-                                    ("_hashopenssl", ["UnsupportedDigestmodError"]): "ValueError",
-                                    ("subprocess", ["CalledProcessError"]): "OSError",
-                                    ("subprocess", ["SubprocessError"]): "OSError",
-                                    ("aifc", ["Error"]): "Exception",
-                                    ("wave", ["Error"]): "Exception",
-                                }
-                                key = (_mod, _attrs)
-                                if key in _exc_map:
-                                    return _exc_map[key]
+                            if not mchain:
+                                raise MIRLoweringError(f"native except type must be a builtin exception name [module_attr_chain=None for {node}]")
+                            _mod, _attrs = mchain
+                            _exc_map = {
+                                ("struct", ["error"]): "Exception",
+                                ("re", ["error"]): "Exception",
+                                ("getopt", ["error"]): "GetoptError",
+                                ("tokenize", ["TokenError"]): "TokenError",
+                                ("_hashopenssl", ["UnsupportedDigestmodError"]): "ValueError",
+                                ("subprocess", ["CalledProcessError"]): "OSError",
+                                ("subprocess", ["SubprocessError"]): "OSError",
+                                ("aifc", ["Error"]): "Exception",
+                                ("wave", ["Error"]): "Exception",
+                            }
+                            key = (_mod, _attrs)
+                            if key in _exc_map:
+                                return _exc_map[key]
+                            if _mod in {"aifc", "wave"} and _attrs and _attrs[0] == "Error":
+                                return "Exception"
+                            if _mod == "_hashopenssl":
+                                return "ValueError"
+                            raise MIRLoweringError(f"native except type must be a builtin exception name [unmapped {key}]")
                         raise MIRLoweringError("native except type must be a builtin exception name")
 
                     if handler.type_.kind == HIRKind.LOAD:
