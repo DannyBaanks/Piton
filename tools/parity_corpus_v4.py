@@ -936,17 +936,21 @@ def cmd_run(tier: str, out: str | None, markdown: str | None, workers: int,
     # hash of core piton lowering files for reproducibility
     mir_hash = _hash_file(REPO / "piton" / "mir.py")
     linux_hash = _hash_file(REPO / "piton" / "linux_x86.py")
+    verified = git_clean
     meta = {"date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "oracle": f"CPython {platform.python_version()}",
             "platform": platform.platform(), "git_sha": _git_sha(),
             "git_clean": git_clean,
             "git_dirty_files": git_dirty,
+            "verified": verified,
             "instrument_hash": instrument_hash,
             "piton_mir_hash": mir_hash,
             "piton_linux_hash": linux_hash,
             "tool": "tools/parity_corpus_v4.py", "tiers": tier,
             "recursive": recursive, "exclude": list(exclude),
             "isolate": isolate}
+    if not verified:
+        print("WARNING: working tree dirty – report marked UNVERIFIED", file=sys.stderr)
     results: dict[str, dict] = {}
 
     if tier in {"a", "all"}:
