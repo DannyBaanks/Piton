@@ -3075,36 +3075,38 @@ class MIRLowerer:
                     # EXCEPT_TUPLE_V1: `excepto (A, B):` — se guarda la lista
                     # de nombres; se expande a N pares (accepted, label) al
                     # MISMO bloque al volcar exception_handlers (hashlib.py:140).
+                    def _resolve_exc(node):
+                        if node.kind == HIRKind.LOAD:
+                            return node.name
+                        if node.kind == HIRKind.ATTR:
+                            mchain = self._module_attr_chain(builder, node)
+                            if mchain:
+                                _mod, _attrs = mchain
+                                _exc_map = {
+                                    ("struct", ["error"]): "Exception",
+                                    ("re", ["error"]): "Exception",
+                                    ("getopt", ["error"]): "GetoptError",
+                                    ("tokenize", ["TokenError"]): "TokenError",
+                                    ("_hashopenssl", ["UnsupportedDigestmodError"]): "ValueError",
+                                    ("subprocess", ["CalledProcessError"]): "OSError",
+                                    ("subprocess", ["SubprocessError"]): "OSError",
+                                    ("aifc", ["Error"]): "Exception",
+                                    ("wave", ["Error"]): "Exception",
+                                }
+                                key = (_mod, _attrs)
+                                if key in _exc_map:
+                                    return _exc_map[key]
+                        raise MIRLoweringError("native except type must be a builtin exception name")
+
                     if handler.type_.kind == HIRKind.LOAD:
-                        h_accepted = handler.type_.name
-                    elif (handler.type_.kind == HIRKind.TUPLE
-                          and getattr(handler.type_, "elts", None)
-                          and all(e.kind == HIRKind.LOAD for e in handler.type_.elts)):
-                        h_accepted = [e.name for e in handler.type_.elts]
-                    elif handler.type_.kind == HIRKind.ATTR:
-                        # EXCEPT_MODULE_ATTR_V1: soportar except mod.Error
-                        mchain = self._module_attr_chain(builder, handler.type_)
-                        if mchain:
-                            _mod, _attrs = mchain
-                            # Mapeo mínimo verificable de excepciones de módulo a nombres nativos
-                            _exc_map = {
-                                ("struct", ["error"]): "Exception",
-                                ("re", ["error"]): "Exception",
-                                ("getopt", ["error"]): "GetoptError",
-                                ("tokenize", ["TokenError"]): "TokenError",
-                                ("_hashopenssl", ["UnsupportedDigestmodError"]): "ValueError",
-                                ("subprocess", ["CalledProcessError"]): "OSError",
-                                ("subprocess", ["SubprocessError"]): "OSError",
-                                ("aifc", ["Error"]): "Exception",
-                                ("wave", ["Error"]): "Exception",
-                            }
-                            key = (_mod, _attrs)
-                            if key in _exc_map:
-                                h_accepted = _exc_map[key]
-                            else:
-                                raise MIRLoweringError("native except type must be a builtin exception name")
-                        else:
+                        h_accepted = _resolve_exc(handler.type_)
+                    elif handler.type_.kind == HIRKind.TUPLE and getattr(handler.type_, "elts", None):
+                        try:
+                            h_accepted = [_resolve_exc(e) for e in handler.type_.elts]
+                        except MIRLoweringError:
                             raise MIRLoweringError("native except type must be a builtin exception name")
+                    elif handler.type_.kind == HIRKind.ATTR:
+                        h_accepted = _resolve_exc(handler.type_)
                     else:
                         raise MIRLoweringError("native except type must be a builtin exception name")
                 handlers.append((handler, h_accepted, builder.new_block(), handler.name))
