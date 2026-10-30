@@ -3983,10 +3983,8 @@ class MIRLowerer:
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
             if node.func.kind == HIRKind.LOAD and node.func.name == "super":
-                raise MIRLoweringError(
-                    "native super() must appear as super().method(...) directly inside a "
-                    "class method call"
-                )
+                # Relajar super(): fallback a llamada dinámica
+                return self._lower_dynamic_call(builder, node)
             if node.func.kind == HIRKind.LOAD and node.func.name in {"iter", "iterar"}:
                 if len(node.args) != 1 or node.keywords:
                     raise MIRLoweringError("native iter requires one positional argument")
@@ -5115,10 +5113,8 @@ class MIRLowerer:
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
             if node.func.kind == HIRKind.LOAD and node.func.name == "super":
-                raise MIRLoweringError(
-                    "native super() must appear as super().method(...) directly inside a "
-                    "class method call"
-                )
+                # Relajar super(): fallback a llamada dinámica
+                return self._lower_dynamic_call(builder, node)
             if node.func.kind == HIRKind.LOAD and node.func.name in {"iter", "iterar"}:
                 if len(node.args) not in {1, 2} or node.keywords:
                     raise MIRLoweringError("native iter requires one iterable or callable+sentinel")
