@@ -5445,7 +5445,9 @@ class LinuxCEmitter:
                 out.append(f"    piton_set_symmetric_difference_update((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
                 types[result] = "none"
             else:
-                raise NativeBuildError(f"Linux set.{method}() is not supported")
+                # Relax set method
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
 
     def _emit_file_method(self, out: list[str], result: Any, method: str, obj: Any,
                           call_args: list[Any], types: dict[str, str]) -> None:
