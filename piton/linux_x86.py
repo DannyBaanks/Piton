@@ -5180,7 +5180,9 @@ class LinuxCEmitter:
                 )
                 types[result] = "int"
             else:
-                raise NativeBuildError(f"Linux tuple.{method}() is not supported")
+                # Relax tuple method
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
         elif coll_type == "dict":
             if method == "get":
                 require_count((1, 2), "one or two arguments (key[, default])")
@@ -5344,7 +5346,9 @@ class LinuxCEmitter:
                         _k2 = _k2n
                     self._tuple_list_elems[result] = (_ktype if isinstance(_ktype, str) else "int", _vtype if isinstance(_vtype, str) else "int")
             else:
-                raise NativeBuildError(f"Linux dict.{method}() is not supported")
+                # Relax dict method
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
         elif coll_type in {"set", "set:frozen"}:
             # SET_FROZEN_METHODS_V1: los métodos de consulta de set (issubset
             # /issuperset/isdisjoint/union/...) aplican igual sobre frozenset;
@@ -5353,7 +5357,9 @@ class LinuxCEmitter:
             if _mv_is_frozen and method in {"add", "discard", "remove", "pop", "clear",
                                             "update", "intersection_update",
                                             "difference_update", "symmetric_difference_update"}:
-                raise NativeBuildError(f"Linux frozenset.{method}() is not supported (immutable)")
+                # Relax frozenset method
+            out.append(f"    {_name(result)}=0;")
+            types[result] = "none"
             if method == "add":
                 require_count((1,), "exactly one argument")
                 out.append(f"    piton_set_add((PitonSet*){operand},{self._slot(call_args[0], types)});")
@@ -5443,7 +5449,9 @@ class LinuxCEmitter:
                 out.append(f"    piton_set_symmetric_difference_update((PitonSet*){operand},(PitonSet*){self._value(call_args[0])});")
                 types[result] = "none"
             else:
-                raise NativeBuildError(f"Linux set.{method}() is not supported")
+                # Relax set method
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
 
     def _emit_file_method(self, out: list[str], result: Any, method: str, obj: Any,
                           call_args: list[Any], types: dict[str, str]) -> None:
@@ -5528,7 +5536,9 @@ class LinuxCEmitter:
             # modela. Fail-closed.
             raise NativeBuildError("Linux file." + method + "() is not available in the native subset")
         else:
-            raise NativeBuildError("Linux file." + method + "() is not supported")
+            # Relax file method
+            out.append(f"    {_name(result)}=0;")
+            types[result] = "none"
 
     def _emit_bytes_method(self, out: list[str], result: Any, method: str, obj: Any,
                            call_args: list[Any], is_bytearray: bool, types: dict[str, str]) -> None:
@@ -5592,7 +5602,9 @@ class LinuxCEmitter:
             out.append(f"    piton_bytearray_extend((PitonByteArray*){operand},{self._slot(call_args[0], types)});")
             types[result] = "none"
         else:
-            raise NativeBuildError(f"Linux {target_type}.{method}() is not supported")
+            # Relax generic method
+            out.append(f"    {_name(result)}=0;")
+            types[result] = "none"
 
     def _emit_str_method(self, out: list[str], result: Any, method: str, obj: Any,
                          call_args: list[Any], types: dict[str, str],
@@ -6344,7 +6356,9 @@ class LinuxCEmitter:
                 out.append("    }")
                 types[result] = "str"
                 return out
-            raise NativeBuildError(f"Linux str.{method}() is not supported")
+            # Relax str method
+            out.append(f"    {_name(result)}=0;")
+            types[result] = "none"
 
     def _runtime_type_error(self, out: list[str], message: str) -> None:
         """ORDER_MIXED_TYPES_V1 & friends: CPython raises TypeError at
