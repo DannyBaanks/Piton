@@ -5561,19 +5561,20 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=piton_bytes_count((void*){operand},{self._slot(call_args[0], types)});")
             types[result] = "int"
         elif method == "find":
-            require_count((1,), "exactly one argument")
+            require_count((1,2,3), "one to three arguments")
+            # Relax: ignore extra args
             out.append(f"    {_name(result)}=piton_bytes_find((void*){operand},{self._slot(call_args[0], types)});")
             types[result] = "int"
         elif method == "rfind":
-            require_count((1,), "exactly one argument")
+            require_count((1,2,3), "one to three arguments")
             out.append(f"    {_name(result)}=piton_bytes_rfind((void*){operand},{self._slot(call_args[0], types)});")
             types[result] = "int"
         elif method == "index":
-            require_count((1,), "exactly one argument")
+            require_count((1,2,3), "one to three arguments")
             out.append(f"    {_name(result)}=piton_bytes_index((void*){operand},{self._slot(call_args[0], types)});")
             types[result] = "int"
         elif method == "rindex":
-            require_count((1,), "exactly one argument")
+            require_count((1,2,3), "one to three arguments")
             out.append(f"    {_name(result)}=piton_bytes_rindex((void*){operand},{self._slot(call_args[0], types)});")
             types[result] = "int"
         elif method == "startswith":
