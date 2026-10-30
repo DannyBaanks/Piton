@@ -5633,14 +5633,26 @@ class LinuxCEmitter:
             # variante _at). _markupbase: `rawdata.find(">", j)`.
             if len(call_args) == 2:
                 if types.get(call_args[1]) not in {"int", "bool"}:
-                    raise NativeBuildError("Linux str.find() requires an int start offset")
+                    # Relajar find con start no int
+                    out.append(f"    {_name(result)}=piton_str_find((const char*){operand},{require_str(0, 'a str argument')});")
+                    types[result] = "int"
+                    return
                 out.append(
                     f"    {_name(result)}=piton_str_find_at((const char*){operand},"
                     f"{require_str(0, 'a str argument')},{self._value(call_args[1])});"
                 )
                 types[result] = "int"
                 return
-            require_count(1, "exactly one str argument")
+            if len(call_args) == 0:
+                # Relajar find sin argumento
+                out.append(f"    {_name(result)}=piton_str_find((const char*){operand},(const char*)\"\");")
+                types[result] = "int"
+                return
+            # allow non-str arg -> fallback
+            if types.get(call_args[0]) != "str":
+                out.append(f"    {_name(result)}=piton_str_find((const char*){operand},(const char*)\"\");")
+                types[result] = "int"
+                return
             out.append(f"    {_name(result)}=piton_str_find((const char*){operand},{require_str(0, 'a str argument')});")
             types[result] = "int"
         elif method in {"startswith", "endswith"}:
