@@ -3305,6 +3305,14 @@ class MIRLowerer:
                     builder.emit("store", var.name, ctx_result)
                 self._lower_statements(builder, node.body)
                 return
+            # Soporte adicional para `con <variable>` o LOAD
+            if expr.kind == HIRKind.LOAD:
+                ctx_result = self._lower_expr(builder, expr)
+                var = item.optional_vars
+                if var is not None and var.kind == HIRKind.LOAD:
+                    builder.emit("store", var.name, ctx_result)
+                self._lower_statements(builder, node.body)
+                return
             raise MIRLoweringError(
                 "native with context must be a direct call to a native class constructor"
             )
