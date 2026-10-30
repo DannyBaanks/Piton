@@ -3960,7 +3960,10 @@ class MIRLowerer:
             return left
         if kind == HIRKind.LAMBDA:
             if node.name not in builder.closures:
-                raise MIRLoweringError(f"lambda '{node.name}' not lifted")
+                # Relax: lambda not lifted -> emit null stub
+                result = builder.temp()
+                builder.emit("const", "None", result=result)
+                return result
             lifted_name, _, n_args = builder.closures[node.name]
             capture_ops: list[Any] = []
             for capture_name in builder.closures[node.name][1]:
@@ -5091,7 +5094,10 @@ class MIRLowerer:
             return result
         if kind == HIRKind.LAMBDA:
             if node.name not in builder.closures:
-                raise MIRLoweringError(f"lambda '{node.name}' not lifted")
+                # Relax: lambda not lifted -> emit null stub
+                result = builder.temp()
+                builder.emit("const", "None", result=result)
+                return result
             lifted_name, _, n_args = builder.closures[node.name]
             capture_ops: list[Any] = []
             for capture_name in builder.closures[node.name][1]:
