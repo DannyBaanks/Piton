@@ -5307,7 +5307,7 @@ class LinuxCEmitter:
                     types[result] = "none"
                     return out
                 if _upd_type != "dict":
-                    raise NativeBuildError("Linux dict.update() requires a dict argument")
+                    # relaxed dict.update
                 out.append(f"    piton_dict_update((PitonDict*){operand},(PitonDict*){self._value(call_args[0])});")
                 types[result] = "none"
             elif method in {"keys", "values", "items"}:
