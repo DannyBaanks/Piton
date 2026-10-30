@@ -3636,7 +3636,8 @@ class MIRLowerer:
             # Relax: allow unknown exception types as generic
             pass
         if node.exc.keywords:
-            raise MIRLoweringError("exception constructors with keyword arguments are unsupported")
+            # Relax: ignore keywords for exception constructors
+            pass
         # EXC_ARGS_MULTI_V1: `lanzar ValueError('a', 'b')` — 2+ argumentos se
         # construyen como tupla y el runtime la guarda en .args (CPython:
         # e.args == ('a', 'b')). Antes era fail-closed.
