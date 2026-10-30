@@ -6674,9 +6674,8 @@ class MIRLowerer:
             # Fallback a llamada dinámica para callees con más de 4 params
             return self._lower_dynamic_call(builder, node)
         if self.function_posonly.get(name) or self.function_kwonly.get(name):
-            raise MIRLoweringError(
-                "CALL_UNPACKING_DYNAMIC4_V1 does not support positional-only or keyword-only callees yet"
-            )
+            # Relajar positional-only/keyword-only: fallback a llamada dinámica
+            return self._lower_dynamic_call(builder, node)
         # CALL_UNPACK_VARIADIC_V1: los callees *args / **kwargs ya bajan (el
         # emisor Linux empaqueta la cola en la tupla del vararg, o pasa el
         # dict directo). Siguen rechazados positional-only/keyword-only.
