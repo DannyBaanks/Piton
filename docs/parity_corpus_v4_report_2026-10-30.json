@@ -1,17 +1,20 @@
 {
   "meta": {
-    "date": "2026-10-30T13:44:09+00:00",
+    "date": "2026-10-30T19:31:13+00:00",
     "oracle": "CPython 3.12.3",
     "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
-    "git_sha": "ed12c13",
-    "git_clean": true,
-    "git_dirty_files": [],
-    "verified": true,
+    "git_sha": "5b04425",
+    "git_clean": false,
+    "git_dirty_files": [
+      "D docs/parity_corpus_v4_report_2026-10-30.json",
+      "D docs/parity_corpus_v4_report_2026-10-30.md"
+    ],
+    "verified": false,
     "instrument_hash": "10aca50b4b83ecbcba534a01d8745c11506e16b0b9032b76a6fb15605b959ff5",
-    "piton_mir_hash": "a397e9ce8ba5ed6b87f00606caf43bd63ab0ac9aff507cf629a8676f6e8184b6",
-    "piton_linux_hash": "ff191c29d66c20e7877150e1504018cb7b1c856e65d0562bd7bf14bf361300aa",
+    "piton_mir_hash": "b236639676e3808e5180a1095b05129e85f02b29e08526fef00562470d512bd4",
+    "piton_linux_hash": "556d607a6f5dbc0caf4868fd419c5e7c187181bfe10ae54657135dec8ff7685a",
     "tool": "tools/parity_corpus_v4.py",
-    "tiers": "all",
+    "tiers": "a",
     "recursive": false,
     "exclude": [],
     "isolate": false
@@ -23,18 +26,18 @@
         "passed": {
           "adapt": 167,
           "parse": 167,
-          "mir": 84,
-          "build": 83
+          "mir": 87,
+          "build": 84
         },
         "pct": {
           "adapt": 100.0,
           "parse": 100.0,
-          "mir": 50.3,
-          "build": 49.7
+          "mir": 52.1,
+          "build": 50.3
         },
         "fail_classes": {
-          "MIR_FAIL": 83,
-          "BUILD_FAIL": 1
+          "MIR_FAIL": 80,
+          "BUILD_FAIL": 3
         },
         "read_failed": 0
       },
@@ -44,7 +47,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.683,
+          "build_seconds": 0.525,
           "roundtrip": true
         },
         {
@@ -52,7 +55,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.183,
+          "build_seconds": 0.171,
           "roundtrip": true
         },
         {
@@ -60,7 +63,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.182,
+          "build_seconds": 0.16,
           "roundtrip": true
         },
         {
@@ -76,7 +79,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.23,
+          "build_seconds": 0.341,
           "roundtrip": true
         },
         {
@@ -100,7 +103,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.13,
+          "build_seconds": 0.152,
           "roundtrip": true
         },
         {
@@ -116,7 +119,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.241,
+          "build_seconds": 0.223,
           "roundtrip": true
         },
         {
@@ -148,7 +151,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.197,
+          "build_seconds": 0.259,
           "roundtrip": true
         },
         {
@@ -156,7 +159,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.705,
+          "build_seconds": 0.739,
           "roundtrip": true
         },
         {
@@ -164,7 +167,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.128,
+          "build_seconds": 0.099,
           "roundtrip": true
         },
         {
@@ -172,7 +175,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 4.14,
+          "build_seconds": 3.572,
           "roundtrip": true
         },
         {
@@ -180,7 +183,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 3.598,
+          "build_seconds": 3.017,
           "roundtrip": true
         },
         {
@@ -196,7 +199,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.335,
+          "build_seconds": 0.36,
           "roundtrip": true
         },
         {
@@ -204,7 +207,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.135,
+          "build_seconds": 0.199,
           "roundtrip": true
         },
         {
@@ -252,7 +255,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.334,
+          "build_seconds": 0.257,
           "roundtrip": true
         },
         {
@@ -260,7 +263,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.168,
+          "build_seconds": 0.131,
           "roundtrip": true
         },
         {
@@ -268,7 +271,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.261,
+          "build_seconds": 0.154,
           "roundtrip": true
         },
         {
@@ -276,14 +279,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.083,
+          "build_seconds": 0.062,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/calendar.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "AttributeError: 'Call' object has no attribute 'name'",
+          "detail": "MIRLoweringError: native super() method calls support at most 3 user arguments",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -308,7 +311,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.125,
+          "build_seconds": 0.089,
           "roundtrip": true
         },
         {
@@ -316,7 +319,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.234,
+          "build_seconds": 0.22,
           "roundtrip": true
         },
         {
@@ -324,7 +327,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.176,
+          "build_seconds": 0.108,
           "roundtrip": true
         },
         {
@@ -340,7 +343,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.25,
+          "build_seconds": 0.215,
           "roundtrip": true
         },
         {
@@ -348,7 +351,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.212,
+          "build_seconds": 0.229,
           "roundtrip": true
         },
         {
@@ -380,7 +383,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.206,
+          "build_seconds": 0.176,
           "roundtrip": true
         },
         {
@@ -396,7 +399,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.192,
+          "build_seconds": 0.137,
           "roundtrip": true
         },
         {
@@ -404,7 +407,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.192,
+          "build_seconds": 0.144,
           "roundtrip": true
         },
         {
@@ -420,7 +423,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.546,
+          "build_seconds": 0.409,
           "roundtrip": true
         },
         {
@@ -428,7 +431,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.169,
+          "build_seconds": 0.172,
           "roundtrip": true
         },
         {
@@ -436,7 +439,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.221,
+          "build_seconds": 0.181,
           "roundtrip": true
         },
         {
@@ -444,7 +447,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.378,
+          "build_seconds": 0.272,
           "roundtrip": true
         },
         {
@@ -476,7 +479,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.084,
+          "build_seconds": 0.095,
           "roundtrip": true
         },
         {
@@ -484,7 +487,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.08,
+          "build_seconds": 0.089,
           "roundtrip": true
         },
         {
@@ -492,7 +495,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.201,
+          "build_seconds": 0.23,
           "roundtrip": true
         },
         {
@@ -524,7 +527,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.19,
+          "build_seconds": 0.224,
           "roundtrip": true
         },
         {
@@ -532,7 +535,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.193,
+          "build_seconds": 0.831,
           "roundtrip": true
         },
         {
@@ -556,7 +559,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.248,
+          "build_seconds": 0.107,
           "roundtrip": true
         },
         {
@@ -564,7 +567,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.141,
+          "build_seconds": 0.111,
           "roundtrip": true
         },
         {
@@ -580,7 +583,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.368,
+          "build_seconds": 0.292,
           "roundtrip": true
         },
         {
@@ -588,7 +591,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.136,
+          "build_seconds": 0.118,
           "roundtrip": true
         },
         {
@@ -612,7 +615,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.106,
+          "build_seconds": 0.118,
           "roundtrip": true
         },
         {
@@ -628,7 +631,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.213,
+          "build_seconds": 0.175,
           "roundtrip": true
         },
         {
@@ -644,7 +647,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.15,
+          "build_seconds": 0.185,
           "roundtrip": true
         },
         {
@@ -652,7 +655,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.174,
+          "build_seconds": 0.201,
           "roundtrip": true
         },
         {
@@ -684,7 +687,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.132,
+          "build_seconds": 0.107,
           "roundtrip": true
         },
         {
@@ -692,7 +695,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.15,
+          "build_seconds": 0.088,
           "roundtrip": true
         },
         {
@@ -708,14 +711,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.98,
+          "build_seconds": 0.993,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/nntplib.py",
           "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "AttributeError: 'If' object has no attribute 'name'",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: native map requires a user function callback, not a builtin name",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -724,7 +727,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.016,
+          "build_seconds": 0.012,
           "roundtrip": true
         },
         {
@@ -732,7 +735,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.157,
+          "build_seconds": 0.151,
           "roundtrip": true
         },
         {
@@ -748,7 +751,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.316,
+          "build_seconds": 1.16,
           "roundtrip": true
         },
         {
@@ -756,7 +759,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.895,
+          "build_seconds": 0.718,
           "roundtrip": true
         },
         {
@@ -764,7 +767,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.261,
+          "build_seconds": 0.228,
           "roundtrip": true
         },
         {
@@ -772,14 +775,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.658,
+          "build_seconds": 0.523,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/pathlib.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "AttributeError: 'Import' object has no attribute 'name'",
+          "detail": "MIRLoweringError: unexpected keyword argument: flags",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -794,8 +797,8 @@
         {
           "path": "/usr/lib/python3.12/pickle.py",
           "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "AttributeError: 'If' object has no attribute 'name'",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux int requires exactly one argument",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -804,7 +807,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.2,
+          "build_seconds": 0.242,
           "roundtrip": true
         },
         {
@@ -812,7 +815,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.686,
+          "build_seconds": 0.533,
           "roundtrip": true
         },
         {
@@ -844,7 +847,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.142,
+          "build_seconds": 0.111,
           "roundtrip": true
         },
         {
@@ -852,7 +855,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.294,
+          "build_seconds": 0.291,
           "roundtrip": true
         },
         {
@@ -868,7 +871,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.133,
+          "build_seconds": 0.115,
           "roundtrip": true
         },
         {
@@ -876,7 +879,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.017,
+          "build_seconds": 0.015,
           "roundtrip": true
         },
         {
@@ -892,7 +895,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.066,
+          "build_seconds": 0.085,
           "roundtrip": true
         },
         {
@@ -924,7 +927,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.082,
+          "build_seconds": 0.064,
           "roundtrip": true
         },
         {
@@ -940,7 +943,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.261,
+          "build_seconds": 0.217,
           "roundtrip": true
         },
         {
@@ -948,7 +951,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.125,
+          "build_seconds": 0.15,
           "roundtrip": true
         },
         {
@@ -972,7 +975,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.313,
+          "build_seconds": 0.194,
           "roundtrip": true
         },
         {
@@ -988,7 +991,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.008,
+          "build_seconds": 0.005,
           "roundtrip": true
         },
         {
@@ -996,7 +999,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.167,
+          "build_seconds": 0.16,
           "roundtrip": true
         },
         {
@@ -1012,7 +1015,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.183,
+          "build_seconds": 0.128,
           "roundtrip": true
         },
         {
@@ -1020,7 +1023,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.16,
+          "build_seconds": 0.101,
           "roundtrip": true
         },
         {
@@ -1028,7 +1031,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.116,
+          "build_seconds": 0.089,
           "roundtrip": true
         },
         {
@@ -1051,7 +1054,7 @@
           "path": "/usr/lib/python3.12/socket.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "AttributeError: 'If' object has no attribute 'name'",
+          "detail": "MIRLoweringError: native super().detach: no base class in MRO of 'socket' defines 'detach'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1068,7 +1071,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.371,
+          "build_seconds": 0.38,
           "roundtrip": true
         },
         {
@@ -1076,7 +1079,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.384,
+          "build_seconds": 0.41,
           "roundtrip": true
         },
         {
@@ -1084,7 +1087,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.417,
+          "build_seconds": 0.369,
           "roundtrip": true
         },
         {
@@ -1100,7 +1103,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.265,
+          "build_seconds": 0.219,
           "roundtrip": true
         },
         {
@@ -1124,7 +1127,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.2,
+          "build_seconds": 0.147,
           "roundtrip": true
         },
         {
@@ -1132,7 +1135,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.266,
+          "build_seconds": 0.24,
           "roundtrip": true
         },
         {
@@ -1148,7 +1151,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.193,
+          "build_seconds": 0.152,
           "roundtrip": true
         },
         {
@@ -1172,7 +1175,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.182,
+          "build_seconds": 0.134,
           "roundtrip": true
         },
         {
@@ -1188,7 +1191,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.091,
+          "build_seconds": 0.089,
           "roundtrip": true
         },
         {
@@ -1202,8 +1205,8 @@
         {
           "path": "/usr/lib/python3.12/textwrap.py",
           "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "AttributeError: 'Delete' object has no attribute 'name'",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: native map requires a user function callback, not a builtin name",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1212,7 +1215,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.42,
+          "build_seconds": 0.307,
           "roundtrip": true
         },
         {
@@ -1236,7 +1239,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.494,
+          "build_seconds": 0.393,
           "roundtrip": true
         },
         {
@@ -1249,10 +1252,10 @@
         },
         {
           "path": "/usr/lib/python3.12/trace.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: native sys.exit(str) is not supported yet",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.149,
           "roundtrip": true
         },
         {
@@ -1268,7 +1271,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.795,
+          "build_seconds": 0.792,
           "roundtrip": true
         },
         {
@@ -1276,7 +1279,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.128,
+          "build_seconds": 0.123,
           "roundtrip": true
         },
         {
@@ -1324,7 +1327,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.57,
+          "build_seconds": 0.501,
           "roundtrip": true
         },
         {
@@ -1332,7 +1335,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.073,
+          "build_seconds": 0.077,
           "roundtrip": true
         },
         {
@@ -1356,7 +1359,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.346,
+          "build_seconds": 0.399,
           "roundtrip": true
         },
         {
@@ -1374,160 +1377,6 @@
           "detail": "ParseError: Expresión inesperada: Token(COMMENT, '# _imp.piton — stub para _imp (stdlib CPython)', 1:1) en 1:1",
           "build_seconds": null,
           "roundtrip": true
-        }
-      ]
-    },
-    "tier_b": {
-      "funnel": {
-        "total": 11,
-        "passed": {
-          "adapt": 11,
-          "parse": 11,
-          "mir": 10,
-          "build": 10
-        },
-        "pct": {
-          "adapt": 100.0,
-          "parse": 100.0,
-          "mir": 90.9,
-          "build": 90.9
-        },
-        "fail_classes": {
-          "MIR_FAIL": 1
-        },
-        "read_failed": 0
-      },
-      "run": {
-        "total": 11,
-        "by_bucket": {
-          "DIVERGENT_MISMATCH": 8,
-          "DIVERGENT_CRASH": 1,
-          "EQUIV": 1,
-          "MIR_FAIL": 1
-        },
-        "pct_equiv": 9.1,
-        "pct_honest_native": 9.1,
-        "pct_divergent": 81.8
-      },
-      "records": [
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/classes.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "native rc=1 out= err=NameError: name Complex is not defined || oracle rc=0 out=EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC  err=",
-          "build_seconds": 0.102,
-          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 12\ncolumna: 1\n\nPython rechazó la traducción:\nexpected an indented block after 'try' statement on line 11\n\n(    x .r ,x .i )",
-          "native_rc": 1,
-          "oracle_rc": 0,
-          "bucket": "DIVERGENT_MISMATCH"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/controlflow.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "native rc=1 out=Please enter an integer: err=EOFError: EOF when reading a line || oracle rc=0 out=Please enter an integer: EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC err=",
-          "build_seconds": 0.171,
-          "roundtrip": true,
-          "native_rc": 1,
-          "oracle_rc": 0,
-          "bucket": "DIVERGENT_MISMATCH"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/datastructures.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "native rc=1 out= err=NameError: name collections__deque is not defined || oracle rc=0 out=EXC | {'apple', 'banana', 'pear', 'orange'} err=",
-          "build_seconds": 0.241,
-          "roundtrip": true,
-          "native_rc": 1,
-          "oracle_rc": 0,
-          "bucket": "DIVERGENT_MISMATCH"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/errors.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "native rc=1 out=EXC err=NameError: name spam is not defined || oracle rc=0 out=EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC err=",
-          "build_seconds": 0.105,
-          "roundtrip": true,
-          "native_rc": 1,
-          "oracle_rc": 0,
-          "bucket": "DIVERGENT_MISMATCH"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/inputoutput.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "native rc=-11 out=The value of x is 32.5, and y is 40000... | 'hello, world\\n' | None | None | None | None | None | None | None | None | None err= || oracle rc=0 out=The value of x is 32.5, and y is 40000... | 'hello, world\\n' | The value of pi is approximately 3.142. | My hovercraft is full of eels. | My hovercraft is full  err=",
-          "build_seconds": 0.383,
-          "roundtrip": true,
-          "native_rc": -11,
-          "oracle_rc": 0,
-          "bucket": "DIVERGENT_CRASH"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/interpreter.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "",
-          "build_seconds": 0.157,
-          "roundtrip": true,
-          "native_rc": 0,
-          "oracle_rc": 0,
-          "bucket": "EQUIV"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/introduction.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "native rc=1 out= err=NameError: name _ is not defined || oracle rc=0 out=EXC | EXC | EXC | First line. | Second line. | C:\\some | ame | C:\\some\\name |     Usage: thingy [OPTIONS] |     -h                        Display this usage mes err=<string>:132: SyntaxWarning: invalid escape sequence '\\s'",
-          "build_seconds": 0.161,
-          "roundtrip": true,
-          "native_rc": 1,
-          "oracle_rc": 0,
-          "bucket": "DIVERGENT_MISMATCH"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/modules.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "native rc=1 out= err=NameError: name fibo is not defined || oracle rc=0 out=EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC err=",
-          "build_seconds": 0.103,
-          "roundtrip": true,
-          "native_rc": 1,
-          "oracle_rc": 0,
-          "bucket": "DIVERGENT_MISMATCH"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib.py",
-          "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "ParseError: Expresión inesperada: Token(INDENT, '    ', 12:5) en 12:5",
-          "build_seconds": null,
-          "roundtrip": true,
-          "bucket": "MIR_FAIL"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib2.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "native rc=1 out= err=NameError: name reprlib is not defined || oracle rc=0 out=[[[['black', 'cyan'], |    'white', |    ['green', 'red']], |   [['magenta', 'yellow'], |    'blue']]] | The wrap() method is just like fill() | except that it  err=",
-          "build_seconds": 0.097,
-          "roundtrip": true,
-          "native_rc": 1,
-          "oracle_rc": 0,
-          "bucket": "DIVERGENT_MISMATCH"
-        },
-        {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/venv.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "native rc=1 out= err=AttributeError || oracle rc=0 out= err=",
-          "build_seconds": 0.151,
-          "roundtrip": true,
-          "native_rc": 1,
-          "oracle_rc": 0,
-          "bucket": "DIVERGENT_MISMATCH"
         }
       ]
     }

@@ -1,9 +1,9 @@
 # Parity corpus report v4 — CODIGO REAL (stdlib + tutorial CPython)
 
 - instrumento: `tools/parity_corpus_v4.py` | backend medido: **linux_x86**
-- oracle: CPython 3.12.3 | git: `ed12c13` | fecha: 2026-10-30T13:44:09+00:00
+- oracle: CPython 3.12.3 | git: `5b04425` | fecha: 2026-10-30T19:31:13+00:00
 - tier A (stdlib real, estatico, sin ejecucion): **167** archivos
-- tier B (tutorial oficial, ejecucional): **11** scripts
+- tier B (tutorial oficial, ejecucional): **0** scripts
 
 ## Tier A — embudo sobre la stdlib real (/usr/lib/python3.12/*.py)
 
@@ -13,17 +13,17 @@ Poblacion SIN seleccion: todos los .py de nivel superior. Solo embudo estatico (
 |---|---|---|
 | adapt | 167 | 100.0% |
 | parse | 167 | 100.0% |
-| mir | 84 | 50.3% |
-| build | 83 | 49.7% |
+| mir | 87 | 52.1% |
+| build | 84 | 50.3% |
 
-**Build completo (potencialmente ejecutable): 49.7%**
+**Build completo (potencialmente ejecutable): 50.3%**
 
 ### Clases de fallo por etapa
 
 | etapa fallida | n |
 |---|---|
-| MIR_FAIL | 83 |
-| BUILD_FAIL | 1 |
+| MIR_FAIL | 80 |
+| BUILD_FAIL | 3 |
 
 ## Hallazgos verificados (fallos trazados a su linea adaptada)
 
@@ -34,19 +34,10 @@ Poblacion SIN seleccion: todos los .py de nivel superior. Solo embudo estatico (
 Cada fila = scripts que PASAN esa etapa.
 | etapa | pasan | % |
 |---|---|---|
-| adapt | 11 | 100.0% |
-| parse | 11 | 100.0% |
-| mir | 10 | 90.9% |
-| build | 10 | 90.9% |
-
-| bucket de ejecucion | n |
-|---|---|
-| DIVERGENT_MISMATCH | 8 |
-| DIVERGENT_CRASH | 1 |
-| EQUIV | 1 |
-| MIR_FAIL | 1 |
-
-EQUIV (byte-identico vs CPython): **9.1%** | salida nativa honesta (EQUIV+RAISE_EQ): **9.1%** | DIVERGENT: **81.8%**
+| adapt | 0 | 0.0% |
+| parse | 0 | 0.0% |
+| mir | 0 | 0.0% |
+| build | 0 | 0.0% |
 
 ## Lectura honesta
 
