@@ -44,3 +44,5 @@ funcion perf_counter ():
 
 funcion monotonic ():
     lanzar NotImplementedError ('time.monotonic no esta implementado en el backend nativo')
+
+tzname = "UTC"
