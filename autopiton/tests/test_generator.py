@@ -35,7 +35,33 @@ class GeneratorTests(unittest.TestCase):
     def test_all_families_are_reachable(self):
         programs = ProgramGenerator(seed=42).generate(count=200)
         families = {program.family for program in programs}
-        self.assertEqual(families, set(ProgramFamily))
+        self.assertEqual(families, set(ProgramFamily) - {ProgramFamily.SYSTEMATIC})
+
+    def test_systematic_corpus_is_deterministic_and_complete(self):
+        from autopiton.generator import SystematicGrid
+
+        generator = ProgramGenerator(seed=7)
+        cells = SystematicGrid.cells()
+        programs = generator.systematic_corpus()
+        self.assertEqual(len(programs), len(cells) * len(SystematicGrid.SURFACES))
+        self.assertEqual(
+            [p.description for p in programs],
+            [p.description for p in ProgramGenerator(seed=999).systematic_corpus()],
+        )
+        self.assertEqual(
+            {p.family for p in programs}, {ProgramFamily.SYSTEMATIC}
+        )
+        surfaces_seen = {p.description.split("/")[1].split("]")[0] for p in programs}
+        self.assertEqual(surfaces_seen, set(SystematicGrid.SURFACES))
+        for program in programs:
+            compile(program.code, "<systematic>", "exec")
+            self.assertTrue(program.is_valid)
+            self.assertIn("print(", program.code)
+
+    def test_generate_family_systematic_routes_to_grid(self):
+        programs = ProgramGenerator(seed=1).generate(ProgramFamily.SYSTEMATIC, 5)
+        self.assertEqual(len(programs), 5)
+        self.assertTrue(all(p.family is ProgramFamily.SYSTEMATIC for p in programs))
 
     def test_family_generation_honours_the_requested_family(self):
         generator = ProgramGenerator(seed=3)

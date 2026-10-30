@@ -231,6 +231,10 @@ def compare_command(args):
         mode = "canary"
         seed = None
         programs = generator.generate_canary_cases()
+    elif getattr(args, "systematic", False):
+        mode = "systematic"
+        seed = None
+        programs = generator.systematic_corpus()
     elif args.input:
         mode = "input"
         seed = None
@@ -671,6 +675,7 @@ def main():
     cmp_parser.add_argument("-c", "--count", type=int, default=10, help="Number of generated programs")
     cmp_parser.add_argument("--seed", type=int, help="Random seed (default 0)")
     cmp_parser.add_argument("--canary", action="store_true", help="Use the mandatory canary cases")
+    cmp_parser.add_argument("--systematic", action="store_true", help="Use the deterministic systematic grid")
     cmp_parser.add_argument("--repeat", type=int, default=1, help="Repetitions per program for stability")
     cmp_parser.add_argument("--limit", type=int, help="Only run the first N programs")
     cmp_parser.set_defaults(func=compare_command)

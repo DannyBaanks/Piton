@@ -33,6 +33,56 @@ class ProgramFamily(Enum):
     PROPERTIES = "properties"
     GENERATORS = "generators"
     ASYNC = "async"
+    SYSTEMATIC = "systematic"
+
+
+class SystematicGrid:
+    """Deterministic op x kind x surface grid used to probe corpus coverage.
+
+    The rule (which combinations are tried) is the corpus definition; AutoPiton's
+    generator emits every cell. Random sampling cannot guarantee coverage, so a
+    systematic pass exists as an independent path: no RNG, one program per cell,
+    always in the same order.
+
+    Surfaces: ``direct`` prints the expression inline; ``lambda`` returns it
+    from a lambda and prints the call. Empirically the value's *shape* is what
+    changes under PITON when it crosses a callable boundary — a direct
+    ``print(True)`` prints ``True`` but ``f = lambda: True; print(f())`` prints
+    ``1`` — so the surface dimension is required for the grid to see those
+    divergences at all.
+    """
+
+    ARITHMETIC_OPS = ("+", "-", "*", "/", "//", "%")
+    COMPARISON_OPS = ("==", "!=", "<", "<=", ">", ">=")
+    BITWISE_OPS = ("&", "|", "^", "<<", ">>")
+
+    INT_OPERANDS = (7, 3)
+    FLOAT_OPERANDS = (7.5, 3.5)
+    BOOL_OPERANDS = (True, True)
+    SHIFT_OPERANDS = (17, 3)
+
+    SURFACES = ("direct", "lambda")
+
+    @classmethod
+    def cells(cls):
+        cells = []
+        for op in cls.ARITHMETIC_OPS:
+            cells.append(("arith_int", op, cls.INT_OPERANDS))
+            cells.append(("arith_float", op, cls.FLOAT_OPERANDS))
+        for op in cls.COMPARISON_OPS:
+            cells.append(("compare_int", op, cls.INT_OPERANDS))
+            cells.append(("compare_bool", op, cls.BOOL_OPERANDS))
+        for op in cls.BITWISE_OPS:
+            cells.append(("bitwise_int", op, cls.SHIFT_OPERANDS))
+        return cells
+
+    @classmethod
+    def render(cls, kind: str, op: str, operands, surface: str) -> str:
+        left, right = operands
+        expr = f"{left!r} {op} {right!r}"
+        if surface == "lambda":
+            return f"_v = lambda: {expr}\nprint(_v())\n"
+        return f"print({expr})\n"
 
 
 @dataclass
@@ -230,14 +280,17 @@ class ProgramGenerator:
     def generate(self, family: Optional[ProgramFamily] = None, count: int = 1) -> List[GeneratedProgram]:
         """
         Generate programs.
-        
+
         Args:
-            family: Specific family to generate, or None for random
+            family: Specific family to generate, or None for random.
+                SYSTEMATIC bypasses the RNG and enumerates the grid instead.
             count: Number of programs to generate
-            
+
         Returns:
             List of generated programs
         """
+        if family is ProgramFamily.SYSTEMATIC:
+            return self.systematic_corpus(limit=count)
         programs = []
         for _ in range(count):
             if family:
@@ -259,10 +312,34 @@ class ProgramGenerator:
             program.description = f"{program.description} [auto-invalid: {exc.msg}]"
     
     def _generate_random(self) -> GeneratedProgram:
-        """Generate a random program."""
-        families = list(ProgramFamily)
+        """Generate a random program from the sampled families."""
+        families = [f for f in ProgramFamily if f is not ProgramFamily.SYSTEMATIC]
         family = self.rng.choice(families)
         return self._generate_family(family)
+
+    def systematic_corpus(self, limit: Optional[int] = None) -> List[GeneratedProgram]:
+        """Enumerate every cell x surface of the systematic grid."""
+        cells = [
+            (kind, op, operands, surface)
+            for (kind, op, operands) in SystematicGrid.cells()
+            for surface in SystematicGrid.SURFACES
+        ]
+        if limit is not None:
+            cells = cells[:limit]
+        programs: List[GeneratedProgram] = []
+        for kind, op, operands, surface in cells:
+            code = SystematicGrid.render(kind, op, operands, surface)
+            left, right = operands
+            program = GeneratedProgram(
+                code=code,
+                family=ProgramFamily.SYSTEMATIC,
+                seed=0,
+                complexity=1 if surface == "direct" else 2,
+                description=f"systematic[{kind}/{surface}] {left!r} {op} {right!r}",
+            )
+            self._validate(program)
+            programs.append(program)
+        return programs
     
     def _generate_family(self, family: ProgramFamily) -> GeneratedProgram:
         """Generate a program of a specific family."""
