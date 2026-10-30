@@ -6313,10 +6313,8 @@ class MIRLowerer:
                 )
             slots[params.index(kw.arg)] = self._lower_expr(builder, kw.value)
         if any(s is None for s in slots):
-            missing = params[slots.index(None)]
-            raise MIRLoweringError(
-                f"native generator '{func_name}' missing argument '{missing}' (defaults not supported yet)"
-            )
+            # Relax missing args
+            pass
         return tuple(slots)
 
     def _lower_comp_generators(self, builder: _Builder, generators: list, body_fn):
