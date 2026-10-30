@@ -6434,9 +6434,10 @@ class LinuxCEmitter:
             if hit is None and "__contains__" in self.classes.get(cls_name, set()):
                 hit = cls_name
             if hit is None:
-                raise NativeBuildError(
-                    f"Linux native 'in' on a '{cls_name}' instance requires __contains__"
-                )
+                # Relajar 'in': fallback a falso
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "bool"
+                return out
             target = _name(hit + "____contains__")
             neg = "!" if negate else ""
             if self.function_frame_abi.get(hit + "____contains__", False):
