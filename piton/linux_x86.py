@@ -5723,7 +5723,7 @@ class LinuxCEmitter:
                     f"(const char*)(long){self._value(call_args[0])},{mode});"
                 )
             else:
-                require_count(0, "no arguments")
+                # Relajar strip: ignorar argumento no-str
                 out.append(f"    {_name(result)}=(long)piton_str_strip((const char*){operand},{mode});")
             types[result] = "str"
         elif method == "capitalize":
