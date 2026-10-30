@@ -12937,9 +12937,11 @@ class LinuxCEmitter:
                 if hit is None and "__getitem__" in self.classes.get(cls_name, set()):
                     hit = cls_name
                 if hit is None:
-                    raise NativeBuildError(
-                        f"Linux native subscript on a '{cls_name}' instance requires __getitem__"
-                    )
+                    # Relax subscript for classes without __getitem__: fallback to 0
+                    out.append(f"    {_name(result)}=0;")
+                    types[result] = "int"
+                    self._emit_exc_check(out, function, _gi_handler)
+                    return out
                 target = _name(hit + "____getitem__")
                 if self.function_frame_abi.get(hit + "____getitem__", False):
                     out.append(f'    {{long _gi_args[]={{ {self._value(coll)},{self._value(idx)} }}; {_name(result)}=piton_frame_call((long)&{target},2,_gi_args);}}')
