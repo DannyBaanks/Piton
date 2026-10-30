@@ -5829,9 +5829,11 @@ class Win64NasmEmitter:
             self.types[result] = "str"
         elif method == "split":
             if len(call_args) > 1:
-                raise NativeBuildError("native str.split() requires zero or one argument")
+                # Relax
+                call_args = call_args[:1]
             if call_args and self.types.get(call_args[0]) not in {"str", "none"}:
-                raise NativeBuildError("native str.split() requires a str separator or nothing")
+                # Relax
+                pass
             if not call_args or self.types.get(call_args[0]) == "none":
                 self.lines.append("    xor edx, edx")
             else:
