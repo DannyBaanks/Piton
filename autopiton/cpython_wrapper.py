@@ -74,7 +74,13 @@ def main(argv: list) -> int:
         "__file__": display_name,
         "__builtins__": __builtins__,
     }
-    report = {\n        "display_name": display_name,\n        "status": "ok",\n        "exit_code": 0,\n        "python_version": sys.version.split()[0],\n        "python_executable": sys.executable,\n    }
+    report = {
+        "display_name": display_name,
+        "status": "ok",
+        "exit_code": 0,
+        "python_version": sys.version.split()[0],
+        "python_executable": sys.executable,
+    }
 
     try:
         code = compile(source, display_name, "exec")
