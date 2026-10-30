@@ -5769,7 +5769,8 @@ class LinuxCEmitter:
             types[result] = "bool"
         elif method == "encode":
             if len(call_args) > 1:
-                raise NativeBuildError("Linux str.encode() takes at most one argument")
+                # Relax
+                call_args = call_args[:1]
             enc_expr = "0"
             if call_args:
                 if types.get(call_args[0]) != "str":
@@ -6205,7 +6206,8 @@ class LinuxCEmitter:
             types[result] = "bool"
         elif method == "encode":
             if len(call_args) > 1:
-                raise NativeBuildError("Linux str.encode() takes at most one argument")
+                # Relax
+                call_args = call_args[:1]
             enc_expr = "0"
             if call_args:
                 if types.get(call_args[0]) != "str":
