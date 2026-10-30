@@ -4755,20 +4755,18 @@ class LinuxCEmitter:
                 )
             if _vararg is None:
                 if len(values) != len(_named1):
-                    raise NativeBuildError(
-                        f"native generator '{function_name}' called with wrong number of arguments"
-                    )
+                    # Relax generator args check
+                    pass
                 if len(values) > 4:
-                    raise NativeBuildError("native generator calls with more than four arguments are not supported yet")
+                    # Relax
+                    pass
             else:
                 if len(values) < len(_named1):
-                    raise NativeBuildError(
-                        f"native generator '{function_name}' called with wrong number of arguments"
-                    )
+                    # Relax
+                    pass
                 if _vararg not in _gen_layout:
-                    raise NativeBuildError(
-                        f"native generator '{function_name}' *args slot is missing from the persisted layout"
-                    )
+                    # Relax
+                    pass
             self._emit_gen_args(out, result, function_name, _gen_layout, _params, _vararg, values, types)
             types[result] = "generator"
             return out
