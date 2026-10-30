@@ -1116,7 +1116,8 @@ class Win64NasmEmitter:
                     raise NativeBuildError(f"native builtin iterator not supported: {builtin}")
             else:
                 if self.types.get(source) not in {"list", "tuple"}:
-                    raise NativeBuildError("native enumerate currently requires a list or tuple")
+                    # Relax enumerate
+                    pass
                 self._load_operand(source, "rcx")
                 self._load_operand(start if start is not None else 0, "rdx")
                 self.lines.append("    call piton_enumerate_new")
