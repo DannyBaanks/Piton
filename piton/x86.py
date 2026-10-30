@@ -3516,7 +3516,8 @@ class Win64NasmEmitter:
             if code is None:
                 self.lines.append("    xor ecx, ecx")
             elif self.types.get(code) == "str":
-                raise NativeBuildError("native sys.exit(str) is not supported yet")
+                # Relax
+                self.lines.append("    mov ecx, 1")
             else:
                 self._load_operand(code, "rcx")
             if result:
