@@ -1084,6 +1084,9 @@ class MIRLowerer:
                         continue
                     if method.kind == HIRKind.ANN_ASSIGN:
                         continue
+                    if method.kind != HIRKind.FUNC_DEF:
+                        # Skip non-method statements in class body (e.g., if, for)
+                        continue
                     symbol, role, prop_name = self._class_method_symbol(node.name, method, property_methods)
                     if used_symbols and symbol in used_symbols:
                         raise MIRLoweringError(
