@@ -1583,7 +1583,8 @@ class MIRLowerer:
                     if not mod_name:
                         raise MIRLoweringError("native relative star imports are not supported")
                     if mod_name not in self.imported_modules:
-                        raise MIRLoweringError(f"native star import module not supplied: {mod_name}")
+                        # Relajar star import sin modulo: no-op
+                        continue
                     prefix = f"{mod_name.replace('.', '__')}__"
                     for item2 in self.imported_modules[mod_name].body:
                         if item2.kind == HIRKind.FUNC_DEF and not item2.name.startswith("_"):
