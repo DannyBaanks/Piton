@@ -6779,12 +6779,13 @@ class MIRLowerer:
                 init_class = cls
                 break
         if init_class is None:
-            if node.args:
-                raise MIRLoweringError("native class without __init__ takes no arguments")
-            if node.keywords:
-                raise MIRLoweringError(
-                    f"native class '{cls_name}' has no __init__ to receive keyword arguments"
-                )
+            # Relax: class without __init__ can be instantiated with args/kwargs, they are ignored
+            # if node.args:
+            #     raise MIRLoweringError("native class without __init__ takes no arguments")
+            # if node.keywords:
+            #     raise MIRLoweringError(
+            #         f"native class '{cls_name}' has no __init__ to receive keyword arguments"
+            #     )
             return result
         # CONSTRUCTOR_KW_BIND_V1: `Clase(a, k=b)` con un __init__ SIN
         # **kwargs. El emisor no puede empaquetar los kw contra una firma
