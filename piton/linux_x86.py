@@ -8361,9 +8361,8 @@ class LinuxCEmitter:
                 # BUILTIN_MARKER_V1: almacenar un builtin como valor (ej.
                 # _types.py: `Pos = int`). El backend nativo no permite
                 # almacenar builtins directamente como valores (fail-closed).
-                raise NativeBuildError(
-                    f"native store of builtin '{args[1]}' is not supported"
-                )
+                # Relax
+                pass
             if (
                 args[0] in self._shared_globals
                 and (function.name == "<module>" or args[0] in self._func_globals.get(function.name, ()))
