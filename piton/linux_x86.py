@@ -5628,12 +5628,12 @@ class LinuxCEmitter:
             if len(call_args) == 2:
                 if types.get(call_args[1]) not in {"int", "bool"}:
                     # Relajar find con start no int
-                    out.append(f"    {_name(result)}=piton_str_find((const char*){operand},{require_str(0, 'a str argument')});")
+                    out.append(f"    {_name(result)}=piton_str_find((const char*){operand},{self._value(call_args[0])});")
                     types[result] = "int"
                     return
                 out.append(
                     f"    {_name(result)}=piton_str_find_at((const char*){operand},"
-                    f"{require_str(0, 'a str argument')},{self._value(call_args[1])});"
+                    f"{self._value(call_args[0])},{self._value(call_args[1])});"
                 )
                 types[result] = "int"
                 return
@@ -5647,7 +5647,7 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_str_find((const char*){operand},(const char*)\"\");")
                 types[result] = "int"
                 return
-            out.append(f"    {_name(result)}=piton_str_find((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_find((const char*){operand},{self._value(call_args[0])});")
             types[result] = "int"
         elif method in {"startswith", "endswith"}:
             # STR_OFFSET_PREFIX_V1: `s.startswith(p, start)` /
@@ -5660,7 +5660,7 @@ class LinuxCEmitter:
                 )
                 out.append(
                     f"    {_name(result)}={helper_at}((const char*){operand},"
-                    f"{require_str(0, 'a str argument')},{self._value(call_args[1])});"
+                    f"{self._value(call_args[0])},{self._value(call_args[1])});"
                 )
                 types[result] = "bool"
                 return
@@ -5678,12 +5678,12 @@ class LinuxCEmitter:
                     f"{self._value(_p0)},{1 if method == 'endswith' else 0});"
                 )
             else:
-                out.append(f"    {_name(result)}={helper}((const char*){operand},{require_str(0, 'a str argument')});")
+                out.append(f"    {_name(result)}={helper}((const char*){operand},{self._value(call_args[0])});")
             types[result] = "bool"
         elif method in {"removeprefix", "removesuffix"}:
             require_count(1, "exactly one str argument")
             helper = "piton_str_removeprefix" if method == "removeprefix" else "piton_str_removesuffix"
-            out.append(f"    {_name(result)}=(long){helper}((const char*){operand},(const char*){require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=(long){helper}((const char*){operand},(const char*){self._value(call_args[0])});")
             types[result] = "str"
         elif method == "replace":
             require_count(2, "exactly two str arguments")
@@ -5841,28 +5841,28 @@ class LinuxCEmitter:
             types[result] = "bool"
         elif method == "count":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_count((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_count((const char*){operand},{self._value(call_args[0])});")
             types[result] = "int"
         elif method == "index":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_index_f((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_index_f((const char*){operand},{self._value(call_args[0])});")
             types[result] = "int"
         elif method == "rfind":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_rfind((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_rfind((const char*){operand},{self._value(call_args[0])});")
             types[result] = "int"
         elif method == "rindex":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_rindex_f((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_rindex_f((const char*){operand},{self._value(call_args[0])});")
             types[result] = "int"
         elif method == "partition":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_partition((const char*){operand},{require_str(0, 'a str separator')});")
+            out.append(f"    {_name(result)}=piton_str_partition((const char*){operand},{self._value(call_args[0])});")
             types[result] = "tuple"
             self._tuple_elems[result] = (("%pre", "str"), ("%sep", "str"), ("%suf", "str"))
         elif method == "rpartition":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_rpartition((const char*){operand},{require_str(0, 'a str separator')});")
+            out.append(f"    {_name(result)}=piton_str_rpartition((const char*){operand},{self._value(call_args[0])});")
             types[result] = "tuple"
             self._tuple_elems[result] = (("%pre", "str"), ("%sep", "str"), ("%suf", "str"))
         elif method == "rsplit":
@@ -6247,19 +6247,19 @@ class LinuxCEmitter:
             types[result] = "str"
         elif method == "count":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_count((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_count((const char*){operand},{self._value(call_args[0])});")
             types[result] = "int"
         elif method == "rfind":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_rfind((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_rfind((const char*){operand},{self._value(call_args[0])});")
             types[result] = "int"
         elif method == "rindex":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_rindex_f((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_rindex_f((const char*){operand},{self._value(call_args[0])});")
             types[result] = "int"
         elif method == "index":
             require_count(1, "exactly one str argument")
-            out.append(f"    {_name(result)}=piton_str_index_f((const char*){operand},{require_str(0, 'a str argument')});")
+            out.append(f"    {_name(result)}=piton_str_index_f((const char*){operand},{self._value(call_args[0])});")
             types[result] = "int"
         else:
             if method == "format_map":
