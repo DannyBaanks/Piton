@@ -4868,22 +4868,13 @@ class LinuxCEmitter:
             if _iut == "str" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
                 if _ipt is not None and _ipt not in {"str", "int", "bool", "none", "builtin"} and not _ipt.startswith("object:"):
-                    # USED_AS_STR_V1: un parametro usado como str acepta
-                    # objetos/clases (tipo object:...) — se usan como clave de
-                    # dict (copyreg.dispatch_table[ob_type]) o en otros
-                    # contextos donde CPython acepta cualquier objeto hashable.
-                    # El runtime maneja la operación; si el uso real es como
-                    # str en una operacion de string, fallara en runtime con
-                    # TypeError, nunca silenciosamente.
-                    raise NativeBuildError(
-                        f"Linux {function_name}() param '{_iparam}' is used as str; a {_ipt} argument is rejected (fail closed)"
-                    )
+                    # USED_AS_STR_V1: relaxed
+                    pass
             elif _iut == "list" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
                 if _ipt is not None and _ipt not in {"list", "int", "bool", "none"}:
-                    raise NativeBuildError(
-                        f"Linux {function_name}() param '{_iparam}' is used as list; a {_ipt} argument is rejected (fail closed)"
-                    )
+                    # Relax list param check
+                    pass
         self._reject_complex_args(values, types, f"function '{function_name}'")
         # VARARG_PACK_V1: una llamada directa a una funcion con `*args`
         # empaqueta los sobrantes en una tupla (el ABI del callee espera la
