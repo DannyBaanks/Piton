@@ -3323,9 +3323,13 @@ class MIRLowerer:
                     builder.emit("store", var.name, ctx_result)
                 self._lower_statements(builder, node.body)
                 return
-            raise MIRLoweringError(
-                "native with context must be a direct call to a native class constructor"
-            )
+            # Relax with context to dynamic fallback for any expression
+            ctx_result = self._lower_expr(builder, expr)
+            var = item.optional_vars
+            if var is not None and var.kind == HIRKind.LOAD:
+                builder.emit("store", var.name, ctx_result)
+            self._lower_statements(builder, node.body)
+            return
         class_name = expr.func.name
         enter_name = "__aenter__" if is_async_with else "__enter__"
         exit_name = "__aexit__" if is_async_with else "__exit__"
