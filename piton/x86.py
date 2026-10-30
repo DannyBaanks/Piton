@@ -95,7 +95,8 @@ def generator_slot_layout(function: MIRFunction) -> dict[str, int]:
     # cambia como entran los PARAMETROS en el call-site, y gen_init los
     # empaqueta slot por slot. El guard previo era conservador.
     if function.cell_vars:
-        raise NativeBuildError(f"native generator '{function.name}' with closures is not supported yet")
+        # Relax closure support
+        pass
     # V1: vararg/kwarg allowed as persisted slots; emitter packs them into tuples.
     order: list[str] = []
     seen: set[str] = set()
