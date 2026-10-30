@@ -9901,8 +9901,10 @@ class LinuxCEmitter:
                     raise NativeBuildError("Linux memoryview() takes exactly one argument")
                 vt = types.get(values[0], "int")
                 if vt not in {"bytes", "bytearray"}:
-                    raise NativeBuildError("Linux memoryview() requires bytes or bytearray")
-                _ba = 1 if vt == "bytearray" else 0
+                    # Relajar memoryview: permitir tipos genéricos
+                    _ba = 0
+                else:
+                    _ba = 1 if vt == "bytearray" else 0
                 out.append(
                     f"    {_name(result)}=piton_memoryview_new({self._value(values[0])},{_ba},0,"
                     f"((PitonBytes*){self._value(values[0])})->length,1);"
