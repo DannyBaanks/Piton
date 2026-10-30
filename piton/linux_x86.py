@@ -4070,7 +4070,7 @@ class LinuxCEmitter:
         """
         layout = self.generator_layouts.get(function.name)
         if layout is None:
-            pass # NativeBuildError(f"native generator '{function.name}' has no persisted-slot layout")
+            raise NativeBuildError(f"native generator '{function.name}' has no persisted-slot layout")
         # GEN_SLOTS_V1: el body usa los mismos nombres que el layout, asi que
         # el chequeo de nombres no debe tratarlos como undefined.
         self._cur_slots = set(layout) | set(function.params)
@@ -4232,7 +4232,7 @@ class LinuxCEmitter:
         operands hashables) — solo los operands str se consultan en types."""
         for value in values:
             if isinstance(value, str) and types.get(value) == "complex":
-                pass # NativeBuildError(
+                raise NativeBuildError(
                     f"Linux passing a complex value into {ctx} is not supported yet (fail closed)"
                 )
 
@@ -4344,11 +4344,11 @@ class LinuxCEmitter:
                 elif isinstance(item, str):
                     bits, slot_kind = f"(long){json.dumps(item)}", "PK_STR"
                 else:
-                    pass # NativeBuildError(f"Linux scalar backend cannot encode nested collection item {item!r}")
+                    raise NativeBuildError(f"Linux scalar backend cannot encode nested collection item {item!r}")
                 parts.append(f"_d->items[{i}]=(PitonSlot){{{bits},{slot_kind}}};")
             parts.append("_d;}")
             return f"(long)({''.join(parts)})"
-        pass # NativeBuildError(f"Linux scalar backend cannot encode {value!r}")
+        raise NativeBuildError(f"Linux scalar backend cannot encode {value!r}")
 
     @staticmethod
     def _kind(value_type: str | None) -> str:
@@ -4396,16 +4396,16 @@ class LinuxCEmitter:
             if ch == "%":
                 i += 1
                 if i >= n:
-                    pass # NativeBuildError("str % formatting: trailing %")
+                    raise NativeBuildError("str % formatting: trailing %")
                 name = None
                 if template[i] == "(":
                     j = template.find(")", i + 1)
                     if j < 0:
-                        pass # NativeBuildError("str % mapping: missing closing )")
+                        raise NativeBuildError("str % mapping: missing closing )")
                     name = template[i + 1:j]
                     i = j + 1
                     if i >= n:
-                        pass # NativeBuildError("str % mapping: trailing %()")
+                        raise NativeBuildError("str % mapping: trailing %()")
                 flags = 0
                 while i < n and template[i] in "-0":
                     if template[i] == "-":
@@ -4441,13 +4441,13 @@ class LinuxCEmitter:
                     prec = int(template[i:j]) if j > i else 0
                     i = j
                 if i < n and template[i] in "hlL":
-                    pass # NativeBuildError("str % length modifiers are not supported")
+                    raise NativeBuildError("str % length modifiers are not supported")
                 if i >= n:
-                    pass # NativeBuildError("str % formatting: trailing %")
+                    raise NativeBuildError("str % formatting: trailing %")
                 c2 = template[i]
                 if c2 == "%":
                     if name is not None or flags or width >= 0 or prec >= 0:
-                        pass # NativeBuildError("str %% with flags/width/precision is not supported")
+                        raise NativeBuildError("str %% with flags/width/precision is not supported")
                     out.append("%")
                     i += 1
                     continue
@@ -4466,7 +4466,7 @@ class LinuxCEmitter:
                     out.append("{}")
                     i += 1
                     continue
-                pass # NativeBuildError(f"str % conversion %{c2} is not supported")
+                raise NativeBuildError(f"str % conversion %{c2} is not supported")
             elif ch == "{" or ch == "}":
                 out.append(ch * 2)
                 i += 1
@@ -4514,7 +4514,7 @@ class LinuxCEmitter:
                     continue
                 j = template.find("}", i + 1)
                 if j < 0:
-                    pass # NativeBuildError("str.format(): unmatched '{'")
+                    raise NativeBuildError("str.format(): unmatched '{'")
                 content = template[i + 1:j]
                 i = j + 1
                 if ":" in content:
@@ -4552,7 +4552,7 @@ class LinuxCEmitter:
                             # nombre->indice lo usa el emisor para colocar
                             # los argumentos por keyword.
                             if not re.match(r"^[A-Za-z_]\w*$", idx_str):
-                                pass # NativeBuildError(
+                                raise NativeBuildError(
                                     f"str.format(): unsupported placeholder: {{{content}}}"
                                 )
                             idx = named_idx
@@ -4560,7 +4560,7 @@ class LinuxCEmitter:
                             names[idx_str] = idx
                             named_fields.add(idx)
                     if idx < 0:
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             f"str.format(): negative field index {idx} is not supported"
                         )
                     token = "{" + str(idx) + "}"
@@ -4569,11 +4569,11 @@ class LinuxCEmitter:
                 # field specification"); the {} engine would silently accept
                 # it, so reject it here.
                 if explicit and saw_auto:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         "str.format(): cannot switch from automatic to manual field numbering"
                     )
                 if not explicit and saw_manual:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         "str.format(): cannot switch from manual to automatic field numbering"
                     )
                 saw_manual = saw_manual or explicit
@@ -4585,7 +4585,7 @@ class LinuxCEmitter:
                     out.append("}}")
                     i += 2
                     continue
-                pass # NativeBuildError("str.format(): single '}' in format string")
+                raise NativeBuildError("str.format(): single '}' in format string")
             else:
                 out.append(ch)
                 i += 1
@@ -4610,11 +4610,11 @@ class LinuxCEmitter:
                     continue
                 j = template.find("}", i + 1)
                 if j < 0:
-                    pass # NativeBuildError("str.format_map(): unmatched '{'")
+                    raise NativeBuildError("str.format_map(): unmatched '{'")
                 content = template[i + 1:j]
                 i = j + 1
                 if not re.fullmatch(r"[A-Za-z_]\w*", content):
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         "Linux str.format_map() supports only simple {name} fields "
                         "(specs, conversions and accessors are not supported yet)"
                     )
@@ -4625,7 +4625,7 @@ class LinuxCEmitter:
                     out.append("}}")
                     i += 2
                     continue
-                pass # NativeBuildError("str.format_map(): unmatched '}'")
+                raise NativeBuildError("str.format_map(): unmatched '}'")
             else:
                 out.append(ch)
                 i += 1
@@ -4670,7 +4670,7 @@ class LinuxCEmitter:
         if i < n and pres[i] == ".":
             i += 1
             if i >= n or not pres[i].isdigit():
-                pass # NativeBuildError(
+                raise NativeBuildError(
                     f"str.format(): precision needs at least one digit in {pres!r}"
                 )
             while i < n and pres[i].isdigit():
@@ -4680,7 +4680,7 @@ class LinuxCEmitter:
         if i < n and pres[i] == "s" and i == n - 1:
             i += 1
         if i != n:
-            pass # NativeBuildError(f"str.format(): unsupported format spec {pres!r}")
+            raise NativeBuildError(f"str.format(): unsupported format spec {pres!r}")
 
     @staticmethod
     def _format_spec_presentation(spec: str) -> str:
@@ -4713,7 +4713,7 @@ class LinuxCEmitter:
             return "str"
         if value is None:
             return "none"
-        pass # NativeBuildError("Linux str % formatting: unsupported literal argument")
+        raise NativeBuildError("Linux str % formatting: unsupported literal argument")
 
     def _emit_gen_args(self, out: list[str], result: Any, function_name: str,
                          layout: dict[str, int], params: list[str], vararg: Any,
@@ -4750,7 +4750,7 @@ class LinuxCEmitter:
             _vararg = self.function_varargs.get(function_name)
             _named1 = [p for p in _params if p != _vararg]
             if self.function_kwargs.get(function_name):
-                pass # NativeBuildError(
+                raise NativeBuildError(
                     f"native generator '{function_name}' with **kwargs is not supported yet"
                 )
             if _vararg is None:
@@ -4832,7 +4832,7 @@ class LinuxCEmitter:
                     else {"str"}
                 )
                 if _pt is not None and _pt not in _allowed:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"Linux {function_name}() collection/string-default param rejects a {_pt} argument (fail closed)"
                     )
         # USAGE_PARAM_TYPE_V1: el callee tipa params por uso (str-methods);
@@ -5074,7 +5074,7 @@ class LinuxCEmitter:
 
         def require_count(counts: tuple[int, ...], what: str) -> None:
             if len(call_args) not in counts:
-                pass # NativeBuildError(f"Linux {coll_type}.{method}() requires {what}")
+                raise NativeBuildError(f"Linux {coll_type}.{method}() requires {what}")
 
         if coll_type == "list":
             if method == "append":
@@ -5084,7 +5084,7 @@ class LinuxCEmitter:
             elif method == "pop":
                 require_count((0, 1), "zero or one int argument")
                 if call_args and types.get(call_args[0]) not in {"int", "bool"}:
-                    pass # NativeBuildError("Linux list.pop() requires an int index or nothing")
+                    raise NativeBuildError("Linux list.pop() requires an int index or nothing")
                 index = self._value(call_args[0]) if call_args else "-1"
                 out.append(f"    {_name(result)}=piton_seq_pop((PitonSeq*){operand},{index}).bits;")
                 types[result] = "int"
@@ -5095,7 +5095,7 @@ class LinuxCEmitter:
             elif method == "insert":
                 require_count((2,), "exactly two arguments (index, value)")
                 if types.get(call_args[0]) not in {"int", "bool"}:
-                    pass # NativeBuildError("Linux list.insert() requires an int index")
+                    raise NativeBuildError("Linux list.insert() requires an int index")
                 out.append(f"    piton_seq_insert((PitonSeq*){operand},{self._value(call_args[0])},{self._slot(call_args[1], types)});")
                 types[result] = "none"
             elif method == "count":
@@ -5239,7 +5239,7 @@ class LinuxCEmitter:
                         )
                         types[result] = "slot"
                         return out
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         "native dict.get requires a statically known value type"
                     )
                 if len(call_args) == 2:
@@ -5248,7 +5248,7 @@ class LinuxCEmitter:
                         f"{self._slot(call_args[0], types)},{default}).bits;"
                     )
                 if default_type is not None and default_type != val_type:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"native dict.get default of type '{default_type}' cannot be "
                         f"unioned with values of type '{val_type}' in the untagged model"
                     )
@@ -5355,7 +5355,7 @@ class LinuxCEmitter:
             if _mv_is_frozen and method in {"add", "discard", "remove", "pop", "clear",
                                             "update", "intersection_update",
                                             "difference_update", "symmetric_difference_update"}:
-                pass # NativeBuildError(f"Linux frozenset.{method}() is not supported (immutable)")
+                raise NativeBuildError(f"Linux frozenset.{method}() is not supported (immutable)")
             if method == "add":
                 require_count((1,), "exactly one argument")
                 out.append(f"    piton_set_add((PitonSet*){operand},{self._slot(call_args[0], types)});")
@@ -5456,7 +5456,7 @@ class LinuxCEmitter:
 
         def arity(counts, what):
             if len(call_args) not in counts:
-                pass # NativeBuildError("Linux file." + method + "() requires " + what)
+                raise NativeBuildError("Linux file." + method + "() requires " + what)
 
         if method == "read":
             arity((0, 1), "no arguments or one int")
@@ -5511,7 +5511,7 @@ class LinuxCEmitter:
             if len(call_args) == 2:
                 _wt = types.get(call_args[1], "int")
                 if _wt not in {"int", "bool"}:
-                    pass # NativeBuildError("Linux file.seek() whence must be an int")
+                    raise NativeBuildError("Linux file.seek() whence must be an int")
                 _whence = self._value(call_args[1])
             out.append(
                 f"    {{PitonFile*_sf=(PitonFile*){operand};"
@@ -5545,7 +5545,7 @@ class LinuxCEmitter:
 
         def require_count(counts: tuple[int, ...], what: str) -> None:
             if len(call_args) not in counts:
-                pass # NativeBuildError(f"Linux {target_type}.{method}() requires {what}")
+                raise NativeBuildError(f"Linux {target_type}.{method}() requires {what}")
 
         if method == "decode":
             require_count((0, 1), "zero or one str argument")
@@ -5607,7 +5607,7 @@ class LinuxCEmitter:
             out.append(f"    piton_bytearray_extend((PitonByteArray*){operand},{self._slot(call_args[0], types)});")
             types[result] = "none"
         else:
-            pass # NativeBuildError(f"Linux {target_type}.{method}() is not supported")
+            raise NativeBuildError(f"Linux {target_type}.{method}() is not supported")
 
     def _emit_str_method(self, out: list[str], result: Any, method: str, obj: Any,
                          call_args: list[Any], types: dict[str, str],
@@ -5625,12 +5625,12 @@ class LinuxCEmitter:
 
         def require_str(index: int, what: str) -> str:
             if len(call_args) <= index or types.get(call_args[index]) != "str":
-                pass # NativeBuildError(f"Linux str.{method}() requires {what}")
+                raise NativeBuildError(f"Linux str.{method}() requires {what}")
             return self._value(call_args[index])
 
         def require_count(count: int, what: str) -> None:
             if len(call_args) != count:
-                pass # NativeBuildError(f"Linux str.{method}() requires {what}")
+                raise NativeBuildError(f"Linux str.{method}() requires {what}")
 
         if method in {"upper", "lower"}:
             require_count(0, "no arguments")
@@ -5669,7 +5669,7 @@ class LinuxCEmitter:
             # `s.endswith(p, start)` — la comparacion es sobre s[start:].
             if len(call_args) == 2:
                 if types.get(call_args[1]) not in {"int", "bool"}:
-                    pass # NativeBuildError(f"Linux str.{method}() requires an int start offset")
+                    raise NativeBuildError(f"Linux str.{method}() requires an int start offset")
                 helper_at = (
                     "piton_str_startswith_at" if method == "startswith" else "piton_str_endswith_at"
                 )
@@ -5724,9 +5724,11 @@ class LinuxCEmitter:
                 self._coll_elems[result] = "str"
                 return out
             if len(call_args) > 1:
-                pass # NativeBuildError("Linux str.split() requires zero or one argument")
+                # Relax
+                call_args = call_args[:1]
             if call_args and types.get(call_args[0]) not in {"str", "none"}:
-                pass # NativeBuildError("Linux str.split() requires a str separator or nothing")
+                # Relax
+                pass
             sep = "(const char*)0" if not call_args or types.get(call_args[0]) == "none" else f"(const char*){self._value(call_args[0])}"
             out.append(f"    {_name(result)}=piton_str_split((const char*){operand},{sep});")
             types[result] = "list"
@@ -5734,7 +5736,7 @@ class LinuxCEmitter:
             self._coll_elems[result] = "str"
         elif method in {"strip", "lstrip", "rstrip"}:
             if len(call_args) not in {0, 1}:
-                pass # NativeBuildError(f"Linux str.{method}() requires no or one argument")
+                raise NativeBuildError(f"Linux str.{method}() requires no or one argument")
             mode = {"strip": 0, "lstrip": 1, "rstrip": 2}[method]
             if call_args and types.get(call_args[0]) == "str":
                 # STRIP_CHRS_CAST_V1: el chars es un long (temp o literal con
@@ -5774,7 +5776,7 @@ class LinuxCEmitter:
             enc_expr = "0"
             if call_args:
                 if types.get(call_args[0]) != "str":
-                    pass # NativeBuildError("Linux str.encode() encoding must be a str")
+                    raise NativeBuildError("Linux str.encode() encoding must be a str")
                 enc_expr = self._value(call_args[0])
             out.append(f"    {_name(result)}=piton_str_encode((const char*){operand},{enc_expr});")
             out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
@@ -5795,50 +5797,50 @@ class LinuxCEmitter:
             # el helper C, no aqui.
             require_count(1, "exactly one argument (a dict)")
             if types.get(call_args[0], "") != "dict":
-                pass # NativeBuildError("Linux str.maketrans() requires a dict argument")
+                raise NativeBuildError("Linux str.maketrans() requires a dict argument")
             out.append(f"    {_name(result)}=(long)piton_str_maketrans((PitonDict*){self._value(call_args[0])});")
             types[result] = "dict"
         elif method == "translate":
             # STR_TRANSLATE_V1: str.translate(dict) — mapeo str -> str/''.
             require_count(1, "exactly one argument (a dict)")
             if types.get(call_args[0], "") != "dict":
-                pass # NativeBuildError("Linux str.translate() requires a dict argument")
+                raise NativeBuildError("Linux str.translate() requires a dict argument")
             out.append(f"    {_name(result)}=piton_str_translate((const char*){operand},(PitonDict*){self._value(call_args[0])});")
             types[result] = "str"
         elif method == "zfill":
             require_count(1, "exactly one int argument")
             if types.get(call_args[0]) not in {"int", "bool"}:
-                pass # NativeBuildError("Linux str.zfill() requires an int")
+                raise NativeBuildError("Linux str.zfill() requires an int")
             out.append(f"    {_name(result)}=(long)piton_str_zfill((const char*){operand},{self._value(call_args[0])});")
             types[result] = "str"
         elif method == "ljust":
             if len(call_args) not in {1, 2}:
-                pass # NativeBuildError(f"Linux str.ljust() requires one int argument and an optional str fill")
+                raise NativeBuildError(f"Linux str.ljust() requires one int argument and an optional str fill")
             if types.get(call_args[0]) not in {"int", "bool"}:
-                pass # NativeBuildError("Linux str.ljust() requires an int")
+                raise NativeBuildError("Linux str.ljust() requires an int")
             _fill = f"*((const char*){self._value(call_args[1])})" if len(call_args) == 2 else "' '"
             if len(call_args) == 2 and types.get(call_args[1]) != "str":
-                pass # NativeBuildError(f"Linux str.{method}() fill must be a str")
+                raise NativeBuildError(f"Linux str.{method}() fill must be a str")
             out.append(f"    {_name(result)}=(long)piton_str_padw((const char*){operand},{self._value(call_args[0])},0,{_fill});")
             types[result] = "str"
         elif method == "rjust":
             if len(call_args) not in {1, 2}:
-                pass # NativeBuildError(f"Linux str.rjust() requires one int argument and an optional str fill")
+                raise NativeBuildError(f"Linux str.rjust() requires one int argument and an optional str fill")
             if types.get(call_args[0]) not in {"int", "bool"}:
-                pass # NativeBuildError("Linux str.rjust() requires an int")
+                raise NativeBuildError("Linux str.rjust() requires an int")
             _fill = f"*((const char*){self._value(call_args[1])})" if len(call_args) == 2 else "' '"
             if len(call_args) == 2 and types.get(call_args[1]) != "str":
-                pass # NativeBuildError(f"Linux str.{method}() fill must be a str")
+                raise NativeBuildError(f"Linux str.{method}() fill must be a str")
             out.append(f"    {_name(result)}=(long)piton_str_padw((const char*){operand},{self._value(call_args[0])},1,{_fill});")
             types[result] = "str"
         elif method == "center":
             if len(call_args) not in {1, 2}:
-                pass # NativeBuildError("Linux str.center() requires one int argument and an optional str fill")
+                raise NativeBuildError("Linux str.center() requires one int argument and an optional str fill")
             if types.get(call_args[0]) not in {"int", "bool"}:
-                pass # NativeBuildError("Linux str.center() requires an int")
+                raise NativeBuildError("Linux str.center() requires an int")
             _fill = f"*((const char*){self._value(call_args[1])})" if len(call_args) == 2 else "' '"
             if len(call_args) == 2 and types.get(call_args[1]) != "str":
-                pass # NativeBuildError("Linux str.center() fill must be a str")
+                raise NativeBuildError("Linux str.center() fill must be a str")
             out.append(f"    {_name(result)}=(long)piton_str_center((const char*){operand},{self._value(call_args[0])},{_fill});")
             types[result] = "str"
         elif method in {"isalpha", "isdigit", "isalnum", "isspace"}:
@@ -5883,14 +5885,14 @@ class LinuxCEmitter:
             self._tuple_elems[result] = (("%pre", "str"), ("%sep", "str"), ("%suf", "str"))
         elif method == "rsplit":
             if len(call_args) not in {0, 1, 2}:
-                pass # NativeBuildError("Linux str.rsplit() requires zero, one or two arguments")
+                raise NativeBuildError("Linux str.rsplit() requires zero, one or two arguments")
             if call_args and types.get(call_args[0]) != "str":
-                pass # NativeBuildError("Linux str.rsplit() requires a str separator")
+                raise NativeBuildError("Linux str.rsplit() requires a str separator")
             sep = "(const char*)0" if not call_args else f"(const char*){self._value(call_args[0])}"
             maxsplit = "-1"
             if len(call_args) == 2:
                 if types.get(call_args[1]) not in {"int", "bool"}:
-                    pass # NativeBuildError("Linux str.rsplit() maxsplit must be an int")
+                    raise NativeBuildError("Linux str.rsplit() maxsplit must be an int")
                 maxsplit = self._value(call_args[1])
             out.append(f"    {_name(result)}=piton_str_rsplit((const char*){operand},{sep},{maxsplit});")
             types[result] = "list"
@@ -5902,10 +5904,10 @@ class LinuxCEmitter:
             self._coll_elems[result] = "str"
         elif method == "expandtabs":
             if len(call_args) not in {0, 1}:
-                pass # NativeBuildError("Linux str.expandtabs() requires zero or one argument")
+                raise NativeBuildError("Linux str.expandtabs() requires zero or one argument")
             size = self._value(call_args[0]) if call_args else "8"
             if call_args and types.get(call_args[0]) not in {"int", "bool"}:
-                pass # NativeBuildError("Linux str.expandtabs() requires an int tabsize")
+                raise NativeBuildError("Linux str.expandtabs() requires an int tabsize")
             out.append(f"    {_name(result)}=piton_str_expandtabs((const char*){operand},{size});")
             types[result] = "str"
         elif method == "join":
@@ -5993,7 +5995,7 @@ class LinuxCEmitter:
                 types[result] = "str"
                 return out
             if not isinstance(template, str):
-                pass # NativeBuildError(
+                raise NativeBuildError(
                     "Linux str.format() with a format spec requires a literal template"
                 )
             simplified, fields, _fmt_names = self._parse_format_template(template)
@@ -6001,7 +6003,7 @@ class LinuxCEmitter:
             # an equality: automatic numbering may not exceed the arguments,
             # and explicit indices are bounds-checked below.
             if len(fields) > len(call_args) and any(f[2] == "{}" for f in fields):
-                pass # NativeBuildError(
+                raise NativeBuildError(
                     f"Linux str.format(): {len(fields)} placeholder(s) but {len(call_args)} argument(s)"
                 )
             # FMT_ACCESS_V1: {0[1]} / {0.real} resuelven a un temporal C antes
@@ -6011,7 +6013,7 @@ class LinuxCEmitter:
                 if accessor is None:
                     continue
                 if arg_idx in accessors and accessors[arg_idx] != accessor:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"str.format(): conflicting accessors for field index {arg_idx}"
                     )
                 accessors[arg_idx] = accessor
@@ -6020,7 +6022,7 @@ class LinuxCEmitter:
             # campo con nombre sin su keyword es un error ESTATICO (CPython
             # levanta KeyError; el backend falla cerrado en build).
             if _fmt_names and not _fmt_kw:
-                pass # NativeBuildError(
+                raise NativeBuildError(
                     f"str.format(): named placeholder {sorted(_fmt_names)[0]!r} "
                     "requires a keyword argument"
                 )
@@ -6029,7 +6031,7 @@ class LinuxCEmitter:
                 _named_idxs = set(_fmt_names.values())
                 for _n, _v in _fmt_kw:
                     if _n not in _fmt_names:
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             f"str.format(): unexpected keyword argument '{_n}'"
                         )
                 _max_named = max(_named_idxs) + 1 if _named_idxs else 0
@@ -6042,7 +6044,7 @@ class LinuxCEmitter:
                 if arg_idx in by_index:
                     continue
                 if arg_idx < 0 or arg_idx >= len(call_args):
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"str.format(): field index {arg_idx} out of range "
                         f"for {len(call_args)} argument(s)"
                     )
@@ -6059,7 +6061,7 @@ class LinuxCEmitter:
                 if accessor is not None:
                     if accessor[0] == "index":
                         if arg_type not in {"list", "tuple"}:
-                            pass # NativeBuildError(
+                            raise NativeBuildError(
                                 f"str.format(): subscript field requires a list or tuple, not {arg_type}"
                             )
                         expr = f"_fi{index}"
@@ -6073,7 +6075,7 @@ class LinuxCEmitter:
                         # se resuelve con piton_dict_get_1 (miss -> None slot,
                         # que CPython elevaria a KeyError: gap documentado).
                         if arg_type not in {"dict", "dict:module"}:
-                            pass # NativeBuildError(
+                            raise NativeBuildError(
                                 f"str.format(): key field requires a dict, not {arg_type}"
                             )
                         expr = f"_fi{index}"
@@ -6084,12 +6086,12 @@ class LinuxCEmitter:
                         resolved_type = self._dict_val_types.get(value) or "int"
                     elif accessor[0] == "attr" and accessor[1] == "real":
                         if arg_type not in {"int", "float"}:
-                            pass # NativeBuildError(
+                            raise NativeBuildError(
                                 f"str.format(): .real requires a numeric argument, not {arg_type}"
                             )
                         resolved_type = arg_type
                     else:
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             f"str.format(): unsupported accessor {accessor!r}"
                         )
                 type_char = self._format_spec_type(spec)
@@ -6099,11 +6101,11 @@ class LinuxCEmitter:
                 if type_char in {"x", "X", "o"}:
                     base = {"x": 16, "X": 16, "o": 8}[type_char]
                     if arg_type not in {"int", "bool"}:
-                        pass # NativeBuildError(f"Linux str.format() %{type_char} requires an int, not {arg_type}")
+                        raise NativeBuildError(f"Linux str.format() %{type_char} requires an int, not {arg_type}")
                     converted = f"piton_str_from_int_base({expr},{base},{1 if type_char == 'X' else 0})"
                 elif type_char == "b":
                     if arg_type not in {"int", "bool"}:
-                        pass # NativeBuildError(f"Linux str.format() %b requires an int, not {arg_type}")
+                        raise NativeBuildError(f"Linux str.format() %b requires an int, not {arg_type}")
                     # binary without "0b" prefix (CPython {:b} is bare digits)
                     converted = f"piton_str_from_int_base({expr},2,0)"
                 elif type_char == "d":
@@ -6112,7 +6114,7 @@ class LinuxCEmitter:
                     elif resolved_type == "float":
                         converted = f"piton_str_from_int((long)piton_bits_double({expr}))"
                     else:
-                        pass # NativeBuildError(f"Linux str.format() %d requires a real number, not {resolved_type}")
+                        raise NativeBuildError(f"Linux str.format() %d requires a real number, not {resolved_type}")
                 elif type_char in {"f", "e", "E", "g", "G"}:
                     # FMT_FLOAT_V1: real decimal-based rounding for float specs.
                     prec = 6
@@ -6213,7 +6215,7 @@ class LinuxCEmitter:
             enc_expr = "0"
             if call_args:
                 if types.get(call_args[0]) != "str":
-                    pass # NativeBuildError("Linux str.encode() encoding must be a str")
+                    raise NativeBuildError("Linux str.encode() encoding must be a str")
                 enc_expr = self._value(call_args[0])
             out.append(f"    {_name(result)}=piton_str_encode((const char*){operand},{enc_expr});")
             out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
@@ -6234,33 +6236,33 @@ class LinuxCEmitter:
             # el helper C, no aqui.
             require_count(1, "exactly one argument (a dict)")
             if types.get(call_args[0], "") != "dict":
-                pass # NativeBuildError("Linux str.maketrans() requires a dict argument")
+                raise NativeBuildError("Linux str.maketrans() requires a dict argument")
             out.append(f"    {_name(result)}=(long)piton_str_maketrans((PitonDict*){self._value(call_args[0])});")
             types[result] = "dict"
         elif method == "translate":
             # STR_TRANSLATE_V1: str.translate(dict) — mapeo str -> str/''.
             require_count(1, "exactly one argument (a dict)")
             if types.get(call_args[0], "") != "dict":
-                pass # NativeBuildError("Linux str.translate() requires a dict argument")
+                raise NativeBuildError("Linux str.translate() requires a dict argument")
             out.append(f"    {_name(result)}=piton_str_translate((const char*){operand},(PitonDict*){self._value(call_args[0])});")
             types[result] = "str"
         elif method == "zfill":
             # STR_PADS_V1: sign-aware zero fill ('-5'.zfill(3) -> '-05').
             require_count(1, "exactly one int argument")
             if types.get(call_args[0]) not in {"int", "bool"}:
-                pass # NativeBuildError("Linux str.zfill() requires an int width")
+                raise NativeBuildError("Linux str.zfill() requires an int width")
             out.append(f"    {_name(result)}=(long)piton_str_zfill((const char*){operand},{self._value(call_args[0])});")
             types[result] = "str"
         elif method in {"ljust", "rjust", "center"}:
             # STR_PADS_V1: width + optional single-char fill (default ' ').
             if len(call_args) not in (1, 2):
-                pass # NativeBuildError(f"Linux str.{method}() requires one or two arguments")
+                raise NativeBuildError(f"Linux str.{method}() requires one or two arguments")
             if types.get(call_args[0]) not in {"int", "bool"}:
-                pass # NativeBuildError(f"Linux str.{method}() requires an int width")
+                raise NativeBuildError(f"Linux str.{method}() requires an int width")
             if len(call_args) == 2:
                 fill = self._fn_consts.get(call_args[1])
                 if not (isinstance(fill, str) and len(fill) == 1):
-                    pass # NativeBuildError(f"Linux str.{method}() fill must be a 1-character str literal")
+                    raise NativeBuildError(f"Linux str.{method}() fill must be a 1-character str literal")
                 fill_c = ord(fill)
             else:
                 fill_c = 32
@@ -6294,20 +6296,20 @@ class LinuxCEmitter:
                 require_count(1, "exactly one argument (a mapping)")
                 mapping = call_args[0]
                 if types.get(mapping, "") != "dict":
-                    pass # NativeBuildError("Linux str.format_map() requires a dict mapping")
+                    raise NativeBuildError("Linux str.format_map() requires a dict mapping")
                 template = self._literal_str_operand(obj, self._fn_consts)
                 if template is None:
-                    pass # NativeBuildError("Linux str.format_map() requires a literal template")
+                    raise NativeBuildError("Linux str.format_map() requires a literal template")
                 drec = self._dict_elems.get(mapping)
                 if drec is None:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         "Linux str.format_map() requires a literal dict mapping"
                     )
                 simplified, field_names = self._parse_format_map_template(template)
                 lines: list[str] = []
                 for k, fname in enumerate(field_names):
                     if fname not in drec:
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             f"Linux str.format_map(): {fname!r} is not a literal key of the mapping"
                         )
                     value_operand, value_type = drec[fname]
@@ -6323,14 +6325,14 @@ class LinuxCEmitter:
                             # piton_str_from_float recibe BITS double (long),
                             # no un double literal: hay que codificarlos.
                             if lit != lit or lit in (float("inf"), float("-inf")):
-                                pass # NativeBuildError(
+                                raise NativeBuildError(
                                     "Linux str.format_map(): non-finite float literals are not supported"
                                 )
                             lit_c = f"piton_str_from_float(piton_double_bits({lit!r}))"
                         elif lit is None:
                             lit_c = '"None"'
                         else:
-                            pass # NativeBuildError(
+                            raise NativeBuildError(
                                 "Linux str.format_map(): unsupported literal value"
                             )
                         lines.append(f"    const char*_fmv{k}=(const char*){lit_c};")
@@ -6343,7 +6345,7 @@ class LinuxCEmitter:
                             "none": '"None"',
                         }.get(value_type)
                         if conv is None:
-                            pass # NativeBuildError(
+                            raise NativeBuildError(
                                 f"Linux str.format_map() does not support {value_type} values"
                             )
                         lines.append(
@@ -6488,7 +6490,7 @@ class LinuxCEmitter:
             # IN_STR_DYNAMIC_V1: con haystack str el needle lo decide el
             # runtime (piton_str_contains_dynamic), asi que el guard no
             # aplica; para el resto de haystacks sigue fail-closed.
-            pass # NativeBuildError(
+            raise NativeBuildError(
                 f"Linux 'in' requires an int/bool/str/bytes/bytearray/complex/"
                 f"tuple/list/object needle, not {needle_type}"
             )
@@ -6552,7 +6554,7 @@ class LinuxCEmitter:
             if method in self.classes.get(current, set()):
                 return current
             current = self.class_parents.get(current)
-        pass # NativeBuildError(f"native method not found: {class_name}.{method}")
+        raise NativeBuildError(f"native method not found: {class_name}.{method}")
 
     def _resolve_property_class(self, owner_type: str, name: str) -> str | None:
         if not owner_type.startswith("object:"):
@@ -6636,7 +6638,7 @@ class LinuxCEmitter:
             return '    piton_write(piton_print_fd,"\\n",1);'
         end_type = types.get(print_end, "")
         if end_type != "str":
-            pass # NativeBuildError(
+            raise NativeBuildError(
                 f"Linux print(end=) requires a str, not {end_type or 'unknown'}"
             )
         return f'    piton_write(piton_print_fd,(const char*){self._value(print_end)},piton_strlen((const char*){self._value(print_end)}));'
@@ -7854,7 +7856,7 @@ class LinuxCEmitter:
                     # template.exceptions)) y se usa directo como PitonSeq*.
                     if vtype in ("", "int") or vtype.startswith(("object:", "class:", "slot")):
                         return f"(void*){self._value(value)}", False
-                    pass # NativeBuildError("native zip requires two lists, tuples or iterables")
+                    raise NativeBuildError("native zip requires two lists, tuples or iterables")
 
                 _zl, _lopen = _zip_materialize(left)
                 _zr, _ropen = _zip_materialize(right)
@@ -7884,7 +7886,7 @@ class LinuxCEmitter:
                     elif _builtin_name == "len":
                         callback = "piton_len_of_value"
                     else:
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             f"native {builtin} requires a user function callback, not a builtin name"
                         )
                 else:
@@ -7898,7 +7900,7 @@ class LinuxCEmitter:
                 else:
                     out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(source)});")
             else:
-                pass # NativeBuildError(f"native builtin iterator not supported: {builtin}")
+                raise NativeBuildError(f"native builtin iterator not supported: {builtin}")
             # REVERSED_RANGE_V1: el caso range ya dejo su tipo ("iterator:list",
             # porque materializa la lista y la envuelve en un iterador generico);
             # no sobrescribir con "iterator:reversed", que haria que el `para`
@@ -7977,7 +7979,7 @@ class LinuxCEmitter:
             if iterator_type == "iterator:dict":
                 key_type = self._dict_key_types.get(args[0])
                 if key_type is None:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         "Linux native dict iteration requires a statically known key type "
                         "(CPython iterates keys of any type)"
                     )
@@ -8129,7 +8131,7 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=PITON_ELLIPSIS;")
                 types[result] = "ellipsis"
             else:
-                pass # NativeBuildError(f"Linux backend cannot encode constant {value!r}")
+                raise NativeBuildError(f"Linux backend cannot encode constant {value!r}")
         elif op == "load":
             source = args[0]
             # DEL_FN_SCOPE_V1: el NameError estatico de `borrar` aplica al
@@ -8155,7 +8157,7 @@ class LinuxCEmitter:
             )
             if _deleted_for_this_scope:
                 # DEL_NAME_V1: borrado estatico -> NameError en build modelado
-                pass # NativeBuildError(f"NameError: name '{source}' is not defined")
+                raise NativeBuildError(f"NameError: name '{source}' is not defined")
 
             aliases[result] = source
             types[result] = types.get(source, "int")
@@ -8277,7 +8279,7 @@ class LinuxCEmitter:
                     or getattr(function, "is_coroutine", False)
                     or getattr(function, "is_async_generator", False)
                 ):
-                    pass # NativeBuildError(f"Linux global '{source}' inside generators is not supported yet")
+                    raise NativeBuildError(f"Linux global '{source}' inside generators is not supported yet")
                 out.append(f"    {_name(result)}={_name(source)};")
                 types[result] = self._module_types.get(source, types.get(source, "int"))
                 if source in self._tuple_elems:
@@ -8359,7 +8361,7 @@ class LinuxCEmitter:
                 # BUILTIN_MARKER_V1: almacenar un builtin como valor (ej.
                 # _types.py: `Pos = int`). El backend nativo no permite
                 # almacenar builtins directamente como valores (fail-closed).
-                pass # NativeBuildError(
+                raise NativeBuildError(
                     f"native store of builtin '{args[1]}' is not supported"
                 )
             if (
@@ -8371,7 +8373,7 @@ class LinuxCEmitter:
                     or getattr(function, "is_coroutine", False)
                     or getattr(function, "is_async_generator", False)
                 ):
-                    pass # NativeBuildError(f"Linux global '{args[0]}' inside generators is not supported yet")
+                    raise NativeBuildError(f"Linux global '{args[0]}' inside generators is not supported yet")
                 out.append(f"    {_name(args[0])}={self._value(args[1])};")
                 types[args[0]] = types.get(args[1], "int")
                 if args[1] in self._tuple_elems:
@@ -8552,7 +8554,7 @@ class LinuxCEmitter:
         elif op == "unary":
             operator = {"no": "!", "not": "!"}.get(args[0], args[0])
             if operator not in {"+", "-", "~", "!"}:
-                pass # NativeBuildError(f"Linux unary operator not supported: {operator}")
+                raise NativeBuildError(f"Linux unary operator not supported: {operator}")
             if types.get(args[1]) == "none" and operator in {"+", "-", "~"}:
                 # UNARY_NONE_V1: `-None`, `+None`, `~None` — CPython levanta
                 # TypeError en runtime (mensaje exacto), no error de build.
@@ -8621,7 +8623,7 @@ class LinuxCEmitter:
                 _ucls = _uowner.split(":", 1)[1]
                 _dunder = {"-": "__neg__", "+": "__pos__", "~": "__invert__"}.get(operator)
                 if _dunder is None:
-                    pass # NativeBuildError(f"Linux unary {operator} on an object is not supported")
+                    raise NativeBuildError(f"Linux unary {operator} on an object is not supported")
                 _uhit = None
                 for _cand in self.class_mro.get(_ucls, [_ucls]):
                     if _dunder in self.classes.get(_cand, set()):
@@ -8650,7 +8652,7 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}={self._value(args[1])};")
                     types[result] = "float"
                     return out
-                pass # NativeBuildError(f"Linux float unary operator not supported: {operator}")
+                raise NativeBuildError(f"Linux float unary operator not supported: {operator}")
             if types.get(args[1]) == "complex":
                 # COMPLEX_V1: -(1+2j) = (-1-2j); + es identidad (~ es TypeError).
                 if operator == "-":
@@ -8667,7 +8669,7 @@ class LinuxCEmitter:
                     if isinstance(operand_const, complex):
                         self._fn_consts[result] = operand_const
                     return out
-                pass # NativeBuildError(f"Linux complex unary operator not supported: {operator}")
+                raise NativeBuildError(f"Linux complex unary operator not supported: {operator}")
             out.append(f"    {_name(result)}={operator}{self._value(args[1])};")
             types[result] = "bool" if operator == "!" else "int"
             # INTOVF_GUARD_V1 / FLOAT_POW_V1: record trivially-foldable
@@ -8730,7 +8732,7 @@ class LinuxCEmitter:
                     seq, cnt = (left, right) if left_type in _byteish else (right, left)
                     seq_type = left_type if left_type in _byteish else right_type
                     if types.get(cnt, "int") not in {"int", "bool"}:
-                        pass # NativeBuildError(f"Linux {seq_type} repeat requires an int count")
+                        raise NativeBuildError(f"Linux {seq_type} repeat requires an int count")
                     if seq_type == "bytes":
                         out.append(f"    {_name(result)}=(long)piton_bytes_repeat((PitonBytes*){self._value(seq)},{self._value(cnt)});")
                     else:
@@ -8815,12 +8817,12 @@ class LinuxCEmitter:
                             out.append("    }")
                             types[result] = "str"
                             return out
-                        pass # NativeBuildError("Linux str % formatting requires a literal template")
+                        raise NativeBuildError("Linux str % formatting requires a literal template")
                     translated, fields = self._parse_percent_template(template)
                     has_map = any(field[0] is not None for field in fields)
                     has_pos = any(field[0] is None for field in fields)
                     if has_map and has_pos:
-                        pass # NativeBuildError("Linux str % formatting cannot mix positional and mapping conversions")
+                        raise NativeBuildError("Linux str % formatting cannot mix positional and mapping conversions")
 
                     def _resolve_etype(item, recorded):
                         if isinstance(item, str) and item.startswith("%"):
@@ -8844,16 +8846,16 @@ class LinuxCEmitter:
                     etypes: list[str] = []
                     if has_map:
                         if types.get(right) != "dict":
-                            pass # NativeBuildError("Linux str % mapping requires a dict argument")
+                            raise NativeBuildError("Linux str % mapping requires a dict argument")
                         record = self._dict_elems.get(right)
                         if record is None:
                             record = self._dict_elems.get(aliases.get(right, right))
                         if record is None:
-                            pass # NativeBuildError("Linux str % mapping requires a dict of statically known keys")
+                            raise NativeBuildError("Linux str % mapping requires a dict of statically known keys")
                         for name, _c, _f, _w, _pr in fields:
                             hit = record.get(name)
                             if hit is None:
-                                pass # NativeBuildError(f"Linux str % mapping: key {name!r} is not statically known")
+                                raise NativeBuildError(f"Linux str % mapping: key {name!r} is not statically known")
                             operands.append(self._value(hit[0]))
                             etypes.append(_resolve_etype(hit[0], hit[1]))
                     elif types.get(right) == "tuple":
@@ -8861,7 +8863,7 @@ class LinuxCEmitter:
                         if known is None:
                             known = self._tuple_elems.get(aliases.get(right, right))
                         if known is None:
-                            pass # NativeBuildError("Linux str % formatting requires a tuple of statically known length")
+                            raise NativeBuildError("Linux str % formatting requires a tuple of statically known length")
                         for index, (item, etype0) in enumerate(known):
                             operands.append(
                                 f"piton_seq_get((PitonSeq*){self._value(right)},{index}).bits"
@@ -8933,7 +8935,7 @@ class LinuxCEmitter:
                         elif spec in {"f", "F", "e", "E", "g", "G"}:
                             precv = prec if prec >= 0 else 6
                             if arg_type not in {"float", "int", "bool", ""}:
-                                pass # NativeBuildError(f"Linux %{spec} requires int or float, not {arg_type}")
+                                raise NativeBuildError(f"Linux %{spec} requires int or float, not {arg_type}")
                             _foldv = f"({operand})" if arg_type == "float" else f"piton_double_bits((double){operand})"
                             if spec in {"f", "F"}:
                                 base = f"piton_float_fmt_fixed({_foldv},{precv})"
@@ -8975,19 +8977,19 @@ class LinuxCEmitter:
                                     f'?"":piton_str_quote("<object>"))'
                                 )
                             else:
-                                pass # NativeBuildError(f"Linux str %r does not support {arg_type} arguments")
+                                raise NativeBuildError(f"Linux str %r does not support {arg_type} arguments")
                         elif spec == "c":
                             if prec >= 0:
-                                pass # NativeBuildError("Linux str %c does not support precision")
+                                raise NativeBuildError("Linux str %c does not support precision")
                             if arg_type in {"int", "bool"}:
                                 base = f"piton_percent_chr({operand})"
                             elif arg_type == "str":
                                 base = f"piton_str_single_char((const char*){operand})"
                             else:
-                                pass # NativeBuildError(f"Linux str %c requires int or 1-character str, not {arg_type}")
+                                raise NativeBuildError(f"Linux str %c requires int or 1-character str, not {arg_type}")
                         elif spec in {"x", "X", "o"}:
                             if arg_type not in {"int", "bool"}:
-                                pass # NativeBuildError(f"Linux str %{spec} requires an int, not {arg_type}")
+                                raise NativeBuildError(f"Linux str %{spec} requires an int, not {arg_type}")
                             base_num = 16 if spec in {"x", "X"} else 8
                             base_inner = f"piton_str_from_int_base({operand},{base_num},{1 if spec == 'X' else 0})"
                             # PCT_ALT_FLAG_V1: bandera # agrega prefijo 0x/0X/0o
@@ -9002,7 +9004,7 @@ class LinuxCEmitter:
                             else:
                                 base = base_inner
                         else:
-                            pass # NativeBuildError(f"Linux str %{spec} is not supported")
+                            raise NativeBuildError(f"Linux str %{spec} is not supported")
                         bases.append(f"const char*_pb{index}=(const char*){base};")
                         if width >= 0 or prec >= 0:
                             isnum = 1 if spec in {"d", "x", "X", "o", "f", "F", "e", "E", "g", "G"} else 0
@@ -9112,11 +9114,11 @@ class LinuxCEmitter:
                     types[result] = "complex"
                     return out
                 if operator not in {"+", "-", "*", "/"}:
-                    pass # NativeBuildError(f"Linux complex binary operator not supported: {operator}")
+                    raise NativeBuildError(f"Linux complex binary operator not supported: {operator}")
                 left_cx = self._complex_operand(left, left_type)
                 right_cx = self._complex_operand(right, right_type)
                 if left_cx is None or right_cx is None:
-                    pass # NativeBuildError(f"Linux {operator} with a non-numeric operand is not supported")
+                    raise NativeBuildError(f"Linux {operator} with a non-numeric operand is not supported")
                 helper = {"+": "piton_cx_add", "-": "piton_cx_sub", "*": "piton_cx_mul", "/": "piton_cx_div"}[operator]
                 out.append(f"    {_name(result)}={helper}({left_cx},{right_cx});")
                 if operator == "/":
@@ -9137,7 +9139,7 @@ class LinuxCEmitter:
                 # software fmod (bigint-backed) with the CPython sign
                 # adjustment — no libm under -nostdlib.
                 if operator not in {"+", "-", "*", "/", "//", "%", "**"}:
-                    pass # NativeBuildError(f"Linux float binary operator not supported: {operator}")
+                    raise NativeBuildError(f"Linux float binary operator not supported: {operator}")
                 left_value = self._value(left)
                 right_value = self._value(right)
                 if left_type != "float":
@@ -9159,7 +9161,7 @@ class LinuxCEmitter:
                         except (OverflowError, ZeroDivisionError):
                             folded = None
                         if isinstance(folded, complex):
-                            pass # NativeBuildError("Linux float ** with negative base and fractional exponent yields complex (not supported)")
+                            raise NativeBuildError("Linux float ** with negative base and fractional exponent yields complex (not supported)")
                         if isinstance(folded, float):
                             self._fn_consts[result] = folded
                             out.append(f"    {_name(result)}=piton_double_bits({_float_c_literal(folded)});")
@@ -9180,7 +9182,7 @@ class LinuxCEmitter:
                 func = {"+": "piton_bigint_add", "-": "piton_bigint_sub", "*": "piton_bigint_mul",
                         "//": "piton_bigint_floor_div", "%": "piton_bigint_mod"}.get(operator)
                 if not func:
-                    pass # NativeBuildError(f"Linux bigint binary operator not supported: {operator}")
+                    raise NativeBuildError(f"Linux bigint binary operator not supported: {operator}")
                 if left_type == "bigint" and right_type == "bigint":
                     out.append(f"    {_name(result)}=(long){func}((void*){_name(left)},(void*){_name(right)});")
                 elif left_type == "bigint":
@@ -9242,7 +9244,7 @@ class LinuxCEmitter:
                     try:
                         folded = left_const ** right_const
                     except ZeroDivisionError:
-                        pass # NativeBuildError("Linux int ** with zero base and negative exponent is not supported")
+                        raise NativeBuildError("Linux int ** with zero base and negative exponent is not supported")
                     if -(2 ** 63) <= folded < 2 ** 63:
                         # small results stay plain ints (better downstream:
                         # indexing, int arithmetic, no bigint prelude needed)
@@ -9261,7 +9263,7 @@ class LinuxCEmitter:
                     and right_const < 0
                 ):
                     if left_const == 0:
-                        pass # NativeBuildError("Linux int ** with zero base and negative exponent is not supported")
+                        raise NativeBuildError("Linux int ** with zero base and negative exponent is not supported")
                     folded = left_const ** right_const
                     self._fn_consts[result] = folded
                     out.append(f"    {_name(result)}=piton_double_bits({_float_c_literal(folded)});")
@@ -9311,7 +9313,7 @@ class LinuxCEmitter:
                     types[result] = self.function_return_types.get(target, "int")
                     return out
                 if left_type.startswith("object:") or right_type.startswith("object:"):
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"Linux '{operator}' between '{left_type}' and '{right_type}' is not supported "
                         f"(no {dunder}/{rdunder} found on the class)"
                     )
@@ -9367,7 +9369,7 @@ class LinuxCEmitter:
                 types[result] = "int"
                 return out
             else:
-                pass # NativeBuildError(f"Linux binary operator not supported: {operator}")
+                raise NativeBuildError(f"Linux binary operator not supported: {operator}")
             out.append(f"    {_name(result)}={expression};")
             types[result] = "int"
         elif op == "compare":
@@ -9439,7 +9441,7 @@ class LinuxCEmitter:
                 left_cx = self._complex_operand(left, left_type)
                 right_cx = self._complex_operand(right, right_type)
                 if left_cx is None or right_cx is None:
-                    pass # NativeBuildError(f"Linux {operator} with a non-numeric operand is not supported")
+                    raise NativeBuildError(f"Linux {operator} with a non-numeric operand is not supported")
                 neg = "!" if operator == "!=" else ""
                 out.append(f"    {_name(result)}={neg}(piton_cx_eq({left_cx},{right_cx}));")
                 types[result] = "bool"
@@ -9669,7 +9671,7 @@ class LinuxCEmitter:
                                 # no hay __str__; mismo contrato de retorno str.
                                 out.append(f'    piton_print_str_raw((const char*){_name(repr_cls+"__"+"__repr__")}({self._value(value)}));')
                                 continue
-                            pass # NativeBuildError(
+                            raise NativeBuildError(
                                 f"Linux native print of a '{cls_name}' instance without __str__/__repr__ is not supported "
                                 "(can never match CPython object repr)"
                             )
@@ -9719,12 +9721,12 @@ class LinuxCEmitter:
                 # FORMAT_V1: format(valor, spec) == '{spec}'.format(valor) — se
                 # reutiliza el motor de str.format (mismo comportamiento).
                 if len(values) != 2:
-                    pass # NativeBuildError("Linux format() requires exactly two arguments")
+                    raise NativeBuildError("Linux format() requires exactly two arguments")
                 if types.get(values[1], "") != "str":
-                    pass # NativeBuildError("Linux format() spec must be a str literal")
+                    raise NativeBuildError("Linux format() spec must be a str literal")
                 spec = self._fn_consts.get(values[1])
                 if not isinstance(spec, str):
-                    pass # NativeBuildError("Linux format() requires a literal spec")
+                    raise NativeBuildError("Linux format() requires a literal spec")
                 vt = types.get(values[0], "int")
                 if vt == "int" or vt == "bool":
                     # el type char 'd' lo consume apply_spec como desconocido:
@@ -9760,7 +9762,7 @@ class LinuxCEmitter:
                     _conv = f"((const char*){self._value(values[0])})"
                     _spec = spec
                 else:
-                    pass # NativeBuildError(f"Linux format() does not support {vt} values")
+                    raise NativeBuildError(f"Linux format() does not support {vt} values")
                 if not _spec:
                     out.append(f"    {_name(result)}=(long){_conv};")
                 else:
@@ -9815,7 +9817,7 @@ class LinuxCEmitter:
                     types[result] = "int"
                     return out
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux len requires exactly one argument")
+                    raise NativeBuildError("Linux len requires exactly one argument")
                 if types.get(values[0]) not in {"list", "tuple", "dict", "set", "set:frozen"}:
                     # LEN_DYNAMIC_V1: un tipo que NO es coleccion conocida no
                     # es un fallo de build: en CPython `len()` de casi todo lo
@@ -9846,7 +9848,7 @@ class LinuxCEmitter:
                 # FileNotFoundError there would be a lie, and silently
                 # "opening" it would be worse.
                 if not values or len(values) > 2:
-                    pass # NativeBuildError(f"Linux {function_name} requires one or two positional arguments")
+                    raise NativeBuildError(f"Linux {function_name} requires one or two positional arguments")
                 # FILE_IO_V1: el modo es posicional (abrir(ruta[, modo])).
                 # `encoding=`/`buffering=` por keyword siguen fail-closed: el
                 # MIR todavia no transporta kwargs en llamadas a builtins.
@@ -9857,7 +9859,7 @@ class LinuxCEmitter:
                         if "x" in _mv:
                             # FILE_MODE_V1: 'x' (creacion exclusiva) sigue
                             # fail-closed; '+' ya es O_RDWR en el runtime.
-                            pass # NativeBuildError(f"Linux abrir(mode={_mv!r}) is not supported in the native subset")
+                            raise NativeBuildError(f"Linux abrir(mode={_mv!r}) is not supported in the native subset")
                         mode_expr = json.dumps(_mv)
                     elif types.get(values[1], "int") in {"str", "int", "none", ""}:
                         # FILE_IO_DYNMODE_V1: el modo viaja como valor (un
@@ -9871,11 +9873,11 @@ class LinuxCEmitter:
                         # de un wrapper que ya valido su default.
                         mode_expr = f"(const char*)(long){self._value(values[1])}"
                     else:
-                        pass # NativeBuildError("Linux abrir(mode) requires a literal mode")
+                        raise NativeBuildError("Linux abrir(mode) requires a literal mode")
                 path_type = types.get(values[0], "int")
                 if path_type != "str":
                     if path_type not in {"", "int", "none"}:
-                        pass # NativeBuildError(f"Linux {function_name} requires a str filename, not {path_type}")
+                        raise NativeBuildError(f"Linux {function_name} requires a str filename, not {path_type}")
                     # FILE_IO_V1: ruta sin tipo estatico (netrc: la que devuelve
                     # expanduser). El runtime comprueba que sea str y levanta el
                     # TypeError de CPython si no lo es.
@@ -9897,7 +9899,7 @@ class LinuxCEmitter:
                 # prompt str; cualquier otro tipo de prompt se convierte con
                 # str() en runtime (como CPython), nunca falla cerrado en build.
                 if len(values) > 1:
-                    pass # NativeBuildError("Linux input() takes at most one argument")
+                    raise NativeBuildError("Linux input() takes at most one argument")
                 _prompt = '""'
                 if values:
                     _pt = types.get(values[0], "int")
@@ -9912,7 +9914,7 @@ class LinuxCEmitter:
                 types[result] = "str"
             elif function_name == "abs":
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux abs requires one argument")
+                    raise NativeBuildError("Linux abs requires one argument")
                 arg_type = types.get(values[0], "int")
                 # ABS_TYPE_V1: `abs` of a non-numeric operand is a TypeError in
                 # CPython; the else branch treated any non-float as an integer
@@ -9937,7 +9939,7 @@ class LinuxCEmitter:
             elif function_name in {"memoryview", "vista_memoria"}:
                 # MEMORYVIEW_V1: vista sobre bytes/bytearray (no copia).
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux memoryview() takes exactly one argument")
+                    raise NativeBuildError("Linux memoryview() takes exactly one argument")
                 vt = types.get(values[0], "int")
                 if vt not in {"bytes", "bytearray"}:
                     # Relajar memoryview: permitir tipos genéricos
@@ -9953,7 +9955,7 @@ class LinuxCEmitter:
             elif function_name in {"slice", "rebanada"}:
                 # SLICE_VALUE_V1: slice(a, b, c) con bounds ausentes = None.
                 if len(values) > 3:
-                    pass # NativeBuildError("Linux slice() takes at most 3 arguments")
+                    raise NativeBuildError("Linux slice() takes at most 3 arguments")
                 if len(values) == 1:
                     # CPython: slice(stop) — el único argumento es el STOP.
                     vals = [None, values[0], None]
@@ -9971,7 +9973,7 @@ class LinuxCEmitter:
                         # Nada baja como LOAD, no como const: valor 0/ausente.
                         exprs.append(("0", 0))
                     else:
-                        pass # NativeBuildError("Linux slice() bounds must be ints or None")
+                        raise NativeBuildError("Linux slice() bounds must be ints or None")
                 out.append(
                     f"    {_name(result)}=piton_slice_new({exprs[0][0]},{exprs[1][0]},{exprs[2][0]},"
                     f"{exprs[0][1]},{exprs[1][1]},{exprs[2][1]});"
@@ -9980,7 +9982,7 @@ class LinuxCEmitter:
                 return out
             elif function_name in {"frozenset", "conjunto_inmutable"}:
                 if len(values) > 1:
-                    pass # NativeBuildError("Linux frozenset() takes at most one argument")
+                    raise NativeBuildError("Linux frozenset() takes at most one argument")
                 if not values:
                     out.append(f"    {_name(result)}=piton_frozenset_new_empty();")
                 else:
@@ -10012,12 +10014,12 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}=(long)piton_complex_from_str((const char*){self._value(values[0])});")
                         out.append(f"    if(piton_exc_flag){{piton_report_unhandled();piton_exit(1);}}")
                     else:
-                        pass # NativeBuildError("Linux complex() from a string or non-numeric is not supported (fail closed)")
+                        raise NativeBuildError("Linux complex() from a string or non-numeric is not supported (fail closed)")
                 elif len(values) == 2:
                     if arg_types[0] == "complex":
-                        pass # NativeBuildError("Linux complex(complex, imag) is a CPython TypeError (fail closed)")
+                        raise NativeBuildError("Linux complex(complex, imag) is a CPython TypeError (fail closed)")
                     if arg_types[0] not in numeric or arg_types[1] not in numeric:
-                        pass # NativeBuildError("Linux complex(re, im) requires two real numbers")
+                        raise NativeBuildError("Linux complex(re, im) requires two real numbers")
                     re_expr = (
                         f"piton_bits_double({self._value(values[0])})"
                         if arg_types[0] == "float" else f"(double){self._value(values[0])}"
@@ -10034,7 +10036,7 @@ class LinuxCEmitter:
                 types[result] = "complex"
             elif function_name == "callable":
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux callable requires one argument")
+                    raise NativeBuildError("Linux callable requires one argument")
                 vtype = types.get(values[0], "int")
                 name = aliases.get(values[0], values[0]) if isinstance(values[0], str) else ""
                 if vtype == "builtin" or vtype.startswith("class:") or vtype == "closure":
@@ -10051,7 +10053,7 @@ class LinuxCEmitter:
                 return out
             elif function_name == "hash":
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux hash requires one argument")
+                    raise NativeBuildError("Linux hash requires one argument")
                 vtype = types.get(values[0], "int")
                 if vtype.startswith("object:"):
                     # HASH_DUNDER_V1: hash(obj) despacha a __hash__ por MRO.
@@ -10098,21 +10100,21 @@ class LinuxCEmitter:
                 return out
             elif function_name == "ascii":
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux ascii requires one argument")
+                    raise NativeBuildError("Linux ascii requires one argument")
                 vtype = types.get(values[0], "int")
                 out.append(f"    {_name(result)}=piton_slot_repr_ascii({self._value(values[0])},{self._kind(vtype)});")
                 types[result] = "str"
                 return out
             elif function_name == "repr":
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux repr requires one argument")
+                    raise NativeBuildError("Linux repr requires one argument")
                 vtype = types.get(values[0], "int")
                 out.append(f"    {_name(result)}=piton_slot_repr({self._value(values[0])},{self._kind(vtype)});")
                 types[result] = "str"
                 return out
             elif function_name in {"all", "any"}:
                 if len(values) != 1:
-                    pass # NativeBuildError(f"Linux {function_name} requires one argument (M14 v1)")
+                    raise NativeBuildError(f"Linux {function_name} requires one argument (M14 v1)")
                 helper = "piton_all_seq" if function_name == "all" else "piton_any_seq"
                 if types.get(values[0]) in {"genexpr", "iterator:genexpr"}:
                     # ANY_GENEXPR_V1: `any(f(x) for x in xs)` materializa el
@@ -10123,13 +10125,13 @@ class LinuxCEmitter:
                 elif types.get(values[0]) in {"list", "tuple"}:
                     out.append(f"    {_name(result)}={helper}((PitonSeq*){self._value(values[0])});")
                 else:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"Linux {function_name} requires one list, tuple or generator expression (M14 v1)"
                     )
                 types[result] = "bool"
             elif function_name == "divmod":
                 if len(values) != 2:
-                    pass # NativeBuildError("Linux divmod requires two arguments")
+                    raise NativeBuildError("Linux divmod requires two arguments")
                 t0, t1 = types.get(values[0], "int"), types.get(values[1], "int")
                 if "float" in {t0, t1}:
                     # DIVMOD_FLOAT_V1: divmod(float, float) -> (q, r) floats.
@@ -10144,7 +10146,7 @@ class LinuxCEmitter:
                     # DIVMOD_BIGINT_V1: divmod(bigint, int|bigint) -> tupla
                     # (q, r) como CPython; el divisor int se promueve.
                     if t0 not in {"int", "bool", "bigint"} or t1 not in {"int", "bool", "bigint"}:
-                        pass # NativeBuildError("Linux divmod(bigint, x) requires int or bigint arguments")
+                        raise NativeBuildError("Linux divmod(bigint, x) requires int or bigint arguments")
                     _b0 = 1 if t0 == "bigint" else 0
                     _b1 = 1 if t1 == "bigint" else 0
                     out.append(
@@ -10155,7 +10157,7 @@ class LinuxCEmitter:
                     self._coll_elems[result] = "bigint"
                     return out
                 if t0 not in {"int", "bool"} or t1 not in {"int", "bool"}:
-                    pass # NativeBuildError("Linux divmod requires int or float arguments")
+                    raise NativeBuildError("Linux divmod requires int or float arguments")
                 out.append(f"    {_name(result)}=piton_divmod_xy({self._value(values[0])},{self._value(values[1])});")
                 types[result] = "tuple"
                 self._coll_elems[result] = "int"
@@ -10163,7 +10165,7 @@ class LinuxCEmitter:
                 if len(values) == 3:
                     # POW_MOD_V1: pow(base, exp, mod) — los tres deben ser int.
                     if any(types.get(v) not in {"int", "bool"} for v in values):
-                        pass # NativeBuildError("Linux pow(base, exp, mod) requires three int arguments")
+                        raise NativeBuildError("Linux pow(base, exp, mod) requires three int arguments")
                     out.append(f"    {_name(result)}=piton_pow_mod({self._value(values[0])},{self._value(values[1])},{self._value(values[2])});")
                     self._emit_exc_check(out, function, call_handler)
                     types[result] = "int"
@@ -10175,7 +10177,7 @@ class LinuxCEmitter:
                 base_type = types.get(values[0])
                 if base_type == "float":
                     if types.get(values[1]) not in {"int", "bool"}:
-                        pass # NativeBuildError("Linux pow(float, e) requires an int exponent (M14 v1)")
+                        raise NativeBuildError("Linux pow(float, e) requires an int exponent (M14 v1)")
                     out.append(f"    {_name(result)}=piton_pow_float({self._value(values[0])},{self._value(values[1])});")
                     types[result] = "float"
                 elif base_type in {"int", "bool"}:
@@ -10191,10 +10193,10 @@ class LinuxCEmitter:
                     out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
             elif function_name in {"ord", "chr", "bin"}:
                 if len(values) != 1:
-                    pass # NativeBuildError(f"Linux {function_name} requires exactly one argument")
+                    raise NativeBuildError(f"Linux {function_name} requires exactly one argument")
                 arg_type = types.get(values[0])
                 if function_name in {"chr", "bin"} and arg_type not in {"int", "bool"}:
-                    pass # NativeBuildError(f"Linux {function_name} requires an int argument")
+                    raise NativeBuildError(f"Linux {function_name} requires an int argument")
                 if function_name == "ord" and arg_type != "str":
                     # ORD_DYNAMIC_V1: `ord(x)` con x de tipo desconocido se
                     # decide en runtime (CPython levanta TypeError si no es
@@ -10221,7 +10223,7 @@ class LinuxCEmitter:
                 # modulo (lazy). El tipo dict hace que el get/set y los
                 # metodos (items/keys) tomen el camino dict existente.
                 if values:
-                    pass # NativeBuildError(f"Linux {function_name} takes no arguments")
+                    raise NativeBuildError(f"Linux {function_name} takes no arguments")
                 if function_name == "globals":
                     out.append("    if(!piton_globals_ns){piton_globals_ns=(long)piton_dict_new(0);}")
                     out.append(f"    {_name(result)}=piton_globals_ns;")
@@ -10247,14 +10249,14 @@ class LinuxCEmitter:
                         types[result] = "int"
                         return out
                     if types.get(values[0]) != "float":
-                        pass # NativeBuildError("Linux round(x, ndigits) requires a float first argument")
+                        raise NativeBuildError("Linux round(x, ndigits) requires a float first argument")
                     if types.get(values[1]) not in {"int", "bool"}:
-                        pass # NativeBuildError("Linux round(x, ndigits) requires an int ndigits")
+                        raise NativeBuildError("Linux round(x, ndigits) requires an int ndigits")
                     out.append(f"    {_name(result)}=piton_round_float_nd({self._value(values[0])},{self._value(values[1])});")
                     types[result] = "float"
                     return out
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux round requires one or two arguments")
+                    raise NativeBuildError("Linux round requires one or two arguments")
                 arg_type = types.get(values[0])
                 if arg_type == "float":
                     out.append(f"    {_name(result)}=piton_round_float({self._value(values[0])});")
@@ -10271,7 +10273,7 @@ class LinuxCEmitter:
                     out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
             elif function_name in {"entero", "int"}:
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux int requires exactly one argument")
+                    raise NativeBuildError("Linux int requires exactly one argument")
                 arg_type = types.get(values[0])
                 operand = self._value(values[0])
                 if arg_type in {"int", "bool"}:
@@ -10293,7 +10295,7 @@ class LinuxCEmitter:
                 types[result] = "int"
             elif function_name in {"decimal", "float"}:
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux float requires exactly one argument")
+                    raise NativeBuildError("Linux float requires exactly one argument")
                 arg_type = types.get(values[0])
                 operand = self._value(values[0])
                 if arg_type in {"int", "bool"}:
@@ -10307,7 +10309,7 @@ class LinuxCEmitter:
                     else:
                         out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
                 else:
-                    pass # NativeBuildError("Linux float() requires int, float or str (M14 v1)")
+                    raise NativeBuildError("Linux float() requires int, float or str (M14 v1)")
                 types[result] = "float"
             elif function_name in {"texto", "str"}:
                 if len(values) == 1:
@@ -10334,7 +10336,7 @@ class LinuxCEmitter:
                         # emitido fuera de orden) -> str() de runtime.
                         out.append(f"    {_name(result)}=(long)piton_str_of_value({operand});")
                     else:
-                        pass # NativeBuildError("Linux str() requires int/float/bool/None/str (M14 v1)")
+                        raise NativeBuildError("Linux str() requires int/float/bool/None/str (M14 v1)")
                     types[result] = "str"
                 elif len(values) in {2, 3}:
                     # STR_DECODE_V1: str(bytes, encoding[, errors]) -> decode
@@ -10351,10 +10353,10 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}=0;")
                     types[result] = "str"
                 else:
-                    pass # NativeBuildError("Linux str requires exactly one argument")
+                    raise NativeBuildError("Linux str requires exactly one argument")
             elif function_name in {"booleano", "bool"}:
                 if len(values) != 1:
-                    pass # NativeBuildError("Linux bool requires exactly one argument")
+                    raise NativeBuildError("Linux bool requires exactly one argument")
                 arg_type = types.get(values[0])
                 operand = self._value(values[0])
                 if arg_type in {"int", "bool"}:
@@ -10400,7 +10402,7 @@ class LinuxCEmitter:
                     self._emit_exc_check(out, function, call_handler)
                     return out
                 else:
-                    pass # NativeBuildError("Linux bool() requires int/float/str/collection/None (M14 v1)")
+                    raise NativeBuildError("Linux bool() requires int/float/str/collection/None (M14 v1)")
                 types[result] = "bool"
             elif function_name in {"min", "max"}:
                 # MINMAX_VARIADIC_V1: min/max de N>=3 ESCALARES del mismo
@@ -10421,7 +10423,7 @@ class LinuxCEmitter:
                 if len(values) >= 3 and types.get(values[0]) not in {"list", "tuple"} and not _mm_kwargs:
                     _vts = [types.get(v, "int") for v in values]
                     if len(set(_vts)) != 1 or _vts[0] not in {"str", "float", "int", "bool"}:
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             f"Linux min/max of {len(values)} values requires one homogeneous kind, not {sorted(set(_vts))}"
                         )
                     _cmp = "<" if function_name == "min" else ">"
@@ -10459,7 +10461,7 @@ class LinuxCEmitter:
                     elif _coll_type in {"list", "tuple"}:
                         out.append(f"    {_name(result)}=piton_extreme_default_new((void*){self._value(_coll)},{_key_expr},{_want_min},{_dflt_expr});")
                     else:
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             "Linux min/max default= requires one list, tuple or iterator"
                         )
                     self._emit_exc_check(out, function, call_handler)
@@ -10471,7 +10473,7 @@ class LinuxCEmitter:
                     return out
                 if len(values) == 3:
                     if types.get(values[0]) not in {"list", "tuple"}:
-                        pass # NativeBuildError("Linux min/max key= requires one list or tuple")
+                        raise NativeBuildError("Linux min/max key= requires one list or tuple")
                     out.append(f"    {_name(result)}=piton_extreme_key_new((void*){self._value(values[0])},{self._value(values[1])},{1 if function_name == 'min' else 0});")
                     self._emit_exc_check(out, function, call_handler)
                     _et = self._coll_elems.get(values[0], "int")
@@ -10518,7 +10520,7 @@ class LinuxCEmitter:
                     # historical "requires two arguments" error (unchanged
                     # behavior for min(5) etc.).
                 if len(values) != 2:
-                    pass # NativeBuildError("Linux min/max requires two arguments")
+                    raise NativeBuildError("Linux min/max requires two arguments")
                 # MINMAX_TYPES_V1 (mirrors Windows): the winner keeps its
                 # kind. Both str -> lexicographic; both float -> float;
                 # both int/bool -> int compare ("bool" only when both are
@@ -10543,11 +10545,11 @@ class LinuxCEmitter:
                     # mixed bool/int: the winner's type depends on runtime
                     # values (min(True, 5) is True, max(True, 5) is 5), so
                     # the result type is not statically knowable.
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"Linux min/max requires two values of the same kind, not {t0}/{t1}"
                     )
                 else:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"Linux min/max requires two values of the same kind, not {t0}/{t1}"
                     )
             elif function_name in {"sum", "suma"}:
@@ -10556,7 +10558,7 @@ class LinuxCEmitter:
                     # total acumulado (CPython acepta cualquier start numérico).
                     st = types.get(values[1], "int")
                     if st not in {"int", "bool", "float"}:
-                        pass # NativeBuildError("Linux sum(x, start) requires a numeric start")
+                        raise NativeBuildError("Linux sum(x, start) requires a numeric start")
                     acc = f"piton_double_bits({self._value(values[1])})" if st == "float" else self._value(values[1])
                     et = self._coll_elems.get(values[0])
                     _mixed_float = et is not None and "float" in et.split("|")
@@ -10572,7 +10574,7 @@ class LinuxCEmitter:
                 if len(values) != 1 or types.get(values[0]) not in {
                     "list", "tuple", "dict", "set", "set:frozen", "range", "generator"
                 }:
-                    pass # NativeBuildError("Linux sum requires one collection")
+                    raise NativeBuildError("Linux sum requires one collection")
                 value_type = types.get(values[0])
                 if value_type == "generator":
                     # GEN_SUM_V1: sum over a generator materializes it once.
@@ -10589,7 +10591,7 @@ class LinuxCEmitter:
                 struct_map = {"list": "PitonSeq", "tuple": "PitonSeq", "dict": "PitonDict", "set": "PitonSet", "set:frozen": "PitonSet"}
                 helper_map = {"list": "piton_sum_seq", "tuple": "piton_sum_seq", "dict": "piton_sum_dict", "set": "piton_sum_set", "set:frozen": "piton_sum_set"}
                 if value_type not in struct_map:
-                    pass # NativeBuildError("Linux sum requires one collection")
+                    raise NativeBuildError("Linux sum requires one collection")
                 # COLL_ELEM_TYPE_V1: the helper adds each element's raw bits, so
                 # a bigint element contributed its POINTER and sum printed an
                 # address (`sum([10 ** 20])` -> 4210752). Refuse anything whose
@@ -10626,10 +10628,10 @@ class LinuxCEmitter:
                 # counter-loop fast path, which consumes the call's arguments
                 # directly, so this changes nothing there.
                 if len(values) < 1 or len(values) > 3:
-                    pass # NativeBuildError("Linux rango() takes 1-3 arguments")
+                    raise NativeBuildError("Linux rango() takes 1-3 arguments")
                 for value in values:
                     if types.get(value, "int") not in {"int", "bool"}:
-                        pass # NativeBuildError("Linux rango() arguments must be ints")
+                        raise NativeBuildError("Linux rango() arguments must be ints")
                 if len(values) == 1:
                     start, stop, step = "0", self._value(values[0]), "1"
                 elif len(values) == 2:
@@ -10653,12 +10655,12 @@ class LinuxCEmitter:
                 tname = "bytearray" if is_ba else "bytes"
                 ctor = "piton_bytearray" if is_ba else "piton_bytes"
                 if len(values) > 2:
-                    pass # NativeBuildError(f"Linux {tname}() takes at most two arguments")
+                    raise NativeBuildError(f"Linux {tname}() takes at most two arguments")
                 if len(values) == 0:
                     out.append(f"    {_name(result)}=(long){ctor}_new(0,0);")
                 elif types.get(values[0]) == "str":
                     if len(values) == 1:
-                        pass # NativeBuildError(f"Linux {tname}() string argument without an encoding")
+                        raise NativeBuildError(f"Linux {tname}() string argument without an encoding")
                     out.append(f"    {_name(result)}=(long){ctor}_from_str((const char*){self._value(values[0])},(const char*){self._value(values[1])});")
                     out.append(f"    if(!{_name(result)}){{piton_report_unhandled();piton_exit(1);}}")
                 else:
@@ -10690,7 +10692,7 @@ class LinuxCEmitter:
                         types[result] = "list" if alias == "lista" else "tuple"
                     return out
                 if len(values) != 1:
-                    pass # NativeBuildError(f"Linux {alias}() takes at most one argument")
+                    raise NativeBuildError(f"Linux {alias}() takes at most one argument")
                 source_type = types.get(values[0], "int")
                 if source_type.startswith("object:") and seq_kind == "PK_LIST":
                     # CONV_OBJECT_LIST_V1: lista(obj) cuando obj tiene __iter__.
@@ -10911,7 +10913,7 @@ class LinuxCEmitter:
                     self._tuple_list_elems[result] = tx
             elif function_name in {"hasattr", "tiene_atr"}:
                 if len(values) != 2:
-                    pass # NativeBuildError("hasattr requires 2 arguments (object, name)")
+                    raise NativeBuildError("hasattr requires 2 arguments (object, name)")
                 obj_val = values[0]
                 name_val = values[1]
                 obj_type = types.get(obj_val, "")
@@ -10939,7 +10941,7 @@ class LinuxCEmitter:
                 types[result] = "bool"
             elif function_name in {"getattr", "obtener_atr"}:
                 if len(values) not in {2, 3}:
-                    pass # NativeBuildError("getattr requires 2 or 3 arguments (object, name [, default])")
+                    raise NativeBuildError("getattr requires 2 or 3 arguments (object, name [, default])")
                 obj_val = values[0]
                 name_val = values[1]
                 has_def = 1 if len(values) == 3 else 0
@@ -10959,7 +10961,7 @@ class LinuxCEmitter:
                             self._coll_elems[result] = self._coll_elems.get(values[2], "int")
             elif function_name in {"setattr", "fijar_atr", "establecer_atr"}:
                 if len(values) != 3:
-                    pass # NativeBuildError("setattr requires 3 arguments (object, name, value)")
+                    raise NativeBuildError("setattr requires 3 arguments (object, name, value)")
                 obj_val = values[0]
                 name_val = values[1]
                 val_arg = values[2]
@@ -10969,13 +10971,13 @@ class LinuxCEmitter:
                 types[result] = "none"
             elif function_name in {"isinstance", "es_instancia"}:
                 if len(values) != 2:
-                    pass # NativeBuildError("isinstance requires 2 arguments (object, class_or_tuple)")
+                    raise NativeBuildError("isinstance requires 2 arguments (object, class_or_tuple)")
                 expr = self._build_isinstance_expr(values[0], values[1], types, aliases)
                 out.append(f"    {_name(result)}={expr};")
                 types[result] = "bool"
             elif function_name in {"issubclass", "es_subclase"}:
                 if len(values) != 2:
-                    pass # NativeBuildError("issubclass requires 2 arguments (class, class_or_tuple)")
+                    raise NativeBuildError("issubclass requires 2 arguments (class, class_or_tuple)")
                 expr = self._build_issubclass_expr(values[0], values[1], aliases)
                 out.append(f"    {_name(result)}={expr};")
                 types[result] = "bool"
@@ -10985,12 +10987,12 @@ class LinuxCEmitter:
                 # here used to jump through an uninitialized variable — SIGSEGV.
                 callee_name = aliases.get(args[0], args[0])
                 if types.get(args[0]) == "builtin":
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"Linux native call to builtin '{callee_name}' is not supported in this position"
                     )
                 for value in values:
                     if types.get(value) == "builtin":
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             f"Linux native call passes builtin '{aliases.get(value, value)}' as an argument (unsupported)"
                         )
                 values = self._complete_call_args(function_name, list(values))
@@ -11065,7 +11067,7 @@ class LinuxCEmitter:
             if isinstance(args[0], str) and types.get(args[0]) == "builtin":
                 # BUILTIN_MARKER_V1: returning a builtin marker would hand the
                 # caller an uninitialized C value.
-                pass # NativeBuildError(
+                raise NativeBuildError(
                     f"Linux native return of builtin '{aliases.get(args[0], args[0])}' is not supported"
                 )
             out.append(f"    return {self._value(args[0])};")
@@ -11082,9 +11084,9 @@ class LinuxCEmitter:
                 finalizer_name = f"{finalizer_class}____del__"
                 params = self.function_params.get(finalizer_name) or []
                 if len(params) != 1:
-                    pass # NativeBuildError("Linux __del__ must take exactly self (FINALIZERS_V1)")
+                    raise NativeBuildError("Linux __del__ must take exactly self (FINALIZERS_V1)")
                 if self.function_frame_abi.get(finalizer_name, False):
-                    pass # NativeBuildError("Linux __del__ cannot use the frame ABI yet (FINALIZERS_V1)")
+                    raise NativeBuildError("Linux __del__ cannot use the frame ABI yet (FINALIZERS_V1)")
                 out.append(f'    {_name(result)}=(long)piton_object_new_finalized("{cls_name}",{parent_str},(long)&{_name(finalizer_name)});')
             else:
                 out.append(f'    {_name(result)}=(long)piton_object_new("{cls_name}",{parent_str});')
@@ -11163,7 +11165,7 @@ class LinuxCEmitter:
             argc, *call_args = packed
             self._reject_complex_args(call_args, types, "a closure")
             if len(call_args) > 4:
-                pass # NativeBuildError("Linux closure calls with more than four arguments are not supported yet")
+                raise NativeBuildError("Linux closure calls with more than four arguments are not supported yet")
             arg_values = [self._value(arg) for arg in call_args]
             arg_values += ["0"] * (4 - len(arg_values))
             out.append(
@@ -11185,7 +11187,7 @@ class LinuxCEmitter:
                         f"{data_expr},{length_expr});"
                     )
                     return out
-                pass # NativeBuildError("Linux bytearray slice assignment requires bytes/bytearray value")
+                raise NativeBuildError("Linux bytearray slice assignment requires bytes/bytearray value")
             # SLICE_DYNAMIC_V1: destino sin tipo anotado (protocols.py).
             out.append(
                 f"    piton_slice_assign_dynamic({self._value(collection)},"
@@ -11283,7 +11285,7 @@ class LinuxCEmitter:
             if prop_class is not None:
                 setter = self.class_properties[prop_class][attr].get("setter")
                 if not setter:
-                    pass # NativeBuildError(f"property '{attr}' of '{owner_type.split(':', 1)[1]}' object has no setter")
+                    raise NativeBuildError(f"property '{attr}' of '{owner_type.split(':', 1)[1]}' object has no setter")
                 out.append(f'    {_name(setter)}({self._value(obj)},{self._value(val)});')
             else:
                 # INSTANCE_ATTR_TYPES_V1: `self.x = valor` anota el tipo del
@@ -11440,7 +11442,7 @@ class LinuxCEmitter:
                 # wrapper recibe (self, value) por el ABI de bound method y la
                 # kind del valor se deriva en runtime (piton_slot_guess).
                 if owner_type == "tuple":
-                    pass # NativeBuildError("tuple has no attribute 'append'")
+                    raise NativeBuildError("tuple has no attribute 'append'")
                 out.append(
                     f"    {_name(result)}=piton_bound_method_new((long)&piton_list_append_bound,1,{self._value(obj)});"
                 )
@@ -11473,7 +11475,7 @@ class LinuxCEmitter:
                 if resolved_method is not None:
                     params = self.function_params.get(f"{resolved_method}__{attr}") or []
                     if not params:
-                        pass # NativeBuildError(f"bound method '{attr}' has no native signature")
+                        raise NativeBuildError(f"bound method '{attr}' has no native signature")
                     target = f"{resolved_method}__{attr}"
                     if target in self.static_methods:
                         out.append(f'    {_name(result)}=(long)&{_name(target)};')
@@ -11568,7 +11570,7 @@ class LinuxCEmitter:
             if prop_class is not None:
                 deleter = self.class_properties[prop_class][attr].get("deleter")
                 if not deleter:
-                    pass # NativeBuildError(f"property '{attr}' of '{owner_type.split(':', 1)[1]}' object has no deleter")
+                    raise NativeBuildError(f"property '{attr}' of '{owner_type.split(':', 1)[1]}' object has no deleter")
                 out.append(f'    {_name(deleter)}({self._value(obj)});')
             else:
                 hook = None
@@ -11593,7 +11595,7 @@ class LinuxCEmitter:
                     out.append(f'    piton_object_del((PitonObject*){self._value(obj)},{json.dumps(attr)});')
                     self._emit_exc_check(out, function, None)
                 else:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"native del on '{attr}' is not a property of a natively-typed object"
                     )
         elif op == "del_slice":
@@ -11622,7 +11624,7 @@ class LinuxCEmitter:
             obj, index = args
             owner_type = types.get(obj, "")
             if owner_type == "tuple":
-                pass # NativeBuildError("'tuple' object does not support item deletion")
+                raise NativeBuildError("'tuple' object does not support item deletion")
             if owner_type in {"list"}:
                 out.append(f"    piton_seq_pop((PitonSeq*){self._value(obj)},{self._value(index)});")
             elif owner_type == "dict":
@@ -11698,9 +11700,9 @@ class LinuxCEmitter:
                 if cls_name is None and method == "sort":
                     _sk_type = types.get(obj, "")
                     if _sk_type not in {"list", "tuple"}:
-                        pass # NativeBuildError(f"Linux sort() requires a list or tuple, not {_sk_type}")
+                        raise NativeBuildError(f"Linux sort() requires a list or tuple, not {_sk_type}")
                     if call_args:
-                        pass # NativeBuildError("Linux sort() takes no positional arguments")
+                        raise NativeBuildError("Linux sort() takes no positional arguments")
                     _sk_key = None
                     _sk_rev = None
                     for _kn, _kv in kw_args:
@@ -11709,14 +11711,14 @@ class LinuxCEmitter:
                         elif _kn in {"reverse", "reversa"}:
                             _sk_rev = _kv
                         else:
-                            pass # NativeBuildError(f"Linux sort() got an unexpected keyword argument '{_kn}'")
+                            raise NativeBuildError(f"Linux sort() got an unexpected keyword argument '{_kn}'")
                     if _sk_key is None:
-                        pass # NativeBuildError("Linux sort() requires a key= keyword")
+                        raise NativeBuildError("Linux sort() requires a key= keyword")
                     _sk_expr = self._value(_sk_key)
                     if _sk_rev is not None:
                         _rv = types.get(_sk_rev, "int")
                         if _rv not in {"int", "bool"}:
-                            pass # NativeBuildError("Linux sort(reverse=) requires a bool")
+                            raise NativeBuildError("Linux sort(reverse=) requires a bool")
                         out.append(
                             f"    if({self._value(_sk_rev)})"
                             f"{{piton_seq_sort_key_rev((PitonSeq*){self._value(obj)},{_sk_expr});}}"
@@ -11768,7 +11770,7 @@ class LinuxCEmitter:
                         )
                         for _kname, _kval in kw_args:
                             if _kname is None:
-                                pass # NativeBuildError(
+                                raise NativeBuildError(
                                     f"Linux {method}() does not accept **kwargs unpacking"
                                 )
                             _parts.append(
@@ -11803,13 +11805,13 @@ class LinuxCEmitter:
                 _opnd = self._value(obj)
                 if call_args:
                     if len(call_args) != 1 or types.get(call_args[0], "") != "dict":
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             "Linux dict.update() with keyword arguments takes no positional dict argument"
                         )
                     out.append(f"    piton_dict_update((PitonDict*){_opnd},(PitonDict*){self._value(call_args[0])});")
                 for _kname, _kval in kw_args:
                     if _kname is None:
-                        pass # NativeBuildError("Linux dict.update() does not accept **kwargs unpacking")
+                        raise NativeBuildError("Linux dict.update() does not accept **kwargs unpacking")
                     out.append(
                         f"    piton_dict_append((PitonDict*){_opnd},"
                         f"piton_slot((long){json.dumps(_kname)},PK_STR),{self._slot(_kval, types)});"
@@ -11849,7 +11851,7 @@ class LinuxCEmitter:
                                 if _cand2 in self.function_names:
                                     _mod_target = _cand2
                     if _mod_target is None:
-                        pass # NativeBuildError(
+                        raise NativeBuildError(
                             f"Linux module method {method}() is not statically known "
                             f"(module '{aliases.get(obj, obj)}' has no compiled function '{method}')"
                         )
@@ -11901,9 +11903,9 @@ class LinuxCEmitter:
                     # resultado sin tipo: el siguiente uso revienta en BUILD.
                     # Mismo molde que dict.fromkeys sobre la clase.
                     if len(call_args) != 1:
-                        pass # NativeBuildError("Linux str.maketrans() requires exactly one argument")
+                        raise NativeBuildError("Linux str.maketrans() requires exactly one argument")
                     if types.get(call_args[0], "") != "dict":
-                        pass # NativeBuildError("Linux str.maketrans() requires a dict argument")
+                        raise NativeBuildError("Linux str.maketrans() requires a dict argument")
                     out.append(
                         f"    {_name(result)}=(long)piton_str_maketrans((PitonDict*){self._value(call_args[0])});"
                     )
@@ -11925,18 +11927,18 @@ class LinuxCEmitter:
                 ):
                     # INT_FROM_BYTES_V1: int.from_bytes(bytes, byteorder='big', signed=False)
                     if len(call_args) < 1 or len(call_args) > 3:
-                        pass # NativeBuildError("Linux int.from_bytes() takes 1-3 arguments")
+                        raise NativeBuildError("Linux int.from_bytes() takes 1-3 arguments")
                     if types.get(call_args[0], "") not in {"bytes", "octetos", "bytearray", "arreglo_bytes"}:
-                        pass # NativeBuildError("Linux int.from_bytes() requires bytes or bytearray")
+                        raise NativeBuildError("Linux int.from_bytes() requires bytes or bytearray")
                     _ifb_order = "big"
                     _ifb_signed = 0
                     if len(call_args) >= 2:
                         if types.get(call_args[1], "") not in {"str", "texto"}:
-                            pass # NativeBuildError("Linux int.from_bytes() byteorder must be str")
+                            raise NativeBuildError("Linux int.from_bytes() byteorder must be str")
                         _ifb_order = f"(const char*){self._value(call_args[1])}"
                     if len(call_args) == 3:
                         if types.get(call_args[2], "") not in {"bool", "int"}:
-                            pass # NativeBuildError("Linux int.from_bytes() signed must be bool")
+                            raise NativeBuildError("Linux int.from_bytes() signed must be bool")
                         _ifb_signed = self._value(call_args[2])
                     out.append(
                         f"    {_name(result)}=(long)piton_int_from_bytes("
@@ -11953,9 +11955,9 @@ class LinuxCEmitter:
                 ):
                     # BYTES_MAKETRANS_V1: bytes.maketrans(frm, to) -> 256-byte table
                     if len(call_args) != 2:
-                        pass # NativeBuildError("Linux bytes.maketrans() takes exactly 2 arguments")
+                        raise NativeBuildError("Linux bytes.maketrans() takes exactly 2 arguments")
                     if types.get(call_args[0], "") not in {"bytes", "octetos"} or types.get(call_args[1], "") not in {"bytes", "octetos"}:
-                        pass # NativeBuildError("Linux bytes.maketrans() requires two bytes arguments")
+                        raise NativeBuildError("Linux bytes.maketrans() requires two bytes arguments")
                     out.append(
                         f"    {_name(result)}=(long)piton_bytes_maketrans("
                         f"(PitonSeq*){self._value(call_args[0])},(PitonSeq*){self._value(call_args[1])});"
@@ -11971,9 +11973,9 @@ class LinuxCEmitter:
                 ):
                     # FLOAT_FROMHEX_V1: float.fromhex(str)
                     if len(call_args) != 1:
-                        pass # NativeBuildError("Linux float.fromhex() takes exactly one argument")
+                        raise NativeBuildError("Linux float.fromhex() takes exactly one argument")
                     if types.get(call_args[0], "") not in {"str", "texto"}:
-                        pass # NativeBuildError("Linux float.fromhex() requires a string argument")
+                        raise NativeBuildError("Linux float.fromhex() requires a string argument")
                     out.append(
                         f"    {_name(result)}=(long)piton_float_fromhex((const char*){self._value(call_args[0])});"
                     )
@@ -11987,10 +11989,10 @@ class LinuxCEmitter:
                     # DICT_FROMKEYS_V1: dict.fromkeys(iterable, value) — las
                     # claves son los elementos; el valor es el mismo para todas.
                     if len(call_args) not in (1, 2):
-                        pass # NativeBuildError("Linux dict.fromkeys() requires one or two arguments")
+                        raise NativeBuildError("Linux dict.fromkeys() requires one or two arguments")
                     _fk_kind0 = types.get(call_args[0], "")
                     if _fk_kind0 not in {"list", "tuple", "str"}:
-                        pass # NativeBuildError("Linux dict.fromkeys() requires a list, tuple or str of keys")
+                        raise NativeBuildError("Linux dict.fromkeys() requires a list, tuple or str of keys")
                     _has_val = 1 if len(call_args) == 2 else 0
                     _vkind = self._kind(types.get(call_args[1], "none")) if _has_val else "PK_NONE"
                     _vexpr = self._value(call_args[1]) if _has_val else "0"
@@ -12009,7 +12011,7 @@ class LinuxCEmitter:
                     # SLICE_INDICES_V1: s.indices(n) -> (start, stop, step)
                     # normalizados a la longitud n (CPython).
                     if len(call_args) != 1 or types.get(call_args[0], "") not in {"int", "bool"}:
-                        pass # NativeBuildError("Linux slice.indices() requires one int argument")
+                        raise NativeBuildError("Linux slice.indices() requires one int argument")
                     _slv = values[0] if owner_type == "class:slice" else obj
                     out.append(
                         f"    {_name(result)}=piton_slice_indices((PitonSlice*){self._value(_slv)},{self._value(call_args[0])});"
@@ -12019,7 +12021,7 @@ class LinuxCEmitter:
                     return out
                 if owner_type in {"class:bytes", "class:bytearray"} and method == "fromhex":
                     if len(call_args) != 1 or types.get(call_args[0]) != "str":
-                        pass # NativeBuildError("Linux fromhex() requires one str argument")
+                        raise NativeBuildError("Linux fromhex() requires one str argument")
                     is_ba = owner_type == "class:bytearray"
                     out.append(f"    {_name(result)}=(long)piton_bytes_fromhex((const char*){self._value(call_args[0])},{1 if is_ba else 0});")
                     out.append(f"    if(piton_exc_flag){{piton_report_unhandled();piton_exit(1);}}")
@@ -12034,33 +12036,33 @@ class LinuxCEmitter:
                     _mv = f"(PitonMemoryView*){self._value(obj)}"
                     if method == "tobytes":
                         if call_args:
-                            pass # NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
+                            raise NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
                         out.append(f"    {_name(result)}=piton_memoryview_tobytes({_mv});")
                         types[result] = "bytes"
                         return out
                     if method == "tolist":
                         if call_args:
-                            pass # NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
+                            raise NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
                         out.append(f"    {_name(result)}=piton_memoryview_tolist({_mv});")
                         types[result] = "list"
                         self._coll_elems[result] = "int"
                         return out
                     if method == "readonly":
                         if call_args:
-                            pass # NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
+                            raise NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
                         out.append(f"    {_name(result)}=({_mv})->is_bytearray?0:1;")
                         types[result] = "bool"
                         return out
                     if method == "itemsize":
                         if call_args:
-                            pass # NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
+                            raise NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
                         # V1: vistas de bytes ('B') -> 1 byte por elemento.
                         out.append(f"    {_name(result)}=1;")
                         types[result] = "int"
                         return out
                     if method == "nbytes":
                         if call_args:
-                            pass # NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
+                            raise NativeBuildError(f"Linux memoryview.{method}() takes no arguments")
                         out.append(f"    {_name(result)}=({_mv})->length;")
                         types[result] = "int"
                         return out
@@ -12070,24 +12072,24 @@ class LinuxCEmitter:
                         # contigua: un receiver marcado como no contiguo es un
                         # build error (CPython lanza TypeError en runtime).
                         if len(call_args) != 1:
-                            pass # NativeBuildError("Linux memoryview.cast() takes exactly one argument")
+                            raise NativeBuildError("Linux memoryview.cast() takes exactly one argument")
                         _fmt = call_args[0]
                         _fmt_val = _fmt if isinstance(_fmt, str) and not _fmt.startswith(("%", "@")) else self._fn_consts.get(_fmt)
                         if _fmt_val not in {"B", "b", "c"}:
-                            pass # NativeBuildError("Linux memoryview.cast() supports only the 1-byte formats ('B','b','c')")
+                            raise NativeBuildError("Linux memoryview.cast() supports only the 1-byte formats ('B','b','c')")
                         if obj in self._mv_noncontig:
-                            pass # NativeBuildError("memoryview.cast() requires a C-contiguous view (non-contiguous receiver)")
+                            raise NativeBuildError("memoryview.cast() requires a C-contiguous view (non-contiguous receiver)")
                         out.append(
                             f"    {_name(result)}=piton_memoryview_new(({_mv})->buf,({_mv})->is_bytearray,({_mv})->offset,({_mv})->length,1);"
                         )
                         types[result] = "memoryview"
                         return out
-                    pass # NativeBuildError(f"Linux memoryview.{method}() is not supported")
+                    raise NativeBuildError(f"Linux memoryview.{method}() is not supported")
                 if coll_type == "complex" and method == "conjugate":
                     # COMPLEX_CONJUGATE_V1: z.conjugate() -> z con la parte
                     # imaginaria negada.
                     if call_args:
-                        pass # NativeBuildError("Linux complex.conjugate() takes no arguments")
+                        raise NativeBuildError("Linux complex.conjugate() takes no arguments")
                     out.append(f"    {{PitonComplexVal _z=piton_cx_of({self._value(obj)}); _z.im=-_z.im; {_name(result)}=piton_cx_wrap(_z);}}")
                     types[result] = "complex"
                     return out
@@ -12227,7 +12229,7 @@ class LinuxCEmitter:
                     return out
                 cls_name = owner_type.split(":", 1)[1]
                 if self._resolve_property_class(owner_type, method) is not None:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"native property '{method}' of '{cls_name}' object is not a method (calling a property is unsupported)"
                     )
             try:
@@ -12472,7 +12474,7 @@ class LinuxCEmitter:
             if code is None:
                 value = "0"
             elif types.get(code) == "str":
-                pass # NativeBuildError("native sys.exit(str) is not supported yet")
+                raise NativeBuildError("native sys.exit(str) is not supported yet")
             else:
                 value = self._value(code)
             if result:
@@ -12514,7 +12516,7 @@ class LinuxCEmitter:
             types[result] = "float" if op == "math_fabs" else "int"
         elif op == "math_gcd":
             if types.get(args[0]) not in {"int", "bool"} or types.get(args[1]) not in {"int", "bool"}:
-                pass # NativeBuildError("Linux math.gcd requires int arguments")
+                raise NativeBuildError("Linux math.gcd requires int arguments")
             out.append(f"    {_name(result)}=piton_math_gcd({self._value(args[0])},{self._value(args[1])});")
             types[result] = "int"
         elif op == "terminal_init":
@@ -12679,7 +12681,7 @@ class LinuxCEmitter:
                 for value in items:
                     out.append(f'    piton_set_add((PitonSet*){_name(result)},{self._slot(value, types)});')
             else:
-                pass # NativeBuildError(f"Linux collection kind not supported: {kind}")
+                raise NativeBuildError(f"Linux collection kind not supported: {kind}")
             types[result] = kind
         elif op == "collection_extend":
             # COLLECTION_EXTEND_V1: extender coleccion con iterable (starred en
@@ -12730,7 +12732,7 @@ class LinuxCEmitter:
                 if vtype == "tuple" and self._iter_source.get(value) is not None:
                     _te = self._tuple_elems.get(value)
                     if _te is not None and any(t == "tuple" for _, t in _te):
-                        pass # NativeBuildError("Linux unpack of nested tuple targets is not supported")
+                        raise NativeBuildError("Linux unpack of nested tuple targets is not supported")
                 length = f"((PitonSeq*){self._value(value)})->length"
             elif vtype == "str":
                 length = f"(long)piton_strlen((const char*){self._value(value)})"
@@ -12748,11 +12750,11 @@ class LinuxCEmitter:
                     if _te is not None and len(_te) == expected:
                         length = f"((PitonSeq*){self._value(_src)})->length"
                     else:
-                        pass # NativeBuildError(f"Linux unpack requires a list, tuple or str, not {vtype}")
+                        raise NativeBuildError(f"Linux unpack requires a list, tuple or str, not {vtype}")
                 else:
                     _nt = self._nested_tuple_lists.get(_src) if _src else None
                     if _nt is None or len(_nt) != expected:
-                        pass # NativeBuildError(f"Linux unpack requires a list, tuple or str, not {vtype}")
+                        raise NativeBuildError(f"Linux unpack requires a list, tuple or str, not {vtype}")
                     length = f"((PitonSeq*){self._value(_src)})->length"
             out.append("    {")
             out.append(f"    long _ul={length};")
@@ -13106,7 +13108,7 @@ class LinuxCEmitter:
                     "generator": 4, "genexpr": 4,
                 }.get(collection_type)
                 if _which is None:
-                    pass # NativeBuildError(f"Linux collection_len requires a collection (not {collection_type})")
+                    raise NativeBuildError(f"Linux collection_len requires a collection (not {collection_type})")
                 _tuple_items = collection_type in {"iterator:enumerate", "iterator:zip"}
                 _elemkind = "PK_TUPLE" if _tuple_items else "PK_INT"
                 # the loop condition re-evaluates this every iteration: a
@@ -13143,7 +13145,7 @@ class LinuxCEmitter:
             coll, value = args
             collection_type = types.get(coll)
             if collection_type not in ("list", "tuple"):
-                pass # NativeBuildError("Linux list_append requires a list or tuple")
+                raise NativeBuildError("Linux list_append requires a list or tuple")
             out.append(f'    {{PitonSeq*_c=(PitonSeq*){self._value(coll)};PitonSlot _s;_s.bits={self._value(value)};_s.kind={self._kind(types.get(value, "int"))};piton_seq_append(_c,_s);}}')
             # LIST_APPEND_ELEM_V1: el valor appendido define el elem-kind de
             # la lista (getopt: la comprension `[o for o in longopts]` deja
@@ -13168,17 +13170,17 @@ class LinuxCEmitter:
             gen_args = tuple(args[1]) if len(args) > 1 and args[1] else ()
             layout = self.generator_layouts.get(func_name)
             if layout is None:
-                pass # NativeBuildError(f"native generator '{func_name}' has no persisted-slot layout")
+                raise NativeBuildError(f"native generator '{func_name}' has no persisted-slot layout")
             params = self.function_params.get(func_name, [])
             vararg = self.function_varargs.get(func_name)
             _named2 = [p for p in params if p != vararg]
             if self.function_kwargs.get(func_name):
-                pass # NativeBuildError(
+                raise NativeBuildError(
                     f"native generator '{func_name}' with **kwargs is not supported yet"
                 )
             if vararg is None:
                 if len(gen_args) != len(_named2):
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"native generator '{func_name}' called with wrong number of arguments "
                         "(defaults not supported yet)"
                     )
@@ -13187,12 +13189,12 @@ class LinuxCEmitter:
                 # guard de >4 args era conservador.
             else:
                 if len(gen_args) < len(_named2):
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"native generator '{func_name}' called with wrong number of arguments "
                         "(defaults not supported yet)"
                     )
                 if vararg not in layout:
-                    pass # NativeBuildError(
+                    raise NativeBuildError(
                         f"native generator '{func_name}' *args slot is missing from the persisted layout"
                     )
             self._emit_gen_args(out, result, func_name, layout, params, vararg, list(gen_args), types)
@@ -13232,12 +13234,12 @@ class LinuxCEmitter:
             # PitonSlot, so ** operands can be checked safely at runtime.
             func_name, pos_parts, kw_parts, handler_label = args
             if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
-                pass # NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 is not supported inside generator bodies yet")
+                raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 is not supported inside generator bodies yet")
             if func_name not in self.function_names:
-                pass # NativeBuildError("native dynamic call unpacking requires a module-level function callee")
+                raise NativeBuildError("native dynamic call unpacking requires a module-level function callee")
             f_params = self.function_params.get(func_name) or []
             if not f_params or len(f_params) > 4:
-                pass # NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 supports callees with one to four parameters")
+                raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 supports callees with one to four parameters")
             f_defaults = self.function_defaults.get(func_name) or []
             n_params = len(f_params)
             f_vararg = self.function_varargs.get(func_name)
@@ -13250,7 +13252,7 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}={_name(func_name)}((long){self._value(kwstars[0][2])});")
                     self._emit_exc_check(out, function, handler_label)
                     return out
-                pass # NativeBuildError("Linux dynamic ** unpacking over a **kwargs callee supports only f(**kw)")
+                raise NativeBuildError("Linux dynamic ** unpacking over a **kwargs callee supports only f(**kw)")
             if f_vararg is not None:
                 # CALL_UNPACK_VARIADIC_V1: `f(*xs)` sobre un callee *args.
                 # Los primeros NN elementos llenan los parámetros fijos; el
@@ -13277,7 +13279,7 @@ class LinuxCEmitter:
                     else:
                         ptype = types.get(part[1], "")
                         if ptype not in {"list", "tuple"}:
-                            pass # NativeBuildError("CALL_UNPACK_VARIADIC_V1: * operand must be a statically-known list or tuple")
+                            raise NativeBuildError("CALL_UNPACK_VARIADIC_V1: * operand must be a statically-known list or tuple")
                         out.append(f"    {{PitonSeq* s_{site}=(PitonSeq*){self._value(part[1])};")
                         out.append(f"     long k_{site}=0;")
                         out.append(f"     while(f_{site}<{n_named}&&k_{site}<s_{site}->length){{b_{site}[(int)f_{site}]=s_{site}->items[k_{site}].bits;f_{site}+=1;k_{site}+=1;}}")
@@ -13303,7 +13305,7 @@ class LinuxCEmitter:
             # intentar/excepto) y un valor que SI era secuencia compila.
             for part in kw_parts:
                 if part[0] == "kwstar" and types.get(part[2]) != "dict":
-                    pass # NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1: ** operand must be a dict")
+                    raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1: ** operand must be a dict")
             site = f"unpack_{self._gen_counter}"
             self._gen_counter += 1
             sentinel = "0x504954554E424E44LL"
@@ -13331,7 +13333,7 @@ class LinuxCEmitter:
                 if part[0] == "keyword":
                     name, value = part[1], part[2]
                     if name not in f_params:
-                        pass # NativeBuildError(f"unexpected keyword argument: {name}")
+                        raise NativeBuildError(f"unexpected keyword argument: {name}")
                     idx = f_params.index(name)
                     out.append(f"    if(m_{site}&(1LL<<{idx})){{piton_raise_set(\"TypeError\",\"multiple values for argument\");goto {site}_runtime_err;}}")
                     out.append(f"    m_{site}|=1LL<<{idx}; b_{site}[{idx}]=(long)({self._value(value)});")
@@ -13395,35 +13397,35 @@ class LinuxCEmitter:
                                              await_flag=getattr(function, "is_async_generator", False))
         elif op == "agen_emit":
             if not getattr(function, "is_async_generator", False):
-                pass # NativeBuildError("Linux agen_emit outside an async generator body is not supported")
+                raise NativeBuildError("Linux agen_emit outside an async generator body is not supported")
             # ASYNC_GENERATOR_V1: data yield inside an async generator; clears
             # the await marker (slot 63) so piton_agen_next returns it as data.
             self._emit_linux_gen_suspend(out, types, args[0] if args else None, result, await_flag=False)
         elif op == "agen_next":
             if not args:
-                pass # NativeBuildError("agen_next requires an async generator operand")
+                raise NativeBuildError("agen_next requires an async generator operand")
             out.append(f"    {_name(result)}=piton_agen_next({self._value(args[0])});")
             types[result] = "int"
         elif op == "agen_done":
             if not args:
-                pass # NativeBuildError("agen_done requires an async generator operand")
+                raise NativeBuildError("agen_done requires an async generator operand")
             out.append(f"    {_name(result)}=((PitonGenerator*){self._value(args[0])})->finished;")
             types[result] = "int"
         elif op == "genexpr_new":
             source = args[0]
             if types.get(source) != "list":
-                pass # NativeBuildError("Linux genexpr requires a list-backed sequence")
+                raise NativeBuildError("Linux genexpr requires a list-backed sequence")
             out.append(f"    {_name(result)}=piton_genexpr_new((PitonSeq*){self._value(source)});")
             types[result] = "genexpr"
         elif op == "set_add":
             coll, value = args
             if types.get(coll) != "set":
-                pass # NativeBuildError("Linux set_add requires a set")
+                raise NativeBuildError("Linux set_add requires a set")
             out.append(f'    piton_set_add((PitonSet*){self._value(coll)},{self._slot(value, types)});')
         elif op == "dict_put":
             coll, key, value = args
             if types.get(coll) != "dict":
-                pass # NativeBuildError("Linux dict_put requires a dict")
+                raise NativeBuildError("Linux dict_put requires a dict")
             out.append(f'    piton_dict_append((PitonDict*){self._value(coll)},piton_slot({self._value(key)},{self._kind(types.get(key, "int"))}),{self._slot(value, types)});')
             _ptarget = coll if coll in self._dict_elems else aliases.get(coll)
             if _ptarget is not None and _ptarget in self._dict_elems:
@@ -13446,9 +13448,9 @@ class LinuxCEmitter:
                     # so later mapping use fails closed (sound over-strict).
                     del self._dict_elems[_ptarget]
         elif op == "runtime_call":
-            pass # NativeBuildError(f"runtime operation not supported in Linux native subset: {args[0]}")
+            raise NativeBuildError(f"runtime operation not supported in Linux native subset: {args[0]}")
         else:
-            pass # NativeBuildError(f"Linux MIR operation not supported: {op}")
+            raise NativeBuildError(f"Linux MIR operation not supported: {op}")
         return out
 
 
@@ -13458,7 +13460,7 @@ def windows_to_wsl_path(path: str | Path) -> str:
     if not drive:
         if _is_native_linux():
             return str(resolved)
-        pass # NativeBuildError(f"WSL path requires a Windows drive: {resolved}")
+        raise NativeBuildError(f"WSL path requires a Windows drive: {resolved}")
     tail = resolved.as_posix().split(":", 1)[1].lstrip("/")
     return f"/mnt/{drive}/{tail}"
 
@@ -13506,7 +13508,7 @@ def compile_native_linux(source: str, output: str | Path) -> Path:
     try:
         mir = lower_hir_to_mir(lower_cst_to_hir(parse(source)))
     except (MIRLoweringError, LoweringError) as error:
-        pass # NativeBuildError(str(error)) from error
+        raise NativeBuildError(str(error)) from error
     output_path = Path(output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="piton-linux-") as directory:
@@ -13528,7 +13530,7 @@ def compile_native_linux_files(entry: str | Path, output: str | Path) -> Path:
             entry_file=str(entry_path), module_meta=module_meta,
         )
     except (MIRLoweringError, LoweringError) as error:
-        pass # NativeBuildError(str(error)) from error
+        raise NativeBuildError(str(error)) from error
     output_path = Path(output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="piton-linux-") as directory:
