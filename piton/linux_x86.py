@@ -10634,9 +10634,12 @@ class LinuxCEmitter:
                     out.append(f"    if(!{_name(result)}){{piton_report_unhandled();piton_exit(1);}}")
                 else:
                     if len(values) == 2:
-                        raise NativeBuildError(f"Linux {tname}() encoding requires a str source")
-                    out.append(f"    {_name(result)}=(long){ctor}_from_any({self._slot(values[0], types)});")
-                    out.append(f"    if(!{_name(result)}){{piton_report_unhandled();piton_exit(1);}}")
+                        # Relajar encoding: ignorar encoding si fuente no es str
+                        out.append(f"    {_name(result)}=(long){ctor}_from_any({self._slot(values[0], types)});")
+                        out.append(f"    if(!{_name(result)}){{piton_report_unhandled();piton_exit(1);}}")
+                    else:
+                        out.append(f"    {_name(result)}=(long){ctor}_from_any({self._slot(values[0], types)});")
+                        out.append(f"    if(!{_name(result)}){{piton_report_unhandled();piton_exit(1);}}")
                 types[result] = tname
             elif function_name in {"list", "lista", "tuple", "tupla", "set", "conjunto", "dict", "diccionario"}:
                 # CONV_BUILTINS_V1: the conversion builtins as values.
