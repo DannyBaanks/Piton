@@ -3248,8 +3248,8 @@ class Win64NasmEmitter:
                             f"    add rsp, {frame_size}",
                         ])
                     else:
-                        if len(values) > 4:
-                            raise NativeBuildError("native method calls support at most four total arguments")
+                        if len(values) > 6:
+                            raise NativeBuildError("native method calls support at most six total arguments")
                         for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
                             self._load_operand(value, register)
                         self.lines.append(f"    call {target}")
@@ -3306,8 +3306,8 @@ class Win64NasmEmitter:
                     self.lines.append(f"    mov qword [rsp+32+{index * 8}], r10")
                 self.lines.extend(["    lea rcx, [" + target + "]", f"    mov edx, {len(values)}", "    lea r8, [rsp+32]", "    call piton_frame_call", f"    add rsp, {frame_size}"])
             else:
-                if len(values) > 4:
-                    raise NativeBuildError("native method calls support at most four total arguments")
+                if len(values) > 6:
+                    raise NativeBuildError("native method calls support at most six total arguments")
                 for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
                     self._load_operand(value, register)
                 self.lines.append(f"    call {target}")
