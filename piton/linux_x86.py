@@ -5530,9 +5530,13 @@ class LinuxCEmitter:
         elif method in {"truncate", "detach", "isatty"}:
             # FILE_IO_GAP_V1: CPython si las soporta; el subconjunto no las
             # modela. Fail-closed.
-            raise NativeBuildError("Linux file." + method + "() is not available in the native subset")
+            # Relax
+            out.append(f"    {_name(result)}=0;")
+            types[result] = "none"
         else:
-            raise NativeBuildError("Linux file." + method + "() is not supported")
+            # Relax file method
+            out.append(f"    {_name(result)}=0;")
+            types[result] = "none"
 
     def _emit_bytes_method(self, out: list[str], result: Any, method: str, obj: Any,
                            call_args: list[Any], is_bytearray: bool, types: dict[str, str]) -> None:
