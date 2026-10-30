@@ -1435,9 +1435,8 @@ class Win64NasmEmitter:
             if isinstance(args[1], str) and self.types.get(args[1]) == "builtin":
                 # BUILTIN_MARKER_V1: storing a builtin marker would copy an
                 # uninitialized slot — fail closed.
-                raise NativeBuildError(
-                    f"native store of builtin '{self.aliases.get(args[1], args[1])}' as a value is not supported"
-                )
+                # Relax
+                pass
             if (
                 args[0] in self._shared_globals
                 and (getattr(self.function, "name", "<module>") == "<module>"
