@@ -16,6 +16,8 @@ ASCII = 256
 T = 1
 TEMPLATE = 1
 
+clase error :
+    pasar
 
 funcion escape (s ):
     salida = s
