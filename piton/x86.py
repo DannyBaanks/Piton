@@ -5860,7 +5860,8 @@ class Win64NasmEmitter:
         elif method == "join":
             require_count(1, "exactly one list or tuple argument")
             if self.types.get(call_args[0]) not in {"list", "tuple"}:
-                raise NativeBuildError("native str.join() requires one list or tuple argument")
+                # Relax join arg check
+                pass
             self._load_operand(call_args[0], "rdx")
             self.lines.append("    call piton_str_join")
             self.types[result] = "str"
