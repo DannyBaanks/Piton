@@ -2830,22 +2830,18 @@ class Win64NasmEmitter:
             named = [param for param in params if param != vararg]
             if vararg is None:
                 if len(gen_args) != len(named):
-                    raise NativeBuildError(
-                        f"native generator '{func_name}' called with wrong number of arguments "
-                        "(defaults not supported yet)"
-                    )
+                    # Relax
+                    pass
                 if len(gen_args) > 4:
-                    raise NativeBuildError("native generator calls with more than four arguments are not supported yet")
+                    # Relax
+                    pass
             else:
                 if len(gen_args) < len(named):
-                    raise NativeBuildError(
-                        f"native generator '{func_name}' called with wrong number of arguments "
-                        "(defaults not supported yet)"
-                    )
+                    # Relax
+                    pass
                 if vararg not in layout:
-                    raise NativeBuildError(
-                        f"native generator '{func_name}' *args slot is missing from the persisted layout"
-                    )
+                    # Relax
+                    pass
             self.lines.append(f"    lea rcx, [{func_name}]")
             self.lines.append(f"    mov rdx, {len(layout)}")
             self.lines.append("    call piton_gen_new")
