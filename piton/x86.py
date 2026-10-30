@@ -70,7 +70,7 @@ _math_fn_map = {
 # exacta no se modela), asi que el tope es un limite de implementacion, no
 # semantico. 256 slots cubren los generadores de la stdlib (heapq.merge
 # necesita 180).
-PITON_GEN_MAX_SLOTS = 256
+PITON_GEN_MAX_SLOTS = 512
 PITON_GEN_LOCAL_BASE = 48
 # ASYNC_GENERATOR_V1: the LAST persisted slot of every PitonGenerator object is
 # reserved as the "await marker" flag for async-generator driving. A data yield
