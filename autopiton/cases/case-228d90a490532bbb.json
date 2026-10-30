@@ -1,0 +1,94 @@
+{
+  "case_id": "case-228d90a490532bbb",
+  "created_at": "2026-10-30T16:13:13-06:00",
+  "description": "Canary H: Dict merge",
+  "expected_exception": null,
+  "family": "collections",
+  "generator": {
+    "code_hash": "228d90a490532bbbe409cd9538060838ac4936666f42d41cf3d5c756f8e6efeb",
+    "complexity": 2
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "UNSUPPORTED",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.760257999849273,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "228d90a490532bbbe409cd9538060838ac4936666f42d41cf3d5c756f8e6efeb",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "{'x': 2, 'y': 3}\n",
+      "timed_out": false
+    },
+    "details": {
+      "piton_stage_error": {
+        "error_message": "dict literal merge {**a, **b} is not implemented natively",
+        "error_type": "MIRLoweringError",
+        "stage": "MIR"
+      }
+    },
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 164.00863000126265,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "MIR",
+      "filename": "program_0008.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "signal_number": null,
+      "source_hash": "228d90a490532bbbe409cd9538060838ac4936666f42d41cf3d5c756f8e6efeb",
+      "stage_reached": "PARSE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 50,
+          "surface_sha256": "201da99eb4ca3e4672346addbc76165f8b70c480a0568b4808a236f793a39790"
+        },
+        "MIR": {
+          "error_message": "dict literal merge {**a, **b} is not implemented natively",
+          "error_traceback": "Traceback (most recent call last):\n  File \"/piton-repo/autopiton/piton_worker.py\", line 121, in main\n    mir = lower_hir_to_mir(lower_cst_to_hir(cst))\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 7024, in lower_hir_to_mir\n    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 1237, in lower\n    self._lower_statements(module, [\n  File \"/piton-repo/piton/mir.py\", line 2256, in _lower_statements\n    self._lower_statement(builder, statement)\n  File \"/piton-repo/piton/mir.py\", line 2609, in _lower_statement\n    self._lower_expr(builder, node)\n  File \"/piton-repo/piton/mir.py\", line 5961, in _lower_expr\n    args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 5961, in <genexpr>\n    args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 6017, in _lower_expr\n    raise MIRLoweringError(\npiton.mir.MIRLoweringError: dict literal merge {**a, **b} is not implemented natively\n",
+          "error_type": "MIRLoweringError",
+          "passed": false
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "201da99eb4ca3e4672346addbc76165f8b70c480a0568b4808a236f793a39790",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON rejected the program at MIR",
+    "source": "a = {'x': 1}\nb = {'x': 2, 'y': 3}\nprint({**a, **b})",
+    "source_hash": "228d90a490532bbbe409cd9538060838ac4936666f42d41cf3d5c756f8e6efeb"
+  },
+  "run_id": "run_20261030_161309_canary",
+  "seed": 7,
+  "source": "a = {'x': 1}\nb = {'x': 2, 'y': 3}\nprint({**a, **b})",
+  "source_hash": "228d90a490532bbbe409cd9538060838ac4936666f42d41cf3d5c756f8e6efeb"
+}

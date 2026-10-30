@@ -1,0 +1,95 @@
+{
+  "case_id": "case-c4cde107c427eac8",
+  "created_at": "2026-10-30T16:13:04-06:00",
+  "description": "Canary A: Lambda real",
+  "expected_exception": null,
+  "family": "lambdas",
+  "generator": {
+    "code_hash": "c4cde107c427eac828392c8f8230b5c062fdcaad87a6becfd327df5a357750f1",
+    "complexity": 1
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 32.626721000269754,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "c4cde107c427eac828392c8f8230b5c062fdcaad87a6becfd327df5a357750f1",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "6\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "cb6b9070050f87265c80e5fd3bdbad24f48c4bdd1c85ab9989e093e204d3015d",
+      "build_exit_code": 0,
+      "build_ms": 514.5782620002137,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 7.6509999998961575,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0001.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "signal_number": null,
+      "source_hash": "c4cde107c427eac828392c8f8230b5c062fdcaad87a6becfd327df5a357750f1",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 33,
+          "surface_sha256": "7827e0b8078b6f66e3d96277cc8efb70855a70b5b636a0d6cc9a0d9ec964b02b"
+        },
+        "BUILD": {
+          "artifact_bytes": 25448,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "cb6b9070050f87265c80e5fd3bdbad24f48c4bdd1c85ab9989e093e204d3015d",
+          "c_chars": 278731,
+          "c_sha256": "287b7ca2825eeeb9ad2573e86832fdb5e0f63c3c0dac1296128cdf549b7a9b11",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "6\n",
+      "surface_sha256": "7827e0b8078b6f66e3d96277cc8efb70855a70b5b636a0d6cc9a0d9ec964b02b",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "f = lambda x: x + 1\nprint(f(5))",
+    "source_hash": "c4cde107c427eac828392c8f8230b5c062fdcaad87a6becfd327df5a357750f1"
+  },
+  "run_id": "run_20261030_161303_canary",
+  "seed": 0,
+  "source": "f = lambda x: x + 1\nprint(f(5))",
+  "source_hash": "c4cde107c427eac828392c8f8230b5c062fdcaad87a6becfd327df5a357750f1"
+}

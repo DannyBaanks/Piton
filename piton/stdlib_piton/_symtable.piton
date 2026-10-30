@@ -66,6 +66,9 @@ clase TYPE_FUNCTION :
     pasar
 
 
+TYPE_FUNCTION = 0
+
+
 clase TYPE_MODULE :
     pasar
 

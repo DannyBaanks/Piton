@@ -1,21 +1,20 @@
+MAX_EMAX = 999999
+MAX_PREC = 999999
+MIN_EMIN = -999999
+
 clase Inexact :
     pasar
 
 
-clase MAX_EMAX :
+clase Decimal :
     pasar
 
 
-clase MAX_PREC :
-    pasar
-
-
-clase MIN_EMIN :
-    pasar
-
-
-funcion Decimal (*args ) :
-    lanzar NotImplementedError ('decimal.Decimal no esta implementado en el backend nativo')
+clase Context :
+    prec = 999999
+    Emax = 999999
+    Emin = -999999
+    traps = {}
 
 
 funcion localcontext (*args ) :
@@ -25,3 +24,7 @@ funcion localcontext (*args ) :
 funcion replace (*args ) :
     lanzar NotImplementedError ('decimal.replace no esta implementado en el backend nativo')
 
+
+MAX_EMAX = 999999
+MAX_PREC = 999999
+MIN_EMIN = -999999

@@ -14,7 +14,7 @@ el backend nativo tiene un runtime en C.
 ## Paso 1 — Checkout y ubicación
 
 ```powershell
-cd "C:\Development\ISyCo Git\PITON"
+cd "<ISyCo>\PITON"
 git checkout main
 git pull
 ```

@@ -1,0 +1,88 @@
+{
+  "case_id": "case-912241919394a987",
+  "created_at": "2026-10-30T16:13:11-06:00",
+  "description": "Canary B: Unexpected keyword argument",
+  "expected_exception": "TypeError",
+  "family": "functions",
+  "generator": {
+    "code_hash": "912241919394a987f11e3fa5b08b53cc25765fc32e3d2b25878e24543e0f2a73",
+    "complexity": 2
+  },
+  "is_valid": false,
+  "minimized_from": null,
+  "result": {
+    "classification": "INVALID_REFERENCE",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.699494998974842,
+      "exception_message": "f() got an unexpected keyword argument 'b'",
+      "exception_traceback": "Traceback (most recent call last):\n  File \".autopiton_cpython_runner.py\", line 90, in main\n    exec(code, namespace)\n  File \"program_0002.py\", line 4, in <module>\n    print(f(a=1, b=2))\n          ^^^^^^^^^^^\nTypeError: f() got an unexpected keyword argument 'b'\n",
+      "exception_type": "TypeError",
+      "exit_code": 1,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "912241919394a987f11e3fa5b08b53cc25765fc32e3d2b25878e24543e0f2a73",
+      "status": "exception",
+      "stderr": "Traceback (most recent call last):\n  File \".autopiton_cpython_runner.py\", line 90, in main\n    exec(code, namespace)\n  File \"program_0002.py\", line 4, in <module>\n    print(f(a=1, b=2))\n          ^^^^^^^^^^^\nTypeError: f() got an unexpected keyword argument 'b'\n",
+      "stdout": "",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 164.19468599997344,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "MIR",
+      "filename": "program_0002.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "signal_number": null,
+      "source_hash": "912241919394a987f11e3fa5b08b53cc25765fc32e3d2b25878e24543e0f2a73",
+      "stage_reached": "PARSE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 56,
+          "surface_sha256": "66277e222627ceecec76fc24e141e151dcd6478b49685e4cde80865b1b2cfb1f"
+        },
+        "MIR": {
+          "error_message": "unexpected keyword argument: b",
+          "error_traceback": "Traceback (most recent call last):\n  File \"/piton-repo/autopiton/piton_worker.py\", line 121, in main\n    mir = lower_hir_to_mir(lower_cst_to_hir(cst))\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 7024, in lower_hir_to_mir\n    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 1237, in lower\n    self._lower_statements(module, [\n  File \"/piton-repo/piton/mir.py\", line 2256, in _lower_statements\n    self._lower_statement(builder, statement)\n  File \"/piton-repo/piton/mir.py\", line 2609, in _lower_statement\n    self._lower_expr(builder, node)\n  File \"/piton-repo/piton/mir.py\", line 5961, in _lower_expr\n    args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 5961, in <genexpr>\n    args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 5926, in _lower_expr\n    args = self._resolve_call_args(builder, node.func.name, node.args, node.keywords)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 7000, in _resolve_call_args\n    raise MIRLoweringError(f\"unexpected keyword argument: {kw.arg}\")\npiton.mir.MIRLoweringError: unexpected keyword argument: b\n",
+          "error_type": "MIRLoweringError",
+          "passed": false
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "66277e222627ceecec76fc24e141e151dcd6478b49685e4cde80865b1b2cfb1f",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "reference rejects (exception TypeError: f() got an unexpected keyword argument 'b'); PITON rejects at MIR",
+    "source": "def f(a):\n    return a\n\nprint(f(a=1, b=2))",
+    "source_hash": "912241919394a987f11e3fa5b08b53cc25765fc32e3d2b25878e24543e0f2a73"
+  },
+  "run_id": "run_20261030_161309_canary",
+  "seed": 1,
+  "source": "def f(a):\n    return a\n\nprint(f(a=1, b=2))",
+  "source_hash": "912241919394a987f11e3fa5b08b53cc25765fc32e3d2b25878e24543e0f2a73"
+}

@@ -1,0 +1,35 @@
+{
+  "config": {
+    "build_timeout_s": 60.0,
+    "count": 29,
+    "memory_limit_mb": 256,
+    "oracle_timeout_s": 10.0,
+    "repeat": 1,
+    "runner_timeout_s": 10.0
+  },
+  "corpus_version": 1,
+  "environment": {
+    "bwrap": "/usr/bin/bwrap",
+    "cpython_version": "3.12.3",
+    "piton": {
+      "commit": "48df6719ab98ea6b6fa8c2f75f2d19c909307b12",
+      "dirty": true,
+      "dirty_paths": [
+        " M autopiton/cli.py",
+        " M autopiton/generator.py",
+        " M autopiton/tests/test_generator.py",
+        " M docs/parity_corpus_v4_report_2026-10-30.json",
+        " M docs/parity_corpus_v4_report_2026-10-30.md"
+      ],
+      "repo": "PITON"
+    },
+    "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
+    "python_executable": "/usr/bin/python3",
+    "sandbox_backend": "bwrap"
+  },
+  "mode": "systematic",
+  "notes": "compare systematic",
+  "run_id": "run_20261030_170447_systematic",
+  "seed": null,
+  "started_at": "2026-10-30T17:04:47-06:00"
+}
