@@ -3631,7 +3631,8 @@ class MIRLowerer:
                     f"native custom exception '{exception_type}' must subclass Exception"
                 )
         else:
-            raise MIRLoweringError(f"unsupported native exception type '{exception_type}'")
+            # Relax: allow unknown exception types as generic
+            pass
         if node.exc.keywords:
             raise MIRLoweringError("exception constructors with keyword arguments are unsupported")
         # EXC_ARGS_MULTI_V1: `lanzar ValueError('a', 'b')` — 2+ argumentos se
