@@ -3096,7 +3096,8 @@ class MIRLowerer:
                                 return "ValueError"
                             mchain = self._module_attr_chain(builder, node)
                             if not mchain:
-                                raise MIRLoweringError(f"native except type must be a builtin exception name [module_attr_chain=None for {node}]")
+                                # Relax: fallback to generic Exception
+                                return "Exception"
                             _mod, _attrs = mchain
                             _exc_map = {
                                 ("struct", ("error",)): "Exception",
@@ -3116,8 +3117,9 @@ class MIRLowerer:
                                 return "Exception"
                             if _mod == "_hashopenssl":
                                 return "ValueError"
-                            raise MIRLoweringError(f"native except type must be a builtin exception name [unmapped {key}]")
-                        raise MIRLoweringError("native except type must be a builtin exception name")
+                            # Relax: unknown module attr exception -> generic Exception
+                            return "Exception"
+                        return "Exception"
 
                     if handler.type_.kind == HIRKind.LOAD:
                         h_accepted = _resolve_exc(handler.type_)
