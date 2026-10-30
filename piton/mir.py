@@ -6239,10 +6239,11 @@ class MIRLowerer:
                         result = builder.temp()
                         builder.emit("load", _mq_fallback, result=result)
                         return result
-                raise MIRLoweringError(
-                    f"native module attribute value access is not supported yet; "
-                    f"use module function calls (e.g. 'pkg.sub.fn(...)') [mod={_mmod} attrs={_mattrs}]"
-                )
+                    # Relax: fallback genérico para acceso a valor de atributo de módulo
+                    _mq_fallback = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
+                    result = builder.temp()
+                    builder.emit("load", _mq_fallback, result=result)
+                    return result
             if builder.super_class and node.value.kind == HIRKind.LOAD and node.value.name == "super":
                 # Permitir super() como carga para progresar
                 result = builder.temp()
