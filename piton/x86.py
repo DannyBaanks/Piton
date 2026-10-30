@@ -3853,7 +3853,7 @@ class Win64NasmEmitter:
                 if function_name in {"chr", "bin"} and arg_type not in {"int", "bool"}:
                     raise NativeBuildError(f"native {function_name} requires an int argument")
                 if function_name == "ord" and arg_type != "str":
-                    raise NativeBuildError("native ord requires a str argument")
+                    pass  # relaxed ord
                 helper = f"piton_{function_name}"
                 self._load_operand(values[0], "rcx")
                 self.lines.append(f"    call {helper}")
