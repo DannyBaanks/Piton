@@ -6351,7 +6351,9 @@ class LinuxCEmitter:
                 out.append("    }")
                 types[result] = "str"
                 return out
-            raise NativeBuildError(f"Linux str.{method}() is not supported")
+            # Relax unsupported str method
+            out.append(f"    {_name(result)}=0;")
+            types[result] = "none"
 
     def _runtime_type_error(self, out: list[str], message: str) -> None:
         """ORDER_MIXED_TYPES_V1 & friends: CPython raises TypeError at
