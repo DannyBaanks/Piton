@@ -10777,7 +10777,7 @@ class LinuxCEmitter:
                     self._coll_elems[result] = "int"
                     self._emit_exc_check(out, function, call_handler)
                     return out
-                if source_type not in {"list", "tuple", "str", "set", "dict", "range"}:
+                if source_type not in {"list", "tuple", "str", "set", "dict", "range", "iterator:map", "iterator:zip", "iterator:any"}:
                     raise NativeBuildError(f"Linux {alias}() cannot convert a '{source_type}' value")
                 # COLL_ELEM_TYPE_V1: a conversion preserves the element kind, so
                 # `x = lista('abc'); x[1]` prints 'b' instead of a pointer.
