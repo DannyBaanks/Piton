@@ -5582,6 +5582,11 @@ class LinuxCEmitter:
                 pass
             out.append(f"    {_name(result)}=(long)piton_bytes_join((void*){operand},(void*){self._value(call_args[0])});")
             types[result] = "bytes"
+        elif method in {"strip", "lstrip", "rstrip"}:
+            require_count((0,1), "zero or one argument")
+            mode = {"strip": 0, "lstrip": 1, "rstrip": 2}[method]
+            out.append(f"    {_name(result)}=(long)piton_bytes_strip((void*){operand},{mode});")
+            types[result] = "bytes"
         elif method == "append" and is_bytearray:
             require_count((1,), "exactly one int argument")
             out.append(f"    piton_bytearray_append((PitonByteArray*){operand},{self._value(call_args[0])});")
