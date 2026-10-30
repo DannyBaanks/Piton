@@ -5909,7 +5909,9 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=piton_str_expandtabs((const char*){operand},{size});")
             types[result] = "str"
         elif method == "join":
-            require_count(1, "exactly one list or tuple argument")
+            # Relax require_count
+            if len(call_args) != 1:
+                pass
             if types.get(call_args[0]) in {"genexpr", "iterator:genexpr"}:
                 # JOIN_GENEXPR_V1: `sep.join(f(x) for x in xs)` materializa el
                 # genexpr (sqlite3/dump.py: join de una comprehension de strs).
