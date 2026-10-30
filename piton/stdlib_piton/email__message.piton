@@ -1,7 +1,5 @@
-clase EmailMessage :
-    pasar
-
-
 clase Message :
     pasar
 
+funcion from_string (*args ) :
+    lanzar NotImplementedError ('email.message.from_string no esta implementado')

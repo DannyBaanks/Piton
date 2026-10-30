@@ -6159,6 +6159,21 @@ class MIRLowerer:
                 # registrada, la referencia baja como `load` — el mismo op
                 # que `f = doble` — en vez del fail-closed generico.
                 _mmod, _mattrs = _mchain
+                # Normalizar submodulos conocidos para evitar fail-closed
+                # os.path, email.message, importlib.util
+                _submodule_alias = {
+                    ('os', 'path'): 'os.path',
+                    ('email', 'message'): 'email.message',
+                    ('importlib', 'util'): 'importlib.util',
+                }
+                # Resolver cadena de submodulos de forma iterativa
+                while len(_mattrs) >= 1:
+                    key = (_mmod, _mattrs[0])
+                    if key in _submodule_alias:
+                        _mmod = _submodule_alias[key]
+                        _mattrs = _mattrs[1:]
+                        continue
+                    break
                 if len(_mattrs) == 1:
                     _mq = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
                     if (
@@ -6183,9 +6198,15 @@ class MIRLowerer:
                                         result = builder.temp()
                                         builder.emit("load", _ms, result=result)
                                         return result
+                    # Fallback verificable: si el modulo es empaquetado, cargar como simbolo cualificado
+                    if self._is_bundled_module(_mmod):
+                        _mq_fallback = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
+                        result = builder.temp()
+                        builder.emit("load", _mq_fallback, result=result)
+                        return result
                 raise MIRLoweringError(
-                    "native module attribute value access is not supported yet; "
-                    "use module function calls (e.g. 'pkg.sub.fn(...)')"
+                    f"native module attribute value access is not supported yet; "
+                    f"use module function calls (e.g. 'pkg.sub.fn(...)') [mod={_mmod} attrs={_mattrs}]"
                 )
             if builder.super_class and node.value.kind == HIRKind.LOAD and node.value.name == "super":
                 raise MIRLoweringError(
