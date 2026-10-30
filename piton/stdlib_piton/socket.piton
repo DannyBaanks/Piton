@@ -1,9 +1,7 @@
-clase AF_INET :
-    pasar
+AF_INET = 2
 
 
-clase AF_INET6 :
-    pasar
+AF_INET6 = 10
 
 
 clase AF_UNIX :
@@ -26,12 +24,11 @@ clase Returns :
     pasar
 
 
-clase SHUT_RDWR :
-    pasar
+SHUT_RD = 0
+SHUT_RDWR = 2
 
 
-clase SHUT_WR :
-    pasar
+SHUT_WR = 1
 
 
 clase SOCK_DGRAM :
