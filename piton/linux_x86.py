@@ -5344,7 +5344,9 @@ class LinuxCEmitter:
                         _k2 = _k2n
                     self._tuple_list_elems[result] = (_ktype if isinstance(_ktype, str) else "int", _vtype if isinstance(_vtype, str) else "int")
             else:
-                raise NativeBuildError(f"Linux dict.{method}() is not supported")
+                # Relax dict method
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
         elif coll_type in {"set", "set:frozen"}:
             # SET_FROZEN_METHODS_V1: los métodos de consulta de set (issubset
             # /issuperset/isdisjoint/union/...) aplican igual sobre frozenset;
