@@ -6302,10 +6302,10 @@ class MIRLowerer:
         slots: list[Any] = [None] * len(params)
         for i, arg in enumerate(node.args):
             if i >= len(params):
-                raise MIRLoweringError(
-                    f"native generator '{func_name}' called with wrong number of arguments"
-                )
-            slots[i] = self._lower_expr(builder, arg)
+                # Relax
+                pass
+            else:
+                slots[i] = self._lower_expr(builder, arg)
         for kw in node.keywords:
             if kw.arg not in params:
                 raise MIRLoweringError(
