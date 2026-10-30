@@ -1,0 +1,100 @@
+{
+  "case_id": "case-efd722252f2ec8ff",
+  "created_at": "2026-10-30T16:13:11-06:00",
+  "description": "Canary C: super() with multiple args",
+  "expected_exception": null,
+  "family": "super",
+  "generator": {
+    "code_hash": "efd722252f2ec8ffe6b352463d5f0ac9a220b2be679debb153dc3c2c1076ec35",
+    "complexity": 4
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "UNSUPPORTED",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.771018000654294,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "efd722252f2ec8ffe6b352463d5f0ac9a220b2be679debb153dc3c2c1076ec35",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "4\n",
+      "timed_out": false
+    },
+    "details": {
+      "piton_stage_error": {
+        "error_message": "/work/program.c: In function \u2018B__g\u2019:\n/work/program.c:3979:8: error: too many arguments to function \u2018A__f\u2019\n 3979 |     _5=A__f(_0,_1,_2,_3,_4);\n      |        ^~~~\n/work/program.c:3960:13: note: declared here\n 3960 | static long A__f(long self, long args) {\n      |             ^~~~",
+        "error_type": "GccError",
+        "stage": "BUILD"
+      }
+    },
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 214.16339100142068,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "BUILD",
+      "filename": "program_0003.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "signal_number": null,
+      "source_hash": "efd722252f2ec8ffe6b352463d5f0ac9a220b2be679debb153dc3c2c1076ec35",
+      "stage_reached": "MIR",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 167,
+          "surface_sha256": "a455ae524b0756629fa95c8f9191fa42a6357c2d9edbd8672bbd3cd13f946179"
+        },
+        "BUILD": {
+          "c_chars": 279212,
+          "c_sha256": "f1a0895a9bf86146454ca376d46efb99210aa0def79b702f55e2f161d1323913",
+          "error_message": "/work/program.c: In function \u2018B__g\u2019:\n/work/program.c:3979:8: error: too many arguments to function \u2018A__f\u2019\n 3979 |     _5=A__f(_0,_1,_2,_3,_4);\n      |        ^~~~\n/work/program.c:3960:13: note: declared here\n 3960 | static long A__f(long self, long args) {\n      |             ^~~~",
+          "error_type": "GccError",
+          "gcc_returncode": 1,
+          "gcc_stderr": "/work/program.c: In function \u2018B__g\u2019:\n/work/program.c:3979:8: error: too many arguments to function \u2018A__f\u2019\n 3979 |     _5=A__f(_0,_1,_2,_3,_4);\n      |        ^~~~\n/work/program.c:3960:13: note: declared here\n 3960 | static long A__f(long self, long args) {\n      |             ^~~~\n",
+          "passed": false
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "a455ae524b0756629fa95c8f9191fa42a6357c2d9edbd8672bbd3cd13f946179",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON rejected the program at BUILD",
+    "source": "class A:\n    def f(self, *args):\n        return len(args)\n\nclass B(A):\n    def g(self):\n        return super().f(1, 2, 3, 4)\n\nprint(B().g())",
+    "source_hash": "efd722252f2ec8ffe6b352463d5f0ac9a220b2be679debb153dc3c2c1076ec35"
+  },
+  "run_id": "run_20261030_161309_canary",
+  "seed": 2,
+  "source": "class A:\n    def f(self, *args):\n        return len(args)\n\nclass B(A):\n    def g(self):\n        return super().f(1, 2, 3, 4)\n\nprint(B().g())",
+  "source_hash": "efd722252f2ec8ffe6b352463d5f0ac9a220b2be679debb153dc3c2c1076ec35"
+}

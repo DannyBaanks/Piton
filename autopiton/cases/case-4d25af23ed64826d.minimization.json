@@ -1,0 +1,170 @@
+{
+  "accepted": 3,
+  "attempts": 11,
+  "budget_exhausted": false,
+  "case_id": "case-4d25af23ed64826d",
+  "changed": true,
+  "created_at": "2026-10-30T16:13:32-06:00",
+  "history": [
+    {
+      "accepted": true,
+      "attempt": 1,
+      "classification": "INVALID_ACCEPTED",
+      "kind": [
+        "INVALID_ACCEPTED",
+        "exception",
+        "TypeError",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "normalize formatting",
+      "source": "class A:\n    pass\nA(1, 2)\n"
+    },
+    {
+      "accepted": false,
+      "attempt": 2,
+      "classification": "DIVERGENT",
+      "kind": [
+        "DIVERGENT",
+        "exception",
+        "NameError",
+        "EXECUTE",
+        "NameError"
+      ],
+      "reduction": "remove ClassDef statement"
+    },
+    {
+      "accepted": false,
+      "attempt": 3,
+      "classification": "EQUIV",
+      "kind": [
+        "EQUIV",
+        "ok",
+        "",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "remove Expr statement"
+    },
+    {
+      "accepted": true,
+      "attempt": 4,
+      "classification": "INVALID_ACCEPTED",
+      "kind": [
+        "INVALID_ACCEPTED",
+        "exception",
+        "TypeError",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "drop argument 0 of call 0",
+      "source": "class A:\n    pass\nA(2)\n"
+    },
+    {
+      "accepted": false,
+      "attempt": 5,
+      "classification": "DIVERGENT",
+      "kind": [
+        "DIVERGENT",
+        "exception",
+        "NameError",
+        "EXECUTE",
+        "NameError"
+      ],
+      "reduction": "remove ClassDef statement"
+    },
+    {
+      "accepted": false,
+      "attempt": 6,
+      "classification": "EQUIV",
+      "kind": [
+        "EQUIV",
+        "ok",
+        "",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "remove Expr statement"
+    },
+    {
+      "accepted": false,
+      "attempt": 7,
+      "classification": "EQUIV",
+      "kind": [
+        "EQUIV",
+        "ok",
+        "",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "drop argument 0 of call 0"
+    },
+    {
+      "accepted": true,
+      "attempt": 8,
+      "classification": "INVALID_ACCEPTED",
+      "kind": [
+        "INVALID_ACCEPTED",
+        "exception",
+        "TypeError",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "reduce constant 0 to 0",
+      "source": "class A:\n    pass\nA(0)\n"
+    },
+    {
+      "accepted": false,
+      "attempt": 9,
+      "classification": "DIVERGENT",
+      "kind": [
+        "DIVERGENT",
+        "exception",
+        "NameError",
+        "EXECUTE",
+        "NameError"
+      ],
+      "reduction": "remove ClassDef statement"
+    },
+    {
+      "accepted": false,
+      "attempt": 10,
+      "classification": "EQUIV",
+      "kind": [
+        "EQUIV",
+        "ok",
+        "",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "remove Expr statement"
+    },
+    {
+      "accepted": false,
+      "attempt": 11,
+      "classification": "EQUIV",
+      "kind": [
+        "EQUIV",
+        "ok",
+        "",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "drop argument 0 of call 0"
+    }
+  ],
+  "minimized_case_id": "case-707d1042403c5de2",
+  "minimized_classification": "INVALID_ACCEPTED",
+  "minimized_source": "class A:\n    pass\nA(0)\n",
+  "original_classification": "INVALID_ACCEPTED",
+  "original_source": "class A:\n    pass\n\nA(1, 2)",
+  "preserved_kind": [
+    "INVALID_ACCEPTED",
+    "exception",
+    "TypeError",
+    "EXECUTE",
+    ""
+  ],
+  "run_id": "run_20261030_161330_minimize_seed5",
+  "stopped_reason": "no reduction preserved the divergence"
+}

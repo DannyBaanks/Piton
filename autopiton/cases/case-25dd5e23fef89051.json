@@ -1,0 +1,95 @@
+{
+  "case_id": "case-25dd5e23fef89051",
+  "created_at": "2026-10-30T16:19:45-06:00",
+  "description": "Decorator usage",
+  "expected_exception": null,
+  "family": "decorators",
+  "generator": {
+    "code_hash": "25dd5e23fef8905189fa6a469fe8f21ab813ef4d6a5b4158034677d1aa70f070",
+    "complexity": 6
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.886774999293266,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "25dd5e23fef8905189fa6a469fe8f21ab813ef4d6a5b4158034677d1aa70f070",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "50\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "b221f20730f3713cf400bff3df3203461c9263b17d9504a433faad6909d8dc0c",
+      "build_exit_code": 0,
+      "build_ms": 464.68035299949406,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 7.834494999769959,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0023.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "signal_number": null,
+      "source_hash": "25dd5e23fef8905189fa6a469fe8f21ab813ef4d6a5b4158034677d1aa70f070",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 91,
+          "surface_sha256": "703a62cea50fe4ba24915e90790979d6c54bb92c136e448c7213038e7d3e0cd0"
+        },
+        "BUILD": {
+          "artifact_bytes": 24864,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "b221f20730f3713cf400bff3df3203461c9263b17d9504a433faad6909d8dc0c",
+          "c_chars": 278525,
+          "c_sha256": "6967e6cbacf424c212b21abe5c6a31d930b019578f9406ba63cfb562ff19c05d",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "50\n",
+      "surface_sha256": "703a62cea50fe4ba24915e90790979d6c54bb92c136e448c7213038e7d3e0cd0",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "class C:\n    @property\n    def prop(self):\n        return 50\n\nprint(C().prop)",
+    "source_hash": "25dd5e23fef8905189fa6a469fe8f21ab813ef4d6a5b4158034677d1aa70f070"
+  },
+  "run_id": "run_20261030_161934_generated_seed42",
+  "seed": 4278308761,
+  "source": "class C:\n    @property\n    def prop(self):\n        return 50\n\nprint(C().prop)",
+  "source_hash": "25dd5e23fef8905189fa6a469fe8f21ab813ef4d6a5b4158034677d1aa70f070"
+}

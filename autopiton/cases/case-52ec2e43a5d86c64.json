@@ -1,0 +1,94 @@
+{
+  "case_id": "case-52ec2e43a5d86c64",
+  "created_at": "2026-10-30T16:13:11-06:00",
+  "description": "Canary D: zip with three iterables",
+  "expected_exception": null,
+  "family": "collections",
+  "generator": {
+    "code_hash": "52ec2e43a5d86c64dbc1a1ad924926623e0eecbf0969258f96b75b03d2a178d6",
+    "complexity": 2
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "UNSUPPORTED",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.804890999410418,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "52ec2e43a5d86c64dbc1a1ad924926623e0eecbf0969258f96b75b03d2a178d6",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "[(1, 3, 5), (2, 4, 6)]\n",
+      "timed_out": false
+    },
+    "details": {
+      "piton_stage_error": {
+        "error_message": "native zip currently requires two iterables",
+        "error_type": "MIRLoweringError",
+        "stage": "MIR"
+      }
+    },
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 164.06705900044471,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "MIR",
+      "filename": "program_0004.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "signal_number": null,
+      "source_hash": "52ec2e43a5d86c64dbc1a1ad924926623e0eecbf0969258f96b75b03d2a178d6",
+      "stage_reached": "PARSE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 44,
+          "surface_sha256": "8c199e37bbe88747ff6823c6a1bbf28a7505972563db0d841bb037c9ca9d401c"
+        },
+        "MIR": {
+          "error_message": "native zip currently requires two iterables",
+          "error_traceback": "Traceback (most recent call last):\n  File \"/piton-repo/autopiton/piton_worker.py\", line 121, in main\n    mir = lower_hir_to_mir(lower_cst_to_hir(cst))\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 7024, in lower_hir_to_mir\n    return MIRLowerer().lower(hir, modules, from_imports=from_imports, entry_file=entry_file, module_meta=module_meta)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 1237, in lower\n    self._lower_statements(module, [\n  File \"/piton-repo/piton/mir.py\", line 2256, in _lower_statements\n    self._lower_statement(builder, statement)\n  File \"/piton-repo/piton/mir.py\", line 2609, in _lower_statement\n    self._lower_expr(builder, node)\n  File \"/piton-repo/piton/mir.py\", line 5961, in _lower_expr\n    args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 5961, in <genexpr>\n    args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 5961, in _lower_expr\n    args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 5961, in <genexpr>\n    args = tuple(self._lower_expr(builder, arg) for arg in (*node.args, *_extra_args))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/mir.py\", line 5307, in _lower_expr\n    raise MIRLoweringError(\"native zip currently requires two iterables\")\npiton.mir.MIRLoweringError: native zip currently requires two iterables\n",
+          "error_type": "MIRLoweringError",
+          "passed": false
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "8c199e37bbe88747ff6823c6a1bbf28a7505972563db0d841bb037c9ca9d401c",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON rejected the program at MIR",
+    "source": "print(list(zip([1, 2], [3, 4], [5, 6])))",
+    "source_hash": "52ec2e43a5d86c64dbc1a1ad924926623e0eecbf0969258f96b75b03d2a178d6"
+  },
+  "run_id": "run_20261030_161309_canary",
+  "seed": 3,
+  "source": "print(list(zip([1, 2], [3, 4], [5, 6])))",
+  "source_hash": "52ec2e43a5d86c64dbc1a1ad924926623e0eecbf0969258f96b75b03d2a178d6"
+}
