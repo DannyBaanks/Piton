@@ -1020,10 +1020,14 @@ class Win64NasmEmitter:
                     None,
                 )
                 if resolved_class is None:
-                    raise NativeBuildError(f"native iter requires '{class_name}.__iter__'")
-                self._load_operand(source, "rcx")
-                self.lines.append(f"    call {resolved_class}____iter__")
-                self.types[result] = f"iterator:object:{class_name}"
+                    # Relajar iter: fallback a iterador genérico
+                    self._load_operand(source, "rcx")
+                    self.lines.append("    call piton_iterator_new_any")
+                    self.types[result] = f"iterator:{class_name}"
+                else:
+                    self._load_operand(source, "rcx")
+                    self.lines.append(f"    call {resolved_class}____iter__")
+                    self.types[result] = f"iterator:object:{class_name}"
             elif source_type == "str":
                 self._load_operand(source, "rcx")
                 self.lines.append("    call piton_str_iterator_new")
