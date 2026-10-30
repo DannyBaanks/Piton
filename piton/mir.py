@@ -6205,7 +6205,7 @@ class MIRLowerer:
                                         builder.emit("load", _ms, result=result)
                                         return result
                     # Fallback verificable: si el modulo es empaquetado, cargar como simbolo cualificado
-                    if self._is_bundled_module(_mmod):
+                    if _is_bundled_module(_mmod):
                         _mq_fallback = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
                         result = builder.temp()
                         builder.emit("load", _mq_fallback, result=result)
