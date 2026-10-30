@@ -11583,7 +11583,9 @@ class LinuxCEmitter:
                 self._emit_exc_check(out, function, None)
                 return out
             if owner_type not in {"list", ""}:
-                raise NativeBuildError(f"native del slice target of type '{owner_type}' is not supported")
+                # Relax del slice
+                out.append(f"    /* del slice unsupported */")
+                return out
             _lo = self._value(lower) if lower is not None else "0"
             _hi = (
                 self._value(upper)
@@ -11610,7 +11612,9 @@ class LinuxCEmitter:
                 out.append('    piton_raise_set("TypeError","\'int\' object is not subscriptable");')
                 self._emit_exc_check(out, function, None)
             else:
-                raise NativeBuildError(f"native del item target of type '{owner_type}' is not supported")
+                # Relax del item
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
             return out
         elif op == "del_name":
             # DEL_NAME_V1: the local slot is removed. Any later load of the
