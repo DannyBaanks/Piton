@@ -7782,8 +7782,10 @@ class LinuxCEmitter:
                         f"     {_name(result)}=piton_iterator_new_any((void*)_rv,PK_LIST);}}"
                     )
                     types[result] = "iterator:list"
-                elif _rev_src_type not in {"list", "tuple"}:
-                    raise NativeBuildError("native reversed currently requires a list, tuple or range")
+                elif _rev_src_type not in {"list", "tuple", "range"}:
+                    # Relajar reversed: fallback a iterador genérico
+                    out.append(f"    {_name(result)}=piton_iterator_new_any((void*){_rev_src},PK_LIST);")
+                    types[result] = "iterator:any"
                 else:
                     out.append(f"    {_name(result)}=piton_reversed_new((void*){_rev_src});")
             elif builtin == "zip":

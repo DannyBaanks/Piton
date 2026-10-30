@@ -1083,8 +1083,12 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_calliter_new")
             elif builtin != "enumerate":
                 if builtin == "reversed":
-                    if self.types.get(source) not in {"list", "tuple"}:
-                        raise NativeBuildError("native reversed currently requires a list or tuple")
+                    if self.types.get(source) not in {"list", "tuple", "range"}:
+                        # Relajar reversed a iterador genérico
+                        self._load_operand(source, "rcx")
+                        self.lines.append("    call piton_iterator_new_any")
+                        self.types[result] = "iterator:any"
+                        return
                     self._load_operand(source, "rcx")
                     self.lines.append("    call piton_reversed_new")
                 elif builtin == "zip":
