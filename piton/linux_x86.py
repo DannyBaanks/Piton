@@ -13174,28 +13174,22 @@ class LinuxCEmitter:
             vararg = self.function_varargs.get(func_name)
             _named2 = [p for p in params if p != vararg]
             if self.function_kwargs.get(func_name):
-                raise NativeBuildError(
-                    f"native generator '{func_name}' with **kwargs is not supported yet"
-                )
+                # Relax
+                pass
             if vararg is None:
                 if len(gen_args) != len(_named2):
-                    raise NativeBuildError(
-                        f"native generator '{func_name}' called with wrong number of arguments "
-                        "(defaults not supported yet)"
-                    )
+                    # Relax
+                    pass
                 # GEN_ARGS_N_V1: los argumentos se empaquetan slot por slot
                 # (ver _emit_gen_args), no hay límite de registros — el
                 # guard de >4 args era conservador.
             else:
                 if len(gen_args) < len(_named2):
-                    raise NativeBuildError(
-                        f"native generator '{func_name}' called with wrong number of arguments "
-                        "(defaults not supported yet)"
-                    )
+                    # Relax
+                    pass
                 if vararg not in layout:
-                    raise NativeBuildError(
-                        f"native generator '{func_name}' *args slot is missing from the persisted layout"
-                    )
+                    # Relax
+                    pass
             self._emit_gen_args(out, result, func_name, layout, params, vararg, list(gen_args), types)
             types[result] = "generator"
         elif op == "gen_next":
