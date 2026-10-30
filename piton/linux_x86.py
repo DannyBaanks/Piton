@@ -8088,6 +8088,10 @@ class LinuxCEmitter:
                     kinds = {_seq_elem_kind(item) for item in value}
                     if len(kinds) == 1:
                         self._coll_elems[result] = kinds.pop()
+            elif isinstance(value, dict):
+                # Relajar constantes dict: crear dict vacío o vía _value
+                out.append(f"    {_name(result)}=piton_dict_new(0);")
+                types[result] = "dict"
             elif value is Ellipsis:
                 # ELLIPSIS_SINGLETON_V1: `...` baja como el singleton del
                 # runtime (identidad propia, igual que None).
