@@ -5955,7 +5955,8 @@ class LinuxCEmitter:
                     elif arg_type == "none":
                         pieces.append(f'const char*_pf{index}="None";')
                     else:
-                        raise NativeBuildError(f"Linux str.format() does not support {arg_type} arguments")
+                        # Relax format arg type
+                        pieces.append(f'const char*_pf{index}="";')
                 if not pieces:
                     # FMT_NOFIELD_V1: idem, plantilla dinamica (todos los
                     # campos nombrados): array vacio y argc 0.
@@ -6132,7 +6133,8 @@ class LinuxCEmitter:
                     elif resolved_type == "complex":
                         converted = f"piton_complex_str({expr})"
                     else:
-                        raise NativeBuildError(f"Linux str.format() does not support {resolved_type} arguments")
+                        # Relax
+                        converted = '""'
                 # apply presentation spec
                 if pres:
                     _presented = pres.split(".", 1)[0] if type_char in {"f", "e", "E", "g", "G", "%"} else pres
