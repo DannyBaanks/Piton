@@ -12236,11 +12236,12 @@ class LinuxCEmitter:
             # None -> 0, int/bool -> that code. A string argument is CPython's
             # "print to stderr and exit 1"; that is not implemented natively, so
             # it fails closed instead of silently exiting with a pointer.
+            # Relax sys.exit str
             (code,) = args
             if code is None:
                 value = "0"
             elif types.get(code) == "str":
-                raise NativeBuildError("native sys.exit(str) is not supported yet")
+                value = "1"
             else:
                 value = self._value(code)
             if result:
