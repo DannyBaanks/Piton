@@ -1,0 +1,6 @@
+# Piton stub for _pyprofile
+
+def run():
+    pass
+
+__doc__ = "placeholder"
