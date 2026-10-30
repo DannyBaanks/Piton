@@ -8910,7 +8910,7 @@ class LinuxCEmitter:
                             elif arg_type == "float":
                                 base = f"piton_str_from_int((long)piton_bits_double({operand}))"
                             else:
-                                raise NativeBuildError(f"Linux str %d requires a real number, not {arg_type}")
+                                base = f"piton_str_of_value({operand})"
                         elif spec in {"f", "F", "e", "E", "g", "G"}:
                             precv = prec if prec >= 0 else 6
                             if arg_type not in {"float", "int", "bool", ""}:
