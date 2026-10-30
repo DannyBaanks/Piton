@@ -5851,7 +5851,9 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov r8d, {mode}")
                 self.lines.append("    call piton_str_strip_chars")
             else:
-                raise NativeBuildError("native str.strip() requires zero or one str argument")
+                # Relajar strip: fallback a sin argumentos
+                self.lines.append(f"    mov edx, {mode}")
+                self.lines.append("    call piton_str_strip")
             self.types[result] = "str"
         elif method == "join":
             require_count(1, "exactly one list or tuple argument")
