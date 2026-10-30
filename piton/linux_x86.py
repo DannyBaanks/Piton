@@ -13460,13 +13460,13 @@ def _gcc_compile(c_path: Path, output_path: Path) -> None:
     """Compile a freestanding ELF using the available gcc."""
     if _is_native_linux():
         cmd = [
-            "gcc", "-std=c11", "-w", "-O2", "-ffreestanding",
+            "gcc", "-std=c11", "-w", "-Wno-error", "-O2", "-ffreestanding",
             "-fno-stack-protector", "-fno-pie", "-no-pie", "-nostdlib", "-static",
             str(c_path), "-o", str(output_path),
         ]
     else:
         cmd = [
-            "wsl.exe", "gcc", "-std=c11", "-w", "-O2", "-ffreestanding",
+            "wsl.exe", "gcc", "-std=c11", "-w", "-Wno-error", "-O2", "-ffreestanding",
             "-fno-stack-protector", "-fno-pie", "-no-pie", "-nostdlib", "-static",
             windows_to_wsl_path(c_path), "-o", windows_to_wsl_path(output_path),
         ]
