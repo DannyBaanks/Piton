@@ -1,0 +1,25 @@
+{
+  "cases_registered": 78,
+  "classification_counts": {
+    "CRASH": 0,
+    "DIVERGENT": 11,
+    "EQUIV": 89,
+    "INCONCLUSIVE": 0,
+    "INVALID_ACCEPTED": 0,
+    "INVALID_REFERENCE": 0,
+    "NONDETERMINISTIC": 0,
+    "TIMEOUT": 0,
+    "UNSUPPORTED": 0
+  },
+  "duration_ms": 48528.2,
+  "finished_at": "2026-10-30T16:38:42-06:00",
+  "harness_errors": 0,
+  "programs_executed": 100,
+  "programs_requested": 100,
+  "run_id": "run_20261030_163754_generated_seed42",
+  "unique_divergences": 2,
+  "unique_signatures": [
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int"
+  ]
+}

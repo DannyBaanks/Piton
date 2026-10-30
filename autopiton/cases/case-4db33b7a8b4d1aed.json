@@ -1,0 +1,95 @@
+{
+  "case_id": "case-4db33b7a8b4d1aed",
+  "created_at": "2026-10-30T16:19:38-06:00",
+  "description": "Exception handling",
+  "expected_exception": null,
+  "family": "exceptions",
+  "generator": {
+    "code_hash": "4db33b7a8b4d1aed533fed10ffc3c922985a60ffd2497731d7979f855452dcc4",
+    "complexity": 6
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.971532000170555,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "4db33b7a8b4d1aed533fed10ffc3c922985a60ffd2497731d7979f855452dcc4",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "div by zero\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "1f8a2bfeef0fbb191d6a66d581c1f5e0c35ef45818aee8c25d31a910d4b1ae06",
+      "build_exit_code": 0,
+      "build_ms": 264.26633299888636,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 7.658688000447,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0009.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "signal_number": null,
+      "source_hash": "4db33b7a8b4d1aed533fed10ffc3c922985a60ffd2497731d7979f855452dcc4",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 117,
+          "surface_sha256": "ac68e8b7992d5b95445c76bebb9dd837c4b0ec1c7cd5e5fc8993a33621580e1a"
+        },
+        "BUILD": {
+          "artifact_bytes": 10544,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "1f8a2bfeef0fbb191d6a66d581c1f5e0c35ef45818aee8c25d31a910d4b1ae06",
+          "c_chars": 278665,
+          "c_sha256": "6a2d9ed88e81eabe98cd523a060d7381e2f5b5787e91cc929794f1bcf03beef4",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "div by zero\n",
+      "surface_sha256": "ac68e8b7992d5b95445c76bebb9dd837c4b0ec1c7cd5e5fc8993a33621580e1a",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "try:\n    x = 1 / 0\nexcept ZeroDivisionError:\n    print(\"div by zero\")\nexcept Exception:\n    print(\"other\")",
+    "source_hash": "4db33b7a8b4d1aed533fed10ffc3c922985a60ffd2497731d7979f855452dcc4"
+  },
+  "run_id": "run_20261030_161934_generated_seed42",
+  "seed": 3701002945,
+  "source": "try:\n    x = 1 / 0\nexcept ZeroDivisionError:\n    print(\"div by zero\")\nexcept Exception:\n    print(\"other\")",
+  "source_hash": "4db33b7a8b4d1aed533fed10ffc3c922985a60ffd2497731d7979f855452dcc4"
+}
