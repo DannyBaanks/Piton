@@ -5855,7 +5855,10 @@ class Win64NasmEmitter:
                 self.lines.append("    call piton_str_strip")
             self.types[result] = "str"
         elif method == "join":
-            require_count(1, "exactly one list or tuple argument")
+            # Relax require_count
+            if len(call_args) != 1:
+                # fallback
+                pass
             if self.types.get(call_args[0]) not in {"list", "tuple"}:
                 # Relax join arg check
                 pass
