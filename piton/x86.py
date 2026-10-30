@@ -4137,7 +4137,12 @@ class Win64NasmEmitter:
                 self.types[result] = "str"
             elif function_name in {"sorted", "ordenar"}:
                 if len(values) != 1 or self.types.get(values[0]) not in {"list", "tuple", "range"}:
-                    raise NativeBuildError("native sorted currently requires one list, tuple or range")
+                    # Relajar sorted: fallback a conversión genérica
+                    self._load_operand(values[0], "rcx")
+                    self.lines.append("    call piton_conv_seq_to_list")
+                    self.lines.append("    mov rcx, rax")
+                else:
+                    self._load_operand(values[0], "rcx")
                 if self.types.get(values[0]) == "range":
                     # RANGE_VALUE_V1: a range is not a PitonCollection, so it is
                     # materialized to a list before sorting. This returns early

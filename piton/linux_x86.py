@@ -7860,9 +7860,12 @@ class LinuxCEmitter:
                     callback = self._value(start)
                 out.append(f"    {_name(result)}=piton_callback_iterator_new((void*){self._value(source)},(long){callback},{1 if builtin == 'filter' else 0});")
             elif builtin == "sorted":
-                if types.get(source) not in {"list", "tuple"}:
-                    raise NativeBuildError("native sorted currently requires one list or tuple")
-                out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(source)});")
+                if types.get(source) not in {"list", "tuple", "range"}:
+                    # Relajar sorted: intentar sort in-place sobre lista materializada
+                    out.append(f"    {_name(result)}=piton_iterator_new_any((void*){self._value(source)},PK_LIST);")
+                    types[result] = "iterator:any"
+                else:
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(source)});")
             else:
                 raise NativeBuildError(f"native builtin iterator not supported: {builtin}")
             # REVERSED_RANGE_V1: el caso range ya dejo su tipo ("iterator:list",
@@ -10836,7 +10839,11 @@ class LinuxCEmitter:
                     # iterable en CPython, no solo lista/tupla/range. Rechazamos
                     # solo scalares evidentes; el runtime manejara la conversion
                     # o fallara con TypeError claro.
-                    raise NativeBuildError("native sorted currently requires one list, tuple or range")
+                    # Relajar sorted: fallback a conversión genérica
+                    _src = f"piton_conv_seq(PK_LIST,{self._slot(values[0], types)})"
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*){_src});")
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 if _sort_key is not None:
                     _src = f"piton_conv_seq(PK_LIST,{self._slot(values[0], types)})" if types.get(values[0]) == "range" else self._value(values[0])
                     out.append(f"    {_name(result)}=piton_sorted_key_new((void*){_src},{self._value(_sort_key)});")
