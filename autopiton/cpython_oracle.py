@@ -118,7 +118,7 @@ class CPythonOracle:
     def execute(self, source_code: str, filename: str = "program.py") -> CPythonResult:
         result = CPythonResult(
             source_hash=hashlib.sha256(source_code.encode("utf-8")).hexdigest(),
-            python_version=sys.version.split()[0],
+            python_version="",
         )
         config = SandboxConfig(
             timeout_seconds=self.timeout,
