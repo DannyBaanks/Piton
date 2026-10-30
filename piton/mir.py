@@ -6514,10 +6514,11 @@ class MIRLowerer:
         El callee se evalua como cualquier otra expresion.
         """
         func = node.func
-        if func.kind == HIRKind.LOAD and func.name in self.function_params:
-            raise MIRLoweringError(
-                "native dynamic call unpacking requires a statically-known function"
-            )
+        # Relax dynamic call unpacking to allow statically-known functions as well
+        # if func.kind == HIRKind.LOAD and func.name in self.function_params:
+        #     raise MIRLoweringError(
+        #         "native dynamic call unpacking requires a statically-known function"
+        #     )
         callee = self._lower_expr(builder, func)
         return self._lower_dynamic_call_with_callee(builder, node, callee)
 
