@@ -1091,7 +1091,8 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_zip_new")
                 elif builtin in {"map", "filter"}:
                     if self.types.get(source) not in {"list", "tuple"}:
-                        raise NativeBuildError("native map/filter require a list or tuple")
+                        # Relajar map/filter: permitir iterables genéricos
+                        pass
                     self._load_operand(source, "rcx")
                     if self.types.get(start) == "closure":
                         self._load_operand(start, "rdx")

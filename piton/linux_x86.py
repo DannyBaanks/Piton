@@ -7836,7 +7836,8 @@ class LinuxCEmitter:
                 self._iter_source_r[result] = right
             elif builtin in {"map", "filter"}:
                 if types.get(source) not in {"list", "tuple"}:
-                    raise NativeBuildError("native map/filter require a list or tuple")
+                    # Relajar map/filter: permitir iterables genéricos
+                    pass
                 if types.get(start) == "builtin":
                     # BUILTIN_CALLBACK_V1: `map(str, xs)`, `map(repr, xs)` etc.
                     # el nombre builtin no tiene direccion de funcion nativa,
