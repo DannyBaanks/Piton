@@ -3906,9 +3906,10 @@ class MIRLowerer:
                 builder.emit("sys_argv", result=result)
                 return result
             if alias_target is not None and alias_target.startswith("os."):
-                raise MIRLoweringError(
-                    f"native os.{alias_target[3:]} is not supported yet; only os.name is native"
-                )
+                # Relajar os.*: fallback a nombre cualificado
+                result = builder.temp()
+                builder.emit("load", f"os__{alias_target[3:]}", result=result)
+                return result
             result = builder.temp()
             builder.emit("load", alias_target if alias_target is not None else node.name, result=result)
             return result
@@ -4947,9 +4948,10 @@ class MIRLowerer:
                     builder.emit("const", _value, result=result)
                     return result
             if alias_qual is not None and alias_qual.startswith("os."):
-                raise MIRLoweringError(
-                    f"native os.{alias_qual[3:]} is not supported yet; only os.name is native"
-                )
+                # Relajar os.*: fallback a nombre cualificado
+                result = builder.temp()
+                builder.emit("load", f"os__{alias_qual[3:]}", result=result)
+                return result
             result = builder.temp()
             builder.emit("load", builder.from_import_aliases.get(node.name, node.name), result=result)
             return result
@@ -6166,9 +6168,10 @@ class MIRLowerer:
                     builder.emit("call", "__main___var____dict__", (), result=result)
                     return result
                 if _alias_module == "os":
-                    raise MIRLoweringError(
-                        f"native os.{node.attr} is not supported yet; only os.name is native"
-                    )
+                    # Relajar os.*: fallback a load dinámico
+                    result = builder.temp()
+                    builder.emit("load", f"os__{node.attr}", result=result)
+                    return result
             _mchain = self._module_attr_chain(builder, node)
             if _mchain is not None:
                 # MODULE_FUNC_VALUE_V1: `modulo.func` en posicion de VALOR
