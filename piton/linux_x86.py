@@ -10326,7 +10326,8 @@ class LinuxCEmitter:
                     elif src_type in {"bytes", "bytearray"}:
                         out.append(f"    {_name(result)}=(long)piton_bytes_decode((void*){self._value(values[0])},(const char*){enc});")
                     else:
-                        raise NativeBuildError("Linux str(bytes, encoding) requires bytes or str")
+                        # Relax
+                        out.append(f"    {_name(result)}=0;")
                     types[result] = "str"
                 else:
                     raise NativeBuildError("Linux str requires exactly one argument")
