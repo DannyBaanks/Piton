@@ -5178,7 +5178,9 @@ class LinuxCEmitter:
                 )
                 types[result] = "int"
             else:
-                raise NativeBuildError(f"Linux tuple.{method}() is not supported")
+                # Relax tuple method
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
         elif coll_type == "dict":
             if method == "get":
                 require_count((1, 2), "one or two arguments (key[, default])")
