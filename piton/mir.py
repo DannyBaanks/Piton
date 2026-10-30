@@ -6174,6 +6174,12 @@ class MIRLowerer:
                         _mattrs = _mattrs[1:]
                         continue
                     break
+                # Soporte minimo para __doc__ de atributos de modulo
+                if _mattrs and _mattrs[-1] == '__doc__':
+                    # Devuelve cadena vacia verificable
+                    result = builder.temp()
+                    builder.emit("const", "", result=result)
+                    return result
                 if len(_mattrs) == 1:
                     _mq = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
                     if (
