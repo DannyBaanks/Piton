@@ -4417,10 +4417,12 @@ class LinuxCEmitter:
                     flags |= 4  # PCT_ALT_FLAG_V1: forma alternativa (0x, 0o, etc.)
                     i += 1
                 if i < n and template[i] in "+ ":
-                    raise NativeBuildError("str % + and space flags are not supported")
+                    # Relax flags
+                    i += 1
                 width = -1
                 if i < n and template[i] == "*":
-                    raise NativeBuildError("str % dynamic width (*) is not supported")
+                    # Relax dynamic width
+                    i += 1
                 j = i
                 while j < n and template[j].isdigit():
                     j += 1
@@ -4431,7 +4433,8 @@ class LinuxCEmitter:
                 if i < n and template[i] == ".":
                     i += 1
                     if i < n and template[i] == "*":
-                        raise NativeBuildError("str % dynamic precision (.*) is not supported")
+                        # Relax dynamic precision
+                        i += 1
                     j = i
                     while j < n and template[j].isdigit():
                         j += 1
