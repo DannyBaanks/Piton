@@ -11731,8 +11731,25 @@ class LinuxCEmitter:
                         types[result] = "int"
                         return out
                 if cls_name is not None or method != "update" or owner_type not in {"dict", "class:dict", "dict:module"}:
-                    # Relajar kwargs en métodos: permitir
-                    pass
+                    # Fallback dinámico para kwargs en métodos no soportados nativamente
+                    _dparts = [f"{{PitonSeq*_dpa=piton_seq_new(PK_TUPLE,{len(call_args)});"]
+                    for _di, _dv in enumerate(call_args):
+                        _dparts.append(f"    _dpa->items[{_di}]=piton_slot({self._value(_dv)},PK_INT);")
+                    _dparts.append("_dpa;}")
+                    _dtuple = f"(long)({''.join(_dparts)})"
+                    _kparts = [f"{{PitonDict*_dpk=piton_dict_new(0);"]
+                    for _kn, _kv in kw_args:
+                        _kname_c = json.dumps(_kn)
+                        _kparts.append(f"    piton_dict_append(_dpk,piton_slot((long){_kname_c},PK_STR),{self._slot(_kv, types)});")
+                    _kparts.append("    }")
+                    _kdict = f"(long)({''.join(_kparts)})"
+                    out.append(
+                        f"    {_name(result)}=piton_call_dynamic("
+                        f"piton_object_get((PitonObject*){self._value(obj)},\"{method}\").bits,"
+                        f"{_dtuple},0,{_kdict});"
+                    )
+                    types[result] = "int"
+                    return out
                 _opnd = self._value(obj)
                 if call_args:
                     if len(call_args) != 1 or types.get(call_args[0], "") != "dict":
