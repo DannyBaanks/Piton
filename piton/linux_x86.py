@@ -8886,7 +8886,8 @@ class LinuxCEmitter:
                                     f'?"":piton_str_quote("<object>"))'
                                 )
                             else:
-                                raise NativeBuildError(f"Linux str %s does not support {arg_type} arguments")
+                                # Relajar str %s: fallback genérico
+                                base = f"piton_str_of_value({operand})"
                         elif spec == "d":
                             if arg_type in {"int", "bool", ""}:
                                 # PCT_UNKNOWN_ARG_V1: tipo desconocido ->

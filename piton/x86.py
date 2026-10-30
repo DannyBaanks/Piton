@@ -5355,7 +5355,10 @@ class Win64NasmEmitter:
             elif arg_type == "str":
                 self._load_operand(value, "rax")
             else:
-                raise NativeBuildError(f"native str %s does not support {arg_type} arguments")
+                # Relajar str %s: fallback genérico
+                self._load_operand(value, "rcx")
+                self.lines.append("    call piton_str_of_value")
+                self.lines.append("    mov rax, rcx")
         elif spec == "d":
             if arg_type == "slot":
                 # PCT_SLOT_V1 (Windows): unbox int/bool o TypeError.
