@@ -66,7 +66,7 @@
         "?? autopiton/cases/case-c6b8cfcbf5cb006a.json",
         "?? autopiton/cases/case-c6b8cfcbf5cb006a.py"
       ],
-      "repo": "/home/danny/Development/ISyCo Git/PITON"
+      "repo": "PITON"
     },
     "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
     "python_executable": "/usr/bin/python3",

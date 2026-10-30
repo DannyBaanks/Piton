@@ -147,8 +147,13 @@ def divergence_signature(comparison: ComparisonResult) -> Optional[str]:
 
 
 def git_provenance(repo_root: Optional[Path]) -> Dict[str, Any]:
-    """Commit and dirty state of the PITON checkout under test."""
-    info: Dict[str, Any] = {"repo": str(repo_root) if repo_root else None, "commit": None, "dirty": None}
+    """Commit and dirty state of the PITON checkout under test.
+
+    Only the repo's basename is stored in the run record; the absolute path
+    would leak the operator's workstation layout into the public git history
+    whenever a run's meta.json is committed.
+    """
+    info: Dict[str, Any] = {"repo": Path(repo_root).name if repo_root else None, "commit": None, "dirty": None}
     if repo_root is None or not Path(repo_root).is_dir():
         return info
     try:
