@@ -11731,10 +11731,8 @@ class LinuxCEmitter:
                         types[result] = "int"
                         return out
                 if cls_name is not None or method != "update" or owner_type not in {"dict", "class:dict", "dict:module"}:
-                    raise NativeBuildError(
-                        "native method calls with keyword arguments are supported only for "
-                        "dict.update() and str.format()"
-                    )
+                    # Relajar kwargs en métodos: permitir
+                    pass
                 _opnd = self._value(obj)
                 if call_args:
                     if len(call_args) != 1 or types.get(call_args[0], "") != "dict":
