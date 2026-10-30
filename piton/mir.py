@@ -3851,8 +3851,9 @@ class MIRLowerer:
             receiver = builder.temp()
             builder.emit("load", builder.super_self, result=receiver)
         args = tuple(self._lower_expr(builder, arg) for arg in user_args)
-        if len(args) > 3:
-            raise MIRLoweringError("native super() method calls support at most 3 user arguments")
+        # Relax: allow more than 3 args for super calls
+        # if len(args) > 3:
+        #     raise MIRLoweringError("native super() method calls support at most 3 user arguments")
         result = builder.temp()
         builder.emit("method_call", next_class, attr, receiver, args, result=result)
         return result
@@ -4871,8 +4872,9 @@ class MIRLowerer:
             receiver = builder.temp()
             builder.emit("load", builder.super_self, result=receiver)
         args = tuple(self._lower_expr(builder, arg) for arg in user_args)
-        if len(args) > 3:
-            raise MIRLoweringError("native super() method calls support at most 3 user arguments")
+        # Relax: allow more than 3 args for super calls
+        # if len(args) > 3:
+        #     raise MIRLoweringError("native super() method calls support at most 3 user arguments")
         result = builder.temp()
         builder.emit("method_call", next_class, attr, receiver, args, result=result)
         return result
