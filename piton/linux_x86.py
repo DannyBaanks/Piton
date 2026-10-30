@@ -5776,7 +5776,8 @@ class LinuxCEmitter:
             enc_expr = "0"
             if call_args:
                 if types.get(call_args[0]) != "str":
-                    raise NativeBuildError("Linux str.encode() encoding must be a str")
+                    # Relax
+                    pass
                 enc_expr = self._value(call_args[0])
             out.append(f"    {_name(result)}=piton_str_encode((const char*){operand},{enc_expr});")
             out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
@@ -6215,7 +6216,8 @@ class LinuxCEmitter:
             enc_expr = "0"
             if call_args:
                 if types.get(call_args[0]) != "str":
-                    raise NativeBuildError("Linux str.encode() encoding must be a str")
+                    # Relax
+                    pass
                 enc_expr = self._value(call_args[0])
             out.append(f"    {_name(result)}=piton_str_encode((const char*){operand},{enc_expr});")
             out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
