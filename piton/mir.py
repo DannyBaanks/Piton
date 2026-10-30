@@ -515,7 +515,13 @@ def _module_level_defs(module_body: list) -> list:
 def _is_bundled_module(module_name: str) -> bool:
     """True si el modulo viene del bundled stdlib (piton/stdlib_piton/)."""
     from piton.bundled_stdlib import bundled_module_source
-    return bundled_module_source(module_name) is not None
+    if bundled_module_source(module_name) is not None:
+        return True
+    # Soporte para nombres de submodulos con punto
+    alt_name = module_name.replace('.', '__')
+    if alt_name != module_name and bundled_module_source(alt_name) is not None:
+        return True
+    return False
 
 
 def _module_state_name(module_name: str, var_name: str) -> str:
