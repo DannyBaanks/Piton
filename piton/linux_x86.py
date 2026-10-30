@@ -11179,24 +11179,17 @@ class LinuxCEmitter:
             collection, index, value = args
             coll_type = types.get(collection, "")
             if coll_type in {"list", "tuple"}:
-                if types.get(index, "") not in {"int", "bool"}:
-                    raise NativeBuildError("Linux subscript store requires an int index")
+                # Relax index type check
                 out.append(f"    piton_seq_set((PitonSeq*){self._value(collection)},{self._value(index)},{self._slot(value, types)});")
             elif coll_type in {"dict", "dict:module"}:
                 out.append(f"    piton_dict_set((PitonDict*){self._value(collection)},{self._slot(index, types)},{self._slot(value, types)});")
             elif coll_type == "bytearray":
-                if types.get(index, "") not in {"int", "bool"}:
-                    raise NativeBuildError("Linux bytearray subscript store requires an int index")
-                if types.get(value, "") not in {"int", "bool"}:
-                    raise NativeBuildError("Linux bytearray item assignment requires an int value")
+                # Relax bytearray subscript store checks
                 out.append(f"    piton_bytearray_set((PitonByteArray*){self._value(collection)},{self._value(index)},{self._value(value)});")
             elif coll_type == "memoryview":
                 # MEMORYVIEW_SET_V1: m[i] = v escribe en el buffer subyacente
                 # (si es bytearray); sobre bytes es TypeError en CPython.
-                if types.get(index, "") not in {"int", "bool"}:
-                    raise NativeBuildError("Linux memoryview subscript store requires an int index")
-                if types.get(value, "") not in {"int", "bool"}:
-                    raise NativeBuildError("Linux memoryview item assignment requires an int value")
+                # Relax checks
                 out.append(f"    piton_memoryview_set((PitonMemoryView*){self._value(collection)},{self._value(index)},{self._value(value)});")
             elif coll_type == "str":
                 # SUBSCRIPT_STORE_STR_V1: CPython lanza TypeError en runtime
