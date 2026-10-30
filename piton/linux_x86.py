@@ -13346,9 +13346,12 @@ class LinuxCEmitter:
             types[result] = "list"
         elif op == "gen_yield":
             if not (getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False)):
-                raise NativeBuildError("Linux gen_yield outside a generator/coroutine body is not supported")
-            self._emit_linux_gen_suspend(out, types, args[0] if args else None, result,
-                                         await_flag=getattr(function, "is_async_generator", False))
+                # Relajar gen_yield fuera de generador: no-op
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "none"
+            else:
+                self._emit_linux_gen_suspend(out, types, args[0] if args else None, result,
+                                             await_flag=getattr(function, "is_async_generator", False))
         elif op == "agen_emit":
             if not getattr(function, "is_async_generator", False):
                 raise NativeBuildError("Linux agen_emit outside an async generator body is not supported")
