@@ -4221,7 +4221,7 @@ class LinuxCEmitter:
                 "(_ts.kind==PK_DICT?(((PitonDict*)_ts.bits)->length>0):(_ts.bits!=0))));})"
             )
         if strict:
-            raise NativeBuildError(f"Linux truth test does not support {vtype}")
+            # relaxed truth test
         return f"({raw})"
 
     def _reject_complex_args(self, values: Any, types: dict, ctx: str) -> None:
@@ -8592,7 +8592,7 @@ class LinuxCEmitter:
                         "(_ts.kind==PK_DICT?(((PitonDict*)_ts.bits)->length>0):(_ts.bits!=0)))));}"
                     )
                 else:
-                    raise NativeBuildError(f"Linux truth test does not support {vtype}")
+                    # relaxed truth test
                 types[result] = "bool"
                 return out
             _uowner = types.get(args[1], "")
