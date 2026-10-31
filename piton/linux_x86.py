@@ -13244,25 +13244,37 @@ def linux_run_cmd(args: list[str]) -> list[str]:
     return ["wsl.exe", "/usr/bin/env", "-i"] + args
 
 
+# GCC 14+ promotes these diagnostics to errors by default; ``-w`` and
+# ``-Wno-error`` do not downgrade promoted errors. The emitted C carries
+# pointers in ``long`` on purpose (that is the native ABI), so a newer host
+# compiler must keep them as warnings or every build fails at BUILD.
+_GCC_COMPAT_FLAGS = [
+    "-Wno-error=int-conversion",
+    "-Wno-error=incompatible-pointer-types",
+    "-Wno-error=implicit-function-declaration",
+    "-Wno-error=implicit-int",
+]
+
+
 def _gcc_compile(c_path: Path, output_path: Path) -> None:
     """Compile a freestanding ELF using the available gcc."""
     if _is_native_linux():
         cmd = [
-            "gcc", "-std=c11", "-w", "-Wno-error", "-O2", "-ffreestanding",
-            "-fno-stack-protector", "-fno-pie", "-no-pie", "-nostdlib", "-static",
-            str(c_path), "-o", str(output_path),
+            "gcc", "-std=c11", "-w", "-Wno-error", *_GCC_COMPAT_FLAGS, "-O2",
+            "-ffreestanding", "-fno-stack-protector", "-fno-pie", "-no-pie",
+            "-nostdlib", "-static", str(c_path), "-o", str(output_path),
         ]
     else:
         cmd = [
-            "wsl.exe", "gcc", "-std=c11", "-w", "-Wno-error", "-O2", "-ffreestanding",
-            "-fno-stack-protector", "-fno-pie", "-no-pie", "-nostdlib", "-static",
+            "wsl.exe", "gcc", "-std=c11", "-w", "-Wno-error", *_GCC_COMPAT_FLAGS,
+            "-O2", "-ffreestanding", "-fno-stack-protector", "-fno-pie",
+            "-no-pie", "-nostdlib", "-static",
             windows_to_wsl_path(c_path), "-o", windows_to_wsl_path(output_path),
         ]
     completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    # Relax compiler errors to allow build to progress
     if completed.returncode:
-        # raise NativeBuildError(completed.stderr or completed.stdout or f"Linux compiler exited {completed.returncode}")
-        pass
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise NativeBuildError(detail or f"gcc exited {completed.returncode}")
 
 
 def compile_native_linux(source: str, output: str | Path) -> Path:
