@@ -287,3 +287,19 @@ ahora un paso que levanta esa restriccion, corre `autopiton doctor` y hace un
 probe directo de `bwrap`, para que la disponibilidad quede en el log.
 **Pendiente de verificar en el proximo run**: no se da por arreglado hasta que
 el log muestre los skips de sandbox en 0.
+
+**Verificado 2026-10-31, run `41195941442` (job `test-autopiton`):** el log
+imprime `kernel.apparmor_restrict_unprivileged_userns = 0`, luego
+`sandbox disponible: True`, `autopiton doctor` cierra con *All checks passed.* y
+el suite es **68 passed, 2 skipped in 9.49s**. Los unicos dos skips son los
+canarios con gate de procedencia (`requires PITON commit fd76a88 (mir: relax) in
+HEAD`), que es su diseno. Los 19 skips de sandbox pasan a 0, asi que el gate
+ahora si ejecuta CPython + PITON nativo dentro de bwrap y falla cerrado: sin
+sandbox, `doctor` sale con codigo 2 y el job se pone rojo.
+
+Correccion a lo escrito arriba: el paso de diagnostico **no** hace un probe de
+`bwrap` a medida. Un probe propio (ejecutar `/bin/true` ligando solo `/usr`) dio
+falso negativo en el run `41195564482` — decia `FALLA (rc=1)` mientras `doctor`
+reportaba el sandbox disponible, es decir contradecía lo que el suite mide. La
+linea ahora pregunta a `autopiton.sandbox.sandbox_available()`, unica fuente de
+verdad de lo que el suite va a ejecutar (commit `17942f2`).

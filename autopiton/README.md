@@ -14,6 +14,11 @@ reproduced and reasoned about.
 
 - Linux with **bubblewrap** (`bwrap`) and usable user namespaces. Without a
   working sandbox AutoPiton refuses to execute anything (fail closed).
+  On Ubuntu 24.04 unprivileged user namespaces are restricted by AppArmor, so
+  `sandbox_available()` reports False and every sandbox-gated test skips; the CI
+  gate lifts it with
+  `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` and then runs
+  `doctor`, so a sandbox-less runner turns the job red instead of green.
 - CPython `python3` on `PATH` (the reference engine; measured against 3.12.3).
 - A PITON checkout at the repository root (measured against commit
   `fd76a88d`). `gcc` must be available to PITON for the native BUILD stage.
@@ -41,7 +46,7 @@ JSONL, summary) and registers every distinct program in the corpus under
 Run the suite from the repository root:
 
 ```
-python3 -m pytest autopiton/tests -q        # 65 tests
+python3 -m pytest autopiton/tests -q        # 70 tests (measured 2026-10-31)
 ```
 
 ## Commands
@@ -105,8 +110,10 @@ the same numbers.
   of the same expression is EQUIV, and bitwise ops are EQUIV on both surfaces.
   That bounds the PITON-side investigation to the callable-return lowering
   path; it is a location, not a diagnosis.
-- Suite: 65 tests pass. The two integration canaries that assert PITON
-  *rejection* behaviour are gated on PITON commit `fd76a88` being an ancestor
+- Suite: 65 tests pass. Re-measured 2026-10-31: **70** collected, 70 passed on
+  this machine; the CI gate collects the same 70 and reports 68 passed / 2
+  skipped. The two skipped are the integration canaries that assert PITON
+  *rejection* behaviour, gated on PITON commit `fd76a88` being an ancestor
   of `HEAD`, so they skip — visibly, with a reason — on a base that predates
   that work instead of reporting a false failure or a false pass.
 
