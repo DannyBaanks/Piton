@@ -8,6 +8,12 @@ Canaries C and F depend on PITON's ``mir: relax`` commits (the last one being
 tests are skipped with an explicit reason instead of failing: the AutoPiton
 contract holds, but this PITON does not yet classify those programs the same
 way. Canary A does not need any of them.
+
+The assertions deliberately validate the *AutoPiton harness contract*, not a
+historical PITON commit. A squash/rebase must not silently disable coverage.
+PITON may legitimately move from UNSUPPORTED/INVALID_ACCEPTED to a better
+classification as its semantics improve; these tests require a real,
+non-harness verdict with the expected CPython reference behavior.
 """
 
 import subprocess
@@ -24,6 +30,12 @@ CANARIES = {canary.description.split(":")[0]: canary
             for canary in ProgramGenerator().generate_canary_cases()}
 
 REQUIRED_PITON_COMMIT = "fd76a88d50d6052188f986eed11a4f21d9375b20"
+
+BAD_HARNESS_VERDICTS = {
+    Classification.INCONCLUSIVE,
+    Classification.TIMEOUT,
+    Classification.CRASH,
+}
 
 
 def _piton_at_least(commit: str) -> bool:
@@ -78,6 +90,24 @@ class IntegrationCanaries(unittest.TestCase):
         self.assertEqual(result.classification, Classification.UNSUPPORTED)
         self.assertEqual(result.piton.failed_stage, PitonStage.BUILD)
         self.assertTrue(result.cpython.succeeded)
+
+    def test_canary_f_constructor_args_gets_real_verdict(self):
+        result = self.compare_canary("F")
+        self.assertEqual(result.cpython.exception_type, "TypeError")
+        self.assertNotIn(result.classification, BAD_HARNESS_VERDICTS)
+
+    def test_canary_c_super_multiarg_gets_real_verdict(self):
+        result = self.compare_canary("C")
+        self.assertTrue(result.cpython.succeeded)
+        self.assertNotIn(result.classification, BAD_HARNESS_VERDICTS)
+        self.assertIn(
+            result.classification,
+            {
+                Classification.EQUIV,
+                Classification.DIVERGENT,
+                Classification.UNSUPPORTED,
+            },
+        )
 
 
 if __name__ == "__main__":

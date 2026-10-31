@@ -4,7 +4,7 @@
 - main unica rama de trabajo (local y remota).
 - Excepcion conservada a proposito: preservacion/terminal-sesion-ajena-2026-10-24
   (trabajo sin commitear de otra sesion; NO se fusiona sin decision de su dueno).
-- Respaldo total previo: /home/danny/Development/ISyCo Git/piton-backup-2026-10-24.bundle
+- Respaldo total previo: <ISyCo>/piton-backup-2026-10-24.bundle
   (git bundle --all verificado; recupera TODAS las refs).
 - Inventario de SHAs pre-borrado: /tmp/opencode/piton-ramas-inventario.txt
 - Manifiesto de verificacion pre-borrado: /tmp/opencode/piton-manifiesto.txt

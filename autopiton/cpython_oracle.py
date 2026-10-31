@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -118,7 +119,7 @@ class CPythonOracle:
     def execute(self, source_code: str, filename: str = "program.py") -> CPythonResult:
         result = CPythonResult(
             source_hash=hashlib.sha256(source_code.encode("utf-8")).hexdigest(),
-            python_version=sys.version.split()[0],
+            python_version="",
         )
         config = SandboxConfig(
             timeout_seconds=self.timeout,
@@ -159,6 +160,8 @@ class CPythonOracle:
             result.status = "harness_error"
             return result
         result.status = status
+        result.python_version = str(report.get("python_version") or result.python_version)
+        result.python_executable = str(report.get("python_executable") or result.python_executable)
         result.exception_type = report.get("type")
         result.exception_message = report.get("message")
         result.exception_traceback = report.get("traceback")
@@ -181,7 +184,17 @@ class CPythonOracle:
         return report if isinstance(report, dict) else None
     
     def get_version(self) -> str:
-        return sys.version.split()[0]
+        try:
+            completed = subprocess.run(
+                [PYTHON_EXECUTABLE, "-I", "-S", "-c",
+                 "import sys; print(sys.version.split()[0])"],
+                capture_output=True, text=True, timeout=5, check=False,
+            )
+            if completed.returncode == 0 and completed.stdout.strip():
+                return completed.stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return "unknown"
 
     def get_platform(self) -> str:
         return sys.platform

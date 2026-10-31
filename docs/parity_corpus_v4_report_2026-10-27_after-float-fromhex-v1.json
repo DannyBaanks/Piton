@@ -1400,7 +1400,7 @@
       },
       "records": [
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/classes.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/classes.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out= err=NameError: name Complex is not defined || oracle rc=0 out=EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC  err=",
@@ -1411,7 +1411,7 @@
           "bucket": "DIVERGENT_MISMATCH"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/controlflow.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/controlflow.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out=Please enter an integer: err=EOFError: EOF when reading a line || oracle rc=0 out=Please enter an integer: EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC err=",
@@ -1422,7 +1422,7 @@
           "bucket": "DIVERGENT_MISMATCH"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/datastructures.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/datastructures.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out= err=NameError: name collections__deque is not defined || oracle rc=0 out=EXC | {'orange', 'banana', 'apple', 'pear'} err=",
@@ -1433,7 +1433,7 @@
           "bucket": "DIVERGENT_MISMATCH"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/errors.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/errors.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out=EXC err=NameError: name spam is not defined || oracle rc=0 out=EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC err=",
@@ -1444,7 +1444,7 @@
           "bucket": "DIVERGENT_MISMATCH"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/inputoutput.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/inputoutput.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out=The value of x is 32.5, and y is 40000... | 'hello, world\\n' | The value of pi is approximately 3.142. | My hovercraft is full of eels. | My hovercraft is full  err=TypeError: 'str' object has no attribute 'format' || oracle rc=0 out=The value of x is 32.5, and y is 40000... | 'hello, world\\n' | The value of pi is approximately 3.142. | My hovercraft is full of eels. | My hovercraf",
@@ -1455,7 +1455,7 @@
           "bucket": "DIVERGENT_MISMATCH"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/interpreter.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/interpreter.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "",
@@ -1466,7 +1466,7 @@
           "bucket": "EQUIV"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/introduction.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/introduction.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out= err=NameError: name _ is not defined || oracle rc=0 out=EXC | EXC | EXC | First line. | Second line. | C:\\some | ame | C:\\some\\name |     Usage: thingy [OPTIONS] |     -h                        Display this usage mes err=<string>:132: SyntaxWarning: invalid escape sequence '\\s'",
@@ -1477,7 +1477,7 @@
           "bucket": "DIVERGENT_MISMATCH"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/modules.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/modules.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out= err=NameError: name fibo is not defined || oracle rc=0 out=EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC | EXC err=",
@@ -1488,7 +1488,7 @@
           "bucket": "DIVERGENT_MISMATCH"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/stdlib.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out= err=NameError: name os is not defined || oracle rc=0 out=EXC | Help on module os: |  | NAME |     os - OS routines for NT or Posix depending on what system we're on. |  | MODULE REFERENCE |     https://docs.python.org err=",
@@ -1499,7 +1499,7 @@
           "bucket": "DIVERGENT_MISMATCH"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib2.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/stdlib2.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out= err=NameError: name reprlib is not defined || oracle rc=0 out=[[[['black', 'cyan'], |    'white', |    ['green', 'red']], |   [['magenta', 'yellow'], |    'blue']]] | The wrap() method is just like fill() | except that it  err=",
@@ -1510,7 +1510,7 @@
           "bucket": "DIVERGENT_MISMATCH"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/venv.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/venv.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out= err=AttributeError || oracle rc=0 out= err=",
