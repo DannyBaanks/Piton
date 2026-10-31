@@ -1,0 +1,22 @@
+{
+  "cases_registered": 29,
+  "classification_counts": {
+    "CRASH": 0,
+    "DIVERGENT": 0,
+    "EQUIV": 29,
+    "INCONCLUSIVE": 0,
+    "INVALID_ACCEPTED": 0,
+    "INVALID_REFERENCE": 0,
+    "NONDETERMINISTIC": 0,
+    "TIMEOUT": 0,
+    "UNSUPPORTED": 0
+  },
+  "duration_ms": 11816.5,
+  "finished_at": "2026-10-30T17:04:59-06:00",
+  "harness_errors": 0,
+  "programs_executed": 29,
+  "programs_requested": 29,
+  "run_id": "run_20261030_170447_systematic",
+  "unique_divergences": 0,
+  "unique_signatures": []
+}

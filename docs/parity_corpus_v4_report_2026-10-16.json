@@ -1507,7 +1507,7 @@
       },
       "records": [
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/classes.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/classes.py",
           "reached": "parse",
           "stage_fail": "PARSE_FAIL",
           "detail": "ParseError: Expresión inesperada: Token(DOT, '.', 12:8) en 12:8",
@@ -1517,7 +1517,7 @@
           "bucket": "PARSE_FAIL"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/controlflow.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/controlflow.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
           "detail": "MIRLoweringError: native keyword call requires known function: function",
@@ -1526,7 +1526,7 @@
           "bucket": "MIR_FAIL"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/datastructures.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/datastructures.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
           "detail": "MIRLoweringError: native dynamic call unpacking requires a statically-known function",
@@ -1535,7 +1535,7 @@
           "bucket": "MIR_FAIL"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/errors.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/errors.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
           "detail": "MIRLoweringError: unsupported native exception type 'ExceptionGroup'",
@@ -1544,7 +1544,7 @@
           "bucket": "MIR_FAIL"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/inputoutput.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/inputoutput.py",
           "reached": "parse",
           "stage_fail": "PARSE_FAIL",
           "detail": "LoweringError: f-string conversion must be !s or omitted here",
@@ -1554,7 +1554,7 @@
           "bucket": "PARSE_FAIL"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/interpreter.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/interpreter.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "",
@@ -1565,7 +1565,7 @@
           "bucket": "EQUIV"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/introduction.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/introduction.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
           "detail": "NativeBuildError: Linux round(x, ndigits) requires a float first argument",
@@ -1574,7 +1574,7 @@
           "bucket": "BUILD_FAIL"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/modules.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/modules.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
           "detail": "NativeBuildError: Linux method receiver class is not statically known",
@@ -1583,7 +1583,7 @@
           "bucket": "BUILD_FAIL"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/stdlib.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
           "detail": "NativeBuildError: Linux method receiver class is not statically known",
@@ -1592,7 +1592,7 @@
           "bucket": "BUILD_FAIL"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/stdlib2.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/stdlib2.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
           "detail": "MIRLoweringError: native method calls do not support keyword arguments yet",
@@ -1601,7 +1601,7 @@
           "bucket": "MIR_FAIL"
         },
         {
-          "path": "/home/danny/Development/ISyCo Git/PITON/corpus_v4/tutorial/venv.py",
+          "path": "<ISyCo>/PITON/corpus_v4/tutorial/venv.py",
           "reached": "build",
           "stage_fail": null,
           "detail": "native rc=1 out= err=AttributeError || oracle rc=0 out= err=",

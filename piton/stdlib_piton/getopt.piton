@@ -1,6 +1,7 @@
 clase GetoptError (Exception ) :
     pasar
 
+error = GetoptError
 
 funcion getopt (args ,opciones ,argumentos_largos =[] ):
     lanzar NotImplementedError ('getopt.getopt no esta implementado en el backend nativo (V1 real MEDIDA con SIGSEGV: revertida a fail-closed)')

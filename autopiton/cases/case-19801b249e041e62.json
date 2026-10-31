@@ -1,0 +1,95 @@
+{
+  "case_id": "case-19801b249e041e62",
+  "created_at": "2026-10-30T16:19:54-06:00",
+  "description": "Boolean expression",
+  "expected_exception": null,
+  "family": "boolean",
+  "generator": {
+    "code_hash": "19801b249e041e62748881c9944650466e0ab131b7af3137e3cebb28dfeae066",
+    "complexity": 2
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.83934600019711,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "19801b249e041e62748881c9944650466e0ab131b7af3137e3cebb28dfeae066",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "True\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "7825a3fffa444a77de6829da07c88a56f89c1b063c8454811bae7462f3254e4c",
+      "build_exit_code": 0,
+      "build_ms": 264.30729200001224,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 7.724541001152829,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0042.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "signal_number": null,
+      "source_hash": "19801b249e041e62748881c9944650466e0ab131b7af3137e3cebb28dfeae066",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 32,
+          "surface_sha256": "9cbd73f9a78df900a01dff8fbdc2d2dfdf72073f6abec7528ce5c8b7eea77c53"
+        },
+        "BUILD": {
+          "artifact_bytes": 10528,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "7825a3fffa444a77de6829da07c88a56f89c1b063c8454811bae7462f3254e4c",
+          "c_chars": 278326,
+          "c_sha256": "8b67389ce2cb2f4324fbd8ae1deaee5b91045e25721fb4e15ab9a0e515fbf58b",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "True\n",
+      "surface_sha256": "9cbd73f9a78df900a01dff8fbdc2d2dfdf72073f6abec7528ce5c8b7eea77c53",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "print(7.63 * True > -0.19)\n",
+    "source_hash": "19801b249e041e62748881c9944650466e0ab131b7af3137e3cebb28dfeae066"
+  },
+  "run_id": "run_20261030_161934_generated_seed42",
+  "seed": 422701550,
+  "source": "print(7.63 * True > -0.19)\n",
+  "source_hash": "19801b249e041e62748881c9944650466e0ab131b7af3137e3cebb28dfeae066"
+}

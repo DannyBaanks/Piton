@@ -1,0 +1,17 @@
+{
+  "cases_registered": 0,
+  "classification_counts": {
+    "INVALID_ACCEPTED": 1
+  },
+  "drift": false,
+  "duration_ms": 614.2,
+  "finished_at": "2026-10-30T16:13:37-06:00",
+  "harness_errors": 0,
+  "programs_executed": 1,
+  "programs_requested": 1,
+  "run_id": "run_20261030_161336_replay_seed5",
+  "unique_divergences": 1,
+  "unique_signatures": [
+    "INVALID_ACCEPTED|cpython:exception:TypeError|piton:EXECUTE:-"
+  ]
+}

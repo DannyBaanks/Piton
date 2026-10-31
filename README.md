@@ -47,7 +47,7 @@ Pitón **no es**:
   el objetivo es correcto, no rápido.
 - Self-hosted: el compilador está escrito en Python, no en Pitón.
 
-## Qué SÍ hace (estado verificado 2026-10-24)
+## Qué SÍ hace (estado verificado 2026-10-24; AutoPiton añadido 2026-10-30)
 
 - **Traduce superficie español → Python ordinario** (source-to-source,
   líneas 1:1) y lo ejecuta con CPython: `piton ejecutar`, `piton traducir`,
@@ -86,6 +86,17 @@ Pitón **no es**:
     (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier a
     --recursive --workers 1 --isolate` — **`--isolate` es obligatorio**: sin
     él un archivo mata el worker del pool y la corrida muere siempre).
+  - **AutoPiton (fuzzing diferencial autónomo, 2026-10-30)**: genera programas
+    Python, los ejecuta en CPython y en el pipeline nativo dentro de una
+    sandbox bwrap fail-closed, y clasifica la divergencia. Corpus con semilla
+    `run_20261030_163754_generated_seed42`: 100/100 ejecutados, 89 EQUIV, 11
+    DIVERGENT, 2 firmas. Rejilla sistemática
+    `run_20261030_170633_systematic`: 58 programas producidos por la
+    herramienta a partir de una regla (0 programas escritos a mano), 39 EQUIV /
+    19 DIVERGENT. Hallazgo: **todas las divergencias del grid ocurren sólo
+    cuando el valor cruza una frontera de callable** (retorna desde una
+    lambda); el `print` directo de la misma expresión es EQUIV. Sección
+    «AutoPiton» y `autopiton/RESULTS.md`.
 
 - **Biblioteca nativa empaquetada** (`piton/stdlib_piton/`, 60 módulos):
   módulos escritos **en Pitón** que se compilan e inlinean cuando el
@@ -486,6 +497,55 @@ enumerativo sin divergencias observadas, Windows y Linux, y fail-closed fuera
 del subconjunto. No es una reimplementación completa de CPython 3.12 — ver
 «Qué NO es Pitón».
 
+## AutoPiton: oráculo diferencial que se programa solo (verificado 2026-10-30)
+
+Hasta aquí el corpus diferencial está **escrito a mano**. `autopiton/` es el
+contrario: un fuzzer que genera los programas, los ejecuta contra CPython
+(oracle) y contra el pipeline nativo, y clasifica el par en una de nueve
+salidas — `EQUIV`, `DIVERGENT`, `UNSUPPORTED`, `INVALID_REFERENCE`,
+`INVALID_ACCEPTED`, `CRASH`, `TIMEOUT`, `INCONCLUSIVE`,
+`NONDETERMINISTIC` — con precedencia explícita (un fallo de harness nunca se
+registra como `EQUIV`).
+
+```bash
+python3 -m autopiton doctor                 # sandbox + entorno; exit 2 si no hay bwrap
+python3 -m autopiton compare --canary       # los 10 canarios obligatorios A-J
+python3 -m autopiton compare --count 100 --seed 42
+python3 -m autopiton compare --systematic   # rejilla op x tipo x superficie
+python3 -m autopiton minimize <case-id>     # shrink preservando el tipo de divergencia
+python3 -m autopiton replay <case-id>       # huella estable + deriva de clasificación
+python3 -m pytest autopiton/tests -q        # 53 tests
+```
+
+Qué lo hace creíble, y no un número bonito:
+
+- **Fail-closed de verdad.** Ambos motores corren en `bwrap --unshare-all`,
+  con entorno vaciado, `/tmp` privado y límites de SO aplicados dentro de la
+  namespace vía `prlimit`. Si la sandbox no está disponible, `doctor` sale 2 y
+  `compare` produce `INCONCLUSIVE`: no hay camino al `EQUIV` sin aislamiento.
+- **Controles anti-fake.** La suite incluye un comparador roto a propósito que
+  debe fallar; declarar `EQUIV` sin ejecutar los dos motores no pasa CI local.
+- **El corpus es una regla, no una lista.** La rejilla sistemática enumera
+  operaciones aritméticas/ comparaciones/ bitwise sobre pares de enteros,
+  flotantes y boolenos, y cada expresión se mide en dos superficies: impresa
+  directo y retornada desde una lambda. 58 programas salen del generador, 0 a
+  mano.
+- **Las falsificaciones quedan registradas.** La primera versión de la rejilla
+  (29 celdas, sólo impresión directa) dio 29/29 `EQUIV`: cero divergencias. Esa
+  corrida vive en `reports/runs/run_20261030_170447_systematic` y es la razón
+  de añadir el eje de superficie — sin ella el hallazgo no se entiende.
+- **Firmas, no conteos.** `divergence_signature` agrupa programas por *forma*
+  del defecto (`stdout:bool->int`, `stdout:float->int`) y no por programa: las
+  19 divergencias de la rejilla son 2 firmas, así que una causa raíz repetida
+  en muchas superficies cuenta como un hallazgo, no como diecinueve.
+
+Medido con CPython 3.12.3, bwrap 0.9.0 sobre PITON `fd76a88d` con árbol
+**sucio**: 147 casos registrados en el corpus. Los números de compatibilidad
+son del subconjunto generado y de esa revisión concreta; no son una garantía
+global de PITON (ver la tabla de claims en `autopiton/RESULTS.md`). AutoPiton
+no toca el compilador ni propone arreglos: una divergencia es un hallazgo con
+replay, no una tarea que se resuelva en silencio.
+
 ## Por qué no usa `replace()`
 
 `str.replace("si", "if")` no sabe si está viendo sintaxis, un comentario,
@@ -543,6 +603,12 @@ PITON/
 |-- examples/            # .piton y sus equivalentes .py
 |-- tests/               # gates por fase + test_grammar_parity.py
 |-- tools/               # parity_corpus_v4.py (stdlib real, embudo + equiv)
+|-- autopiton/           # fuzzer diferencial autónomo: CPython vs nativo, sandbox bwrap
+|   |-- generator.py, cpython_oracle.py, piton_runner.py, comparator.py
+|   |-- minimizer.py, corpus.py, sandbox.py, cli.py
+|   |-- tests/           # 53 tests (controles anti-fake + canarios de sandbox)
+|   |-- cases/           # corpus contenido por hash + index.json con firmas
+|   `-- reports/runs/    # meta.json + results.jsonl + summary.json por corrida
 |-- validation/windows/  # receipts de la maquina Windows
 |-- GUIA.md, NATIVE_COMPATIBILITY.md, NATIVE_SUBSET_1_0.md, ABI.md, ROADMAP.md
 `-- README.md

@@ -18,8 +18,7 @@ clase NAME :
     pasar
 
 
-clase NEWLINE :
-    pasar
+NEWLINE = 4
 
 
 clase NL :

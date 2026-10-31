@@ -18,8 +18,7 @@ clase EEXIST :
     pasar
 
 
-clase EINVAL :
-    pasar
+EINVAL = 22
 
 
 clase EISDIR :

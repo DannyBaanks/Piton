@@ -1,0 +1,95 @@
+{
+  "case_id": "case-95c9b5863dcab5d0",
+  "created_at": "2026-10-30T16:13:13-06:00",
+  "description": "Canary G: Context manager",
+  "expected_exception": null,
+  "family": "classes",
+  "generator": {
+    "code_hash": "95c9b5863dcab5d0e4cd8ccfc04147fd893fc6c0edb31da89014d3b475db910b",
+    "complexity": 3
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.818015000681044,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "95c9b5863dcab5d0e4cd8ccfc04147fd893fc6c0edb31da89014d3b475db910b",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "enter\nbody\nexit\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "1fa17306d43fe38f6b0288402bd942fe4c9dc98816d8441f67962c11f939f400",
+      "build_exit_code": 0,
+      "build_ms": 264.3227400003525,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 7.723015000010491,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0007.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "signal_number": null,
+      "source_hash": "95c9b5863dcab5d0e4cd8ccfc04147fd893fc6c0edb31da89014d3b475db910b",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 194,
+          "surface_sha256": "adfde1588a78ffcac8b5eac2b9612a198708c8c9c6043e3e8e2c24404b15fa3b"
+        },
+        "BUILD": {
+          "artifact_bytes": 14736,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "1fa17306d43fe38f6b0288402bd942fe4c9dc98816d8441f67962c11f939f400",
+          "c_chars": 279776,
+          "c_sha256": "290db404962ba7601b4d17c12f0a477f84ffba621f5b6b72c224fa3a0edcd77d",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "enter\nbody\nexit\n",
+      "surface_sha256": "adfde1588a78ffcac8b5eac2b9612a198708c8c9c6043e3e8e2c24404b15fa3b",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "class C:\n    def __enter__(self):\n        print('enter')\n        return self\n    def __exit__(self, kind, value, traceback):\n        print('exit')\n\nwith C():\n    print('body')",
+    "source_hash": "95c9b5863dcab5d0e4cd8ccfc04147fd893fc6c0edb31da89014d3b475db910b"
+  },
+  "run_id": "run_20261030_161309_canary",
+  "seed": 6,
+  "source": "class C:\n    def __enter__(self):\n        print('enter')\n        return self\n    def __exit__(self, kind, value, traceback):\n        print('exit')\n\nwith C():\n    print('body')",
+  "source_hash": "95c9b5863dcab5d0e4cd8ccfc04147fd893fc6c0edb31da89014d3b475db910b"
+}
