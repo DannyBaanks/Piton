@@ -297,6 +297,10 @@ HEAD`), que es su diseno. Los 19 skips de sandbox pasan a 0, asi que el gate
 ahora si ejecuta CPython + PITON nativo dentro de bwrap y falla cerrado: sin
 sandbox, `doctor` sale con codigo 2 y el job se pone rojo.
 
+Re-verificado tras las celdas `str`, run `41230502012`: misma linea de sonda en
+True, doctor sin fallos y **70 passed, 2 skipped in 7.04s** sobre los 72
+recolectados. El gate se mantiene diferencial.
+
 Correccion a lo escrito arriba: el paso de diagnostico **no** hace un probe de
 `bwrap` a medida. Un probe propio (ejecutar `/bin/true` ligando solo `/usr`) dio
 falso negativo en el run `41195564482` — decia `FALLA (rc=1)` mientras `doctor`

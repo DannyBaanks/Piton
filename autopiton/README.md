@@ -117,18 +117,18 @@ the same numbers.
   where it prints `False` — the same `bool->int` signature as
   `compare_bool/lambda`. The comparison itself is right on all six operators
   (lexicographic order agrees with CPython); only the returned `bool`'s
-  representation changes. So the defect does
-  **not** depend on the operand type: what fails to cross the boundary is the
-  `bool` (and `float`) *result*, not any non-int value. Details in the
-  2026-10-31 (II) addendum in `RESULTS.md`.
+  representation changes. So the defect does **not** depend on the operand type:
+  what fails to cross the boundary is the `bool` (and `float`) *result*, not any
+  non-int value. Details in the 2026-10-31 (II) addendum in `RESULTS.md`.
 - Suite: 65 tests pass. Re-measured 2026-10-31: **72** collected, 72 passed on
   this machine. The CI gate was verified on the 70-test suite (`run
   41195941442`): the log shows `sandbox disponible: True`, `doctor` reporting
   *All checks passed.*, and 68 passed / 2 skipped, so the 19 sandbox skips are
-  gone. The two that remain skipped are the integration canaries asserting PITON
-  *rejection* behaviour, gated on PITON commit `fd76a88` being an ancestor
-  of `HEAD`, so they skip — visibly, with a reason — on a base that predates
-  that work instead of reporting a false failure or a false pass.
+  gone; re-verified on the 72-test suite as 70 passed / 2 skipped
+  (`run 41230502012`). The two that remain skipped are the integration canaries
+  asserting PITON *rejection* behaviour, gated on PITON commit `fd76a88` being
+  an ancestor of `HEAD`, so they skip — visibly, with a reason — on a base that
+  predates that work instead of reporting a false failure or a false pass.
 
 ### Synthesis — can AutoPiton write what PITON lacks?
 
