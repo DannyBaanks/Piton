@@ -4417,12 +4417,10 @@ class LinuxCEmitter:
                     flags |= 4  # PCT_ALT_FLAG_V1: forma alternativa (0x, 0o, etc.)
                     i += 1
                 if i < n and template[i] in "+ ":
-                    # Relax flags
-                    i += 1
+                    raise NativeBuildError("str % + and space flags are not supported")
                 width = -1
                 if i < n and template[i] == "*":
-                    # Relax dynamic width
-                    i += 1
+                    raise NativeBuildError("str % dynamic width (*) is not supported")
                 j = i
                 while j < n and template[j].isdigit():
                     j += 1
@@ -4433,8 +4431,7 @@ class LinuxCEmitter:
                 if i < n and template[i] == ".":
                     i += 1
                     if i < n and template[i] == "*":
-                        # Relax dynamic precision
-                        i += 1
+                        raise NativeBuildError("str % dynamic precision (.*) is not supported")
                     j = i
                     while j < n and template[j].isdigit():
                         j += 1
@@ -4869,13 +4866,15 @@ class LinuxCEmitter:
             if _iut == "str" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
                 if _ipt is not None and _ipt not in {"str", "int", "bool", "none", "builtin"} and not _ipt.startswith("object:"):
-                    # USED_AS_STR_V1: relaxed
-                    pass
+                    raise NativeBuildError(
+                        f"Linux {function_name}() param '{_iparam}' is used as str; a {_ipt} argument is rejected (fail closed)"
+                    )
             elif _iut == "list" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
                 if _ipt is not None and _ipt not in {"list", "int", "bool", "none"}:
-                    # Relax list param check
-                    pass
+                    raise NativeBuildError(
+                        f"Linux {function_name}() param '{_iparam}' is used as list; a {_ipt} argument is rejected (fail closed)"
+                    )
         self._reject_complex_args(values, types, f"function '{function_name}'")
         # VARARG_PACK_V1: una llamada directa a una funcion con `*args`
         # empaqueta los sobrantes en una tupla (el ABI del callee espera la
@@ -5178,9 +5177,7 @@ class LinuxCEmitter:
                 )
                 types[result] = "int"
             else:
-                # Relax tuple method
-                out.append(f"    {_name(result)}=0;")
-                types[result] = "none"
+                raise NativeBuildError(f"Linux tuple.{method}() is not supported")
         elif coll_type == "dict":
             if method == "get":
                 require_count((1, 2), "one or two arguments (key[, default])")
@@ -5724,11 +5721,13 @@ class LinuxCEmitter:
                 self._coll_elems[result] = "str"
                 return out
             if len(call_args) > 1:
-                # Relax
-                call_args = call_args[:1]
+                raise NativeBuildError(
+                    "Linux str.split() requires zero, one or two arguments"
+                )
             if call_args and types.get(call_args[0]) not in {"str", "none"}:
-                # Relax
-                pass
+                raise NativeBuildError(
+                    "Linux str.split() requires a str separator or nothing"
+                )
             sep = "(const char*)0" if not call_args or types.get(call_args[0]) == "none" else f"(const char*){self._value(call_args[0])}"
             out.append(f"    {_name(result)}=piton_str_split((const char*){operand},{sep});")
             types[result] = "list"
@@ -8363,8 +8362,9 @@ class LinuxCEmitter:
                 # BUILTIN_MARKER_V1: almacenar un builtin como valor (ej.
                 # _types.py: `Pos = int`). El backend nativo no permite
                 # almacenar builtins directamente como valores (fail-closed).
-                # Relax
-                pass
+                raise NativeBuildError(
+                    f"native store of builtin '{args[1]}' is not supported"
+                )
             if (
                 args[0] in self._shared_globals
                 and (function.name == "<module>" or args[0] in self._func_globals.get(function.name, ()))
@@ -8932,7 +8932,9 @@ class LinuxCEmitter:
                             elif arg_type == "float":
                                 base = f"piton_str_from_int((long)piton_bits_double({operand}))"
                             else:
-                                base = f"piton_str_of_value({operand})"
+                                raise NativeBuildError(
+                                    f"Linux str %d requires a real number, not {arg_type}"
+                                )
                         elif spec in {"f", "F", "e", "E", "g", "G"}:
                             precv = prec if prec >= 0 else 6
                             if arg_type not in {"float", "int", "bool", ""}:
@@ -9127,10 +9129,11 @@ class LinuxCEmitter:
                 types[result] = "complex"
                 return out
             if "none" in {left_type, right_type}:
-                # Relax None arithmetic: fallback to 0
-                out.append(f"    {_name(result)}=0;")
-                types[result] = "int"
-                return out
+                # WRETURNTYPE_V1 (mirrors the Windows guard): None in
+                # arithmetic is a CPython TypeError, not pointer math.
+                raise NativeBuildError(
+                    f"Linux {operator} with None is not supported (CPython raises TypeError)"
+                )
             if "float" in {left_type, right_type}:
                 # TRUEDIV_V1: float / and // join the supported set. CPython
                 # raises ZeroDivisionError on float division by zero instead
@@ -9648,8 +9651,10 @@ class LinuxCEmitter:
                             str(value_type).startswith("iterator:")
                             or value_type in {"generator", "genexpr", "builtin", "closure", "module", "cell"}
                         ):
-                            # Relax print check
-                            pass
+                            raise NativeBuildError(
+                                f"Linux native print of a {value_type} value is not supported "
+                                "(can never match CPython output)"
+                            )
                         if str(value_type).startswith("object:"):
                             cls_name = value_type.split(":", 1)[1]
                             str_cls = None
@@ -10841,8 +10846,9 @@ class LinuxCEmitter:
                 self._emit_exc_check(out, function, call_handler)
             elif function_name in {"type", "tipo"}:
                 if len(values) != 1:
-                    # Relax type args
-                    values = [values[0]] if values else ["0"]
+                    raise NativeBuildError(
+                        "Linux type requires one argument (dynamic class creation is not supported)"
+                    )
                 value_type = types.get(values[0], "int")
                 if value_type.startswith("object:"):
                     # TIPO_OBJ_V1: `tipo(instancia)` must name the class, not the

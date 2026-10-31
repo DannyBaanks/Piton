@@ -694,8 +694,10 @@ class MIRLowerer:
             if existing[prop] is not None:
                 raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
             return f"{class_name}__{method.name}__{prop}", prop, method.name
-        # Permitir decoradores no soportados para progresar; se ignoran
-        return f"{class_name}__{method.name}", None, method.name
+        raise MIRLoweringError(
+            "native class methods support only @property, @staticmethod, @classmethod, "
+            "@<name>.setter, @<name>.deleter"
+        )
 
     @staticmethod
     def _fold_str_concat(function: MIRFunction) -> None:
@@ -6251,11 +6253,10 @@ class MIRLowerer:
                         result = builder.temp()
                         builder.emit("load", _mq_fallback, result=result)
                         return result
-                    # Relax: fallback genérico para acceso a valor de atributo de módulo
-                    _mq_fallback = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
-                    result = builder.temp()
-                    builder.emit("load", _mq_fallback, result=result)
-                    return result
+                raise MIRLoweringError(
+                    f"native module attribute value access is not supported yet; "
+                    f"use module function calls (e.g. 'pkg.sub.fn(...)') [mod={_mmod} attrs={_mattrs}]"
+                )
             if builder.super_class and node.value.kind == HIRKind.LOAD and node.value.name == "super":
                 # Permitir super() como carga para progresar
                 result = builder.temp()
