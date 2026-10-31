@@ -303,3 +303,68 @@ falso negativo en el run `41195564482` — decia `FALLA (rc=1)` mientras `doctor
 reportaba el sandbox disponible, es decir contradecía lo que el suite mide. La
 linea ahora pregunta a `autopiton.sandbox.sandbox_available()`, unica fuente de
 verdad de lo que el suite va a ejecutar (commit `17942f2`).
+
+## Addendum 2026-10-31 (II) — la grilla gana el tipo `str` y el defecto deja de depender del operando
+
+Cambio en el harness: `SystematicGrid` pasa de 29 a **37 celdas** (58 → 74
+programas). Las 8 celdas nuevas son `arith_str` con `+` y `*` y `compare_str`
+con los seis operadores de comparación. Las celdas se **anexan al final** para
+que `systematic_corpus(limit=N)` devuelva el mismo prefijo que devolvía con la
+grilla de 58: un run archivado sigue siendo comparable con uno truncado de
+hoy. Lo fija el test `test_new_grid_cells_are_appended_so_truncation_stays_a_prefix`.
+
+Medido en `run_20261031_123128_systematic` (74/74 ejecutados, entorno CPython
+3.12.3 + bwrap 0.9.0, `piton/` intacto; el `dirty=True` del `meta.json` son
+`autopiton/generator.py` y su test, es decir la grilla nueva se midió antes de
+commitearla — inherente a medir un cambio de corpus).
+
+| Pasada | EQUIV | DIVERGENT | firmas |
+|---|---|---|---|
+| grid anterior, re-medida (58) | 39 | 19 | 2 |
+| grid con `str` (74) | 49 | 25 | 2 |
+
+Desagregado de los 16 programas `str`: **10 EQUIV, 6 DIVERGENT**, y los 6
+divergentes son exactamente `compare_str/lambda`, todos con la firma **ya
+existente** `stdout:bool->int`. Los buckets del run completo quedan en 18
+`bool->int` / 7 `float->int`: el recuento de clases de divergencia **no** sube.
+
+Salidas concretas (`results.jsonl`, exit 0 en PITON, etapa EXECUTE en ambos):
+
+| Programa | CPython | PITON |
+|---|---|---|
+| `print('ab' + 'cd')` desde lambda | `abcd` | `abcd` (EQUIV) |
+| `print('ab' * 3)` desde lambda | `ababab` | `ababab` (EQUIV) |
+| `print('ab' < 'cd')` directo | `True` | `True` (EQUIV) |
+| `print(_v())` con `_v = lambda: 'ab' == 'cd'` | `False` | `0` (DIVERGENT) |
+| `print(_v())` con `_v = lambda: True == True` | `True` | `1` (DIVERGENT) |
+
+**Qué acota.** La hipotesis "cualquier valor no-int que cruza la frontera de una
+funcion callable se reinterpreta" queda **falsada**: un `str` cruza la misma
+frontera y sale intacto, tanto si es el operando como si es el resultado de la
+expresion dentro del lambda. Lo que no cruza es el `bool` del resultado de una
+comparacion, **independientemente del tipo de los operandos** (bool-operandos y
+str-operandos caen en la misma firma). O sea: el defecto está en la
+representacion que devuelve el retorno callable para `bool` (y para `float`), no
+en la lowering de la comparacion ni en el tipo de los operandos. Es una
+restriccion del lugar, sigue sin ser diagnostico.
+
+Refuerzo dentro de la misma tanda: en los seis `compare_str/lambda` el **orden
+lexicografico es correcto** — `'ab' < 'cd'` y `'ab' <= 'cd'` dan `True`, `'ab' >
+'cd'` y `'ab' >= 'cd'` dan `False`, igual que CPython — y lo unico que cambia es
+la marca del bool retornado (`True→1`, `False→0`). La comparacion con operandos
+`str` acierta; lo que se pierde es la representacion del resultado al cruzar el
+retorno.
+
+**Límite de esta tanda.** La cobertura de `str` es concatenacion, repeticion y
+comparacion lexicografica. No hay indexado, slicing, metodos, escapes, ni
+formateo (`%`/f-string), y no hay programas `str` que mezclen tipos. **Cobertura
+exhaustiva del sublenguaje `str`: NOT DEMONSTRATED.** Tampoco se toca el claim
+de exhaustividad de clases de divergencia: 2 firmas en 74 programas es lo que se
+midio, no una particion cerrada.
+
+| Claim | Estado |
+|---|---|
+| La grilla cubre `str` sin romper la reproducibilidad del prefijo de 58 | DEMONSTRATED (test + run) |
+| El defecto de frontera depende del tipo de operando | FALSADO (6/6 divergentes caen en la firma `bool->int`) |
+| Un `str` cruza la frontera callable intacto bajo PITON | DEMONSTRATED para `+`, `*` (2 celdas × 2 superficies) |
+| Cobertura `str` exhaustiva | NOT DEMONSTRATED |

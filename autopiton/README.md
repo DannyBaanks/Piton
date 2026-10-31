@@ -46,7 +46,7 @@ JSONL, summary) and registers every distinct program in the corpus under
 Run the suite from the repository root:
 
 ```
-python3 -m pytest autopiton/tests -q        # 70 tests (measured 2026-10-31)
+python3 -m pytest autopiton/tests -q        # 72 tests (measured 2026-10-31)
 ```
 
 ## Commands
@@ -110,9 +110,22 @@ the same numbers.
   of the same expression is EQUIV, and bitwise ops are EQUIV on both surfaces.
   That bounds the PITON-side investigation to the callable-return lowering
   path; it is a location, not a diagnosis.
-- Suite: 65 tests pass. Re-measured 2026-10-31: **70** collected, 70 passed on
-  this machine; the CI gate collects the same 70 and reports 68 passed / 2
-  skipped. The two skipped are the integration canaries that assert PITON
+- Extended 2026-10-31: the grid gains a `str` kind (37 cells / 74 programs,
+  `run_20261031_123128_systematic`, 49 EQUIV / 25 DIVERGENT, still 2
+  signatures). `'ab' + 'cd'` and `'ab' * 3` come back intact from a lambda, but
+  every `compare_str/lambda` prints `1` where CPython prints `True` and `0`
+  where it prints `False` — the same `bool->int` signature as
+  `compare_bool/lambda`. The comparison itself is right on all six operators
+  (lexicographic order agrees with CPython); only the returned `bool`'s
+  representation changes. So the defect does
+  **not** depend on the operand type: what fails to cross the boundary is the
+  `bool` (and `float`) *result*, not any non-int value. Details in the
+  2026-10-31 (II) addendum in `RESULTS.md`.
+- Suite: 65 tests pass. Re-measured 2026-10-31: **72** collected, 72 passed on
+  this machine. The CI gate was verified on the 70-test suite (`run
+  41195941442`): the log shows `sandbox disponible: True`, `doctor` reporting
+  *All checks passed.*, and 68 passed / 2 skipped, so the 19 sandbox skips are
+  gone. The two that remain skipped are the integration canaries asserting PITON
   *rejection* behaviour, gated on PITON commit `fd76a88` being an ancestor
   of `HEAD`, so they skip — visibly, with a reason — on a base that predates
   that work instead of reporting a false failure or a false pass.
