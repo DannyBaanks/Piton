@@ -60,6 +60,44 @@ class GeneratorTests(unittest.TestCase):
             self.assertTrue(program.is_valid)
             self.assertIn("print(", program.code)
 
+    def test_string_kinds_are_on_the_grid_and_compile(self):
+        from autopiton.generator import SystematicGrid
+
+        str_cells = [cell for cell in SystematicGrid.cells() if cell[0].endswith("str")]
+        self.assertEqual({cell[0] for cell in str_cells}, {"arith_str", "compare_str"})
+        # Concat needs two strings, repeat a string and an int: the operand
+        # pair is part of the cell, so the grid cannot reuse one tuple for both.
+        self.assertEqual(
+            [(cell[1], cell[2]) for cell in str_cells if cell[0] == "arith_str"],
+            [("+", SystematicGrid.STR_OPERANDS), ("*", SystematicGrid.STR_REPEAT_OPERANDS)],
+        )
+
+        programs = ProgramGenerator(seed=7).systematic_corpus()
+        str_programs = [
+            program
+            for program in programs
+            if program.description.split("[")[1].split("/")[0].endswith("str")
+        ]
+        self.assertEqual(len(str_programs), len(str_cells) * len(SystematicGrid.SURFACES))
+        self.assertEqual(
+            {p.description.split("/")[1].split("]")[0] for p in str_programs},
+            set(SystematicGrid.SURFACES),
+        )
+        for program in str_programs:
+            compile(program.code, "<str>", "exec")
+            self.assertTrue(program.is_valid, program.description)
+
+    def test_new_grid_cells_are_appended_so_truncation_stays_a_prefix(self):
+        full = ProgramGenerator(seed=1).systematic_corpus()
+        # 58 is the size of the grid as measured on 2026-10-30: checking the
+        # prefix at that boundary is what keeps the old run replayable.
+        for limit in (5, 20, 58, len(full)):
+            truncated = ProgramGenerator(seed=1).systematic_corpus(limit=limit)
+            self.assertEqual(
+                [program.code for program in truncated],
+                [program.code for program in full[:limit]],
+            )
+
     def test_generate_family_systematic_routes_to_grid(self):
         programs = ProgramGenerator(seed=1).generate(ProgramFamily.SYSTEMATIC, 5)
         self.assertEqual(len(programs), 5)
