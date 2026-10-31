@@ -221,6 +221,9 @@ class MIRModule:
     class_mro: dict = field(default_factory=dict)
     # CLASS_BASES_V1: las bases DIRECTAS de cada clase (`cls.__bases__`).
     class_bases: dict = field(default_factory=dict)
+    # METACLASS_CONFLICT_V1: metaclase efectiva por clase ("type" por defecto);
+    # `type(A)` devuelve este objeto de clase.
+    class_metaclasses: dict = field(default_factory=dict)
     class_properties: dict = field(default_factory=dict)
     static_methods: set = field(default_factory=set)
     class_methods: set = field(default_factory=set)
@@ -567,6 +570,9 @@ class MIRLowerer:
         self.classes: dict[str, set[str]] = {}
         self.class_parents: dict[str, str | None] = {}
         self.class_base_list: dict[str, list[str]] = {}
+        # METACLASS_CONFLICT_V1: metaclase efectiva por clase (nombre de
+        # clase o "type"); sirve para fallar cerrado ante bases incompatibles.
+        self.class_metaclasses: dict[str, str] = {}
         self.class_mro: dict[str, list[str]] = {}
         self._mro_memo: dict[str, list[str]] = {}
         self.class_properties: dict[str, dict[str, dict[str, str | None]]] = {}
@@ -694,8 +700,10 @@ class MIRLowerer:
             if existing[prop] is not None:
                 raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
             return f"{class_name}__{method.name}__{prop}", prop, method.name
-        # Permitir decoradores no soportados para progresar; se ignoran
-        return f"{class_name}__{method.name}", None, method.name
+        raise MIRLoweringError(
+            "native class methods support only @property, @staticmethod, @classmethod, "
+            "@<name>.setter, @<name>.deleter"
+        )
 
     @staticmethod
     def _fold_str_concat(function: MIRFunction) -> None:
@@ -1051,6 +1059,27 @@ class MIRLowerer:
                 # el nombre LOCAL se traduce al cualificado del from-import,
                 # que es el que el levantamiento de modulos registro.
                 bases = [self.from_import_aliases.get(_b, _b) for _b in bases]
+                # METACLASS_CONFLICT_V1: `clase C(A, B)` cuyas bases tienen
+                # metaclases incompatibles debe fallar cerrado (CPython lanza
+                # TypeError "metaclass conflict"); antes la clase se creaba en
+                # silencio (fail-open de la cadena relax).
+                _explicit_meta = None
+                for _kw in (getattr(node, "keywords", None) or []):
+                    if getattr(_kw, "arg", None) in {"metaclass", "metaclase"}:
+                        _explicit_meta = getattr(getattr(_kw, "value", None), "name", None)
+                _meta_winner = _explicit_meta or "type"
+                for _base in bases:
+                    _base_meta = self.class_metaclasses.get(_base, "type")
+                    if _base_meta == "type" or _base_meta == _meta_winner:
+                        continue
+                    if self._metaclass_is_subclass(_base_meta, _meta_winner):
+                        _meta_winner = _base_meta
+                    elif not self._metaclass_is_subclass(_meta_winner, _base_meta):
+                        raise MIRLoweringError(
+                            "metaclass conflict: the metaclasses of the bases are "
+                            f"incompatible ('{_meta_winner}' and '{_base_meta}')"
+                        )
+                self.class_metaclasses[node.name] = _meta_winner
                 for base in bases:
                     # BASE_BUILTIN_V1: `object` es no-op semantico puro en
                     # CPython (toda clase ya lo hereda); `classmethod` lo pide
@@ -1348,6 +1377,7 @@ class MIRLowerer:
         module.class_bases = {
             name: list(bases) for name, bases in self.class_base_list.items()
         }
+        module.class_metaclasses = dict(self.class_metaclasses)
         module.class_properties = dict(self.class_properties)
         module.static_methods = set(self.static_methods)
         module.class_methods = set(self.class_methods)
@@ -1649,11 +1679,13 @@ class MIRLowerer:
             ("sys", sys_obj),
             ("__main__", module_object("__main__", entry_file, None)),
         ]
+        module_objects: dict[str, str] = {}
         for name in sorted(module_meta or {}):
             file_path, is_package = module_meta[name]
             package = name.rsplit(".", 1)[0] if "." in name else (name if is_package else "")
             module_obj = module_object(name, file_path, package)
             entries.append((name, module_obj))
+            module_objects[name] = module_obj
             # Keep imported module names available to native emitters. The
             # catalog above models sys.modules; this binding models `import a`.
             binding = name.split(".", 1)[0]
@@ -1663,6 +1695,16 @@ class MIRLowerer:
         builder.emit("build_collection", "dict", tuple(entries), result=modules_dict)
         builder.emit("set_attr", sys_obj, "modules", modules_dict)
         builder.emit("store", "sys", sys_obj)
+        # IMPORT_BINDS_SUBMODULE_V1: CPython's import machinery sets each
+        # imported submodule as an attribute of its parent package
+        # (`importar pkg.sub` makes `pkg.sub` reachable). Without the runtime
+        # edge, any `pkg.sub.fn()` chain that falls back to a runtime
+        # get_attr dies with AttributeError.
+        for name, module_obj in module_objects.items():
+            parent_name, _, leaf = name.rpartition(".")
+            parent_obj = module_objects.get(parent_name)
+            if parent_obj is not None:
+                builder.emit("set_attr", parent_obj, leaf, module_obj)
 
     def _lower_function(
         self, node: HIRNode, qualified_name: str | None = None,
@@ -2546,6 +2588,17 @@ class MIRLowerer:
                         )
                         if _es_constante:
                             qualified = _module_state_name(mod_name, alias.name)
+                    if (
+                        qualified is None
+                        and mod_name in _NATIVE_MODULE_CONSTS
+                        and alias.name in _NATIVE_MODULE_CONSTS[mod_name]
+                    ):
+                        # NATIVE_MODULE_CONSTS_V1: `desde stat importar S_IFDIR`
+                        # de un modulo que el backend provee con CONSTANTES
+                        # (aunque tambien exista empaquetado). Sin esto el
+                        # alias caia al simbolo de funcion stat__S_IFDIR, que
+                        # no existe: NameError en runtime.
+                        qualified = f"{mod_name}.{alias.name}"
                     if qualified is None:
                         _cand = f"{mod_name.replace('.', '__')}__{alias.name}"
                         qualified = _cand if (
@@ -3786,6 +3839,21 @@ class MIRLowerer:
             return False, None
         return True, _consts[_attr]
 
+    def _metaclass_is_subclass(self, child: str, ancestor: str) -> bool:
+        """True si ``child`` es ``ancestor`` o lo hereda (walk de bases).
+        METACLASS_CONFLICT_V1: CPython solo acepta metaclases compatibles."""
+        seen: set[str] = set()
+        stack = [child]
+        while stack:
+            current = stack.pop()
+            if current == ancestor:
+                return True
+            if current in seen:
+                continue
+            seen.add(current)
+            stack.extend(self.class_base_list.get(current, ()))
+        return False
+
     def _lower_super_call(self, builder: _Builder, attr: str, user_args: tuple) -> str:
         if not builder.super_class:
             raise MIRLoweringError("native super() must be called directly inside a class method")
@@ -3922,6 +3990,16 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("load", f"os__{alias_target[3:]}", result=result)
                 return result
+            if alias_target is not None:
+                # NATIVE_MODULE_CONSTS_V1: un alias "mod.CONST" de un modulo
+                # nativo con constantes (desde stat importar S_IFDIR) se
+                # materializa como const, no como load de una variable C
+                # inexistente.
+                _c_found, _c_value = self._native_module_const(alias_target)
+                if _c_found:
+                    result = builder.temp()
+                    builder.emit("const", _c_value, result=result)
+                    return result
             result = builder.temp()
             builder.emit("load", alias_target if alias_target is not None else node.name, result=result)
             return result
@@ -4187,7 +4265,6 @@ class MIRLowerer:
                 # se empaqueta en el emisor en vez de fallar aqui).
                 return self._lower_class_construct(builder, node.func.name, node)
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.ATTR:
-                print('DEBUG-CHAIN', getattr(node.func, 'attr', None), flush=True)
                 chain = self._module_attr_chain(builder, node.func)
                 if chain is not None:
                     if node.keywords:
@@ -6251,11 +6328,10 @@ class MIRLowerer:
                         result = builder.temp()
                         builder.emit("load", _mq_fallback, result=result)
                         return result
-                    # Relax: fallback genérico para acceso a valor de atributo de módulo
-                    _mq_fallback = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
-                    result = builder.temp()
-                    builder.emit("load", _mq_fallback, result=result)
-                    return result
+                raise MIRLoweringError(
+                    f"native module attribute value access is not supported yet; "
+                    f"use module function calls (e.g. 'pkg.sub.fn(...)') [mod={_mmod} attrs={_mattrs}]"
+                )
             if builder.super_class and node.value.kind == HIRKind.LOAD and node.value.name == "super":
                 # Permitir super() como carga para progresar
                 result = builder.temp()
