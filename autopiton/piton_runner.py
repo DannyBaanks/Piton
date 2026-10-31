@@ -101,6 +101,7 @@ class PitonResult:
 
     artifact_sha256: Optional[str] = None
     surface_sha256: Optional[str] = None
+    overlay_sha256: Dict[str, str] = field(default_factory=dict)
 
     @property
     def rejected(self) -> bool:
@@ -151,6 +152,7 @@ class PitonResult:
             "exception_message": self.exception_message,
             "artifact_sha256": self.artifact_sha256,
             "surface_sha256": self.surface_sha256,
+            "overlay_sha256": self.overlay_sha256,
         }
 
 
@@ -188,8 +190,18 @@ class PitonRunner:
         self.build_timeout = build_timeout
         self.memory_limit_mb = memory_limit_mb
 
-    def execute(self, source_code: str, filename: str = "program.py") -> PitonResult:
-        """Build and run *source_code* with PITON, stage by stage."""
+    def execute(
+        self,
+        source_code: str,
+        filename: str = "program.py",
+        overlay_sources: Optional[Dict[str, str]] = None,
+    ) -> PitonResult:
+        """Build and run *source_code* with PITON, stage by stage.
+
+        ``overlay_sources`` registers out-of-tree module candidates in the
+        worker's bundled catalog for this build only; the repository is never
+        written.
+        """
         from .piton_worker import ARTIFACT_FILENAME, RESULT_FILENAME
 
         result = PitonResult(
@@ -204,7 +216,11 @@ class PitonRunner:
 
         with Sandbox(config) as sandbox:
             build = sandbox.run_build_worker(
-                self.repo_root, source_code, filename, timeout=self.build_timeout
+                self.repo_root,
+                source_code,
+                filename,
+                timeout=self.build_timeout,
+                overlay_sources=overlay_sources,
             )
             result.build_ms = build.duration_ms
             result.build_exit_code = build.exit_code
@@ -213,6 +229,7 @@ class PitonRunner:
             result.build_timed_out = build.timed_out
 
             report = self._read_report(sandbox.workdir / RESULT_FILENAME, result)
+            result.overlay_sha256 = dict(report.get("overlay_sha256") or {})
             if result.worker_error:
                 result.failed_stage = PitonStage.HARNESS
                 return result
