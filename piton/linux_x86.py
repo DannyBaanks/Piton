@@ -3687,7 +3687,9 @@ class LinuxCEmitter:
         self.module_attr_types: dict[str, str] = {
             "__name__": "str",
             "__file__": "str",
-            "__package__": "str",
+            # __package__ es None en __main__ y texto en sys/modulos: el tipo
+            # estatico no puede ser "str" o el print emitiria punteros.
+            "__package__": "module-pkg",
             "modules": "dict:module",
         }
 
@@ -3698,6 +3700,9 @@ class LinuxCEmitter:
         self.class_mro = getattr(module, "class_mro", {})
         # CLASS_BASES_V1: las bases directas de cada clase (`cls.__bases__`).
         self.class_bases = getattr(module, "class_bases", {})
+        # METACLASS_INTROSPECT_V1: metaclase efectiva por clase — `type(A)`
+        # devuelve el objeto de la metaclase, no una representacion str.
+        self.class_metaclasses = getattr(module, "class_metaclasses", {})
         self.class_properties = getattr(module, "class_properties", {})
         self.static_methods = getattr(module, "static_methods", set())
         self.class_methods = getattr(module, "class_methods", set())
@@ -3872,7 +3877,9 @@ class LinuxCEmitter:
         # (a nivel de archivo) — sin interning, cada carga del nombre creaba
         # uno nuevo y la IDENTIDAD fallaba (`A is A` -> False; `A en (A,)` ->
         # False). El objeto se crea la primera vez que se usa.
-        for cls_name in sorted(self.classes):
+        # METACLASS_INTROSPECT_V1: las metaclases también tienen su objeto
+        # internado: `type(A) es Meta` compara la misma variable estática.
+        for cls_name in sorted(set(self.classes) | set(self.class_metaclasses.values())):
             lines.append(f"static long {_name('_clsobj_' + cls_name)};")
         if self._has_rich_runtime:
             # Forward declarations for runtime helpers used in <module>
@@ -4417,12 +4424,10 @@ class LinuxCEmitter:
                     flags |= 4  # PCT_ALT_FLAG_V1: forma alternativa (0x, 0o, etc.)
                     i += 1
                 if i < n and template[i] in "+ ":
-                    # Relax flags
-                    i += 1
+                    raise NativeBuildError("str % + and space flags are not supported")
                 width = -1
                 if i < n and template[i] == "*":
-                    # Relax dynamic width
-                    i += 1
+                    raise NativeBuildError("str % dynamic width (*) is not supported")
                 j = i
                 while j < n and template[j].isdigit():
                     j += 1
@@ -4433,8 +4438,7 @@ class LinuxCEmitter:
                 if i < n and template[i] == ".":
                     i += 1
                     if i < n and template[i] == "*":
-                        # Relax dynamic precision
-                        i += 1
+                        raise NativeBuildError("str % dynamic precision (.*) is not supported")
                     j = i
                     while j < n and template[j].isdigit():
                         j += 1
@@ -4869,13 +4873,15 @@ class LinuxCEmitter:
             if _iut == "str" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
                 if _ipt is not None and _ipt not in {"str", "int", "bool", "none", "builtin"} and not _ipt.startswith("object:"):
-                    # USED_AS_STR_V1: relaxed
-                    pass
+                    raise NativeBuildError(
+                        f"Linux {function_name}() param '{_iparam}' is used as str; a {_ipt} argument is rejected (fail closed)"
+                    )
             elif _iut == "list" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
                 if _ipt is not None and _ipt not in {"list", "int", "bool", "none"}:
-                    # Relax list param check
-                    pass
+                    raise NativeBuildError(
+                        f"Linux {function_name}() param '{_iparam}' is used as list; a {_ipt} argument is rejected (fail closed)"
+                    )
         self._reject_complex_args(values, types, f"function '{function_name}'")
         # VARARG_PACK_V1: una llamada directa a una funcion con `*args`
         # empaqueta los sobrantes en una tupla (el ABI del callee espera la
@@ -5054,6 +5060,34 @@ class LinuxCEmitter:
                 f'    piton_object_set((PitonObject*){_name(result)},"__mro__",piton_slot((long)_mr,PK_TUPLE));}}'
             )
 
+    def _emit_class_object(self, out: list[str], result: Any, cls_name: str,
+                           function: Any) -> None:
+        """CLASS_OBJECT_LOAD_V1: cargar el nombre de una clase produce un
+        objeto de clase REAL (no un alias al identificador, que no existe en
+        C: `P.f()` emitía `P__f(P)` -> undeclared). El objeto además hace
+        observable `cls` en classmethods y `P()` vía el path PK_OBJECT de
+        piton_closure_call_frame.
+
+        METACLASS_INTROSPECT_V1 reutiliza este helper para `type(A)`: el
+        objeto de la metaclase es el mismo que produce cargar su nombre, así
+        `type(A) es Meta` compara identidad de verdad.
+        """
+        if function.name == "<module>" and cls_name in self._module_stored:
+            out.append(f"    {_name(result)}={_name(cls_name)};")
+            return
+        # CLASS_OBJECT_INTERN_V1: el objeto de clase es UNO por clase
+        # (variable a nivel de archivo) — sin interning, cada carga del
+        # nombre creaba uno nuevo y la IDENTIDAD fallaba (`A is A` -> False;
+        # `A en (A,)` -> False). El objeto se crea la primera vez que se usa.
+        _cvar = _name("_clsobj_" + cls_name)
+        out.append(
+            f"    if(!{_cvar}){{{_cvar}=(long)piton_object_new(\"{cls_name}\",0);"
+            f"    piton_object_set((PitonObject*){_cvar},\"__name__\","
+            f"piton_slot((long)\"{cls_name}\",PK_STR));}}"
+        )
+        out.append(f"    {_name(result)}={_cvar};")
+        self._emit_class_bases_attribute(out, result, cls_name)
+
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
                                 call_args: list[Any], coll_type: str, types: dict[str, str],
                                 aliases: dict[str, str] | None = None) -> None:
@@ -5178,9 +5212,7 @@ class LinuxCEmitter:
                 )
                 types[result] = "int"
             else:
-                # Relax tuple method
-                out.append(f"    {_name(result)}=0;")
-                types[result] = "none"
+                raise NativeBuildError(f"Linux tuple.{method}() is not supported")
         elif coll_type == "dict":
             if method == "get":
                 require_count((1, 2), "one or two arguments (key[, default])")
@@ -5724,11 +5756,13 @@ class LinuxCEmitter:
                 self._coll_elems[result] = "str"
                 return out
             if len(call_args) > 1:
-                # Relax
-                call_args = call_args[:1]
+                raise NativeBuildError(
+                    "Linux str.split() requires zero, one or two arguments"
+                )
             if call_args and types.get(call_args[0]) not in {"str", "none"}:
-                # Relax
-                pass
+                raise NativeBuildError(
+                    "Linux str.split() requires a str separator or nothing"
+                )
             sep = "(const char*)0" if not call_args or types.get(call_args[0]) == "none" else f"(const char*){self._value(call_args[0])}"
             out.append(f"    {_name(result)}=piton_str_split((const char*){operand},{sep});")
             types[result] = "list"
@@ -5950,10 +5984,245 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=(long)piton_str_join((const char*){operand},(PitonSeq*){self._value(call_args[0])});")
             types[result] = "str"
         elif method == "format":
-            # Relax format to empty string
-            out.append(f"    {_name(result)}=0;")
-            types[result] = "str"
-            return out
+            # FMT_SPEC_V1: {}/ {N} positional substitution with format
+            # specs. Each argument is converted to the target type's
+            # string (type char in the spec), then the presentation part
+            # (fill/align/sign/zero/width/comma/precision) is applied
+            # via piton_str_apply_spec. Named placeholders and keyword
+            # arguments fail closed.
+            # obj can be: a temp (%12) holding a literal, a variable name,
+            # or the literal string itself. Look up temps in constants,
+            # names in _fn_consts, and use literals directly.
+            template = self._literal_str_operand(obj, self._fn_consts)
+            if template is None:
+                # no-spec {} substitution on a runtime string: the old
+                # pointer-passing path still handles {} and {N} exactly.
+                pieces = []
+                for index, value in enumerate(call_args):
+                    arg_type = types.get(value, "int")
+                    if arg_type == "str":
+                        pieces.append(f"const char*_pf{index}=(const char*){self._value(value)};")
+                    elif arg_type == "int":
+                        pieces.append(f"const char*_pf{index}=(const char*)piton_str_from_int({self._value(value)});")
+                    elif arg_type == "float":
+                        pieces.append(f"const char*_pf{index}=(const char*)piton_str_from_float({self._value(value)});")
+                    elif arg_type == "bool":
+                        pieces.append(f'const char*_pf{index}={self._value(value)}?"True":"False";')
+                    elif arg_type == "none":
+                        pieces.append(f'const char*_pf{index}="None";')
+                    else:
+                        # Relax format arg type
+                        pieces.append(f'const char*_pf{index}="";')
+                if not pieces:
+                    # FMT_NOFIELD_V1: idem, plantilla dinamica (todos los
+                    # campos nombrados): array vacio y argc 0.
+                    out.append(
+                        f"    {{const char*_fa[]={{0}};"
+                        f" {_name(result)}=(long)piton_str_format((const char*){self._value(obj)},0,_fa);}}"
+                    )
+                    types[result] = "str"
+                    return out
+                names = ",".join(f"_pf{index}" for index in range(len(call_args)))
+                out.append(
+                    f"    {{{''.join(pieces)}const char*_fa[]={{{names}}};"
+                    f" {_name(result)}=(long)piton_str_format((const char*){self._value(obj)},{len(call_args)},_fa);}}"
+                )
+                types[result] = "str"
+                return out
+            if not isinstance(template, str):
+                raise NativeBuildError(
+                    "Linux str.format() with a format spec requires a literal template"
+                )
+            simplified, fields, _fmt_names = self._parse_format_template(template)
+            # a field may be referenced twice ({0} {0}), so the count is not
+            # an equality: automatic numbering may not exceed the arguments,
+            # and explicit indices are bounds-checked below.
+            if len(fields) > len(call_args) and any(f[2] == "{}" for f in fields):
+                raise NativeBuildError(
+                    f"Linux str.format(): {len(fields)} placeholder(s) but {len(call_args)} argument(s)"
+                )
+            # FMT_ACCESS_V1: {0[1]} / {0.real} resuelven a un temporal C antes
+            # de entrar al engine; el template queda como {0}.
+            accessors: dict[int, tuple] = {}
+            for arg_idx, _spec, _token, accessor in fields:
+                if accessor is None:
+                    continue
+                if arg_idx in accessors and accessors[arg_idx] != accessor:
+                    raise NativeBuildError(
+                        f"str.format(): conflicting accessors for field index {arg_idx}"
+                    )
+                accessors[arg_idx] = accessor
+            # FMT_NAMED_V1: los argumentos por keyword se colocan en los
+            # campos con NOMBRE (el mapa nombre->indice del parser). Un
+            # campo con nombre sin su keyword es un error ESTATICO (CPython
+            # levanta KeyError; el backend falla cerrado en build).
+            if _fmt_names and not _fmt_kw:
+                raise NativeBuildError(
+                    f"str.format(): named placeholder {sorted(_fmt_names)[0]!r} "
+                    "requires a keyword argument"
+                )
+            if _fmt_kw:
+                _by_name = {name: value for name, value in _fmt_kw}
+                _named_idxs = set(_fmt_names.values())
+                for _n, _v in _fmt_kw:
+                    if _n not in _fmt_names:
+                        raise NativeBuildError(
+                            f"str.format(): unexpected keyword argument '{_n}'"
+                        )
+                _max_named = max(_named_idxs) + 1 if _named_idxs else 0
+                if _max_named > len(call_args):
+                    call_args = list(call_args) + [None] * (_max_named - len(call_args))
+                for _n, _v in _fmt_kw:
+                    call_args[_fmt_names[_n]] = _v
+            by_index: dict[int, str] = {}
+            for arg_idx, spec, _token, _accessor in fields:
+                if arg_idx in by_index:
+                    continue
+                if arg_idx < 0 or arg_idx >= len(call_args):
+                    raise NativeBuildError(
+                        f"str.format(): field index {arg_idx} out of range "
+                        f"for {len(call_args)} argument(s)"
+                    )
+                by_index[arg_idx] = spec
+            pre_lines: list[str] = []
+            pieces = []
+            for index in range(len(call_args)):
+                value = call_args[index]
+                spec = by_index.get(index, "")
+                arg_type = types.get(value, "int")
+                expr = self._value(value)
+                resolved_type = arg_type
+                accessor = accessors.get(index)
+                if accessor is not None:
+                    if accessor[0] == "index":
+                        if arg_type not in {"list", "tuple"}:
+                            raise NativeBuildError(
+                                f"str.format(): subscript field requires a list or tuple, not {arg_type}"
+                            )
+                        expr = f"_fi{index}"
+                        pre_lines.append(
+                            f"    long {expr}=piton_seq_get((PitonSeq*){self._value(value)},{accessor[1]}).bits;"
+                        )
+                        elem = self._coll_elems.get(value) or self._tuple_elems.get(value) or "int"
+                        resolved_type = elem
+                    elif accessor[0] == "key":
+                        # FMT_KEY_V1: {0[Jack]} sobre un dict — la key string
+                        # se resuelve con piton_dict_get_1 (miss -> None slot,
+                        # que CPython elevaria a KeyError: gap documentado).
+                        if arg_type not in {"dict", "dict:module"}:
+                            raise NativeBuildError(
+                                f"str.format(): key field requires a dict, not {arg_type}"
+                            )
+                        expr = f"_fi{index}"
+                        pre_lines.append(
+                            f"    long {expr}=piton_dict_get_1((PitonDict*){self._value(value)},"
+                            f"piton_slot((long){json.dumps(accessor[1])},PK_STR)).bits;"
+                        )
+                        resolved_type = self._dict_val_types.get(value) or "int"
+                    elif accessor[0] == "attr" and accessor[1] == "real":
+                        if arg_type not in {"int", "float"}:
+                            raise NativeBuildError(
+                                f"str.format(): .real requires a numeric argument, not {arg_type}"
+                            )
+                        resolved_type = arg_type
+                    else:
+                        raise NativeBuildError(
+                            f"str.format(): unsupported accessor {accessor!r}"
+                        )
+                type_char = self._format_spec_type(spec)
+                pres = self._format_spec_presentation(spec)
+                self._validate_presentation_spec(pres)
+                # convert to target type string
+                if type_char in {"x", "X", "o"}:
+                    base = {"x": 16, "X": 16, "o": 8}[type_char]
+                    if arg_type not in {"int", "bool"}:
+                        raise NativeBuildError(f"Linux str.format() %{type_char} requires an int, not {arg_type}")
+                    converted = f"piton_str_from_int_base({expr},{base},{1 if type_char == 'X' else 0})"
+                elif type_char == "b":
+                    if arg_type not in {"int", "bool"}:
+                        raise NativeBuildError(f"Linux str.format() %b requires an int, not {arg_type}")
+                    # binary without "0b" prefix (CPython {:b} is bare digits)
+                    converted = f"piton_str_from_int_base({expr},2,0)"
+                elif type_char == "d":
+                    if resolved_type in {"int", "bool"}:
+                        converted = f"piton_str_from_int({expr})"
+                    elif resolved_type == "float":
+                        converted = f"piton_str_from_int((long)piton_bits_double({expr}))"
+                    else:
+                        raise NativeBuildError(f"Linux str.format() %d requires a real number, not {resolved_type}")
+                elif type_char in {"f", "e", "E", "g", "G"}:
+                    # FMT_FLOAT_V1: real decimal-based rounding for float specs.
+                    prec = 6
+                    if "." in pres:
+                        try:
+                            prec = int(pres.split(".")[1])
+                        except ValueError:
+                            prec = 6
+                    _foldv = f"({expr})" if resolved_type == "float" else f"piton_double_bits((double){expr})"
+                    if type_char in {"f"}:
+                        converted = f"piton_float_fmt_fixed({_foldv},{prec})"
+                    elif type_char in {"e", "E"}:
+                        converted = f"piton_float_fmt_exp({_foldv},{prec},{1 if type_char == 'E' else 0})"
+                    else:
+                        converted = f"piton_float_fmt_g({_foldv},{1 if type_char == 'G' else 0})"
+                elif type_char == "%":
+                    _foldv = f"({expr})" if resolved_type == "float" else f"piton_double_bits((double){expr})"
+                    prec = 6
+                    if "." in pres:
+                        try:
+                            prec = int(pres.split(".")[1])
+                        except ValueError:
+                            prec = 6
+                    converted = f"piton_float_fmt_pct({_foldv},{prec})"
+                else:
+                    # no type char: use the natural string conversion
+                    if resolved_type == "int":
+                        converted = f"piton_str_from_int({expr})"
+                    elif resolved_type == "float":
+                        converted = f"piton_str_from_float({expr})"
+                    elif resolved_type == "bool":
+                        converted = f'{expr}?"True":"False"'
+                    elif resolved_type == "none":
+                        converted = '"None"'
+                    elif resolved_type == "str":
+                        converted = f"(const char*){expr}"
+                    elif resolved_type == "complex":
+                        converted = f"piton_complex_str({expr})"
+                    else:
+                        # Relax
+                        converted = '""'
+                # apply presentation spec
+                if pres:
+                    _presented = pres.split(".", 1)[0] if type_char in {"f", "e", "E", "g", "G", "%"} else pres
+                    if _presented:
+                        pieces.append(f"const char*_pf{index}=(const char*)piton_str_apply_spec((const char*){converted},{_str_c_literal(_presented)});")
+                    else:
+                        pieces.append(f"const char*_pf{index}=(const char*){converted};")
+                else:
+                    pieces.append(f"const char*_pf{index}=(const char*){converted};")
+            out.extend(pre_lines)
+            if not pieces:
+                # FMT_NOFIELD_V1: sin campos que sustituir. CPython ignora los
+                # argumentos extra: argc 0 y array vacio. Antes se emitia
+                # `_fa[]={_pf0}` sin declarar _pf0 cuando HABIA argumentos pero
+                # ningun campo, y ese C no compilaba (warnings.py).
+                out.append(
+                    f"    {{const char*_fa[]={{0}}; {_name(result)}=(long)piton_str_format((const char*){_str_c_literal(simplified)},0,_fa);}}"
+                )
+                types[result] = "str"
+            else:
+                names = ",".join(f"_pf{index}" for index in range(len(call_args)))
+                out.append(f"    {{{''.join(pieces)}const char*_fa[]={{{names}}}; {_name(result)}=(long)piton_str_format((const char*){_str_c_literal(simplified)},{len(call_args)},_fa);}}")
+                types[result] = "str"
+        elif method in {"isalpha", "isdigit", "isalnum", "isspace", "istitle", "isupper", "islower"}:
+            # STR_PREDS_V1: per-kind predicates (ASCII subset). Empty
+            # strings are False for all of them; isupper/islower/istitle
+            # also need at least one cased character (helper-internal).
+            require_count(0, "no arguments")
+            mode = {"isalpha": 0, "isdigit": 1, "isalnum": 2, "isspace": 3,
+                    "istitle": 4, "isupper": 5, "islower": 6}[method]
+            out.append(f"    {_name(result)}=piton_str_pred((const char*){operand},{mode});")
+            types[result] = "bool"
         elif method == "capitalize":
             require_count(0, "no arguments")
             out.append(f"    {_name(result)}=(long)piton_str_capitalize((const char*){operand});")
@@ -7959,26 +8228,10 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
             if source in self.classes:
-                # CLASS_OBJECT_LOAD_V1: cargar el nombre de una clase produce
-                # un objeto de clase REAL (no un alias al identificador, que
-                # no existe en C: `P.f()` emitía `P__f(P)` -> undeclared).
-                # El objeto además hace observable `cls` en classmethods y
-                # `P()` vía el path PK_OBJECT de piton_closure_call_frame.
+                # CLASS_OBJECT_LOAD_V1: ver _emit_class_object (objeto de
+                # clase real e internado por clase).
                 types[result] = f"class:{source}"
-                if function.name == "<module>" and source in self._module_stored:
-                    out.append(f"    {_name(result)}={_name(source)};")
-                else:
-                    # CLASS_OBJECT_INTERN_V1: el objeto de clase es UNO por
-                    # clase (variable a nivel de archivo) — la identidad del
-                    # objeto de clase se comporta como en CPython.
-                    _cvar = _name("_clsobj_" + source)
-                    out.append(
-                        f"    if(!{_cvar}){{{_cvar}=(long)piton_object_new(\"{source}\",0);"
-                        f"    piton_object_set((PitonObject*){_cvar},\"__name__\","
-                        f"piton_slot((long)\"{source}\",PK_STR));}}"
-                    )
-                    out.append(f"    {_name(result)}={_cvar};")
-                    self._emit_class_bases_attribute(out, result, source)
+                self._emit_class_object(out, result, source, function)
                 return out
             if source in _BUILTIN_EXCEPTIONS:
                 # BUILTIN_EXC_CLASS_V1: cargar el nombre de una excepcion
@@ -8128,8 +8381,9 @@ class LinuxCEmitter:
                 # BUILTIN_MARKER_V1: almacenar un builtin como valor (ej.
                 # _types.py: `Pos = int`). El backend nativo no permite
                 # almacenar builtins directamente como valores (fail-closed).
-                # Relax
-                pass
+                raise NativeBuildError(
+                    f"native store of builtin '{args[1]}' is not supported"
+                )
             if (
                 args[0] in self._shared_globals
                 and (function.name == "<module>" or args[0] in self._func_globals.get(function.name, ()))
@@ -8697,7 +8951,9 @@ class LinuxCEmitter:
                             elif arg_type == "float":
                                 base = f"piton_str_from_int((long)piton_bits_double({operand}))"
                             else:
-                                base = f"piton_str_of_value({operand})"
+                                raise NativeBuildError(
+                                    f"Linux str %d requires a real number, not {arg_type}"
+                                )
                         elif spec in {"f", "F", "e", "E", "g", "G"}:
                             precv = prec if prec >= 0 else 6
                             if arg_type not in {"float", "int", "bool", ""}:
@@ -8892,10 +9148,11 @@ class LinuxCEmitter:
                 types[result] = "complex"
                 return out
             if "none" in {left_type, right_type}:
-                # Relax None arithmetic: fallback to 0
-                out.append(f"    {_name(result)}=0;")
-                types[result] = "int"
-                return out
+                # WRETURNTYPE_V1 (mirrors the Windows guard): None in
+                # arithmetic is a CPython TypeError, not pointer math.
+                raise NativeBuildError(
+                    f"Linux {operator} with None is not supported (CPython raises TypeError)"
+                )
             if "float" in {left_type, right_type}:
                 # TRUEDIV_V1: float / and // join the supported set. CPython
                 # raises ZeroDivisionError on float division by zero instead
@@ -9413,8 +9670,10 @@ class LinuxCEmitter:
                             str(value_type).startswith("iterator:")
                             or value_type in {"generator", "genexpr", "builtin", "closure", "module", "cell"}
                         ):
-                            # Relax print check
-                            pass
+                            raise NativeBuildError(
+                                f"Linux native print of a {value_type} value is not supported "
+                                "(can never match CPython output)"
+                            )
                         if str(value_type).startswith("object:"):
                             cls_name = value_type.split(":", 1)[1]
                             str_cls = None
@@ -10606,9 +10865,27 @@ class LinuxCEmitter:
                 self._emit_exc_check(out, function, call_handler)
             elif function_name in {"type", "tipo"}:
                 if len(values) != 1:
-                    # Relax type args
-                    values = [values[0]] if values else ["0"]
+                    raise NativeBuildError(
+                        "Linux type requires one argument (dynamic class creation is not supported)"
+                    )
                 value_type = types.get(values[0], "int")
+                if value_type.startswith("class:"):
+                    # METACLASS_INTROSPECT_V1: `type(A)` sobre una CLASE
+                    # devuelve su metaclase como objeto de clase (no la
+                    # representacion str que usa TIPO_OBJ_V1 para instancias):
+                    # asi `type(A) es Meta` compara identidad de verdad y
+                    # `type(A).__name__` da el nombre de la metaclase, como
+                    # CPython. Una clase sin `metaclass=` tiene metaclase
+                    # `type`.
+                    _cls_name = value_type.split(":", 1)[1]
+                    _meta_name = self.class_metaclasses.get(_cls_name) or "type"
+                    if _meta_name != "type" and _meta_name not in self.classes:
+                        raise NativeBuildError(
+                            f"Linux type() of class '{_cls_name}': metaclass '{_meta_name}' is not a native class"
+                        )
+                    self._emit_class_object(out, result, _meta_name, function)
+                    types[result] = f"class:{_meta_name}"
+                    return out
                 if value_type.startswith("object:"):
                     # TIPO_OBJ_V1: `tipo(instancia)` must name the class, not the
                     # generic object slot: CPython prints `<class '__main__.P'>`.
@@ -11062,10 +11339,17 @@ class LinuxCEmitter:
                     _vt = types.get(val, "")
                     if _vt and _vt not in {"int", "bool"}:
                         self._instance_attr_types.setdefault(_cls, {}).setdefault(attr, _vt)
-                # MODULE_ATTR_TYPES_V1: track module attribute types for get_attr
+                # MODULE_ATTR_TYPES_V1: track module attribute types for get_attr.
+                # BOOTSTRAP_ATTRS_KEEP_V1: el bootstrap de sys.modules construye
+                # el catalogo como build_collection "dict" (validos tambien para
+                # Win y backend_python), pero su tipo compuesto es "dict:module":
+                # si el set_attr lo pisara con "dict", sys.modules[k].__package__
+                # caeria a int y se imprimiria una direccion. Los atributos
+                # sembrados en __init__ (metadata de modulo) son estaticos y
+                # mandan sobre la inferencia.
                 if owner_type == "object:module":
                     _vt = types.get(val, "")
-                    if _vt and _vt != "none":
+                    if _vt and _vt != "none" and attr not in self.module_attr_types:
                         self.module_attr_types[attr] = _vt
                 # ATTRIBUTE_LOOKUP_V2: __setattr__ hook routes normal stores;
                 # the hook body itself stores raw (bypass, mirror of Win).
@@ -11094,6 +11378,19 @@ class LinuxCEmitter:
         elif op == "get_attr":
             obj, attr = args
             owner_type = types.get(obj, "")
+            if owner_type.startswith("class:") and attr in {"__name__", "__qualname__"}:
+                # CLASS_NAME_ATTR_V1: `A.__name__` y `type(categoria).__name__`
+                # — el nombre de la clase como literal. El objeto de clase lo
+                # lleva en runtime, pero el get generico tipo int y se
+                # imprimia el puntero. En una clase real el descriptor del
+                # metatipo gana al dict de la clase, asi que el literal es
+                # siempre el nombre correcto (una clase funcional no tiene
+                # `__qualname__` anidado en el subset).
+                out.append(
+                    f"    {_name(result)}=(long){json.dumps(owner_type.split(':', 1)[1])};"
+                )
+                types[result] = "str"
+                return out
             if owner_type.startswith("class:") and attr == "__bases__":
                 # CLASS_BASES_V1: `cls.__bases__` -> la tupla de las bases
                 # DIRECTAS (abc: update_abstractmethods las recorre). Cada
@@ -11314,12 +11611,22 @@ class LinuxCEmitter:
                     types[result] = self.module_attr_types.get(attr, "int")
                     # Track module name for nested module method calls
                     parent_name = aliases.get(obj, "")
-                    if parent_name and isinstance(parent_name, str) and "." not in parent_name:
-                        # Parent is a top-level module, child is parent.attr
-                        aliases[result] = f"{parent_name}.{attr}"
-                    elif parent_name and isinstance(parent_name, str) and "." in parent_name:
-                        # Parent is already a nested module
-                        aliases[result] = f"{parent_name}.{attr}"
+                    if parent_name and isinstance(parent_name, str) and parent_name:
+                        # Parent is a top-level or nested module, child is parent.attr
+                        child_name = f"{parent_name}.{attr}"
+                        aliases[result] = child_name
+                        # SUBMODULE_CHAIN_TYPE_V1: `pkg.sub.deep.fn()` is a chain
+                        # of get_attr over module objects; an intermediate hop
+                        # typed "int" sent method_call to the dynamic fallback,
+                        # which reads attributes the runtime module objects do
+                        # not have (AttributeError). A dotted attribute whose
+                        # qualified symbol prefix is compiled IS a module and
+                        # keeps the module type so the call resolves statically.
+                        if any(
+                            name.startswith(f"{child_name.replace('.', '__')}__")
+                            for name in self.function_names
+                        ):
+                            types[result] = "object:module"
                 else:
                     types[result] = "int"
                 # INSTANCE_ATTR_TYPES_V1: el tipo del atributo de instancia
@@ -13244,25 +13551,37 @@ def linux_run_cmd(args: list[str]) -> list[str]:
     return ["wsl.exe", "/usr/bin/env", "-i"] + args
 
 
+# GCC 14+ promotes these diagnostics to errors by default; ``-w`` and
+# ``-Wno-error`` do not downgrade promoted errors. The emitted C carries
+# pointers in ``long`` on purpose (that is the native ABI), so a newer host
+# compiler must keep them as warnings or every build fails at BUILD.
+_GCC_COMPAT_FLAGS = [
+    "-Wno-error=int-conversion",
+    "-Wno-error=incompatible-pointer-types",
+    "-Wno-error=implicit-function-declaration",
+    "-Wno-error=implicit-int",
+]
+
+
 def _gcc_compile(c_path: Path, output_path: Path) -> None:
     """Compile a freestanding ELF using the available gcc."""
     if _is_native_linux():
         cmd = [
-            "gcc", "-std=c11", "-w", "-Wno-error", "-O2", "-ffreestanding",
-            "-fno-stack-protector", "-fno-pie", "-no-pie", "-nostdlib", "-static",
-            str(c_path), "-o", str(output_path),
+            "gcc", "-std=c11", "-w", "-Wno-error", *_GCC_COMPAT_FLAGS, "-O2",
+            "-ffreestanding", "-fno-stack-protector", "-fno-pie", "-no-pie",
+            "-nostdlib", "-static", str(c_path), "-o", str(output_path),
         ]
     else:
         cmd = [
-            "wsl.exe", "gcc", "-std=c11", "-w", "-Wno-error", "-O2", "-ffreestanding",
-            "-fno-stack-protector", "-fno-pie", "-no-pie", "-nostdlib", "-static",
+            "wsl.exe", "gcc", "-std=c11", "-w", "-Wno-error", *_GCC_COMPAT_FLAGS,
+            "-O2", "-ffreestanding", "-fno-stack-protector", "-fno-pie",
+            "-no-pie", "-nostdlib", "-static",
             windows_to_wsl_path(c_path), "-o", windows_to_wsl_path(output_path),
         ]
     completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    # Relax compiler errors to allow build to progress
     if completed.returncode:
-        # raise NativeBuildError(completed.stderr or completed.stdout or f"Linux compiler exited {completed.returncode}")
-        pass
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise NativeBuildError(detail or f"gcc exited {completed.returncode}")
 
 
 def compile_native_linux(source: str, output: str | Path) -> Path:
