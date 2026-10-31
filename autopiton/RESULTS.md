@@ -13,7 +13,7 @@ Reproduce any line with `python3 -m autopiton replay <case-id>`.
 | bubblewrap | 0.9.0 |
 | PITON commit under test | `fd76a88d50d6052188f986eed11a4f21d9375b20` |
 | PITON working tree | **dirty=True** (uncommitted local changes present) |
-| AutoPiton suite | 53 tests, all passing |
+| AutoPiton suite | 65 tests, all passing |
 
 The dirty PITON tree is recorded honestly: these divergences are attributed to
 that specific uncommitted state, not to a clean tagged release.
@@ -133,6 +133,41 @@ An earlier grid pass without the surface axis (`run_20261030_170447_systematic`,
 29 direct-only programs) produced 29/29 EQUIV — it is preserved as evidence of
 the *falsification* that led to adding the surface dimension.
 
+## Synthesis — `run_20261030_193229_synthesis_seed7` (colorsys, 12 API cases)
+
+Measured on PITON commit `2f24a01e` with a dirty tree (the AutoPiton files
+only). `synthesize` writes a module PITON lacks by translating CPython's
+source with the project's own ADAPT rule
+(`tools.parity_corpus_v4.python_to_piton`), then registers it through the
+sandbox overlay: the bundled catalog is extended inside the worker process
+only, so `piton/` is never written and each executed case records the
+candidate's `overlay_sha256`.
+
+| Pass | EQUIV | INVALID_REFERENCE | DIVERGENT |
+|---|---|---|---|
+| Baseline (stock compiler) | 0 | 0 | 12 |
+| With candidate (sha `eb40f2fa…`) | 1 | 3 | 8 |
+| Control: one comparison flipped per public function (sha `1931fb8a…`) | 0 | 3 | 8 (+1 INVALID_ACCEPTED) |
+
+The single EQUIV is `hsv_to_rgb(1, 2, 7)`: baseline DIVERGENT, overlay EQUIV,
+`overlay_sha256` equal to the candidate's. In the control run the same case is
+DIVERGENT and `hsv_to_rgb([3, 1, 2], 1, False)` becomes INVALID_ACCEPTED — the
+pipeline accepts a rule-written body, and the oracle rejects a wrong one on
+the same sample. (The first control attempt,
+`run_20261030_193417_synthesis_seed7`, flipped a comparison in a function no
+case exercised and stayed at 1/12; it is kept as a falsified control design.)
+
+Remaining blockers, attributed per module with the candidate registered:
+float arguments crossing call boundaries are reinterpreted as int64 bit
+patterns (`colorsys` — a by-hand probe prints `9199052598866975130` for
+`add(0.2, 0.5)`) and two overlay builds segfault (exit 139); `nturl2path`
+loses the binding of lazy dotted imports (`NameError: name urllib`);
+`glob`, `statistics`, `ipaddress`, `uuid`, `configparser` are rejected at MIR;
+`stringprep` needs a missing `unicodedata` table; `quopri` needs bytes
+parameters; `ntpath` hits ADAPT list concatenation; `csv` raises
+MiniBuildError. This is the same boundary the systematic grid found: the
+callable boundary, not the module text.
+
 ## Corpus state after these runs
 
 147 distinct cases (deduplicated by source hash). Signature buckets:
@@ -157,6 +192,10 @@ the *falsification* that led to adding the surface dimension.
 | Systematic-grid corpus (op × kind × surface) replicated by the generator alone, with 0 hand-written programs | **DEMONSTRATED** (`run_20261030_170633_systematic`) |
 | Divergence-preserving minimization of a real case | **DEMONSTRATED** (`case-707d1042403c5de2`) |
 | Replay stability / drift detection | **DEMONSTRATED** (repeat 2, no drift) |
+| Rule synthesis of a missing module, registered out-of-tree, measured baseline vs overlay | **DEMONSTRATED** (`run_...193229_synthesis_seed7`: 0/12 → 1/12 EQUIV) |
+| The EQUIV is attributable to the candidate, not a lenient oracle | **DEMONSTRATED** on this sample (mutated control, `run_...193704_synthesis_seed7`: 0/12) |
+| `piton/` is never written by synthesis | **DEMONSTRATED** (mtime snapshot test + overlay lives in the worker process) |
+| AutoPiton writes modules at CPython parity for PITON | **NOT DEMONSTRATED** — 11/12 cases still fail; blockers are PITON runtime/compiler limits, not the candidate text |
 | Two distinct PITON output defects (bool→int, float→int) | **DEMONSTRATED** on this sample |
 | "89% / 11%" is PITON's Python compatibility | **NOT DEMONSTRATED** — a rate on one 100-program seeded sample, nothing more |
 | Divergence classes are exhaustive | **NOT DEMONSTRATED** — generator emits a bounded numeric sublanguage; strings/IO/imports are untested |
@@ -166,6 +205,11 @@ the *falsification* that led to adding the surface dimension.
 ## Limits of these results
 
 - Sample size is 100 seeded programs over a restricted expression sublanguage.
-- All divergences so far are output-formatting/numeric-printing, not crashes.
+- Synthesis is measured on one module (`colorsys`) and 12 generated API calls;
+  INVALID_REFERENCE cases are excluded from the valid denominator, so 1/12 is
+  over all generated cases, not over the valid ones.
+- Divergences in the V0 corpus are output-formatting/numeric-printing, not
+  crashes; the synthesis runs add two segfaults (exit 139) under the overlay,
+  recorded in their artifacts and not yet analyzed.
 - The PITON tree was dirty; re-measure against a tagged commit before treating
   any defect as canonical in the genealogy.
