@@ -1402,6 +1402,7 @@ class DynamicCallGatesV1(unittest.TestCase):
             "imprimir (externa ())\n",
         )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_dynamic_method_call_compiles(self):
         # el callee es el valor del atributo del receiver, resuelto en
         # runtime: el archivo COMPILA (el receptor de una clase de PITON no
