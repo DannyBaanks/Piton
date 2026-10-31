@@ -6,9 +6,12 @@ the deterministic parts (candidate, mutation, case grammar) and prove that
 really reaches the compiler and that the run attributes it.
 """
 
+import pathlib
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from autopiton.generator import ProgramFamily
 from autopiton.sandbox import sandbox_available
@@ -156,6 +159,74 @@ class NoWritesIntoCompilerTreeTests(unittest.TestCase):
             candidate = synthesize_module("sample", stdlib_dir=stdlib, mutate=True)
             save_candidate(candidate, Path(target))
         self.assertEqual(before, self.snapshot())
+
+
+class ObservableOutcomeTests(unittest.TestCase):
+    """Cada pasada del run guarda exit code, crash y senal.
+
+    Sin esos campos un SIGSEGV del candidato es indistinguible de un rechazo
+    limpio en el artefacto, y ninguna evidencia podria despues sostener (o
+    refutar) una afirmacion tipo "el build hace segfault".
+    """
+
+    class _Verdict:
+        def __init__(self, value):
+            self.classification = SimpleNamespace(value=value)
+
+    class _Comparator:
+        def compare(self, code, cpython, piton):
+            return ObservableOutcomeTests._Verdict(piton.classification)
+
+    class _Runner:
+        def __init__(self, results):
+            self._results = list(results)
+
+        def execute(self, code, filename, overlay_sources=None):
+            return self._results.pop(0)
+
+    def _case(self, overlay_crash, overlay_exit, overlay_signal):
+        from autopiton import synthesizer as synth_mod
+
+        baseline = SimpleNamespace(
+            classification="DIVERGENT", exit_code=0, crash=False,
+            signal_number=None, failed_stage=None, overlay_sha256={},
+        )
+        overlay = SimpleNamespace(
+            classification="EQUIV", exit_code=overlay_exit, crash=overlay_crash,
+            signal_number=overlay_signal, failed_stage=None,
+            overlay_sha256={"sample": "sha-de-candidato"},
+        )
+        with MaterializedStdlib() as stdlib, \
+                patch.object(synth_mod, "sandbox_available", lambda *a, **k: True):
+            synthesizer = ModuleSynthesizer(stdlib_dir=stdlib)
+            synthesizer.oracle = SimpleNamespace(execute=lambda code, name: None)
+            synthesizer.runner = self._Runner([baseline, overlay])
+            synthesizer.comparator = self._Comparator()
+            return synthesizer.run("sample", count=1, seed=7)
+
+    def test_exit_and_crash_are_recorded_per_pass(self):
+        summary = self._case(overlay_crash=True, overlay_exit=139, overlay_signal=11)
+        case = summary.cases[0]
+        self.assertEqual(case["baseline_exit"], 0)
+        self.assertFalse(case["baseline_crash"])
+        self.assertEqual(case["overlay_exit"], 139)
+        self.assertTrue(case["overlay_crash"])
+        self.assertEqual(case["overlay_signal"], 11)
+        self.assertEqual(summary.crashes, {"overlay": 1})
+        self.assertEqual(summary.to_dict()["crashes"], {"overlay": 1})
+
+    def test_clean_rejection_records_no_crash(self):
+        summary = self._case(overlay_crash=False, overlay_exit=0, overlay_signal=None)
+        self.assertEqual(summary.crashes, {})
+        self.assertFalse(summary.cases[0]["overlay_crash"])
+
+    def test_candidate_provenance_is_a_label_not_an_absolute_path(self):
+        # La evidencia se commitea: una ruta absoluta publicaria el layout del
+        # equipo de quien corre el run (misma regla que git_provenance()).
+        with MaterializedStdlib() as stdlib:
+            candidate = synthesize_module("sample", stdlib_dir=stdlib)
+        self.assertEqual(candidate.to_dict()["reference_source"], f"{stdlib.name}/sample.py")
+        self.assertFalse(pathlib.PurePath(candidate.reference_source).is_absolute())
 
 
 @unittest.skipUnless(sandbox_available(), "bubblewrap is not available")
