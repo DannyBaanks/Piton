@@ -8,6 +8,10 @@ The worker imports the real PITON compiler from a read-only repository bind
 (``/piton-repo``) and never modifies it. gcc failures are fatal here, unlike
 ``piton.linux_x86._gcc_compile`` which currently swallows them; the artifact
 is verified (exists, non-empty, ELF magic) before BUILD is declared passed.
+
+The ``overlay_modules`` request field extends the *bundled module catalog* with
+out-of-tree sources for this process only; the repository bind stays read-only
+and the run record carries the sha256 of every candidate registered.
 """
 
 import hashlib
@@ -16,6 +20,8 @@ import os
 import subprocess
 import sys
 import traceback
+from pathlib import Path
+from typing import Dict
 
 WORKER_FILENAME = "piton_worker.py"
 INPUT_FILENAME = ".autopiton_input.json"
@@ -23,6 +29,8 @@ RESULT_FILENAME = "autopiton_piton_result.json"
 ADAPTED_FILENAME = "program_adapted.piton"
 C_FILENAME = "program.c"
 ARTIFACT_FILENAME = "program.bin"
+OVERLAY_PREFIX = "overlay_"
+OVERLAY_SUFFIX = ".piton"
 
 GCC_TIMEOUT_SECONDS = 30
 GCC_FLAGS = [
@@ -57,6 +65,35 @@ def _write_result(workdir: str, report: dict) -> None:
 
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def overlay_source_name(module_name: str) -> str:
+    """Workdir filename that carries the candidate source of *module_name*."""
+    return f"{OVERLAY_PREFIX}{module_name.replace('.', '__')}{OVERLAY_SUFFIX}"
+
+
+def apply_overlay(workdir: str, overlay: Dict[str, str]) -> Dict[str, str]:
+    """Register out-of-tree PITON module sources as bundled modules.
+
+    The compiler resolves bundled stdlib imports through
+    ``piton.bundled_stdlib.bundled_modules()``; the worker replaces that
+    function with one that also knows the candidate files staged in the
+    workdir. Nothing under ``/piton-repo`` is written: the overlay lives only
+    in this worker process and disappears with it.
+    """
+    from piton import bundled_stdlib
+
+    base = dict(bundled_stdlib.bundled_modules())
+    registered: Dict[str, Path] = {}
+    for module_name in sorted(overlay):
+        path = Path(workdir) / overlay.get(module_name, overlay_source_name(module_name))
+        if not path.is_file():
+            raise FileNotFoundError(f"overlay source missing for {module_name}: {path}")
+        registered[module_name] = path
+    merged = {**base, **registered}
+    bundled_stdlib.bundled_modules = lambda: dict(merged)
+    return {name: _sha256_text(path.read_text(encoding="utf-8")) for name, path in registered.items()}
+
 
 
 def main(argv: list) -> int:
@@ -98,6 +135,14 @@ def main(argv: list) -> int:
     except BaseException as exc:
         _write_result(workdir, {"failed_stage": "HARNESS", "stages": {}, **_error_payload(exc)})
         return 2
+
+    overlay = request.get("overlay_modules") or {}
+    if overlay:
+        try:
+            report["overlay_sha256"] = apply_overlay(workdir, overlay)
+        except BaseException as exc:
+            return fail("HARNESS", exc)
+        report["overlay_modules"] = sorted(overlay)
 
     try:
         adapted = python_to_piton(source)

@@ -377,6 +377,67 @@ def compare_command(args):
     print(f"Cases:     {corpus.cases_dir}")
 
 
+def synthesize_command(args):
+    """Write a missing module by rule, then measure whether it is correct.
+
+    Every case runs twice: baseline with the stock compiler and overlay with
+    the candidate registered. A candidate only counts as *written* when the
+    overlay pass is EQUIV and the baseline pass was not, so a module PITON
+    already had can never be mistaken for a synthesis success.
+    """
+    _require_sandbox()
+    from .synthesizer import ModuleSynthesizer, save_candidate, synthesize_module
+
+    synthesizer = ModuleSynthesizer(
+        oracle_timeout=get_oracle().timeout,
+        runner_timeout=get_runner().timeout,
+        build_timeout=get_runner().build_timeout,
+    )
+    corpus = get_corpus()
+    notes = f"synthesize {args.module}" + (" (mutated control)" if args.control else "")
+    writer = corpus.create_run(
+        mode="synthesis",
+        seed=args.seed,
+        config={"module": args.module, "count": args.count, "mutated": bool(args.control)},
+        notes=notes,
+    )
+    print(f"Run: {writer.run_id}")
+    print(f"Writing '{args.module}' from the CPython oracle source via the ADAPT rule.")
+
+    summary = synthesizer.run(
+        args.module, count=args.count, seed=args.seed, mutate=bool(args.control)
+    )
+    for index, case in enumerate(summary.cases, start=1):
+        writer.append({"index": index, **case})
+
+    candidate_path = None
+    if args.save_candidate:
+        candidate = synthesize_module(args.module, mutate=bool(args.control))
+        saved = save_candidate(candidate, Path(__file__).resolve().parent / "candidates")
+        candidate_path = saved.relative_to(Path(__file__).resolve().parents[1])
+
+    payload = summary.to_dict()
+    payload.pop("cases", None)
+    writer.finalize({
+        "classification_counts": summary.with_overlay,
+        "synthesis": payload,
+        "candidate_path": str(candidate_path) if candidate_path else None,
+    })
+
+    print(f"Candidate: {summary.candidate['piton_lines']} lines, "
+          f"sha256 {summary.candidate['piton_sha256'][:16]}...")
+    if summary.candidate.get("mutation"):
+        print(f"Control mutation: {summary.candidate['mutation']}")
+    print(f"Baseline (stock compiler):   {summary.baseline}")
+    print(f"With candidate registered:   {summary.with_overlay}")
+    print(f"Rejected by compiler anyway: {summary.candidate_rejected}/{summary.programs}")
+    print(f"\nCorrect (EQUIV) with candidate: {summary.overlay_equiv}/{summary.programs}; "
+          f"without candidate: {summary.baseline_equiv}/{summary.programs}")
+    print("EQUIV is counted over every generated case; INVALID_REFERENCE and "
+          "INVALID_ACCEPTED are reported separately, not folded in.")
+    print(f"Artifacts: {writer.path}")
+
+
 def minimize_command(args):
     """Structurally minimize a divergent case, preserving the divergence kind."""
     _require_sandbox()
@@ -679,6 +740,18 @@ def main():
     cmp_parser.add_argument("--repeat", type=int, default=1, help="Repetitions per program for stability")
     cmp_parser.add_argument("--limit", type=int, help="Only run the first N programs")
     cmp_parser.set_defaults(func=compare_command)
+
+    syn_parser = subparsers.add_parser(
+        "synthesize", help="Write a missing stdlib module by rule and measure it"
+    )
+    syn_parser.add_argument("--module", required=True, help="Module name (CPython source must exist)")
+    syn_parser.add_argument("-c", "--count", type=int, default=12, help="Generated API cases")
+    syn_parser.add_argument("--seed", type=int, default=7, help="Argument-grammar seed")
+    syn_parser.add_argument("--control", action="store_true", help="Flip one comparison (anti-fake control)")
+    syn_parser.add_argument(
+        "--save-candidate", action="store_true", help="Save candidate under autopiton/candidates/"
+    )
+    syn_parser.set_defaults(func=synthesize_command)
 
     min_parser = subparsers.add_parser("minimize", help="Minimize a divergent case")
     min_parser.add_argument("case", help="Case id or case JSON path")

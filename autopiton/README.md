@@ -28,6 +28,7 @@ python3 -m autopiton generate --count 20 --seed 42
 python3 -m autopiton compare --canary       # the 10 mandatory canary cases
 python3 -m autopiton compare --count 100 --seed 42
 python3 -m autopiton compare --systematic   # deterministic op x kind x surface grid
+python3 -m autopiton synthesize --module colorsys --control   # write a missing stdlib module by rule, then measure it
 python3 -m autopiton report --latest
 python3 -m autopiton minimize <case-id>
 python3 -m autopiton replay <case-id>
@@ -40,7 +41,7 @@ JSONL, summary) and registers every distinct program in the corpus under
 Run the suite from the repository root:
 
 ```
-python3 -m pytest autopiton/tests -q        # 53 tests
+python3 -m pytest autopiton/tests -q        # 65 tests
 ```
 
 ## Commands
@@ -50,6 +51,7 @@ python3 -m pytest autopiton/tests -q        # 53 tests
 | `doctor` | Probe sandbox, CPython, PITON repo provenance, generator; exit 2 if no sandbox |
 | `generate` | Emit deterministic programs (`--count`, `--seed`, `--family`, `--save`) |
 | `compare` | Run programs through both engines and classify (`--canary`, `--systematic`, `--input`, `--count`, `--seed`, `--repeat`) |
+| `synthesize` | Write a missing stdlib module by rule (ADAPT translation of CPython's source) and measure baseline vs overlay (`--module`, `--count`, `--seed`, `--control`, `--save-candidate`) |
 | `minimize` | Shrink a stored divergent case while preserving its divergence kind |
 | `replay` | Re-execute a stored case, check fingerprint stability and classification drift |
 | `report` | Summarize one run (`--run` / `--latest`) or the whole corpus |
@@ -62,12 +64,14 @@ autopiton/
   cpython_oracle.py  CPython reference engine (structured result)
   piton_runner.py    PITON native pipeline: ADAPT/PARSE/MIR/BUILD/EXECUTE
   comparator.py      classifies one CPython/PITON pair per the contract
+  synthesizer.py     writes a missing stdlib module by rule; baseline vs overlay measurement
   minimizer.py       AST-level divergence-preserving shrinker
   corpus.py          cases + runs + divergence signature index
   sandbox.py         fail-closed bwrap isolation with OS resource limits
   cli.py             the six commands above
   tests/             sandbox canaries, comparator controls, integration
   cases/             corpus: index.json, <case>.json, <case>.py
+  candidates/        synthesized module bodies (never inside piton/)
   reports/runs/      per-run meta.json, results.jsonl, summary.json
 ```
 
@@ -99,10 +103,44 @@ that tree, not of a release).
   of the same expression is EQUIV, and bitwise ops are EQUIV on both surfaces.
   That bounds the PITON-side investigation to the callable-return lowering
   path; it is a location, not a diagnosis.
-- Suite: 53 tests pass. The two integration canaries that assert PITON
+- Suite: 65 tests pass. The two integration canaries that assert PITON
   *rejection* behaviour are gated on PITON commit `fd76a88` being an ancestor
   of `HEAD`, so they skip — visibly, with a reason — on a base that predates
   that work instead of reporting a false failure or a false pass.
+
+### Synthesis — can AutoPiton write what PITON lacks?
+
+Measured 2026-10-30 on the same environment and tree. `synthesize` reads a
+missing stdlib module's CPython source, translates it with the project's own
+ADAPT stage (`tools.parity_corpus_v4.python_to_piton`), registers the result
+through the sandbox overlay (in-process only — `piton/` is never written), and
+classifies every generated API case twice: against stock PITON and with the
+candidate registered. The baseline pass is what makes the result attributable.
+
+- `run_20261030_193229_synthesis_seed7` (`colorsys`, 12 API cases, unmutated
+  candidate): baseline 0/12 EQUIV (12 DIVERGENT — stock PITON cannot resolve
+  the module at all); with the candidate 1/12 EQUIV, 3 INVALID_REFERENCE, 8
+  DIVERGENT. The EQUIV case is `hsv_to_rgb(1, 2, 7)`: a rule-written body
+  *can* reach and satisfy the oracle, so the pipeline is not the limit — the
+  runtime is.
+- Control: `run_20261030_193704_synthesis_seed7` repeats the run with one
+  comparison flipped per public function (`hls_to_rgb`, `hsv_to_rgb`,
+  `rgb_to_hls`, `rgb_to_hsv`, `yiq_to_rgb`): 0/12 EQUIV, the former EQUIV case
+  becomes DIVERGENT and another becomes INVALID_ACCEPTED. The oracle detects a
+  wrong candidate on this sample, so the 1/12 is not the comparator being
+  lenient. (The first control attempt, `run_20261030_193417_synthesis_seed7`,
+  flipped a comparison in a function no case exercised and was therefore
+  inert — kept as a falsified design.)
+- Why the other 11/12: the blockers are PITON-side, attributed per module.
+  `colorsys` — float arguments crossing a call boundary are reinterpreted as
+  int64 bit patterns (`add(0.2, 0.5)` prints `9199052598866975130`), and two
+  overlay builds segfault (exit 139); `nturl2path` — lazy dotted imports lose
+  the name binding (`NameError: name urllib is not defined`); `glob`,
+  `statistics`, `ipaddress`, `uuid`, `configparser` — MIR rejects the body;
+  `stringprep` — missing `unicodedata` table; `quopri` — bytes parameters;
+  `ntpath` — ADAPT list concatenation; `csv` — MiniBuildError. This is the
+  same boundary the systematic grid found: what breaks is the callable
+  boundary, not the module text.
 
 Run records store the PITON checkout's basename only, never its absolute path,
 so committed metadata cannot leak an operator's filesystem layout into public

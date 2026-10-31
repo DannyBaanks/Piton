@@ -1,0 +1,48 @@
+{
+  "candidate_path": "autopiton/candidates/colorsys.piton",
+  "classification_counts": {
+    "DIVERGENT": 8,
+    "EQUIV": 1,
+    "INVALID_REFERENCE": 3
+  },
+  "duration_ms": 68425.4,
+  "finished_at": "2026-10-30T19:33:38-06:00",
+  "programs_executed": 12,
+  "run_id": "run_20261030_193229_synthesis_seed7",
+  "synthesis": {
+    "baseline": {
+      "DIVERGENT": 12
+    },
+    "baseline_equiv": 0,
+    "baseline_stages": {
+      "none": 12
+    },
+    "candidate": {
+      "mutated": false,
+      "mutation": null,
+      "name": "colorsys",
+      "piton_chars": 3306,
+      "piton_lines": 165,
+      "piton_sha256": "eb40f2fa5a6e7be0d1949aa8d25029e2c6b2a9023773f2e3edab3108c0255813",
+      "reference_sha256": "d9800f8e81d46e63ca6f2e7d6ac5f344d85afb92c3cf6d103b5f977f1ad66ac2",
+      "reference_source": "/usr/lib/python3.12/colorsys.py"
+    },
+    "candidate_rejected": 3,
+    "candidate_sha_seen": [
+      "eb40f2fa5a6e7be0d1949aa8d25029e2c6b2a9023773f2e3edab3108c0255813"
+    ],
+    "module": "colorsys",
+    "overlay_equiv": 1,
+    "overlay_stages": {
+      "BUILD": 3,
+      "none": 9
+    },
+    "programs": 12,
+    "sandbox_available": true,
+    "with_overlay": {
+      "DIVERGENT": 8,
+      "EQUIV": 1,
+      "INVALID_REFERENCE": 3
+    }
+  }
+}
