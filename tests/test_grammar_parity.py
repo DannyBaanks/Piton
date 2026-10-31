@@ -45,6 +45,28 @@ def _stdlib_file(relative: str) -> pathlib.Path:
     return pathlib.Path(sysconfig.get_path("stdlib")) / relative
 
 
+def _linux_gcc_available() -> bool:
+    """``compile_native_linux`` enlaza con gcc: gcc nativo en Linux y, en
+    Windows, a traves de WSL. Sin toolchain el gate no puede compilar nada, y
+    eso es ausencia de entorno, no divergencia del lenguaje: se salta. Los
+    gates que solo emiten C (sin enlazar) siguen corriendo en ambos SO."""
+    import shutil
+    import subprocess
+
+    if sys.platform != "win32":
+        return shutil.which("gcc") is not None
+    if shutil.which("wsl.exe") is None:
+        return False
+    try:
+        probe = subprocess.run(
+            ["wsl.exe", "-l", "-q"], capture_output=True, check=False, timeout=30
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    text = probe.stdout.decode("utf-16-le", errors="replace").strip().strip("\x00").strip()
+    return probe.returncode == 0 and bool(text)
+
+
 def _assert_matches(testcase: unittest.TestCase, source: str) -> None:
     result = compare_native_to_cpython(source)
     testcase.assertEqual(
@@ -1163,6 +1185,7 @@ class MirReachGatesV1(unittest.TestCase):
                 "imprimir (f ('ab' ,0 ))\n"
             )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_bisect_real_compiles(self):
         # El archivo real del corpus completa el pipeline (MIR_FAIL ->
         # BUILD_OK; el unico archivo stdlib ganado por esta tanda).
@@ -1228,6 +1251,7 @@ class GetoptGatesV1(unittest.TestCase):
             "imprimir (f ('abc' ) )\n",
         )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_getopt_real_compiles(self):
         # el archivo real del corpus completa el pipeline.
         import importlib.util as _ilu
@@ -1322,6 +1346,7 @@ class StdlibV2GatesV1(unittest.TestCase):
             "imprimir (C () .usar ())\n",
         )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_compat_pickle_real_compiles(self):
         # El archivo real del corpus completa el pipeline.
         import importlib.util as _ilu
@@ -2528,6 +2553,7 @@ class ConcatChainGatesV1(unittest.TestCase):
             f"v = 'X'\nx = {parts} + v\nimprimir (len (x ))\nimprimir (x [-1 :])\n",
         )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_topics_stdlib_file_compiles(self):
         # El archivo real: 1.3 MB con 17.254 concatenaciones en una expresion.
         # Antes moria con exit -9 (RecursionError en el subproceso aislado).
