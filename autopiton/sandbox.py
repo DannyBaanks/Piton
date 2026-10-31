@@ -314,11 +314,15 @@ class Sandbox:
         source_code: str,
         filename: str = "program.py",
         timeout: float = 60.0,
+        overlay_sources: Optional[Dict[str, str]] = None,
     ) -> ExecutionResult:
         """Run the PITON stage worker (adapt/parse/mir/emit/gcc) in isolation.
 
         The worker gets a read-only copy of the repository and a writable
         workdir at /work; it cannot touch the host or the network.
+        ``overlay_sources`` maps a module name to candidate PITON source staged
+        in the workdir, which the worker registers as a bundled module for that
+        process only.
         """
         from .piton_worker import (
             ADAPTED_FILENAME,
@@ -327,13 +331,22 @@ class Sandbox:
             INPUT_FILENAME,
             RESULT_FILENAME,
             WORKER_FILENAME,
+            overlay_source_name,
         )
+
+        overlay_files: Dict[str, str] = {}
+        for module_name in sorted(overlay_sources or {}):
+            staged = overlay_source_name(module_name)
+            self.write_file(staged, overlay_sources[module_name])
+            overlay_files[module_name] = staged
+            self._excluded_files.add(staged)
 
         self.write_file(filename, source_code)
         self.write_file(INPUT_FILENAME, _json_dump({
             "source": source_code,
             "filename": filename,
             "repo": str(repo_root),
+            "overlay_modules": overlay_files,
         }))
         self._excluded_files.update({
             ADAPTED_FILENAME,

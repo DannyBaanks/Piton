@@ -34,6 +34,10 @@ class ProgramFamily(Enum):
     GENERATORS = "generators"
     ASYNC = "async"
     SYSTEMATIC = "systematic"
+    MODULE = "module"
+
+
+NON_RANDOM_FAMILIES = (ProgramFamily.SYSTEMATIC, ProgramFamily.MODULE)
 
 
 class SystematicGrid:
@@ -313,7 +317,7 @@ class ProgramGenerator:
     
     def _generate_random(self) -> GeneratedProgram:
         """Generate a random program from the sampled families."""
-        families = [f for f in ProgramFamily if f is not ProgramFamily.SYSTEMATIC]
+        families = [f for f in ProgramFamily if f not in NON_RANDOM_FAMILIES]
         family = self.rng.choice(families)
         return self._generate_family(family)
 

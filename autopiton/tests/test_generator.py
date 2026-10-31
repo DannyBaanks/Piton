@@ -33,9 +33,11 @@ class GeneratorTests(unittest.TestCase):
             self.assertGreaterEqual(program.complexity, 1)
 
     def test_all_families_are_reachable(self):
+        from autopiton.generator import NON_RANDOM_FAMILIES
+
         programs = ProgramGenerator(seed=42).generate(count=200)
         families = {program.family for program in programs}
-        self.assertEqual(families, set(ProgramFamily) - {ProgramFamily.SYSTEMATIC})
+        self.assertEqual(families, set(ProgramFamily) - set(NON_RANDOM_FAMILIES))
 
     def test_systematic_corpus_is_deterministic_and_complete(self):
         from autopiton.generator import SystematicGrid
