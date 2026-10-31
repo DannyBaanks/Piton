@@ -3687,7 +3687,9 @@ class LinuxCEmitter:
         self.module_attr_types: dict[str, str] = {
             "__name__": "str",
             "__file__": "str",
-            "__package__": "str",
+            # __package__ es None en __main__ y texto en sys/modulos: el tipo
+            # estatico no puede ser "str" o el print emitiria punteros.
+            "__package__": "module-pkg",
             "modules": "dict:module",
         }
 
@@ -3698,6 +3700,9 @@ class LinuxCEmitter:
         self.class_mro = getattr(module, "class_mro", {})
         # CLASS_BASES_V1: las bases directas de cada clase (`cls.__bases__`).
         self.class_bases = getattr(module, "class_bases", {})
+        # METACLASS_INTROSPECT_V1: metaclase efectiva por clase — `type(A)`
+        # devuelve el objeto de la metaclase, no una representacion str.
+        self.class_metaclasses = getattr(module, "class_metaclasses", {})
         self.class_properties = getattr(module, "class_properties", {})
         self.static_methods = getattr(module, "static_methods", set())
         self.class_methods = getattr(module, "class_methods", set())
@@ -3872,7 +3877,9 @@ class LinuxCEmitter:
         # (a nivel de archivo) — sin interning, cada carga del nombre creaba
         # uno nuevo y la IDENTIDAD fallaba (`A is A` -> False; `A en (A,)` ->
         # False). El objeto se crea la primera vez que se usa.
-        for cls_name in sorted(self.classes):
+        # METACLASS_INTROSPECT_V1: las metaclases también tienen su objeto
+        # internado: `type(A) es Meta` compara la misma variable estática.
+        for cls_name in sorted(set(self.classes) | set(self.class_metaclasses.values())):
             lines.append(f"static long {_name('_clsobj_' + cls_name)};")
         if self._has_rich_runtime:
             # Forward declarations for runtime helpers used in <module>
@@ -5052,6 +5059,34 @@ class LinuxCEmitter:
             out.append(
                 f'    piton_object_set((PitonObject*){_name(result)},"__mro__",piton_slot((long)_mr,PK_TUPLE));}}'
             )
+
+    def _emit_class_object(self, out: list[str], result: Any, cls_name: str,
+                           function: Any) -> None:
+        """CLASS_OBJECT_LOAD_V1: cargar el nombre de una clase produce un
+        objeto de clase REAL (no un alias al identificador, que no existe en
+        C: `P.f()` emitía `P__f(P)` -> undeclared). El objeto además hace
+        observable `cls` en classmethods y `P()` vía el path PK_OBJECT de
+        piton_closure_call_frame.
+
+        METACLASS_INTROSPECT_V1 reutiliza este helper para `type(A)`: el
+        objeto de la metaclase es el mismo que produce cargar su nombre, así
+        `type(A) es Meta` compara identidad de verdad.
+        """
+        if function.name == "<module>" and cls_name in self._module_stored:
+            out.append(f"    {_name(result)}={_name(cls_name)};")
+            return
+        # CLASS_OBJECT_INTERN_V1: el objeto de clase es UNO por clase
+        # (variable a nivel de archivo) — sin interning, cada carga del
+        # nombre creaba uno nuevo y la IDENTIDAD fallaba (`A is A` -> False;
+        # `A en (A,)` -> False). El objeto se crea la primera vez que se usa.
+        _cvar = _name("_clsobj_" + cls_name)
+        out.append(
+            f"    if(!{_cvar}){{{_cvar}=(long)piton_object_new(\"{cls_name}\",0);"
+            f"    piton_object_set((PitonObject*){_cvar},\"__name__\","
+            f"piton_slot((long)\"{cls_name}\",PK_STR));}}"
+        )
+        out.append(f"    {_name(result)}={_cvar};")
+        self._emit_class_bases_attribute(out, result, cls_name)
 
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
                                 call_args: list[Any], coll_type: str, types: dict[str, str],
@@ -8193,26 +8228,10 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=(long)&{_name(source)};")
                 return out
             if source in self.classes:
-                # CLASS_OBJECT_LOAD_V1: cargar el nombre de una clase produce
-                # un objeto de clase REAL (no un alias al identificador, que
-                # no existe en C: `P.f()` emitía `P__f(P)` -> undeclared).
-                # El objeto además hace observable `cls` en classmethods y
-                # `P()` vía el path PK_OBJECT de piton_closure_call_frame.
+                # CLASS_OBJECT_LOAD_V1: ver _emit_class_object (objeto de
+                # clase real e internado por clase).
                 types[result] = f"class:{source}"
-                if function.name == "<module>" and source in self._module_stored:
-                    out.append(f"    {_name(result)}={_name(source)};")
-                else:
-                    # CLASS_OBJECT_INTERN_V1: el objeto de clase es UNO por
-                    # clase (variable a nivel de archivo) — la identidad del
-                    # objeto de clase se comporta como en CPython.
-                    _cvar = _name("_clsobj_" + source)
-                    out.append(
-                        f"    if(!{_cvar}){{{_cvar}=(long)piton_object_new(\"{source}\",0);"
-                        f"    piton_object_set((PitonObject*){_cvar},\"__name__\","
-                        f"piton_slot((long)\"{source}\",PK_STR));}}"
-                    )
-                    out.append(f"    {_name(result)}={_cvar};")
-                    self._emit_class_bases_attribute(out, result, source)
+                self._emit_class_object(out, result, source, function)
                 return out
             if source in _BUILTIN_EXCEPTIONS:
                 # BUILTIN_EXC_CLASS_V1: cargar el nombre de una excepcion
@@ -10850,6 +10869,23 @@ class LinuxCEmitter:
                         "Linux type requires one argument (dynamic class creation is not supported)"
                     )
                 value_type = types.get(values[0], "int")
+                if value_type.startswith("class:"):
+                    # METACLASS_INTROSPECT_V1: `type(A)` sobre una CLASE
+                    # devuelve su metaclase como objeto de clase (no la
+                    # representacion str que usa TIPO_OBJ_V1 para instancias):
+                    # asi `type(A) es Meta` compara identidad de verdad y
+                    # `type(A).__name__` da el nombre de la metaclase, como
+                    # CPython. Una clase sin `metaclass=` tiene metaclase
+                    # `type`.
+                    _cls_name = value_type.split(":", 1)[1]
+                    _meta_name = self.class_metaclasses.get(_cls_name) or "type"
+                    if _meta_name != "type" and _meta_name not in self.classes:
+                        raise NativeBuildError(
+                            f"Linux type() of class '{_cls_name}': metaclass '{_meta_name}' is not a native class"
+                        )
+                    self._emit_class_object(out, result, _meta_name, function)
+                    types[result] = f"class:{_meta_name}"
+                    return out
                 if value_type.startswith("object:"):
                     # TIPO_OBJ_V1: `tipo(instancia)` must name the class, not the
                     # generic object slot: CPython prints `<class '__main__.P'>`.
@@ -11303,10 +11339,17 @@ class LinuxCEmitter:
                     _vt = types.get(val, "")
                     if _vt and _vt not in {"int", "bool"}:
                         self._instance_attr_types.setdefault(_cls, {}).setdefault(attr, _vt)
-                # MODULE_ATTR_TYPES_V1: track module attribute types for get_attr
+                # MODULE_ATTR_TYPES_V1: track module attribute types for get_attr.
+                # BOOTSTRAP_ATTRS_KEEP_V1: el bootstrap de sys.modules construye
+                # el catalogo como build_collection "dict" (validos tambien para
+                # Win y backend_python), pero su tipo compuesto es "dict:module":
+                # si el set_attr lo pisara con "dict", sys.modules[k].__package__
+                # caeria a int y se imprimiria una direccion. Los atributos
+                # sembrados en __init__ (metadata de modulo) son estaticos y
+                # mandan sobre la inferencia.
                 if owner_type == "object:module":
                     _vt = types.get(val, "")
-                    if _vt and _vt != "none":
+                    if _vt and _vt != "none" and attr not in self.module_attr_types:
                         self.module_attr_types[attr] = _vt
                 # ATTRIBUTE_LOOKUP_V2: __setattr__ hook routes normal stores;
                 # the hook body itself stores raw (bypass, mirror of Win).
@@ -11335,6 +11378,19 @@ class LinuxCEmitter:
         elif op == "get_attr":
             obj, attr = args
             owner_type = types.get(obj, "")
+            if owner_type.startswith("class:") and attr in {"__name__", "__qualname__"}:
+                # CLASS_NAME_ATTR_V1: `A.__name__` y `type(categoria).__name__`
+                # — el nombre de la clase como literal. El objeto de clase lo
+                # lleva en runtime, pero el get generico tipo int y se
+                # imprimia el puntero. En una clase real el descriptor del
+                # metatipo gana al dict de la clase, asi que el literal es
+                # siempre el nombre correcto (una clase funcional no tiene
+                # `__qualname__` anidado en el subset).
+                out.append(
+                    f"    {_name(result)}=(long){json.dumps(owner_type.split(':', 1)[1])};"
+                )
+                types[result] = "str"
+                return out
             if owner_type.startswith("class:") and attr == "__bases__":
                 # CLASS_BASES_V1: `cls.__bases__` -> la tupla de las bases
                 # DIRECTAS (abc: update_abstractmethods las recorre). Cada
@@ -11555,12 +11611,22 @@ class LinuxCEmitter:
                     types[result] = self.module_attr_types.get(attr, "int")
                     # Track module name for nested module method calls
                     parent_name = aliases.get(obj, "")
-                    if parent_name and isinstance(parent_name, str) and "." not in parent_name:
-                        # Parent is a top-level module, child is parent.attr
-                        aliases[result] = f"{parent_name}.{attr}"
-                    elif parent_name and isinstance(parent_name, str) and "." in parent_name:
-                        # Parent is already a nested module
-                        aliases[result] = f"{parent_name}.{attr}"
+                    if parent_name and isinstance(parent_name, str) and parent_name:
+                        # Parent is a top-level or nested module, child is parent.attr
+                        child_name = f"{parent_name}.{attr}"
+                        aliases[result] = child_name
+                        # SUBMODULE_CHAIN_TYPE_V1: `pkg.sub.deep.fn()` is a chain
+                        # of get_attr over module objects; an intermediate hop
+                        # typed "int" sent method_call to the dynamic fallback,
+                        # which reads attributes the runtime module objects do
+                        # not have (AttributeError). A dotted attribute whose
+                        # qualified symbol prefix is compiled IS a module and
+                        # keeps the module type so the call resolves statically.
+                        if any(
+                            name.startswith(f"{child_name.replace('.', '__')}__")
+                            for name in self.function_names
+                        ):
+                            types[result] = "object:module"
                 else:
                     types[result] = "int"
                 # INSTANCE_ATTR_TYPES_V1: el tipo del atributo de instancia
