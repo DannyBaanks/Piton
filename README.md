@@ -95,7 +95,11 @@ Pitón **no es**:
     herramienta a partir de una regla (0 programas escritos a mano), 39 EQUIV /
     19 DIVERGENT. Hallazgo: **todas las divergencias del grid ocurren sólo
     cuando el valor cruza una frontera de callable** (retorna desde una
-    lambda); el `print` directo de la misma expresión es EQUIV. Sección
+    lambda); el `print` directo de la misma expresión es EQUIV. Síntesis por
+    regla (`synthesize`): escribe `colorsys` desde la fuente de CPython y pasa
+    de 0/12 a 1/12 EQUIV con el candidato registrado; el control mutado lo
+    devuelve a 0/12 (`run_20261030_193229_synthesis_seed7` /
+    `run_20261030_193704_synthesis_seed7`). Sección
     «AutoPiton» y `autopiton/RESULTS.md`.
 
 - **Biblioteca nativa empaquetada** (`piton/stdlib_piton/`, 60 módulos):
@@ -512,9 +516,10 @@ python3 -m autopiton doctor                 # sandbox + entorno; exit 2 si no ha
 python3 -m autopiton compare --canary       # los 10 canarios obligatorios A-J
 python3 -m autopiton compare --count 100 --seed 42
 python3 -m autopiton compare --systematic   # rejilla op x tipo x superficie
+python3 -m autopiton synthesize --module colorsys --control   # escribe un módulo ausente por regla y lo mide
 python3 -m autopiton minimize <case-id>     # shrink preservando el tipo de divergencia
 python3 -m autopiton replay <case-id>       # huella estable + deriva de clasificación
-python3 -m pytest autopiton/tests -q        # 53 tests
+python3 -m pytest autopiton/tests -q        # 65 tests
 ```
 
 Qué lo hace creíble, y no un número bonito:
@@ -538,6 +543,15 @@ Qué lo hace creíble, y no un número bonito:
   del defecto (`stdout:bool->int`, `stdout:float->int`) y no por programa: las
   19 divergencias de la rejilla son 2 firmas, así que una causa raíz repetida
   en muchas superficies cuenta como un hallazgo, no como diecinueve.
+- **Síntesis medida, no declarada.** `synthesize` escribe un módulo que PITON
+  no tiene traduciendo la fuente de CPython con la regla ADAPT del propio
+  proyecto, lo registra sólo dentro del proceso worker (overlay; `piton/`
+  nunca se escribe) y clasifica cada caso dos veces: baseline y con el
+  candidato. En `colorsys` (12 casos,
+  `run_20261030_193229_synthesis_seed7`): 0/12 EQUIV sin candidato → 1/12
+  EQUIV con candidato. El control que invierte una comparación por función
+  pública baja ese 1 a 0 (`run_20261030_193704_synthesis_seed7`): el oráculo
+  también rechaza candidatos incorrectos en esa muestra.
 
 Medido con CPython 3.12.3, bwrap 0.9.0 sobre PITON `fd76a88d` con árbol
 **sucio**: 147 casos registrados en el corpus. Los números de compatibilidad
