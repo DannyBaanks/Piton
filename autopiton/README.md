@@ -87,7 +87,9 @@ autopiton/
 
 Environment of every run below: CPython 3.12.3, bubblewrap 0.9.0, PITON commit
 `fd76a88d` **with a dirty working tree** (so each number is a measurement of
-that tree, not of a release).
+that tree, not of a release). The 2026-10-31 addendum in `RESULTS.md` re-measures
+the grid, the canaries and the synthesis on a clean tree (`d202e9e`) and records
+the same numbers.
 
 - Seeded corpus `run_20261030_163754_generated_seed42` (seed 42): 100/100
   executed, 89 EQUIV, 11 DIVERGENT, 2 unique divergence signatures.
@@ -133,14 +135,19 @@ candidate registered. The baseline pass is what makes the result attributable.
   inert — kept as a falsified design.)
 - Why the other 11/12: the blockers are PITON-side, attributed per module.
   `colorsys` — float arguments crossing a call boundary are reinterpreted as
-  int64 bit patterns (`add(0.2, 0.5)` prints `9199052598866975130`), and two
-  overlay builds segfault (exit 139); `nturl2path` — lazy dotted imports lose
+  int64 bit patterns (`add(0.2, 0.5)` prints `9199052598866975130`);
+  `nturl2path` — lazy dotted imports lose
   the name binding (`NameError: name urllib is not defined`); `glob`,
   `statistics`, `ipaddress`, `uuid`, `configparser` — MIR rejects the body;
   `stringprep` — missing `unicodedata` table; `quopri` — bytes parameters;
   `ntpath` — ADAPT list concatenation; `csv` — MiniBuildError. This is the
   same boundary the systematic grid found: what breaks is the callable
   boundary, not the module text.
+
+  (This section earlier also claimed two overlay builds segfaulted with exit
+  139. That claim is not supported by any committed artifact and the
+  re-measurement on a clean tree records zero crashes — see the 2026-10-31
+  addendum in `RESULTS.md`.)
 
 Run records store the PITON checkout's basename only, never its absolute path,
 so committed metadata cannot leak an operator's filesystem layout into public

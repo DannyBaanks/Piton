@@ -39,7 +39,7 @@ def fake_comparison(source, classification, *, cpython_type=None,
     )
 
 
-class TestCorpusManager(CorpusManager):
+class ProbeFreeCorpusManager(CorpusManager):
     """Avoid the bwrap probe and git calls in unit tests."""
 
     def environment(self, extra=None):
@@ -59,7 +59,7 @@ class TestCorpusManager(CorpusManager):
 class CorpusTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.manager = TestCorpusManager(root=Path(self.tmp.name) / "autopiton")
+        self.manager = ProbeFreeCorpusManager(root=Path(self.tmp.name) / "autopiton")
 
     def tearDown(self):
         self.tmp.cleanup()

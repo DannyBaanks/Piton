@@ -431,6 +431,8 @@ def synthesize_command(args):
     print(f"Baseline (stock compiler):   {summary.baseline}")
     print(f"With candidate registered:   {summary.with_overlay}")
     print(f"Rejected by compiler anyway: {summary.candidate_rejected}/{summary.programs}")
+    if summary.crashes:
+        print(f"Crashed programs by pass: {dict(sorted(summary.crashes.items()))}")
     print(f"\nCorrect (EQUIV) with candidate: {summary.overlay_equiv}/{summary.programs}; "
           f"without candidate: {summary.baseline_equiv}/{summary.programs}")
     print("EQUIV is counted over every generated case; INVALID_REFERENCE and "

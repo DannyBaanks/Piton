@@ -160,7 +160,7 @@ case exercised and stayed at 1/12; it is kept as a falsified control design.)
 Remaining blockers, attributed per module with the candidate registered:
 float arguments crossing call boundaries are reinterpreted as int64 bit
 patterns (`colorsys` — a by-hand probe prints `9199052598866975130` for
-`add(0.2, 0.5)`) and two overlay builds segfault (exit 139); `nturl2path`
+`add(0.2, 0.5)`) and two overlay builds segfault (exit 139) [NO SUSTENTADO: ver Addendum 2026-10-31]; `nturl2path`
 loses the binding of lazy dotted imports (`NameError: name urllib`);
 `glob`, `statistics`, `ipaddress`, `uuid`, `configparser` are rejected at MIR;
 `stringprep` needs a missing `unicodedata` table; `quopri` needs bytes
@@ -199,7 +199,7 @@ callable boundary, not the module text.
 | Two distinct PITON output defects (bool→int, float→int) | **DEMONSTRATED** on this sample |
 | "89% / 11%" is PITON's Python compatibility | **NOT DEMONSTRATED** — a rate on one 100-program seeded sample, nothing more |
 | Divergence classes are exhaustive | **NOT DEMONSTRATED** — generator emits a bounded numeric sublanguage; strings/IO/imports are untested |
-| Results hold on a clean PITON release | **NOT DEMONSTRATED** — measured against a **dirty** working tree |
+| Results hold on a clean PITON release | **DEMONSTRATED** para grid, canarios y sintesis — re-medidos sobre `d202e9e` con `piton/` intacto y los mismos numeros (Addendum 2026-10-31). Minizacion y replay no se re-midieron: siguen `NOT DEMONSTRATED` ahi |
 | PITON semantics were changed to fix anything | **Explicitly false** — AutoPiton never edits the compiler |
 
 ## Limits of these results
@@ -210,6 +210,80 @@ callable boundary, not the module text.
   over all generated cases, not over the valid ones.
 - Divergences in the V0 corpus are output-formatting/numeric-printing, not
   crashes; the synthesis runs add two segfaults (exit 139) under the overlay,
-  recorded in their artifacts and not yet analyzed.
+  recorded in their artifacts and not yet analyzed [NO SUSTENTADO: los artefactos no registraban exit codes y la re-medicion da 0 crashes; ver Addendum 2026-10-31].
 - The PITON tree was dirty; re-measure against a tagged commit before treating
   any defect as canonical in the genealogy.
+
+---
+
+## Addendum 2026-10-31 — re-medido sobre un arbol limpio y una correccion
+
+Todo lo de arriba se midio contra un arbol **dirty**. Esta tanda repite las
+medidas sobre el commit limpio `d202e9e4564999f10272f9a4570ba407a9d63da7`
+(`piton/` sin modificar en los tres runs; el `dirty=True` que aparece en dos
+`meta.json` corresponde exclusivamente a ficheros de `autopiton/` y
+`.github/`, no al compilador). Entorno: CPython 3.12.3, bubblewrap 0.9.0.
+
+| Run | Artefacto | Resultado | vs. medida del 2026-10-30 |
+|---|---|---|---|
+| Grid sistematico (58) | `run_20261031_044219_systematic` | 39 EQUIV / 19 DIVERGENT, 2 firmas | identico (`run_20261030_170633_systematic`) |
+| Canarios obligatorios (10) | `run_20261031_045547_canary` | EQUIV 3, UNSUPPORTED 3, INVALID_REFERENCE 3, INVALID_ACCEPTED 1 | identico (`run_20261030_161309_canary`) |
+| Sintesis `colorsys` (12) | `run_20261031_045338_synthesis_seed7` | baseline 12 DIVERGENT; overlay 1 EQUIV / 3 INVALID_REFERENCE / 8 DIVERGENT; sha candidato `eb40f2fa…` | identico (`run_20261030_193229_synthesis_seed7`) |
+
+**Claim actualizado:** "Results hold on a clean PITON release" pasa de
+`NOT DEMONSTRATED` a **DEMONSTRATED** para estas tres medidas (grid, canarios y
+sintesis se replican digito a digito sobre `d202e9e` con `piton/` intacto). No
+se actualiza para minimizacion ni replay, que no se re-ejecutaron aqui.
+
+### Correccion — el segfault (exit 139) no esta sustentado por la evidencia
+
+Arriba (seccion Synthesis y "Limits") se afirma que *"two overlay builds segfault
+(exit 139)"* y que queda *"recorded in their artifacts and not yet analyzed"*.
+Comprobado contra los artefactos commiteados, **la afirmacion no es sostenible**:
+
+1. Los tres runs de sintesis del 2026-10-30 (`run_20261030_193229/193417/193704_
+   synthesis_seed7`) no registran codigos de salida ni senales en absoluto: su
+   `results.jsonl` solo guarda `baseline`, `overlay`, `overlay_reject_stage` y
+   `overlay_sha256`. Ningun `139`, ni en `results.jsonl` ni en `meta.json` ni en
+   `summary.json`. Es decir, **no estaba registrado**; la frase era falsa en su
+   parte verificable.
+2. El run nuevo, que ahora si registra el resultado observable por pasada, no
+   produce ningun crash en 12 casos x 2 pasadas: `overlay_exit` = 1 (7 casos),
+   `None` (3, rechazados en BUILD, nunca ejecutados), 0 (2); `overlay_crash`
+   `False` en los 12; `overlay_signal` `None` en los 12; `crashes: {}` en el
+   summary.
+
+Estado del claim: **NOT_DEMONSTRATED** (refutado como registro; no refutado como
+observacion, que pudo ser real y no persistirse). El texto original se conserva
+arriba sin reescribir, conforme a la regla de corregir por anadido.
+
+### Cambios en el harness que esta tanda exige para poder afirmarse
+
+- `OBSERVABLE_OUTCOME_V1` (`autopiton/synthesizer.py`): cada case de sintesis
+  registra `baseline_exit`/`baseline_crash`/`baseline_signal` y
+  `overlay_exit`/`overlay_crash`/`overlay_signal`, y el summary un conteo
+  `crashes` por pasada; `synthesize` lo imprime solo si hay crashes. Sin esto,
+  un SIGSEGV de un candidato era indistinguible de un rechazo limpio en el
+  artefacto. Fijado con tests (`ObservableOutcomeTests`).
+- `STDLIB_FROM_ORACLE_V1`: la stdlib de la que se traduce el candidato se
+  pregunta al interprete oraculo (`oracle_stdlib_dir()`) en lugar de
+  hardcodear `/usr/lib/python3.12`, que en runners con toolcache no existe.
+  Neutro donde ya funcionaba: el candidato de `colorsys` conserva la sha
+  `eb40f2fa…`.
+- La procedencia del candidato se guarda como etiqueta (`python3.12/colorsys.py`),
+  no como ruta absoluta, por la misma razon que `git_provenance()` guarda solo
+  el basename del repo: la evidencia se commitea en un repo publico.
+
+### Hallazgo abierto — el gate `test-autopiton` de CI no ejecutaba nada diferencial
+
+El job instala bubblewrap y queda **48 passed / 19 skipped**; los 19 skip son
+todos con motivo `bubblewrap is not available` (listado en el log del run
+`41193007576`, job `test-autopiton`), incluyendo el test de sintesis con overlay
+y los 13 de sandbox. En local el mismo suite es 70 passed / 0 skipped. Es decir:
+el gate "anti-fake" era verde sin correr ni un programa bajo el sandbox.
+Causa probable: Ubuntu 24.04 restringe user namespaces sin privilegio por
+AppArmor (`kernel.apparmor_restrict_unprivileged_userns`). El workflow anade
+ahora un paso que levanta esa restriccion, corre `autopiton doctor` y hace un
+probe directo de `bwrap`, para que la disponibilidad quede en el log.
+**Pendiente de verificar en el proximo run**: no se da por arreglado hasta que
+el log muestre los skips de sandbox en 0.
