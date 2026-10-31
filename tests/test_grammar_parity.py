@@ -34,6 +34,39 @@ from piton.native_differential import compare_native_to_cpython
 from piton.parser import parse
 
 
+def _stdlib_file(relative: str) -> pathlib.Path:
+    """Modulo de la stdlib del interprete EN USO. No se hardcodea
+    /usr/lib/python3.12: en CI el Python viene del toolcache de
+    setup-python y los runners nuevos ya no traen python3.12 del sistema
+    (los gates quedaban en rojo por FileNotFoundError, no por una
+    divergencia real)."""
+    import sysconfig
+
+    return pathlib.Path(sysconfig.get_path("stdlib")) / relative
+
+
+def _linux_gcc_available() -> bool:
+    """``compile_native_linux`` enlaza con gcc: gcc nativo en Linux y, en
+    Windows, a traves de WSL. Sin toolchain el gate no puede compilar nada, y
+    eso es ausencia de entorno, no divergencia del lenguaje: se salta. Los
+    gates que solo emiten C (sin enlazar) siguen corriendo en ambos SO."""
+    import shutil
+    import subprocess
+
+    if sys.platform != "win32":
+        return shutil.which("gcc") is not None
+    if shutil.which("wsl.exe") is None:
+        return False
+    try:
+        probe = subprocess.run(
+            ["wsl.exe", "-l", "-q"], capture_output=True, check=False, timeout=30
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    text = probe.stdout.decode("utf-16-le", errors="replace").strip().strip("\x00").strip()
+    return probe.returncode == 0 and bool(text)
+
+
 def _assert_matches(testcase: unittest.TestCase, source: str) -> None:
     result = compare_native_to_cpython(source)
     testcase.assertEqual(
@@ -1152,6 +1185,7 @@ class MirReachGatesV1(unittest.TestCase):
                 "imprimir (f ('ab' ,0 ))\n"
             )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_bisect_real_compiles(self):
         # El archivo real del corpus completa el pipeline (MIR_FAIL ->
         # BUILD_OK; el unico archivo stdlib ganado por esta tanda).
@@ -1161,7 +1195,10 @@ class MirReachGatesV1(unittest.TestCase):
         _spec = _ilu.spec_from_file_location("pcv4", "tools/parity_corpus_v4.py")
         _mod = _ilu.module_from_spec(_spec)
         _spec.loader.exec_module(_mod)
-        _src = _mod.python_to_piton(_pl.Path("/usr/lib/python3.12/bisect.py").read_text())
+        path = _stdlib_file("bisect.py")
+        if not path.exists():
+            self.skipTest("bisect.py no presente en este host")
+        _src = _mod.python_to_piton(path.read_text())
         _c(_src, _pl.Path("/tmp/opencode/gate_bisect.exe"))
         self.assertTrue(True)
 
@@ -1214,6 +1251,7 @@ class GetoptGatesV1(unittest.TestCase):
             "imprimir (f ('abc' ) )\n",
         )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_getopt_real_compiles(self):
         # el archivo real del corpus completa el pipeline.
         import importlib.util as _ilu
@@ -1222,7 +1260,10 @@ class GetoptGatesV1(unittest.TestCase):
         _spec = _ilu.spec_from_file_location("pcv4g", "tools/parity_corpus_v4.py")
         _mod = _ilu.module_from_spec(_spec)
         _spec.loader.exec_module(_mod)
-        _src = _mod.python_to_piton(_pl.Path("/usr/lib/python3.12/getopt.py").read_text())
+        path = _stdlib_file("getopt.py")
+        if not path.exists():
+            self.skipTest("getopt.py no presente en este host")
+        _src = _mod.python_to_piton(path.read_text())
         _c(_src, _pl.Path("/tmp/opencode/gate_getopt.exe"))
         self.assertTrue(True)
 
@@ -1305,6 +1346,7 @@ class StdlibV2GatesV1(unittest.TestCase):
             "imprimir (C () .usar ())\n",
         )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_compat_pickle_real_compiles(self):
         # El archivo real del corpus completa el pipeline.
         import importlib.util as _ilu
@@ -1313,7 +1355,10 @@ class StdlibV2GatesV1(unittest.TestCase):
         _spec = _ilu.spec_from_file_location("pcv4c", "tools/parity_corpus_v4.py")
         _mod = _ilu.module_from_spec(_spec)
         _spec.loader.exec_module(_mod)
-        _src = _mod.python_to_piton(_pl.Path("/usr/lib/python3.12/_compat_pickle.py").read_text())
+        path = _stdlib_file("_compat_pickle.py")
+        if not path.exists():
+            self.skipTest("_compat_pickle.py no presente en este host")
+        _src = _mod.python_to_piton(path.read_text())
         _c(_src, _pl.Path("/tmp/opencode/gate_compat_pickle.exe"))
         self.assertTrue(True)
 
@@ -1357,6 +1402,7 @@ class DynamicCallGatesV1(unittest.TestCase):
             "imprimir (externa ())\n",
         )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_dynamic_method_call_compiles(self):
         # el callee es el valor del atributo del receiver, resuelto en
         # runtime: el archivo COMPILA (el receptor de una clase de PITON no
@@ -2508,6 +2554,7 @@ class ConcatChainGatesV1(unittest.TestCase):
             f"v = 'X'\nx = {parts} + v\nimprimir (len (x ))\nimprimir (x [-1 :])\n",
         )
 
+    @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_topics_stdlib_file_compiles(self):
         # El archivo real: 1.3 MB con 17.254 concatenaciones en una expresion.
         # Antes moria con exit -9 (RecursionError en el subproceso aislado).
@@ -2516,7 +2563,7 @@ class ConcatChainGatesV1(unittest.TestCase):
         _sys.path.insert(0, "tools")
         from parity_corpus_v4 import python_to_piton as _to_piton
         from piton.linux_x86 import compile_native_linux as _compile
-        path = _pl.Path("/usr/lib/python3.12/pydoc_data/topics.py")
+        path = _stdlib_file("pydoc_data/topics.py")
         if not path.exists():
             self.skipTest("topics.py no presente en este host")
         out = _pl.Path("/tmp/opencode/topics_native")
@@ -2796,7 +2843,7 @@ class NoneSingletonGatesV2(unittest.TestCase):
         from piton.lower import lower_cst_to_hir
         from piton.mir import lower_hir_to_mir
         from piton.linux_x86 import LinuxCEmitter
-        path = _pl.Path("/usr/lib/python3.12/netrc.py")
+        path = _stdlib_file("netrc.py")
         if not path.exists():
             self.skipTest("netrc.py no presente en este host")
         src = _tp(path.read_text(encoding="utf-8", errors="replace"))
@@ -2811,7 +2858,7 @@ class NoneSingletonGatesV2(unittest.TestCase):
         from piton.lower import lower_cst_to_hir
         from piton.mir import lower_hir_to_mir
         from piton.linux_x86 import LinuxCEmitter
-        path = _pl.Path("/usr/lib/python3.12/warnings.py")
+        path = _stdlib_file("warnings.py")
         if not path.exists():
             self.skipTest("warnings.py no presente en este host")
         src = _tp(path.read_text(encoding="utf-8", errors="replace"))
