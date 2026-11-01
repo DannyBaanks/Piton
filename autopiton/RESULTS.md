@@ -372,3 +372,65 @@ midio, no una particion cerrada.
 | El defecto de frontera depende del tipo de operando | FALSADO (6/6 divergentes caen en la firma `bool->int`) |
 | Un `str` cruza la frontera callable intacto bajo PITON | DEMONSTRATED para `+`, `*` (2 celdas × 2 superficies) |
 | Cobertura `str` exhaustiva | NOT DEMONSTRATED |
+
+---
+
+## Grid extendido: límites de frontera (2026-11-01)
+
+Se añaden 16 kinds de `boundary_*` al grid sistemático (`autopiton/generator.py`,
+`SystematicGrid.BOUNDARY_KINDS`), cada uno probado con 4 formas de valor
+(`arith_int` = control, `arith_float`, `compare_bool`, `arith_str`) y en las 2
+superficies (`direct`, `lambda`): 128 programas nuevos, total 202. Los 74
+programas del grid V0 conservan su hash exactamente (regresión de prefijo
+probada por test), así que los runs archivados siguen siendo replayables.
+
+Cada kind mueve la misma expresión a través de un límite distinto (return de
+función, función anidada, argumento, `**kwargs`, valor por defecto, closure,
+contenedor, dict, comprensión, `*args`, f-string, `.format()`, `%`, atributo de
+clase, método, generador). El `int` es el control por límite: si un límite
+rompe todo, el grid lo distingue de un límite que rompe solo bool/float.
+
+**Corrida `run_20261101_003943_systematic` (202/202 ejecutados):**
+
+| Clasificación | Count |
+|---|---|
+| EQUIV | 123 |
+| DIVERGENT | 79 |
+| Firmas únicas | 9 |
+
+**Firmas encontradas:**
+
+| Firma | Count | Nuevo en esta tanda |
+|---|---|---|
+| `stdout:bool->int` | 38 | No (V0) |
+| `stdout:float->int` | 27 | No (V0) |
+| `stdout:float->none` | 2 | Sí — `boundary_default` (valor de retorno por defecto se pierde) |
+| `stdout:bool->none` | 2 | Sí — `boundary_default` |
+| `stdout:other->none` | 2 | Sí — `boundary_default` (`str`) |
+| `stdout:int->other` | 2 | Sí — `boundary_comprehension` (devuelve `[valor]`) |
+| `stdout:float->other` | 2 | Sí — `boundary_comprehension` |
+| `stdout:bool->other` | 2 | Sí — `boundary_comprehension` |
+| `stdout:other->other` | 2 | Sí — `boundary_comprehension` |
+
+**Qué acota.** Dos clases nuevas y localizadas:
+1. `boundary_default`: un argumento con valor por defecto (`def f(_x=...)`) no
+   transporta el valor — CPython imprime `11.0`/`True`/`abcd`, PITON imprime
+   `None`. Afecta a int, float, bool y str por igual.
+2. `boundary_comprehension`: `[_x for _x in [expr]][0]` devuelve la lista en
+   vez del escalar (`10 -> [10]`). Afecta a todas las formas.
+
+**Límites limpios (sin divergencia en ninguna forma):** `fstring`, `str_format`,
+`percent`, `classattr`, `method`, `generator`, `closure`, `nested`, `arg`,
+`kwargs`, `starargs`, `func` (solo bool/float/divergen; int y str EQUIV).
+
+**Replays de estabilidad:** los casos clave de cada firma nueva se rejugaron
+con `autopiton replay` y reportaron `stable=True` (1 fingerprint, sin drift
+contra la clasificación almacenada).
+
+| Claim | Estado |
+|---|---|
+| El prefijo de 74 programas del grid V0 no cambia de hash | DEMONSTRATED (test + digest archivado) |
+| `boundary_default` pierde el valor de retorno por defecto | DEMONSTRATED (run + replay stable) |
+| `boundary_comprehension` devuelve la lista en vez del escalar | DEMONSTRATED (run + replay stable) |
+| `fstring`/`str_format`/`%` cruzan la frontera intactos | DEMONSTRATED (4 formas × 2 superficies EQUIV) |
+| Las 9 firmas son una partición cerrada de toda la divergencia | NOT DEMONSTRATED |
