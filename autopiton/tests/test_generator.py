@@ -111,6 +111,119 @@ class GeneratorTests(unittest.TestCase):
         for program in programs:
             compile(program.code, "<generated>", "exec")
 
+    def test_grid_prefix_is_frozen_at_74(self):
+        """The 74 programs of the V0 grid must never change hash.
+
+        Archived runs are replayed by truncating the grid, so if the prefix
+        moves, an old run silently stops describing what it claims to.
+        """
+        from autopiton.generator import SystematicGrid
+
+        programs = ProgramGenerator(seed=1).systematic_corpus(limit=74)
+        self.assertEqual(len(programs), 74)
+        self.assertEqual(
+            digest(programs),
+            "a77fabdc0f34e26dbe4cafdadf021d554db1ba04ceca82ad8f13bdec110ff9ab",
+        )
+        # 74 is the old grid exactly: 37 cells, each on both surfaces.
+        self.assertEqual(len(SystematicGrid.cells()) * 2, len(
+            ProgramGenerator(seed=1).systematic_corpus()
+        ))
+
+    def test_boundary_cells_are_appended_and_probe_four_shapes(self):
+        """Every boundary kind is probed with int (control), float, bool, str.
+
+        The V0 finding is that a bool/float *result* comes back as int when it
+        crosses a callable boundary, while the same expression printed inline
+        is EQUIV. Without the per-boundary int control, a boundary that breaks
+        everything is indistinguishable from one that breaks nothing.
+        """
+        from autopiton.generator import SystematicGrid
+
+        cells = SystematicGrid.cells()
+        base = [cell for cell in cells if not cell[0].startswith("boundary_")]
+        boundary = [cell for cell in cells if cell[0].startswith("boundary_")]
+        # Appended, never inserted: the V0 prefix stays at the front.
+        self.assertEqual(
+            [cell for cell in cells[: len(base)]],
+            base,
+        )
+        self.assertEqual(len(base), 37)
+        self.assertEqual(len(boundary), len(SystematicGrid.BOUNDARY_KINDS) * 4)
+
+        shapes = {
+            "arith_int": SystematicGrid.INT_OPERANDS,
+            "arith_float": SystematicGrid.FLOAT_OPERANDS,
+            "compare_bool": SystematicGrid.BOOL_OPERANDS,
+            "arith_str": SystematicGrid.STR_OPERANDS,
+        }
+        for kind in SystematicGrid.BOUNDARY_KINDS:
+            per_kind = [cell for cell in boundary if cell[0] == kind]
+            self.assertEqual(
+                {(op, operands) for _name, op, operands in per_kind},
+                {(op, operands) for _name, op, operands in SystematicGrid.BOUNDARY_SHAPES},
+                kind,
+            )
+            self.assertEqual(len(per_kind), 4, kind)
+        # The operand pairs are exactly the four value shapes.
+        self.assertEqual(
+            {tuple(operands) for _n, _op, operands in SystematicGrid.BOUNDARY_SHAPES},
+            {tuple(v) for v in shapes.values()},
+        )
+
+    def test_boundary_programs_compile_and_bind_the_crossed_value(self):
+        """Each boundary program compiles, binds ``_b``, and prints it."""
+        from autopiton.generator import SystematicGrid
+
+        programs = ProgramGenerator(seed=5).systematic_corpus()
+        boundary_programs = [
+            p for p in programs if p.description.split("[")[1].startswith("boundary_")
+        ]
+        self.assertTrue(boundary_programs)
+        self.assertEqual(
+            len(boundary_programs),
+            len(SystematicGrid.BOUNDARY_KINDS) * 4 * len(SystematicGrid.SURFACES),
+        )
+        for program in boundary_programs:
+            compile(program.code, "<boundary>", "exec")
+            self.assertTrue(program.is_valid, program.description)
+            self.assertIn("_b", program.code)
+            self.assertIn("print(", program.code)
+
+    def test_boundary_surface_only_wraps_the_crossed_value_in_a_lambda(self):
+        """``direct`` and ``lambda`` differ by the outer lambda, nothing else.
+
+        The outer layer asks whether the defect compounds across two crossings
+        or is decided by the first one, so the prologue must be byte-identical
+        between the two surfaces of a cell.
+        """
+        from autopiton.generator import SystematicGrid
+
+        programs = ProgramGenerator(seed=5).systematic_corpus()
+        by_key = {}
+        for program in programs:
+            kind, surface = program.description.split("[")[1].split("]")
+            kind = kind.split("/")[0]
+            surface = kind and program.description.split("/")[1].split("]")[0]
+            key = program.description.split("] ")[1]
+            kind_name = program.description.split("[")[1].split("/")[0]
+            if not kind_name.startswith("boundary_"):
+                continue
+            by_key.setdefault((kind_name, key), {})[surface] = program
+
+        for (kind_name, key), surfaces in by_key.items():
+            self.assertEqual(set(surfaces), set(SystematicGrid.SURFACES), key)
+            direct = surfaces["direct"].code
+            wrapped = surfaces["lambda"].code
+            self.assertTrue(direct.endswith("print(_b)\n"), direct)
+            self.assertTrue(wrapped.endswith("_v = lambda: _b\nprint(_v())\n"), wrapped)
+            # Identical up to the surface wrapper.
+            self.assertEqual(
+                direct[: -len("print(_b)\n")],
+                wrapped[: -len("_v = lambda: _b\nprint(_v())\n")],
+                kind_name,
+            )
+
     def test_canaries_are_the_ten_mandatory_cases(self):
         canaries = ProgramGenerator().generate_canary_cases()
         self.assertEqual(len(canaries), 10)
