@@ -14,6 +14,11 @@ reproduced and reasoned about.
 
 - Linux with **bubblewrap** (`bwrap`) and usable user namespaces. Without a
   working sandbox AutoPiton refuses to execute anything (fail closed).
+  On Ubuntu 24.04 unprivileged user namespaces are restricted by AppArmor, so
+  `sandbox_available()` reports False and every sandbox-gated test skips; the CI
+  gate lifts it with
+  `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` and then runs
+  `doctor`, so a sandbox-less runner turns the job red instead of green.
 - CPython `python3` on `PATH` (the reference engine; measured against 3.12.3).
 - A PITON checkout at the repository root (measured against commit
   `fd76a88d`). `gcc` must be available to PITON for the native BUILD stage.
@@ -41,7 +46,7 @@ JSONL, summary) and registers every distinct program in the corpus under
 Run the suite from the repository root:
 
 ```
-python3 -m pytest autopiton/tests -q        # 65 tests
+python3 -m pytest autopiton/tests -q        # 72 tests (measured 2026-10-31)
 ```
 
 ## Commands
@@ -87,7 +92,9 @@ autopiton/
 
 Environment of every run below: CPython 3.12.3, bubblewrap 0.9.0, PITON commit
 `fd76a88d` **with a dirty working tree** (so each number is a measurement of
-that tree, not of a release).
+that tree, not of a release). The 2026-10-31 addendum in `RESULTS.md` re-measures
+the grid, the canaries and the synthesis on a clean tree (`d202e9e`) and records
+the same numbers.
 
 - Seeded corpus `run_20261030_163754_generated_seed42` (seed 42): 100/100
   executed, 89 EQUIV, 11 DIVERGENT, 2 unique divergence signatures.
@@ -103,10 +110,25 @@ that tree, not of a release).
   of the same expression is EQUIV, and bitwise ops are EQUIV on both surfaces.
   That bounds the PITON-side investigation to the callable-return lowering
   path; it is a location, not a diagnosis.
-- Suite: 65 tests pass. The two integration canaries that assert PITON
-  *rejection* behaviour are gated on PITON commit `fd76a88` being an ancestor
-  of `HEAD`, so they skip — visibly, with a reason — on a base that predates
-  that work instead of reporting a false failure or a false pass.
+- Extended 2026-10-31: the grid gains a `str` kind (37 cells / 74 programs,
+  `run_20261031_123128_systematic`, 49 EQUIV / 25 DIVERGENT, still 2
+  signatures). `'ab' + 'cd'` and `'ab' * 3` come back intact from a lambda, but
+  every `compare_str/lambda` prints `1` where CPython prints `True` and `0`
+  where it prints `False` — the same `bool->int` signature as
+  `compare_bool/lambda`. The comparison itself is right on all six operators
+  (lexicographic order agrees with CPython); only the returned `bool`'s
+  representation changes. So the defect does **not** depend on the operand type:
+  what fails to cross the boundary is the `bool` (and `float`) *result*, not any
+  non-int value. Details in the 2026-10-31 (II) addendum in `RESULTS.md`.
+- Suite: 65 tests pass. Re-measured 2026-10-31: **72** collected, 72 passed on
+  this machine. The CI gate was verified on the 70-test suite (`run
+  41195941442`): the log shows `sandbox disponible: True`, `doctor` reporting
+  *All checks passed.*, and 68 passed / 2 skipped, so the 19 sandbox skips are
+  gone; re-verified on the 72-test suite as 70 passed / 2 skipped
+  (`run 41230502012`). The two that remain skipped are the integration canaries
+  asserting PITON *rejection* behaviour, gated on PITON commit `fd76a88` being
+  an ancestor of `HEAD`, so they skip — visibly, with a reason — on a base that
+  predates that work instead of reporting a false failure or a false pass.
 
 ### Synthesis — can AutoPiton write what PITON lacks?
 
@@ -133,14 +155,19 @@ candidate registered. The baseline pass is what makes the result attributable.
   inert — kept as a falsified design.)
 - Why the other 11/12: the blockers are PITON-side, attributed per module.
   `colorsys` — float arguments crossing a call boundary are reinterpreted as
-  int64 bit patterns (`add(0.2, 0.5)` prints `9199052598866975130`), and two
-  overlay builds segfault (exit 139); `nturl2path` — lazy dotted imports lose
+  int64 bit patterns (`add(0.2, 0.5)` prints `9199052598866975130`);
+  `nturl2path` — lazy dotted imports lose
   the name binding (`NameError: name urllib is not defined`); `glob`,
   `statistics`, `ipaddress`, `uuid`, `configparser` — MIR rejects the body;
   `stringprep` — missing `unicodedata` table; `quopri` — bytes parameters;
   `ntpath` — ADAPT list concatenation; `csv` — MiniBuildError. This is the
   same boundary the systematic grid found: what breaks is the callable
   boundary, not the module text.
+
+  (This section earlier also claimed two overlay builds segfaulted with exit
+  139. That claim is not supported by any committed artifact and the
+  re-measurement on a clean tree records zero crashes — see the 2026-10-31
+  addendum in `RESULTS.md`.)
 
 Run records store the PITON checkout's basename only, never its absolute path,
 so committed metadata cannot leak an operator's filesystem layout into public

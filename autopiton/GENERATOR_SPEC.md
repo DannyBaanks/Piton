@@ -58,6 +58,32 @@ Deliberately **excluded**:
   inside the numeric sublanguage — calls, methods and indexing appear only in
   the family-level statement templates where names are known to be bound.
 
+`str` literals are outside this sampler: they are emitted only by the systematic
+grid renderer below, which writes complete programs as text and never touches
+the AST expression grammar. Adding a value shape to the grid therefore cannot
+loosen the sublanguage contract.
+
+## The systematic grid (`systematic` family)
+
+Not RNG-derived. `SystematicGrid.cells()` enumerates `(kind, op, operands)` and
+each cell is rendered on every surface in `SURFACES`, giving exactly one program
+per cell × surface in a fixed order (`seed` is ignored, so the corpus is
+replayable from the rule alone).
+
+- Surfaces: `direct` prints the expression inline, `lambda` binds it as
+  `_v = lambda: <expr>` and prints `_v()`. The surface dimension exists because
+  the observable difference appears only when a value crosses a callable
+  boundary.
+- Kinds: `arith_int`, `arith_float`, `compare_int`, `compare_bool`,
+  `bitwise_int`, `arith_str`, `compare_str`. The string kinds exist to bound the
+  boundary finding — it was observed for `bool` and `float`, so `str` is the
+  third value shape and its verdict says whether the defect follows the crossing
+  or the type.
+- New cells are **appended**: `systematic_corpus(limit=N)` must return the same
+  first N programs it returned before the grid grew, otherwise a truncated run
+  stops being comparable with an archived one.
+- Size: 37 cells × 2 surfaces = 74 programs (58 before the string kinds).
+
 ## Families (16)
 
 ```

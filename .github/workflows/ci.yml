@@ -82,6 +82,25 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install -e .[dev]
 
+    - name: Enable unprivileged user namespaces for bwrap
+      run: |
+        # Ubuntu 24.04 restringe los user namespaces sin privilegio por AppArmor,
+        # y bwrap no puede crear su sandbox: el suite entero se saltaba y el gate
+        # quedaba verde sin ejecutar ni un programa diferencial.
+        if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+        else
+          echo "apparmor_restrict_unprivileged_userns no presente en este kernel"
+        fi
+        # La sonda es la del propio harness, no una replica de sus flags: un
+        # probe a medida (p.ej. ejecutando /bin/true sin bind de /bin) da falso
+        # negativo y one el log contra lo que despues mide `doctor`.
+        python -c "from autopiton.sandbox import sandbox_available; print('sandbox disponible:', sandbox_available())"
+
+    - name: AutoPiton doctor (sandbox provenance in the log)
+      run: |
+        python -m autopiton doctor
+
     - name: Verify CPython oracle baseline
       run: |
         /usr/bin/python3 -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version; print(sys.version)"

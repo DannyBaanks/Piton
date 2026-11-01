@@ -54,6 +54,12 @@ class SystematicGrid:
     ``print(True)`` prints ``True`` but ``f = lambda: True; print(f())`` prints
     ``1`` — so the surface dimension is required for the grid to see those
     divergences at all.
+
+    The ``str`` kinds exist to bound that finding: the boundary defect was
+    observed for ``bool`` and ``float``, so ``str`` is the third value shape and
+    whether it survives the same crossing is what narrows the defect to a type
+    or to the crossing itself. New cells are appended so that a truncated pass
+    (``limit``) keeps replaying the same prefix it did before.
     """
 
     ARITHMETIC_OPS = ("+", "-", "*", "/", "//", "%")
@@ -64,6 +70,8 @@ class SystematicGrid:
     FLOAT_OPERANDS = (7.5, 3.5)
     BOOL_OPERANDS = (True, True)
     SHIFT_OPERANDS = (17, 3)
+    STR_OPERANDS = ("ab", "cd")
+    STR_REPEAT_OPERANDS = ("ab", 3)
 
     SURFACES = ("direct", "lambda")
 
@@ -78,6 +86,10 @@ class SystematicGrid:
             cells.append(("compare_bool", op, cls.BOOL_OPERANDS))
         for op in cls.BITWISE_OPS:
             cells.append(("bitwise_int", op, cls.SHIFT_OPERANDS))
+        cells.append(("arith_str", "+", cls.STR_OPERANDS))
+        cells.append(("arith_str", "*", cls.STR_REPEAT_OPERANDS))
+        for op in cls.COMPARISON_OPS:
+            cells.append(("compare_str", op, cls.STR_OPERANDS))
         return cells
 
     @classmethod

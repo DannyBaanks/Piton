@@ -1,0 +1,38 @@
+{
+  "config": {
+    "build_timeout_s": 60.0,
+    "count": 10,
+    "memory_limit_mb": 256,
+    "oracle_timeout_s": 10.0,
+    "repeat": 1,
+    "runner_timeout_s": 10.0
+  },
+  "corpus_version": 1,
+  "environment": {
+    "bwrap": "/usr/bin/bwrap",
+    "cpython_version": "3.12.3",
+    "piton": {
+      "commit": "d202e9e4564999f10272f9a4570ba407a9d63da7",
+      "dirty": true,
+      "dirty_paths": [
+        " M .github/workflows/ci.yml",
+        " M autopiton/cases/index.json",
+        " M autopiton/cli.py",
+        " M autopiton/synthesizer.py",
+        " M autopiton/tests/test_corpus.py",
+        " M autopiton/tests/test_synthesizer.py",
+        "?? autopiton/reports/runs/run_20261031_044219_systematic/",
+        "?? autopiton/reports/runs/run_20261031_045338_synthesis_seed7/"
+      ],
+      "repo": "piton-autopiton"
+    },
+    "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
+    "python_executable": "/usr/bin/python3",
+    "sandbox_backend": "bwrap"
+  },
+  "mode": "canary",
+  "notes": "compare canary",
+  "run_id": "run_20261031_045547_canary",
+  "seed": null,
+  "started_at": "2026-10-31T04:55:47-06:00"
+}

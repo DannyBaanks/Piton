@@ -160,7 +160,7 @@ case exercised and stayed at 1/12; it is kept as a falsified control design.)
 Remaining blockers, attributed per module with the candidate registered:
 float arguments crossing call boundaries are reinterpreted as int64 bit
 patterns (`colorsys` — a by-hand probe prints `9199052598866975130` for
-`add(0.2, 0.5)`) and two overlay builds segfault (exit 139); `nturl2path`
+`add(0.2, 0.5)`) and two overlay builds segfault (exit 139) [NO SUSTENTADO: ver Addendum 2026-10-31]; `nturl2path`
 loses the binding of lazy dotted imports (`NameError: name urllib`);
 `glob`, `statistics`, `ipaddress`, `uuid`, `configparser` are rejected at MIR;
 `stringprep` needs a missing `unicodedata` table; `quopri` needs bytes
@@ -199,7 +199,7 @@ callable boundary, not the module text.
 | Two distinct PITON output defects (bool→int, float→int) | **DEMONSTRATED** on this sample |
 | "89% / 11%" is PITON's Python compatibility | **NOT DEMONSTRATED** — a rate on one 100-program seeded sample, nothing more |
 | Divergence classes are exhaustive | **NOT DEMONSTRATED** — generator emits a bounded numeric sublanguage; strings/IO/imports are untested |
-| Results hold on a clean PITON release | **NOT DEMONSTRATED** — measured against a **dirty** working tree |
+| Results hold on a clean PITON release | **DEMONSTRATED** para grid, canarios y sintesis — re-medidos sobre `d202e9e` con `piton/` intacto y los mismos numeros (Addendum 2026-10-31). Minizacion y replay no se re-midieron: siguen `NOT DEMONSTRATED` ahi |
 | PITON semantics were changed to fix anything | **Explicitly false** — AutoPiton never edits the compiler |
 
 ## Limits of these results
@@ -210,6 +210,165 @@ callable boundary, not the module text.
   over all generated cases, not over the valid ones.
 - Divergences in the V0 corpus are output-formatting/numeric-printing, not
   crashes; the synthesis runs add two segfaults (exit 139) under the overlay,
-  recorded in their artifacts and not yet analyzed.
+  recorded in their artifacts and not yet analyzed [NO SUSTENTADO: los artefactos no registraban exit codes y la re-medicion da 0 crashes; ver Addendum 2026-10-31].
 - The PITON tree was dirty; re-measure against a tagged commit before treating
   any defect as canonical in the genealogy.
+
+---
+
+## Addendum 2026-10-31 — re-medido sobre un arbol limpio y una correccion
+
+Todo lo de arriba se midio contra un arbol **dirty**. Esta tanda repite las
+medidas sobre el commit limpio `d202e9e4564999f10272f9a4570ba407a9d63da7`
+(`piton/` sin modificar en los tres runs; el `dirty=True` que aparece en dos
+`meta.json` corresponde exclusivamente a ficheros de `autopiton/` y
+`.github/`, no al compilador). Entorno: CPython 3.12.3, bubblewrap 0.9.0.
+
+| Run | Artefacto | Resultado | vs. medida del 2026-10-30 |
+|---|---|---|---|
+| Grid sistematico (58) | `run_20261031_044219_systematic` | 39 EQUIV / 19 DIVERGENT, 2 firmas | identico (`run_20261030_170633_systematic`) |
+| Canarios obligatorios (10) | `run_20261031_045547_canary` | EQUIV 3, UNSUPPORTED 3, INVALID_REFERENCE 3, INVALID_ACCEPTED 1 | identico (`run_20261030_161309_canary`) |
+| Sintesis `colorsys` (12) | `run_20261031_045338_synthesis_seed7` | baseline 12 DIVERGENT; overlay 1 EQUIV / 3 INVALID_REFERENCE / 8 DIVERGENT; sha candidato `eb40f2fa…` | identico (`run_20261030_193229_synthesis_seed7`) |
+
+**Claim actualizado:** "Results hold on a clean PITON release" pasa de
+`NOT DEMONSTRATED` a **DEMONSTRATED** para estas tres medidas (grid, canarios y
+sintesis se replican digito a digito sobre `d202e9e` con `piton/` intacto). No
+se actualiza para minimizacion ni replay, que no se re-ejecutaron aqui.
+
+### Correccion — el segfault (exit 139) no esta sustentado por la evidencia
+
+Arriba (seccion Synthesis y "Limits") se afirma que *"two overlay builds segfault
+(exit 139)"* y que queda *"recorded in their artifacts and not yet analyzed"*.
+Comprobado contra los artefactos commiteados, **la afirmacion no es sostenible**:
+
+1. Los tres runs de sintesis del 2026-10-30 (`run_20261030_193229/193417/193704_
+   synthesis_seed7`) no registran codigos de salida ni senales en absoluto: su
+   `results.jsonl` solo guarda `baseline`, `overlay`, `overlay_reject_stage` y
+   `overlay_sha256`. Ningun `139`, ni en `results.jsonl` ni en `meta.json` ni en
+   `summary.json`. Es decir, **no estaba registrado**; la frase era falsa en su
+   parte verificable.
+2. El run nuevo, que ahora si registra el resultado observable por pasada, no
+   produce ningun crash en 12 casos x 2 pasadas: `overlay_exit` = 1 (7 casos),
+   `None` (3, rechazados en BUILD, nunca ejecutados), 0 (2); `overlay_crash`
+   `False` en los 12; `overlay_signal` `None` en los 12; `crashes: {}` en el
+   summary.
+
+Estado del claim: **NOT_DEMONSTRATED** (refutado como registro; no refutado como
+observacion, que pudo ser real y no persistirse). El texto original se conserva
+arriba sin reescribir, conforme a la regla de corregir por anadido.
+
+### Cambios en el harness que esta tanda exige para poder afirmarse
+
+- `OBSERVABLE_OUTCOME_V1` (`autopiton/synthesizer.py`): cada case de sintesis
+  registra `baseline_exit`/`baseline_crash`/`baseline_signal` y
+  `overlay_exit`/`overlay_crash`/`overlay_signal`, y el summary un conteo
+  `crashes` por pasada; `synthesize` lo imprime solo si hay crashes. Sin esto,
+  un SIGSEGV de un candidato era indistinguible de un rechazo limpio en el
+  artefacto. Fijado con tests (`ObservableOutcomeTests`).
+- `STDLIB_FROM_ORACLE_V1`: la stdlib de la que se traduce el candidato se
+  pregunta al interprete oraculo (`oracle_stdlib_dir()`) en lugar de
+  hardcodear `/usr/lib/python3.12`, que en runners con toolcache no existe.
+  Neutro donde ya funcionaba: el candidato de `colorsys` conserva la sha
+  `eb40f2fa…`.
+- La procedencia del candidato se guarda como etiqueta (`python3.12/colorsys.py`),
+  no como ruta absoluta, por la misma razon que `git_provenance()` guarda solo
+  el basename del repo: la evidencia se commitea en un repo publico.
+
+### Hallazgo abierto — el gate `test-autopiton` de CI no ejecutaba nada diferencial
+
+El job instala bubblewrap y queda **48 passed / 19 skipped**; los 19 skip son
+todos con motivo `bubblewrap is not available` (listado en el log del run
+`41193007576`, job `test-autopiton`), incluyendo el test de sintesis con overlay
+y los 13 de sandbox. En local el mismo suite es 70 passed / 0 skipped. Es decir:
+el gate "anti-fake" era verde sin correr ni un programa bajo el sandbox.
+Causa probable: Ubuntu 24.04 restringe user namespaces sin privilegio por
+AppArmor (`kernel.apparmor_restrict_unprivileged_userns`). El workflow anade
+ahora un paso que levanta esa restriccion, corre `autopiton doctor` y hace un
+probe directo de `bwrap`, para que la disponibilidad quede en el log.
+**Pendiente de verificar en el proximo run**: no se da por arreglado hasta que
+el log muestre los skips de sandbox en 0.
+
+**Verificado 2026-10-31, run `41195941442` (job `test-autopiton`):** el log
+imprime `kernel.apparmor_restrict_unprivileged_userns = 0`, luego
+`sandbox disponible: True`, `autopiton doctor` cierra con *All checks passed.* y
+el suite es **68 passed, 2 skipped in 9.49s**. Los unicos dos skips son los
+canarios con gate de procedencia (`requires PITON commit fd76a88 (mir: relax) in
+HEAD`), que es su diseno. Los 19 skips de sandbox pasan a 0, asi que el gate
+ahora si ejecuta CPython + PITON nativo dentro de bwrap y falla cerrado: sin
+sandbox, `doctor` sale con codigo 2 y el job se pone rojo.
+
+Re-verificado tras las celdas `str`, run `41230502012`: misma linea de sonda en
+True, doctor sin fallos y **70 passed, 2 skipped in 7.04s** sobre los 72
+recolectados. El gate se mantiene diferencial.
+
+Correccion a lo escrito arriba: el paso de diagnostico **no** hace un probe de
+`bwrap` a medida. Un probe propio (ejecutar `/bin/true` ligando solo `/usr`) dio
+falso negativo en el run `41195564482` — decia `FALLA (rc=1)` mientras `doctor`
+reportaba el sandbox disponible, es decir contradecía lo que el suite mide. La
+linea ahora pregunta a `autopiton.sandbox.sandbox_available()`, unica fuente de
+verdad de lo que el suite va a ejecutar (commit `17942f2`).
+
+## Addendum 2026-10-31 (II) — la grilla gana el tipo `str` y el defecto deja de depender del operando
+
+Cambio en el harness: `SystematicGrid` pasa de 29 a **37 celdas** (58 → 74
+programas). Las 8 celdas nuevas son `arith_str` con `+` y `*` y `compare_str`
+con los seis operadores de comparación. Las celdas se **anexan al final** para
+que `systematic_corpus(limit=N)` devuelva el mismo prefijo que devolvía con la
+grilla de 58: un run archivado sigue siendo comparable con uno truncado de
+hoy. Lo fija el test `test_new_grid_cells_are_appended_so_truncation_stays_a_prefix`.
+
+Medido en `run_20261031_123128_systematic` (74/74 ejecutados, entorno CPython
+3.12.3 + bwrap 0.9.0, `piton/` intacto; el `dirty=True` del `meta.json` son
+`autopiton/generator.py` y su test, es decir la grilla nueva se midió antes de
+commitearla — inherente a medir un cambio de corpus).
+
+| Pasada | EQUIV | DIVERGENT | firmas |
+|---|---|---|---|
+| grid anterior, re-medida (58) | 39 | 19 | 2 |
+| grid con `str` (74) | 49 | 25 | 2 |
+
+Desagregado de los 16 programas `str`: **10 EQUIV, 6 DIVERGENT**, y los 6
+divergentes son exactamente `compare_str/lambda`, todos con la firma **ya
+existente** `stdout:bool->int`. Los buckets del run completo quedan en 18
+`bool->int` / 7 `float->int`: el recuento de clases de divergencia **no** sube.
+
+Salidas concretas (`results.jsonl`, exit 0 en PITON, etapa EXECUTE en ambos):
+
+| Programa | CPython | PITON |
+|---|---|---|
+| `print('ab' + 'cd')` desde lambda | `abcd` | `abcd` (EQUIV) |
+| `print('ab' * 3)` desde lambda | `ababab` | `ababab` (EQUIV) |
+| `print('ab' < 'cd')` directo | `True` | `True` (EQUIV) |
+| `print(_v())` con `_v = lambda: 'ab' == 'cd'` | `False` | `0` (DIVERGENT) |
+| `print(_v())` con `_v = lambda: True == True` | `True` | `1` (DIVERGENT) |
+
+**Qué acota.** La hipotesis "cualquier valor no-int que cruza la frontera de una
+funcion callable se reinterpreta" queda **falsada**: un `str` cruza la misma
+frontera y sale intacto, tanto si es el operando como si es el resultado de la
+expresion dentro del lambda. Lo que no cruza es el `bool` del resultado de una
+comparacion, **independientemente del tipo de los operandos** (bool-operandos y
+str-operandos caen en la misma firma). O sea: el defecto está en la
+representacion que devuelve el retorno callable para `bool` (y para `float`), no
+en la lowering de la comparacion ni en el tipo de los operandos. Es una
+restriccion del lugar, sigue sin ser diagnostico.
+
+Refuerzo dentro de la misma tanda: en los seis `compare_str/lambda` el **orden
+lexicografico es correcto** — `'ab' < 'cd'` y `'ab' <= 'cd'` dan `True`, `'ab' >
+'cd'` y `'ab' >= 'cd'` dan `False`, igual que CPython — y lo unico que cambia es
+la marca del bool retornado (`True→1`, `False→0`). La comparacion con operandos
+`str` acierta; lo que se pierde es la representacion del resultado al cruzar el
+retorno.
+
+**Límite de esta tanda.** La cobertura de `str` es concatenacion, repeticion y
+comparacion lexicografica. No hay indexado, slicing, metodos, escapes, ni
+formateo (`%`/f-string), y no hay programas `str` que mezclen tipos. **Cobertura
+exhaustiva del sublenguaje `str`: NOT DEMONSTRATED.** Tampoco se toca el claim
+de exhaustividad de clases de divergencia: 2 firmas en 74 programas es lo que se
+midio, no una particion cerrada.
+
+| Claim | Estado |
+|---|---|
+| La grilla cubre `str` sin romper la reproducibilidad del prefijo de 58 | DEMONSTRATED (test + run) |
+| El defecto de frontera depende del tipo de operando | FALSADO (6/6 divergentes caen en la firma `bool->int`) |
+| Un `str` cruza la frontera callable intacto bajo PITON | DEMONSTRATED para `+`, `*` (2 celdas × 2 superficies) |
+| Cobertura `str` exhaustiva | NOT DEMONSTRATED |
