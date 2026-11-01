@@ -434,3 +434,51 @@ contra la clasificación almacenada).
 | `boundary_comprehension` devuelve la lista en vez del escalar | DEMONSTRATED (run + replay stable) |
 | `fstring`/`str_format`/`%` cruzan la frontera intactos | DEMONSTRATED (4 formas × 2 superficies EQUIV) |
 | Las 9 firmas son una partición cerrada de toda la divergencia | NOT DEMONSTRATED |
+
+---
+
+## Casos mínimos (minimize, 2026-11-01)
+
+Se pasó `autopiton minimize` (budget 120 evaluaciones) sobre un representante de cada firma nueva. Ambos minimizados confirman `stable=True` en `autopiton replay` (1 fingerprint, sin drift contra la clasificación almacenada).
+
+### `boundary_default` — `stdout:bool->none` (y `float->none`, `str->none`)
+
+Caso minimizado: **ya es minimal** (59 bytes; el minimizador probó 4 reducciones y ninguna preservó la divergencia).
+
+| Engine | Output |
+|---|---|
+| CPython | `True` |
+| PITON | `None` |
+
+Source (case `case-eca1f5b2bf2ae439`):
+```python
+def _f(_x=True == True):
+    return _x
+_b = _f()
+print(_b)
+```
+
+El argumento con valor por defecto no se transporta al cuerpo: CPython evalúa `True == True` y devuelve `True`; PITON devuelve `None`. Afecta por igual a int, float, bool y str (firmas `*->none`).
+
+### `boundary_comprehension` — `stdout:int->other` (y `float->other`, `bool->other`, `str->other`)
+
+Caso minimizado: **41 → 37 bytes**, nuevo caso `case-1487c557e87055c9`.
+
+| Engine | Output |
+|---|---|
+| CPython | `0` |
+| PITON | `[0]` |
+
+Source:
+```python
+_b = [_x for _x in [0]][0]
+print(_b)
+```
+
+La comprensión devuelve la lista en vez del escalar `[0]`. Reducciones aplicadas: `fold constant arithmetic` (`7 + 3` → `10`) y `reduce constant 0 to 0` (`10` → `0`).
+
+| Claim | Estado |
+|---|---|
+| `boundary_default` es minimal local (ninguna reducción preserva la divergencia) | DEMONSTRATED (4 intentos, 0 aceptados) |
+| `boundary_comprehension` minimiza a 37 bytes preservando `int->[valor]` | DEMONSTRATED (2 reducciones aceptadas) |
+| Ambos casos mínimos son estables bajo replay | DEMONSTRATED (`stable=True`) |

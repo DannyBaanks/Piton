@@ -1,0 +1,103 @@
+{
+  "case_id": "case-6a4037df7616c76e",
+  "created_at": "2026-11-01T01:34:10-06:00",
+  "description": "systematic[boundary_starargs/lambda] 7.5 + 3.5",
+  "expected_exception": null,
+  "family": "systematic",
+  "generator": {
+    "code_hash": "6a4037df7616c76e44d52b37ff67aa535443b7311a249e5bfe50d96f0db8e2af",
+    "complexity": 2
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "DIVERGENT",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 32.11981099957484,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "6a4037df7616c76e44d52b37ff67aa535443b7311a249e5bfe50d96f0db8e2af",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "11.0\n",
+      "timed_out": false
+    },
+    "details": {
+      "cpython_exit": 0,
+      "cpython_stderr": "",
+      "cpython_stdout": "11.0\n",
+      "piton_exit": 0,
+      "piton_stderr": "",
+      "piton_stdout": "4622382067542392832\n"
+    },
+    "piton": {
+      "artifact_sha256": "d283ac6866ab57b27d96179032529fc43a871befc584d3ae05b9ec4a75802952",
+      "build_exit_code": 0,
+      "build_ms": 815.9604109987413,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 8.000463998541818,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0150.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "6a4037df7616c76e44d52b37ff67aa535443b7311a249e5bfe50d96f0db8e2af",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 92,
+          "surface_sha256": "75c637435464562462b263a8aab338332420cc15d5c9e3e644c4b2241ee9d819"
+        },
+        "BUILD": {
+          "artifact_bytes": 25504,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "d283ac6866ab57b27d96179032529fc43a871befc584d3ae05b9ec4a75802952",
+          "c_chars": 279697,
+          "c_sha256": "7b900cba632655eb392088043e3673f76d3cde4f28fd8ce1c039d4a9c319cddd",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "4622382067542392832\n",
+      "surface_sha256": "75c637435464562462b263a8aab338332420cc15d5c9e3e644c4b2241ee9d819",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "both completed but observable output differs",
+    "source": "def _f(*_a):\n    return _a[0]\n_b = _f(*[7.5 + 3.5])\n_v = lambda: _b\nprint(_v())\n",
+    "source_hash": "6a4037df7616c76e44d52b37ff67aa535443b7311a249e5bfe50d96f0db8e2af"
+  },
+  "run_id": "run_20261101_013152_systematic",
+  "seed": 0,
+  "source": "def _f(*_a):\n    return _a[0]\n_b = _f(*[7.5 + 3.5])\n_v = lambda: _b\nprint(_v())\n",
+  "source_hash": "6a4037df7616c76e44d52b37ff67aa535443b7311a249e5bfe50d96f0db8e2af"
+}

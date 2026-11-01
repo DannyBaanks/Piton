@@ -1,0 +1,76 @@
+{
+  "accepted": 0,
+  "attempts": 4,
+  "budget_exhausted": false,
+  "case_id": "case-eca1f5b2bf2ae439",
+  "changed": false,
+  "created_at": "2026-11-01T01:35:18-06:00",
+  "history": [
+    {
+      "accepted": false,
+      "attempt": 1,
+      "classification": "DIVERGENT",
+      "kind": [
+        "DIVERGENT",
+        "exception",
+        "NameError",
+        "EXECUTE",
+        "NameError"
+      ],
+      "reduction": "remove FunctionDef statement"
+    },
+    {
+      "accepted": false,
+      "attempt": 2,
+      "classification": "DIVERGENT",
+      "kind": [
+        "DIVERGENT",
+        "exception",
+        "NameError",
+        "EXECUTE",
+        "NameError"
+      ],
+      "reduction": "remove Assign statement"
+    },
+    {
+      "accepted": false,
+      "attempt": 3,
+      "classification": "EQUIV",
+      "kind": [
+        "EQUIV",
+        "ok",
+        "",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "remove Expr statement"
+    },
+    {
+      "accepted": false,
+      "attempt": 4,
+      "classification": "EQUIV",
+      "kind": [
+        "EQUIV",
+        "ok",
+        "",
+        "EXECUTE",
+        ""
+      ],
+      "reduction": "drop argument 0 of call 1"
+    }
+  ],
+  "minimized_case_id": null,
+  "minimized_classification": "DIVERGENT",
+  "minimized_source": "def _f(_x=True == True):\n    return _x\n_b = _f()\nprint(_b)\n",
+  "original_classification": "DIVERGENT",
+  "original_source": "def _f(_x=True == True):\n    return _x\n_b = _f()\nprint(_b)\n",
+  "preserved_kind": [
+    "DIVERGENT",
+    "ok",
+    "",
+    "EXECUTE",
+    ""
+  ],
+  "run_id": "run_20261101_013515_minimize_seed0",
+  "stopped_reason": "no reduction preserved the divergence"
+}
