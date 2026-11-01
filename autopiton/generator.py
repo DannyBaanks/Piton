@@ -75,6 +75,48 @@ class SystematicGrid:
 
     SURFACES = ("direct", "lambda")
 
+    # Boundary kinds. V0's finding is that a ``bool``/``float`` *result* comes
+    # back as an int once it crosses a callable boundary (a lambda's return),
+    # while the same expression printed inline is EQUIV. That localises the
+    # defect to a crossing, but to one crossing only — the lambda lowering path.
+    #
+    # Each kind below moves the very same operand expression across a
+    # *different* boundary. If a kind's int control stays EQUIV while its
+    # float/bool siblings diverge, the corruption follows the value shape and
+    # the new signature names the boundary that leaked it. If a kind is
+    # uniformly EQUIV, that boundary is clean and the defect is narrower than
+    # "callable boundary" — a falsifying result, kept as such.
+    BOUNDARY_KINDS = (
+        "boundary_func",           # def _f(): return expr
+        "boundary_nested",         # def _f(): return _g() -> expr
+        "boundary_arg",            # def _f(_x): return _x ; _f(expr)
+        "boundary_kwargs",         # def _f(**_k): return _k["x"] ; _f(x=expr)
+        "boundary_default",        # def _f(_x=expr): return _x ; _f()
+        "boundary_closure",        # value bound in an enclosing scope, read by a nested def
+        "boundary_container",      # [expr] then _c[0]
+        "boundary_dict",           # {"k": expr} then _c["k"]
+        "boundary_comprehension",  # [_x for _x in [expr]][0]
+        "boundary_starargs",       # def _f(*_a): return _a[0] ; _f(*[expr])
+        "boundary_fstring",        # f"{expr}"
+        "boundary_str_format",     # "{0}".format(expr)
+        "boundary_percent",        # "%s" % (expr,)
+        "boundary_classattr",      # class _C: _a = expr ; _C._a
+        "boundary_method",         # class _C: def _m(self): return expr ; _C()._m()
+        "boundary_generator",      # def _gen(): yield expr ; next(_gen())
+    )
+
+    # Operand shape per boundary. ``arith_int`` is the per-boundary control
+    # (an int survives every crossing V0 measured); ``arith_float`` and
+    # ``compare_bool`` are the two shapes V0 proved corrupt; ``arith_str`` is
+    # the shape that survived. Without the control a boundary that breaks
+    # everything looks like a boundary that breaks nothing.
+    BOUNDARY_SHAPES = (
+        ("arith_int", "+", INT_OPERANDS),
+        ("arith_float", "+", FLOAT_OPERANDS),
+        ("compare_bool", "==", BOOL_OPERANDS),
+        ("arith_str", "+", STR_OPERANDS),
+    )
+
     @classmethod
     def cells(cls):
         cells = []
@@ -90,15 +132,71 @@ class SystematicGrid:
         cells.append(("arith_str", "*", cls.STR_REPEAT_OPERANDS))
         for op in cls.COMPARISON_OPS:
             cells.append(("compare_str", op, cls.STR_OPERANDS))
+        # Appended, never inserted: the first 74 programs must keep hashing
+        # identically or every archived run stops being replayable.
+        for kind in cls.BOUNDARY_KINDS:
+            for _shape, op, operands in cls.BOUNDARY_SHAPES:
+                cells.append((kind, op, operands))
         return cells
 
     @classmethod
     def render(cls, kind: str, op: str, operands, surface: str) -> str:
         left, right = operands
         expr = f"{left!r} {op} {right!r}"
+        if kind.startswith("boundary_"):
+            return cls.render_boundary(kind, expr, surface)
         if surface == "lambda":
             return f"_v = lambda: {expr}\nprint(_v())\n"
         return f"print({expr})\n"
+
+    # One prologue per boundary. Each binds the crossed value to ``_b`` so the
+    # surface layer can stay uniform. Every wrapper is written in the safe core
+    # only: no new names are read before binding, no exception is manufactured.
+    BOUNDARY_PROLOGUES = {
+        "boundary_func": "def _f():\n    return {e}\n_b = _f()\n",
+        "boundary_nested": "def _g():\n    return {e}\ndef _f():\n    return _g()\n_b = _f()\n",
+        "boundary_arg": "def _f(_x):\n    return _x\n_b = _f({e})\n",
+        "boundary_kwargs": 'def _f(**_k):\n    return _k["x"]\n_b = _f(x={e})\n',
+        "boundary_default": "def _f(_x={e}):\n    return _x\n_b = _f()\n",
+        "boundary_closure": (
+            "def _outer():\n    _cap = {e}\n"
+            "    def _inner():\n        return _cap\n    return _inner\n"
+            "_b = _outer()()\n"
+        ),
+        "boundary_container": "_c = [{e}]\n_b = _c[0]\n",
+        "boundary_dict": '_c = {"k": {e}}\n_b = _c["k"]\n',
+        "boundary_comprehension": "_b = [_x for _x in [{e}]][0]\n",
+        "boundary_starargs": "def _f(*_a):\n    return _a[0]\n_b = _f(*[{e}])\n",
+        # boundary_fstring is templated separately: the expression goes inside
+        # the replacement field, so it cannot share the {e} format pass.
+        "boundary_fstring": "",
+        "boundary_str_format": '_b = "{0}".format({e})\n',
+        "boundary_percent": '_b = "%s" % ({e},)\n',
+        "boundary_classattr": "class _C:\n    _a = {e}\n_b = _C._a\n",
+        "boundary_method": "class _C:\n    def _m(self):\n        return {e}\n_b = _C()._m()\n",
+        "boundary_generator": "def _gen():\n    yield {e}\n_b = next(_gen())\n",
+    }
+
+    @classmethod
+    def render_boundary(cls, kind: str, expr: str, surface: str) -> str:
+        """Move ``expr`` across one boundary, then apply the surface wrapper.
+
+        ``direct`` prints the crossed value as-is; ``lambda`` returns it from a
+        second, outer lambda. The outer layer answers whether the defect
+        compounds across two crossings or is decided by the first one.
+        """
+        prologue = cls.BOUNDARY_PROLOGUES[kind]
+        if kind == "boundary_fstring":
+            # The expression itself goes inside the replacement field, so the
+            # template is rendered separately from the other prologues.
+            prologue = f'_b = f"{{{expr}}}"\n'
+        else:
+            # Literal replacement, not str.format: several prologues carry real
+            # braces (dict literals, **kwargs reads) that format() would eat.
+            prologue = prologue.replace("{e}", expr)
+        if surface == "lambda":
+            return prologue + "_v = lambda: _b\nprint(_v())\n"
+        return prologue + "print(_b)\n"
 
 
 @dataclass

@@ -11,7 +11,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:34-06:00",
+      "last_seen_at": "2026-11-01T01:31:57-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -19,7 +19,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -36,7 +37,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:12-06:00",
+      "last_seen_at": "2026-11-01T01:32:32-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -44,11 +45,34 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "019fe3d6739452ea70c85c25e54c2ad7b5616c2b6203c48848cc734e7b20136f"
+    },
+    "case-01b500e236e57b8e": {
+      "case_id": "case-01b500e236e57b8e",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:44-06:00",
+      "description": "systematic[boundary_generator/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:44-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "01b500e236e57b8e83cf1f6b7a905b9f5d1fd77ce26b79d6bdc1a0dcb6eff55e"
     },
     "case-03dffbc05d637bc4": {
       "case_id": "case-03dffbc05d637bc4",
@@ -73,6 +97,28 @@
       "signature": null,
       "source_hash": "03dffbc05d637bc48ed68045126082d3ab3263a3526e218bdf0c6e82c8fa7699"
     },
+    "case-062921c9106ddfaa": {
+      "case_id": "case-062921c9106ddfaa",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:50-06:00",
+      "description": "systematic[boundary_dict/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:50-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "062921c9106ddfaaf30a5ec9b8c6e407942032e74640521e0cf28bb9f3ba6a96"
+    },
     "case-082f1009ee8ac3a3": {
       "case_id": "case-082f1009ee8ac3a3",
       "classification": "EQUIV",
@@ -96,6 +142,28 @@
       "signature": null,
       "source_hash": "082f1009ee8ac3a366efc4c4d51c6f3be73fbd2db823acac66f968f4a20c6760"
     },
+    "case-0a2a5df2fc7c2da5": {
+      "case_id": "case-0a2a5df2fc7c2da5",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:48-06:00",
+      "description": "systematic[boundary_container/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:48-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "0a2a5df2fc7c2da5ddba0da9b8f90e3f90ca31c6808eaf0d0eaa1758f67ebb14"
+    },
     "case-0b7308d27e5926cb": {
       "case_id": "case-0b7308d27e5926cb",
       "classification": "EQUIV",
@@ -107,7 +175,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:53-06:00",
+      "last_seen_at": "2026-11-01T01:32:14-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -115,11 +183,34 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "0b7308d27e5926cb50cc16a62dd995e0ceac7ebc53bab74ea68f724bf2fcc1e5"
+    },
+    "case-0bb4371780e190a3": {
+      "case_id": "case-0bb4371780e190a3",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:18-06:00",
+      "description": "systematic[boundary_arg/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:18-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "0bb4371780e190a39c0c9546d543e6757830f8ab3e2678092715c66c7790b7f2"
     },
     "case-0df05d89086193ec": {
       "case_id": "case-0df05d89086193ec",
@@ -144,6 +235,50 @@
       "signature": null,
       "source_hash": "0df05d89086193ecd7f0e1a0e7e7bb08cd37f228d6e772acfba9d5579b5cda5a"
     },
+    "case-0df63b43e8bab149": {
+      "case_id": "case-0df63b43e8bab149",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:38-06:00",
+      "description": "systematic[boundary_closure/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:38-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "0df63b43e8bab1493e160965459199ae15b9f1d5b36291a2e5ec68caf049d3f2"
+    },
+    "case-0ea32dd39fbec420": {
+      "case_id": "case-0ea32dd39fbec420",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:49-06:00",
+      "description": "systematic[boundary_container/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:49-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "0ea32dd39fbec4208747c555f60a0512de6ea4ddfb09c378631fc8d5091eb278"
+    },
     "case-0f826d007aaab3de": {
       "case_id": "case-0f826d007aaab3de",
       "classification": "EQUIV",
@@ -167,6 +302,50 @@
       "signature": null,
       "source_hash": "0f826d007aaab3de679a29767e16eb07dc1f0927be965d5eea1b9864653e64d2"
     },
+    "case-109916f796a8f7de": {
+      "case_id": "case-109916f796a8f7de",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:33-06:00",
+      "description": "systematic[boundary_default/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:33-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->none",
+      "source_hash": "109916f796a8f7de3c191d649abf9650d75b170dd4c22f127e913080e76d3e19"
+    },
+    "case-10d36f78c0efa738": {
+      "case_id": "case-10d36f78c0efa738",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:32:52-06:00",
+      "description": "systematic[boundary_func/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:32:52-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "10d36f78c0efa7381ab65d23f5154be591720c523affcbf16e6d18a07f1948b0"
+    },
     "case-113fc7fb0d069267": {
       "case_id": "case-113fc7fb0d069267",
       "classification": "EQUIV",
@@ -178,7 +357,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:43-06:00",
+      "last_seen_at": "2026-11-01T01:32:06-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -186,11 +365,34 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "113fc7fb0d069267ab9dc05cd4f2aecc0e5003c07af4e319a480caaf9d81fe0b"
+    },
+    "case-11500735210cdc34": {
+      "case_id": "case-11500735210cdc34",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:32:53-06:00",
+      "description": "systematic[boundary_func/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:32:53-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "11500735210cdc34b1fdd5281881488327c6fdf225329b8ecc06f6b84d085e86"
     },
     "case-12550e3dfae257cf": {
       "case_id": "case-12550e3dfae257cf",
@@ -203,7 +405,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:07-06:00",
+      "last_seen_at": "2026-11-01T01:32:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -211,7 +413,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -251,18 +454,93 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:01-06:00",
+      "last_seen_at": "2026-11-01T01:32:21-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "131d4170b7729d1b32286a36705393a4185aa17fe7dc064f1653aa4926722118"
+    },
+    "case-1486a7b234373577": {
+      "case_id": "case-1486a7b234373577",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:04-06:00",
+      "description": "systematic[boundary_nested/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:04-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "1486a7b23437357731081e3b304d6e6e045eef78bae1630742c2a2610675579f"
+    },
+    "case-14870658c93ce9db": {
+      "case_id": "case-14870658c93ce9db",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:41-06:00",
+      "description": "systematic[boundary_closure/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:41-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "14870658c93ce9db1ea92916e70c49c8563c665693494409fe9dc6aacd97a19e"
+    },
+    "case-1487c557e87055c9": {
+      "case_id": "case-1487c557e87055c9",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:35:24-06:00",
+      "description": "minimized from case-e772a571c7081b2d",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:35:50-06:00",
+      "minimized_from": "case-e772a571c7081b2d",
+      "nondeterministic": false,
+      "replay_history": [
+        {
+          "classification": "DIVERGENT",
+          "command": "python3 -m autopiton replay case-1487c557e87055c9",
+          "fingerprint": "d1153b5a06f7500d036438ba842859b5b0172968aacd4fc75eeae3b06df0fad3",
+          "run_id": "run_20261101_013549_replay_seed0",
+          "timestamp": "2026-11-01T01:35:50-06:00"
+        }
+      ],
+      "run_ids": [
+        "run_20261101_013518_minimize_seed0"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:int->other",
+      "source_hash": "1487c557e87055c9051a0b0ea6c5023919dfb28bdfc38265ebfc0d1ba84ab262"
     },
     "case-16ee8b4a70f91533": {
       "case_id": "case-16ee8b4a70f91533",
@@ -287,6 +565,28 @@
       "signature": null,
       "source_hash": "16ee8b4a70f915336ba005ff0c46099494dbe3c2e9884ce166d5cf5a434202d7"
     },
+    "case-1766049663bc228b": {
+      "case_id": "case-1766049663bc228b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:46-06:00",
+      "description": "systematic[boundary_container/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:46-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "1766049663bc228bfd7425de35eec2405c9798befe14770a611a24e6bd619675"
+    },
     "case-18058898ba6763f0": {
       "case_id": "case-18058898ba6763f0",
       "classification": "EQUIV",
@@ -298,7 +598,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:48-06:00",
+      "last_seen_at": "2026-11-01T01:32:10-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -306,7 +606,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -346,14 +647,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:46-06:00",
+      "last_seen_at": "2026-11-01T01:32:08-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -382,6 +684,50 @@
       "signature": null,
       "source_hash": "1eeab157532931610f08f15d166d9f4d70327519021dda5011a73411875ce2ab"
     },
+    "case-20cdfd0ddd126955": {
+      "case_id": "case-20cdfd0ddd126955",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:10-06:00",
+      "description": "systematic[boundary_starargs/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:10-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "20cdfd0ddd126955100dfa890c5028d215f22f70e1339a778c7932c6409adeb7"
+    },
+    "case-21c61799b15b9d70": {
+      "case_id": "case-21c61799b15b9d70",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:39-06:00",
+      "description": "systematic[boundary_method/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "21c61799b15b9d709c3e4fb53a3d8579c0714cd2faa6dd071ccf53bee10d5133"
+    },
     "case-228d90a490532bbb": {
       "case_id": "case-228d90a490532bbb",
       "classification": "UNSUPPORTED",
@@ -405,6 +751,28 @@
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
       "source_hash": "228d90a490532bbbe409cd9538060838ac4936666f42d41cf3d5c756f8e6efeb"
     },
+    "case-23bc6c9d23d7d2df": {
+      "case_id": "case-23bc6c9d23d7d2df",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:22-06:00",
+      "description": "systematic[boundary_str_format/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:22-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "23bc6c9d23d7d2df877b9b87c9b345ea586c10d5250b77d5be98c24c8fd2c8bc"
+    },
     "case-23cb4ff49252c615": {
       "case_id": "case-23cb4ff49252c615",
       "classification": "EQUIV",
@@ -416,7 +784,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:29-06:00",
+      "last_seen_at": "2026-11-01T01:31:53-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -424,7 +792,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -487,18 +856,41 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:51-06:00",
+      "last_seen_at": "2026-11-01T01:32:12-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "24869db1b37fbcf92721eb85059f268cc9ddcecb1fbffd3b78d5bb2e96fc1d6e"
+    },
+    "case-24b9d331a8f43b5f": {
+      "case_id": "case-24b9d331a8f43b5f",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:18-06:00",
+      "description": "systematic[boundary_fstring/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:18-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "24b9d331a8f43b5f55203e12a4e1aef4441e9bc8039cab4b3f9d0cb6bb9fec15"
     },
     "case-24eae6d5c2cbecfa": {
       "case_id": "case-24eae6d5c2cbecfa",
@@ -557,14 +949,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:07-06:00",
+      "last_seen_at": "2026-11-01T01:32:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -581,7 +974,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:03-06:00",
+      "last_seen_at": "2026-11-01T01:32:23-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -589,7 +982,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -606,7 +1000,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:51-06:00",
+      "last_seen_at": "2026-11-01T01:32:12-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -614,7 +1008,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -642,6 +1037,50 @@
       "seed": 4160575046,
       "signature": null,
       "source_hash": "27a2046bc8d71a79a6fb2ca077a78d0a49ded0119c52151aa0a2011ad43bc1c8"
+    },
+    "case-280e5c0950767e0e": {
+      "case_id": "case-280e5c0950767e0e",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:45-06:00",
+      "description": "systematic[boundary_container/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:45-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "280e5c0950767e0e6334c3a76ea02f932c938ea0da409b73b8ad634377757bd9"
+    },
+    "case-2a4070d4bd3bfd93": {
+      "case_id": "case-2a4070d4bd3bfd93",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:34-06:00",
+      "description": "systematic[boundary_default/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:34-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->none",
+      "source_hash": "2a4070d4bd3bfd93aa7697bf08d68440cacf987a52e63ceb9e23c05cabed5036"
     },
     "case-2a538027c1f0c1b5": {
       "case_id": "case-2a538027c1f0c1b5",
@@ -735,6 +1174,138 @@
       "signature": null,
       "source_hash": "32a70c6a30616d3c5fca291ddec3bd064ee8a14db504c4fd4652b1d246e2bf92"
     },
+    "case-32d979c793d99392": {
+      "case_id": "case-32d979c793d99392",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:08-06:00",
+      "description": "systematic[boundary_arg/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:08-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "32d979c793d9939272ba1985b8436392000c7e3a882490d9c02a1f80aae3a7bd"
+    },
+    "case-337c1d91da1544f4": {
+      "case_id": "case-337c1d91da1544f4",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:05-06:00",
+      "description": "systematic[boundary_nested/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:05-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "337c1d91da1544f4fe968d9f6febeefb849dff9589b878d6cf42459432f39bf3"
+    },
+    "case-344ab1464566e6ea": {
+      "case_id": "case-344ab1464566e6ea",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:47-06:00",
+      "description": "systematic[boundary_generator/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:47-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "344ab1464566e6eab56a17d26ffa71b06bafc85db4a26916b7b684c225b5680f"
+    },
+    "case-34b33fdb21ac944b": {
+      "case_id": "case-34b33fdb21ac944b",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:25-06:00",
+      "description": "systematic[boundary_kwargs/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:25-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "34b33fdb21ac944bb26b6cd0e6822767659c31866a0352a2259da61c935d48c6"
+    },
+    "case-3616b728721f98d9": {
+      "case_id": "case-3616b728721f98d9",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:08-06:00",
+      "description": "systematic[boundary_starargs/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:08-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "3616b728721f98d97330fece27277f979fd7f4efe1c4e7236f705b73160d6003"
+    },
+    "case-362e2539523ee087": {
+      "case_id": "case-362e2539523ee087",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:32:58-06:00",
+      "description": "systematic[boundary_func/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:32:58-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "362e2539523ee0872fcbfce2f4fb1eb5d216d1220ecee70662540e1276c12210"
+    },
     "case-37158a4503ff36ad": {
       "case_id": "case-37158a4503ff36ad",
       "classification": "DIVERGENT",
@@ -746,18 +1317,85 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:31-06:00",
+      "last_seen_at": "2026-11-01T01:31:55-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "37158a4503ff36ad9ac0b282ec1b7eade7461d5bc631584eac4a100838a507dd"
+    },
+    "case-38b35a85bb71c733": {
+      "case_id": "case-38b35a85bb71c733",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:16-06:00",
+      "description": "systematic[boundary_arg/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:16-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "38b35a85bb71c733a12949813db15aafec3e1c32459e45032b973e4d57aeff8a"
+    },
+    "case-3a57965dec1341a2": {
+      "case_id": "case-3a57965dec1341a2",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:26-06:00",
+      "description": "systematic[boundary_percent/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:26-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "3a57965dec1341a26a0488cd4a912a1734a99e454fb01ae437a06daf23dacd0b"
+    },
+    "case-3b836df60f018041": {
+      "case_id": "case-3b836df60f018041",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:23-06:00",
+      "description": "systematic[boundary_kwargs/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:23-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "3b836df60f0180415d88c0af2ed4c6bc58ff2f84adf46c43a472cbd0903f61b6"
     },
     "case-3ccfa548c07d1978": {
       "case_id": "case-3ccfa548c07d1978",
@@ -782,6 +1420,50 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "3ccfa548c07d1978bc696f6f9f0b8bcfe90d0a2bc2182addbccd86585af6ab88"
     },
+    "case-3deb17a78a5b5a7a": {
+      "case_id": "case-3deb17a78a5b5a7a",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:01-06:00",
+      "description": "systematic[boundary_nested/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:01-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "3deb17a78a5b5a7a5065c9d4ea417c38fd49482bbc7bd756fc1f029538113176"
+    },
+    "case-3e6893363489a4fc": {
+      "case_id": "case-3e6893363489a4fc",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:21-06:00",
+      "description": "systematic[boundary_str_format/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:21-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "3e6893363489a4fc16a9e9d3b0afbf1c3fc433d4ea4fa764fc2470b55b24d066"
+    },
     "case-3e8f88f60d7adc7f": {
       "case_id": "case-3e8f88f60d7adc7f",
       "classification": "EQUIV",
@@ -793,7 +1475,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:04-06:00",
+      "last_seen_at": "2026-11-01T01:32:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -801,11 +1483,100 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "3e8f88f60d7adc7f1d4b66a8277d65f2c4f55686c452dc2ae7f1ee07b795b67d"
+    },
+    "case-3fb4969ab4608eac": {
+      "case_id": "case-3fb4969ab4608eac",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:05-06:00",
+      "description": "systematic[boundary_comprehension/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:05-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
+      "source_hash": "3fb4969ab4608eac3de977360dd92532e8380d855c037ed8e39b88b0d5a7857f"
+    },
+    "case-412f3c469add9951": {
+      "case_id": "case-412f3c469add9951",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:41-06:00",
+      "description": "systematic[boundary_method/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:41-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "412f3c469add9951ca1c536879297d65c73e1e4bf8a6fa1d751a0a11cf56bb98"
+    },
+    "case-413dd9a75f6cd896": {
+      "case_id": "case-413dd9a75f6cd896",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:19-06:00",
+      "description": "systematic[boundary_fstring/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:19-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "413dd9a75f6cd896f7a398994b56c17e692a0fed127b4fbfc46af2bf398eb564"
+    },
+    "case-4140ca7717c32de1": {
+      "case_id": "case-4140ca7717c32de1",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:47-06:00",
+      "description": "systematic[boundary_container/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:47-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "4140ca7717c32de1cd0e8189ac97fb7ba92b3eafb7431d3cc1cb3ba322b287e0"
     },
     "case-416f2ab670e27e11": {
       "case_id": "case-416f2ab670e27e11",
@@ -830,6 +1601,28 @@
       "signature": null,
       "source_hash": "416f2ab670e27e113fc87edc1228f3fe452ad6a19b33f6c0718294d7943c6416"
     },
+    "case-4278f9c58f3f506e": {
+      "case_id": "case-4278f9c58f3f506e",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:43-06:00",
+      "description": "systematic[boundary_generator/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:43-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "4278f9c58f3f506eb2f7b8d024c7dc280822f4f2f04b2c802c24ca73faa40026"
+    },
     "case-45def1a4575fc272": {
       "case_id": "case-45def1a4575fc272",
       "classification": "DIVERGENT",
@@ -841,18 +1634,107 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:05-06:00",
+      "last_seen_at": "2026-11-01T01:32:25-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "45def1a4575fc27229f4c77ad422862c8cf4dff91452f6a7dffa255347184d36"
+    },
+    "case-462057d8939c5274": {
+      "case_id": "case-462057d8939c5274",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:05-06:00",
+      "description": "systematic[boundary_nested/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:05-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "462057d8939c5274f5e64fdcc94e775ccd8e3dc6c7f1cb35cdca06507bfaf198"
+    },
+    "case-46ce32a6e24214d2": {
+      "case_id": "case-46ce32a6e24214d2",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:40-06:00",
+      "description": "systematic[boundary_closure/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:40-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "46ce32a6e24214d2f2e54efe05da0798180111ee361b4239b51b3c39ec495b83"
+    },
+    "case-47448ab026562a1f": {
+      "case_id": "case-47448ab026562a1f",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:42-06:00",
+      "description": "systematic[boundary_closure/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:42-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "47448ab026562a1faa2c0a97b415488fa84d00403a85884acc82aa8cb683a468"
+    },
+    "case-479eb5f21b7159ca": {
+      "case_id": "case-479eb5f21b7159ca",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:29-06:00",
+      "description": "systematic[boundary_default/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:29-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "479eb5f21b7159ca25546b125c34f568c8694731c10897e79ef2b58f0a428d16"
     },
     "case-4912b393280ecaef": {
       "case_id": "case-4912b393280ecaef",
@@ -888,16 +1770,39 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:21-06:00",
+      "last_seen_at": "2026-11-01T01:32:46-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "4a2e2c6fb2be7c0915b1dfd34639d56b347d679d53e17448ef5ce645895e9c0d"
+    },
+    "case-4b3025d4cf09b350": {
+      "case_id": "case-4b3025d4cf09b350",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:34-06:00",
+      "description": "systematic[boundary_classattr/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:34-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "4b3025d4cf09b3506b591a56bc07451912747a795ed36a29f65f8bb82949ad9f"
     },
     "case-4c792f7c8d69818c": {
       "case_id": "case-4c792f7c8d69818c",
@@ -921,6 +1826,28 @@
       "seed": 2659704908,
       "signature": null,
       "source_hash": "4c792f7c8d69818c8e69d6d01cbc7c4ab1ed9368de4e48b6cc8131737076da37"
+    },
+    "case-4ce783c08a84e459": {
+      "case_id": "case-4ce783c08a84e459",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:47-06:00",
+      "description": "systematic[boundary_generator/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:47-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "4ce783c08a84e45993fb0fddbc5dbfefb7ba00084ff55bc8fa402ea9badb229b"
     },
     "case-4d25af23ed64826d": {
       "case_id": "case-4d25af23ed64826d",
@@ -971,7 +1898,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:30-06:00",
+      "last_seen_at": "2026-11-01T01:31:54-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -979,7 +1906,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1031,6 +1959,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "4e4e59b5f3193e1318e2ef7d420085f0e093d6877f0f89f3148a99a5fb397286"
     },
+    "case-4e5041dbcef4637a": {
+      "case_id": "case-4e5041dbcef4637a",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:24-06:00",
+      "description": "systematic[boundary_str_format/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:24-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "4e5041dbcef4637ad9b2d858ef61bf2b2bf4eeedca2b008ca6bf905444c142ea"
+    },
     "case-4ec3d08218b5dad2": {
       "case_id": "case-4ec3d08218b5dad2",
       "classification": "EQUIV",
@@ -1053,6 +2003,28 @@
       "seed": 1010193046,
       "signature": null,
       "source_hash": "4ec3d08218b5dad251ec06e45c47f24f3f34a5a71b22d8003001fe099afc671f"
+    },
+    "case-516d5cf14837a079": {
+      "case_id": "case-516d5cf14837a079",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:45-06:00",
+      "description": "systematic[boundary_generator/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:45-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "516d5cf14837a0790b493bb9a1d939cd04064d87b219aa0062c6875cb0f0e15f"
     },
     "case-52ec2e43a5d86c64": {
       "case_id": "case-52ec2e43a5d86c64",
@@ -1077,6 +2049,28 @@
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
       "source_hash": "52ec2e43a5d86c64dbc1a1ad924926623e0eecbf0969258f96b75b03d2a178d6"
     },
+    "case-53e0edee5741e624": {
+      "case_id": "case-53e0edee5741e624",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:11-06:00",
+      "description": "systematic[boundary_starargs/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:11-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "53e0edee5741e624630aa9e1610c5ec941fff8e8fdee33b25b7402c6011937c7"
+    },
     "case-55e2be756d8e62f7": {
       "case_id": "case-55e2be756d8e62f7",
       "classification": "EQUIV",
@@ -1100,6 +2094,116 @@
       "signature": null,
       "source_hash": "55e2be756d8e62f770eb1983aa40e1b2d53149958e931a095647e8635cb0b473"
     },
+    "case-56dac03cbf5b1649": {
+      "case_id": "case-56dac03cbf5b1649",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:53-06:00",
+      "description": "systematic[boundary_dict/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:53-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "56dac03cbf5b1649a1b16beee69dfc7e34f957122a6caa6a3d182c52ff9b81ee"
+    },
+    "case-57b6cbea19215534": {
+      "case_id": "case-57b6cbea19215534",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:28-06:00",
+      "description": "systematic[boundary_percent/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:28-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "57b6cbea192155345873ec09ccb4246d02496f4c956a1aec0d8d843b460a7547"
+    },
+    "case-58c37be1085101fb": {
+      "case_id": "case-58c37be1085101fb",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:43-06:00",
+      "description": "systematic[boundary_closure/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:43-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "58c37be1085101fb70e335fd9bada9c5192a53a0546e8573fab0864879fa7022"
+    },
+    "case-597b45887191e1cb": {
+      "case_id": "case-597b45887191e1cb",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:00-06:00",
+      "description": "systematic[boundary_comprehension/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:00-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:int->other",
+      "source_hash": "597b45887191e1cb09f674457c6ac7f7daad60540d835f6fdda9a4f1eecc3372"
+    },
+    "case-5a1f0b45fa37fa62": {
+      "case_id": "case-5a1f0b45fa37fa62",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:30-06:00",
+      "description": "systematic[boundary_percent/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:30-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "5a1f0b45fa37fa6226987bbbd66035615ed3aa359c4d242a762501667e2789e8"
+    },
     "case-5a819b726a51004a": {
       "case_id": "case-5a819b726a51004a",
       "classification": "EQUIV",
@@ -1111,7 +2215,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:42-06:00",
+      "last_seen_at": "2026-11-01T01:32:04-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1119,11 +2223,100 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "5a819b726a51004a4fc672b7b93088297ec3e78e803804f102e048098f8eef63"
+    },
+    "case-5a8346c93ba02248": {
+      "case_id": "case-5a8346c93ba02248",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:19-06:00",
+      "description": "systematic[boundary_arg/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:19-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "5a8346c93ba022483455490bff62aa9e3b134286666e28b8478be5a0a764edaa"
+    },
+    "case-5b69bb61f2ae039e": {
+      "case_id": "case-5b69bb61f2ae039e",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:12-06:00",
+      "description": "systematic[boundary_starargs/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:12-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "5b69bb61f2ae039e03bed82288f48718508ba9f1d571b6f6263b1a5bd09fe6bb"
+    },
+    "case-5b745cd29524169a": {
+      "case_id": "case-5b745cd29524169a",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:17-06:00",
+      "description": "systematic[boundary_fstring/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:17-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "5b745cd29524169a39aeb5d6c7a8fb91ae0266cb1bf74689056b71ccc9c3e20d"
+    },
+    "case-5b8c9fdc7edd85d2": {
+      "case_id": "case-5b8c9fdc7edd85d2",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:37-06:00",
+      "description": "systematic[boundary_method/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:37-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "5b8c9fdc7edd85d2fa0f89c7853ba92d81696f9b60bcd3ff5197104df6ff79d8"
     },
     "case-5c2f72918763b970": {
       "case_id": "case-5c2f72918763b970",
@@ -1148,6 +2341,28 @@
       "signature": null,
       "source_hash": "5c2f72918763b9701eb9319ca7ed31d97b5ad2197f3bdc93608a85914bc2a963"
     },
+    "case-5da66c2d190c4f9d": {
+      "case_id": "case-5da66c2d190c4f9d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:23-06:00",
+      "description": "systematic[boundary_str_format/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:23-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "5da66c2d190c4f9d40ea957e76bb81809c5616564e72fa9a8782fbf99f230160"
+    },
     "case-5f83d6d05e238d44": {
       "case_id": "case-5f83d6d05e238d44",
       "classification": "EQUIV",
@@ -1170,6 +2385,50 @@
       "seed": 855256552,
       "signature": null,
       "source_hash": "5f83d6d05e238d4412a320c375a172ea51e675c22a068e6b51b93a7aecd9faf9"
+    },
+    "case-61c20e05afe9c8fa": {
+      "case_id": "case-61c20e05afe9c8fa",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:17-06:00",
+      "description": "systematic[boundary_arg/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:17-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "61c20e05afe9c8fab15ef07539918454ecbe0e6810dd864e1874cdd3d3871ecd"
+    },
+    "case-637dc2c8529762da": {
+      "case_id": "case-637dc2c8529762da",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:31-06:00",
+      "description": "systematic[boundary_percent/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:31-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "637dc2c8529762da8db3becec584da1f63768ef79a87dc9c0855cdd3f925d803"
     },
     "case-63ddc80fb03524b4": {
       "case_id": "case-63ddc80fb03524b4",
@@ -1194,6 +2453,138 @@
       "signature": null,
       "source_hash": "63ddc80fb03524b4a15a736308b85faeaac270dc043377302176aead7568229e"
     },
+    "case-66c9e3e8f986a7df": {
+      "case_id": "case-66c9e3e8f986a7df",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:31-06:00",
+      "description": "systematic[boundary_default/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:31-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->none",
+      "source_hash": "66c9e3e8f986a7df9446f3e1980e086dce2c20bba334d5052902bb654706790b"
+    },
+    "case-67501d7f6f6a7b4f": {
+      "case_id": "case-67501d7f6f6a7b4f",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:22-06:00",
+      "description": "systematic[boundary_kwargs/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:22-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "67501d7f6f6a7b4fa1a97dc83a8c70acaedd79afdc08797d140365e7cc137053"
+    },
+    "case-67f9dbdb212bc4ea": {
+      "case_id": "case-67f9dbdb212bc4ea",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:56-06:00",
+      "description": "systematic[boundary_dict/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:56-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "67f9dbdb212bc4ea1b2e980c3f9eb67128c8cf0f05e77ad6f58adf64c0bf3b6d"
+    },
+    "case-69c465e2c2d6f3d0": {
+      "case_id": "case-69c465e2c2d6f3d0",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:43-06:00",
+      "description": "systematic[boundary_closure/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:43-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "69c465e2c2d6f3d0830dbc6b8a44c7cc27032d7e8d9c7bff80f46bcf684c0189"
+    },
+    "case-6a4037df7616c76e": {
+      "case_id": "case-6a4037df7616c76e",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:10-06:00",
+      "description": "systematic[boundary_starargs/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:10-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "6a4037df7616c76e44d52b37ff67aa535443b7311a249e5bfe50d96f0db8e2af"
+    },
+    "case-6a625455f66bccf5": {
+      "case_id": "case-6a625455f66bccf5",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:27-06:00",
+      "description": "systematic[boundary_percent/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:27-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "6a625455f66bccf5dacb5436ab47e5a847178fa5c8365505ef865a069e526b3b"
+    },
     "case-6ad2f261ba5cbb62": {
       "case_id": "case-6ad2f261ba5cbb62",
       "classification": "EQUIV",
@@ -1205,14 +2596,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:12-06:00",
+      "last_seen_at": "2026-11-01T01:32:32-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1287,6 +2679,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "6debd6132f5794c75b000b807b3f7137828002fe79615570c2ad6f90c2e9fdfb"
     },
+    "case-6f85628e12a9294d": {
+      "case_id": "case-6f85628e12a9294d",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:02-06:00",
+      "description": "systematic[boundary_comprehension/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:02-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->other",
+      "source_hash": "6f85628e12a9294d9b6590fd1a22b4c4d317c682b7f83ab9ba242ab62b4d799b"
+    },
     "case-707d1042403c5de2": {
       "case_id": "case-707d1042403c5de2",
       "classification": "INVALID_ACCEPTED",
@@ -1328,12 +2742,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:14-06:00",
+      "last_seen_at": "2026-11-01T01:32:34-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1373,7 +2788,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:11-06:00",
+      "last_seen_at": "2026-11-01T01:32:31-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1381,7 +2796,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1421,16 +2837,39 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:19-06:00",
+      "last_seen_at": "2026-11-01T01:32:43-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "743c8555280c1e744fa589d2745ff4247b28f53c43ee123c720cbad1ba0f8bf6"
+    },
+    "case-7523e2431e537d1f": {
+      "case_id": "case-7523e2431e537d1f",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:32:57-06:00",
+      "description": "systematic[boundary_func/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:32:57-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "7523e2431e537d1fbcb193184121110375696ab6be2d0ee2310414838551dce4"
     },
     "case-75eca1c43accfc16": {
       "case_id": "case-75eca1c43accfc16",
@@ -1443,14 +2882,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:48-06:00",
+      "last_seen_at": "2026-11-01T01:32:09-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -1467,12 +2907,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:16-06:00",
+      "last_seen_at": "2026-11-01T01:32:36-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1501,6 +2942,50 @@
       "signature": null,
       "source_hash": "7675eaa3ff318e154da65da35a626c030ec73a80f06c83f5400149658bc8e55d"
     },
+    "case-768b4f6322e52ee9": {
+      "case_id": "case-768b4f6322e52ee9",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:26-06:00",
+      "description": "systematic[boundary_kwargs/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:26-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "768b4f6322e52ee940b2f3dc97ab6ef2191b7fd71d66a9dbf08ad5fdf0f11066"
+    },
+    "case-76f097921ba8b309": {
+      "case_id": "case-76f097921ba8b309",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:37-06:00",
+      "description": "systematic[boundary_default/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:37-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->none",
+      "source_hash": "76f097921ba8b309fc07e168f4e4b1841f4335697b31013b053960e6ff21cbb4"
+    },
     "case-77acdc84437a6633": {
       "case_id": "case-77acdc84437a6633",
       "classification": "DIVERGENT",
@@ -1512,12 +2997,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:23-06:00",
+      "last_seen_at": "2026-11-01T01:32:48-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -1546,6 +3032,50 @@
       "signature": null,
       "source_hash": "780a1b7341ceba92f056d0447f63f96dd0849e1d8066da7ba4a28832eaef440a"
     },
+    "case-7914ea4f86fd1087": {
+      "case_id": "case-7914ea4f86fd1087",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:03-06:00",
+      "description": "systematic[boundary_comprehension/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:03-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->other",
+      "source_hash": "7914ea4f86fd1087be6cb5bc6f0b9e32af0ab7d49042deffc1d6968c142a8d44"
+    },
+    "case-7bbfee2ef1d84d66": {
+      "case_id": "case-7bbfee2ef1d84d66",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:07-06:00",
+      "description": "systematic[boundary_nested/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:07-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "7bbfee2ef1d84d66fe284d44445f2523e8e3c78c7c96c812f003a94701dd4d54"
+    },
     "case-7eab851e74666613": {
       "case_id": "case-7eab851e74666613",
       "classification": "EQUIV",
@@ -1568,6 +3098,28 @@
       "seed": 3821286999,
       "signature": null,
       "source_hash": "7eab851e74666613d70cbba99fbee91e4d849d3622e6de1401e6c9108e62f37e"
+    },
+    "case-7f822712ec64da60": {
+      "case_id": "case-7f822712ec64da60",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:39-06:00",
+      "description": "systematic[boundary_method/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "7f822712ec64da60a03e08748ce498f5b7b5dc31ab892c02daa3435d11ce21a3"
     },
     "case-7faffc602822b75e": {
       "case_id": "case-7faffc602822b75e",
@@ -1592,6 +3144,28 @@
       "signature": null,
       "source_hash": "7faffc602822b75ee5ea0c9b4bf9c0f6242e4c87ffca4377af3b1ce131b0b43e"
     },
+    "case-8068517572b20b09": {
+      "case_id": "case-8068517572b20b09",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:46-06:00",
+      "description": "systematic[boundary_container/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:46-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "8068517572b20b09b551a869ae422aefee9281478de8d85693eb76faac7cd28f"
+    },
     "case-80947b1e517ea5af": {
       "case_id": "case-80947b1e517ea5af",
       "classification": "EQUIV",
@@ -1603,7 +3177,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:56-06:00",
+      "last_seen_at": "2026-11-01T01:32:16-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1611,7 +3185,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1639,6 +3214,28 @@
       "seed": 2342331444,
       "signature": null,
       "source_hash": "81820eef4eb5acd893cdffb55ee55340b439979051c1c546c5cb6192c3ff4344"
+    },
+    "case-81bb0148a506bc1c": {
+      "case_id": "case-81bb0148a506bc1c",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:29-06:00",
+      "description": "systematic[boundary_percent/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:29-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "81bb0148a506bc1cac1a7a1cee42f6391cc0e3f6bf85965f85dc4e6923b1a7e5"
     },
     "case-8288104f7089d964": {
       "case_id": "case-8288104f7089d964",
@@ -1674,7 +3271,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:45-06:00",
+      "last_seen_at": "2026-11-01T01:32:07-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1682,11 +3279,34 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "853dbe6a6504937e5cc77f02d81ddf509c2feb948e3e300adce6149c5cf183d8"
+    },
+    "case-855c7d54d19355f0": {
+      "case_id": "case-855c7d54d19355f0",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:01-06:00",
+      "description": "systematic[boundary_comprehension/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:01-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->other",
+      "source_hash": "855c7d54d19355f0576e0bc17293c542adbadd85767a64a1e328377f21c9d716"
     },
     "case-86275975ae552d7c": {
       "case_id": "case-86275975ae552d7c",
@@ -1711,6 +3331,28 @@
       "signature": null,
       "source_hash": "86275975ae552d7c8ff0b398da3ee148ee23637133532e819f8b4f23694d8eff"
     },
+    "case-8716648f7e3ba8e1": {
+      "case_id": "case-8716648f7e3ba8e1",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:44-06:00",
+      "description": "systematic[boundary_generator/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:44-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "8716648f7e3ba8e16cb01104492293d04868087a567ca6f0afeced2610f4e854"
+    },
     "case-880605da24f7c0b1": {
       "case_id": "case-880605da24f7c0b1",
       "classification": "EQUIV",
@@ -1734,6 +3376,28 @@
       "signature": null,
       "source_hash": "880605da24f7c0b14fc80c50dff21d4ba9a3b442610ffd8b0ad642ed5bee3969"
     },
+    "case-88c6d0e8926f19ee": {
+      "case_id": "case-88c6d0e8926f19ee",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:34-06:00",
+      "description": "systematic[boundary_classattr/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:34-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "88c6d0e8926f19ee645d4ff0674005ae2711e1fcbcdad1217e5a2015dca7ca66"
+    },
     "case-89c8b838bd1c6293": {
       "case_id": "case-89c8b838bd1c6293",
       "classification": "DIVERGENT",
@@ -1745,18 +3409,41 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:59-06:00",
+      "last_seen_at": "2026-11-01T01:32:20-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "89c8b838bd1c6293f3fca6eb06b9ae5927b009f65013868a407e883d4b4b1681"
+    },
+    "case-8a483ddf28b6742d": {
+      "case_id": "case-8a483ddf28b6742d",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:06-06:00",
+      "description": "systematic[boundary_comprehension/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:06-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
+      "source_hash": "8a483ddf28b6742dbd623754d7cbb1fcd68cf30c03525098f83b7db4f84cfaf0"
     },
     "case-8b34ef8e80fce517": {
       "case_id": "case-8b34ef8e80fce517",
@@ -1804,6 +3491,28 @@
       "signature": null,
       "source_hash": "8dd956643be5bfa1b1d5f10a3d17847eaff6bc81901f68cf5cdfc050e29d7820"
     },
+    "case-8f14a8aa53a76fc4": {
+      "case_id": "case-8f14a8aa53a76fc4",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:57-06:00",
+      "description": "systematic[boundary_dict/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:57-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "8f14a8aa53a76fc406cf8ff7307d59f87de982ade49c25b9f1e381c5c64e931d"
+    },
     "case-8fa3593bc8a1538e": {
       "case_id": "case-8fa3593bc8a1538e",
       "classification": "EQUIV",
@@ -1838,12 +3547,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:15-06:00",
+      "last_seen_at": "2026-11-01T01:32:35-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1906,18 +3616,63 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:13-06:00",
+      "last_seen_at": "2026-11-01T01:32:33-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "922e66ea55959a4f9dde4622598e4c7e8fe89173f797f558b068dc704f6150d2"
+    },
+    "case-92938fd7d201491d": {
+      "case_id": "case-92938fd7d201491d",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:46-06:00",
+      "description": "systematic[boundary_generator/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:46-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "92938fd7d201491d8061bf1d0294c2a198ab3280b90417824fdf8424b4369b2d"
+    },
+    "case-92d933a2e4d8fc1e": {
+      "case_id": "case-92d933a2e4d8fc1e",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:33-06:00",
+      "description": "systematic[boundary_classattr/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:33-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "92d933a2e4d8fc1e6f74a1d0a5bdb1e8bf58402c3bf677a95b958281c1779a45"
     },
     "case-93198047b71e24a2": {
       "case_id": "case-93198047b71e24a2",
@@ -1930,14 +3685,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:58-06:00",
+      "last_seen_at": "2026-11-01T01:32:18-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -1954,12 +3710,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:20-06:00",
+      "last_seen_at": "2026-11-01T01:32:45-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -1988,6 +3745,28 @@
       "signature": null,
       "source_hash": "95c9b5863dcab5d0e4cd8ccfc04147fd893fc6c0edb31da89014d3b475db910b"
     },
+    "case-973aa0378eefe445": {
+      "case_id": "case-973aa0378eefe445",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:48-06:00",
+      "description": "systematic[boundary_container/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:48-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "973aa0378eefe4454f2b834171f1a520633f7781e3ac70f065186cc308b1c32b"
+    },
     "case-978a7e684d0660f0": {
       "case_id": "case-978a7e684d0660f0",
       "classification": "EQUIV",
@@ -1999,14 +3778,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:43-06:00",
+      "last_seen_at": "2026-11-01T01:32:05-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2023,12 +3803,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:17-06:00",
+      "last_seen_at": "2026-11-01T01:32:38-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -2079,6 +3860,28 @@
       "seed": 1137651678,
       "signature": null,
       "source_hash": "98eaed99ac232786270decc2ff4fb485620b3507a1c080be58eb16457c002a70"
+    },
+    "case-9a3d56364cc1a030": {
+      "case_id": "case-9a3d56364cc1a030",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:32:54-06:00",
+      "description": "systematic[boundary_func/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:32:54-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "9a3d56364cc1a030fe2e38cc1881d96ae355e8d92ab07fce1b00309728631b52"
     },
     "case-9c1863ddd1284814": {
       "case_id": "case-9c1863ddd1284814",
@@ -2172,6 +3975,72 @@
       "signature": null,
       "source_hash": "a05366650ecd6d5163c90fc49e08ce7999180dd2deb9725897fd94d464b68176"
     },
+    "case-a0b0f91d41cb13ce": {
+      "case_id": "case-a0b0f91d41cb13ce",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:52-06:00",
+      "description": "systematic[boundary_dict/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:52-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "a0b0f91d41cb13ce21130a668b19fba5fdd80a0292adf09c40b03365af7cf9a6"
+    },
+    "case-a0c0a4485ddbb6c4": {
+      "case_id": "case-a0c0a4485ddbb6c4",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:21-06:00",
+      "description": "systematic[boundary_str_format/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:21-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "a0c0a4485ddbb6c4bcd5ebc0f4fa07e13fe160031f422e6d842dd2068810d280"
+    },
+    "case-a11801ed7fbfae2a": {
+      "case_id": "case-a11801ed7fbfae2a",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:15-06:00",
+      "description": "systematic[boundary_arg/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:15-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "a11801ed7fbfae2a3c874899feb7b23608a253a112a33c5b2f01a623e9630237"
+    },
     "case-a2e82a07a2e539ec": {
       "case_id": "case-a2e82a07a2e539ec",
       "classification": "DIVERGENT",
@@ -2206,14 +4075,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:38-06:00",
+      "last_seen_at": "2026-11-01T01:32:01-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -2288,6 +4158,72 @@
       "signature": null,
       "source_hash": "a582efcea4a33b7a562068c3b7cca71ac4a4c013405e4edd37486cdb333fd3fc"
     },
+    "case-a61fb7719ec39db2": {
+      "case_id": "case-a61fb7719ec39db2",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:21-06:00",
+      "description": "systematic[boundary_kwargs/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:21-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "a61fb7719ec39db27478e79c0fdcc57edfcb6922b094949402458337447aa8f7"
+    },
+    "case-a68ad58522fe55db": {
+      "case_id": "case-a68ad58522fe55db",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:15-06:00",
+      "description": "systematic[boundary_fstring/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:15-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "a68ad58522fe55dbd64c15465ce63793ddd5d7f86ff131c82e97a5025246dd4c"
+    },
+    "case-a7b98ea202e3b58b": {
+      "case_id": "case-a7b98ea202e3b58b",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:03-06:00",
+      "description": "systematic[boundary_nested/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:03-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "a7b98ea202e3b58bb7ab5cc052ca61e77554e8abcc3b476b4314f6b472b466ac"
+    },
     "case-a7f450e2dfe4449f": {
       "case_id": "case-a7f450e2dfe4449f",
       "classification": "EQUIV",
@@ -2322,14 +4258,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:02-06:00",
+      "last_seen_at": "2026-11-01T01:32:22-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -2346,18 +4283,41 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:55-06:00",
+      "last_seen_at": "2026-11-01T01:32:16-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "a949099c2101f118512b42755ee2473e534818285910d1a9b42b70f5d4f77ca6"
+    },
+    "case-a9a38d902998c8dc": {
+      "case_id": "case-a9a38d902998c8dc",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:44-06:00",
+      "description": "systematic[boundary_container/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:44-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "a9a38d902998c8dc0e32b798fa3ff6478fa3d1fef47fc036d933d46b671d5a68"
     },
     "case-aa69f6780719ac82": {
       "case_id": "case-aa69f6780719ac82",
@@ -2439,16 +4399,61 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:22-06:00",
+      "last_seen_at": "2026-11-01T01:32:47-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "abb76133927f2b5b81cdbbe71e0d1ab380dcd02e3ecb40bebbd94ba1be2f878d"
+    },
+    "case-aee05824abbc8e56": {
+      "case_id": "case-aee05824abbc8e56",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:41-06:00",
+      "description": "systematic[boundary_method/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:41-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "aee05824abbc8e560f5918d9a3588b485597267b2286f345ad704c46bc52285d"
+    },
+    "case-af256a2794352884": {
+      "case_id": "case-af256a2794352884",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:09-06:00",
+      "description": "systematic[boundary_starargs/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:09-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "af256a27943528840c0f77578acee3a7c0af643cabcac5ab65841cc155713e24"
     },
     "case-af87cdb0fd84ec03": {
       "case_id": "case-af87cdb0fd84ec03",
@@ -2461,14 +4466,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:33-06:00",
+      "last_seen_at": "2026-11-01T01:31:57-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2485,18 +4491,41 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:40-06:00",
+      "last_seen_at": "2026-11-01T01:32:02-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "b05438e3217928f17d8ec80d9d07a32ad290a58d8d4128130f5bb3775fda2427"
+    },
+    "case-b434861e80a01bb4": {
+      "case_id": "case-b434861e80a01bb4",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:32:56-06:00",
+      "description": "systematic[boundary_func/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:32:56-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "b434861e80a01bb48a9dd1ec5848b4c8d8d102c3d854ed7e7c6bd890a587f6ce"
     },
     "case-b5e148df78c46ca7": {
       "case_id": "case-b5e148df78c46ca7",
@@ -2521,6 +4550,50 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "b5e148df78c46ca72b5f3a57e04783b41cda2da4301521a43f1450029c96b8d1"
     },
+    "case-b6542d11dd112ebf": {
+      "case_id": "case-b6542d11dd112ebf",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:55-06:00",
+      "description": "systematic[boundary_dict/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:55-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "b6542d11dd112ebfa1dc1c29aef73ca66b488a0f7d97724bda9d53990b7d5ea0"
+    },
+    "case-b68d756168a4f9ee": {
+      "case_id": "case-b68d756168a4f9ee",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:40-06:00",
+      "description": "systematic[boundary_method/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:40-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "b68d756168a4f9ee54f38a2271ccc63f841b0f0e3f9d0b810e9c2a084d6d8dd9"
+    },
     "case-b735d9835bece440": {
       "case_id": "case-b735d9835bece440",
       "classification": "EQUIV",
@@ -2532,14 +4605,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:08-06:00",
+      "last_seen_at": "2026-11-01T01:32:28-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2556,7 +4630,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:39-06:00",
+      "last_seen_at": "2026-11-01T01:32:01-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2564,7 +4638,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2581,7 +4656,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:37-06:00",
+      "last_seen_at": "2026-11-01T01:32:00-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2589,7 +4664,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2618,6 +4694,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "b92a3a119fdbbf98efbc7d187655a6f8cb4ffa8f1211ce4131a8d9b9e8d40847"
     },
+    "case-b9f238c6c58aee6c": {
+      "case_id": "case-b9f238c6c58aee6c",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:32:51-06:00",
+      "description": "systematic[boundary_func/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:32:51-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "b9f238c6c58aee6c7397a835980766c8d97b3c06a4f6f10e3a044711d61cfe61"
+    },
     "case-bad788f2784c4652": {
       "case_id": "case-bad788f2784c4652",
       "classification": "DIVERGENT",
@@ -2629,18 +4727,41 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:52-06:00",
+      "last_seen_at": "2026-11-01T01:32:13-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "bad788f2784c46527c6424d9818c25dd18cf680de5a0152fe6bd4086646857f9"
+    },
+    "case-bc8b148bb0b36839": {
+      "case_id": "case-bc8b148bb0b36839",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:36-06:00",
+      "description": "systematic[boundary_classattr/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:36-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "bc8b148bb0b36839aac7e461710e45c93e63e355a3e5bfc529df3b231f6871b7"
     },
     "case-be41fb55c43e8f15": {
       "case_id": "case-be41fb55c43e8f15",
@@ -2653,7 +4774,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:09-06:00",
+      "last_seen_at": "2026-11-01T01:32:29-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2661,11 +4782,34 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "be41fb55c43e8f15fba21ade3ff2116d74a5353e16a7db57abc05b176dc2abb9"
+    },
+    "case-be6603f178f58378": {
+      "case_id": "case-be6603f178f58378",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:42-06:00",
+      "description": "systematic[boundary_method/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:42-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "be6603f178f58378e11a00c80605c38b14ef9575e435a2ac624834824868e89e"
     },
     "case-bf3d75f9ad761615": {
       "case_id": "case-bf3d75f9ad761615",
@@ -2701,7 +4845,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:47-06:00",
+      "last_seen_at": "2026-11-01T01:32:08-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2709,7 +4853,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2726,7 +4871,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:01-06:00",
+      "last_seen_at": "2026-11-01T01:32:22-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2734,11 +4879,34 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "bf74c4f1273e149c1461a5453926eb8b7f17c3ec0990e269b933005fc5b45391"
+    },
+    "case-c0824b88b8c472a1": {
+      "case_id": "case-c0824b88b8c472a1",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:07-06:00",
+      "description": "systematic[boundary_starargs/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:07-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "c0824b88b8c472a1ebc0e1dbaae105b2c82ae904430a70ee61302a0ccaab8771"
     },
     "case-c10f0d169a35f8a6": {
       "case_id": "case-c10f0d169a35f8a6",
@@ -2751,7 +4919,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:40-06:00",
+      "last_seen_at": "2026-11-01T01:32:03-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2759,11 +4927,34 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "c10f0d169a35f8a63653eb8f8d217fded5fe27df9500cdcd9edaaec3676b5a1f"
+    },
+    "case-c2f89ea919704211": {
+      "case_id": "case-c2f89ea919704211",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:28-06:00",
+      "description": "systematic[boundary_percent/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:28-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "c2f89ea9197042110f0368853e437c949f8d5924135ed623ce57c4d3fc89f3c2"
     },
     "case-c40807ea966ad9e4": {
       "case_id": "case-c40807ea966ad9e4",
@@ -2812,6 +5003,28 @@
       "signature": null,
       "source_hash": "c4cde107c427eac828392c8f8230b5c062fdcaad87a6becfd327df5a357750f1"
     },
+    "case-c6141fb866a91fb7": {
+      "case_id": "case-c6141fb866a91fb7",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:28-06:00",
+      "description": "systematic[boundary_kwargs/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:28-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "c6141fb866a91fb7fb416cb2d52803a52308cfa1786a4d52bc16f5b9f1772553"
+    },
     "case-c69f2278220f35c6": {
       "case_id": "case-c69f2278220f35c6",
       "classification": "DIVERGENT",
@@ -2823,14 +5036,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:56-06:00",
+      "last_seen_at": "2026-11-01T01:32:17-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -2847,7 +5061,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:00-06:00",
+      "last_seen_at": "2026-11-01T01:32:20-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2855,7 +5069,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2872,14 +5087,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:41-06:00",
+      "last_seen_at": "2026-11-01T01:32:03-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -2896,16 +5112,61 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:15-06:00",
+      "last_seen_at": "2026-11-01T01:32:35-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "c953a948a8c83d3a6ee5c345790aeaf74577d4cd5ee264464fb22ae0ac2233b7"
+    },
+    "case-cc616a8c49b651af": {
+      "case_id": "case-cc616a8c49b651af",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:14-06:00",
+      "description": "systematic[boundary_fstring/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:14-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "cc616a8c49b651afd21cbea54935016bcf55fa1f44cf5aeb3788206c38370825"
+    },
+    "case-cdfdc89b6960f54b": {
+      "case_id": "case-cdfdc89b6960f54b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:20-06:00",
+      "description": "systematic[boundary_fstring/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:20-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "cdfdc89b6960f54b9f8a177913b16646c09822b9c55bb457c2e6969410d5cb12"
     },
     "case-cf8330fc2b3d7324": {
       "case_id": "case-cf8330fc2b3d7324",
@@ -2918,18 +5179,41 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:30-06:00",
+      "last_seen_at": "2026-11-01T01:31:54-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "cf8330fc2b3d7324a47d5fbfc3bf7261ba4ad2a2793f0c8c063c560beb0275cc"
+    },
+    "case-cfc4b6f94bcc4332": {
+      "case_id": "case-cfc4b6f94bcc4332",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:30-06:00",
+      "description": "systematic[boundary_default/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:30-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "cfc4b6f94bcc43326436ef52302a2511da39bcd7fbb5f6367c465d8dea18a829"
     },
     "case-d255bb3922a85207": {
       "case_id": "case-d255bb3922a85207",
@@ -2942,12 +5226,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:22-06:00",
+      "last_seen_at": "2026-11-01T01:32:48-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2964,16 +5249,61 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:24-06:00",
+      "last_seen_at": "2026-11-01T01:32:49-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "d2573c9672506027787f81b5b65642a0e3eeed2e7421a3a188bc82065418020f"
+    },
+    "case-d2b45732f761cf83": {
+      "case_id": "case-d2b45732f761cf83",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:31-06:00",
+      "description": "systematic[boundary_classattr/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:31-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "d2b45732f761cf8386485218a0a492efda58906426ba7166eb9294473c11f549"
+    },
+    "case-d402f4b573bd3caa": {
+      "case_id": "case-d402f4b573bd3caa",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:10-06:00",
+      "description": "systematic[boundary_arg/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:10-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "d402f4b573bd3caabfab4e92da98f56d8ba6c791de7a5b313c33aeb3b393d1e9"
     },
     "case-d48362bc0010f443": {
       "case_id": "case-d48362bc0010f443",
@@ -3009,14 +5339,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:54-06:00",
+      "last_seen_at": "2026-11-01T01:32:14-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -3033,18 +5364,41 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:04-06:00",
+      "last_seen_at": "2026-11-01T01:32:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "d680aaf6f05aa384eafd97dd576c30620dfe673fe94b2a6e5678d8fcce835c41"
+    },
+    "case-d78ce4d965025f8a": {
+      "case_id": "case-d78ce4d965025f8a",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:39-06:00",
+      "description": "systematic[boundary_closure/direct] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "d78ce4d965025f8a5bd71beae0f9aff892f9b3e42d164a054472affd94ecc236"
     },
     "case-d902821b81eb4391": {
       "case_id": "case-d902821b81eb4391",
@@ -3068,6 +5422,50 @@
       "seed": 40009587,
       "signature": null,
       "source_hash": "d902821b81eb4391817ce5b27d0c6638ec3d13d43c47a43444f811f04ed5d23a"
+    },
+    "case-da81fa54c80b9640": {
+      "case_id": "case-da81fa54c80b9640",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:16-06:00",
+      "description": "systematic[boundary_fstring/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:16-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "da81fa54c80b964028954e417d195d78e9b33f87cc262378f6b17b5455e17037"
+    },
+    "case-db32d2aac800c682": {
+      "case_id": "case-db32d2aac800c682",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:32-06:00",
+      "description": "systematic[boundary_default/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:32-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->none",
+      "source_hash": "db32d2aac800c682004c195267417d4027f06e56552ee77d59b44470f62e9de5"
     },
     "case-db5a45382e9ec23a": {
       "case_id": "case-db5a45382e9ec23a",
@@ -3115,6 +5513,28 @@
       "signature": null,
       "source_hash": "db5e1c85c5a1679ab62718bc5cc537569567735eaa32cff6476b8561c023a9fa"
     },
+    "case-dc166b6e36ef19e4": {
+      "case_id": "case-dc166b6e36ef19e4",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:13-06:00",
+      "description": "systematic[boundary_starargs/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:13-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "dc166b6e36ef19e415cd58427631297b590427127f669d5357f4344194d13ad2"
+    },
     "case-dc937900537218b0": {
       "case_id": "case-dc937900537218b0",
       "classification": "EQUIV",
@@ -3137,6 +5557,50 @@
       "seed": 3954680709,
       "signature": null,
       "source_hash": "dc937900537218b0c4a5e56c6ccfeb36ec3f72ea4483a24698eee106831d9cbc"
+    },
+    "case-dc9fe0d356b1e5c8": {
+      "case_id": "case-dc9fe0d356b1e5c8",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:27-06:00",
+      "description": "systematic[boundary_kwargs/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:27-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "dc9fe0d356b1e5c83fc7b0a67051cec8cef36877277eba87827a713aa127a1af"
+    },
+    "case-ddf7b68ca6912281": {
+      "case_id": "case-ddf7b68ca6912281",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:32-06:00",
+      "description": "systematic[boundary_classattr/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:32-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "ddf7b68ca69122811e95cc5d5562a5656ddc7ecee1d43ea03be32ac5ab1280e5"
     },
     "case-de72e2d1e73bce01": {
       "case_id": "case-de72e2d1e73bce01",
@@ -3161,6 +5625,50 @@
       "signature": null,
       "source_hash": "de72e2d1e73bce01e82dd8c834a407b8705695443844eff1a41c3455d99ce8f3"
     },
+    "case-df9ccfca865757a7": {
+      "case_id": "case-df9ccfca865757a7",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:24-06:00",
+      "description": "systematic[boundary_kwargs/lambda] 7.5 + 3.5",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:24-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
+      "source_hash": "df9ccfca865757a7436074d7005c385292d525f71be5032d33d3ac46abc06e7b"
+    },
+    "case-e0ac38eb55680f18": {
+      "case_id": "case-e0ac38eb55680f18",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:20-06:00",
+      "description": "systematic[boundary_str_format/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:20-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "e0ac38eb55680f18e72e71e141c7eb2176bd7ea4b2dbc0b0ffc5aad7ef62910b"
+    },
     "case-e1592dba3360cae3": {
       "case_id": "case-e1592dba3360cae3",
       "classification": "DIVERGENT",
@@ -3172,12 +5680,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:25-06:00",
+      "last_seen_at": "2026-11-01T01:32:50-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -3206,6 +5715,50 @@
       "signature": null,
       "source_hash": "e246710f32034c3f7d2e4e31a3d0e53699a9c07a328dd2bc7116fdac443ecbf2"
     },
+    "case-e2a1d23232b1c897": {
+      "case_id": "case-e2a1d23232b1c897",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:36-06:00",
+      "description": "systematic[boundary_classattr/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:36-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "e2a1d23232b1c897e17e673523e890ab40475005535778d75e3eec55f0526a75"
+    },
+    "case-e3468dde66d7730d": {
+      "case_id": "case-e3468dde66d7730d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:09-06:00",
+      "description": "systematic[boundary_arg/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:09-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "e3468dde66d7730d0101bd22e63be06906065fddd08afa5bd232d7adffcf0b21"
+    },
     "case-e35207636861554b": {
       "case_id": "case-e35207636861554b",
       "classification": "EQUIV",
@@ -3217,14 +5770,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:36-06:00",
+      "last_seen_at": "2026-11-01T01:31:59-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3241,12 +5795,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:18-06:00",
+      "last_seen_at": "2026-11-01T01:32:41-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3298,6 +5853,28 @@
       "signature": null,
       "source_hash": "e49b5c7a9e738d485bc77b54d9906a928859295bcd805a4600efcb51f1588e9e"
     },
+    "case-e4fcb3d2b213f9de": {
+      "case_id": "case-e4fcb3d2b213f9de",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:32:59-06:00",
+      "description": "systematic[boundary_nested/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:32:59-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "e4fcb3d2b213f9ded65656ac59e817d1eb4cba447f4561143befea67f257f7b1"
+    },
     "case-e6499da21ad37ce7": {
       "case_id": "case-e6499da21ad37ce7",
       "classification": "EQUIV",
@@ -3332,7 +5909,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:54-06:00",
+      "last_seen_at": "2026-11-01T01:32:15-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3340,11 +5917,34 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "e688047572ce4960d953e5dff4f13e57a382b24edf7ea0fd802dc54ba93a213c"
+    },
+    "case-e6eed033593c6f25": {
+      "case_id": "case-e6eed033593c6f25",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:23-06:00",
+      "description": "systematic[boundary_str_format/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:23-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "e6eed033593c6f25ee55c0db6c13999f48640ff376c1fbd3e2bb37fefc09ecd9"
     },
     "case-e76e81b4592b1fab": {
       "case_id": "case-e76e81b4592b1fab",
@@ -3369,6 +5969,35 @@
       "signature": null,
       "source_hash": "e76e81b4592b1fab1cc7a7889b3b08f6e6efc81a952df2f2c96ddccf105bb989"
     },
+    "case-e772a571c7081b2d": {
+      "case_id": "case-e772a571c7081b2d",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:58-06:00",
+      "description": "systematic[boundary_comprehension/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:58-06:00",
+      "minimization": {
+        "accepted": 2,
+        "attempts": 11,
+        "minimized_case_id": "case-1487c557e87055c9",
+        "recorded_at": "2026-11-01T01:35:24-06:00",
+        "stopped_reason": "no reduction preserved the divergence"
+      },
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:int->other",
+      "source_hash": "e772a571c7081b2de1f83d889420cb71149d075e125b4c1c47487fdfec65fd08"
+    },
     "case-e7ce8e244ed8829b": {
       "case_id": "case-e7ce8e244ed8829b",
       "classification": "EQUIV",
@@ -3391,6 +6020,28 @@
       "seed": 3212530587,
       "signature": null,
       "source_hash": "e7ce8e244ed8829b08a259dc7fb34039abc927ca64b1eb3a56d007e193778647"
+    },
+    "case-e8264281bfc36321": {
+      "case_id": "case-e8264281bfc36321",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:32:57-06:00",
+      "description": "systematic[boundary_func/direct] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:32:57-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "e8264281bfc36321c53ca0093c19d51ea8a5e2b2e8d2268588c4ecb88e78257b"
     },
     "case-e8e467249af66a85": {
       "case_id": "case-e8e467249af66a85",
@@ -3415,6 +6066,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "e8e467249af66a851a7317c2c5f1d7b2b3076b9cdbacfe5368efbed772663503"
     },
+    "case-e929f77e0bbd386e": {
+      "case_id": "case-e929f77e0bbd386e",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:35-06:00",
+      "description": "systematic[boundary_classattr/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:35-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
+      "source_hash": "e929f77e0bbd386efb8c658a13de1d279dd308ced418b2616d5ceb1c6b26baf8"
+    },
     "case-ea38730723669d7e": {
       "case_id": "case-ea38730723669d7e",
       "classification": "EQUIV",
@@ -3426,7 +6099,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:57-06:00",
+      "last_seen_at": "2026-11-01T01:32:18-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3434,11 +6107,115 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "ea38730723669d7e6f5bf774d5a7f9796cbce73aca1eff710c6e60addcf09b34"
+    },
+    "case-eca1f5b2bf2ae439": {
+      "case_id": "case-eca1f5b2bf2ae439",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:33:32-06:00",
+      "description": "systematic[boundary_default/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:35:49-06:00",
+      "minimization": {
+        "accepted": 0,
+        "attempts": 4,
+        "minimized_case_id": null,
+        "recorded_at": "2026-11-01T01:35:18-06:00",
+        "stopped_reason": "no reduction preserved the divergence"
+      },
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [
+        {
+          "classification": "DIVERGENT",
+          "command": "python3 -m autopiton replay case-eca1f5b2bf2ae439",
+          "fingerprint": "d780167d43bd92935761545fd04667c4dbb41890f85819c02be1167fd8c3d893",
+          "run_id": "run_20261101_013548_replay_seed0",
+          "timestamp": "2026-11-01T01:35:49-06:00"
+        }
+      ],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->none",
+      "source_hash": "eca1f5b2bf2ae43929ad21a7b7e577f1c1eb0bb291428c6ed31233bf0b606bb8"
+    },
+    "case-ed2489cc47afe5cf": {
+      "case_id": "case-ed2489cc47afe5cf",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:38-06:00",
+      "description": "systematic[boundary_method/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:38-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "ed2489cc47afe5cf3970c8cbf0b92dd68dc16e7195cb967dc95d9bcdbfe8c449"
+    },
+    "case-ee4dfe466011fde7": {
+      "case_id": "case-ee4dfe466011fde7",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:34:04-06:00",
+      "description": "systematic[boundary_comprehension/lambda] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:04-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->other",
+      "source_hash": "ee4dfe466011fde7dd8c515c6b64123c5bb7b1dcb95955a101c78d890ff5a100"
+    },
+    "case-ee95afdd23b6042b": {
+      "case_id": "case-ee95afdd23b6042b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:51-06:00",
+      "description": "systematic[boundary_dict/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:51-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "ee95afdd23b6042bf4860b534a01d48fd06d7fa6168f88c139431d5529550575"
     },
     "case-ef7206f30ad127e4": {
       "case_id": "case-ef7206f30ad127e4",
@@ -3451,7 +6228,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:06-06:00",
+      "last_seen_at": "2026-11-01T01:32:26-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3459,7 +6236,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3476,12 +6254,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:19-06:00",
+      "last_seen_at": "2026-11-01T01:32:44-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3521,7 +6300,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:32-06:00",
+      "last_seen_at": "2026-11-01T01:31:56-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3529,7 +6308,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3546,7 +6326,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:35-06:00",
+      "last_seen_at": "2026-11-01T01:31:59-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3554,11 +6334,34 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "f1b3ed5c7463a5a8bd76363089369d6a60773ef4c1d36674dd490cd5837cd446"
+    },
+    "case-f36a46521089979b": {
+      "case_id": "case-f36a46521089979b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:14-06:00",
+      "description": "systematic[boundary_fstring/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:14-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "f36a46521089979b559db3f523c5304b86c15605832c849a2c4c10dd90a61f44"
     },
     "case-f3d59be281bf6072": {
       "case_id": "case-f3d59be281bf6072",
@@ -3629,6 +6432,72 @@
       "signature": null,
       "source_hash": "f49d3dd5f2b5bdb1cd22fa185146eded7a2ea06c9bfbdf289e608ee6a5c01aee"
     },
+    "case-f4d10b6555e71d7f": {
+      "case_id": "case-f4d10b6555e71d7f",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:00-06:00",
+      "description": "systematic[boundary_nested/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:00-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "f4d10b6555e71d7f2abb387fec5a0d298496d8f4775335d4d3d5ba93f7efe2ee"
+    },
+    "case-f515c2368c1127d2": {
+      "case_id": "case-f515c2368c1127d2",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:54-06:00",
+      "description": "systematic[boundary_dict/direct] True == True",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:54-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "f515c2368c1127d23fb202d5d6f9b146e837fe9c11b9b7b295042acf84bbfe97"
+    },
+    "case-f534b40c029d24d5": {
+      "case_id": "case-f534b40c029d24d5",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:25-06:00",
+      "description": "systematic[boundary_str_format/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:25-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "f534b40c029d24d55d6a5f068d6242263d95e61f9547eaf4b2ead78340ce9d2d"
+    },
     "case-f5b40e01f01e3430": {
       "case_id": "case-f5b40e01f01e3430",
       "classification": "EQUIV",
@@ -3640,12 +6509,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:17-06:00",
+      "last_seen_at": "2026-11-01T01:32:37-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3662,7 +6532,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:50-06:00",
+      "last_seen_at": "2026-11-01T01:32:11-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3670,7 +6540,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3687,7 +6558,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:59-06:00",
+      "last_seen_at": "2026-11-01T01:32:19-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3695,7 +6566,8 @@
         "run_20261030_170447_systematic",
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3712,14 +6584,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:49-06:00",
+      "last_seen_at": "2026-11-01T01:32:10-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -3748,6 +6621,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "f9a227a8e3b48ccd37935cfc8ea9363314a9ce7112888fc8101b521e0a541a87"
     },
+    "case-fa8bf914155bc954": {
+      "case_id": "case-fa8bf914155bc954",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:33:39-06:00",
+      "description": "systematic[boundary_closure/lambda] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:33:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "fa8bf914155bc95498cfea39c65a0571514f117e0aacb85a40adc0bd69428239"
+    },
     "case-fac9cf07b7452d39": {
       "case_id": "case-fac9cf07b7452d39",
       "classification": "EQUIV",
@@ -3771,6 +6666,28 @@
       "signature": null,
       "source_hash": "fac9cf07b7452d39d47b99a7d49e289b50d3a768e2c51eb348791d0b8981ca8e"
     },
+    "case-fc7f26d32aa2bdf1": {
+      "case_id": "case-fc7f26d32aa2bdf1",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:48-06:00",
+      "description": "systematic[boundary_generator/lambda] 'ab' + 'cd'",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:48-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "fc7f26d32aa2bdf1acb4cf19e492b488d56b750996bdd5887d38d48632a872a9"
+    },
     "case-fd4e794d2ee46f35": {
       "case_id": "case-fd4e794d2ee46f35",
       "classification": "DIVERGENT",
@@ -3782,14 +6699,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:35-06:00",
+      "last_seen_at": "2026-11-01T01:31:58-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -3806,14 +6724,15 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:31:44-06:00",
+      "last_seen_at": "2026-11-01T01:32:06-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -3830,18 +6749,41 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-10-31T12:32:10-06:00",
+      "last_seen_at": "2026-11-01T01:32:30-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
-        "run_20261031_123128_systematic"
+        "run_20261031_123128_systematic",
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
       "source_hash": "feaf0b5c199de674a56d2f8408674298d3af9ec0d51694bf00121ea9a581bf21"
+    },
+    "case-ffddc74c4e3ea28b": {
+      "case_id": "case-ffddc74c4e3ea28b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T01:34:26-06:00",
+      "description": "systematic[boundary_percent/direct] 7 + 3",
+      "expected_exception": null,
+      "family": "systematic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:34:26-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_013152_systematic"
+      ],
+      "seed": 0,
+      "signature": null,
+      "source_hash": "ffddc74c4e3ea28bb63226531f362831d8e2e5964a115a13e29693c95b222ee2"
     }
   },
   "signatures": {
@@ -3870,7 +6812,35 @@
       "case-932cbe168be0e8a1",
       "case-abb76133927f2b5b",
       "case-77acdc84437a6633",
-      "case-e1592dba3360cae3"
+      "case-e1592dba3360cae3",
+      "case-b434861e80a01bb4",
+      "case-7523e2431e537d1f",
+      "case-1486a7b234373577",
+      "case-462057d8939c5274",
+      "case-38b35a85bb71c733",
+      "case-61c20e05afe9c8fa",
+      "case-34b33fdb21ac944b",
+      "case-768b4f6322e52ee9",
+      "case-14870658c93ce9db",
+      "case-47448ab026562a1f",
+      "case-0a2a5df2fc7c2da5",
+      "case-b6542d11dd112ebf",
+      "case-20cdfd0ddd126955",
+      "case-53e0edee5741e624",
+      "case-4b3025d4cf09b350",
+      "case-e929f77e0bbd386e",
+      "case-b68d756168a4f9ee",
+      "case-aee05824abbc8e56",
+      "case-92938fd7d201491d",
+      "case-344ab1464566e6ea"
+    ],
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->none": [
+      "case-eca1f5b2bf2ae439",
+      "case-109916f796a8f7de"
+    ],
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->other": [
+      "case-7914ea4f86fd1087",
+      "case-ee4dfe466011fde7"
     ],
     "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int": [
       "case-9e042952ac86e66e",
@@ -3883,7 +6853,48 @@
       "case-b05438e3217928f1",
       "case-c7aa2ef686c189dd",
       "case-fe0687a154d45013",
-      "case-75eca1c43accfc16"
+      "case-75eca1c43accfc16",
+      "case-11500735210cdc34",
+      "case-9a3d56364cc1a030",
+      "case-3deb17a78a5b5a7a",
+      "case-a7b98ea202e3b58b",
+      "case-d402f4b573bd3caa",
+      "case-a11801ed7fbfae2a",
+      "case-3b836df60f018041",
+      "case-df9ccfca865757a7",
+      "case-d78ce4d965025f8a",
+      "case-46ce32a6e24214d2",
+      "case-8068517572b20b09",
+      "case-56dac03cbf5b1649",
+      "case-af256a2794352884",
+      "case-6a4037df7616c76e",
+      "case-92d933a2e4d8fc1e",
+      "case-88c6d0e8926f19ee",
+      "case-21c61799b15b9d70",
+      "case-7f822712ec64da60",
+      "case-8716648f7e3ba8e1",
+      "case-516d5cf14837a079"
+    ],
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->none": [
+      "case-66c9e3e8f986a7df",
+      "case-db32d2aac800c682"
+    ],
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->other": [
+      "case-855c7d54d19355f0",
+      "case-6f85628e12a9294d"
+    ],
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:int->other": [
+      "case-e772a571c7081b2d",
+      "case-597b45887191e1cb",
+      "case-1487c557e87055c9"
+    ],
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->none": [
+      "case-2a4070d4bd3bfd93",
+      "case-76f097921ba8b309"
+    ],
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other": [
+      "case-3fb4969ab4608eac",
+      "case-8a483ddf28b6742d"
     ],
     "INVALID_ACCEPTED|cpython:exception:TypeError|piton:EXECUTE:-": [
       "case-4d25af23ed64826d",
@@ -3897,6 +6908,6 @@
       "case-228d90a490532bbb"
     ]
   },
-  "updated_at": "2026-10-31T12:32:25-06:00",
+  "updated_at": "2026-11-01T01:35:50-06:00",
   "version": 1
 }
