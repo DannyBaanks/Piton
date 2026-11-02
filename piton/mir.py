@@ -1933,14 +1933,40 @@ class MIRLowerer:
         expresion no es determinista.
 
         Cubre: constantes, `a ** b`, `a * b`, `a + b`, `a - b`, `a // b`,
-        `a << b`, `a | b`, `a & b` y el menos unario — solo con operandos
-        enteros/booleanos (hashlib: `_bufsize=2**18`).
+        `a << b`, `a | b`, `a & b`, comparaciones `==`/`!=`/`<`/`<=`/`>`/`>=`
+        entre literales enteros/booleanos y el menos unario
+        (hashlib: `_bufsize=2**18`).
         """
         kind = getattr(node, "kind", None)
         if kind == HIRKind.CONST:
             value = getattr(node, "value", None)
             if isinstance(value, bool) or isinstance(value, int):
                 return value
+            return None
+        if kind == HIRKind.COMPARE:
+            left = self._fold_const_expr(getattr(node, "left", None))
+            comparators = list(getattr(node, "comparators", None) or [])
+            if left is None or len(comparators) != 1:
+                return None
+            right = self._fold_const_expr(comparators[0])
+            if right is None:
+                return None
+            op = getattr(node, "op", "")
+            try:
+                if op == "==":
+                    return left == right
+                if op == "!=":
+                    return left != right
+                if op == "<":
+                    return left < right
+                if op == "<=":
+                    return left <= right
+                if op == ">":
+                    return left > right
+                if op == ">=":
+                    return left >= right
+            except Exception:
+                return None
             return None
         if kind == HIRKind.BINOP:
             left = self._fold_const_expr(getattr(node, "left", None))

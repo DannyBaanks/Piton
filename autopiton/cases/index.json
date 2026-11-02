@@ -5378,6 +5378,29 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "d680aaf6f05aa384eafd97dd576c30620dfe673fe94b2a6e5678d8fcce835c41"
     },
+    "case-d6c99c747cd13463": {
+      "case_id": "case-d6c99c747cd13463",
+      "classification": "DIVERGENT",
+      "classifications": [
+        "DIVERGENT"
+      ],
+      "created_at": "2026-11-01T01:57:38-06:00",
+      "description": "case-eca1f5b2bf2ae439.py",
+      "expected_exception": null,
+      "family": "arithmetic",
+      "is_valid": true,
+      "last_seen_at": "2026-11-01T01:57:46-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_015737_input",
+        "run_20261101_015745_input"
+      ],
+      "seed": 0,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->none",
+      "source_hash": "d6c99c747cd1346387bf7be36dbae5ceb1a2406f39cae384265a952ae1fade0e"
+    },
     "case-d78ce4d965025f8a": {
       "case_id": "case-d78ce4d965025f8a",
       "classification": "DIVERGENT",
@@ -6836,7 +6859,8 @@
     ],
     "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->none": [
       "case-eca1f5b2bf2ae439",
-      "case-109916f796a8f7de"
+      "case-109916f796a8f7de",
+      "case-d6c99c747cd13463"
     ],
     "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->other": [
       "case-7914ea4f86fd1087",
@@ -6908,6 +6932,6 @@
       "case-228d90a490532bbb"
     ]
   },
-  "updated_at": "2026-11-01T01:35:50-06:00",
+  "updated_at": "2026-11-01T01:57:46-06:00",
   "version": 1
 }
