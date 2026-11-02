@@ -1,0 +1,42 @@
+{
+  "config": {
+    "build_timeout_s": 60.0,
+    "count": 20,
+    "memory_limit_mb": 256,
+    "oracle_timeout_s": 10.0,
+    "repeat": 1,
+    "runner_timeout_s": 10.0
+  },
+  "corpus_version": 1,
+  "environment": {
+    "bwrap": "/usr/bin/bwrap",
+    "cpython_version": "3.12.3",
+    "piton": {
+      "commit": "fdac8931122f0b8c25b25aecf71522cb1ee9e71a",
+      "dirty": true,
+      "dirty_paths": [
+        " M autopiton/cases/index.json",
+        "?? autopiton/reports/runs/run_20261101_224433_bounded_fa_seed42/",
+        "?? autopiton/reports/runs/run_20261101_224513_canary/",
+        "?? autopiton/reports/runs/run_20261101_224526_bounded_seed11/",
+        "?? autopiton/reports/runs/run_20261101_230754_bounded_fa_seed42/",
+        "?? autopiton/reports/runs/run_20261101_230836_canary/",
+        "?? autopiton/reports/runs/run_20261101_230846_bounded_seed11/",
+        "?? autopiton/reports/runs/run_20261101_233405_bounded_fa_seed42/",
+        "?? autopiton/reports/runs/run_20261101_233435_canary/",
+        "?? autopiton/reports/runs/run_20261101_233447_bounded_seed11/",
+        "?? autopiton/reports/runs/run_20261102_010223_canary/",
+        "?? autopiton/reports/runs/run_20261102_010302_bounded_seed11/"
+      ],
+      "repo": "PITON"
+    },
+    "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
+    "python_executable": "/usr/bin/python3",
+    "sandbox_backend": "bwrap"
+  },
+  "mode": "bounded_fa",
+  "notes": "compare bounded_fa",
+  "run_id": "run_20261102_010338_bounded_fa_seed42",
+  "seed": 42,
+  "started_at": "2026-11-02T01:03:38-06:00"
+}

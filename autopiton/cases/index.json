@@ -154,7 +154,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:43-06:00",
+      "last_seen_at": "2026-11-02T01:03:11-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -162,7 +162,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2941612270,
       "signature": null,
@@ -477,7 +478,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:37-06:00",
+      "last_seen_at": "2026-11-02T01:03:04-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -485,7 +486,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2198630850,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -753,7 +755,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:44-06:00",
+      "last_seen_at": "2026-11-02T01:03:12-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -761,7 +763,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2018579976,
       "signature": null,
@@ -828,7 +831,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:23-06:00",
+      "last_seen_at": "2026-11-02T01:03:46-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -837,7 +840,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 298737106,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
@@ -1271,7 +1275,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:26-06:00",
+      "last_seen_at": "2026-11-02T01:03:49-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1280,7 +1284,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 2783290795,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -1413,7 +1418,7 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:51:26-06:00",
+      "last_seen_at": "2026-11-02T01:02:29-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1424,7 +1429,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 7,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
@@ -1442,7 +1448,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:24-06:00",
+      "last_seen_at": "2026-11-02T01:03:47-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1451,7 +1457,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 3673561638,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -1656,7 +1663,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:27-06:00",
+      "last_seen_at": "2026-11-02T01:03:51-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1665,7 +1672,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 240251661,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -2010,7 +2018,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:29-06:00",
+      "last_seen_at": "2026-11-02T01:03:54-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2019,7 +2027,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 2340505846,
       "signature": null,
@@ -2037,7 +2046,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:28-06:00",
+      "last_seen_at": "2026-11-02T01:03:52-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -2046,7 +2055,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 1149938334,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -2109,7 +2119,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:38-06:00",
+      "last_seen_at": "2026-11-02T01:03:05-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2117,7 +2127,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 1918102982,
       "signature": null,
@@ -2453,7 +2464,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:39-06:00",
+      "last_seen_at": "2026-11-02T01:03:06-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2461,7 +2472,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2269380278,
       "signature": null,
@@ -2806,7 +2818,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:42-06:00",
+      "last_seen_at": "2026-11-02T01:03:09-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2814,7 +2826,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 1241417136,
       "signature": null,
@@ -2989,7 +3002,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:51-06:00",
+      "last_seen_at": "2026-11-02T01:03:20-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2997,7 +3010,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 1109293664,
       "signature": null,
@@ -3014,7 +3028,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:45-06:00",
+      "last_seen_at": "2026-11-02T01:03:13-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3022,7 +3036,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2703488257,
       "signature": null,
@@ -3245,7 +3260,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:39-06:00",
+      "last_seen_at": "2026-11-02T01:03:07-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3253,7 +3268,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 1992583342,
       "signature": null,
@@ -3361,7 +3377,7 @@
       "expected_exception": "TypeError",
       "family": "classes",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T00:51:25-06:00",
+      "last_seen_at": "2026-11-02T01:02:27-06:00",
       "minimization": {
         "accepted": 3,
         "attempts": 11,
@@ -3387,7 +3403,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 5,
       "signature": "INVALID_ACCEPTED|cpython:exception:TypeError|piton:EXECUTE:-",
@@ -3645,7 +3662,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:53-06:00",
+      "last_seen_at": "2026-11-02T01:03:22-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3653,7 +3670,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 1583447950,
       "signature": null,
@@ -3671,7 +3689,7 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:51:24-06:00",
+      "last_seen_at": "2026-11-02T01:02:26-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -3682,7 +3700,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 3,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
@@ -3767,7 +3786,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:30-06:00",
+      "last_seen_at": "2026-11-02T01:03:55-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3776,7 +3795,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 1715412119,
       "signature": null,
@@ -3895,7 +3915,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:46-06:00",
+      "last_seen_at": "2026-11-02T01:03:15-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3903,7 +3923,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 3036610734,
       "signature": null,
@@ -4169,7 +4190,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:26-06:00",
+      "last_seen_at": "2026-11-02T01:03:50-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -4178,7 +4199,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 3131575764,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
@@ -4217,7 +4239,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:57-06:00",
+      "last_seen_at": "2026-11-02T01:03:26-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -4225,7 +4247,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 203588198,
       "signature": null,
@@ -4243,7 +4266,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:18-06:00",
+      "last_seen_at": "2026-11-02T01:03:39-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -4252,7 +4275,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 3184935163,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -5269,7 +5293,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:22-06:00",
+      "last_seen_at": "2026-11-02T01:03:44-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -5278,7 +5302,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 398340369,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -5317,7 +5342,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:42-06:00",
+      "last_seen_at": "2026-11-02T01:03:10-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -5325,7 +5350,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 1719704081,
       "signature": null,
@@ -5879,7 +5905,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:21-06:00",
+      "last_seen_at": "2026-11-02T01:03:43-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -5888,7 +5914,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 667779376,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -5973,7 +6000,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:38-06:00",
+      "last_seen_at": "2026-11-02T01:03:05-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -5981,7 +6008,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2724953954,
       "signature": null,
@@ -6113,7 +6141,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:40-06:00",
+      "last_seen_at": "2026-11-02T01:03:07-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6121,7 +6149,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 1263371380,
       "signature": null,
@@ -6138,7 +6167,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:41-06:00",
+      "last_seen_at": "2026-11-02T01:03:08-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6146,7 +6175,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 1194700572,
       "signature": null,
@@ -6210,7 +6240,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:28-06:00",
+      "last_seen_at": "2026-11-02T01:03:52-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6219,7 +6249,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 1351531223,
       "signature": null,
@@ -6282,7 +6313,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:19-06:00",
+      "last_seen_at": "2026-11-02T01:03:41-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -6291,7 +6322,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 127978094,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -6354,7 +6386,7 @@
       "expected_exception": "TypeError",
       "family": "functions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T00:51:22-06:00",
+      "last_seen_at": "2026-11-02T01:02:25-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6365,7 +6397,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 1,
       "signature": null,
@@ -6577,7 +6610,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:47-06:00",
+      "last_seen_at": "2026-11-02T01:03:15-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6585,7 +6618,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2090890118,
       "signature": null,
@@ -6602,7 +6636,7 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:51:25-06:00",
+      "last_seen_at": "2026-11-02T01:02:28-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6613,7 +6647,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 6,
       "signature": null,
@@ -6630,7 +6665,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:57-06:00",
+      "last_seen_at": "2026-11-02T01:03:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6638,7 +6673,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 1095983971,
       "signature": null,
@@ -6793,7 +6829,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:54-06:00",
+      "last_seen_at": "2026-11-02T01:03:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6801,7 +6837,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2693996244,
       "signature": null,
@@ -6840,7 +6877,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:45-06:00",
+      "last_seen_at": "2026-11-02T01:03:14-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6848,7 +6885,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 374281491,
       "signature": null,
@@ -7540,7 +7578,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:18-06:00",
+      "last_seen_at": "2026-11-02T01:03:40-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7549,7 +7587,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 2342331444,
       "signature": null,
@@ -7808,7 +7847,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:23-06:00",
+      "last_seen_at": "2026-11-02T01:03:46-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -7817,7 +7856,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 1625792787,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -7975,7 +8015,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:29-06:00",
+      "last_seen_at": "2026-11-02T01:03:53-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -7984,7 +8024,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 613628803,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -8114,7 +8155,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:53-06:00",
+      "last_seen_at": "2026-11-02T01:03:23-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -8122,7 +8163,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2467764733,
       "signature": null,
@@ -8455,7 +8497,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:22-06:00",
+      "last_seen_at": "2026-11-02T01:03:45-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -8464,7 +8506,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 2592983555,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -8529,7 +8572,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:47-06:00",
+      "last_seen_at": "2026-11-02T01:03:16-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -8537,7 +8580,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2185560420,
       "signature": null,
@@ -8770,7 +8814,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:36-06:00",
+      "last_seen_at": "2026-11-02T01:03:03-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -8778,7 +8822,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 3355305989,
       "signature": null,
@@ -8957,7 +9002,7 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:51:22-06:00",
+      "last_seen_at": "2026-11-02T01:02:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -8969,7 +9014,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 0,
       "signature": null,
@@ -9243,7 +9289,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:20-06:00",
+      "last_seen_at": "2026-11-02T01:03:42-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -9252,7 +9298,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 3460967357,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -9438,7 +9485,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:25-06:00",
+      "last_seen_at": "2026-11-02T01:03:48-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -9447,7 +9494,8 @@
         "run_20261101_224433_bounded_fa_seed42",
         "run_20261101_230754_bounded_fa_seed42",
         "run_20261101_233405_bounded_fa_seed42",
-        "run_20261102_005017_bounded_fa_seed42"
+        "run_20261102_005017_bounded_fa_seed42",
+        "run_20261102_010338_bounded_fa_seed42"
       ],
       "seed": 3582477022,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -9623,7 +9671,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:49-06:00",
+      "last_seen_at": "2026-11-02T01:03:18-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -9633,7 +9681,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2898712818,
       "signature": null,
@@ -9769,7 +9818,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:48-06:00",
+      "last_seen_at": "2026-11-02T01:03:17-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -9777,7 +9826,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 2764735410,
       "signature": null,
@@ -9929,7 +9979,7 @@
       "expected_exception": null,
       "family": "unpacking",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:51:27-06:00",
+      "last_seen_at": "2026-11-02T01:02:30-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -9940,7 +9990,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 8,
       "signature": null,
@@ -10445,7 +10496,7 @@
       "expected_exception": "TypeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T00:51:27-06:00",
+      "last_seen_at": "2026-11-02T01:02:30-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10456,7 +10507,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 9,
       "signature": null,
@@ -10473,7 +10525,7 @@
       "expected_exception": "RuntimeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T00:51:24-06:00",
+      "last_seen_at": "2026-11-02T01:02:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10484,7 +10536,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 4,
       "signature": null,
@@ -10501,7 +10554,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:51-06:00",
+      "last_seen_at": "2026-11-02T01:03:20-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10509,7 +10562,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 4249018436,
       "signature": null,
@@ -10637,7 +10691,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:56-06:00",
+      "last_seen_at": "2026-11-02T01:03:25-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10645,7 +10699,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 3788976143,
       "signature": null,
@@ -11052,7 +11107,7 @@
       "expected_exception": null,
       "family": "super",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:51:23-06:00",
+      "last_seen_at": "2026-11-02T01:02:26-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -11063,7 +11118,8 @@
         "run_20261101_224513_canary",
         "run_20261101_230836_canary",
         "run_20261101_233435_canary",
-        "run_20261102_005121_canary"
+        "run_20261102_005121_canary",
+        "run_20261102_010223_canary"
       ],
       "seed": 2,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -11558,7 +11614,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:50-06:00",
+      "last_seen_at": "2026-11-02T01:03:19-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -11566,7 +11622,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 804478983,
       "signature": null,
@@ -11644,7 +11701,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:55-06:00",
+      "last_seen_at": "2026-11-02T01:03:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -11652,7 +11709,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 815187656,
       "signature": null,
@@ -11692,7 +11750,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T00:50:52-06:00",
+      "last_seen_at": "2026-11-02T01:03:21-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -11700,7 +11758,8 @@
         "run_20261101_224526_bounded_seed11",
         "run_20261101_230846_bounded_seed11",
         "run_20261101_233447_bounded_seed11",
-        "run_20261102_005036_bounded_seed11"
+        "run_20261102_005036_bounded_seed11",
+        "run_20261102_010302_bounded_seed11"
       ],
       "seed": 319034450,
       "signature": null,
@@ -11940,6 +11999,6 @@
       "case-0d8c4e46dd483884"
     ]
   },
-  "updated_at": "2026-11-02T00:51:27-06:00",
+  "updated_at": "2026-11-02T01:03:55-06:00",
   "version": 1
 }
