@@ -1,0 +1,96 @@
+{
+  "case_id": "case-1f8a70b7bc4f7507",
+  "created_at": "2026-11-02T02:52:32-06:00",
+  "description": "bounded[context_manager_exit_inspection/int] suppress=True",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "1f8a70b7bc4f7507d53fe67c91028ca513d3f603224a6eb519ff8bc076af32cf",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 67.31118100287858,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "1f8a70b7bc4f7507d53fe67c91028ca513d3f603224a6eb519ff8bc076af32cf",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "handled: 379 err\nsuppressed\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "2169a6001de770f5bb63a7eda87ef3ccd93ce6277da2d6bba8dc76e9dfc87952",
+      "build_exit_code": 0,
+      "build_ms": 923.6190529918531,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 9.906024002702907,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0013.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "1f8a70b7bc4f7507d53fe67c91028ca513d3f603224a6eb519ff8bc076af32cf",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 441,
+          "surface_sha256": "19f30ffcde7f13ff9c66b123212565a072b9535492083c5754f7348e4d3b0657"
+        },
+        "BUILD": {
+          "artifact_bytes": 25712,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "2169a6001de770f5bb63a7eda87ef3ccd93ce6277da2d6bba8dc76e9dfc87952",
+          "c_chars": 284973,
+          "c_sha256": "c875abb833919428e89405c82bd7f4169f0703651c072622c00c20b8b6c6b609",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "handled: 379 err\nsuppressed\n",
+      "surface_sha256": "19f30ffcde7f13ff9c66b123212565a072b9535492083c5754f7348e4d3b0657",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "class C2(Exception):\n    def __init__(self, code, msg):\n        self.code = code\n        self.msg = msg\n\nclass C1:\n    def __enter__(self):\n        return self\n    def __exit__(self, exc_type, exc_val, tb):\n        if exc_val is not None:\n            print('handled:', exc_val.code, exc_val.msg)\n            return True\n        return False\n\nwith C1():\n    raise C2(379, 'err')\nprint('suppressed')\n",
+    "source_hash": "1f8a70b7bc4f7507d53fe67c91028ca513d3f603224a6eb519ff8bc076af32cf"
+  },
+  "run_id": "run_20261102_025152_bounded_fc_seed88",
+  "seed": 218829074,
+  "source": "class C2(Exception):\n    def __init__(self, code, msg):\n        self.code = code\n        self.msg = msg\n\nclass C1:\n    def __enter__(self):\n        return self\n    def __exit__(self, exc_type, exc_val, tb):\n        if exc_val is not None:\n            print('handled:', exc_val.code, exc_val.msg)\n            return True\n        return False\n\nwith C1():\n    raise C2(379, 'err')\nprint('suppressed')\n",
+  "source_hash": "1f8a70b7bc4f7507d53fe67c91028ca513d3f603224a6eb519ff8bc076af32cf"
+}
