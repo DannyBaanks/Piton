@@ -1,0 +1,1381 @@
+{
+  "meta": {
+    "date": "2026-11-02T08:21:36+00:00",
+    "oracle": "CPython 3.12.3",
+    "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
+    "git_sha": "bf35e9f",
+    "git_clean": true,
+    "git_dirty_files": [],
+    "verified": true,
+    "instrument_hash": "10aca50b4b83ecbcba534a01d8745c11506e16b0b9032b76a6fb15605b959ff5",
+    "piton_mir_hash": "aaf792f86e63233abfa13cb76c8a4d60b6df94fd864dda4f1f43dcd1b90dadd6",
+    "piton_linux_hash": "98849a13a91969abfed3c6c97a102a7894b35667c5d53741a252230d7a426cda",
+    "tool": "tools/parity_corpus_v4.py",
+    "tiers": "a",
+    "recursive": false,
+    "exclude": [],
+    "isolate": false
+  },
+  "results": {
+    "tier_a": {
+      "funnel": {
+        "total": 167,
+        "passed": {
+          "adapt": 167,
+          "parse": 167,
+          "mir": 107,
+          "build": 64
+        },
+        "pct": {
+          "adapt": 100.0,
+          "parse": 100.0,
+          "mir": 64.1,
+          "build": 38.3
+        },
+        "fail_classes": {
+          "MIR_FAIL": 60,
+          "BUILD_FAIL": 43
+        },
+        "read_failed": 0
+      },
+      "records": [
+        {
+          "path": "/usr/lib/python3.12/__future__.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.768,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/__hello__.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.218,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_aix_support.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.279,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_collections_abc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: metaclass conflict: the metaclasses of the bases are incompatible ('type' and 'ABCMeta')",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_compat_pickle.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.385,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_compression.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().close: no base class in MRO of 'DecompressReader' defines 'close'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_distutils_system_mod.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().initialize_options: no base class in MRO of 'install' defines 'initialize_options'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_markupbase.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.177,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_osx_support.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: flags",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_py_abc.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.336,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_pydatetime.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native math.modf is not supported or requires 1 positional argument",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_pydecimal.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native math.isinf is not supported or requires 1 positional argument",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_pyio.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: str.format(): unsupported placeholder: {!r}",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_pylong.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.262,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_sitebuiltins.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.901,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_strptime.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux + with None is not supported (CPython raises TypeError)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_sysconfigdata__linux_x86_64-linux-gnu.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 4.836,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_sysconfigdata__x86_64-linux-gnu.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 4.933,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_threading_local.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native decorators on generators/coroutines are not supported yet",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/_weakrefset.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.582,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/abc.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.264,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/aifc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native math.frexp is not supported or requires 1 positional argument",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/antigravity.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: usedforsecurity",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/argparse.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)') [mod=_sys attrs=['stdin', 'buffer']]",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ast.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native class methods support only @property, @staticmethod, @classmethod, @<name>.setter, @<name>.deleter",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 1266\ncolumna: 20\n\nPython rechazó la traducción:\ninvalid syntax\n\n        elif value es ...:"
+        },
+        {
+          "path": "/usr/lib/python3.12/base64.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: newline",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/bdb.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.856,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/bisect.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.268,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/bz2.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.332,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/cProfile.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-cv22a32w/program.c: In function ‘run’:\n/tmp/piton-v4-cv22a32w/program.c:4177:12: error: too many arguments to function ‘Profile__run’\n 4177 |         _7=Profile__run(_3,_4,_5,_6);\n      |            ^~~~~~~~~~~~\n/tmp/piton-v4-cv22a32w/program.c:4026:13: note: declared",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/calendar.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux str.center() requires an int",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/cgi.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: encoding",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/cgitb.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: suffix",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/chunk.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.176,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/cmd.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.458,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/code.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.26,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/codecs.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux str.splitlines() requires no arguments",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/codeop.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.287,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/colorsys.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.262,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/compileall.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(INDENT, '    ', 9:5) en 9:5",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/configparser.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().items: no base class in MRO of 'RawConfigParser' defines 'items'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/contextlib.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux str.split() requires a str separator or nothing",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/contextvars.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.227,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/copy.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: NameError: name 'd' is not defined",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 279\ncolumna: 16\n\nPython rechazó la traducción:\ninvalid syntax\n\n                and [key ]=value "
+        },
+        {
+          "path": "/usr/lib/python3.12/copyreg.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.212,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/crypt.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.28,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/csv.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux min/max of 3 values requires one homogeneous kind, not ['bool', 'dict', 'int']",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/dataclasses.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native class methods support only @property, @staticmethod, @classmethod, @<name>.setter, @<name>.deleter",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/datetime.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.298,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/decimal.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.216,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/difflib.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux + with None is not supported (CPython raises TypeError)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/dis.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: defaults",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/doctest.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: nosigint",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/enum.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().__init__: no base class in MRO of '_EnumDict' defines '__init__'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/filecmp.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux itertools__filterfalse() param 'items' is used as list; a dict argument is rejected (fail closed)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/fileinput.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-cl3p9s3g/program.c: In function ‘FileInput___readline’:\n/tmp/piton-v4-cl3p9s3g/program.c:5185:227: error: invalid use of void expression\n 5185 |     _183=piton_call_dynamic(piton_object_get((PitonObject*)_174,\"_openhook\").bits,(long)({PitonSeq*_dpa=piton_seq_new(PK_TU",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/fnmatch.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.378,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/fractions.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native math.isnan is not supported or requires 1 positional argument",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ftplib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: family",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/functools.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native dynamic call supports one *args sequence",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/genericpath.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.274,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/getopt.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.211,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/getpass.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux fallback_getpass() collection/string-default param rejects a list argument (fail closed)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/gettext.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux str.split() requires a str separator or nothing",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/glob.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.215,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/graphlib.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.138,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/gzip.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(INDENT, '    ', 12:5) en 12:5",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/hashlib.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.543,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/heapq.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.251,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/hmac.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux str.ljust() fill must be a str",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/imaplib.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux unpack of nested tuple targets is not supported",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/imghdr.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.192,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/inspect.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().__new__: no base class in MRO of 'Traceback' defines '__new__'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/io.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /usr/bin/ld: /tmp/ccxx5zve.o: en la función `piton_main':\nprogram.c:(.text+0xac7): referencia a `RawIOBase__register' sin definir\n/usr/bin/ld: program.c:(.text+0xd11): referencia a `BufferedIOBase__register' sin definir\n/usr/bin/ld: program.c:(.text+0xe29): referencia a `TextIOBase",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ipaddress.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().__format__: no base class in MRO of '_BaseAddress' defines '__format__'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/keyword.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.192,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/linecache.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.316,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/locale.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)') [mod=os attrs=['environ', 'get']]",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/lzma.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: str.format(): unsupported placeholder: {!r}",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/mailbox.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux bytes.replace() is not supported",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/mailcap.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux findparam() param 'name' is used as str; a list argument is rejected (fail closed)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/mimetypes.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-am3a48e3/program.c: In function ‘MimeTypes___read_windows_registry’:\n/tmp/piton-v4-am3a48e3/program.c:5306:9: error: called object ‘add_type’ is not a function or function pointer\n 5306 |     _37=add_type(_35,_36,1);\n      |         ^~~~~~~~\n/tmp/piton-v4-am3a48e3/pro",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/modulefinder.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: str.format(): unsupported placeholder: {name!r}",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/netrc.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.52,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/nntplib.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: native map requires a user function callback, not a builtin name",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ntpath.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.029,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/nturl2path.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.205,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/numbers.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: metaclass conflict: the metaclasses of the bases are incompatible ('type' and 'ABCMeta')",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/opcode.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.557,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/operator.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.014,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/optparse.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: str % dynamic width (*) is not supported",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/os.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: native store of builtin '%4' is not supported",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pathlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: flags",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pdb.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(INDENT, '    ', 5:1) en 5:1",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pickle.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux int requires exactly one argument",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pickletools.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux str %d requires a real number, not none",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pipes.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.675,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pkgutil.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)') [mod=importlib attrs=['machinery', 'FileFinder']]",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/platform.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native property decorator '@functools.cached_property' must match the method name 'processor'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/plistlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(COMMENT, '# xml.parsers.expat.piton — stub para xml.parsers.expat (stdlib CPython)', 1:1) en 1:1",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/poplib.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-3gg76ada/program.c: In function ‘POP3___putline’:\n/tmp/piton-v4-3gg76ada/program.c:4553:38: error: incompatible type for argument 1 of ‘piton_bytes_concat_dyn’\n 4553 |     _20=(long)piton_bytes_concat_dyn((PitonBytes*)_18,(PitonSlot){_19,PK_INT});\n      |             ",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/posixpath.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux _joinrealpath() param 'seen' is used as list; a dict argument is rejected (fail closed)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pprint.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: str.format(): unsupported format spec '_'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/profile.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux - with None is not supported (CPython raises TypeError)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pstats.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.045,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pty.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(INDENT, '    ', 19:5) en 19:5",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/py_compile.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-ek012r_z/program.c: In function ‘compile’:\n/tmp/piton-v4-ek012r_z/program.c:4600:228: error: invalid use of void expression\n 4600 |     _63=piton_call_dynamic(piton_object_get((PitonObject*)_55,\"source_to_code\").bits,(long)({PitonSeq*_dpa=piton_seq_new(PK_TUPLE,2);   ",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pyclbr.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.951,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/pydoc.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(COMMENT, '# pkgutil.piton — stub para pkgutil (stdlib CPython)', 1:1) en 1:1",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 1709\ncolumna: 10\n\nPython rechazó la traducción:\ninvalid syntax\n\n        (if nextmodule :module ,n )=(nextmodule ,n +1 )"
+        },
+        {
+          "path": "/usr/lib/python3.12/queue.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux + with None is not supported (CPython raises TypeError)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/quopri.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-nxko6cl1/program.c: In function ‘decode’:\n/tmp/piton-v4-nxko6cl1/program.c:4897:38: error: incompatible type for argument 1 of ‘piton_bytes_concat_dyn’\n 4897 |     _94=(long)piton_bytes_concat_dyn((PitonBytes*)_92,(PitonSlot){_93,PK_INT});\n      |                     ",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/random.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(COMMENT, '# _random.piton — stub para _random (stdlib CPython)', 1:1) en 1:1",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/reprlib.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.4,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/rlcompleter.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.198,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/runpy.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(COMMENT, '# pkgutil.piton — stub para pkgutil (stdlib CPython)', 1:1) en 1:1",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sched.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.136,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/secrets.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.35,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/selectors.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(INDENT, '    ', 19:5) en 19:5",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/shelve.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.012,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/shlex.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.304,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/shutil.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native keyword args require a known function",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/signal.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.197,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/site.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.645,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sitecustomize.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.126,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/smtplib.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: str % conversion %a is not supported",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sndhdr.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.159,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/socket.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().detach: no base class in MRO of 'socket' defines 'detach'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/socketserver.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().append: no base class in MRO of '_Threads' defines 'append'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sre_compile.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.48,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sre_constants.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.53,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sre_parse.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.559,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/ssl.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native class methods support at most one decorator",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/stat.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.316,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/statistics.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native math.isfinite is not supported or requires 1 positional argument",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/string.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native super().__init_subclass__: no base class in MRO of 'Template' defines '__init_subclass__'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/stringprep.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.215,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/struct.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.28,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/subprocess.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native property decorator '@contextlib.contextmanager' must match the method name '_on_error_fd_closer'",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sunau.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux + with None is not supported (CPython raises TypeError)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/symtable.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: str.format(): unsupported placeholder: {0!r}",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/sysconfig.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(COMMENT, '# _imp.piton — stub para _imp (stdlib CPython)', 1:1) en 1:1",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tabnanny.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux str %d requires a real number, not none",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tarfile.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(INDENT, '    ', 12:5) en 12:5",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/telnetlib.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux + with None is not supported (CPython raises TypeError)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tempfile.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native bare re-raise requires an enclosing except handler",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/textwrap.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: native map requires a user function callback, not a builtin name",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/this.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.471,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/threading.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux + with None is not supported (CPython raises TypeError)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/timeit.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: file",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/token.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.605,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tokenize.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native module attribute value access is not supported yet; use module function calls (e.g. 'pkg.sub.fn(...)') [mod=_itertools attrs=['product']]",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/trace.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux - with None is not supported (CPython raises TypeError)",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/traceback.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: end",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tracemalloc.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: str % + and space flags are not supported",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/tty.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.317,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/turtle.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native math.radians is not supported or requires 1 positional argument",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/types.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native coroutine must be awaited or passed directly to asyncio.run",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/typing.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(INDENT, '    ', 2:1) en 2:1",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 88\ncolumna: 16\n\nPython rechazó la traducción:\ninvalid syntax\n\n    return arg es ...o isinstance (arg ,(tuple ,list ,ParamSpec"
+        },
+        {
+          "path": "/usr/lib/python3.12/uu.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: backtick",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 137\ncolumna: 17\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\n            if (out_file .startsw"
+        },
+        {
+          "path": "/usr/lib/python3.12/uuid.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: unexpected keyword argument: path",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/warnings.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.86,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/wave.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-w2u9mf5t/program.c: In function ‘Wave_read___read_fmt_chunk’:\n/tmp/piton-v4-w2u9mf5t/program.c:5751:134: error: invalid use of void expression\n 5751 |     _79=piton_call_dynamic(piton_object_get((PitonObject*)_77,\"UUID\").bits,(long)({PitonSeq*_dpa=piton_seq_new(PK_TUP",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/weakref.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: missing required argument: self",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/webbrowser.py",
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.362,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/xdrlib.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "MIRLoweringError: native class methods support only @property, @staticmethod, @classmethod, @<name>.setter, @<name>.deleter",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/zipapp.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(INDENT, '    ', 11:9) en 11:9",
+          "build_seconds": null,
+          "roundtrip": true
+        },
+        {
+          "path": "/usr/lib/python3.12/zipimport.py",
+          "reached": "mir",
+          "stage_fail": "MIR_FAIL",
+          "detail": "ParseError: Expresión inesperada: Token(COMMENT, '# _imp.piton — stub para _imp (stdlib CPython)', 1:1) en 1:1",
+          "build_seconds": null,
+          "roundtrip": true
+        }
+      ]
+    }
+  }
+}
