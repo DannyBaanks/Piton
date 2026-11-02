@@ -139,6 +139,23 @@ static long piton_object_repr_hook(long obj,const char*cls){
   }
   return 0;
 }
+/* OBJECT_STR_HOOK_V1: tabla clase -> __str__ que el emitter llena. */
+static const char* g_str_hook_cls[PITON_REPR_HOOK_MAX];
+static long g_str_hook_fn[PITON_REPR_HOOK_MAX];
+static long g_str_hook_n=0;
+static void piton_object_str_hook_set(const char*cls,long fn){
+  for(long i=0;i<g_str_hook_n;++i)if(g_str_hook_cls[i]&&piton_strcmp(g_str_hook_cls[i],cls)==0){g_str_hook_fn[i]=fn;return;}
+  if(g_str_hook_n>=PITON_REPR_HOOK_MAX)return;
+  g_str_hook_cls[g_str_hook_n]=cls;g_str_hook_fn[g_str_hook_n]=fn;++g_str_hook_n;
+}
+static long piton_object_str_hook(long obj,const char*cls){
+  if(!cls)return 0;
+  for(long i=0;i<g_str_hook_n;++i)if(g_str_hook_cls[i]&&piton_strcmp(g_str_hook_cls[i],cls)==0){
+    if(!g_str_hook_fn[i])return 0;
+    return((long(*)(long))g_str_hook_fn[i])(obj);
+  }
+  return piton_object_repr_hook(obj,cls);
+}
 /* REPR_V1: repr() byte-identico a CPython. str usa comillas; escalares y
  * colecciones reimitan el camino del printer de slot, pero a un buffer. */
 typedef struct{long len;long cap;char*d;}PitonStrBuf;
@@ -1368,7 +1385,8 @@ static int piton_dict_eq(PitonDict*a,PitonDict*b){
 }
 static void piton_print_set(PitonSet*s){if(s->kind==PK_SET&&s->length==0){piton_write(piton_print_fd,"set()",5);return;}piton_write(piton_print_fd,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(piton_print_fd,", ",2);piton_print_slot_repr(s->items[i]);}piton_write(piton_print_fd,"}",1);}
 static long piton_object_repr_hook(long obj,const char*cls);
-static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_repr_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
+static long piton_object_str_hook(long obj,const char*cls);
+static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_str_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
 /* SEQ_ELEM_REPR_V1: los elementos de una coleccion se imprimen con el
    repr completo de CPython (escapes de backslash/comillas); el camino
    viejo escribia el str raw dentro de [ ] y print(["a\\b"]) divergiaba.
@@ -1630,6 +1648,11 @@ static const char* piton_str_of_value(long bits){if(bits==(long)&piton_none_sing
   if(piton_maybe_ptr(bits)){
     long*ptr=(long*)bits;
     if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_OBJECT){
+      if(ptr[1]==PK_OBJECT){
+        long s=piton_object_str_hook(bits,((PitonObject*)bits)->class_name);
+        if(s)return (const char*)s;
+        return "<object>";
+      }
       PitonSeq*s=(PitonSeq*)bits;
       if(s->kind==PK_LIST||s->kind==PK_TUPLE)return (const char*)piton_str_from_seq((PitonSeq*)bits);
       piton_raise_set("TypeError","%s format: unsupported collection value");
@@ -3996,13 +4019,18 @@ class LinuxCEmitter:
         self._cur_slots = slots
         locals_ = sorted((slots if function.frame_abi else slots - set(function.params)) - self._shared_globals)
         lines = [signature + " {"]
-        # OBJECT_REPR_HOOK_V1: registrar __repr__ de clases para el repr de C.
+        # OBJECT_REPR_HOOK_V1 / OBJECT_STR_HOOK_V1: registrar hooks de __repr__ y __str__.
         if is_main:
             for _cls in sorted(self.classes):
                 for _cand in self.class_mro.get(_cls, [_cls]):
                     _target = f"{_cand}____repr__"
                     if "__repr__" in self.classes.get(_cand, set()) and _target in self.function_names:
                         lines.append(f"    piton_object_repr_hook_set({json.dumps(_cls)},(long)&{_name(_target)});")
+                        break
+                for _cand in self.class_mro.get(_cls, [_cls]):
+                    _target = f"{_cand}____str__"
+                    if "__str__" in self.classes.get(_cand, set()) and _target in self.function_names:
+                        lines.append(f"    piton_object_str_hook_set({json.dumps(_cls)},(long)&{_name(_target)});")
                         break
         # the emitted lines of THIS function: a mixed-type y/o rewrites the
         # line of its first arm, which lives here (not in the per-op buffer).
@@ -10711,6 +10739,34 @@ class LinuxCEmitter:
                         # STR_SEQ_V1 (mismo camino que '%s'): el str() de una
                         # secuencia es su repr, como en CPython.
                         out.append(f"    {_name(result)}=piton_str_from_seq((PitonSeq*){operand});")
+                    elif arg_type and (arg_type.startswith("object:") or arg_type == "object"):
+                        if arg_type.startswith("object:"):
+                            cls_name = arg_type.split(":", 1)[1]
+                            str_cls = self._find_class_method(cls_name, "__str__")
+                            if str_cls is not None:
+                                target_fn = f"{str_cls}____str__"
+                                target = _name(target_fn)
+                                if self.function_frame_abi.get(target_fn, False):
+                                    out.append(f'    {{long _s_args[]={{ {operand} }}; {_name(result)}=piton_frame_call((long)&{target},1,_s_args);}}')
+                                else:
+                                    out.append(f"    {_name(result)}={target}({operand});")
+                                self._emit_exc_check(out, function, call_handler)
+                            else:
+                                repr_cls = self._find_class_method(cls_name, "__repr__")
+                                if repr_cls is not None:
+                                    target_fn = f"{repr_cls}____repr__"
+                                    target = _name(target_fn)
+                                    if self.function_frame_abi.get(target_fn, False):
+                                        out.append(f'    {{long _r_args[]={{ {operand} }}; {_name(result)}=piton_frame_call((long)&{target},1,_r_args);}}')
+                                    else:
+                                        out.append(f"    {_name(result)}={target}({operand});")
+                                    self._emit_exc_check(out, function, call_handler)
+                                else:
+                                    out.append(f"    {{long _pr=piton_object_str_hook({operand},\"{cls_name}\"); {_name(result)}=_pr?_pr:(long)\"<{cls_name} object>\";}}")
+                        else:
+                            out.append(f"    {{long _pr=piton_object_str_hook({operand},((PitonObject*){operand})->class_name); {_name(result)}=_pr?_pr:(long)\"<object>\";}}")
+                    elif arg_type in {"dict", "set", "set:frozen", "bytes", "bytearray"}:
+                        out.append(f"    {_name(result)}=piton_slot_repr({operand},{self._kind(arg_type)});")
                     elif arg_type is None or arg_type == "":
                         # STR_DYNAMIC_V1: tipo desconocido (parametro, bloque
                         # emitido fuera de orden) -> str() de runtime.
