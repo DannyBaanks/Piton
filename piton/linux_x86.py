@@ -1090,11 +1090,38 @@ static long piton_enumerate_new(PitonSlot src,long start){
 }
 static long piton_enumerate_next(long raw){PitonEnumerateIterator*i=(PitonEnumerateIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}long n=i->index++;PitonSeq*p=piton_seq_new(PK_TUPLE,2);piton_seq_put(p,0,(PitonSlot){i->start+n,PK_INT});piton_seq_put(p,1,i->seq->items[n]);return(long)p;}
 typedef struct{long magic,index;PitonSeq*seq;}PitonReversedIterator;
-typedef struct{long magic,index;PitonSeq*left,*right;}PitonZipIterator;
+typedef struct{long magic,index,arity;PitonSeq*left,*right;PitonSeq**seqs;}PitonZipIterator;
 static long piton_reversed_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: reversed() argument is not iterable\n",48);piton_exit(1);}PitonReversedIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->seq=s;i->index=s->length-1;return(long)i;}
 static long piton_reversed_next(long raw){PitonReversedIterator*i=(PitonReversedIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index<0){piton_raise_set("StopIteration","");return 0;}return i->seq->items[i->index--].bits;}
-static long piton_zip_new(void*a,void*b){PitonSeq*l=(PitonSeq*)a,*r=(PitonSeq*)b;if(!l||!r||(l->kind!=PK_LIST&&l->kind!=PK_TUPLE)||(r->kind!=PK_LIST&&r->kind!=PK_TUPLE)){piton_write(2,"TypeError: zip() arguments are not iterable\n",45);piton_exit(1);}PitonZipIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->left=l;i->right=r;return(long)i;}
-static long piton_zip_next(long raw){PitonZipIterator*i=(PitonZipIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->left->length||i->index>=i->right->length){piton_raise_set("StopIteration","");return 0;}long n=i->index++;PitonSeq*p=piton_seq_new(PK_TUPLE,2);piton_seq_put(p,0,i->left->items[n]);piton_seq_put(p,1,i->right->items[n]);return(long)p;}
+static long piton_zip_new_multi(long arity,PitonSeq**seqs){
+  PitonZipIterator*i=piton_alloc(sizeof(*i));
+  i->magic=0x5049544E17E2LL;i->index=0;i->arity=arity;
+  if(arity<=0){i->seqs=0;return(long)i;}
+  i->seqs=piton_alloc((usize)arity*sizeof(PitonSeq*));
+  for(long k=0;k<arity;++k){
+    PitonSeq*s=seqs[k];
+    if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: zip() arguments are not iterable\n",45);piton_exit(1);}
+    i->seqs[k]=s;
+  }
+  if(arity>=1)i->left=i->seqs[0];
+  if(arity>=2)i->right=i->seqs[1];
+  return(long)i;
+}
+static long piton_zip_new(void*a,void*b){PitonSeq*arr[2]={(PitonSeq*)a,(PitonSeq*)b};return piton_zip_new_multi(2,arr);}
+static long piton_zip_next(long raw){
+  PitonZipIterator*i=(PitonZipIterator*)raw;
+  if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}
+  if(i->arity<=0||!i->seqs){piton_raise_set("StopIteration","");return 0;}
+  for(long k=0;k<i->arity;++k){
+    if(i->index>=i->seqs[k]->length){piton_raise_set("StopIteration","");return 0;}
+  }
+  long n=i->index++;
+  PitonSeq*p=piton_seq_new(PK_TUPLE,i->arity);
+  for(long k=0;k<i->arity;++k){
+    piton_seq_put(p,k,i->seqs[k]->items[n]);
+  }
+  return(long)p;
+}
 typedef struct{long magic,index;PitonSeq*seq;long(*callback)(long);}PitonCallbackIterator;
 static long piton_callback_invoke(long,long);
 static long piton_callback_iterator_new(void*raw,long callback,long filter){PitonSeq*s=(PitonSeq*)raw;if(!s||!callback||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map/filter requires an iterable and unary callback\n",62);piton_exit(1);}PitonCallbackIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL|(filter?1:0);i->seq=s;i->callback=(long(*)(long))callback;return(long)i;}
@@ -2059,6 +2086,20 @@ static void piton_seq_extend_any(PitonSeq*dst,long src_bits){
 static void piton_seq_set(PitonSeq*s,long i,PitonSlot v){if(!s)return;if(i<0)i+=s->length;if(i<0||i>=s->length){piton_raise_set("IndexError","seq index out of range");return;}s->items[i]=v;}
 static void piton_dict_set(PitonDict*d,PitonSlot k,PitonSlot v){if(!d)return;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){d->items[i].value=v;return;}piton_dict_append(d,k,v);}
 static void piton_dict_update(PitonDict*d,PitonDict*src){if(!d||!src)return;for(long i=0;i<src->length;++i)piton_dict_set(d,src->items[i].key,src->items[i].value);}
+static void piton_dict_extend_any(PitonDict*dst,long src_bits){
+  if(!dst)return;
+  if(src_bits&&piton_maybe_ptr(src_bits)){
+    long*ptr=(long*)src_bits;
+    if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]==PK_DICT){
+      piton_dict_update(dst,(PitonDict*)src_bits);
+      return;
+    }
+  }
+  const char*tname=piton_dynamic_type_name(src_bits);
+  const char*msg=(const char*)piton_str_concat("'",tname);
+  msg=(const char*)piton_str_concat(msg,"' object is not a mapping");
+  piton_raise_set("TypeError",msg);
+}
 static void piton_dict_del(PitonDict*d,PitonSlot k){for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){for(long j=i;j+1<d->length;++j)d->items[j]=d->items[j+1];--d->length;return;}piton_raise_set("KeyError","");}
 static void piton_seq_remove(PitonSeq*s,PitonSlot v){if(!s)return;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v)){for(long j=i;j<s->length-1;++j)s->items[j]=s->items[j+1];--s->length;return;}piton_raise_set("ValueError","list.remove(x): x not in list");}
 static void piton_seq_extend(PitonSeq*s,PitonSeq*o){if(!s||!o)return;for(long i=0;i<o->length;++i)piton_seq_append(s,o->items[i]);}
@@ -3709,6 +3750,12 @@ class LinuxCEmitter:
         self._module_funcs = list(module.functions)
         self.function_names = {function.name for function in module.functions}
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
+        self.function_default_params = {
+            function.name: set(getattr(function, "default_params", None) or [
+                p for p, d in zip(function.params, function.defaults) if d is not None
+            ])
+            for function in module.functions
+        }
         # USAGE_PARAM_TYPE_V1: tipo inferido por uso de cada param, por
         # funcion — el call-site lo consulta para rechazar (fail-closed)
         # argumentos de tipo conocido contradictorio.
@@ -3763,7 +3810,9 @@ class LinuxCEmitter:
         self._scan_module_globals(module)
         self._scan_usage_param_types(module)
         self._scan_identity_functions(module)
+        self._call_param_type_sets: dict[str, dict[str, set[str]]] = {}
         self.function_return_types = self._infer_return_types(module)
+        self._fn_var_type_seeds: dict[str, dict[str, str]] = {}
         self.generator_layouts = {}
         for function in module.functions:
             if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
@@ -3900,9 +3949,9 @@ class LinuxCEmitter:
         # (la closure se anade al bajar el cuerpo del padre) y conserva el
         # orden del cuerpo de la clase — no se reordena.
         _order = list(module.functions)
-        for _pass in (0, 1):
-            # el estado del `borrar` es POR PASADA (la primera pasada no
-            # debe dejar el nombre borrado para la segunda).
+        for _pass in (0, 1, 2):
+            # el estado del `borrar` es POR PASADA (las pre-pasadas no
+            # deben dejar el nombre borrado para la pasada final).
             _del_state = (
                 set(self._deleted_names),
                 {k: set(v) for k, v in self._deleted_by_function.items()},
@@ -3911,12 +3960,13 @@ class LinuxCEmitter:
             _pass_lines: list[str] = []
             for function in _order:
                 _pass_lines.extend(self._emit_function(function))
-            if _pass == 0:
-                # se descarta la primera pasada, pero sus tipos (los de los
-                # call-sites) quedan en los mapas del emitter.
+            if _pass < 2:
+                # se descartan las pre-pasadas, pero sus tipos de call-sites
+                # quedan en los mapas del emitter y alimentan _infer_return_types.
                 self._deleted_names = _del_state[0]
                 self._deleted_by_function = _del_state[1]
                 self._deleted_at = _del_state[2]
+                self.function_return_types = self._infer_return_types(module)
                 continue
             lines.extend(_pass_lines)
         if self._has_rich_runtime:
@@ -3991,6 +4041,8 @@ class LinuxCEmitter:
         # _emit_user_function_call), asi que la anotacion no se contradice
         # con argumentos observados.
         for _pd_param, _pd_value in zip(function.params, function.defaults or []):
+            if isinstance(_pd_value, tuple) and _pd_value and _pd_value[0] in {"__name__", "__attr__"}:
+                continue
             if isinstance(_pd_value, tuple):
                 types[_pd_param] = "tuple"
                 _pd_elems = []
@@ -4013,6 +4065,10 @@ class LinuxCEmitter:
                 # (bug preexistente: `devolver (a, b)` con default str imprimia
                 # el puntero del param como int).
                 types[_pd_param] = "str"
+            elif isinstance(_pd_value, bool):
+                types[_pd_param] = "bool"
+            elif isinstance(_pd_value, float):
+                types[_pd_param] = "float"
         # USAGE_PARAM_TYPE_V1: el pre-pass de emit() escanea TODAS las
         # funciones ANTES de emitir (el call de <module> a una funcion
         # definida despues ya necesita el seed); aqui solo se aplica al
@@ -4046,6 +4102,9 @@ class LinuxCEmitter:
         if function.name.endswith("__exit__") and len(function.params) >= 3:
             types[function.params[1]] = "str"
             types[function.params[2]] = "str"
+        for _sv_k, _sv_t in (self._fn_var_type_seeds.get(function.name) or {}).items():
+            if types.get(_sv_k) in {None, "int"} and _sv_t in {"bool", "float"}:
+                types[_sv_k] = _sv_t
         if function.frame_abi:
             for index, param in enumerate(function.params):
                 lines.append(f"    {_name(param)}=__piton_frame[{index}];")
@@ -4057,6 +4116,12 @@ class LinuxCEmitter:
                 lines.extend(self._emit_instruction(instruction, function, aliases, types, bigint_slots))
             if not block.instructions or block.instructions[-1].op not in {"jump", "branch", "return"}:
                 lines.append(f"    goto {_name(function.name + '___exit')};")
+        # CFG_ORDER_TYPE_PROP_V1: record scalar bool/float local variable types
+        # discovered in later CFG blocks so the next emit pass sees them in
+        # earlier join blocks without re-running instructions in the same pass.
+        for _tk, _tv in types.items():
+            if isinstance(_tk, str) and not _tk.startswith("%") and _tv in {"bool", "float"}:
+                self._fn_var_type_seeds.setdefault(function.name, {})[_tk] = _tv
         for slot in bigint_slots:
             lines.append(f"    piton_bigint_free((void*){_name(slot)});")
             lines.append(f"    {_name(slot)}=0;")
@@ -4791,7 +4856,11 @@ class LinuxCEmitter:
         # argumentos es entonces los fijos MENOS los que tienen default. Antes se
         # contaban "los None", que es al reves: `def f(a, b=None)` pedia 2
         # argumentos y rechazaba `f(1)` con un TypeError que CPython no lanza.
-        _n_defaults = len(_defaults) if isinstance(_defaults, dict) else len(list(_defaults))
+        _def_params = getattr(self, "function_default_params", {}).get(function_name)
+        if _def_params is not None:
+            _n_defaults = len([p for p in _params if p in _def_params and p != _vararg and p != _kwarg])
+        else:
+            _n_defaults = len(_defaults) if isinstance(_defaults, dict) else len([d for d in _defaults if d is not None])
         _min_args = max(0, _n_fixed - _n_defaults)
         _max_args = len(_params) if _vararg is None and _kwarg is None else None
         _too_few = len(values) < _min_args
@@ -4855,7 +4924,7 @@ class LinuxCEmitter:
             # el callee lo usa para tipar un param sin seed local (getopt:
             # do_longs(opt) <- args[0][2:] es str).
             _ipt_known = types.get(_ival) if isinstance(_ival, str) else None
-            if _ipt_known in {"str", "list", "tuple", "dict", "set"}:
+            if _ipt_known in {"str", "list", "tuple", "dict", "set", "bool", "float"}:
                 self._call_param_types.setdefault(function_name, {})[_iparam] = _ipt_known
             if _weak_types.get(_iparam) and isinstance(_ival, str):
                 # RECONCILE_SEED_V1: el seed del param fue AMBIGUO (indice+
@@ -4921,7 +4990,10 @@ class LinuxCEmitter:
         else:
             out.append(f"    {_name(result)}={_name(function_name)}({encoded_values});")
         self._emit_exc_check(out, function, call_handler)
-        types[result] = self.function_return_types.get(function_name, "int")
+        if _id_index is not None and _id_index < len(values) and isinstance(values[_id_index], str):
+            types[result] = types.get(values[_id_index], self.function_return_types.get(function_name, "int"))
+        else:
+            types[result] = self.function_return_types.get(function_name, "int")
         return out
 
     def _infer_receiver_type(
@@ -6777,6 +6849,52 @@ class LinuxCEmitter:
             values.append(default_value)
         return values
 
+    def _pack_call_varargs(
+        self,
+        out: list[str],
+        function_name: str,
+        values: list[Any],
+        types: dict[str, str],
+    ) -> list[Any]:
+        """VARARG_PACK_V2: pack extra positional arguments into a PK_TUPLE slot
+        when calling a function/method that declares `*args` (or an empty
+        dict when it declares `**kwargs` and no kw dict was passed)."""
+        _params = self.function_params.get(function_name, [])
+        _pack_vararg = self.function_varargs.get(function_name)
+        _pack_kwarg = self.function_kwargs.get(function_name)
+        if _pack_vararg is None and _pack_kwarg is None:
+            return values
+        _n_named = len([p for p in _params if p != _pack_vararg and p != _pack_kwarg])
+        # If the MIR variadic call path already packed the tuple (and kwarg dict),
+        # values has exact length len(_params) and the vararg slot is already a tuple.
+        if (
+            len(values) == len(_params)
+            and _pack_vararg is not None
+            and _n_named < len(values)
+            and isinstance(values[_n_named], str)
+            and types.get(values[_n_named]) == "tuple"
+        ):
+            return values
+        if _pack_vararg is not None and len(values) >= _n_named:
+            _extra = list(values)[_n_named:]
+            _vname = f"%vapack{self._vararg_pack_counter % 4}"
+            self._vararg_pack_counter += 1
+            out.append(f"    {{PitonSeq*_va=piton_seq_new(PK_TUPLE,{len(_extra)});")
+            for _i, _ev in enumerate(_extra):
+                out.append(
+                    f"    piton_seq_put(_va,{_i},{self._slot(_ev, types)});"
+                )
+            out.append(f"    {_name(_vname)}=(long)_va;}}")
+            types[_vname] = "tuple"
+            values = list(values)[:_n_named] + [_vname]
+        if _pack_kwarg is not None and len(values) < len(_params):
+            _kname = f"%vapack{self._vararg_pack_counter % 4}"
+            self._vararg_pack_counter += 1
+            out.append(f"    {_name(_kname)}=(long)piton_dict_new(0);")
+            types[_kname] = "dict"
+            values = list(values) + [_kname]
+        return values
+
     def _emit_linux_gen_suspend(
         self, out: list[str], types: dict[str, str],
         value: Any, result: Optional[str], await_flag: bool,
@@ -7500,6 +7618,7 @@ class LinuxCEmitter:
                             _dead_tail.add(_b.label)
 
                 changed = True
+                closure_src: dict[str, str] = {}
                 while changed:
                     changed = False
                     for block in function.blocks:
@@ -7512,11 +7631,20 @@ class LinuxCEmitter:
                                 origins[result] = ("kind", iargs[0])
                             elif op == "object_new" and result:
                                 origins[result] = ("object", iargs[0])
+                            elif op == "closure_new" and result and iargs:
+                                if isinstance(iargs[0], str):
+                                    closure_src[result] = iargs[0]
                             elif op == "load" and result and iargs:
                                 load_src[result] = iargs[0]
                                 origins[result] = ("var", iargs[0])
-                            elif op == "call" and result:
-                                callee = load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
+                                if isinstance(iargs[0], str) and iargs[0] in closure_src:
+                                    closure_src[result] = closure_src[iargs[0]]
+                            elif op in {"call", "frame_call"} and result:
+                                callee = (
+                                    closure_src.get(iargs[0])
+                                    or closure_src.get(load_src.get(iargs[0], ""))
+                                    or load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
+                                )
                                 if isinstance(callee, str) and callee not in function.params and (
                                     callee in by_name or callee in {"complex", "complejo"}
                                 ):
@@ -7542,18 +7670,73 @@ class LinuxCEmitter:
                                     elif f"{cls_name}__{method}" in by_name:
                                         target = f"{cls_name}__{method}"
                                 origins[result] = ("call", target) if target else ("opaque", None)
+                            elif op == "get_attr" and result and len(iargs) >= 2:
+                                _owner_t = operand_type(iargs[0]) or ""
+                                _attr_n = iargs[1]
+                                if isinstance(_attr_n, str):
+                                    _prop_cls = self._resolve_property_class(_owner_t, _attr_n)
+                                    if _prop_cls is not None:
+                                        _getter = self.class_properties[_prop_cls][_attr_n].get("getter")
+                                        origins[result] = ("call", _getter) if _getter else ("opaque", None)
+                                    elif _owner_t.startswith("object:"):
+                                        _icls = _owner_t.split(":", 1)[1]
+                                        _it = None
+                                        for _cand in self.class_mro.get(_icls, [_icls]):
+                                            _it = self._instance_attr_types.get(_cand, {}).get(_attr_n)
+                                            if _it:
+                                                break
+                                        origins[result] = ("kind", _it) if _it else ("opaque", None)
+                                    else:
+                                        origins[result] = ("opaque", None)
+                                else:
+                                    origins[result] = ("opaque", None)
+                            elif op == "cell_load" and result and iargs:
+                                _ct = self._cell_types.get(iargs[0])
+                                origins[result] = ("kind", _ct) if _ct and _ct not in {"int", "none"} else ("opaque", None)
+                            elif op == "compare" and result:
+                                origins[result] = ("kind", "bool")
+                            elif op == "unary" and result and len(iargs) >= 2:
+                                _uop, _uarg = iargs[0], iargs[1]
+                                _ut = operand_type(_uarg)
+                                if _uop in ("not", "no"):
+                                    origins[result] = ("kind", "bool")
+                                elif _uop in ("-", "+") and _ut == "float":
+                                    origins[result] = ("kind", "float")
+                                elif _uop in ("-", "+", "~") and _ut in ("int", "bool"):
+                                    origins[result] = ("kind", "int")
+                                else:
+                                    origins[result] = ("opaque", None)
                             elif op == "binary" and result:
-                                # METHODTYPE_V1: `'B' + <str>` must stay str.
-                                # Only the unambiguous string-concat shape is
-                                # typed; everything else keeps the historical
-                                # int default.
+                                # METHODTYPE_V1 + NUMERIC_RETTYPE_V1: propagate
+                                # unambiguous str, float, bool, and int binary
+                                # results so callable boundaries preserve types.
                                 _bop, _l, _r = iargs[0], iargs[1], iargs[2]
-                                if _bop == "+" and operand_type(_l) == "str" and operand_type(_r) == "str":
+                                _lt, _rt_op = operand_type(_l), operand_type(_r)
+                                if _bop == "+" and _lt == "str" and _rt_op == "str":
                                     origins[result] = ("kind", "str")
+                                elif _bop == "*" and (
+                                    (_lt == "str" and _rt_op in ("int", "bool"))
+                                    or (_rt_op == "str" and _lt in ("int", "bool"))
+                                ):
+                                    origins[result] = ("kind", "str")
+                                elif _bop == "/":
+                                    origins[result] = ("kind", "float")
+                                elif _bop in ("+", "-", "*", "//", "%", "**") and (
+                                    _lt == "float" or _rt_op == "float"
+                                ):
+                                    origins[result] = ("kind", "float")
+                                elif _bop in ("&", "|", "^") and _lt == "bool" and _rt_op == "bool":
+                                    origins[result] = ("kind", "bool")
+                                elif _bop in ("+", "-", "*", "//", "%", "**", "<<", ">>", "&", "|", "^") and (
+                                    _lt in ("int", "bool") and _rt_op in ("int", "bool")
+                                ):
+                                    origins[result] = ("kind", "int")
                                 else:
                                     origins[result] = ("opaque", None)
                             elif op == "store" and result is None and iargs:
                                 target, source = iargs[0], iargs[1]
+                                if isinstance(source, str) and source in closure_src:
+                                    closure_src[target] = closure_src[source]
                                 if isinstance(source, str) and source.startswith("%"):
                                     origin = origins.get(source)
                                     if origin is None:
@@ -7596,6 +7779,8 @@ class LinuxCEmitter:
                     for _pd_param, _pd_value in zip(function.params, function.defaults or []):
                         if _pd_param in seeded:
                             continue
+                        if isinstance(_pd_value, tuple) and _pd_value and _pd_value[0] in {"__name__", "__attr__"}:
+                            continue
                         if isinstance(_pd_value, tuple):
                             seeded.add(_pd_param)
                             changed = note_var(_pd_param, "tuple") or changed
@@ -7605,6 +7790,12 @@ class LinuxCEmitter:
                         elif isinstance(_pd_value, str):
                             seeded.add(_pd_param)
                             changed = note_var(_pd_param, "str") or changed
+                        elif isinstance(_pd_value, bool):
+                            seeded.add(_pd_param)
+                            changed = note_var(_pd_param, "bool") or changed
+                        elif isinstance(_pd_value, float):
+                            seeded.add(_pd_param)
+                            changed = note_var(_pd_param, "float") or changed
                     # MIR-REACH-V1 (RETURNS PARAM TYPE): param seedeado por
                     # uso (str/list) devuelve ese tipo al retornarlo directo
                     # (bisect insort_right: `a.insert(...)` muta y el caller
@@ -7614,6 +7805,13 @@ class LinuxCEmitter:
                             continue
                         seeded.add(_up_param)
                         changed = note_var(_up_param, _up_type) or changed
+                    for _cp_param, _cp_type in (self._call_param_types.get(function.name) or {}).items():
+                        if _cp_param in seeded:
+                            continue
+                        if _cp_param in (self._runtime_type_params.get(function.name) or ()):
+                            continue
+                        seeded.add(_cp_param)
+                        changed = note_var(_cp_param, _cp_type) or changed
 
                 if not returns:
                     inferred: str | None = "none"
@@ -7858,19 +8056,35 @@ class LinuxCEmitter:
                 else:
                     out.append(f"    {_name(result)}=piton_reversed_new((void*){_rev_src});")
             elif builtin == "zip":
-                left, right = source
+                zip_sources = list(source) if isinstance(source, (tuple, list)) else [source]
 
-                def _zip_materialize(value: Any) -> str:
-                    # ZIP_DYNAMIC_V1: cada lado se materializa a una lista antes
-                    # de zippear (heapq: `zip(range(n), it)` con it de
-                    # `iter(iterable)`). Un range usa piton_range_get; un
-                    # iterador/genexpr, su colector. Devuelve el nombre C de la
-                    # variable local.
-                    name = f"_zl{len(out)}"
+                def _zip_materialize(value: Any, idx: int) -> tuple[str, bool]:
+                    name = f"_zl{len(out)}_{idx}"
                     vtype = types.get(value, "")
                     if vtype in {"list", "tuple"}:
-                        # camino directo: ninguna materializacion
-                        return f"(void*){self._value(value)}", False
+                        return f"(PitonSeq*){self._value(value)}", False
+                    if vtype == "str":
+                        out.append(
+                            f"    {{const char*_zs=(const char*){self._value(value)};"
+                            f"usize _zn=piton_strlen(_zs);PitonSeq*{name}=piton_seq_new(PK_LIST,0);"
+                            f"for(usize _zi=0;_zi<_zn;++_zi){{char*_zq=piton_alloc(2);_zq[0]=_zs[_zi];_zq[1]=0;"
+                            f"piton_seq_append({name},(PitonSlot){{(long)_zq,PK_STR}});}}"
+                        )
+                        return name, True
+                    if vtype in {"set", "set:frozen"}:
+                        out.append(
+                            f"    {{PitonSet*_zst=(PitonSet*){self._value(value)};"
+                            f"PitonSeq*{name}=piton_seq_new(PK_LIST,0);"
+                            f"for(long _zi=0;_zi<_zst->length;++_zi)piton_seq_append({name},_zst->items[_zi]);"
+                        )
+                        return name, True
+                    if vtype in {"dict", "dict:module"}:
+                        out.append(
+                            f"    {{PitonDict*_zdt=(PitonDict*){self._value(value)};"
+                            f"PitonSeq*{name}=piton_seq_new(PK_LIST,0);"
+                            f"for(long _zi=0;_zi<_zdt->length;++_zi)piton_seq_append({name},_zdt->items[_zi].key);"
+                        )
+                        return name, True
                     if vtype == "range":
                         out.append(
                             f"    {{PitonSeq*{name}=piton_seq_new(PK_LIST,piton_range_len((PitonRange*){self._value(value)}));"
@@ -7879,32 +8093,38 @@ class LinuxCEmitter:
                             f"     for(long _zi=0;_zi<{name}->length;++_zi)"
                             f"{{piton_seq_put({name},_zi,piton_slot(piton_range_get((PitonRange*){self._value(value)},_zi),PK_INT));}}"
                         )
-                        return f"(void*){name}", True
+                        return name, True
                     if vtype in {"iterator:genexpr", "genexpr"}:
                         out.append(f"    {{PitonSeq*{name}=(PitonSeq*)piton_genexpr_to_list({self._value(value)});")
-                        return f"(void*){name}", True
+                        return name, True
+                    if vtype == "generator":
+                        out.append(f"    {{PitonSeq*{name}=(PitonSeq*)piton_collect(4,{self._value(value)},PK_INT);")
+                        return name, True
                     if str(vtype).startswith("iterator:"):
                         out.append(f"    {{PitonSeq*{name}=(PitonSeq*)piton_collect_any_iter({self._value(value)});")
-                        return f"(void*){name}", True
-                    # ZIP_ATTR_V1: un atributo con tipo estatico desconocido
-                    # (ej. exc.exceptions de un parametro) se asume secuencia
-                    # (test/support/testcase.py: zip(exc.exceptions,
-                    # template.exceptions)) y se usa directo como PitonSeq*.
+                        return name, True
                     if vtype in ("", "int") or vtype.startswith(("object:", "class:", "slot")):
-                        return f"(void*){self._value(value)}", False
-                    raise NativeBuildError("native zip requires two lists, tuples or iterables")
+                        return f"(PitonSeq*){self._value(value)}", False
+                    raise NativeBuildError("native zip requires lists, tuples or iterables")
 
-                _zl, _lopen = _zip_materialize(left)
-                _zr, _ropen = _zip_materialize(right)
-                if _lopen:
-                    _zl = "(void*)" + _zl[len("(void*)"):]
-                out.append(f"    {_name(result)}=piton_zip_new({_zl},{_zr});")
-                if _lopen:
-                    out.append("    }")
-                if _ropen:
-                    out.append("    }")
-                self._iter_source[result] = left
-                self._iter_source_r[result] = right
+                if not zip_sources:
+                    out.append(f"    {_name(result)}=piton_zip_new_multi(0,(PitonSeq**)0);")
+                else:
+                    _zexprs = []
+                    _zopens = 0
+                    for _zidx, _zsrc in enumerate(zip_sources):
+                        _ze, _zo = _zip_materialize(_zsrc, _zidx)
+                        _zexprs.append(_ze)
+                        if _zo:
+                            _zopens += 1
+                    _zarr = f"_zarr{len(out)}"
+                    out.append(f"    {{PitonSeq*{_zarr}[{len(_zexprs)}]={{ {', '.join(_zexprs)} }};")
+                    out.append(f"    {_name(result)}=piton_zip_new_multi({len(_zexprs)},{_zarr});}}")
+                    for _ in range(_zopens):
+                        out.append("    }")
+                    self._iter_source[result] = zip_sources[0]
+                    if len(zip_sources) >= 2:
+                        self._iter_source_r[result] = zip_sources[1]
             elif builtin in {"map", "filter"}:
                 if types.get(source) not in {"list", "tuple"}:
                     # Relajar map/filter: permitir iterables genéricos
@@ -8215,6 +8435,8 @@ class LinuxCEmitter:
                 self._chr_results.add(result)
             if source in self._dict_val_types:
                 self._dict_val_types[result] = self._dict_val_types[source]
+            if source in self._closure_origin:
+                self._closure_origin[result] = self._closure_origin[source]
             # ELEM_KIND_V1: al cargar un param list con elem-kind conocido,
             # anotar el temp result (getopt: args[0] es str, no int, por
             # que args[0].startswith('-') resuelve el elemento como str).
@@ -8416,9 +8638,13 @@ class LinuxCEmitter:
                     self._nested_tuple_lists[args[0]] = self._nested_tuple_lists[args[1]]
                 if args[1] in self._dict_val_types:
                     self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
+                if args[1] in self._closure_origin:
+                    self._closure_origin[args[0]] = self._closure_origin[args[1]]
                 return out
             out.append(f"    {_name(args[0])}={self._value(args[1])};")
             types[args[0]] = types.get(args[1], "int")
+            if args[1] in self._closure_origin:
+                self._closure_origin[args[0]] = self._closure_origin[args[1]]
             # CALLITER_ELEM_V1: el nombre hereda el tipo de ELEMENTO del
             # iterador (`fiter = iter(f, sent)` -> `fiter` entrega el retorno
             # de f).
@@ -11082,7 +11308,20 @@ class LinuxCEmitter:
                         # apilado devuelve str y se imprimía el puntero).
                         _rt = "int"
                         _callee = aliases.get(args[0], args[0])
-                        if isinstance(_callee, str):
+                        _origin_fn = self._closure_origin.get(args[0]) or (
+                            self._closure_origin.get(_callee) if isinstance(_callee, str) else None
+                        )
+                        if _origin_fn:
+                            _cparams = self.function_params.get(_origin_fn) or []
+                            for _ci, _cv in enumerate(values):
+                                if _ci >= len(_cparams):
+                                    break
+                                _cvt = types.get(_cv) if isinstance(_cv, str) else None
+                                if _cvt in {"str", "list", "tuple", "dict", "set", "bool", "float"}:
+                                    self._call_param_types.setdefault(_origin_fn, {})[_cparams[_ci]] = _cvt
+                        if _origin_fn and _origin_fn in self.function_return_types:
+                            _rt = self.function_return_types[_origin_fn]
+                        elif isinstance(_callee, str):
                             if _callee in self.function_return_types:
                                 _rt = self.function_return_types[_callee]
                             else:
@@ -11091,6 +11330,10 @@ class LinuxCEmitter:
                                 _dec = "__decorated__" + _callee
                                 if _dec in self.function_return_types:
                                     _rt = self.function_return_types[_dec]
+                        _id_target = _origin_fn or (_callee if isinstance(_callee, str) else None)
+                        _id_idx = self._identity_params.get(_id_target) if _id_target else None
+                        if _id_idx is not None and _id_idx < len(values) and isinstance(values[_id_idx], str):
+                            _rt = types.get(values[_id_idx], _rt)
                         types[result] = _rt
         elif op == "return":
             if getattr(function, "is_coroutine", False):
@@ -11170,6 +11413,7 @@ class LinuxCEmitter:
                 f"    {_name(result)}=piton_closure_new_frame((long)&{_name(lifted_name)},{n_args},"
                 f"{len(capture_ops)},(long[]){{ {','.join(cell_values)} }},{int(has_vararg)},{int(has_kwarg)});"
             )
+            self._closure_origin[result] = lifted_name
             types[result] = "closure"
         elif op == "dynamic_call":
             # DYNAMIC_CALL_V1: llamada a un callable desconocido en build time;
@@ -11202,7 +11446,7 @@ class LinuxCEmitter:
                 f"    {_name(result)}=piton_frame_call({self._value(callee)},{len(call_args)},_frame_args);"
             )
             out.append("    }")
-            types[result] = "int"
+            types[result] = self.function_return_types.get(_fname, "int") if isinstance(_fname, str) else "int"
         elif op == "closure_call":
             callee, packed = args
             argc, *call_args = packed
@@ -11337,7 +11581,7 @@ class LinuxCEmitter:
                 _cls = owner_type.split(":", 1)[1] if owner_type.startswith("object:") else ""
                 if _cls in self.classes:
                     _vt = types.get(val, "")
-                    if _vt and _vt not in {"int", "bool"}:
+                    if _vt and _vt != "int":
                         self._instance_attr_types.setdefault(_cls, {}).setdefault(attr, _vt)
                 # MODULE_ATTR_TYPES_V1: track module attribute types for get_attr.
                 # BOOTSTRAP_ATTRS_KEEP_V1: el bootstrap de sys.modules construye
@@ -11520,7 +11764,7 @@ class LinuxCEmitter:
             if prop_class is not None:
                 getter = self.class_properties[prop_class][attr]["getter"]
                 out.append(f'    {_name(result)}={_name(getter)}({self._value(obj)});')
-                types[result] = "int"
+                types[result] = self.function_return_types.get(getter, "int")
             else:
                 if owner_type == "closure" and attr == "__self__":
                     out.append(f'    {_name(result)}=piton_bound_method_self({self._value(obj)});')
@@ -12292,6 +12536,7 @@ class LinuxCEmitter:
                         all_values = self._complete_call_args(target, [unbound_class, *call_args])
                     else:
                         all_values = self._complete_call_args(target, list(call_args))
+                    all_values = self._pack_call_varargs(out, target, all_values, types)
                     if self.function_frame_abi.get(target, False):
                         args_c = ",".join(self._value(v) for v in all_values)
                         out.append(f'    {{long _method_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_values)},_method_args);}}')
@@ -12349,30 +12594,71 @@ class LinuxCEmitter:
                 return out
             target = f"{cls_name}__{method}"
             if target in self.static_methods:
-                all_values = self._complete_call_args(target, list(call_args))
+                raw_values = list(call_args)
             elif target in self.class_methods:
                 # CLASSMETHOD_CLS_V1: el `cls` es el OPERANDO (objeto de
                 # clase real), no el string del nombre — `P__f(P)` no
                 # compila porque P no es un identificador C.
-                all_values = self._complete_call_args(target, [obj, *call_args])
+                raw_values = [obj, *call_args]
             else:
-                all_values = self._complete_call_args(target, [obj, *call_args])
+                raw_values = [obj, *call_args]
+            _mparams = self.function_params.get(target) or []
+            _mdefaults = self.function_defaults.get(target) or []
+            _mvararg = self.function_varargs.get(target)
+            _mkwarg = self.function_kwargs.get(target)
+            if _mparams:
+                _m_fixed = len(_mparams) - (1 if _mvararg is not None else 0) - (1 if _mkwarg is not None else 0)
+                _mdef_params = getattr(self, "function_default_params", {}).get(target)
+                if _mdef_params is not None:
+                    _m_ndef = len([p for p in _mparams if p in _mdef_params and p != _mvararg and p != _mkwarg])
+                else:
+                    _m_ndef = len(_mdefaults) if isinstance(_mdefaults, dict) else len([d for d in _mdefaults if d is not None])
+                _m_min = max(0, _m_fixed - _m_ndef)
+                _m_max = len(_mparams) if _mvararg is None and _mkwarg is None else None
+                if len(raw_values) < _m_min:
+                    _missing = [p for p in _mparams[:_m_min][len(raw_values):]]
+                    _miss_cnt = len(_missing)
+                    if _miss_cnt == 1:
+                        _mmsg = f"{cls_name}.{method}() missing 1 required positional argument: '{_missing[0]}'"
+                    else:
+                        _mmsg = (
+                            f"{cls_name}.{method}() missing {_miss_cnt} required positional arguments: "
+                            + ", ".join(f"'{p}'" for p in _missing[:-1])
+                            + f" and '{_missing[-1]}'"
+                        )
+                    self._runtime_type_error(out, _mmsg)
+                    types[result] = "int"
+                    return out
+                if _m_max is not None and len(raw_values) > _m_max:
+                    _mmax_text = str(_m_max)
+                    _mpos_word = "positional argument" if (_m_min == _m_max == 1) else "positional arguments"
+                    self._runtime_type_error(
+                        out,
+                        f"{cls_name}.{method}() takes "
+                        + (_mmax_text if _m_min == _m_max else f"from {_m_min} to {_m_max}")
+                        + f" {_mpos_word} but {len(raw_values)} were given",
+                    )
+                    types[result] = "int"
+                    return out
+            all_values = self._complete_call_args(target, raw_values)
+            if target not in self.static_methods and target not in self.class_methods:
                 # CALL_ARG_TYPE_V1: el call-site de un metodo informa el tipo
                 # de sus params (el constructor de una clase: `P([1,2])` deja
                 # el tipo de la lista en el param del __init__).
-                _mparams = self.function_params.get(target) or []
                 for _mi, _mv in enumerate(all_values[1:], start=1):
                     if _mi >= len(_mparams):
                         break
                     _mvt = types.get(_mv)
                     if _mvt and _mvt != "int":
                         self._call_param_types.setdefault(target, {})[_mparams[_mi]] = _mvt
+            all_values = self._pack_call_varargs(out, target, all_values, types)
             values = ",".join(self._value(v) for v in all_values)
             if self.function_frame_abi.get(target, False):
                 args_c = ",".join(self._value(v) for v in all_values)
                 out.append(f'    {{long _method_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_values)},_method_args);}}')
             else:
                 out.append(f"    {_name(result)}={_name(target)}({values});")
+            self._emit_exc_check(out, function, None)
             # RETURNTYPE_V1: method results propagate the inferred return type
             # (covers `devolver self` -> __str__ dispatch on print, etc).
             types[result] = self.function_return_types.get(target, "int")
@@ -12759,10 +13045,14 @@ class LinuxCEmitter:
             types[result] = kind
         elif op == "collection_extend":
             # COLLECTION_EXTEND_V1: extender coleccion con iterable (starred en
-            # LIST/TUPLE/SET: `[*a, b]`). dst es un PitonSeq*, src es cualquier
-            # iterable.
+            # LIST/TUPLE/SET: `[*a, b]`) o con mapping (starred en DICT: `{**a, **b}`).
             dst, src = args[0], args[1]
-            out.append(f"    piton_seq_extend_any((PitonSeq*){_name(dst)},{self._value(src)});")
+            handler_label = args[2] if len(args) > 2 else None
+            if types.get(dst) in {"dict", "dict:module"}:
+                out.append(f"    piton_dict_extend_any((PitonDict*){_name(dst)},{self._value(src)});")
+                self._emit_exc_check(out, function, handler_label)
+            else:
+                out.append(f"    piton_seq_extend_any((PitonSeq*){_name(dst)},{self._value(src)});")
         elif op == "truth_test":
             # BOOL_SHORT_V1 / TRUTHY_FIX_V1: full truthiness per static kind
             # (CPython bool()): int/bool != 0, float bits != 0.0, str

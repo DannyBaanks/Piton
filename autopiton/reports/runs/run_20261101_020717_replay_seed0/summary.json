@@ -1,0 +1,17 @@
+{
+  "cases_registered": 0,
+  "classification_counts": {
+    "DIVERGENT": 1
+  },
+  "drift": false,
+  "duration_ms": 714.2,
+  "finished_at": "2026-11-01T02:07:17-06:00",
+  "harness_errors": 0,
+  "programs_executed": 1,
+  "programs_requested": 1,
+  "run_id": "run_20261101_020717_replay_seed0",
+  "unique_divergences": 1,
+  "unique_signatures": [
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int"
+  ]
+}

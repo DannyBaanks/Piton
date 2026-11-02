@@ -116,6 +116,10 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(len(canaries), 10)
         self.assertEqual(
             [canary.description.split(":")[0] for canary in canaries],
+            [f"Canary {letter}" for canary in canaries for letter in [canary.description.split(":")[0].split()[1]]],
+        )
+        self.assertEqual(
+            [canary.description.split(":")[0] for canary in canaries],
             [f"Canary {letter}" for letter in "ABCDEFGHIJ"],
         )
         for canary in canaries:
@@ -125,6 +129,23 @@ class GeneratorTests(unittest.TestCase):
             sum(1 for canary in canaries if not canary.is_valid),
             4,
         )
+
+    def test_bounded_generation_is_deterministic_valid_and_respects_bounds(self):
+        from autopiton.generator import BoundedConfig
+
+        cfg = BoundedConfig(max_depth=2, max_stmts=3, max_args=2, types=("int", "float", "bool", "str"))
+        first = ProgramGenerator(seed=11).generate_bounded(count=40, config=cfg)
+        second = ProgramGenerator(seed=11).generate_bounded(count=40, config=cfg)
+        self.assertEqual(len(first), 40)
+        self.assertEqual(digest(first), digest(second))
+        shapes = set()
+        for program in first:
+            compile(program.code, "<bounded>", "exec")
+            self.assertTrue(program.is_valid, program.description)
+            self.assertIs(program.family, ProgramFamily.BOUNDED)
+            self.assertTrue(program.description.startswith("bounded["))
+            shapes.add(program.description.split("[")[1].split("/")[0])
+        self.assertGreaterEqual(len(shapes), 5)
 
 
 if __name__ == "__main__":

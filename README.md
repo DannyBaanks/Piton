@@ -86,7 +86,7 @@ Pitón **no es**:
     (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier a
     --recursive --workers 1 --isolate` — **`--isolate` es obligatorio**: sin
     él un archivo mata el worker del pool y la corrida muere siempre).
-  - **AutoPiton (fuzzing diferencial autónomo, 2026-10-30)**: genera programas
+  - **AutoPiton (fuzzing diferencial autónomo, 2026-10-30; Parity Attack Cycle V1, 2026-11-01)**: genera programas
     Python, los ejecuta en CPython y en el pipeline nativo dentro de una
     sandbox bwrap fail-closed, y clasifica la divergencia. Corpus con semilla
     `run_20261030_163754_generated_seed42`: 100/100 ejecutados, 89 EQUIV, 11
@@ -99,8 +99,15 @@ Pitón **no es**:
     regla (`synthesize`): escribe `colorsys` desde la fuente de CPython y pasa
     de 0/12 a 1/12 EQUIV con el candidato registrado; el control mutado lo
     devuelve a 0/12 (`run_20261030_193229_synthesis_seed7` /
-    `run_20261030_193704_synthesis_seed7`). Sección
-    «AutoPiton» y `autopiton/RESULTS.md`.
+    `run_20261030_193704_synthesis_seed7`).
+    - **Actualización Parity Attack Cycle V1 (2026-11-01, rama `feat/autopiton-polish`)**:
+      - Rejilla sistemática de 74 programas (`run_20261101_160244_systematic`): **74/74 EQUIV (100.0%)**, 0 divergencias.
+      - Canarios obligatorios A–J (`run_20261101_160238_canary`): **7/10 EQUIV**, **3/10 INVALID_REFERENCE**, 0 divergencias.
+      - Cinco contraejemplos históricos resueltos por causa raíz (`{**a, **b}`, `zip()` N-ario, `super().f(*args)`, y validación de aridad `TypeError` en constructores sin `__init__`): **5/5 EQUIV** + **10/10 EQUIV** en variantes de generalización y controles negativos.
+      - Generación acotada (`--bounded`, 12 plantillas cross-feature): **30/30 EQUIV** en `seed=11` (`run_20261101_160331_bounded_seed11`), **40/40 EQUIV** en `seed=23` (`run_20261101_155010_bounded_seed23`), **30/30 EQUIV** en `seed=99` (`run_20261101_155952_bounded_seed99`) y **30/30 EQUIV** en `seed=77` (`run_20261101_160010_bounded_seed77`).
+      - Reconciliación completa por replay de los 62 casos no-`EQUIV` registrados en `autopiton/cases/index.json`: **59 EQUIV** y **3 INVALID_REFERENCE** (**0 fallos activos**, `run_20261101_160149_reconcile_replay`).
+      - Síntesis por regla sobre `bisect` (`run_20261101_161138_synthesis_seed7`, 10 casos): pasa de **0/10 EQUIV** sin candidato a **8/10 EQUIV** con candidato; el control mutado (`--control`, `run_20261101_161151_synthesis_seed7`) lo reduce a **1/10 EQUIV**. Paquete de evidencia completo en `autopiton/reports/parity_attack_v1/`.
+    Sección «AutoPiton» y `autopiton/RESULTS.md`.
 
 - **Biblioteca nativa empaquetada** (`piton/stdlib_piton/`, 60 módulos):
   módulos escritos **en Pitón** que se compilan e inlinean cuando el
@@ -330,6 +337,10 @@ dependen de CPython**. Hay dos backends:
     CPython) y `os.PathLike` como clase builtin (`isinstance` la reconoce)
 [x] str.format con campos por nombre ({nombre}) y '%r'/'%s' de objetos
 [x] Excepciones builtin de CPython (SystemExit, UserWarning, …) por nombre
+[x] Desempaquetado de diccionarios `{**a, **b}` (orden izq->der, last-wins y TypeError en operandos no-mapping)
+[x] `zip()` N-ario (0, 1, 2, 3 y N iterables sobre listas, tuplas, range, str, set, dict, generadores)
+[x] `super().f(*args)` con empaquetado variádico y validación de aridad en llamadas a método y constructores sin `__init__` (`TypeError`)
+[x] Plegado constante en expresiones de defaults y propagación de tipos `bool`/`float`/`str` a través de closures (`frame_call`, `cell_load`), `@property` (`get_attr`) y bloques CFG
 ```
 
 ### Compilar desde la CLI
@@ -515,11 +526,12 @@ registra como `EQUIV`).
 python3 -m autopiton doctor                 # sandbox + entorno; exit 2 si no hay bwrap
 python3 -m autopiton compare --canary       # los 10 canarios obligatorios A-J
 python3 -m autopiton compare --count 100 --seed 42
-python3 -m autopiton compare --systematic   # rejilla op x tipo x superficie
-python3 -m autopiton synthesize --module colorsys --control   # escribe un módulo ausente por regla y lo mide
+python3 -m autopiton compare --systematic   # rejilla op x tipo x superficie (74 programas)
+python3 -m autopiton compare --bounded -c 30 --seed 11   # generación acotada cross-feature (12 plantillas)
+python3 -m autopiton synthesize --module bisect -c 10 --seed 7 --control   # escribe un módulo ausente por regla y lo mide
 python3 -m autopiton minimize <case-id>     # shrink preservando el tipo de divergencia
 python3 -m autopiton replay <case-id>       # huella estable + deriva de clasificación
-python3 -m pytest autopiton/tests -q        # 65 tests
+python3 -m pytest autopiton/tests -q        # 73 tests
 ```
 
 Qué lo hace creíble, y no un número bonito:

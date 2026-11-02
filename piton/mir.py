@@ -188,6 +188,7 @@ class MIRFunction:
     params: List[str] = field(default_factory=list)
     blocks: List[MIRBlock] = field(default_factory=list)
     defaults: List[Optional[Any]] = field(default_factory=list)
+    default_params: List[str] = field(default_factory=list)
     vararg: Optional[str] = None
     kwarg: Optional[str] = None
     cell_vars: List[str] = field(default_factory=list)
@@ -1789,6 +1790,7 @@ class MIRLowerer:
             builder.function.params.append(kwarg_name)
         builder.function.frame_abi = use_frame_abi
         builder.function.defaults = [defaults_map.get(p) for p in builder.function.params]
+        builder.function.default_params = [p for p in builder.function.params if p in defaults_map]
         self.function_params[qualified_name or node.name] = list(builder.function.params)
         self.function_defaults[qualified_name or node.name] = defaults_map
         self.function_varargs[qualified_name or node.name] = vararg_name
@@ -1921,66 +1923,150 @@ class MIRLowerer:
         # `_bufsize=2**18`) se evalua en build time — el subset no modela
         # la evaluacion diferida de defaults, pero una expresion de
         # literales si es determinista.
-        folded = self._fold_const_expr(node)
-        if folded is not None:
+        ok, folded = self._try_fold_const_expr(node)
+        if ok:
             defaults_map[param] = folded
             return True
         return False
 
     def _fold_const_expr(self, node: HIRNode) -> Any | None:
+        ok, folded = self._try_fold_const_expr(node)
+        return folded if ok else None
+
+    def _try_fold_const_expr(self, node: HIRNode) -> tuple[bool, Any]:
         """CONST_EXPR_DEFAULT_V1: evalua una expresion de literales a un
-        valor estatico (para los defaults de funcion). Devuelve None si la
-        expresion no es determinista.
+        valor estatico (para los defaults de funcion). Devuelve (False, None)
+        si la expresion no es determinista o no evaluable en build time.
 
         Cubre: constantes, `a ** b`, `a * b`, `a + b`, `a - b`, `a // b`,
-        `a << b`, `a | b`, `a & b` y el menos unario — solo con operandos
-        enteros/booleanos (hashlib: `_bufsize=2**18`).
+        `a << b`, `a | b`, `a & b`, comparaciones (`==`, `!=`, `<`, `<=`, `>`, `>=`,
+        `is`, `is not`, `in`, `not in` y alias en español) y unarios (`-`, `+`, `~`, `not`).
         """
-        kind = getattr(node, "kind", None)
-        if kind == HIRKind.CONST:
-            value = getattr(node, "value", None)
-            if isinstance(value, bool) or isinstance(value, int):
-                return value
-            return None
-        if kind == HIRKind.BINOP:
-            left = self._fold_const_expr(getattr(node, "left", None))
-            right = self._fold_const_expr(getattr(node, "right", None))
-            if left is None or right is None:
-                return None
-            op = getattr(node, "op", "")
-            try:
-                if op == "**":
-                    return left ** right
-                if op == "*":
-                    return left * right
-                if op == "+":
-                    return left + right
-                if op == "-":
-                    return left - right
-                if op == "//":
-                    return left // right
-                if op == "<<":
-                    return left << right
-                if op == "|":
-                    return left | right
-                if op == "&":
-                    return left & right
-            except Exception:
-                return None
-            return None
-        if kind == HIRKind.UNOP:
-            operand = self._fold_const_expr(getattr(node, "operand", None))
-            if operand is None:
-                return None
-            op = getattr(node, "op", "")
-            if op == "-":
-                return -operand
-            if op == "+":
-                return operand
-            if op == "~":
-                return ~operand
-            return None
-        return None
+        _FAIL = object()
+
+        def _eval(n: Any) -> Any:
+            if n is None:
+                return _FAIL
+            k = getattr(n, "kind", None)
+            if k == HIRKind.CONST:
+                val = getattr(n, "value", None)
+                if isinstance(val, (bool, int, float, str)) or val is None:
+                    return val
+                return _FAIL
+            if k == HIRKind.COMPARE:
+                left_val = _eval(getattr(n, "left", None))
+                if left_val is _FAIL:
+                    return _FAIL
+                comparators = list(getattr(n, "comparators", None) or [])
+                ops = list(getattr(n, "ops", None) or [])
+                if not ops or len(ops) != len(comparators):
+                    return _FAIL
+                curr_left = left_val
+                for op, comp_node in zip(ops, comparators):
+                    right_val = _eval(comp_node)
+                    if right_val is _FAIL:
+                        return _FAIL
+                    try:
+                        if op in ("==", "es", "is"):
+                            cond = (curr_left == right_val)
+                        elif op in ("!=", "no es", "is not"):
+                            cond = (curr_left != right_val)
+                        elif op == "<":
+                            cond = (curr_left < right_val)
+                        elif op == "<=":
+                            cond = (curr_left <= right_val)
+                        elif op == ">":
+                            cond = (curr_left > right_val)
+                        elif op == ">=":
+                            cond = (curr_left >= right_val)
+                        elif op in ("in", "en"):
+                            cond = (curr_left in right_val)
+                        elif op in ("not in", "no en"):
+                            cond = (curr_left not in right_val)
+                        else:
+                            return _FAIL
+                    except Exception:
+                        return _FAIL
+                    if not cond:
+                        return False
+                    curr_left = right_val
+                return True
+            if k == HIRKind.BINOP:
+                left_val = _eval(getattr(n, "left", None))
+                right_val = _eval(getattr(n, "right", None))
+                if left_val is _FAIL or right_val is _FAIL:
+                    return _FAIL
+                op = getattr(n, "op", "")
+                try:
+                    if op == "**":
+                        return left_val ** right_val
+                    if op == "*":
+                        return left_val * right_val
+                    if op == "+":
+                        return left_val + right_val
+                    if op == "-":
+                        return left_val - right_val
+                    if op == "//":
+                        return left_val // right_val
+                    if op == "/":
+                        return left_val / right_val
+                    if op == "%":
+                        return left_val % right_val
+                    if op == "<<":
+                        return left_val << right_val
+                    if op == ">>":
+                        return left_val >> right_val
+                    if op == "|":
+                        return left_val | right_val
+                    if op == "&":
+                        return left_val & right_val
+                    if op == "^":
+                        return left_val ^ right_val
+                except Exception:
+                    return _FAIL
+                return _FAIL
+            if k == HIRKind.UNOP:
+                operand = _eval(getattr(n, "operand", None))
+                if operand is _FAIL:
+                    return _FAIL
+                op = getattr(n, "op", "")
+                try:
+                    if op == "-":
+                        return -operand
+                    if op == "+":
+                        return operand
+                    if op == "~":
+                        return ~operand
+                    if op in ("not", "no"):
+                        return not operand
+                except Exception:
+                    return _FAIL
+                return _FAIL
+            if k == HIRKind.BOOL_OP:
+                op = getattr(n, "op", "")
+                values = list(getattr(n, "values", None) or [])
+                if not values:
+                    return _FAIL
+                res = _eval(values[0])
+                if res is _FAIL:
+                    return _FAIL
+                for v_node in values[1:]:
+                    v = _eval(v_node)
+                    if v is _FAIL:
+                        return _FAIL
+                    if op in ("and", "y"):
+                        res = res and v
+                    elif op in ("or", "o"):
+                        res = res or v
+                    else:
+                        return _FAIL
+                return res
+            return _FAIL
+
+        res = _eval(node)
+        if res is _FAIL:
+            return False, None
+        return True, res
 
     def _prescan_module_signatures(self, module_body: list, name_prefix: str = "") -> None:
         """FUNC_SIG_PRESCAN_V1: registra params/defaults/varargs/posonly/
@@ -4158,12 +4244,15 @@ class MIRLowerer:
                 builder.emit("builtin_iter_new", "reversed", source, None, result=result)
                 return result
             if node.func.kind == HIRKind.LOAD and node.func.name in {"zip", "combinar"}:
-                if len(node.args) != 2 or node.keywords:
-                    raise MIRLoweringError("native zip currently requires two iterables")
-                left = self._lower_expr(builder, node.args[0])
-                right = self._lower_expr(builder, node.args[1])
+                if node.keywords:
+                    raise MIRLoweringError("native zip does not support keyword arguments")
+                if len(node.args) == 0:
+                    result = builder.temp()
+                    builder.emit("builtin_iter_new", "zip", (), None, result=result)
+                    return result
+                sources = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
-                builder.emit("builtin_iter_new", "zip", (left, right), None, result=result)
+                builder.emit("builtin_iter_new", "zip", sources, None, result=result)
                 return result
             if (
                 node.func.kind == HIRKind.LOAD
@@ -5380,12 +5469,15 @@ class MIRLowerer:
                 builder.emit("builtin_iter_new", "reversed", source, None, result=result)
                 return result
             if node.func.kind == HIRKind.LOAD and node.func.name in {"zip", "combinar"}:
-                if len(node.args) != 2 or node.keywords:
-                    raise MIRLoweringError("native zip currently requires two iterables")
-                left = self._lower_expr(builder, node.args[0])
-                right = self._lower_expr(builder, node.args[1])
+                if node.keywords:
+                    raise MIRLoweringError("native zip does not support keyword arguments")
+                if len(node.args) == 0:
+                    result = builder.temp()
+                    builder.emit("builtin_iter_new", "zip", (), None, result=result)
+                    return result
+                sources = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 result = builder.temp()
-                builder.emit("builtin_iter_new", "zip", (left, right), None, result=result)
+                builder.emit("builtin_iter_new", "zip", sources, None, result=result)
                 return result
             if (
                 node.func.kind == HIRKind.LOAD
@@ -6087,13 +6179,22 @@ class MIRLowerer:
                         builder.emit("set_add", result, v)
             return result
         if kind == HIRKind.DICT:
-            # DICT_MERGE_V1: el parser baja `{**a, **b}` con clave None, pero
-            # no existe op de merge de runtime — fail-closed con mensaje
-            # claro (sin esto _lower_expr(None) petaba sin diagnosticar).
             if any(key is None for key in node.keys):
-                raise MIRLoweringError(
-                    "dict literal merge {**a, **b} is not implemented natively"
-                )
+                # DICT_MERGE_V2: evaluate keys and values in left-to-right
+                # appearance order (`{**a, 'k': v, **b}`). Starred entries
+                # (`key is None`) merge a mapping; regular entries set `k: v`,
+                # overwriting any prior key while preserving first-seen key order.
+                result = builder.temp()
+                builder.emit("build_collection", "dict", (), result=result)
+                for key, value in zip(node.keys, node.values):
+                    if key is None:
+                        v = self._lower_expr(builder, value)
+                        builder.emit("collection_extend", result, v, _active_handler(builder))
+                    else:
+                        k = self._lower_expr(builder, key)
+                        v = self._lower_expr(builder, value)
+                        builder.emit("subscript_store", result, k, v)
+                return result
             items = tuple(
                 (self._lower_expr(builder, key), self._lower_expr(builder, value))
                 for key, value in zip(node.keys, node.values)
@@ -6868,13 +6969,24 @@ class MIRLowerer:
                 init_class = cls
                 break
         if init_class is None:
-            # Relax: class without __init__ can be instantiated with args/kwargs, they are ignored
-            # if node.args:
-            #     raise MIRLoweringError("native class without __init__ takes no arguments")
-            # if node.keywords:
-            #     raise MIRLoweringError(
-            #         f"native class '{cls_name}' has no __init__ to receive keyword arguments"
-            #     )
+            if node.args or node.keywords:
+                # Evaluate arguments left-to-right to preserve side effects
+                # before raising TypeError if the class derives only from
+                # `object` / user classes without `__init__`.
+                for _arg in node.args:
+                    self._lower_expr(builder, _arg)
+                for _kw in (node.keywords or ()):
+                    self._lower_expr(builder, _kw.value)
+                _has_builtin_ctor_base = any(
+                    (c in _BUILTIN_EXCEPTIONS or (c in _BUILTIN_BASES and c != "object") or c not in self.classes)
+                    and c != "object"
+                    for c in (mro or ())
+                    if c != cls_name
+                )
+                if not _has_builtin_ctor_base:
+                    _msg = builder.temp()
+                    builder.emit("const", f"{cls_name}() takes no arguments", result=_msg)
+                    builder.emit("raise_typed", "TypeError", _msg, self._find_exception_handler(builder, "TypeError"))
             return result
         # CONSTRUCTOR_KW_BIND_V1: `Clase(a, k=b)` con un __init__ SIN
         # **kwargs. El emisor no puede empaquetar los kw contra una firma
@@ -7219,6 +7331,20 @@ class MIREvaluator:
         elif op == "dict_put":
             target = self._value(args[0], env)
             target[self._value(args[1], env)] = self._value(args[2], env)
+        elif op == "subscript_store":
+            target = self._value(args[0], env)
+            target[self._value(args[1], env)] = self._value(args[2], env)
+        elif op == "collection_extend":
+            target = self._value(args[0], env)
+            src = self._value(args[1], env)
+            if isinstance(target, dict):
+                if not isinstance(src, dict):
+                    raise TypeError("dict unpacking operand is not a mapping")
+                target.update(src)
+            elif isinstance(target, set):
+                target.update(src)
+            elif isinstance(target, list):
+                target.extend(src)
         elif op == "genexpr_new":
             env[instruction.result] = iter(self._value(args[0], env))
         elif op == "iter_new":

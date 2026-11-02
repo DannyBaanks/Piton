@@ -1,0 +1,47 @@
+{
+  "candidate_path": null,
+  "classification_counts": {
+    "DIVERGENT": 2,
+    "EQUIV": 8
+  },
+  "duration_ms": 12340.2,
+  "finished_at": "2026-11-01T16:11:51-06:00",
+  "programs_executed": 10,
+  "run_id": "run_20261101_161138_synthesis_seed7",
+  "synthesis": {
+    "baseline": {
+      "DIVERGENT": 3,
+      "INVALID_ACCEPTED": 7
+    },
+    "baseline_equiv": 0,
+    "baseline_stages": {
+      "none": 10
+    },
+    "candidate": {
+      "mutated": false,
+      "mutation": null,
+      "name": "bisect",
+      "piton_chars": 3246,
+      "piton_lines": 118,
+      "piton_sha256": "4fa9ac9c39078f83b3f10171e076a28646514333a461c7541e92d45b8a1c89e8",
+      "reference_sha256": "f1cf7b85fc36b5da249813fc5ab97d9464f8cc1bc817f7146206fa2713e35999",
+      "reference_source": "python3.12/bisect.py"
+    },
+    "candidate_rejected": 0,
+    "candidate_sha_seen": [
+      "4fa9ac9c39078f83b3f10171e076a28646514333a461c7541e92d45b8a1c89e8"
+    ],
+    "crashes": {},
+    "module": "bisect",
+    "overlay_equiv": 8,
+    "overlay_stages": {
+      "none": 10
+    },
+    "programs": 10,
+    "sandbox_available": true,
+    "with_overlay": {
+      "DIVERGENT": 2,
+      "EQUIV": 8
+    }
+  }
+}

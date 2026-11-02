@@ -1,0 +1,15 @@
+{
+  "cases_registered": 0,
+  "classification_counts": {
+    "EQUIV": 1
+  },
+  "drift": true,
+  "duration_ms": 712.2,
+  "finished_at": "2026-11-01T15:16:16-06:00",
+  "harness_errors": 0,
+  "programs_executed": 1,
+  "programs_requested": 1,
+  "run_id": "run_20261101_151615_replay_seed2",
+  "unique_divergences": 0,
+  "unique_signatures": []
+}

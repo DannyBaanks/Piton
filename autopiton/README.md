@@ -32,8 +32,9 @@ python3 -m autopiton doctor                 # environment + sandbox check
 python3 -m autopiton generate --count 20 --seed 42
 python3 -m autopiton compare --canary       # the 10 mandatory canary cases
 python3 -m autopiton compare --count 100 --seed 42
-python3 -m autopiton compare --systematic   # deterministic op x kind x surface grid
-python3 -m autopiton synthesize --module colorsys --control   # write a missing stdlib module by rule, then measure it
+python3 -m autopiton compare --systematic   # deterministic op x kind x surface grid (74 programs)
+python3 -m autopiton compare --bounded -c 30 --seed 11   # bounded cross-feature generation (12 templates)
+python3 -m autopiton synthesize --module bisect -c 10 --seed 7 --control   # write a missing stdlib module by rule, then measure it
 python3 -m autopiton report --latest
 python3 -m autopiton minimize <case-id>
 python3 -m autopiton replay <case-id>
@@ -46,7 +47,7 @@ JSONL, summary) and registers every distinct program in the corpus under
 Run the suite from the repository root:
 
 ```
-python3 -m pytest autopiton/tests -q        # 72 tests (measured 2026-10-31)
+python3 -m pytest autopiton/tests -q        # 73 tests (measured 2026-11-01)
 ```
 
 ## Commands
@@ -172,6 +173,18 @@ candidate registered. The baseline pass is what makes the result attributable.
 Run records store the PITON checkout's basename only, never its absolute path,
 so committed metadata cannot leak an operator's filesystem layout into public
 history.
+
+### Parity Attack Cycle V1 — measured 2026-11-01
+
+Measured on branch `feat/autopiton-polish` (CPython 3.12.3, bubblewrap 0.9.0; full
+evidence package and SHA-256 sums in `autopiton/reports/parity_attack_v1/`):
+
+- **Systematic grid (`run_20261101_160244_systematic`):** **74/74 EQUIV (100.0%)**, 0 divergences.
+- **Mandatory canaries (`run_20261101_160238_canary`):** **7/10 EQUIV**, **3/10 INVALID_REFERENCE**, 0 divergences.
+- **Five historical counterexamples resolved by root cause:** `{**a, **b}` (`case-228d90a490532bbb`), N-ary `zip()` (`case-52ec2e43a5d86c64`), `super().f(*args)` (`case-efd722252f2ec8ff`), and implicit/explicit constructor arity validation (`case-4d25af23ed64826d`, `case-707d1042403c5de2`) all replay as **EQUIV**, plus **10/10 EQUIV** across generalization and negative-control variants.
+- **Bounded cross-feature generator (`--bounded`, 12 templates):** **30/30 EQUIV** on `seed=11` (`run_20261101_160331_bounded_seed11`), **40/40 EQUIV** on `seed=23` (`run_20261101_155010_bounded_seed23`), **30/30 EQUIV** on `seed=99` (`run_20261101_155952_bounded_seed99`), and **30/30 EQUIV** on unseen `seed=77` (`run_20261101_160010_bounded_seed77`).
+- **Corpus replay reconciliation (`run_20261101_160149_reconcile_replay`):** all 62 stored non-`EQUIV` cases in `autopiton/cases/index.json` reconcile to **59 EQUIV** and **3 INVALID_REFERENCE** (**0 active failures**).
+- **Stdlib overlay synthesis on `bisect` (`run_20261101_161138_synthesis_seed7`, 10 cases):** improves from **0/10 EQUIV** (baseline) to **8/10 EQUIV** (with overlay); the mutated control (`--control`, `run_20261101_161151_synthesis_seed7`) drops `EQUIV` to **1/10**.
 
 ## Non-goals
 

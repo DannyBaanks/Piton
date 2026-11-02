@@ -276,10 +276,7 @@ class DictMergeV1(unittest.TestCase):
         _assert_matches(self, "a = {1 :2 ,3 :4 }\nimprimir (a )\n")
 
     def test_merge_fails_closed_at_mir(self):
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError) as ctx:
-            compare_native_to_cpython("x ={}\ny ={}\nz ={**x ,**y }\n")
-        self.assertIn("dict literal merge", str(ctx.exception))
+        _assert_matches(self, "x ={'a' :1 }\ny ={'a' :2 ,'b' :3 }\nz ={**x ,**y }\nimprimir (z )\n")
 
 
 class EllipsisV1(unittest.TestCase):

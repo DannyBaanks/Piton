@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from . import __version__
-from .generator import GeneratedProgram, ProgramGenerator, ProgramFamily
+from .generator import BoundedConfig, GeneratedProgram, ProgramGenerator, ProgramFamily
 from .cpython_oracle import CPythonOracle
 from .piton_runner import PitonRunner
 from .comparator import Classification, ComparisonResult, DifferentialComparator
@@ -166,13 +166,29 @@ def doctor_command(args):
     print("\nAll checks passed.")
 
 
+def _bounded_config_from_args(args) -> BoundedConfig:
+    types_raw = getattr(args, "types", None)
+    types_tuple = tuple(types_raw) if types_raw else ("int", "float", "bool", "str")
+    return BoundedConfig(
+        max_depth=getattr(args, "max_depth", 2) or 2,
+        max_stmts=getattr(args, "max_stmts", 3) or 3,
+        max_args=getattr(args, "max_args", 2) or 2,
+        types=types_tuple,
+    ).clamped()
+
+
 def generate_command(args):
     """Generate deterministic test programs."""
     generator = get_generator()
     if args.seed is not None:
         generator.seed(args.seed)
 
-    if args.family:
+    if getattr(args, "bounded", False):
+        programs = generator.generate_bounded(
+            count=args.count,
+            config=_bounded_config_from_args(args),
+        )
+    elif args.family:
         families = [ProgramFamily(name) for name in args.family]
         programs: List[GeneratedProgram] = []
         per_family = max(1, args.count // len(families))
@@ -235,6 +251,24 @@ def compare_command(args):
         mode = "systematic"
         seed = None
         programs = generator.systematic_corpus()
+    elif getattr(args, "bounded", False):
+        mode = "bounded"
+        seed = args.seed if args.seed is not None else 0
+        generator.seed(seed)
+        programs = generator.generate_bounded(
+            count=args.count,
+            config=_bounded_config_from_args(args),
+        )
+    elif getattr(args, "family", None):
+        mode = "family"
+        seed = args.seed if args.seed is not None else 0
+        generator.seed(seed)
+        families = [ProgramFamily(name) for name in args.family]
+        programs = []
+        per_family = max(1, args.count // len(families))
+        for family in families:
+            programs.extend(generator.generate(family, per_family))
+        programs = programs[: args.count]
     elif args.input:
         mode = "input"
         seed = None
@@ -727,6 +761,11 @@ def main():
     gen_parser = subparsers.add_parser("generate", help="Generate deterministic test programs")
     gen_parser.add_argument("-c", "--count", type=int, default=10, help="Number of programs")
     gen_parser.add_argument("-f", "--family", nargs="+", help="Program families to generate")
+    gen_parser.add_argument("--bounded", action="store_true", help="Use bounded cross-feature generation")
+    gen_parser.add_argument("--max-depth", type=int, default=2, help="Bounded expression depth (1..4)")
+    gen_parser.add_argument("--max-stmts", type=int, default=3, help="Bounded statement count (1..6)")
+    gen_parser.add_argument("--max-args", type=int, default=2, help="Bounded parameter count (1..4)")
+    gen_parser.add_argument("--types", nargs="+", help="Allowed bounded types (int float bool str)")
     gen_parser.add_argument("--seed", type=int, help="Random seed")
     gen_parser.add_argument("-o", "--output", help="Output file (JSON)")
     gen_parser.add_argument("-s", "--save", action="store_true", help="Save batch under cases/generated/")
@@ -736,9 +775,15 @@ def main():
     cmp_parser = subparsers.add_parser("compare", help="Compare CPython and PITON")
     cmp_parser.add_argument("-i", "--input", help="Input JSON list or directory of .py files")
     cmp_parser.add_argument("-c", "--count", type=int, default=10, help="Number of generated programs")
+    cmp_parser.add_argument("-f", "--family", nargs="+", help="Program families to generate")
     cmp_parser.add_argument("--seed", type=int, help="Random seed (default 0)")
     cmp_parser.add_argument("--canary", action="store_true", help="Use the mandatory canary cases")
     cmp_parser.add_argument("--systematic", action="store_true", help="Use the deterministic systematic grid")
+    cmp_parser.add_argument("--bounded", action="store_true", help="Use bounded cross-feature generation")
+    cmp_parser.add_argument("--max-depth", type=int, default=2, help="Bounded expression depth (1..4)")
+    cmp_parser.add_argument("--max-stmts", type=int, default=3, help="Bounded statement count (1..6)")
+    cmp_parser.add_argument("--max-args", type=int, default=2, help="Bounded parameter count (1..4)")
+    cmp_parser.add_argument("--types", nargs="+", help="Allowed bounded types (int float bool str)")
     cmp_parser.add_argument("--repeat", type=int, default=1, help="Repetitions per program for stability")
     cmp_parser.add_argument("--limit", type=int, help="Only run the first N programs")
     cmp_parser.set_defaults(func=compare_command)

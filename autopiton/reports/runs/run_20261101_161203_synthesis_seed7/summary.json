@@ -1,0 +1,46 @@
+{
+  "candidate_path": null,
+  "classification_counts": {
+    "INVALID_REFERENCE": 5,
+    "UNSUPPORTED": 5
+  },
+  "duration_ms": 5774.1,
+  "finished_at": "2026-11-01T16:12:09-06:00",
+  "programs_executed": 10,
+  "run_id": "run_20261101_161203_synthesis_seed7",
+  "synthesis": {
+    "baseline": {
+      "DIVERGENT": 10
+    },
+    "baseline_equiv": 0,
+    "baseline_stages": {
+      "none": 10
+    },
+    "candidate": {
+      "mutated": false,
+      "mutation": null,
+      "name": "heapq",
+      "piton_chars": 16156,
+      "piton_lines": 602,
+      "piton_sha256": "e2b7a698a210d9e7e89287a3075ee61f56a668ef9382751df57fd21b617f7d7a",
+      "reference_sha256": "6d43277e5c76fc0f073cd388fcff852d14d068f6bb6d4886c340f8b75a1229a9",
+      "reference_source": "python3.12/heapq.py"
+    },
+    "candidate_rejected": 10,
+    "candidate_sha_seen": [
+      "e2b7a698a210d9e7e89287a3075ee61f56a668ef9382751df57fd21b617f7d7a"
+    ],
+    "crashes": {},
+    "module": "heapq",
+    "overlay_equiv": 0,
+    "overlay_stages": {
+      "MIR": 10
+    },
+    "programs": 10,
+    "sandbox_available": true,
+    "with_overlay": {
+      "INVALID_REFERENCE": 5,
+      "UNSUPPORTED": 5
+    }
+  }
+}
