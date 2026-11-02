@@ -1059,9 +1059,13 @@ static PitonDict*piton_conv_dict(PitonSlot src){
    esta materializado como una secuencia de tuplas, asi que se convierte con
    el mismo helper que dict(lista_de_pares). */
 static long piton_conv_dict_from_genexpr(long raw){PitonGenExpr*g=(PitonGenExpr*)raw;if(!g||!g->source){piton_write(2,"TypeError: cannot convert to a dict\n",33);piton_exit(1);}return(long)piton_conv_dict((PitonSlot){(long)g->source,PK_LIST});}
+#ifndef PITON_GEN_MAGIC
+#define PITON_GEN_MAGIC 0x5049544E47654ELL
+#endif
+static long piton_gen_next(long raw);
 typedef struct{long magic;long kind;void*raw;long index;}PitonAnyIterator;
 static long piton_iterator_new_any(void*raw,long kind){if(!raw||(kind!=PK_LIST&&kind!=PK_TUPLE&&kind!=PK_DICT&&kind!=PK_SET&&kind!=PK_FROZENSET&&kind!=PK_RANGE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonAnyIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->raw=raw;i->index=0;i->kind=kind;return(long)i;}
-static long piton_iterator_next_any(long raw){PitonAnyIterator*i=(PitonAnyIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_RANGE)n=piton_range_len((PitonRange*)i->raw);else if(i->kind==PK_SET||i->kind==PK_FROZENSET)n=((PitonSet*)i->raw)->length;else{piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else if(i->kind==PK_RANGE){PitonRange*rr=(PitonRange*)i->raw;v.bits=rr->start+(i->index++)*rr->step;v.kind=PK_INT;}else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
+static long piton_iterator_next_any(long raw){if(!raw){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(*(long*)raw==PITON_GEN_MAGIC)return piton_gen_next(raw);PitonAnyIterator*i=(PitonAnyIterator*)raw;if(i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_RANGE)n=piton_range_len((PitonRange*)i->raw);else if(i->kind==PK_SET||i->kind==PK_FROZENSET)n=((PitonSet*)i->raw)->length;else{piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else if(i->kind==PK_RANGE){PitonRange*rr=(PitonRange*)i->raw;v.bits=rr->start+(i->index++)*rr->step;v.kind=PK_INT;}else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
 typedef struct{long magic;const char*str;long index;long length;}PitonStrIterator;
 static long piton_str_iterator_new(const char*str){if(!str){piton_write(2,"TypeError: 'NoneType' object is not iterable\n",42);piton_exit(1);}PitonStrIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E53545249LL;i->str=str;i->index=0;i->length=piton_strlen(str);return(long)i;}
 static long piton_str_iterator_next(long raw){PitonStrIterator*i=(PitonStrIterator*)raw;if(!i||i->magic!=0x5049544E53545249LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->length){piton_raise_set("StopIteration","");return 0;}unsigned char c=i->str[i->index++];char*p=piton_alloc(2);p[0]=(char)c;p[1]=0;return(long)p;}
@@ -1762,6 +1766,7 @@ static long piton_list_append_bound(long self,long v){piton_seq_append((PitonSeq
    divergir; un no-iterable levanta el TypeError de CPython (exit 1). */
 static long piton_iter_dynamic(long bits){
   if(piton_maybe_ptr(bits)){
+    if(*(long*)bits==PITON_GEN_MAGIC)return bits;
     long*ptr=(long*)bits;long k=ptr[1];
     if(ptr[0]>=0&&ptr[0]<1000000L){
       if(k==PK_LIST||k==PK_TUPLE)return piton_iterator_new_any((void*)bits,(int)k);
@@ -7876,7 +7881,17 @@ class LinuxCEmitter:
             elif source_type.startswith("object:"):
                 class_name = source_type.split(":", 1)[1]
                 method_class = self._resolve_method(class_name, "__iter__")
-                out.append(f"    {_name(result)}={_name(method_class+'__'+'__iter__')}({self._value(source)});")
+                iter_fn = method_class + "____iter__"
+                gen_layout = self.generator_layouts.get(iter_fn)
+                if gen_layout is not None:
+                    # ITER_GEN_METHOD_V1: __iter__ con yield es un generador:
+                    # debe instanciarse con piton_gen_new y types='generator'.
+                    params = self.function_params.get(iter_fn, ["self"])
+                    vararg = self.function_varargs.get(iter_fn)
+                    self._emit_gen_args(out, result, iter_fn, gen_layout, params, vararg, [source], types)
+                    types[result] = "generator"
+                    return out
+                out.append(f"    {_name(result)}={_name(iter_fn)}({self._value(source)});")
                 # ITER_DISPATCH_V1: si la clase NO tiene __next__, __iter__()
                 # retorna un iterador independiente (ej: iter([1,2])),
                 # no self. No marcar como iterator:object:P porque iter_next
@@ -10959,6 +10974,31 @@ class LinuxCEmitter:
                     except NativeBuildError:
                         _iter_cls = None
                     if _iter_cls:
+                        _iter_fn = _iter_cls + "____iter__"
+                        _gen_layout = self.generator_layouts.get(_iter_fn)
+                        if _gen_layout is not None:
+                            _gparams = self.function_params.get(_iter_fn, ["self"])
+                            _gvararg = self.function_varargs.get(_iter_fn)
+                            _named_g = [p for p in _gparams if p != _gvararg]
+                            _self_slot = _gen_layout.get(_named_g[0], 0) if _named_g else 0
+                            _coll_code = f"(long)piton_collect_gen(_gtmp)"
+                            if seq_kind == "PK_TUPLE":
+                                out.append(
+                                    f"    {{long _gtmp=piton_gen_new((long)&{_iter_fn},{len(_gen_layout)});"
+                                    f" ((PitonGenerator*)_gtmp)->slots[{_self_slot}]={self._value(values[0])};"
+                                    f" long _gl={_coll_code};"
+                                    f" {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{_gl,PK_LIST}});}}"
+                                )
+                                types[result] = "tuple"
+                            else:
+                                out.append(
+                                    f"    {{long _gtmp=piton_gen_new((long)&{_iter_fn},{len(_gen_layout)});"
+                                    f" ((PitonGenerator*)_gtmp)->slots[{_self_slot}]={self._value(values[0])};"
+                                    f" {_name(result)}={_coll_code};}}"
+                                )
+                                types[result] = "list"
+                            self._coll_elems[result] = "int"
+                            return out
                         _has_next = any(
                             "__next__" in self.classes.get(c, set())
                             for c in self.class_mro.get(_cls, [])
@@ -12683,6 +12723,11 @@ class LinuxCEmitter:
                         self._call_param_types.setdefault(target, {})[_mparams[_mi]] = _mvt
             all_values = self._pack_call_varargs(out, target, all_values, types)
             values = ",".join(self._value(v) for v in all_values)
+            if target in self.generator_layouts:
+                _glayout = self.generator_layouts[target]
+                self._emit_gen_args(out, result, target, _glayout, _mparams, self.function_varargs.get(target), all_values, types)
+                types[result] = "generator"
+                return out
             if self.function_frame_abi.get(target, False):
                 args_c = ",".join(self._value(v) for v in all_values)
                 out.append(f'    {{long _method_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_values)},_method_args);}}')
