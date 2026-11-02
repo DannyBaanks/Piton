@@ -2529,7 +2529,7 @@ class MIRLowerer:
                 # it as data (await marker 0) so piton_agen_next returns it.
                 builder.emit("agen_emit", val, result=val)
             else:
-                builder.emit("gen_yield", val, result=val)
+                builder.emit("gen_yield", val, _active_handler(builder), result=val)
             after_block = builder.new_block()
             builder.emit("jump", after_block.label)
             builder.current = after_block
@@ -3311,7 +3311,7 @@ class MIRLowerer:
             bind_name = handler_bind_name
             if bind_name:
                 bound = builder.temp()
-                builder.emit("catch_bind", bind_name, result=bound)
+                builder.emit("catch_bind", bind_name, handler_accepted, result=bound)
                 builder.emit("store", bind_name, bound)  # same as before
             builder.emit("catch_clear")
             previous_reraise_type = builder.reraise_type
@@ -3514,13 +3514,13 @@ class MIRLowerer:
         ignored = await_context_method(exit_cls, exit_name, (none_val, none_val, none_val))
         builder.emit("jump", end_block.label)
 
-        # exception path: __exit__(type_str, message_str, None)
+        # exception path: __exit__(type_str, exc_val, None)
         builder.current = handler_block
         builder.emit("reraise_save")
         exc_type = builder.temp()
         builder.emit("catch_type", result=exc_type)
-        exc_msg = builder.temp()
-        builder.emit("catch_message", result=exc_msg)
+        exc_val = builder.temp()
+        builder.emit("catch_bind", None, None, result=exc_val)
         # WITH_CLEAR_V1: the type/message already live in temps; clear the
         # live flag BEFORE invoking __exit__ so calls inside it (imprimir,
         # user code) do not misread the still-set flag as a fresh raise
@@ -3529,7 +3529,7 @@ class MIRLowerer:
         builder.emit("catch_clear")
         none2 = builder.temp()
         builder.emit("const", None, result=none2)
-        exit_rc = await_context_method(exit_cls, exit_name, (exc_type, exc_msg, none2))
+        exit_rc = await_context_method(exit_cls, exit_name, (exc_type, exc_val, none2))
         suppressed_block = builder.new_block()
         propagate_block = builder.new_block()
         builder.emit("branch", exit_rc, suppressed_block.label, propagate_block.label)
@@ -3762,6 +3762,9 @@ class MIRLowerer:
                 raise MIRLoweringError(
                     f"native custom exception '{exception_type}' must subclass Exception"
                 )
+            val = self._lower_expr(builder, node.exc)
+            builder.emit("raise_value", val, _active_handler(builder))
+            return
         else:
             # Relax: allow unknown exception types as generic
             pass
@@ -4022,7 +4025,7 @@ class MIRLowerer:
                 raise MIRLoweringError("yield-as-expression inside an async generator is not supported")
             val = self._lower_expr(builder, node.value) if node.value else None
             result = builder.temp()
-            builder.emit("gen_yield", val, result=result)
+            builder.emit("gen_yield", val, _active_handler(builder), result=result)
             after_block = builder.new_block()
             builder.emit("jump", after_block.label)
             builder.current = after_block
@@ -5061,7 +5064,7 @@ class MIRLowerer:
                 raise MIRLoweringError("yield-as-expression inside an async generator is not supported")
             val = self._lower_expr(builder, node.value) if node.value else None
             result = builder.temp()
-            builder.emit("gen_yield", val, result=result)
+            builder.emit("gen_yield", val, _active_handler(builder), result=result)
             after_block = builder.new_block()
             builder.emit("jump", after_block.label)
             builder.current = after_block

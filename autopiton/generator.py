@@ -56,6 +56,14 @@ FRONTIER_B_SHAPES: Tuple[str, ...] = (
     "generator_yield_try",
 )
 
+FRONTIER_C_SHAPES: Tuple[str, ...] = (
+    "custom_exception_instance_attrs",
+    "generator_close_finally_unwind",
+    "generator_throw_internal_catch",
+    "context_manager_exit_inspection",
+    "with_multiple_context_managers",
+)
+
 
 @dataclass(frozen=True)
 class BoundedConfig:
@@ -1111,6 +1119,8 @@ asyncio.run(main())
             candidate_shapes = list(FRONTIER_A_SHAPES)
         elif cfg.frontier and str(cfg.frontier).lower() in ("b", "frontier_b", "generators", "exceptions"):
             candidate_shapes = list(FRONTIER_B_SHAPES)
+        elif cfg.frontier and str(cfg.frontier).lower() in ("c", "frontier_c", "contexts", "lifecycle"):
+            candidate_shapes = list(FRONTIER_C_SHAPES)
         else:
             candidate_shapes = [
                 "default_expr_fn",
@@ -1128,6 +1138,7 @@ asyncio.run(main())
                 "try_finally_return_flow",
                 *FRONTIER_A_SHAPES,
                 *FRONTIER_B_SHAPES,
+                *FRONTIER_C_SHAPES,
             ]
         shape = self.rng.choice(candidate_shapes)
 
@@ -1532,6 +1543,139 @@ asyncio.run(main())
                 f"print(x == y, x != y, x < y, x <= y)\n"
             )
             desc = f"bounded[dunder_rich_comparison/bool] depth={depth}"
+
+        elif shape == "custom_exception_instance_attrs":
+            err_name = self.ast_gen.new_class()
+            code_val = self.rng.randint(100, 599)
+            msg_val = self.rng.choice(["err", "fail", "bad", "stop", "denied"])
+            func_name = self.ast_gen.new_func()
+            code = (
+                f"class {err_name}(Exception):\n"
+                f"    def __init__(self, code, msg):\n"
+                f"        self.code = code\n"
+                f"        self.msg = msg\n\n"
+                f"def {func_name}(flag):\n"
+                f"    if flag:\n"
+                f"        raise {err_name}({code_val}, '{msg_val}')\n"
+                f"    return 0\n\n"
+                f"try:\n"
+                f"    {func_name}(True)\n"
+                f"except {err_name} as e:\n"
+                f"    print(e.code, e.msg)\n"
+            )
+            desc = f"bounded[custom_exception_instance_attrs/int] code={code_val}"
+
+        elif shape == "generator_close_finally_unwind":
+            gen_name = self.ast_gen.new_func()
+            y1 = self.rng.randint(1, 10)
+            y2 = self.rng.randint(11, 20)
+            fin_val = self.rng.randint(90, 100)
+            code = (
+                f"events = []\n"
+                f"def {gen_name}():\n"
+                f"    try:\n"
+                f"        events.append(1)\n"
+                f"        yield {y1}\n"
+                f"        events.append(2)\n"
+                f"        yield {y2}\n"
+                f"    finally:\n"
+                f"        events.append({fin_val})\n\n"
+                f"g = {gen_name}()\n"
+                f"v = next(g)\n"
+                f"events.append(v)\n"
+                f"g.close()\n"
+                f"print(events)\n"
+            )
+            desc = f"bounded[generator_close_finally_unwind/int] y1={y1} fin={fin_val}"
+
+        elif shape == "generator_throw_internal_catch":
+            gen_name = self.ast_gen.new_func()
+            y1 = self.rng.randint(1, 10)
+            catch_val = self.rng.randint(50, 70)
+            y2 = self.rng.randint(80, 99)
+            fin_val = self.rng.randint(100, 110)
+            code = (
+                f"events = []\n"
+                f"def {gen_name}():\n"
+                f"    try:\n"
+                f"        events.append(1)\n"
+                f"        yield {y1}\n"
+                f"        events.append(2)\n"
+                f"    except ValueError:\n"
+                f"        events.append({catch_val})\n"
+                f"        yield {y2}\n"
+                f"    finally:\n"
+                f"        events.append({fin_val})\n\n"
+                f"g = {gen_name}()\n"
+                f"v1 = next(g)\n"
+                f"events.append(v1)\n"
+                f"v2 = g.throw(ValueError)\n"
+                f"events.append(v2)\n"
+                f"print(events)\n"
+            )
+            desc = f"bounded[generator_throw_internal_catch/int] y1={y1} y2={y2}"
+
+        elif shape == "context_manager_exit_inspection":
+            mgr_name = self.ast_gen.new_class()
+            err_name = self.ast_gen.new_class()
+            code_val = self.rng.randint(200, 500)
+            suppress = self.rng.choice([True, False])
+            code = (
+                f"class {err_name}(Exception):\n"
+                f"    def __init__(self, code, msg):\n"
+                f"        self.code = code\n"
+                f"        self.msg = msg\n\n"
+                f"class {mgr_name}:\n"
+                f"    def __enter__(self):\n"
+                f"        return self\n"
+                f"    def __exit__(self, exc_type, exc_val, tb):\n"
+                f"        if exc_val is not None:\n"
+                f"            print('handled:', exc_val.code, exc_val.msg)\n"
+                f"            return {suppress}\n"
+                f"        return False\n\n"
+            )
+            if suppress:
+                code += (
+                    f"with {mgr_name}():\n"
+                    f"    raise {err_name}({code_val}, 'err')\n"
+                    f"print('suppressed')\n"
+                )
+            else:
+                code += (
+                    f"try:\n"
+                    f"    with {mgr_name}():\n"
+                    f"        raise {err_name}({code_val}, 'err')\n"
+                    f"except {err_name} as e:\n"
+                    f"    print('outer caught:', e.code, e.msg)\n"
+                )
+            desc = f"bounded[context_manager_exit_inspection/int] suppress={suppress}"
+
+        elif shape == "with_multiple_context_managers":
+            m1_name = self.ast_gen.new_class()
+            m2_name = self.ast_gen.new_class()
+            v1 = self.rng.randint(10, 20)
+            v2 = self.rng.randint(30, 40)
+            code = (
+                f"events = []\n"
+                f"class {m1_name}:\n"
+                f"    def __enter__(self):\n"
+                f"        events.append('m1_enter')\n"
+                f"        return {v1}\n"
+                f"    def __exit__(self, exc_type, exc_val, tb):\n"
+                f"        events.append('m1_exit')\n"
+                f"        return False\n\n"
+                f"class {m2_name}:\n"
+                f"    def __enter__(self):\n"
+                f"        events.append('m2_enter')\n"
+                f"        return {v2}\n"
+                f"    def __exit__(self, exc_type, exc_val, tb):\n"
+                f"        events.append('m2_exit')\n"
+                f"        return False\n\n"
+                f"with {m1_name}() as a, {m2_name}() as b:\n"
+                f"    events.append(a + b)\n\n"
+                f"print(events)\n"
+            )
+            desc = f"bounded[with_multiple_context_managers/int] v1={v1} v2={v2}"
 
         else:  # property_computed_class
             cls_name = self.ast_gen.new_class()

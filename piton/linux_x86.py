@@ -1235,15 +1235,39 @@ static long piton_extreme_default_new(void*raw,long keyfn,int want_min,long dflt
   return best;
 }
 static long piton_sorted_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: sorted() argument is not iterable\n",46);piton_exit(1);}PitonSeq*r=piton_seq_new(PK_LIST,s->length);for(long i=0;i<s->length;++i)r->items[i]=s->items[i];for(long i=1;i<r->length;++i){PitonSlot v=r->items[i];long j=i;while(j>0){int l=piton_slot_less(v,r->items[j-1]);if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}if(l){r->items[j]=r->items[j-1];--j;}else break;}r->items[j]=v;}return(long)r;}
+static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
+/* RAISE_VALUE_V1: `raise <instancia>` — el valor Levantado viaja al runtime
+   (el backend solo llevaba el NOMBRE del tipo y el mensaje). */
+static long piton_exc_value=0;
+static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
+/* EXC_ARGS_MULTI_V1: tupla .args de la excepcion activa (0 = sin multi-arg,
+ * .args se materializa como (mensaje,) como antes). */
+static long piton_exc_args=0;
+static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;piton_exc_args=0;piton_exc_value=0;}
+/* EXC_ARGS_MULTI_V1: raise con 2+ argumentos -> la tupla .args completa. */
+static void piton_raise_set_args(const char*type,const char*message,long args_tuple){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;piton_exc_args=args_tuple;piton_exc_value=0;}
+/* RAISE_VALUE_V1: levantar una INSTANCIA (no una clase): el tipo sale del
+   class_name del objeto y el valor queda disponible para el handler. */
+static void piton_raise_set_value(long value){piton_exc_flag=1;piton_exc_value=value;piton_exc_type="Exception";piton_exc_message=0;piton_exc_args=0;if(value&&piton_maybe_ptr(value)){long*ptr=(long*)value;if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_OBJECT){piton_exc_type=((PitonObject*)value)->class_name;}}}
+static const char*piton_reraise_type=0;static const char*piton_reraise_message=0;static long piton_reraise_value=0;
+/* EXC_ARGS_MULTI_V1: tupla de 1 elemento (mensaje) para .args por defecto. */
+static long piton_tuple1(const char*msg){PitonSeq*p=piton_seq_new(PK_TUPLE,1);p->items[0]=(PitonSlot){(long)msg,PK_STR};return(long)p;}
+static void piton_reraise_save(void){piton_reraise_type=piton_exc_type;piton_reraise_message=piton_exc_message;piton_reraise_value=piton_exc_value;}
+static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=piton_reraise_message;piton_exc_value=piton_reraise_value;piton_exc_args=0;}
+static int piton_exc_flag_get(void){return piton_exc_flag;}
+static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;piton_exc_value=0;
+  /* EXC_ARGS_MULTI_V1: piton_exc_args NO se limpia aqui — el cuerpo del
+   * handler lee e.args despues del clear. Cada raise lo re-setea. */
+}
 #define PITON_GEN_MAGIC 0x5049544E47654ELL
 #define PITON_GEN_MAX_SLOTS 256
 typedef struct{long magic;long state;long finished;long started;long sent_value;long(*func)(void*);long slots[PITON_GEN_MAX_SLOTS];long n_slots;}PitonGenerator;
 static long piton_gen_new(long func,long n){PitonGenerator*g=piton_alloc(sizeof(*g));g->magic=PITON_GEN_MAGIC;g->state=0;g->finished=0;g->started=0;g->sent_value=0;g->func=(long(*)(void*))func;g->n_slots=n<0?0:(n>PITON_GEN_MAX_SLOTS?PITON_GEN_MAX_SLOTS:n);return(long)g;}
-static long piton_gen_next(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished){piton_raise_set("StopIteration","");return 0;}g->sent_value=0;g->started=1;long r=g->func(g);if(g->finished){piton_raise_set("StopIteration","");return 0;}return r;}
-static long piton_gen_send(long raw,long value){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished){piton_raise_set("StopIteration","");return 0;}if(!g->started&&value!=0){piton_raise_set("TypeError","can't send non-None value to a just-started generator");return 0;}g->sent_value=value;g->started=1;long r=g->func(g);if(g->finished){piton_raise_set("StopIteration","");return 0;}return r;}
+static long piton_gen_next(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished){piton_raise_set("StopIteration","");return 0;}g->sent_value=0;g->started=1;long r=g->func(g);if(piton_exc_flag)return 0;if(g->finished){piton_raise_set("StopIteration","");return 0;}return r;}
+static long piton_gen_send(long raw,long value){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished){piton_raise_set("StopIteration","");return 0;}if(!g->started&&value!=0){piton_raise_set("TypeError","can't send non-None value to a just-started generator");return 0;}g->sent_value=value;g->started=1;long r=g->func(g);if(piton_exc_flag)return 0;if(g->finished){piton_raise_set("StopIteration","");return 0;}return r;}
 static long piton_gen_free(long raw){(void)raw;return 0;}
-static long piton_gen_throw(long raw,const char*t){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}g->finished=1;piton_raise_set(t,"");return 0;}
-static long piton_gen_close(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}g->finished=1;return 0;}
+static long piton_gen_throw(long raw,const char*t){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished){piton_raise_set("StopIteration","");return 0;}piton_raise_set(t,"");long r=g->func(g);if(piton_exc_flag)return 0;if(g->finished){piton_raise_set("StopIteration","");return 0;}return r;}
+static long piton_gen_close(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished)return 0;if(!g->started){g->finished=1;return 0;}piton_raise_set("GeneratorExit","");g->func(g);if(piton_exc_flag&&piton_exc_type&&piton_strcmp(piton_exc_type,"GeneratorExit")==0){piton_catch_clear();}g->finished=1;return 0;}
 static long piton_coro_run(long raw){PitonGenerator*c=(PitonGenerator*)raw;if((usize)raw<0x100000||!c||c->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a coroutine\n",35);piton_exit(2);}while(!c->finished){c->started=1;long y=c->func(c);if(c->finished)return y;long inner=piton_coro_run(y);c->sent_value=inner;}return 0;}
 static long piton_agen_next(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not an async generator\n",42);piton_exit(2);}while(!g->finished){g->started=1;long y=g->func(g);if(g->finished)return 0;if(g->slots[63]){g->slots[63]=0;g->sent_value=piton_coro_run(y);continue;}return y;}return 0;}
 #define PITON_TASK_MAGIC 0x5049544E54414B4BLL
@@ -2047,20 +2071,6 @@ static const char* piton_input_read(const char*prompt){
   if(!got){piton_raise_set("EOFError","EOF when reading a line");piton_report_unhandled();piton_exit(1);}
   return inbuf;
 }
-static int piton_exc_flag=0;static const char*piton_exc_type=0;static const char*piton_exc_message=0;
-/* RAISE_VALUE_V1: `raise <instancia>` — el valor Levantado viaja al runtime
-   (el backend solo llevaba el NOMBRE del tipo y el mensaje). */
-static long piton_exc_value=0;
-static const char*piton_exc_cause_type=0;static const char*piton_exc_cause_msg=0;
-/* EXC_ARGS_MULTI_V1: tupla .args de la excepcion activa (0 = sin multi-arg,
- * .args se materializa como (mensaje,) como antes). */
-static long piton_exc_args=0;
-static void piton_raise_set(const char*type,const char*message){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;piton_exc_args=0;}
-/* EXC_ARGS_MULTI_V1: raise con 2+ argumentos -> la tupla .args completa. */
-static void piton_raise_set_args(const char*type,const char*message,long args_tuple){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=message;piton_exc_args=args_tuple;}
-/* RAISE_VALUE_V1: levantar una INSTANCIA (no una clase): el tipo sale del
-   class_name del objeto y el valor queda disponible para el handler. */
-static void piton_raise_set_value(long value){piton_exc_flag=1;piton_exc_value=value;piton_exc_type="Exception";piton_exc_message=0;piton_exc_args=0;if(value&&piton_maybe_ptr(value)){long*ptr=(long*)value;if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_OBJECT){piton_exc_type=((PitonObject*)value)->class_name;}}}
 /* OS_FSPATH_V1: TypeError de os.fspath con el texto EXACTO de CPython:
    "expected str, bytes or os.PathLike object, not <tipo>". */
 static void piton_raise_fspath_type(long bits){
@@ -2074,16 +2084,6 @@ static long piton_int_truediv(long a,long b){if(b==0){piton_raise_set("ZeroDivis
 static long piton_float_div(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float division by zero");return 0;}return piton_double_bits(x/y);}
 static long piton_float_floor_div(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float floor division by zero");return 0;}return piton_double_bits(__builtin_floor(x/y));}
 static void piton_raise_chain_set(const char*type,const char*message,const char*cause_type,const char*cause_msg){piton_exc_cause_type=cause_type;piton_exc_cause_msg=cause_msg;piton_raise_set(type,message);}
-static const char*piton_reraise_type=0;static const char*piton_reraise_message=0;
-/* EXC_ARGS_MULTI_V1: tupla de 1 elemento (mensaje) para .args por defecto. */
-static long piton_tuple1(const char*msg){PitonSeq*p=piton_seq_new(PK_TUPLE,1);p->items[0]=(PitonSlot){(long)msg,PK_STR};return(long)p;}
-static void piton_reraise_save(void){piton_reraise_type=piton_exc_type;piton_reraise_message=piton_exc_message;}
-static void piton_reraise_set(const char*type){piton_exc_flag=1;piton_exc_type=type;piton_exc_message=piton_reraise_message;piton_exc_args=0;}
-static int piton_exc_flag_get(void){return piton_exc_flag;}
-static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_type=0;piton_exc_message=0;piton_exc_cause_type=0;piton_exc_cause_msg=0;
-  /* EXC_ARGS_MULTI_V1: piton_exc_args NO se limpia aqui — el cuerpo del
-   * handler lee e.args despues del clear. Cada raise lo re-setea. */
-}
 /* SEQ_EXTEND_V1: extiende dst con todos los elementos de src (cualquier iterable).
    Usado para `[*a, b]` donde a es un iterable (starred en lista/tupla/conjunto). */
 static void piton_seq_extend_any(PitonSeq*dst,long src_bits){
@@ -3620,8 +3620,7 @@ def _raise_or_propagate(out, function):
     """CALL_PROPAGATE_V1: a `raise` with no handler in THIS function must RETURN
     with the exception flag set, not exit: the CALLER owns the handler and
     routes via its exc check. Exiting here made `lanzar` inside a function
-    invisible to the caller's `intentar`. Only the module top level and
-    generators/coroutines (which cannot propagate across their driver) keep the
+    invisible to the caller's `intentar`. Top level module keeps the
     terminal report-and-exit."""
     in_plain_function = (
         function.name != "<module>"
@@ -3631,6 +3630,8 @@ def _raise_or_propagate(out, function):
     )
     if in_plain_function:
         out.append("    return 0;")
+    elif getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False) or getattr(function, "is_async_generator", False):
+        out.append(f"    goto {_name(function.name + '___exit')};")
     else:
         out.extend(["    piton_report_unhandled();", "    piton_exit(1);"])
 
@@ -4130,12 +4131,11 @@ class LinuxCEmitter:
                 self._param_seeds.setdefault(function.name, {})[_cparam] = _ctype
         if function.self_class and function.params:
             types[function.params[0]] = f"object:{function.self_class}"
-        # WITH_PROTOCOL_V1: __exit__(self, tipo, mensaje, tb) receives the
-        # exception type-name and message as strings (V1: type NAME, not the
-        # exception object; traceback is passed as None).
+        # WITH_PROTOCOL_V1: __exit__(self, tipo, exc_val, tb) receives the
+        # exception type-name (str) and exc_val (instance or str message).
         if function.name.endswith("__exit__") and len(function.params) >= 3:
             types[function.params[1]] = "str"
-            types[function.params[2]] = "str"
+            types[function.params[2]] = "int"
         for _sv_k, _sv_t in (self._fn_var_type_seeds.get(function.name) or {}).items():
             if types.get(_sv_k) in {None, "int"} and _sv_t in {"bool", "float"}:
                 types[_sv_k] = _sv_t
@@ -6583,6 +6583,12 @@ class LinuxCEmitter:
             and not getattr(function, "is_async_generator", False)
         ):
             out.append("    return 0;")
+        elif (
+            getattr(function, "is_generator", False)
+            or getattr(function, "is_coroutine", False)
+            or getattr(function, "is_async_generator", False)
+        ):
+            out.append(f"        goto {_name(function.name + '___exit')};")
         else:
             out.append("        piton_report_unhandled();piton_exit(1);")
         out.append("    }")
@@ -6955,7 +6961,8 @@ class LinuxCEmitter:
 
     def _emit_linux_gen_suspend(
         self, out: list[str], types: dict[str, str],
-        value: Any, result: Optional[str], await_flag: bool,
+        value: Any, result: Optional[str], function: Optional[MIRFunction] = None,
+        handler_label: Any = None, await_flag: bool = False,
     ) -> None:
         """Emit one suspension point for a generator / coroutine / async-generator
         body (Linux freestanding backend). Writes the async-generator await marker
@@ -6974,6 +6981,10 @@ class LinuxCEmitter:
         # Load sent_value from generator struct into yield result slot
         out.append(f"    __sent = piton_gen->sent_value;")
         out.append(f"    piton_gen->sent_value = 0;")
+        if function and handler_label:
+            self._emit_exc_check(out, function, handler_label)
+        elif function:
+            out.append(f"    if(piton_exc_flag) goto {_name(function.name + '___exit')};")
         if result:
             out.append(f"    {_name(result)} = __sent;")
             awaited_type = types.get(value, "int") if isinstance(value, str) else "int"
@@ -13114,8 +13125,22 @@ class LinuxCEmitter:
             types[result] = "tuple"
             return out
         elif op == "catch_bind":
-            out.append(f"    {_name(result)}=(long)(piton_exc_message?piton_exc_message:\"\");")
-            types[result] = "str"
+            _acc = args[1] if len(args) > 1 else None
+            _cls = None
+            if isinstance(_acc, str) and _acc in self.classes:
+                _cls = _acc
+            elif isinstance(_acc, (list, tuple)):
+                for _c in _acc:
+                    if _c in self.classes:
+                        _cls = _c
+                        break
+            out.append(
+                f"    {_name(result)}=(piton_exc_value!=0)?piton_exc_value:(long)(piton_exc_message?piton_exc_message:\"\");"
+            )
+            if _cls:
+                types[result] = f"object:{_cls}"
+            else:
+                types[result] = "int"
         elif op == "catch_type":
             out.append(f"    {_name(result)}=(long)(piton_exc_type?piton_exc_type:\"\");")
             types[result] = "str"
@@ -14089,7 +14114,9 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=0;")
                 types[result] = "none"
             else:
+                handler_label = args[1] if len(args) > 1 else None
                 self._emit_linux_gen_suspend(out, types, args[0] if args else None, result,
+                                             function=function, handler_label=handler_label,
                                              await_flag=getattr(function, "is_async_generator", False))
         elif op == "agen_emit":
             if not getattr(function, "is_async_generator", False):
