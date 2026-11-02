@@ -3838,6 +3838,7 @@ class LinuxCEmitter:
         self._scan_module_globals(module)
         self._scan_usage_param_types(module)
         self._scan_identity_functions(module)
+        self._scan_instance_attr_types(module)
         self._call_param_type_sets: dict[str, dict[str, set[str]]] = {}
         self.function_return_types = self._infer_return_types(module)
         self._fn_var_type_seeds: dict[str, dict[str, str]] = {}
@@ -7515,6 +7516,61 @@ class LinuxCEmitter:
                     continue
                 break
 
+    def _scan_instance_attr_types(self, module: MIRModule) -> None:
+        """Pre-scan methods for set_attr on self to seed instance attr types."""
+        def literal_type(val: Any) -> str | None:
+            if val is None:
+                return None
+            if isinstance(val, bool):
+                return "bool"
+            if isinstance(val, str):
+                return "str"
+            if isinstance(val, int):
+                return "int"
+            if isinstance(val, float):
+                return "float"
+            return None
+
+        for function in module.functions:
+            if not function.self_class or not function.params:
+                continue
+            cls_name = function.self_class
+            self_param = function.params[0]
+            param_types: dict[str, str] = {}
+            def_params = self.function_default_params.get(function.name, set())
+            for param, default_val in zip(function.params, function.defaults or []):
+                if param in def_params:
+                    lt = literal_type(default_val)
+                    if lt and lt != "int":
+                        param_types[param] = lt
+            temp_types: dict[str, str] = {}
+            self_temps: set[str] = set()
+            for block in function.blocks:
+                for inst in block.instructions:
+                    op, args, res = inst.op, inst.args, inst.result
+                    if op == "const" and res and args:
+                        lt = literal_type(args[0])
+                        if lt and lt != "int":
+                            temp_types[res] = lt
+                    elif op == "build_collection" and res and args:
+                        temp_types[res] = args[0]
+                    elif op == "object_new" and res and args:
+                        temp_types[res] = f"object:{args[0]}"
+                    elif op == "load" and res and args:
+                        var_name = args[0]
+                        if var_name == self_param:
+                            self_temps.add(res)
+                        elif var_name in param_types:
+                            temp_types[res] = param_types[var_name]
+                    elif op == "compare" and res:
+                        temp_types[res] = "bool"
+                    elif op == "set_attr" and len(args) >= 3:
+                        target_temp, attr, val_temp = args[0], args[1], args[2]
+                        if target_temp in self_temps:
+                            vt = temp_types.get(val_temp)
+                            if vt and vt != "int":
+                                self._instance_attr_types.setdefault(cls_name, {})[attr] = vt
+
     def _infer_return_types(self, module: MIRModule) -> dict[str, str]:
         """RETURNTYPE_V1: narrow, sound return-type inference over MIR.
 
@@ -7673,6 +7729,48 @@ class LinuxCEmitter:
                             for _i in _ins
                         ):
                             _dead_tail.add(_b.label)
+
+                if function.self_class and function.params and function.params[0] not in seeded:
+                    seeded.add(function.params[0])
+                    note_var(function.params[0], f"object:{function.self_class}")
+                if function.vararg and function.vararg not in seeded:
+                    seeded.add(function.vararg)
+                    note_var(function.vararg, "tuple")
+                if function.kwarg and function.kwarg not in seeded:
+                    seeded.add(function.kwarg)
+                    note_var(function.kwarg, "dict")
+                for _pd_param, _pd_value in zip(function.params, function.defaults or []):
+                    if _pd_param in seeded:
+                        continue
+                    if isinstance(_pd_value, tuple) and _pd_value and _pd_value[0] in {"__name__", "__attr__"}:
+                        continue
+                    if isinstance(_pd_value, tuple):
+                        seeded.add(_pd_param)
+                        note_var(_pd_param, "tuple")
+                    elif isinstance(_pd_value, list):
+                        seeded.add(_pd_param)
+                        note_var(_pd_param, "list")
+                    elif isinstance(_pd_value, str):
+                        seeded.add(_pd_param)
+                        note_var(_pd_param, "str")
+                    elif isinstance(_pd_value, bool):
+                        seeded.add(_pd_param)
+                        note_var(_pd_param, "bool")
+                    elif isinstance(_pd_value, float):
+                        seeded.add(_pd_param)
+                        note_var(_pd_param, "float")
+                for _up_param, _up_type in (self._usage_param_types.get(function.name) or {}).items():
+                    if _up_param in seeded:
+                        continue
+                    seeded.add(_up_param)
+                    note_var(_up_param, _up_type)
+                for _cp_param, _cp_type in (self._call_param_types.get(function.name) or {}).items():
+                    if _cp_param in seeded:
+                        continue
+                    if _cp_param in (self._runtime_type_params.get(function.name) or ()):
+                        continue
+                    seeded.add(_cp_param)
+                    note_var(_cp_param, _cp_type)
 
                 changed = True
                 closure_src: dict[str, str] = {}
