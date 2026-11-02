@@ -297,6 +297,15 @@ def python_to_piton(src: str) -> str:
     index = 0
     while index < len(result):
         kind, value = result[index]
+        # IS_NOT_V1: Python `is not` mapped as tokens yields `es no`, but Piton's
+        # comparison operator is `no es`. Invert the pair to match the parser.
+        if (kind == tokenize.NAME and value == "es"
+                and index + 1 < len(result)
+                and result[index + 1] == (tokenize.NAME, "no")):
+            cleaned.append((tokenize.NAME, "no"))
+            cleaned.append((tokenize.NAME, "es"))
+            index += 2
+            continue
         if (kind == tokenize.NAME and value == "importar"
                 and index + 1 < len(result)
                 and result[index + 1] == (tokenize.OP, "(")):
