@@ -4227,6 +4227,8 @@ class LinuxCEmitter:
             return True
         if left_type in {"list", "tuple", "dict", "set"} and left_type == right_type:
             return True
+        if left_type.startswith("object:") or right_type.startswith("object:"):
+            return False
         return left_type == right_type and left_type not in {"none", ""}
 
     def _truth_expr(self, value: Any, vtype: str, strict: bool) -> str:
@@ -6661,7 +6663,7 @@ class LinuxCEmitter:
         out.append(f"    {_name(result)}={prefix}{expression};")
         types[result] = "bool"
 
-    def _resolve_method(self, class_name: str, method: str) -> str:
+    def _find_class_method(self, class_name: str, method: str) -> str | None:
         for candidate in self.class_mro.get(class_name, []):
             if method in self.classes.get(candidate, set()):
                 return candidate
@@ -6670,6 +6672,25 @@ class LinuxCEmitter:
             if method in self.classes.get(current, set()):
                 return current
             current = self.class_parents.get(current)
+        return None
+
+    def _is_subclass(self, cls_b: str, cls_a: str) -> bool:
+        if cls_b == cls_a:
+            return True
+        for candidate in self.class_mro.get(cls_b, []):
+            if candidate == cls_a:
+                return True
+        current = cls_b
+        while current:
+            if current == cls_a:
+                return True
+            current = self.class_parents.get(current)
+        return False
+
+    def _resolve_method(self, class_name: str, method: str) -> str:
+        found = self._find_class_method(class_name, method)
+        if found is not None:
+            return found
         raise NativeBuildError(f"native method not found: {class_name}.{method}")
 
     def _resolve_property_class(self, owner_type: str, name: str) -> str | None:
@@ -9716,25 +9737,112 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}={neg}(piton_cx_eq({left_cx},{right_cx}));")
                 types[result] = "bool"
                 return out
-            if operator == "==" and (left_type.startswith("object:") or right_type.startswith("object:")):
-                owner_side = left_type if left_type.startswith("object:") else right_type
-                cls_name = owner_side.split(":", 1)[1]
-                eq_cls = None
-                for candidate in self.class_mro.get(cls_name, []):
-                    if "__eq__" in self.classes.get(candidate, set()):
-                        eq_cls = candidate
-                        break
-                if eq_cls is None and "__eq__" in self.classes.get(cls_name, set()):
-                    eq_cls = cls_name
-                if eq_cls is not None:
-                    target = _name(eq_cls + "__" + "__eq__")
-                    frame_args = ",".join(self._value(v) for v in (left, right))
-                    if self.function_frame_abi.get(eq_cls + "____eq__", False):
-                        out.append(f'    {{long _ee_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},2,_ee_args);}}')
+            _RICH_CMP_OPS = {
+                "==": ("__eq__", "__eq__"),
+                "!=": ("__ne__", "__ne__"),
+                "<":  ("__lt__", "__gt__"),
+                "<=": ("__le__", "__ge__"),
+                ">":  ("__gt__", "__lt__"),
+                ">=": ("__ge__", "__le__"),
+            }
+            if operator in _RICH_CMP_OPS and (left_type.startswith("object:") or right_type.startswith("object:")):
+                left_cls = left_type.split(":", 1)[1] if left_type.startswith("object:") else None
+                right_cls = right_type.split(":", 1)[1] if right_type.startswith("object:") else None
+                prim_d, refl_d = _RICH_CMP_OPS[operator]
+
+                target_cls = None
+                target_method = None
+                call_args = None
+
+                # Python data model dispatch order:
+                # If right is a strict subclass of left, try reflected dunder on right first!
+                if left_cls and right_cls and right_cls != left_cls and self._is_subclass(right_cls, left_cls):
+                    r_cand = self._find_class_method(right_cls, refl_d)
+                    if r_cand is not None:
+                        target_cls, target_method, call_args = r_cand, refl_d, (right, left)
+                    else:
+                        l_cand = self._find_class_method(left_cls, prim_d)
+                        if l_cand is not None:
+                            target_cls, target_method, call_args = l_cand, prim_d, (left, right)
+                else:
+                    if left_cls:
+                        l_cand = self._find_class_method(left_cls, prim_d)
+                        if l_cand is not None:
+                            target_cls, target_method, call_args = l_cand, prim_d, (left, right)
+                    if target_cls is None and right_cls:
+                        r_cand = self._find_class_method(right_cls, refl_d)
+                        if r_cand is not None:
+                            target_cls, target_method, call_args = r_cand, refl_d, (right, left)
+
+                if target_cls is not None:
+                    target_fn = f"{target_cls}__{target_method}"
+                    target = _name(target_fn)
+                    frame_args = ",".join(self._value(v) for v in call_args)
+                    if self.function_frame_abi.get(target_fn, False):
+                        out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},2,_rc_args);}}')
                     else:
                         out.append(f"    {_name(result)}={target}({frame_args});")
+                    self._emit_exc_check(out, function, compare_handler)
                     types[result] = "bool"
                     return out
+
+                # Fallback for != : if neither defines __ne__, try __eq__ and negate!
+                if operator == "!=":
+                    eq_target_cls = None
+                    eq_call_args = None
+                    if left_cls and right_cls and right_cls != left_cls and self._is_subclass(right_cls, left_cls):
+                        r_cand = self._find_class_method(right_cls, "__eq__")
+                        if r_cand is not None:
+                            eq_target_cls, eq_call_args = r_cand, (right, left)
+                        else:
+                            l_cand = self._find_class_method(left_cls, "__eq__")
+                            if l_cand is not None:
+                                eq_target_cls, eq_call_args = l_cand, (left, right)
+                    else:
+                        if left_cls:
+                            l_cand = self._find_class_method(left_cls, "__eq__")
+                            if l_cand is not None:
+                                eq_target_cls, eq_call_args = l_cand, (left, right)
+                        if eq_target_cls is None and right_cls:
+                            r_cand = self._find_class_method(right_cls, "__eq__")
+                            if r_cand is not None:
+                                eq_target_cls, eq_call_args = r_cand, (right, left)
+
+                    if eq_target_cls is not None:
+                        target_fn = f"{eq_target_cls}____eq__"
+                        target = _name(target_fn)
+                        frame_args = ",".join(self._value(v) for v in eq_call_args)
+                        if self.function_frame_abi.get(target_fn, False):
+                            out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=!(piton_frame_call((long)&{target},2,_rc_args));}}')
+                        else:
+                            out.append(f"    {_name(result)}=!({target}({frame_args}));")
+                        self._emit_exc_check(out, function, compare_handler)
+                        types[result] = "bool"
+                        return out
+
+                    # No __ne__ and no __eq__: identity comparison!
+                    if left_cls and right_cls:
+                        out.append(f"    {_name(result)}=({self._value(left)} != {self._value(right)});")
+                    else:
+                        out.append(f"    {_name(result)}=1;")
+                    types[result] = "bool"
+                    return out
+
+                # Fallback for == : no __eq__ defined -> identity comparison!
+                if operator == "==":
+                    if left_cls and right_cls:
+                        out.append(f"    {_name(result)}=({self._value(left)} == {self._value(right)});")
+                    else:
+                        out.append(f"    {_name(result)}=0;")
+                    types[result] = "bool"
+                    return out
+
+                # Ordering operators (<, <=, >, >=) without custom methods: TypeError in Python!
+                lt_name = left_cls or left_type
+                rt_name = right_cls or right_type
+                self._runtime_type_error(out, f"'{operator}' not supported between instances of '{lt_name}' and '{rt_name}'")
+                types[result] = "bool"
+                return out
             if left_type in {"bytes", "bytearray"} or right_type in {"bytes", "bytearray"}:
                 # BYTES_CMP_V1: content comparison across bytes/bytearray;
                 # against any other type only ==/!= are defined.
