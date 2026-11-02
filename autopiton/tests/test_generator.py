@@ -260,6 +260,21 @@ class GeneratorTests(unittest.TestCase):
             shapes.add(program.description.split("[")[1].split("/")[0])
         self.assertGreaterEqual(len(shapes), 5)
 
+    def test_frontier_a_dunder_generation_covers_all_dunder_shapes(self):
+        from autopiton.generator import BoundedConfig, FRONTIER_A_SHAPES
+
+        cfg = BoundedConfig(frontier="a")
+        programs = ProgramGenerator(seed=42).generate_bounded(count=50, config=cfg)
+        self.assertEqual(len(programs), 50)
+        shapes_seen = set()
+        for program in programs:
+            compile(program.code, "<frontier_a>", "exec")
+            self.assertTrue(program.is_valid, program.description)
+            shape = program.description.split("[")[1].split("/")[0]
+            self.assertIn(shape, FRONTIER_A_SHAPES)
+            shapes_seen.add(shape)
+        self.assertEqual(shapes_seen, set(FRONTIER_A_SHAPES))
+
 
 if __name__ == "__main__":
     unittest.main()

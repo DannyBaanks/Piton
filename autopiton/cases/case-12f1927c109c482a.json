@@ -1,0 +1,103 @@
+{
+  "case_id": "case-12f1927c109c482a",
+  "created_at": "2026-11-01T22:14:45-06:00",
+  "description": "bounded[dunder_rich_comparison/bool] depth=2",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "12f1927c109c482a381efbd54afb43f03d8500a71041f66d2f59b46d2bf33c95",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "DIVERGENT",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 32.40614300011657,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "12f1927c109c482a381efbd54afb43f03d8500a71041f66d2f59b46d2bf33c95",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "False True False False\n",
+      "timed_out": false
+    },
+    "details": {
+      "cpython_exit": 0,
+      "cpython_stderr": "",
+      "cpython_stdout": "False True False False\n",
+      "piton_exit": 0,
+      "piton_stderr": "",
+      "piton_stdout": "False True True True\n"
+    },
+    "piton": {
+      "artifact_sha256": "1a49722cf73ed0da9d7d31eb171a010de1aaf2ef25425bbe8bd8ff1ede29a246",
+      "build_exit_code": 0,
+      "build_ms": 264.3772360024741,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 7.908378996944521,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0010.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "12f1927c109c482a381efbd54afb43f03d8500a71041f66d2f59b46d2bf33c95",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 375,
+          "surface_sha256": "f61406b4b1f922c6dedb4ead797af87ca6538448fd6c58bae1ee476f2e44f9e0"
+        },
+        "BUILD": {
+          "artifact_bytes": 14888,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "1a49722cf73ed0da9d7d31eb171a010de1aaf2ef25425bbe8bd8ff1ede29a246",
+          "c_chars": 282135,
+          "c_sha256": "f1cb20c79c50aee2ade9f9195c350fa8cb109f64eaec257a9e2c2893699a286c",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "False True True True\n",
+      "surface_sha256": "f61406b4b1f922c6dedb4ead797af87ca6538448fd6c58bae1ee476f2e44f9e0",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "both completed but observable output differs",
+    "source": "class C1:\n    def __init__(self, p, tag):\n        self.p = p\n        self.tag = tag\n    def __eq__(self, other):\n        return self.p == other.p\n    def __lt__(self, other):\n        return self.p < other.p\n    def __le__(self, other):\n        return self.p <= other.p\n\nx = C1(2, 'x')\ny = C1(-5, 'y')\nprint(x == y, x != y, x < y, x <= y)\n",
+    "source_hash": "12f1927c109c482a381efbd54afb43f03d8500a71041f66d2f59b46d2bf33c95"
+  },
+  "run_id": "run_20261101_221441_bounded_fa_seed42",
+  "seed": 298737106,
+  "source": "class C1:\n    def __init__(self, p, tag):\n        self.p = p\n        self.tag = tag\n    def __eq__(self, other):\n        return self.p == other.p\n    def __lt__(self, other):\n        return self.p < other.p\n    def __le__(self, other):\n        return self.p <= other.p\n\nx = C1(2, 'x')\ny = C1(-5, 'y')\nprint(x == y, x != y, x < y, x <= y)\n",
+  "source_hash": "12f1927c109c482a381efbd54afb43f03d8500a71041f66d2f59b46d2bf33c95"
+}

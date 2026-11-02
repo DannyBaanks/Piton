@@ -1,0 +1,101 @@
+{
+  "case_id": "case-1bccea8dce15bf68",
+  "created_at": "2026-11-01T22:14:47-06:00",
+  "description": "bounded[dunder_iterable_protocol/int] depth=2 iters=3",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "1bccea8dce15bf682b8e6b750c6dc99091003f73673cfb6809edcf1e9c6b0cf6",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "DIVERGENT",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.881550006801262,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "1bccea8dce15bf682b8e6b750c6dc99091003f73673cfb6809edcf1e9c6b0cf6",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "[-5, -4, -3] [-5, -4, -3]\n",
+      "timed_out": false
+    },
+    "details": {
+      "cpython_stdout": "[-5, -4, -3] [-5, -4, -3]\n",
+      "piton_exit": 1,
+      "piton_stderr": "TypeError: object is not an iterator\n",
+      "piton_stdout": ""
+    },
+    "piton": {
+      "artifact_sha256": "6a50f8c2dbee0d89dcd5d4f8d04f6f13b49c8500e2efa454478da39757ec780f",
+      "build_exit_code": 0,
+      "build_ms": 464.74644399859244,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": "object is not an iterator",
+      "exception_type": "TypeError",
+      "execute_ms": 7.842685998184606,
+      "executed": true,
+      "exit_code": 1,
+      "failed_stage": null,
+      "filename": "program_0013.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "1bccea8dce15bf682b8e6b750c6dc99091003f73673cfb6809edcf1e9c6b0cf6",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 264,
+          "surface_sha256": "b80529ef75c7dc34ef45daec07fc37f89a32334d621c3734cebe65322ce9fe9a"
+        },
+        "BUILD": {
+          "artifact_bytes": 25616,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "6a50f8c2dbee0d89dcd5d4f8d04f6f13b49c8500e2efa454478da39757ec780f",
+          "c_chars": 282854,
+          "c_sha256": "c5a06854987becee995f4a720f107e5013410ed999e10ba45b44185be25063ff",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "TypeError: object is not an iterator\n",
+      "stdout": "",
+      "surface_sha256": "b80529ef75c7dc34ef45daec07fc37f89a32334d621c3734cebe65322ce9fe9a",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON failed during execution",
+    "source": "class C1:\n    def __init__(self, limit):\n        self.limit = limit\n    def __iter__(self):\n        for i in range(self.limit):\n            yield i + -5\n\nseq = C1(3)\nout = []\nfor elem in seq:\n    out.append(elem)\nprint(out, list(seq))\n",
+    "source_hash": "1bccea8dce15bf682b8e6b750c6dc99091003f73673cfb6809edcf1e9c6b0cf6"
+  },
+  "run_id": "run_20261101_221441_bounded_fa_seed42",
+  "seed": 2783290795,
+  "source": "class C1:\n    def __init__(self, limit):\n        self.limit = limit\n    def __iter__(self):\n        for i in range(self.limit):\n            yield i + -5\n\nseq = C1(3)\nout = []\nfor elem in seq:\n    out.append(elem)\nprint(out, list(seq))\n",
+  "source_hash": "1bccea8dce15bf682b8e6b750c6dc99091003f73673cfb6809edcf1e9c6b0cf6"
+}
