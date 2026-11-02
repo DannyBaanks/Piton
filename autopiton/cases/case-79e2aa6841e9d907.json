@@ -1,0 +1,96 @@
+{
+  "case_id": "case-79e2aa6841e9d907",
+  "created_at": "2026-11-02T01:50:32-06:00",
+  "description": "bounded[generator_yield_try/int] depth=2 iters=4",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "79e2aa6841e9d9075189b3c91b58b07d360800306a97d5e1ad5904ea1ad1fa06",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 64.93748500361107,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "79e2aa6841e9d9075189b3c91b58b07d360800306a97d5e1ad5904ea1ad1fa06",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "[(0, 27, 10), (1, 27, 11), (2, 27, 12), (3, 25, 13)]\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "ef452a5fb30bd67b92fd794ee9e5eba05feb6107e504a62b99bfd911f4adc533",
+      "build_exit_code": 0,
+      "build_ms": 818.78194300225,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 16.74923099926673,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0002.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "79e2aa6841e9d9075189b3c91b58b07d360800306a97d5e1ad5904ea1ad1fa06",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 278,
+          "surface_sha256": "99c5f85b7a4915b7bbf9692cb1671de2feb7f9b203caf6c2fceb84fa13957c51"
+        },
+        "BUILD": {
+          "artifact_bytes": 29672,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "ef452a5fb30bd67b92fd794ee9e5eba05feb6107e504a62b99bfd911f4adc533",
+          "c_chars": 284810,
+          "c_sha256": "812e1246f2945a5478bdec3722fbc04d9a7b72f9429644ca9e5d11b246553c89",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "[(0, 27, 10), (1, 27, 11), (2, 27, 12), (3, 25, 13)]\n",
+      "surface_sha256": "99c5f85b7a4915b7bbf9692cb1671de2feb7f9b203caf6c2fceb84fa13957c51",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "def f1(v1):\n    for i in range(v1):\n        try:\n            if i == 3:\n                raise ValueError('gen_stop')\n            yield (i | 27)\n        except ValueError:\n            yield 25\n\nprint(list(zip(range(4), f1(4), range(10, 10 + 4))))\n",
+    "source_hash": "79e2aa6841e9d9075189b3c91b58b07d360800306a97d5e1ad5904ea1ad1fa06"
+  },
+  "run_id": "run_20261102_015030_bounded_fb_seed77",
+  "seed": 2150145586,
+  "source": "def f1(v1):\n    for i in range(v1):\n        try:\n            if i == 3:\n                raise ValueError('gen_stop')\n            yield (i | 27)\n        except ValueError:\n            yield 25\n\nprint(list(zip(range(4), f1(4), range(10, 10 + 4))))\n",
+  "source_hash": "79e2aa6841e9d9075189b3c91b58b07d360800306a97d5e1ad5904ea1ad1fa06"
+}
