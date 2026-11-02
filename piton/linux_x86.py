@@ -4434,7 +4434,10 @@ class LinuxCEmitter:
         }.get(value_type or "int", "PK_OBJECT")
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
-        return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
+        vtype = types.get(value)
+        if not vtype:
+            return f"piton_slot_guess({self._value(value)})"
+        return f"piton_slot({self._value(value)},{self._kind(vtype)})"
 
     def _needle_slot(self, value: Any, types: dict[str, str]) -> str:
         """NEEDLE_SLOT_V1: el needle de un `in` como expresion C de PitonSlot.
@@ -8416,7 +8419,10 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"NameError: name '{source}' is not defined")
 
             aliases[result] = source
-            types[result] = types.get(source, "int")
+            if source in types:
+                types[result] = types[source]
+            elif source not in function.params:
+                types[result] = "int"
             if source in self._tuple_elems:
                 self._tuple_elems[result] = self._tuple_elems[source]
             if source in self._dict_elems:
@@ -11484,7 +11490,8 @@ class LinuxCEmitter:
             )
             return out
         elif op == "subscript_store":
-            collection, index, value = args
+            collection, index, value = args[:3]
+            handler_label = args[3] if len(args) > 3 else None
             coll_type = types.get(collection, "")
             if coll_type in {"list", "tuple"}:
                 # Relax index type check
@@ -11534,13 +11541,36 @@ class LinuxCEmitter:
                 out.append("        }")
                 out.append("        if(_ss_ok){")
                 out.append(f"            piton_seq_set((PitonSeq*)_ss_coll,{self._value(index)},{self._slot(value, types)});")
-                self._emit_exc_check(out, function, None)
+                self._emit_exc_check(out, function, handler_label)
                 out.append("        } else {")
                 out.append('        piton_raise_set("TypeError","\'int\' object does not support item assignment");')
-                self._emit_exc_check(out, function, None)
+                self._emit_exc_check(out, function, handler_label)
                 out.append("        }")
                 out.append("    }")
-            elif coll_type in ("", "int", "slot", "builtin") or coll_type.startswith(("object:", "class:")):
+            elif coll_type is not None and coll_type.startswith("object:"):
+                # SETITEM_DUNDER_V1: obj[k] = v despacha a __setitem__ por MRO.
+                cls_name = coll_type.split(":", 1)[1]
+                hit = None
+                for candidate in self.class_mro.get(cls_name, [cls_name]):
+                    if "__setitem__" in self.classes.get(candidate, set()):
+                        hit = candidate
+                        break
+                if hit is None and "__setitem__" in self.classes.get(cls_name, set()):
+                    hit = cls_name
+                if hit is not None:
+                    target_fn = hit + "____setitem__"
+                    target = _name(target_fn)
+                    if self.function_frame_abi.get(target_fn, False):
+                        out.append(f'    {{long _si_args[]={{ {self._value(collection)},{self._value(index)},{self._value(value)} }}; piton_frame_call((long)&{target},3,_si_args);}}')
+                    else:
+                        out.append(f"    {target}({self._value(collection)},{self._value(index)},{self._value(value)});")
+                    self._emit_exc_check(out, function, handler_label)
+                    return out
+                else:
+                    out.append(f'    piton_raise_set("TypeError","\'{cls_name}\' object does not support item assignment");')
+                    self._emit_exc_check(out, function, handler_label)
+                    return out
+            elif coll_type in ("", "int", "slot", "builtin") or coll_type.startswith("class:"):
                 # SUBSCRIPT_STORE_UNKNOWN_V1: el tipo estatico del target no
                 # se conoce (pipes.py: list[-1][-1] = x sobre elem de lista
                 # heterogenea). Misma politica que SUBSCRIPT_STORE_INT_V1:
@@ -11555,10 +11585,10 @@ class LinuxCEmitter:
                 out.append("        }")
                 out.append("        if(_ss_ok){")
                 out.append(f"            piton_seq_set((PitonSeq*)_ss_coll,{self._value(index)},{self._slot(value, types)});")
-                self._emit_exc_check(out, function, None)
+                self._emit_exc_check(out, function, handler_label)
                 out.append("        } else {")
                 out.append('        piton_raise_set("TypeError","object does not support item assignment");')
-                self._emit_exc_check(out, function, None)
+                self._emit_exc_check(out, function, handler_label)
                 out.append("        }")
                 out.append("    }")
             else:
@@ -13326,12 +13356,13 @@ class LinuxCEmitter:
                     types[result] = "int"
                     self._emit_exc_check(out, function, _gi_handler)
                     return out
-                target = _name(hit + "____getitem__")
-                if self.function_frame_abi.get(hit + "____getitem__", False):
+                target_fn = hit + "____getitem__"
+                target = _name(target_fn)
+                if self.function_frame_abi.get(target_fn, False):
                     out.append(f'    {{long _gi_args[]={{ {self._value(coll)},{self._value(idx)} }}; {_name(result)}=piton_frame_call((long)&{target},2,_gi_args);}}')
                 else:
                     out.append(f"    {_name(result)}={target}({self._value(coll)},{self._value(idx)});")
-                types[result] = "int"
+                types[result] = self.function_return_types.get(target_fn, "int")
                 self._emit_exc_check(out, function, _gi_handler)
                 return out
             else:

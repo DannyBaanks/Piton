@@ -636,7 +636,7 @@ class MIRLowerer:
                 builder.emit("slice_store", obj, lo, hi, step, value)
                 return
             idx = self._lower_expr(builder, target.slice)
-            builder.emit("subscript_store", obj, idx, value)
+            builder.emit("subscript_store", obj, idx, value, _active_handler(builder))
         elif target.kind == HIRKind.LOAD:
             # UNPACK_TARGET_LOAD_V1: el for-target de un genexpr baja como
             # LOAD (`for (k, v) in ...` en _compat_pickle) — es un nombre, se
@@ -4939,7 +4939,7 @@ class MIRLowerer:
                 builder.emit("slice_store", obj, lo, hi, step, value)
                 return
             idx = self._lower_expr(builder, target.slice)
-            builder.emit("subscript_store", obj, idx, value)
+            builder.emit("subscript_store", obj, idx, value, _active_handler(builder))
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
@@ -6193,7 +6193,7 @@ class MIRLowerer:
                     else:
                         k = self._lower_expr(builder, key)
                         v = self._lower_expr(builder, value)
-                        builder.emit("subscript_store", result, k, v)
+                        builder.emit("subscript_store", result, k, v, _active_handler(builder))
                 return result
             items = tuple(
                 (self._lower_expr(builder, key), self._lower_expr(builder, value))
