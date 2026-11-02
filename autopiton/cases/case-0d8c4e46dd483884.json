@@ -1,0 +1,98 @@
+{
+  "case_id": "case-0d8c4e46dd483884",
+  "created_at": "2026-11-01T22:45:27-06:00",
+  "description": "bounded[dunder_str_repr/str] depth=2",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "0d8c4e46dd483884f77191a3b5e4c019324fcd0e2c788c3627263c70cd119e7e",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "UNSUPPORTED",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 65.93337700178381,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "0d8c4e46dd483884f77191a3b5e4c019324fcd0e2c788c3627263c70cd119e7e",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "item:6 <item 6>\n",
+      "timed_out": false
+    },
+    "details": {
+      "piton_stage_error": {
+        "error_message": "Linux str() requires int/float/bool/None/str (M14 v1)",
+        "error_type": "NativeBuildError",
+        "stage": "BUILD"
+      }
+    },
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 426.29124100494664,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "BUILD",
+      "filename": "program_0002.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "0d8c4e46dd483884f77191a3b5e4c019324fcd0e2c788c3627263c70cd119e7e",
+      "stage_reached": "MIR",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 269,
+          "surface_sha256": "74f9b26593e9f6ba07870842b970f2fd88d93a219039f0ec945ecc5d67529287"
+        },
+        "BUILD": {
+          "error_message": "Linux str() requires int/float/bool/None/str (M14 v1)",
+          "error_traceback": "Traceback (most recent call last):\n  File \"/piton-repo/autopiton/piton_worker.py\", line 172, in main\n    c_source = LinuxCEmitter().emit(mir)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 3962, in emit\n    _pass_lines.extend(self._emit_function(function))\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 4116, in _emit_function\n    lines.extend(self._emit_instruction(instruction, function, aliases, types, bigint_slots))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 10596, in _emit_instruction\n    raise NativeBuildError(\"Linux str() requires int/float/bool/None/str (M14 v1)\")\npiton.x86.NativeBuildError: Linux str() requires int/float/bool/None/str (M14 v1)\n",
+          "error_type": "NativeBuildError",
+          "passed": false
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "74f9b26593e9f6ba07870842b970f2fd88d93a219039f0ec945ecc5d67529287",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON rejected the program at BUILD",
+    "source": "class C1:\n    def __init__(self, val):\n        self.val = val\n    def __str__(self):\n        return 'item:' + str(self.val)\n    def __repr__(self):\n        return '<' + 'item' + ' ' + str(self.val) + '>'\n\nobj = C1(6)\nprint(str(obj), repr(obj))\n",
+    "source_hash": "0d8c4e46dd483884f77191a3b5e4c019324fcd0e2c788c3627263c70cd119e7e"
+  },
+  "run_id": "run_20261101_224526_bounded_seed11",
+  "seed": 2198630850,
+  "source": "class C1:\n    def __init__(self, val):\n        self.val = val\n    def __str__(self):\n        return 'item:' + str(self.val)\n    def __repr__(self):\n        return '<' + 'item' + ' ' + str(self.val) + '>'\n\nobj = C1(6)\nprint(str(obj), repr(obj))\n",
+  "source_hash": "0d8c4e46dd483884f77191a3b5e4c019324fcd0e2c788c3627263c70cd119e7e"
+}

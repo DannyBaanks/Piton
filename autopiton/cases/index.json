@@ -143,6 +143,31 @@
       "signature": null,
       "source_hash": "03dffbc05d637bc48ed68045126082d3ab3263a3526e218bdf0c6e82c8fa7699"
     },
+    "case-04ccb06a6c28f051": {
+      "case_id": "case-04ccb06a6c28f051",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:35-06:00",
+      "description": "bounded[try_finally_return_flow/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:43-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2941612270,
+      "signature": null,
+      "source_hash": "04ccb06a6c28f0517a9f06a056a8e40ae22c83a50b43806ebeb53ec8e78d2106"
+    },
     "case-055fb79fee850943": {
       "case_id": "case-055fb79fee850943",
       "classification": "EQUIV",
@@ -440,6 +465,32 @@
       "signature": null,
       "source_hash": "0d4853c601af276854dac4a2527130bf209930f8da7daa8e1432ac976fbd00af"
     },
+    "case-0d8c4e46dd483884": {
+      "case_id": "case-0d8c4e46dd483884",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:27-06:00",
+      "description": "bounded[dunder_str_repr/str] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:37-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2198630850,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "0d8c4e46dd483884f77191a3b5e4c019324fcd0e2c788c3627263c70cd119e7e"
+    },
     "case-0df05d89086193ec": {
       "case_id": "case-0df05d89086193ec",
       "classification": "EQUIV",
@@ -691,6 +742,31 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "11500735210cdc34b1fdd5281881488327c6fdf225329b8ecc06f6b84d085e86"
     },
+    "case-122a4fd1e6ec650d": {
+      "case_id": "case-122a4fd1e6ec650d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:35-06:00",
+      "description": "bounded[comprehension_filter_call/int] depth=2 iters=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:44-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2018579976,
+      "signature": null,
+      "source_hash": "122a4fd1e6ec650d3bf0c356b850426297e4f3a870ebb7ba8e60156131fcc24f"
+    },
     "case-12550e3dfae257cf": {
       "case_id": "case-12550e3dfae257cf",
       "classification": "EQUIV",
@@ -744,19 +820,24 @@
       "case_id": "case-12f1927c109c482a",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:45-06:00",
       "description": "bounded[dunder_rich_comparison/bool] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:45-06:00",
+      "last_seen_at": "2026-11-02T00:50:23-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 298737106,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
@@ -1182,19 +1263,24 @@
       "case_id": "case-1bccea8dce15bf68",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:47-06:00",
       "description": "bounded[dunder_iterable_protocol/int] depth=2 iters=3",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:47-06:00",
+      "last_seen_at": "2026-11-02T00:50:26-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 2783290795,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -1327,14 +1413,18 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T19:53:11-06:00",
+      "last_seen_at": "2026-11-02T00:51:26-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 7,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
@@ -1344,19 +1434,24 @@
       "case_id": "case-2353aba8567730a1",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:46-06:00",
       "description": "bounded[dunder_iterable_protocol/int] depth=2 iters=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:46-06:00",
+      "last_seen_at": "2026-11-02T00:50:24-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 3673561638,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -1553,19 +1648,24 @@
       "case_id": "case-25b28288554f002b",
       "classification": "UNSUPPORTED",
       "classifications": [
-        "UNSUPPORTED"
+        "UNSUPPORTED",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:47-06:00",
       "description": "bounded[dunder_str_repr/str] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:47-06:00",
+      "last_seen_at": "2026-11-02T00:50:27-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 240251661,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -1910,12 +2010,16 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:48-06:00",
+      "last_seen_at": "2026-11-02T00:50:29-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 2340505846,
       "signature": null,
@@ -1925,19 +2029,24 @@
       "case_id": "case-2c1018d12b4baa16",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:48-06:00",
       "description": "bounded[dunder_iterable_protocol/int] depth=2 iters=3",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:48-06:00",
+      "last_seen_at": "2026-11-02T00:50:28-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 1149938334,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -1988,6 +2097,31 @@
       "seed": 4231494220,
       "signature": null,
       "source_hash": "2d8df0adc9d0fb0246bf73b1e868baa6b6355b9d95b38fd2ac925bde92c198e1"
+    },
+    "case-304d33f1f6021160": {
+      "case_id": "case-304d33f1f6021160",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:28-06:00",
+      "description": "bounded[super_inheritance_expr/float] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:38-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 1918102982,
+      "signature": null,
+      "source_hash": "304d33f1f60211604a274589af2bb1948e5fccfc40a8af2b0ff72f53cd6de4a5"
     },
     "case-3067b8f4b7647b23": {
       "case_id": "case-3067b8f4b7647b23",
@@ -2307,6 +2441,31 @@
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "37158a4503ff36ad9ac0b282ec1b7eade7461d5bc631584eac4a100838a507dd"
+    },
+    "case-37dfa765c0b4c817": {
+      "case_id": "case-37dfa765c0b4c817",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:30-06:00",
+      "description": "bounded[dunder_contains_membership/bool] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2269380278,
+      "signature": null,
+      "source_hash": "37dfa765c0b4c817cabe5b2819e424431a97ff0da6b792411d9c15d5b4fb3a4f"
     },
     "case-38b35a85bb71c733": {
       "case_id": "case-38b35a85bb71c733",
@@ -2636,6 +2795,31 @@
       "signature": null,
       "source_hash": "4035352b9160118e49890b04feb754c4ca295eff1481040c3648a629a6ab38ea"
     },
+    "case-40ea4149a7e23ba6": {
+      "case_id": "case-40ea4149a7e23ba6",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:33-06:00",
+      "description": "bounded[mutable_container_unpack/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:42-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 1241417136,
+      "signature": null,
+      "source_hash": "40ea4149a7e23ba66ca7ba7c07d2e18540f92f8aa679a4fc508c2c6ff2d227ad"
+    },
     "case-412f3c469add9951": {
       "case_id": "case-412f3c469add9951",
       "classification": "EQUIV",
@@ -2793,6 +2977,56 @@
       "seed": 562499339,
       "signature": null,
       "source_hash": "43e9566688cca43c7dd884039d7fccf19ceae494279c351c49ef0434903bbaa5"
+    },
+    "case-457a400c27d1717f": {
+      "case_id": "case-457a400c27d1717f",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:44-06:00",
+      "description": "bounded[dunder_contains_membership/bool] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:51-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 1109293664,
+      "signature": null,
+      "source_hash": "457a400c27d1717f753acda377387f7a9fbd62e5ed98c10b71b6e465c7a05bc7"
+    },
+    "case-457f30cd33260cf0": {
+      "case_id": "case-457f30cd33260cf0",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:36-06:00",
+      "description": "bounded[dunder_subscript_mapping/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:45-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2703488257,
+      "signature": null,
+      "source_hash": "457f30cd33260cf097ba1b39e5c661786ae095480e8e6a53a48cfb0a711480c5"
     },
     "case-45def1a4575fc272": {
       "case_id": "case-45def1a4575fc272",
@@ -3000,6 +3234,31 @@
       "signature": null,
       "source_hash": "4912b393280ecaef910fa565ae53e2f75f9a948d86427dec84a6d785548d3239"
     },
+    "case-492420ccd542408b": {
+      "case_id": "case-492420ccd542408b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:30-06:00",
+      "description": "bounded[closure_capture_fn/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 1992583342,
+      "signature": null,
+      "source_hash": "492420ccd542408b5c7391f24092f3490fa15bd364b5b98a20e085c4b4935d9f"
+    },
     "case-4a2e2c6fb2be7c09": {
       "case_id": "case-4a2e2c6fb2be7c09",
       "classification": "EQUIV",
@@ -3102,7 +3361,7 @@
       "expected_exception": "TypeError",
       "family": "classes",
       "is_valid": false,
-      "last_seen_at": "2026-11-01T19:53:10-06:00",
+      "last_seen_at": "2026-11-02T00:51:25-06:00",
       "minimization": {
         "accepted": 3,
         "attempts": 11,
@@ -3124,7 +3383,11 @@
       "run_ids": [
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 5,
       "signature": "INVALID_ACCEPTED|cpython:exception:TypeError|piton:EXECUTE:-",
@@ -3371,6 +3634,31 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "51d976d11279c07ccd4efe127acaea784fcfc7972fb3f978254e20b1e0fea5fd"
     },
+    "case-51da71ee86564aff": {
+      "case_id": "case-51da71ee86564aff",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:46-06:00",
+      "description": "bounded[property_computed_class/float] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:53-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 1583447950,
+      "signature": null,
+      "source_hash": "51da71ee86564aff429b04a5f553763f00f7a78e966de5828f5b961df9d5e007"
+    },
     "case-52ec2e43a5d86c64": {
       "case_id": "case-52ec2e43a5d86c64",
       "classification": "UNSUPPORTED",
@@ -3383,14 +3671,18 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T19:53:09-06:00",
+      "last_seen_at": "2026-11-02T00:51:24-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 3,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
@@ -3475,12 +3767,16 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:49-06:00",
+      "last_seen_at": "2026-11-02T00:50:30-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 1715412119,
       "signature": null,
@@ -3587,6 +3883,31 @@
       "seed": 224723826,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "57ee3bd8dc7621bd7e1affe8e37b63710e2154485d20520a6c6b046d24e0c56b"
+    },
+    "case-5837560e5d737187": {
+      "case_id": "case-5837560e5d737187",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:38-06:00",
+      "description": "bounded[default_expr_fn/int] depth=2 args=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:46-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 3036610734,
+      "signature": null,
+      "source_hash": "5837560e5d737187489c843d32ccecb96ee7b4d48066b083d8766eb5721c7c78"
     },
     "case-58c37be1085101fb": {
       "case_id": "case-58c37be1085101fb",
@@ -3840,19 +4161,24 @@
       "case_id": "case-5d70255b7c194dce",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:47-06:00",
       "description": "bounded[dunder_rich_comparison/bool] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:47-06:00",
+      "last_seen_at": "2026-11-02T00:50:26-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 3131575764,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
@@ -3880,23 +4206,53 @@
       "signature": null,
       "source_hash": "5da66c2d190c4f9d40ea957e76bb81809c5616564e72fa9a8782fbf99f230160"
     },
+    "case-5e428707111890ef": {
+      "case_id": "case-5e428707111890ef",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:50-06:00",
+      "description": "bounded[dunder_subscript_mapping/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:57-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 203588198,
+      "signature": null,
+      "source_hash": "5e428707111890ef793dac757d9425e1e263f0b5fdf16c3008ba1be6eed7a27e"
+    },
     "case-5e72d5ad9ba117e9": {
       "case_id": "case-5e72d5ad9ba117e9",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:42-06:00",
       "description": "bounded[dunder_subscript_mapping/int] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:42-06:00",
+      "last_seen_at": "2026-11-02T00:50:18-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 3184935163,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -4905,19 +5261,24 @@
       "case_id": "case-78c3951676add4f6",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:44-06:00",
       "description": "bounded[dunder_subscript_mapping/int] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:44-06:00",
+      "last_seen_at": "2026-11-02T00:50:22-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 398340369,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -4944,6 +5305,31 @@
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->other",
       "source_hash": "7914ea4f86fd1087be6cb5bc6f0b9e32af0ab7d49042deffc1d6968c142a8d44"
+    },
+    "case-7927ab442546bc45": {
+      "case_id": "case-7927ab442546bc45",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:34-06:00",
+      "description": "bounded[super_inheritance_expr/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:42-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 1719704081,
+      "signature": null,
+      "source_hash": "7927ab442546bc458cb8eea2454cd021f8ac115cd70e5689a0104157e4655616"
     },
     "case-7b8d8d5fe7b04b89": {
       "case_id": "case-7b8d8d5fe7b04b89",
@@ -5485,19 +5871,24 @@
       "case_id": "case-88565c198f4a9776",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:44-06:00",
       "description": "bounded[dunder_iterable_protocol/int] depth=2 iters=3",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:44-06:00",
+      "last_seen_at": "2026-11-02T00:50:21-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 667779376,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -5570,6 +5961,31 @@
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "88c6d0e8926f19ee645d4ff0674005ae2711e1fcbcdad1217e5a2015dca7ca66"
+    },
+    "case-894af4bac6dc1895": {
+      "case_id": "case-894af4bac6dc1895",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:29-06:00",
+      "description": "bounded[class_method_default/float] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:38-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2724953954,
+      "signature": null,
+      "source_hash": "894af4bac6dc18954d41934bba49bc3ee28957b5d2d6fd1300de232626100e79"
     },
     "case-89c8b838bd1c6293": {
       "case_id": "case-89c8b838bd1c6293",
@@ -5686,6 +6102,56 @@
       "signature": null,
       "source_hash": "8b34ef8e80fce517d6ebcdb2ee5d8123615de79af35289b170eb341c395d1598"
     },
+    "case-8cb1b9081d1af011": {
+      "case_id": "case-8cb1b9081d1af011",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:31-06:00",
+      "description": "bounded[comprehension_filter_call/int] depth=2 iters=4",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:40-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 1263371380,
+      "signature": null,
+      "source_hash": "8cb1b9081d1af011a478899c18011e51ce627ad5e54533a708aa569237df0f5b"
+    },
+    "case-8d30c80481deebca": {
+      "case_id": "case-8d30c80481deebca",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:32-06:00",
+      "description": "bounded[class_method_default/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:41-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 1194700572,
+      "signature": null,
+      "source_hash": "8d30c80481deebca559598c123f1fc588a2b6577b74004c75154fd85c94f25cc"
+    },
     "case-8dd956643be5bfa1": {
       "case_id": "case-8dd956643be5bfa1",
       "classification": "EQUIV",
@@ -5744,12 +6210,16 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:48-06:00",
+      "last_seen_at": "2026-11-02T00:50:28-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 1351531223,
       "signature": null,
@@ -5804,19 +6274,24 @@
       "case_id": "case-907e783d4b3c269f",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:43-06:00",
       "description": "bounded[dunder_subscript_mapping/int] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:43-06:00",
+      "last_seen_at": "2026-11-02T00:50:19-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 127978094,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -5879,14 +6354,18 @@
       "expected_exception": "TypeError",
       "family": "functions",
       "is_valid": false,
-      "last_seen_at": "2026-11-01T19:53:07-06:00",
+      "last_seen_at": "2026-11-02T00:51:22-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 1,
       "signature": null,
@@ -6087,6 +6566,31 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "932cbe168be0e8a1547b7f59f05b6ad26c18ead58a3ab1cfce0bf8302da6d1b5"
     },
+    "case-93d7e7912b562e43": {
+      "case_id": "case-93d7e7912b562e43",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:39-06:00",
+      "description": "bounded[closure_capture_fn/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:47-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2090890118,
+      "signature": null,
+      "source_hash": "93d7e7912b562e43700cd62dd4dd3b7a0b8c67d7ef35a08ffd5439f90d9e9b2f"
+    },
     "case-95c9b5863dcab5d0": {
       "case_id": "case-95c9b5863dcab5d0",
       "classification": "EQUIV",
@@ -6098,18 +6602,47 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T19:53:10-06:00",
+      "last_seen_at": "2026-11-02T00:51:25-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 6,
       "signature": null,
       "source_hash": "95c9b5863dcab5d0e4cd8ccfc04147fd893fc6c0edb31da89014d3b475db910b"
+    },
+    "case-960a8aaf319dedcd": {
+      "case_id": "case-960a8aaf319dedcd",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:51-06:00",
+      "description": "bounded[closure_capture_fn/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:57-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 1095983971,
+      "signature": null,
+      "source_hash": "960a8aaf319dedcdf697756149d9b2605f03a48b71cb6b5653f9aa8350ef0b2d"
     },
     "case-973aa0378eefe445": {
       "case_id": "case-973aa0378eefe445",
@@ -6249,6 +6782,31 @@
       "signature": null,
       "source_hash": "98eaed99ac232786270decc2ff4fb485620b3507a1c080be58eb16457c002a70"
     },
+    "case-996a6b0de05f1d93": {
+      "case_id": "case-996a6b0de05f1d93",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:48-06:00",
+      "description": "bounded[try_except_else_call/str] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:54-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2693996244,
+      "signature": null,
+      "source_hash": "996a6b0de05f1d93e108b9e52531d1a9b7accfa3f55da62203e333cca1e48ed2"
+    },
     "case-9a3d56364cc1a030": {
       "case_id": "case-9a3d56364cc1a030",
       "classification": "DIVERGENT",
@@ -6270,6 +6828,31 @@
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "9a3d56364cc1a030fe2e38cc1881d96ae355e8d92ab07fce1b00309728631b52"
+    },
+    "case-9a6562ebf6d4ab57": {
+      "case_id": "case-9a6562ebf6d4ab57",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:37-06:00",
+      "description": "bounded[dunder_operator_class/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:45-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 374281491,
+      "signature": null,
+      "source_hash": "9a6562ebf6d4ab5701fd552821593a52f5e9b09e7e76953f81c69e20bc8c7c8c"
     },
     "case-9c1863ddd1284814": {
       "case_id": "case-9c1863ddd1284814",
@@ -6957,12 +7540,16 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:42-06:00",
+      "last_seen_at": "2026-11-02T00:50:18-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 2342331444,
       "signature": null,
@@ -7213,19 +7800,24 @@
       "case_id": "case-ae791a48886aa06a",
       "classification": "UNSUPPORTED",
       "classifications": [
-        "UNSUPPORTED"
+        "UNSUPPORTED",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:45-06:00",
       "description": "bounded[dunder_str_repr/str] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:45-06:00",
+      "last_seen_at": "2026-11-02T00:50:23-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 1625792787,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -7375,19 +7967,24 @@
       "case_id": "case-b385ddbcedf5f9eb",
       "classification": "UNSUPPORTED",
       "classifications": [
-        "UNSUPPORTED"
+        "UNSUPPORTED",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:48-06:00",
       "description": "bounded[dunder_str_repr/str] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:48-06:00",
+      "last_seen_at": "2026-11-02T00:50:29-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 613628803,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -7505,6 +8102,31 @@
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "b6542d11dd112ebfa1dc1c29aef73ca66b488a0f7d97724bda9d53990b7d5ea0"
+    },
+    "case-b687ef0098c1676d": {
+      "case_id": "case-b687ef0098c1676d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:47-06:00",
+      "description": "bounded[loop_conditional_call/int] depth=2 iters=4",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:53-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2467764733,
+      "signature": null,
+      "source_hash": "b687ef0098c1676dc762f16c4eb3dd1530374fd26a83a276631bdd801a25d9e3"
     },
     "case-b68d756168a4f9ee": {
       "case_id": "case-b68d756168a4f9ee",
@@ -7825,19 +8447,24 @@
       "case_id": "case-bd8861a8a0390e04",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT"
+        "DIVERGENT",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:45-06:00",
       "description": "bounded[dunder_iterable_protocol/int] depth=2 iters=3",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:45-06:00",
+      "last_seen_at": "2026-11-02T00:50:22-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 2592983555,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -7890,6 +8517,31 @@
       "seed": 0,
       "signature": null,
       "source_hash": "be6603f178f58378e11a00c80605c38b14ef9575e435a2ac624834824868e89e"
+    },
+    "case-be9d838b69fef392": {
+      "case_id": "case-be9d838b69fef392",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:40-06:00",
+      "description": "bounded[dunder_contains_membership/bool] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:47-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2185560420,
+      "signature": null,
+      "source_hash": "be9d838b69fef392f8a82e63132048eaa0ae551034a8f503c0ed10a44fc2b204"
     },
     "case-bf3d75f9ad761615": {
       "case_id": "case-bf3d75f9ad761615",
@@ -8107,6 +8759,31 @@
       "signature": null,
       "source_hash": "c19dbd729eb462377d8b19c55b7a29f7a2ac0824107d4cfa5ed47cc8fe366372"
     },
+    "case-c1b17fb306efa0f8": {
+      "case_id": "case-c1b17fb306efa0f8",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:27-06:00",
+      "description": "bounded[dunder_rich_comparison/bool] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:36-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 3355305989,
+      "signature": null,
+      "source_hash": "c1b17fb306efa0f8f7fd69e373351977a05663ff3ec72f6d793a0ab821abda14"
+    },
     "case-c20c43a6d0f231e3": {
       "case_id": "case-c20c43a6d0f231e3",
       "classification": "EQUIV",
@@ -8280,7 +8957,7 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T19:53:06-06:00",
+      "last_seen_at": "2026-11-02T00:51:22-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -8288,7 +8965,11 @@
         "run_20261030_161303_canary",
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 0,
       "signature": null,
@@ -8554,19 +9235,24 @@
       "case_id": "case-cb77c3cae8b0531e",
       "classification": "UNSUPPORTED",
       "classifications": [
-        "UNSUPPORTED"
+        "UNSUPPORTED",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:43-06:00",
       "description": "bounded[dunder_str_repr/str] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:43-06:00",
+      "last_seen_at": "2026-11-02T00:50:20-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 3460967357,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -8744,19 +9430,24 @@
       "case_id": "case-d13269db2f01ee0a",
       "classification": "UNSUPPORTED",
       "classifications": [
-        "UNSUPPORTED"
+        "UNSUPPORTED",
+        "EQUIV"
       ],
       "created_at": "2026-11-01T22:14:46-06:00",
       "description": "bounded[dunder_str_repr/str] depth=2",
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T22:14:46-06:00",
+      "last_seen_at": "2026-11-02T00:50:25-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
-        "run_20261101_221441_bounded_fa_seed42"
+        "run_20261101_221441_bounded_fa_seed42",
+        "run_20261101_224433_bounded_fa_seed42",
+        "run_20261101_230754_bounded_fa_seed42",
+        "run_20261101_233405_bounded_fa_seed42",
+        "run_20261102_005017_bounded_fa_seed42"
       ],
       "seed": 3582477022,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -8932,13 +9623,17 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T19:53:32-06:00",
+      "last_seen_at": "2026-11-02T00:50:49-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261101_160331_bounded_seed11",
-        "run_20261101_195318_bounded_seed11"
+        "run_20261101_195318_bounded_seed11",
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
       ],
       "seed": 2898712818,
       "signature": null,
@@ -9062,6 +9757,31 @@
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->none",
       "source_hash": "d6c99c747cd1346387bf7be36dbae5ceb1a2406f39cae384265a952ae1fade0e"
+    },
+    "case-d73758e29f3bb736": {
+      "case_id": "case-d73758e29f3bb736",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:41-06:00",
+      "description": "bounded[dunder_subscript_mapping/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:48-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 2764735410,
+      "signature": null,
+      "source_hash": "d73758e29f3bb736ee5358ff3c2a1ba3de970720346388c71004c8bce5cbb2c8"
     },
     "case-d77f6165b6bd59f7": {
       "case_id": "case-d77f6165b6bd59f7",
@@ -9209,14 +9929,18 @@
       "expected_exception": null,
       "family": "unpacking",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T19:53:12-06:00",
+      "last_seen_at": "2026-11-02T00:51:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 8,
       "signature": null,
@@ -9721,14 +10445,18 @@
       "expected_exception": "TypeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-01T19:53:13-06:00",
+      "last_seen_at": "2026-11-02T00:51:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 9,
       "signature": null,
@@ -9745,18 +10473,47 @@
       "expected_exception": "RuntimeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-01T19:53:09-06:00",
+      "last_seen_at": "2026-11-02T00:51:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 4,
       "signature": null,
       "source_hash": "e49b5c7a9e738d485bc77b54d9906a928859295bcd805a4600efcb51f1588e9e"
+    },
+    "case-e4d1aabc90ca8a55": {
+      "case_id": "case-e4d1aabc90ca8a55",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:43-06:00",
+      "description": "bounded[closure_capture_fn/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:51-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 4249018436,
+      "signature": null,
+      "source_hash": "e4d1aabc90ca8a5550deeaf6536b025bc4bfc8ac845a50dd1832bdfce5ca7524"
     },
     "case-e4fcb3d2b213f9de": {
       "case_id": "case-e4fcb3d2b213f9de",
@@ -9868,6 +10625,31 @@
       "seed": 0,
       "signature": null,
       "source_hash": "e688047572ce4960d953e5dff4f13e57a382b24edf7ea0fd802dc54ba93a213c"
+    },
+    "case-e6a65c52d8ba88e8": {
+      "case_id": "case-e6a65c52d8ba88e8",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:49-06:00",
+      "description": "bounded[try_finally_return_flow/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:56-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 3788976143,
+      "signature": null,
+      "source_hash": "e6a65c52d8ba88e8318e91fb6ac87ba248c6dc22243daa9ffb2350d25aaacb21"
     },
     "case-e6eed033593c6f25": {
       "case_id": "case-e6eed033593c6f25",
@@ -10270,14 +11052,18 @@
       "expected_exception": null,
       "family": "super",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T19:53:08-06:00",
+      "last_seen_at": "2026-11-02T00:51:23-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
         "run_20261031_045547_canary",
-        "run_20261101_195305_canary"
+        "run_20261101_195305_canary",
+        "run_20261101_224513_canary",
+        "run_20261101_230836_canary",
+        "run_20261101_233435_canary",
+        "run_20261102_005121_canary"
       ],
       "seed": 2,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -10761,6 +11547,31 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "f9a227a8e3b48ccd37935cfc8ea9363314a9ce7112888fc8101b521e0a541a87"
     },
+    "case-f9b2f16cd90116bc": {
+      "case_id": "case-f9b2f16cd90116bc",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:43-06:00",
+      "description": "bounded[generator_yield_try/int] depth=2 iters=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:50-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 804478983,
+      "signature": null,
+      "source_hash": "f9b2f16cd90116bcb8288bff07e287c2db00780a45bcc1d03e54070b1454fa03"
+    },
     "case-fa841914aca19bd2": {
       "case_id": "case-fa841914aca19bd2",
       "classification": "DIVERGENT",
@@ -10822,6 +11633,31 @@
       "signature": null,
       "source_hash": "fa8bf914155bc95498cfea39c65a0571514f117e0aacb85a40adc0bd69428239"
     },
+    "case-faab2e5a4dfe9195": {
+      "case_id": "case-faab2e5a4dfe9195",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:48-06:00",
+      "description": "bounded[property_computed_class/bool] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:55-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 815187656,
+      "signature": null,
+      "source_hash": "faab2e5a4dfe91953c8eedb2ae843c04e7f6d81028b6d50cfa44260cc735cc47"
+    },
     "case-fac9cf07b7452d39": {
       "case_id": "case-fac9cf07b7452d39",
       "classification": "EQUIV",
@@ -10844,6 +11680,31 @@
       "seed": 479112937,
       "signature": null,
       "source_hash": "fac9cf07b7452d39d47b99a7d49e289b50d3a768e2c51eb348791d0b8981ca8e"
+    },
+    "case-fb5226376769a565": {
+      "case_id": "case-fb5226376769a565",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-01T22:45:45-06:00",
+      "description": "bounded[generator_yield_try/int] depth=2 iters=3",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T00:50:52-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261101_224526_bounded_seed11",
+        "run_20261101_230846_bounded_seed11",
+        "run_20261101_233447_bounded_seed11",
+        "run_20261102_005036_bounded_seed11"
+      ],
+      "seed": 319034450,
+      "signature": null,
+      "source_hash": "fb5226376769a565a7c1dc90a7ff33c2fc11cd031b7eb53aaf8afc47d2de9cf2"
     },
     "case-fc7f26d32aa2bdf1": {
       "case_id": "case-fc7f26d32aa2bdf1",
@@ -11075,9 +11936,10 @@
       "case-ae791a48886aa06a",
       "case-d13269db2f01ee0a",
       "case-25b28288554f002b",
-      "case-b385ddbcedf5f9eb"
+      "case-b385ddbcedf5f9eb",
+      "case-0d8c4e46dd483884"
     ]
   },
-  "updated_at": "2026-11-01T22:14:49-06:00",
+  "updated_at": "2026-11-02T00:51:27-06:00",
   "version": 1
 }
