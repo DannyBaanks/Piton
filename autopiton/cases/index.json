@@ -1529,7 +1529,7 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T02:14:32-06:00",
+      "last_seen_at": "2026-11-02T02:16:30-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1542,7 +1542,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 7,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
@@ -3709,7 +3710,7 @@
       "expected_exception": "TypeError",
       "family": "classes",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T02:14:31-06:00",
+      "last_seen_at": "2026-11-02T02:16:28-06:00",
       "minimization": {
         "accepted": 3,
         "attempts": 11,
@@ -3737,7 +3738,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 5,
       "signature": "INVALID_ACCEPTED|cpython:exception:TypeError|piton:EXECUTE:-",
@@ -4022,7 +4024,7 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T02:14:30-06:00",
+      "last_seen_at": "2026-11-02T02:16:27-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -4035,7 +4037,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 3,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
@@ -7007,7 +7010,7 @@
       "expected_exception": "TypeError",
       "family": "functions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T02:14:29-06:00",
+      "last_seen_at": "2026-11-02T02:16:25-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7020,7 +7023,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 1,
       "signature": null,
@@ -7258,7 +7262,7 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T02:14:32-06:00",
+      "last_seen_at": "2026-11-02T02:16:29-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7271,7 +7275,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 6,
       "signature": null,
@@ -9966,7 +9971,7 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T02:14:28-06:00",
+      "last_seen_at": "2026-11-02T02:16:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -9980,7 +9985,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 0,
       "signature": null,
@@ -11092,7 +11098,7 @@
       "expected_exception": null,
       "family": "unpacking",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T02:14:33-06:00",
+      "last_seen_at": "2026-11-02T02:16:31-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -11105,7 +11111,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 8,
       "signature": null,
@@ -11637,7 +11644,7 @@
       "expected_exception": "TypeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T02:14:33-06:00",
+      "last_seen_at": "2026-11-02T02:16:31-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -11650,7 +11657,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 9,
       "signature": null,
@@ -11667,7 +11675,7 @@
       "expected_exception": "RuntimeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T02:14:31-06:00",
+      "last_seen_at": "2026-11-02T02:16:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -11680,7 +11688,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 4,
       "signature": null,
@@ -12296,7 +12305,7 @@
       "expected_exception": null,
       "family": "super",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T02:14:29-06:00",
+      "last_seen_at": "2026-11-02T02:16:26-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -12309,7 +12318,8 @@
         "run_20261101_233435_canary",
         "run_20261102_005121_canary",
         "run_20261102_010223_canary",
-        "run_20261102_021428_canary"
+        "run_20261102_021428_canary",
+        "run_20261102_021623_canary"
       ],
       "seed": 2,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -13241,6 +13251,6 @@
       "case-367c25e322f2f78d"
     ]
   },
-  "updated_at": "2026-11-02T02:14:33-06:00",
+  "updated_at": "2026-11-02T02:16:31-06:00",
   "version": 1
 }
