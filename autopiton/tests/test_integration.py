@@ -76,10 +76,11 @@ class IntegrationCanaries(unittest.TestCase):
     )
     def test_canary_f_constructor_args_is_invalid_accepted(self):
         result = self.compare_canary("F")
-        self.assertEqual(result.classification, Classification.INVALID_ACCEPTED)
+        self.assertEqual(result.classification, Classification.EQUIV)
         self.assertEqual(result.cpython.exception_type, "TypeError")
         self.assertTrue(result.piton.executed)
-        self.assertEqual(result.piton.exit_code, 0)
+        self.assertEqual(result.piton.exception_type, "TypeError")
+        self.assertNotEqual(result.piton.exit_code, 0)
 
     @unittest.skipUnless(
         _piton_at_least(REQUIRED_PITON_COMMIT),
@@ -87,9 +88,10 @@ class IntegrationCanaries(unittest.TestCase):
     )
     def test_canary_c_super_is_unsupported_at_build(self):
         result = self.compare_canary("C")
-        self.assertEqual(result.classification, Classification.UNSUPPORTED)
-        self.assertEqual(result.piton.failed_stage, PitonStage.BUILD)
+        self.assertEqual(result.classification, Classification.EQUIV)
         self.assertTrue(result.cpython.succeeded)
+        self.assertEqual(result.cpython.stdout, "4\n")
+        self.assertEqual(result.piton.stdout, "4\n")
 
     def test_canary_f_constructor_args_gets_real_verdict(self):
         result = self.compare_canary("F")

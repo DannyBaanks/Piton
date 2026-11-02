@@ -1,0 +1,10 @@
+{
+  "classification_counts": {
+    "EQUIV": 59,
+    "INVALID_REFERENCE": 3
+  },
+  "duration_ms": 36818.7,
+  "finished_at": "2026-11-01T16:02:26-06:00",
+  "programs_executed": 62,
+  "run_id": "run_20261101_160149_reconcile_replay"
+}

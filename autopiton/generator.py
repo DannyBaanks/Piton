@@ -8,7 +8,7 @@ Focuses on generating small, focused test cases that can reveal divergences.
 import ast
 import random
 import textwrap
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional, Callable, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
@@ -33,11 +33,34 @@ class ProgramFamily(Enum):
     PROPERTIES = "properties"
     GENERATORS = "generators"
     ASYNC = "async"
+    BOUNDED = "bounded"
     SYSTEMATIC = "systematic"
     MODULE = "module"
 
 
 NON_RANDOM_FAMILIES = (ProgramFamily.SYSTEMATIC, ProgramFamily.MODULE)
+
+
+@dataclass(frozen=True)
+class BoundedConfig:
+    """Explicit structural bounds for cross-feature bounded generation."""
+    max_depth: int = 2
+    max_stmts: int = 3
+    max_args: int = 2
+    max_iters: int = 4
+    types: Tuple[str, ...] = ("int", "float", "bool", "str")
+
+    def clamped(self) -> "BoundedConfig":
+        valid_types = tuple(
+            t for t in self.types if t in {"int", "float", "bool", "str"}
+        ) or ("int", "float", "bool", "str")
+        return BoundedConfig(
+            max_depth=max(1, min(4, int(self.max_depth))),
+            max_stmts=max(1, min(6, int(self.max_stmts))),
+            max_args=max(1, min(4, int(self.max_args))),
+            max_iters=max(1, min(6, int(self.max_iters))),
+            types=valid_types,
+        )
 
 
 class SystematicGrid:
@@ -373,6 +396,111 @@ class ASTGenerator:
         except Exception:
             return ast.dump(node, indent=2)
 
+    def bounded_literal_source(self, kind: str) -> str:
+        """Return a deterministic, safe literal source string of *kind*."""
+        if kind == "bool":
+            return repr(self.rng.choice([True, False]))
+        if kind == "float":
+            val = round(self.rng.choice([1.5, 2.25, 3.5, 4.75, 6.5, 7.5, 9.25]), 2)
+            return repr(val)
+        if kind == "str":
+            return repr(self.rng.choice(["ab", "cd", "xy", "pq", "hi", "ok"]))
+        return repr(self.rng.randint(-8, 15))
+
+    def bounded_expr_source(
+        self,
+        kind: str,
+        depth: int = 2,
+        typed_vars: Optional[Dict[str, List[str]]] = None,
+        allowed_types: Tuple[str, ...] = ("int", "float", "bool", "str"),
+    ) -> str:
+        """Generate a type-safe expression of *kind* bounded by *depth*.
+
+        Unlike ``random_expr``, operands are constrained by static type so
+        generated expressions never fail with accidental ``str + int`` or
+        ``ZeroDivisionError`` before reaching the compiler stages under test.
+        """
+        vars_for_kind = (typed_vars or {}).get(kind) or []
+        if depth <= 0:
+            if vars_for_kind and self.rng.random() < 0.5:
+                return self.rng.choice(vars_for_kind)
+            return self.bounded_literal_source(kind)
+
+        if kind == "int":
+            op_kind = self.rng.choice(["bin", "shift", "bit", "unop", "leaf"])
+            if op_kind == "leaf":
+                return self.bounded_expr_source("int", 0, typed_vars, allowed_types)
+            if op_kind == "unop":
+                uop = self.rng.choice(["-", "~"])
+                inner = self.bounded_expr_source("int", depth - 1, typed_vars, allowed_types)
+                return f"({uop}({inner}))"
+            if op_kind == "shift":
+                op = self.rng.choice(["<<", ">>"])
+                left = repr(self.rng.randint(1, 32))
+                right = repr(self.rng.randint(0, 4))
+                return f"({left} {op} {right})"
+            if op_kind == "bit":
+                op = self.rng.choice(["&", "|", "^"])
+                left = self.bounded_expr_source("int", depth - 1, typed_vars, allowed_types)
+                right = repr(self.rng.randint(1, 31))
+                return f"({left} {op} {right})"
+            op = self.rng.choice(["+", "-", "*", "//", "%"])
+            left = self.bounded_expr_source("int", depth - 1, typed_vars, allowed_types)
+            if op in ("//", "%"):
+                right = repr(self.rng.randint(1, 7))
+            else:
+                right = self.bounded_expr_source("int", depth - 1, typed_vars, allowed_types)
+            return f"({left} {op} {right})"
+
+        if kind == "float":
+            op_kind = self.rng.choice(["arith", "div_int", "unop", "leaf"])
+            if op_kind == "leaf":
+                return self.bounded_expr_source("float", 0, typed_vars, allowed_types)
+            if op_kind == "unop":
+                inner = self.bounded_expr_source("float", depth - 1, typed_vars, allowed_types)
+                return f"(-({inner}))"
+            if op_kind == "div_int":
+                num = self.rng.randint(1, 25)
+                den = self.rng.choice([2, 4, 5, 8])
+                return f"({num} / {den})"
+            op = self.rng.choice(["+", "-", "*", "/", "//"])
+            left = self.bounded_expr_source("float", depth - 1, typed_vars, allowed_types)
+            right = repr(self.rng.choice([1.5, 2.0, 2.5, 3.5, 4.0]))
+            return f"({left} {op} {right})"
+
+        if kind == "str":
+            op_kind = self.rng.choice(["concat", "repeat", "leaf"])
+            if op_kind == "leaf":
+                return self.bounded_expr_source("str", 0, typed_vars, allowed_types)
+            if op_kind == "repeat":
+                left = self.bounded_expr_source("str", depth - 1, typed_vars, allowed_types)
+                count = self.rng.randint(1, 3)
+                return f"({left} * {count})"
+            left = self.bounded_expr_source("str", depth - 1, typed_vars, allowed_types)
+            right = self.bounded_literal_source("str")
+            return f"({left} + {right})"
+
+        # kind == "bool"
+        op_kind = self.rng.choice(["compare", "boolop", "not", "leaf"])
+        if op_kind == "leaf":
+            return self.bounded_expr_source("bool", 0, typed_vars, allowed_types)
+        if op_kind == "not":
+            inner = self.bounded_expr_source("bool", depth - 1, typed_vars, allowed_types)
+            return f"(not ({inner}))"
+        if op_kind == "boolop":
+            bop = self.rng.choice(["and", "or"])
+            left = self.bounded_expr_source("bool", depth - 1, typed_vars, allowed_types)
+            right = self.bounded_expr_source("bool", depth - 1, typed_vars, allowed_types)
+            return f"({left} {bop} {right})"
+        cmp_type = self.rng.choice(list(allowed_types))
+        if cmp_type == "bool":
+            cmp_op = self.rng.choice(["==", "!="])
+        else:
+            cmp_op = self.rng.choice(["==", "!=", "<", "<=", ">", ">="])
+        left = self.bounded_expr_source(cmp_type, depth - 1, typed_vars, allowed_types)
+        right = self.bounded_expr_source(cmp_type, depth - 1, typed_vars, allowed_types)
+        return f"({left} {cmp_op} {right})"
+
 
 class ProgramGenerator:
     """
@@ -475,6 +603,7 @@ class ProgramGenerator:
             ProgramFamily.PROPERTIES: self._gen_properties,
             ProgramFamily.GENERATORS: self._gen_generators,
             ProgramFamily.ASYNC: self._gen_async,
+            ProgramFamily.BOUNDED: self._gen_bounded,
         }
         
         gen_func = generators.get(family)
@@ -931,6 +1060,318 @@ asyncio.run(main())
             seed=self.rng.randint(0, 2**32),
             complexity=self.rng.randint(5, 7),
             description="Async function",
+            is_valid=True,
+        )
+
+    def generate_bounded(
+        self,
+        count: int = 10,
+        config: Optional[BoundedConfig] = None,
+    ) -> List[GeneratedProgram]:
+        """Generate *count* bounded cross-feature programs under *config*."""
+        cfg = (config or BoundedConfig()).clamped()
+        programs: List[GeneratedProgram] = []
+        for _ in range(count):
+            self.ast_gen.reset()
+            program = self._gen_bounded(cfg)
+            self._validate(program)
+            programs.append(program)
+        return programs
+
+    def _gen_bounded(self, config: Optional[BoundedConfig] = None) -> GeneratedProgram:
+        """Generate a bounded cross-feature program combining 2+ mechanisms."""
+        cfg = (config or BoundedConfig()).clamped()
+        depth = cfg.max_depth
+        allowed = cfg.types
+        target_type = self.rng.choice(list(allowed))
+        shape = self.rng.choice([
+            "default_expr_fn",
+            "closure_capture_fn",
+            "class_method_default",
+            "super_inheritance_expr",
+            "loop_conditional_call",
+            "try_except_else_call",
+            "comprehension_filter_call",
+            "property_computed_class",
+            "mutable_container_unpack",
+            "generator_yield_try",
+            "dunder_operator_class",
+            "nonlocal_mutable_closure",
+            "try_finally_return_flow",
+        ])
+
+        if shape == "default_expr_fn":
+            f = self.ast_gen.new_func()
+            n_args = self.rng.randint(1, cfg.max_args)
+            param_names = [self.ast_gen.new_var() for _ in range(n_args)]
+            param_types = [self.rng.choice(list(allowed)) for _ in range(n_args)]
+            defaults = [
+                self.ast_gen.bounded_expr_source(pt, max(1, depth - 1), None, allowed)
+                for pt in param_types
+            ]
+            sig_parts = [f"{p}={d}" for p, d in zip(param_names, defaults)]
+            typed_vars: Dict[str, List[str]] = {}
+            for p, pt in zip(param_names, param_types):
+                typed_vars.setdefault(pt, []).append(p)
+            ret_type = self.rng.choice(param_types)
+            body_expr = self.ast_gen.bounded_expr_source(ret_type, depth, typed_vars, allowed)
+            call_arg = self.ast_gen.bounded_expr_source(param_types[0], max(0, depth - 1), None, allowed)
+            code = (
+                f"def {f}({', '.join(sig_parts)}):\n"
+                f"    return {body_expr}\n\n"
+                f"print({f}())\n"
+                f"print({f}({call_arg}))\n"
+            )
+            desc = f"bounded[default_expr_fn/{ret_type}] depth={depth} args={n_args}"
+
+        elif shape == "closure_capture_fn":
+            outer_f = self.ast_gen.new_func()
+            inner_f = self.ast_gen.new_func()
+            v_outer = self.ast_gen.new_var()
+            v_inner = self.ast_gen.new_var()
+            typed_vars = {target_type: [v_outer, v_inner]}
+            default_expr = self.ast_gen.bounded_expr_source(target_type, max(1, depth - 1), None, allowed)
+            inner_expr = self.ast_gen.bounded_expr_source(target_type, depth, typed_vars, allowed)
+            call_val = self.ast_gen.bounded_expr_source(target_type, 0, None, allowed)
+            code = (
+                f"def {outer_f}({v_outer}={default_expr}):\n"
+                f"    {v_inner} = {call_val}\n"
+                f"    def {inner_f}():\n"
+                f"        return {inner_expr}\n"
+                f"    return {inner_f}()\n\n"
+                f"print({outer_f}())\n"
+            )
+            desc = f"bounded[closure_capture_fn/{target_type}] depth={depth}"
+
+        elif shape == "class_method_default":
+            cls_name = self.ast_gen.new_class()
+            m_name = self.ast_gen.new_func()
+            p1 = self.ast_gen.new_var()
+            p2 = self.ast_gen.new_var()
+            d1 = self.ast_gen.bounded_expr_source(target_type, max(1, depth - 1), None, allowed)
+            d2 = self.ast_gen.bounded_expr_source(target_type, max(1, depth - 1), None, allowed)
+            typed_vars = {target_type: ["self.val", p2]}
+            body_expr = self.ast_gen.bounded_expr_source(target_type, depth, typed_vars, allowed)
+            code = (
+                f"class {cls_name}:\n"
+                f"    def __init__(self, {p1}={d1}):\n"
+                f"        self.val = {p1}\n"
+                f"    def {m_name}(self, {p2}={d2}):\n"
+                f"        return {body_expr}\n\n"
+                f"obj = {cls_name}()\n"
+                f"print(obj.{m_name}())\n"
+            )
+            desc = f"bounded[class_method_default/{target_type}] depth={depth}"
+
+        elif shape == "super_inheritance_expr":
+            base_cls = self.ast_gen.new_class()
+            sub_cls = self.ast_gen.new_class()
+            m_name = self.ast_gen.new_func()
+            p1 = self.ast_gen.new_var()
+            base_expr = self.ast_gen.bounded_expr_source(target_type, max(1, depth - 1), {target_type: [p1]}, allowed)
+            arg_val = self.ast_gen.bounded_expr_source(target_type, 0, None, allowed)
+            if target_type in ("int", "float", "str"):
+                tail = self.ast_gen.bounded_literal_source(target_type)
+                combine = f"super().{m_name}({p1}) + {tail}"
+            else:
+                combine = f"not super().{m_name}({p1})"
+            code = (
+                f"class {base_cls}:\n"
+                f"    def {m_name}(self, {p1}):\n"
+                f"        return {base_expr}\n\n"
+                f"class {sub_cls}({base_cls}):\n"
+                f"    def {m_name}(self, {p1}):\n"
+                f"        return {combine}\n\n"
+                f"obj = {sub_cls}()\n"
+                f"print(obj.{m_name}({arg_val}))\n"
+            )
+            desc = f"bounded[super_inheritance_expr/{target_type}] depth={depth}"
+
+        elif shape == "loop_conditional_call":
+            f = self.ast_gen.new_func()
+            p = self.ast_gen.new_var()
+            acc = self.ast_gen.new_var()
+            iters = self.rng.randint(2, cfg.max_iters)
+            cond_expr = self.ast_gen.bounded_expr_source("bool", max(1, depth - 1), {"int": [p]}, allowed)
+            branch_a = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), {"int": [p]}, allowed)
+            branch_b = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), {"int": [p]}, allowed)
+            code = (
+                f"def {f}({p}):\n"
+                f"    if {cond_expr}:\n"
+                f"        return {branch_a}\n"
+                f"    return {branch_b}\n\n"
+                f"{acc} = 0\n"
+                f"for i in range({iters}):\n"
+                f"    {acc} = {acc} + {f}(i)\n"
+                f"print({acc})\n"
+            )
+            desc = f"bounded[loop_conditional_call/int] depth={depth} iters={iters}"
+
+        elif shape == "try_except_else_call":
+            f = self.ast_gen.new_func()
+            p = self.ast_gen.new_var()
+            res_var = self.ast_gen.new_var()
+            cond_expr = self.ast_gen.bounded_expr_source("bool", max(1, depth - 1), None, allowed)
+            ok_expr = self.ast_gen.bounded_expr_source(target_type, depth, {target_type: [p]}, allowed)
+            fallback_expr = self.ast_gen.bounded_expr_source(target_type, 0, None, allowed)
+            arg_val = self.ast_gen.bounded_expr_source(target_type, 0, None, allowed)
+            code = (
+                f"def {f}({p}):\n"
+                f"    if {cond_expr}:\n"
+                f"        raise ValueError('bounded')\n"
+                f"    return {ok_expr}\n\n"
+                f"try:\n"
+                f"    {res_var} = {f}({arg_val})\n"
+                f"except ValueError:\n"
+                f"    {res_var} = {fallback_expr}\n"
+                f"print({res_var})\n"
+            )
+            desc = f"bounded[try_except_else_call/{target_type}] depth={depth}"
+
+        elif shape == "comprehension_filter_call":
+            f = self.ast_gen.new_func()
+            p = self.ast_gen.new_var()
+            iters = self.rng.randint(2, cfg.max_iters)
+            body_expr = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), {"int": [p]}, allowed)
+            pred_expr = self.ast_gen.bounded_expr_source("bool", 1, {"int": ["i"]}, ("int", "bool"))
+            code = (
+                f"def {f}({p}):\n"
+                f"    return {body_expr}\n\n"
+                f"vals = [{f}(i) for i in range({iters}) if {pred_expr}]\n"
+                f"print(vals)\n"
+            )
+            desc = f"bounded[comprehension_filter_call/int] depth={depth} iters={iters}"
+
+        elif shape == "mutable_container_unpack":
+            f = self.ast_gen.new_func()
+            v1 = self.ast_gen.new_var()
+            v2 = self.ast_gen.new_var()
+            e1 = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), None, ("int", "bool"))
+            e2 = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), None, ("int", "bool"))
+            e3 = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), None, ("int", "bool"))
+            code = (
+                f"def {f}({v1}):\n"
+                f"    {v2} = {v1}\n"
+                f"    {v2}.append({e3})\n"
+                f"    return {v1}[::-1]\n\n"
+                f"base = [{e1}, {e2}]\n"
+                f"rev = {f}(base)\n"
+                f"d1 = {{'a': base[0], 'b': rev[0]}}\n"
+                f"d2 = {{'b': rev[-1], 'c': len(base)}}\n"
+                f"merged = {{**d1, **d2}}\n"
+                f"print(base, rev, merged['a'], merged['b'], merged['c'])\n"
+            )
+            desc = f"bounded[mutable_container_unpack/int] depth={depth}"
+
+        elif shape == "generator_yield_try":
+            g = self.ast_gen.new_func()
+            p = self.ast_gen.new_var()
+            iters = self.rng.randint(2, cfg.max_iters)
+            step_expr = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), {"int": ["i"]}, ("int", "bool"))
+            fallback = self.rng.randint(10, 50)
+            code = (
+                f"def {g}({p}):\n"
+                f"    for i in range({p}):\n"
+                f"        try:\n"
+                f"            if i == {iters - 1}:\n"
+                f"                raise ValueError('gen_stop')\n"
+                f"            yield {step_expr}\n"
+                f"        except ValueError:\n"
+                f"            yield {fallback}\n\n"
+                f"print(list(zip(range({iters}), {g}({iters}), range(10, 10 + {iters}))))\n"
+            )
+            desc = f"bounded[generator_yield_try/int] depth={depth} iters={iters}"
+
+        elif shape == "dunder_operator_class":
+            cls_name = self.ast_gen.new_class()
+            p = self.ast_gen.new_var()
+            other = self.ast_gen.new_var()
+            v_a = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), None, ("int", "bool"))
+            v_b = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), None, ("int", "bool"))
+            code = (
+                f"class {cls_name}:\n"
+                f"    def __init__(self, {p}):\n"
+                f"        self.v = {p}\n"
+                f"    def __len__(self):\n"
+                f"        return abs(self.v)\n"
+                f"    def __add__(self, {other}):\n"
+                f"        return self.v + {other}\n\n"
+                f"inst = {cls_name}({v_a})\n"
+                f"print(len(inst), inst + {v_b})\n"
+            )
+            desc = f"bounded[dunder_operator_class/int] depth={depth}"
+
+        elif shape == "nonlocal_mutable_closure":
+            outer_f = self.ast_gen.new_func()
+            step_f = self.ast_gen.new_func()
+            acc = self.ast_gen.new_var()
+            delta = self.ast_gen.new_var()
+            iters = self.rng.randint(2, cfg.max_iters)
+            init_expr = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), None, ("int", "bool"))
+            code = (
+                f"def {outer_f}():\n"
+                f"    {acc} = {init_expr}\n"
+                f"    def {step_f}({delta}):\n"
+                f"        nonlocal {acc}\n"
+                f"        {acc} = {acc} + {delta}\n"
+                f"        return {acc}\n"
+                f"    out = []\n"
+                f"    for i in range({iters}):\n"
+                f"        out.append({step_f}(i + 1))\n"
+                f"    return out\n\n"
+                f"print({outer_f}())\n"
+            )
+            desc = f"bounded[nonlocal_mutable_closure/int] depth={depth} iters={iters}"
+
+        elif shape == "try_finally_return_flow":
+            f = self.ast_gen.new_func()
+            p = self.ast_gen.new_var()
+            log = self.ast_gen.new_var()
+            e_ok = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), {"int": [p]}, ("int", "bool"))
+            e_err = self.ast_gen.bounded_expr_source("int", 0, None, ("int",))
+            code = (
+                f"{log} = []\n"
+                f"def {f}({p}):\n"
+                f"    try:\n"
+                f"        if {p} < 0:\n"
+                f"            raise RuntimeError('neg')\n"
+                f"        {log}.append({e_ok})\n"
+                f"    except RuntimeError:\n"
+                f"        {log}.append({e_err})\n"
+                f"    finally:\n"
+                f"        {log}.append(99)\n"
+                f"    return len({log})\n\n"
+                f"r1 = {f}(2)\n"
+                f"r2 = {f}(-1)\n"
+                f"print(r1, r2, {log})\n"
+            )
+            desc = f"bounded[try_finally_return_flow/int] depth={depth}"
+
+        else:  # property_computed_class
+            cls_name = self.ast_gen.new_class()
+            p = self.ast_gen.new_var()
+            init_val = self.ast_gen.bounded_expr_source(target_type, max(1, depth - 1), None, allowed)
+            prop_expr = self.ast_gen.bounded_expr_source(
+                target_type, depth, {target_type: ["self._v"]}, allowed
+            )
+            code = (
+                f"class {cls_name}:\n"
+                f"    def __init__(self, {p}={init_val}):\n"
+                f"        self._v = {p}\n"
+                f"    @property\n"
+                f"    def val(self):\n"
+                f"        return {prop_expr}\n\n"
+                f"obj = {cls_name}()\n"
+                f"print(obj.val)\n"
+            )
+            desc = f"bounded[property_computed_class/{target_type}] depth={depth}"
+
+        return GeneratedProgram(
+            code=code.strip() + "\n",
+            family=ProgramFamily.BOUNDED,
+            seed=self.rng.randint(0, 2**32),
+            complexity=min(10, depth + cfg.max_stmts),
+            description=desc,
             is_valid=True,
         )
     

@@ -1,0 +1,96 @@
+{
+  "case_id": "case-e22ff2c4b2a18e8a",
+  "created_at": "2026-11-01T15:50:59-06:00",
+  "description": "bounded[nonlocal_mutable_closure/int] depth=2 iters=4",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "e22ff2c4b2a18e8a60b74f30fb0ed2e011e90c36c30fc3c8e2808bcd28113af3",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 65.4007279954385,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "e22ff2c4b2a18e8a60b74f30fb0ed2e011e90c36c30fc3c8e2808bcd28113af3",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "[7, 9, 12, 16]\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "97712d466900ee86f3b886aec3f705078f80f78f649984b5972006f31200ffca",
+      "build_exit_code": 0,
+      "build_ms": 822.0537840024917,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 8.118555997498333,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0017.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "e22ff2c4b2a18e8a60b74f30fb0ed2e011e90c36c30fc3c8e2808bcd28113af3",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 221,
+          "surface_sha256": "dd5087f8d26a666b30d6d59a3f438dcc2d0f2eb868d6284384793920f2647eb8"
+        },
+        "BUILD": {
+          "artifact_bytes": 25032,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "97712d466900ee86f3b886aec3f705078f80f78f649984b5972006f31200ffca",
+          "c_chars": 280863,
+          "c_sha256": "d9e2645386b65f2645fef5e0c86b0b1dac8c849777e4993380b5fbaeb1304642",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "[7, 9, 12, 16]\n",
+      "surface_sha256": "dd5087f8d26a666b30d6d59a3f438dcc2d0f2eb868d6284384793920f2647eb8",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "def f1():\n    v1 = (14 & 22)\n    def f2(v2):\n        nonlocal v1\n        v1 = v1 + v2\n        return v1\n    out = []\n    for i in range(4):\n        out.append(f2(i + 1))\n    return out\n\nprint(f1())\n",
+    "source_hash": "e22ff2c4b2a18e8a60b74f30fb0ed2e011e90c36c30fc3c8e2808bcd28113af3"
+  },
+  "run_id": "run_20261101_155043_bounded_seed99",
+  "seed": 3209291095,
+  "source": "def f1():\n    v1 = (14 & 22)\n    def f2(v2):\n        nonlocal v1\n        v1 = v1 + v2\n        return v1\n    out = []\n    for i in range(4):\n        out.append(f2(i + 1))\n    return out\n\nprint(f1())\n",
+  "source_hash": "e22ff2c4b2a18e8a60b74f30fb0ed2e011e90c36c30fc3c8e2808bcd28113af3"
+}

@@ -1,0 +1,17 @@
+{
+  "cases_registered": 0,
+  "classification_counts": {
+    "UNSUPPORTED": 1
+  },
+  "drift": false,
+  "duration_ms": 304.0,
+  "finished_at": "2026-11-01T14:58:47-06:00",
+  "harness_errors": 0,
+  "programs_executed": 1,
+  "programs_requested": 1,
+  "run_id": "run_20261101_145846_replay_seed7",
+  "unique_divergences": 1,
+  "unique_signatures": [
+    "UNSUPPORTED|cpython:ok:-|piton:MIR:-"
+  ]
+}
