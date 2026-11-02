@@ -1416,6 +1416,32 @@ static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton
    viejo escribia el str raw dentro de [ ] y print(["a\\b"]) divergiaba.
    El print top-level de str queda intacto. */
 static void piton_print_slot_repr(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(v.kind==PK_STR){PitonStrBuf b;sb_init(&b);piton_str_repr_into(&b,(const char*)v.bits);piton_write(piton_print_fd,b.d,(usize)b.len);return;}piton_print_slot(v);}
+static void piton_print_exception_instance(long obj){
+  const char* em = piton_exc_message ? piton_exc_message : "";
+  if(!obj){if(em)piton_print_str_raw(em);return;}
+  if(piton_maybe_ptr(obj)){
+    long* ptr = (long*)obj;
+    if(ptr[0]>0 && ptr[0]<1000000L && ptr[1]==PK_OBJECT){
+      PitonObject* o = (PitonObject*)obj;
+      for(long i=0;i<o->length;++i){
+        if(piton_strcmp(o->attrs[i].name,"args")==0){
+          PitonSlot s = o->attrs[i].value;
+          if(s.kind==PK_TUPLE && s.bits){
+            PitonSeq* seq = (PitonSeq*)s.bits;
+            if(seq->length==1){piton_print_slot(seq->items[0]);return;}
+            else if(seq->length>1){piton_print_seq(seq);return;}
+          }
+          break;
+        }
+      }
+      if(em)piton_print_str_raw(em);
+      return;
+    }
+    piton_print_str_raw((const char*)obj);
+    return;
+  }
+  if(em)piton_print_str_raw(em);
+}
 /* COMP_DICT_ITER_V1: the i-th KEY of a dict / the i-th element of a set,
  * for a comprehension's index loop. Explicit subscripts keep using
  * piton_dict_get, which raises KeyError as CPython does. */
@@ -10187,6 +10213,10 @@ class LinuxCEmitter:
                                 # REPR_FALLBACK_V1: CPython usa __repr__ cuando
                                 # no hay __str__; mismo contrato de retorno str.
                                 out.append(f'    piton_print_str_raw((const char*){_name(repr_cls+"__"+"__repr__")}({self._value(value)}));')
+                                continue
+                            is_exc = any(c in {"Exception", "BaseException"} for c in self.class_mro.get(cls_name, [cls_name]))
+                            if is_exc:
+                                out.append(f'    piton_print_exception_instance((long){self._value(value)});')
                                 continue
                             raise NativeBuildError(
                                 f"Linux native print of a '{cls_name}' instance without __str__/__repr__ is not supported "

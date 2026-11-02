@@ -1870,7 +1870,18 @@ class MIRLowerer:
             )
 
         self._lower_statements(builder, [item for item in body if item.kind != HIRKind.FUNC_DEF or getattr(item, "decorators", None)])
-        if not builder.current.instructions or builder.current.instructions[-1].op not in {"return", "jump", "branch"}:
+        if not builder.current.instructions:
+            _referenced_labels: set[str] = set()
+            for _b in builder.function.blocks:
+                for _i in _b.instructions:
+                    for _a in _i.args:
+                        if isinstance(_a, str):
+                            _referenced_labels.add(_a)
+            if builder.current.label != "entry" and builder.current.label not in _referenced_labels:
+                builder.function.blocks.remove(builder.current)
+            else:
+                builder.emit("return", None)
+        elif builder.current.instructions[-1].op not in {"return", "jump", "branch"}:
             builder.emit("return", None)
         builder.function.cell_vars = sorted(captured_var_names)
         if cell_vars:
@@ -3763,7 +3774,8 @@ class MIRLowerer:
                     f"native custom exception '{exception_type}' must subclass Exception"
                 )
             val = self._lower_expr(builder, node.exc)
-            builder.emit("raise_value", val, _active_handler(builder))
+            handler_label = self._find_exception_handler(builder, exception_type)
+            builder.emit("raise_value", val, handler_label)
             return
         else:
             # Relax: allow unknown exception types as generic

@@ -3500,6 +3500,22 @@ class Win64NasmEmitter:
                     # exit), then propagate out of plain functions or exit.
                     self.lines.append("    call piton_raise")
                     self._emit_propagate_or_exit()
+        elif op == "raise_value":
+            value = args[0]
+            handler_label = args[1] if len(args) > 1 else None
+            val_type = self.types.get(value, "")
+            cls_name = val_type.split(":", 1)[1] if val_type.startswith("object:") else "Exception"
+            self.lines.append(f"    lea rcx, [{self._string(cls_name)}]")
+            self.lines.append("    xor edx, edx")
+            if handler_label:
+                self.lines.append("    call piton_raise")
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                target = labels.get(handler_label, handler_label)
+                self.lines.append(f"    jne {target}")
+            else:
+                self.lines.append("    call piton_raise")
+                self._emit_propagate_or_exit()
         elif op == "try_push":
             self.lines.append("    call piton_try_push")
             if result:
@@ -3636,6 +3652,28 @@ class Win64NasmEmitter:
                             self.lines.append(f"    call {str_cls}____str__")
                             self.lines.append(f"    mov {self._address(result)}, rax")
                             self._load_operand(result, "rdx")
+                            self.lines.append("    lea rcx, [fmt_str_raw]")
+                            self.lines.append("    call printf")
+                            continue
+                        repr_cls = None
+                        for candidate in self.mir_module_class_mro.get(cls_name, []):
+                            if repr_cls is None and "__repr__" in self.mir_module_classes.get(candidate, set()):
+                                repr_cls = candidate
+                                break
+                        if repr_cls is None and "__repr__" in self.mir_module_classes.get(cls_name, set()):
+                            repr_cls = cls_name
+                        if repr_cls is not None:
+                            self._load_operand(value, "rcx")
+                            self.lines.append(f"    call {repr_cls}____repr__")
+                            self.lines.append(f"    mov {self._address(result)}, rax")
+                            self._load_operand(result, "rdx")
+                            self.lines.append("    lea rcx, [fmt_str_raw]")
+                            self.lines.append("    call printf")
+                            continue
+                        is_exc = any(c in {"Exception", "BaseException"} for c in self.mir_module_class_mro.get(cls_name, [cls_name]))
+                        if is_exc:
+                            self.lines.append("    call piton_catch_message_safe")
+                            self.lines.append("    mov rdx, rax")
                             self.lines.append("    lea rcx, [fmt_str_raw]")
                             self.lines.append("    call printf")
                             continue
@@ -5005,6 +5043,26 @@ class Win64NasmEmitter:
                 returns: list = []
                 seeded: set[str] = set()
 
+                _referenced: set[str] = set()
+                for _b in function.blocks:
+                    for _i in _b.instructions:
+                        if _i.op in {"jump", "branch"}:
+                            for _t in _i.args:
+                                if isinstance(_t, str):
+                                    _referenced.add(_t)
+                _dead_tail: set[str] = set()
+                for _b in function.blocks:
+                    _ins = _b.instructions
+                    if _ins and _b.label not in _referenced and all(
+                        _i.op in {"const", "return"} for _i in _ins
+                    ) and _ins[-1].op == "return":
+                        _ret_arg = _ins[-1].args[0] if _ins[-1].args else None
+                        if _ret_arg is None or any(
+                            _i.op == "const" and _i.args == (None,) and _i.result == _ret_arg
+                            for _i in _ins
+                        ):
+                            _dead_tail.add(_b.label)
+
                 def note_var(key: str, kind) -> bool:
                     kinds = {kind} if kind else {self._UNKNOWN}
                     if kinds <= var_sets.get(key, set()):
@@ -5165,7 +5223,8 @@ class Win64NasmEmitter:
                                 else:
                                     changed = note_var(target, literal_type(source)) or changed
                             elif op == "return":
-                                returns.append(iargs[0] if iargs else None)
+                                if block.label not in _dead_tail:
+                                    returns.append(iargs[0] if iargs else None)
                     if function.self_class and function.params and function.params[0] not in seeded:
                         seeded.add(function.params[0])
                         changed = note_var(function.params[0], f"object:{function.self_class}") or changed
