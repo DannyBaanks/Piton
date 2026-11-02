@@ -429,6 +429,7 @@ class _Builder:
         self.exception_bindings: frozenset[str] = frozenset()
         self.loop_counter = 0
         self._loop_stack: list[tuple[str, str, str | None]] = []
+        self._finally_stack: list[tuple[list[Any], int]] = []
         self.module_aliases: dict[str, str] = {}
         self.from_import_aliases: dict[str, str] = {}
         self.module_state_vars: dict[str, str] = {}
@@ -2470,21 +2471,56 @@ class MIRLowerer:
             result = self._binary(builder, node.op.rstrip("="), left, right, aug=True)
             self._store(builder, node.target, result)
         elif kind == HIRKind.RETURN:
-            builder.emit("return", self._lower_expr(builder, node.value) if node.value else None)
+            ret_val = self._lower_expr(builder, node.value) if node.value else None
+            if getattr(builder, "_finally_stack", None):
+                saved_stack = list(builder._finally_stack)
+                for idx in range(len(saved_stack) - 1, -1, -1):
+                    fb, _ = saved_stack[idx]
+                    builder._finally_stack = saved_stack[:idx]
+                    self._lower_statements(builder, fb)
+                builder._finally_stack = saved_stack
+            builder.emit("return", ret_val)
+            dead_block = builder.new_block()
+            builder.current = dead_block
+            return
         elif kind == HIRKind.BREAK:
             if not builder._loop_stack:
                 raise MIRLoweringError("'romper' outside loop")
             break_label, _, flag_name = builder._loop_stack[-1]
+            current_loop_depth = len(builder._loop_stack)
+            if getattr(builder, "_finally_stack", None):
+                saved_stack = list(builder._finally_stack)
+                for idx in range(len(saved_stack) - 1, -1, -1):
+                    fb, depth = saved_stack[idx]
+                    if depth >= current_loop_depth:
+                        builder._finally_stack = saved_stack[:idx]
+                        self._lower_statements(builder, fb)
+                builder._finally_stack = saved_stack
             if flag_name:
                 one = builder.temp()
                 builder.emit("const", 1, result=one)
                 builder.emit("store", flag_name, one)
             builder.emit("jump", break_label)
+            dead_block = builder.new_block()
+            builder.current = dead_block
+            return
         elif kind == HIRKind.CONTINUE:
             if not builder._loop_stack:
                 raise MIRLoweringError("'continuar' outside loop")
             _, continue_label, _ = builder._loop_stack[-1]
+            current_loop_depth = len(builder._loop_stack)
+            if getattr(builder, "_finally_stack", None):
+                saved_stack = list(builder._finally_stack)
+                for idx in range(len(saved_stack) - 1, -1, -1):
+                    fb, depth = saved_stack[idx]
+                    if depth >= current_loop_depth:
+                        builder._finally_stack = saved_stack[:idx]
+                        self._lower_statements(builder, fb)
+                builder._finally_stack = saved_stack
             builder.emit("jump", continue_label)
+            dead_block = builder.new_block()
+            builder.current = dead_block
+            return
         elif kind == HIRKind.YIELD:
             val = self._lower_expr(builder, node.value) if node.value else None
             if getattr(builder.function, "is_async_generator", False):
@@ -2499,61 +2535,8 @@ class MIRLowerer:
             builder.current = after_block
             return
         elif kind == HIRKind.YIELD_FROM:
-            # YIELD_FROM_V1: delegation to a generator object. send(None) ==
-            # next() inside the sub, and the sub return value is captured from
-            # the generator slot into the enclosing statement context (the MIR
-            # statement form discards it — assignment form is V2).
-            # Scope deliberately bounded: the source must be a call to a known
-            # generator function (so it lowers to gen_init) or a name bound to
-            # a generator value. Anything else is fail-closed.
-            if not builder.is_async and not getattr(builder.function, "is_generator", False):
-                raise MIRLoweringError("'producir desde' is only valid inside a generator")
-            source_node = node.value
-            is_gen_call = (
-                source_node.kind == HIRKind.CALL
-                and source_node.func.kind == HIRKind.LOAD
-                and source_node.func.name in self.generators
-            )
-            if is_gen_call:
-                sub = self._lower_expr(builder, node.value)
-                done = builder.new_block()
-                loop = builder.new_block()
-                v0 = builder.temp()
-                builder.emit("try_push")
-                builder.emit("iter_next", sub, done.label, result=v0)
-                builder.emit("jump", loop.label)
-                builder.current = loop
-                sent = builder.temp()
-                builder.emit("gen_yield", v0, result=sent)
-                nxt = builder.temp()
-                builder.emit("gen_send", sub, sent, done.label, result=nxt)
-                builder.emit("store", v0, nxt)
-                builder.emit("jump", loop.label)
-                builder.current = done
-                builder.emit("catch_clear")
-                builder.emit("try_pop")
-                retv = builder.temp()
-                builder.emit("gen_retval", sub, result=retv)
-                return
-            else:
-                source = self._lower_expr(builder, node.value)
-                iterator = builder.temp()
-                builder.emit("iter_new", source, result=iterator)
-                condition_block = builder.new_block()
-                loop = builder.new_block()
-                done = builder.new_block()
-                builder.emit("jump", condition_block.label)
-                builder.current = condition_block
-                item = builder.temp()
-                builder.emit("iter_next", iterator, done.label, result=item)
-                builder.emit("jump", loop.label)
-                builder.current = loop
-                sent = builder.temp()
-                builder.emit("gen_yield", item, result=sent)
-                builder.emit("jump", condition_block.label)
-                builder.current = done
-                builder.emit("catch_clear")
-                return
+            self._lower_yield_from(builder, node)
+            return
         elif kind == HIRKind.NONLOCAL:
             return
         elif kind == HIRKind.GLOBAL:
@@ -3284,6 +3267,10 @@ class MIRLowerer:
         builder.current = try_body_block
         handler_block = handlers_meta[0][2] if handlers_meta else None
         accepted = handlers_meta[0][1] if handlers_meta else None
+        finally_entry = (finally_body, len(builder._loop_stack)) if finally_body else None
+        if finally_entry:
+            builder._finally_stack.append(finally_entry)
+
         if handlers_meta:
             # EXCEPT_TUPLE_V1: un handler con N nombres ocupa N pares.
             handler_pairs = []
@@ -3349,6 +3336,8 @@ class MIRLowerer:
 
         # finally block
         if finally_body:
+            if finally_entry and finally_entry in builder._finally_stack:
+                builder._finally_stack.remove(finally_entry)
             builder.current = finally_block
             self._lower_statements(builder, finally_body)
             # FINALBODY_UNWIND_V1: the finally may have been reached by an
@@ -3356,6 +3345,8 @@ class MIRLowerer:
             # propagating instead of falling through to normal flow.
             builder.emit("branch_exc", end_block.label)
 
+        if finally_entry and finally_entry in builder._finally_stack:
+            builder._finally_stack.remove(finally_entry)
         builder.current = end_block
 
     def _with_mro_method(
@@ -4091,7 +4082,13 @@ class MIRLowerer:
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()
-            builder.emit("load", node.name, result=result)
+            _state_name = (getattr(builder, "module_state_vars", None) or {}).get(node.name)
+            if _state_name:
+                builder.emit("load", _state_name, result=result)
+            elif node.name in builder.cell_params:
+                builder.emit("cell_load", node.name, result=result)
+            else:
+                builder.emit("load", node.name, result=result)
             return result
         if kind == HIRKind.BINOP:
             # BINOP_CHAIN_ITER_V1 (mir): una cadena IZQUIERDA del mismo operador
@@ -5139,7 +5136,13 @@ class MIRLowerer:
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()
-            builder.emit("load", node.name, result=result)
+            _state_name = (getattr(builder, "module_state_vars", None) or {}).get(node.name)
+            if _state_name:
+                builder.emit("load", _state_name, result=result)
+            elif node.name in builder.cell_params:
+                builder.emit("cell_load", node.name, result=result)
+            else:
+                builder.emit("load", node.name, result=result)
             return result
         if kind == HIRKind.BINOP:
             # BINOP_CHAIN_ITER_V1 (mir): una cadena IZQUIERDA del mismo operador
@@ -6480,6 +6483,8 @@ class MIRLowerer:
             return self._lower_dictcomp(builder, node)
         if kind == HIRKind.GEN_EXPR:
             return self._lower_genexpr(builder, node)
+        if kind == HIRKind.YIELD_FROM:
+            return self._lower_yield_from(builder, node)
         if kind == HIRKind.STARRED:
             # STARRED_V1: `*iterable` dentro de una coleccion — el desempacado
             # se resuelve en el nivel de la coleccion (LIST/TUPLE/SET), no
@@ -6488,6 +6493,64 @@ class MIRLowerer:
         result = builder.temp()
         builder.emit("runtime_call", "unsupported", kind.name, result=result)
         return result
+
+    def _lower_yield_from(self, builder: _Builder, node: HIRNode) -> str:
+        if not builder.is_async and not getattr(builder.function, "is_generator", False):
+            raise MIRLoweringError("'producir desde' is only valid inside a generator")
+        source_node = node.value
+        is_gen_call = (
+            source_node.kind == HIRKind.CALL
+            and source_node.func.kind == HIRKind.LOAD
+            and source_node.func.name in self.generators
+        )
+        if is_gen_call:
+            sub = self._lower_expr(builder, node.value)
+            done = builder.new_block()
+            loop = builder.new_block()
+            v0 = builder.temp()
+            builder.emit("try_push")
+            builder.emit("iter_next", sub, done.label, result=v0)
+            builder.emit("jump", loop.label)
+            builder.current = loop
+            sent = builder.temp()
+            builder.emit("gen_yield", v0, result=sent)
+            nxt = builder.temp()
+            builder.emit("gen_send", sub, sent, done.label, result=nxt)
+            builder.emit("store", v0, nxt)
+            builder.emit("jump", loop.label)
+            builder.current = done
+            builder.emit("catch_clear")
+            builder.emit("try_pop")
+            retv = builder.temp()
+            builder.emit("gen_retval", sub, result=retv)
+            after = builder.new_block()
+            builder.emit("jump", after.label)
+            builder.current = after
+            return retv
+        else:
+            source = self._lower_expr(builder, node.value)
+            iterator = builder.temp()
+            builder.emit("iter_new", source, result=iterator)
+            condition_block = builder.new_block()
+            loop = builder.new_block()
+            done = builder.new_block()
+            builder.emit("jump", condition_block.label)
+            builder.current = condition_block
+            item = builder.temp()
+            builder.emit("iter_next", iterator, done.label, result=item)
+            builder.emit("jump", loop.label)
+            builder.current = loop
+            sent = builder.temp()
+            builder.emit("gen_yield", item, result=sent)
+            builder.emit("jump", condition_block.label)
+            builder.current = done
+            builder.emit("catch_clear")
+            retv = builder.temp()
+            builder.emit("const", None, result=retv)
+            after = builder.new_block()
+            builder.emit("jump", after.label)
+            builder.current = after
+            return retv
 
     def _gen_call_args(self, builder: _Builder, func_name: str, node: HIRNode) -> tuple[str, ...]:
         """GEN_KW_V1: argumentos de una llamada a generador, con keywords

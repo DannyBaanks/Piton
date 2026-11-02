@@ -48,6 +48,14 @@ FRONTIER_A_SHAPES: Tuple[str, ...] = (
     "dunder_rich_comparison",
 )
 
+FRONTIER_B_SHAPES: Tuple[str, ...] = (
+    "try_finally_return_flow",
+    "try_finally_break_loop",
+    "nonlocal_augmented_closure",
+    "yield_from_expr_return",
+    "generator_yield_try",
+)
+
 
 @dataclass(frozen=True)
 class BoundedConfig:
@@ -1101,6 +1109,8 @@ asyncio.run(main())
             candidate_shapes = list(cfg.shapes)
         elif cfg.frontier and str(cfg.frontier).lower() in ("a", "frontier_a", "dunders"):
             candidate_shapes = list(FRONTIER_A_SHAPES)
+        elif cfg.frontier and str(cfg.frontier).lower() in ("b", "frontier_b", "generators", "exceptions"):
+            candidate_shapes = list(FRONTIER_B_SHAPES)
         else:
             candidate_shapes = [
                 "default_expr_fn",
@@ -1117,6 +1127,7 @@ asyncio.run(main())
                 "nonlocal_mutable_closure",
                 "try_finally_return_flow",
                 *FRONTIER_A_SHAPES,
+                *FRONTIER_B_SHAPES,
             ]
         shape = self.rng.choice(candidate_shapes)
 
@@ -1356,16 +1367,76 @@ asyncio.run(main())
                 f"        if {p} < 0:\n"
                 f"            raise RuntimeError('neg')\n"
                 f"        {log}.append({e_ok})\n"
+                f"        return {p} * 10\n"
                 f"    except RuntimeError:\n"
                 f"        {log}.append({e_err})\n"
+                f"        return -99\n"
                 f"    finally:\n"
-                f"        {log}.append(99)\n"
-                f"    return len({log})\n\n"
+                f"        {log}.append(99)\n\n"
                 f"r1 = {f}(2)\n"
                 f"r2 = {f}(-1)\n"
                 f"print(r1, r2, {log})\n"
             )
             desc = f"bounded[try_finally_return_flow/int] depth={depth}"
+
+        elif shape == "try_finally_break_loop":
+            log = self.ast_gen.new_var()
+            iters = self.rng.randint(2, cfg.max_iters)
+            break_at = self.rng.randint(1, iters - 1)
+            code = (
+                f"{log} = []\n"
+                f"for i in range({iters}):\n"
+                f"    try:\n"
+                f"        {log}.append(i)\n"
+                f"        if i == {break_at}:\n"
+                f"            break\n"
+                f"    finally:\n"
+                f"        {log}.append(100 + i)\n\n"
+                f"print({log})\n"
+            )
+            desc = f"bounded[try_finally_break_loop/int] iters={iters} break_at={break_at}"
+
+        elif shape == "nonlocal_augmented_closure":
+            outer_f = self.ast_gen.new_func()
+            inner_f = self.ast_gen.new_func()
+            acc = self.ast_gen.new_var()
+            delta = self.ast_gen.new_var()
+            iters = self.rng.randint(2, cfg.max_iters)
+            init_val = self.rng.randint(5, 50)
+            op = self.rng.choice(["+=", "-=", "*="])
+            code = (
+                f"def {outer_f}():\n"
+                f"    {acc} = {init_val}\n"
+                f"    def {inner_f}({delta}):\n"
+                f"        nonlocal {acc}\n"
+                f"        {acc} {op} {delta}\n"
+                f"        return {acc}\n"
+                f"    out = []\n"
+                f"    for i in range({iters}):\n"
+                f"        out.append({inner_f}(i + 1))\n"
+                f"    return out, {acc}\n\n"
+                f"print({outer_f}())\n"
+            )
+            desc = f"bounded[nonlocal_augmented_closure/int] op={op} iters={iters}"
+
+        elif shape == "yield_from_expr_return":
+            sub_g = self.ast_gen.new_func()
+            main_g = self.ast_gen.new_func()
+            p = self.ast_gen.new_var()
+            v_val = self.ast_gen.new_var()
+            ret_extra = self.rng.randint(10, 50)
+            code = (
+                f"def {sub_g}({p}):\n"
+                f"    for i in range({p}):\n"
+                f"        yield i * 2\n"
+                f"    return {p} + {ret_extra}\n\n"
+                f"def {main_g}(n):\n"
+                f"    {v_val} = yield from {sub_g}(n)\n"
+                f"    yield {v_val}\n"
+                f"    yield from [99, 100]\n\n"
+                f"print(list({main_g}(3)))\n"
+            )
+            desc = f"bounded[yield_from_expr_return/int] depth={depth}"
 
         elif shape == "dunder_subscript_mapping":
             cls_name = self.ast_gen.new_class()
