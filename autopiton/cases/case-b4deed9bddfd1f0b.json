@@ -1,0 +1,98 @@
+{
+  "case_id": "case-b4deed9bddfd1f0b",
+  "created_at": "2026-11-02T16:40:59-06:00",
+  "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=1 c2=10",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "b4deed9bddfd1f0bce31590f86e6a15e5ecb4b57847db4adb513689c2c5ca109",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "UNSUPPORTED",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 69.0252700005658,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "b4deed9bddfd1f0bce31590f86e6a15e5ecb4b57847db4adb513689c2c5ca109",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "[1, True, 'ok', [10]] [3, 7] (1, 2, 4)\n",
+      "timed_out": false
+    },
+    "details": {
+      "piton_stage_error": {
+        "error_message": "native filter requires a user function callback, not a builtin name",
+        "error_type": "NativeBuildError",
+        "stage": "BUILD"
+      }
+    },
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 227.13553900030092,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "BUILD",
+      "filename": "program_0019.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "b4deed9bddfd1f0bce31590f86e6a15e5ecb4b57847db4adb513689c2c5ca109",
+      "stage_reached": "MIR",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 232,
+          "surface_sha256": "d36d6c2b5f3d2a581bf3ba0b0ff6ce1c2a12f783e774fa2c986dee2cfc61606e"
+        },
+        "BUILD": {
+          "error_message": "native filter requires a user function callback, not a builtin name",
+          "error_traceback": "Traceback (most recent call last):\n  File \"/piton-repo/autopiton/piton_worker.py\", line 172, in main\n    c_source = LinuxCEmitter().emit(mir)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 4028, in emit\n    _pass_lines.extend(self._emit_function(function))\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 4191, in _emit_function\n    lines.extend(self._emit_instruction(instruction, function, aliases, types, bigint_slots))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 8370, in _emit_instruction\n    raise NativeBuildError(\npiton.x86.NativeBuildError: native filter requires a user function callback, not a builtin name\n",
+          "error_type": "NativeBuildError",
+          "passed": false
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "d36d6c2b5f3d2a581bf3ba0b0ff6ce1c2a12f783e774fa2c986dee2cfc61606e",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON rejected the program at BUILD",
+    "source": "raw = [0, 1, False, True, '', 'ok', [], [10]]\nf_none = list(filter(None, raw))\nnums = [-5, -2, 0, 3, 7]\nf_pos = list(filter(lambda x: x > 0, nums))\nf_bool = tuple(filter(bool, [0, 1, 2, 0, 4]))\nprint(f_none, f_pos, f_bool)\n",
+    "source_hash": "b4deed9bddfd1f0bce31590f86e6a15e5ecb4b57847db4adb513689c2c5ca109"
+  },
+  "run_id": "run_20261102_164053_bounded_fe_seed101",
+  "seed": 2718910783,
+  "source": "raw = [0, 1, False, True, '', 'ok', [], [10]]\nf_none = list(filter(None, raw))\nnums = [-5, -2, 0, 3, 7]\nf_pos = list(filter(lambda x: x > 0, nums))\nf_bool = tuple(filter(bool, [0, 1, 2, 0, 4]))\nprint(f_none, f_pos, f_bool)\n",
+  "source_hash": "b4deed9bddfd1f0bce31590f86e6a15e5ecb4b57847db4adb513689c2c5ca109"
+}

@@ -1,0 +1,96 @@
+{
+  "case_id": "case-ed0b1cb745443a2b",
+  "created_at": "2026-11-02T17:12:37-06:00",
+  "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=apple w2=fox",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "ed0b1cb745443a2b5b1c939cee387522fa8f1833ced852c82f333caff2223ce0",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 65.77603199912119,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "ed0b1cb745443a2b5b1c939cee387522fa8f1833ced852c82f333caff2223ce0",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "['apple', 'fox', 'piton'] ['1', '2', '3:4:5'] ['line1\\n', 'line2\\n', 'line3'] ['line1', 'line2', 'line3']\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "2d461c1e3fb61b3ff1881911da9d9efcbed9955792a7142c13871f265e3c4517",
+      "build_exit_code": 0,
+      "build_ms": 829.011943002115,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 13.742297000135295,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0017.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "ed0b1cb745443a2b5b1c939cee387522fa8f1833ced852c82f333caff2223ce0",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 225,
+          "surface_sha256": "e74074b334c2b07714abe0c2ad580cb749942674855f2406a1f6f6eed0e2e202"
+        },
+        "BUILD": {
+          "artifact_bytes": 25064,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "2d461c1e3fb61b3ff1881911da9d9efcbed9955792a7142c13871f265e3c4517",
+          "c_chars": 287861,
+          "c_sha256": "b7a5f0dc224964cd6464a4c25c88cc7f43360b61025a785aebab6181100dc35c",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "['apple', 'fox', 'piton'] ['1', '2', '3:4:5'] ['line1\\n', 'line2\\n', 'line3'] ['line1', 'line2', 'line3']\n",
+      "surface_sha256": "e74074b334c2b07714abe0c2ad580cb749942674855f2406a1f6f6eed0e2e202",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "text = '   apple   fox  \\t  piton  \\n  '\np1 = text.split()\np2 = '1:2:3:4:5'.split(':', 2)\nmulti = 'line1\\nline2\\nline3'\nl_keep = multi.splitlines(True)\nl_drop = multi.splitlines(False)\nprint(p1, p2, l_keep, l_drop)\n",
+    "source_hash": "ed0b1cb745443a2b5b1c939cee387522fa8f1833ced852c82f333caff2223ce0"
+  },
+  "run_id": "run_20261102_171221_bounded_fe_seed2026",
+  "seed": 2140700838,
+  "source": "text = '   apple   fox  \\t  piton  \\n  '\np1 = text.split()\np2 = '1:2:3:4:5'.split(':', 2)\nmulti = 'line1\\nline2\\nline3'\nl_keep = multi.splitlines(True)\nl_drop = multi.splitlines(False)\nprint(p1, p2, l_keep, l_drop)\n",
+  "source_hash": "ed0b1cb745443a2b5b1c939cee387522fa8f1833ced852c82f333caff2223ce0"
+}

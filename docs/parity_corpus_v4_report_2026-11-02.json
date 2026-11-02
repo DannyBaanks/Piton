@@ -1,22 +1,169 @@
 {
   "meta": {
-    "date": "2026-11-02T08:58:27+00:00",
+    "date": "2026-11-02T23:16:30+00:00",
     "oracle": "CPython 3.12.3",
     "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
-    "git_sha": "7baa580",
+    "git_sha": "aebd25c",
     "git_clean": false,
     "git_dirty_files": [
-      "M docs/parity_corpus_v4_report_2026-11-02.json"
+      "M autopiton/cases/index.json",
+      "M autopiton/cli.py",
+      "M autopiton/generator.py",
+      "M autopiton/tests/test_generator.py",
+      "M docs/PARITY_CORPUS_V4_REPORT.md",
+      "M docs/parity_corpus_v4_report_2026-11-02.json",
+      "M piton/linux_x86.py",
+      "?? autopiton/cases/case-01589c288afa682b.json",
+      "?? autopiton/cases/case-01589c288afa682b.py",
+      "?? autopiton/cases/case-03a2817e254ca5e0.json",
+      "?? autopiton/cases/case-03a2817e254ca5e0.py",
+      "?? autopiton/cases/case-07fd5a5bea330326.json",
+      "?? autopiton/cases/case-07fd5a5bea330326.py",
+      "?? autopiton/cases/case-1124ee8b93aafdb0.json",
+      "?? autopiton/cases/case-1124ee8b93aafdb0.py",
+      "?? autopiton/cases/case-1465d4aeefca12e7.json",
+      "?? autopiton/cases/case-1465d4aeefca12e7.py",
+      "?? autopiton/cases/case-1513b06d2f5cdac9.json",
+      "?? autopiton/cases/case-1513b06d2f5cdac9.py",
+      "?? autopiton/cases/case-1b9afda17ba3002b.json",
+      "?? autopiton/cases/case-1b9afda17ba3002b.py",
+      "?? autopiton/cases/case-1ebfab27519cf852.json",
+      "?? autopiton/cases/case-1ebfab27519cf852.py",
+      "?? autopiton/cases/case-24f80f36218f3325.json",
+      "?? autopiton/cases/case-24f80f36218f3325.py",
+      "?? autopiton/cases/case-2b7c767e080cd709.json",
+      "?? autopiton/cases/case-2b7c767e080cd709.py",
+      "?? autopiton/cases/case-2d1e81415cf12302.json",
+      "?? autopiton/cases/case-2d1e81415cf12302.py",
+      "?? autopiton/cases/case-31a9c2cb7f62a154.json",
+      "?? autopiton/cases/case-31a9c2cb7f62a154.py",
+      "?? autopiton/cases/case-35966fc27e41982c.json",
+      "?? autopiton/cases/case-35966fc27e41982c.py",
+      "?? autopiton/cases/case-38e3de07a8f11ca3.json",
+      "?? autopiton/cases/case-38e3de07a8f11ca3.py",
+      "?? autopiton/cases/case-3a30d3fa9512aa09.json",
+      "?? autopiton/cases/case-3a30d3fa9512aa09.py",
+      "?? autopiton/cases/case-3df5355e27b4c907.json",
+      "?? autopiton/cases/case-3df5355e27b4c907.py",
+      "?? autopiton/cases/case-3f862b390ded7271.json",
+      "?? autopiton/cases/case-3f862b390ded7271.py",
+      "?? autopiton/cases/case-456743584efce2ed.json",
+      "?? autopiton/cases/case-456743584efce2ed.py",
+      "?? autopiton/cases/case-4929604dd43dfd14.json",
+      "?? autopiton/cases/case-4929604dd43dfd14.py",
+      "?? autopiton/cases/case-4b8561a8f8134de8.json",
+      "?? autopiton/cases/case-4b8561a8f8134de8.py",
+      "?? autopiton/cases/case-4b89cda3273abb38.json",
+      "?? autopiton/cases/case-4b89cda3273abb38.py",
+      "?? autopiton/cases/case-4fb75bd39b6e8be7.json",
+      "?? autopiton/cases/case-4fb75bd39b6e8be7.py",
+      "?? autopiton/cases/case-53717f9306303650.json",
+      "?? autopiton/cases/case-53717f9306303650.py",
+      "?? autopiton/cases/case-5539822b930dbf9f.json",
+      "?? autopiton/cases/case-5539822b930dbf9f.py",
+      "?? autopiton/cases/case-64cade0b6d908f5e.json",
+      "?? autopiton/cases/case-64cade0b6d908f5e.py",
+      "?? autopiton/cases/case-65f8ee6189ffb917.json",
+      "?? autopiton/cases/case-65f8ee6189ffb917.py",
+      "?? autopiton/cases/case-6b8969b7b7bb7ac1.json",
+      "?? autopiton/cases/case-6b8969b7b7bb7ac1.py",
+      "?? autopiton/cases/case-6ec3c39b62bcf6b6.json",
+      "?? autopiton/cases/case-6ec3c39b62bcf6b6.py",
+      "?? autopiton/cases/case-6f1f7e109453d11a.json",
+      "?? autopiton/cases/case-6f1f7e109453d11a.py",
+      "?? autopiton/cases/case-75012928b78d75d5.json",
+      "?? autopiton/cases/case-75012928b78d75d5.py",
+      "?? autopiton/cases/case-7bb350599baf5fee.json",
+      "?? autopiton/cases/case-7bb350599baf5fee.py",
+      "?? autopiton/cases/case-833e1cae552a751d.json",
+      "?? autopiton/cases/case-833e1cae552a751d.py",
+      "?? autopiton/cases/case-83ca51fda2c64ed3.json",
+      "?? autopiton/cases/case-83ca51fda2c64ed3.py",
+      "?? autopiton/cases/case-8482eb69f94d5057.json",
+      "?? autopiton/cases/case-8482eb69f94d5057.py",
+      "?? autopiton/cases/case-8497b959193b284b.json",
+      "?? autopiton/cases/case-8497b959193b284b.py",
+      "?? autopiton/cases/case-8b1076fba7a641f4.json",
+      "?? autopiton/cases/case-8b1076fba7a641f4.py",
+      "?? autopiton/cases/case-8e4ed7818bd4c3cd.json",
+      "?? autopiton/cases/case-8e4ed7818bd4c3cd.py",
+      "?? autopiton/cases/case-8e7c0c574fcd3218.json",
+      "?? autopiton/cases/case-8e7c0c574fcd3218.py",
+      "?? autopiton/cases/case-91cf8d620c4a4eff.json",
+      "?? autopiton/cases/case-91cf8d620c4a4eff.py",
+      "?? autopiton/cases/case-9c9233d5cd6df6fd.json",
+      "?? autopiton/cases/case-9c9233d5cd6df6fd.py",
+      "?? autopiton/cases/case-9f153aa173eee4fa.json",
+      "?? autopiton/cases/case-9f153aa173eee4fa.py",
+      "?? autopiton/cases/case-a874d8bb5b9eb9d7.json",
+      "?? autopiton/cases/case-a874d8bb5b9eb9d7.py",
+      "?? autopiton/cases/case-a908825382eabb7b.json",
+      "?? autopiton/cases/case-a908825382eabb7b.py",
+      "?? autopiton/cases/case-ab7226af1b00d67a.json",
+      "?? autopiton/cases/case-ab7226af1b00d67a.py",
+      "?? autopiton/cases/case-ac439e8b60521f23.json",
+      "?? autopiton/cases/case-ac439e8b60521f23.py",
+      "?? autopiton/cases/case-b0d8fe2f6896c96d.json",
+      "?? autopiton/cases/case-b0d8fe2f6896c96d.py",
+      "?? autopiton/cases/case-b4deed9bddfd1f0b.json",
+      "?? autopiton/cases/case-b4deed9bddfd1f0b.py",
+      "?? autopiton/cases/case-b7b01b29a1a3c2a7.json",
+      "?? autopiton/cases/case-b7b01b29a1a3c2a7.py",
+      "?? autopiton/cases/case-bd293524325ed79e.json",
+      "?? autopiton/cases/case-bd293524325ed79e.py",
+      "?? autopiton/cases/case-bfc1cd3557a1ad1a.json",
+      "?? autopiton/cases/case-bfc1cd3557a1ad1a.py",
+      "?? autopiton/cases/case-c8b57ee09f57de7d.json",
+      "?? autopiton/cases/case-c8b57ee09f57de7d.py",
+      "?? autopiton/cases/case-c8f165870340c8b1.json",
+      "?? autopiton/cases/case-c8f165870340c8b1.py",
+      "?? autopiton/cases/case-ca7eb2d7e84e7bd3.json",
+      "?? autopiton/cases/case-ca7eb2d7e84e7bd3.py",
+      "?? autopiton/cases/case-cf172dc0e098e321.json",
+      "?? autopiton/cases/case-cf172dc0e098e321.py",
+      "?? autopiton/cases/case-d10128cb9a6be220.json",
+      "?? autopiton/cases/case-d10128cb9a6be220.py",
+      "?? autopiton/cases/case-d36a84bf47c40471.json",
+      "?? autopiton/cases/case-d36a84bf47c40471.py",
+      "?? autopiton/cases/case-dbeb0ddc398041fd.json",
+      "?? autopiton/cases/case-dbeb0ddc398041fd.py",
+      "?? autopiton/cases/case-e83e2ead2a44044f.json",
+      "?? autopiton/cases/case-e83e2ead2a44044f.py",
+      "?? autopiton/cases/case-e9b6c64f2359d689.json",
+      "?? autopiton/cases/case-e9b6c64f2359d689.py",
+      "?? autopiton/cases/case-ead1661b24b3a1fe.json",
+      "?? autopiton/cases/case-ead1661b24b3a1fe.py",
+      "?? autopiton/cases/case-ecf4ef9e54b28b58.json",
+      "?? autopiton/cases/case-ecf4ef9e54b28b58.py",
+      "?? autopiton/cases/case-ed0b1cb745443a2b.json",
+      "?? autopiton/cases/case-ed0b1cb745443a2b.py",
+      "?? autopiton/cases/case-ef224407fcfd3c3f.json",
+      "?? autopiton/cases/case-ef224407fcfd3c3f.py",
+      "?? autopiton/cases/case-f0d13d8f73eaa2c9.json",
+      "?? autopiton/cases/case-f0d13d8f73eaa2c9.py",
+      "?? autopiton/cases/case-f3b99ded99302171.json",
+      "?? autopiton/cases/case-f3b99ded99302171.py",
+      "?? autopiton/reports/runs/run_20261102_164053_bounded_fe_seed101/",
+      "?? autopiton/reports/runs/run_20261102_170553_canary/",
+      "?? autopiton/reports/runs/run_20261102_170744_canary/",
+      "?? autopiton/reports/runs/run_20261102_170755_bounded_fe_seed101/",
+      "?? autopiton/reports/runs/run_20261102_171148_bounded_fe_seed101/",
+      "?? autopiton/reports/runs/run_20261102_171221_bounded_fe_seed2026/",
+      "?? autopiton/reports/runs/run_20261102_171304_bounded_fa_seed42/",
+      "?? autopiton/reports/runs/run_20261102_171331_bounded_fb_seed42/",
+      "?? autopiton/reports/runs/run_20261102_171358_bounded_fc_seed42/",
+      "?? autopiton/reports/runs/run_20261102_171426_bounded_fd_seed42/",
+      "?? autopiton/reports/runs/run_20261102_171452_bounded_seed11/"
     ],
     "verified": false,
     "instrument_hash": "0387d6c489c87131814a4aaa12412cb15792cce9b2d86591b8208ebb3c8060e0",
-    "piton_mir_hash": "abbfe729d912ca4d32d63c129b63d9f98d185152cb3b2bc311eb1eb39c15b781",
-    "piton_linux_hash": "7ad5c622569c522f919a9cd7d16342e3858852aa4b7c5a84712c4dccf615d938",
+    "piton_mir_hash": "0a9ff2bda1de2f1001f2ad08f821bbaf6025297c7dae515b7f43787768744b64",
+    "piton_linux_hash": "105a1214f789b88fa656e8460fd28c3a0a5d7953ddb2c224126440460867c05f",
     "tool": "tools/parity_corpus_v4.py",
     "tiers": "a",
     "recursive": false,
     "exclude": [],
-    "isolate": true
+    "isolate": false
   },
   "results": {
     "tier_a": {
@@ -26,17 +173,17 @@
           "adapt": 167,
           "parse": 167,
           "mir": 107,
-          "build": 64
+          "build": 65
         },
         "pct": {
           "adapt": 100.0,
           "parse": 100.0,
           "mir": 64.1,
-          "build": 38.3
+          "build": 38.9
         },
         "fail_classes": {
           "MIR_FAIL": 60,
-          "BUILD_FAIL": 43
+          "BUILD_FAIL": 42
         },
         "read_failed": 0
       },
@@ -46,7 +193,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.821,
+          "build_seconds": 0.89,
           "roundtrip": true
         },
         {
@@ -54,7 +201,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.3,
+          "build_seconds": 0.243,
           "roundtrip": true
         },
         {
@@ -62,7 +209,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.382,
+          "build_seconds": 0.28,
           "roundtrip": true
         },
         {
@@ -78,7 +225,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.474,
+          "build_seconds": 0.518,
           "roundtrip": true
         },
         {
@@ -102,7 +249,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.289,
+          "build_seconds": 0.215,
           "roundtrip": true
         },
         {
@@ -118,7 +265,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.287,
+          "build_seconds": 0.445,
           "roundtrip": true
         },
         {
@@ -141,7 +288,7 @@
           "path": "/usr/lib/python3.12/_pyio.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: str.format(): unsupported placeholder: {!r}",
+          "detail": "NativeBuildError: /tmp/piton-v4-_coojx0s/program.c: In function ‘IOBase__readline’:\n/tmp/piton-v4-_coojx0s/program.c:5454:38: error: incompatible type for argument 1 of ‘piton_bytes_concat_dyn’\n 5454 |     _41=(long)piton_bytes_concat_dyn((PitonBytes*)_39,(PitonSlot){_40,PK_INT});\n      |           ",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -150,7 +297,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.059,
+          "build_seconds": 0.317,
           "roundtrip": true
         },
         {
@@ -158,7 +305,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.141,
+          "build_seconds": 1.206,
           "roundtrip": true
         },
         {
@@ -174,7 +321,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 4.968,
+          "build_seconds": 4.773,
           "roundtrip": true
         },
         {
@@ -182,7 +329,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 4.763,
+          "build_seconds": 4.807,
           "roundtrip": true
         },
         {
@@ -198,7 +345,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.521,
+          "build_seconds": 0.914,
           "roundtrip": true
         },
         {
@@ -206,7 +353,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.282,
+          "build_seconds": 0.5,
           "roundtrip": true
         },
         {
@@ -254,7 +401,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.967,
+          "build_seconds": 1.221,
           "roundtrip": true
         },
         {
@@ -262,7 +409,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.273,
+          "build_seconds": 0.256,
           "roundtrip": true
         },
         {
@@ -270,14 +417,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.369,
+          "build_seconds": 0.519,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/cProfile.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-bhmmirwj/program.c: In function ‘run’:\n/tmp/piton-v4-bhmmirwj/program.c:4177:12: error: too many arguments to function ‘Profile__run’\n 4177 |         _7=Profile__run(_3,_4,_5,_6);\n      |            ^~~~~~~~~~~~\n/tmp/piton-v4-bhmmirwj/program.c:4026:13: note: declared",
+          "detail": "NativeBuildError: /tmp/piton-v4-yslwclw2/program.c: In function ‘run’:\n/tmp/piton-v4-yslwclw2/program.c:4347:12: error: too many arguments to function ‘Profile__run’\n 4347 |         _7=Profile__run(_3,_4,_5,_6);\n      |            ^~~~~~~~~~~~\n/tmp/piton-v4-yslwclw2/program.c:4201:13: note: declared",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -310,7 +457,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.256,
+          "build_seconds": 0.234,
           "roundtrip": true
         },
         {
@@ -318,7 +465,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.37,
+          "build_seconds": 0.373,
           "roundtrip": true
         },
         {
@@ -326,14 +473,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.22,
+          "build_seconds": 0.236,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/codecs.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux str.splitlines() requires no arguments",
+          "detail": "NativeBuildError: /tmp/piton-v4-_7z8g1cp/program.c: In function ‘BufferedIncrementalDecoder__decode’:\n/tmp/piton-v4-_7z8g1cp/program.c:5084:37: error: incompatible type for argument 1 of ‘piton_bytes_concat_dyn’\n 5084 |     _3=(long)piton_bytes_concat_dyn((PitonBytes*)_0,(PitonSlot){_2,PK_INT});\n   ",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -342,7 +489,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.357,
+          "build_seconds": 0.276,
           "roundtrip": true
         },
         {
@@ -350,7 +497,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.242,
+          "build_seconds": 0.249,
           "roundtrip": true
         },
         {
@@ -373,7 +520,7 @@
           "path": "/usr/lib/python3.12/contextlib.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux str.split() requires a str separator or nothing",
+          "detail": "NativeBuildError: /tmp/piton-v4-gdd9_tbr/program.c: In function ‘AsyncExitStack__aclose’:\n/tmp/piton-v4-gdd9_tbr/program.c:6712:12: error: too many arguments to function ‘AbstractAsyncContextManager____aexit__’\n 6712 |         _6=AbstractAsyncContextManager____aexit__(_2,_3,_4,_5);\n      |          ",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -382,7 +529,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.293,
+          "build_seconds": 0.204,
           "roundtrip": true
         },
         {
@@ -398,7 +545,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.329,
+          "build_seconds": 0.187,
           "roundtrip": true
         },
         {
@@ -406,7 +553,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.485,
+          "build_seconds": 0.266,
           "roundtrip": true
         },
         {
@@ -430,7 +577,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.291,
+          "build_seconds": 0.259,
           "roundtrip": true
         },
         {
@@ -438,7 +585,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.28,
+          "build_seconds": 0.195,
           "roundtrip": true
         },
         {
@@ -485,7 +632,7 @@
           "path": "/usr/lib/python3.12/fileinput.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-pyz83esu/program.c: In function ‘FileInput___readline’:\n/tmp/piton-v4-pyz83esu/program.c:5185:227: error: invalid use of void expression\n 5185 |     _183=piton_call_dynamic(piton_object_get((PitonObject*)_174,\"_openhook\").bits,(long)({PitonSeq*_dpa=piton_seq_new(PK_TU",
+          "detail": "NativeBuildError: /tmp/piton-v4-z8w2xufb/program.c: In function ‘FileInput___readline’:\n/tmp/piton-v4-z8w2xufb/program.c:5356:227: error: invalid use of void expression\n 5356 |     _183=piton_call_dynamic(piton_object_get((PitonObject*)_174,\"_openhook\").bits,(long)({PitonSeq*_dpa=piton_seq_new(PK_TU",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -494,7 +641,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.337,
+          "build_seconds": 0.301,
           "roundtrip": true
         },
         {
@@ -526,7 +673,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.264,
+          "build_seconds": 0.297,
           "roundtrip": true
         },
         {
@@ -534,7 +681,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.123,
+          "build_seconds": 1.163,
           "roundtrip": true
         },
         {
@@ -549,7 +696,7 @@
           "path": "/usr/lib/python3.12/gettext.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux str.split() requires a str separator or nothing",
+          "detail": "NativeBuildError: Linux int requires exactly one argument",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -558,7 +705,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.248,
+          "build_seconds": 0.305,
           "roundtrip": true
         },
         {
@@ -566,7 +713,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.141,
+          "build_seconds": 0.573,
           "roundtrip": true
         },
         {
@@ -582,7 +729,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.409,
+          "build_seconds": 0.516,
           "roundtrip": true
         },
         {
@@ -590,7 +737,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.315,
+          "build_seconds": 0.212,
           "roundtrip": true
         },
         {
@@ -614,7 +761,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.125,
+          "build_seconds": 0.219,
           "roundtrip": true
         },
         {
@@ -629,7 +776,7 @@
           "path": "/usr/lib/python3.12/io.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /usr/bin/ld: /tmp/cchXYXhI.o: en la función `piton_main':\nprogram.c:(.text+0xb07): referencia a `RawIOBase__register' sin definir\n/usr/bin/ld: program.c:(.text+0xd51): referencia a `BufferedIOBase__register' sin definir\n/usr/bin/ld: program.c:(.text+0xe69): referencia a `TextIOBase",
+          "detail": "NativeBuildError: /usr/bin/ld: /tmp/cchYfPrI.o: en la función `piton_main':\nprogram.c:(.text+0xb07): referencia a `RawIOBase__register' sin definir\n/usr/bin/ld: program.c:(.text+0xd51): referencia a `BufferedIOBase__register' sin definir\n/usr/bin/ld: program.c:(.text+0xe69): referencia a `TextIOBase",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -646,7 +793,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.294,
+          "build_seconds": 0.218,
           "roundtrip": true
         },
         {
@@ -654,7 +801,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.317,
+          "build_seconds": 0.255,
           "roundtrip": true
         },
         {
@@ -667,10 +814,10 @@
         },
         {
           "path": "/usr/lib/python3.12/lzma.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: str.format(): unsupported placeholder: {!r}",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.63,
           "roundtrip": true
         },
         {
@@ -693,7 +840,7 @@
           "path": "/usr/lib/python3.12/mimetypes.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-7f4gski0/program.c: In function ‘MimeTypes___read_windows_registry’:\n/tmp/piton-v4-7f4gski0/program.c:5306:9: error: called object ‘add_type’ is not a function or function pointer\n 5306 |     _37=add_type(_35,_36,1);\n      |         ^~~~~~~~\n/tmp/piton-v4-7f4gski0/pro",
+          "detail": "NativeBuildError: /tmp/piton-v4-byts9z84/program.c: In function ‘MimeTypes___read_windows_registry’:\n/tmp/piton-v4-byts9z84/program.c:5473:9: error: called object ‘add_type’ is not a function or function pointer\n 5473 |     _37=add_type(_35,_36,1);\n      |         ^~~~~~~~\n/tmp/piton-v4-byts9z84/pro",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -701,7 +848,7 @@
           "path": "/usr/lib/python3.12/modulefinder.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: str.format(): unsupported placeholder: {name!r}",
+          "detail": "NativeBuildError: Linux str %r does not support slot arguments",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -710,14 +857,14 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.369,
+          "build_seconds": 1.303,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/nntplib.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: native map requires a user function callback, not a builtin name",
+          "detail": "NativeBuildError: str.format(): conflicting accessors for field index 0",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -726,7 +873,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.02,
+          "build_seconds": 0.068,
           "roundtrip": true
         },
         {
@@ -734,7 +881,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.248,
+          "build_seconds": 0.219,
           "roundtrip": true
         },
         {
@@ -750,7 +897,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.632,
+          "build_seconds": 1.95,
           "roundtrip": true
         },
         {
@@ -758,7 +905,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.016,
+          "build_seconds": 0.014,
           "roundtrip": true
         },
         {
@@ -814,7 +961,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.596,
+          "build_seconds": 0.602,
           "roundtrip": true
         },
         {
@@ -845,7 +992,7 @@
           "path": "/usr/lib/python3.12/poplib.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-io98ty6s/program.c: In function ‘POP3___putline’:\n/tmp/piton-v4-io98ty6s/program.c:4552:38: error: incompatible type for argument 1 of ‘piton_bytes_concat_dyn’\n 4552 |     _20=(long)piton_bytes_concat_dyn((PitonBytes*)_18,(PitonSlot){_19,PK_INT});\n      |             ",
+          "detail": "NativeBuildError: /tmp/piton-v4-gksp9km2/program.c: In function ‘POP3___putline’:\n/tmp/piton-v4-gksp9km2/program.c:4738:38: error: incompatible type for argument 1 of ‘piton_bytes_concat_dyn’\n 4738 |     _20=(long)piton_bytes_concat_dyn((PitonBytes*)_18,(PitonSlot){_19,PK_INT});\n      |             ",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -878,7 +1025,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.04,
+          "build_seconds": 0.03,
           "roundtrip": true
         },
         {
@@ -893,7 +1040,7 @@
           "path": "/usr/lib/python3.12/py_compile.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-eu2scrri/program.c: In function ‘compile’:\n/tmp/piton-v4-eu2scrri/program.c:4598:228: error: invalid use of void expression\n 4598 |     _63=piton_call_dynamic(piton_object_get((PitonObject*)_55,\"source_to_code\").bits,(long)({PitonSeq*_dpa=piton_seq_new(PK_TUPLE,2);   ",
+          "detail": "NativeBuildError: /tmp/piton-v4-bxs4qzc8/program.c: In function ‘compile’:\n/tmp/piton-v4-bxs4qzc8/program.c:4773:228: error: invalid use of void expression\n 4773 |     _63=piton_call_dynamic(piton_object_get((PitonObject*)_55,\"source_to_code\").bits,(long)({PitonSeq*_dpa=piton_seq_new(PK_TUPLE,2);   ",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -902,7 +1049,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.194,
+          "build_seconds": 1.196,
           "roundtrip": true
         },
         {
@@ -925,7 +1072,7 @@
           "path": "/usr/lib/python3.12/quopri.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-blspamg3/program.c: In function ‘decode’:\n/tmp/piton-v4-blspamg3/program.c:4892:38: error: incompatible type for argument 1 of ‘piton_bytes_concat_dyn’\n 4892 |     _93=(long)piton_bytes_concat_dyn((PitonBytes*)_91,(PitonSlot){_92,PK_INT});\n      |                     ",
+          "detail": "NativeBuildError: /tmp/piton-v4-ecp9fw5j/program.c: In function ‘decode’:\n/tmp/piton-v4-ecp9fw5j/program.c:5060:38: error: incompatible type for argument 1 of ‘piton_bytes_concat_dyn’\n 5060 |     _93=(long)piton_bytes_concat_dyn((PitonBytes*)_91,(PitonSlot){_92,PK_INT});\n      |                     ",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -942,7 +1089,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.532,
+          "build_seconds": 0.4,
           "roundtrip": true
         },
         {
@@ -950,7 +1097,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.209,
+          "build_seconds": 0.202,
           "roundtrip": true
         },
         {
@@ -966,7 +1113,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.184,
+          "build_seconds": 0.201,
           "roundtrip": true
         },
         {
@@ -974,7 +1121,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.343,
+          "build_seconds": 0.31,
           "roundtrip": true
         },
         {
@@ -990,7 +1137,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.009,
+          "build_seconds": 0.01,
           "roundtrip": true
         },
         {
@@ -998,7 +1145,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.279,
+          "build_seconds": 0.288,
           "roundtrip": true
         },
         {
@@ -1014,7 +1161,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.247,
+          "build_seconds": 0.222,
           "roundtrip": true
         },
         {
@@ -1022,7 +1169,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.62,
+          "build_seconds": 1.83,
           "roundtrip": true
         },
         {
@@ -1030,7 +1177,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.2,
+          "build_seconds": 0.141,
           "roundtrip": true
         },
         {
@@ -1046,7 +1193,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.188,
+          "build_seconds": 0.224,
           "roundtrip": true
         },
         {
@@ -1061,7 +1208,7 @@
           "path": "/usr/lib/python3.12/socketserver.py",
           "reached": "mir",
           "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native super().append: no base class in MRO of '_Threads' defines 'append'",
+          "detail": "MIRLoweringError: native super().server_close: no base class in MRO of 'ForkingMixIn' defines 'server_close'",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1070,7 +1217,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.639,
+          "build_seconds": 0.609,
           "roundtrip": true
         },
         {
@@ -1078,7 +1225,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.605,
+          "build_seconds": 0.594,
           "roundtrip": true
         },
         {
@@ -1086,7 +1233,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.606,
+          "build_seconds": 0.679,
           "roundtrip": true
         },
         {
@@ -1102,7 +1249,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.264,
+          "build_seconds": 0.406,
           "roundtrip": true
         },
         {
@@ -1126,7 +1273,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.242,
+          "build_seconds": 0.189,
           "roundtrip": true
         },
         {
@@ -1134,7 +1281,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.385,
+          "build_seconds": 0.389,
           "roundtrip": true
         },
         {
@@ -1157,7 +1304,7 @@
           "path": "/usr/lib/python3.12/symtable.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: str.format(): unsupported placeholder: {0!r}",
+          "detail": "NativeBuildError: Linux bool() requires int/float/str/collection/None (M14 v1)",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1174,7 +1321,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.195,
+          "build_seconds": 0.502,
           "roundtrip": true
         },
         {
@@ -1214,7 +1361,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.497,
+          "build_seconds": 0.427,
           "roundtrip": true
         },
         {
@@ -1238,7 +1385,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.478,
+          "build_seconds": 0.532,
           "roundtrip": true
         },
         {
@@ -1278,7 +1425,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.284,
+          "build_seconds": 0.298,
           "roundtrip": true
         },
         {
@@ -1323,17 +1470,17 @@
         },
         {
           "path": "/usr/lib/python3.12/warnings.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux native print of a '_OptionError' instance without __str__/__repr__ is not supported (can never match CPython object repr)",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.026,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/wave.py",
           "reached": "mir",
           "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-_c8831so/program.c: In function ‘Wave_read___read_fmt_chunk’:\n/tmp/piton-v4-_c8831so/program.c:5815:134: error: invalid use of void expression\n 5815 |     _80=piton_call_dynamic(piton_object_get((PitonObject*)_78,\"UUID\").bits,(long)({PitonSeq*_dpa=piton_seq_new(PK_TUP",
+          "detail": "NativeBuildError: /tmp/piton-v4-3jbhvu01/program.c: In function ‘Wave_read___read_fmt_chunk’:\n/tmp/piton-v4-3jbhvu01/program.c:5960:134: error: invalid use of void expression\n 5960 |     _80=piton_call_dynamic(piton_object_get((PitonObject*)_78,\"UUID\").bits,(long)({PitonSeq*_dpa=piton_seq_new(PK_TUP",
           "build_seconds": null,
           "roundtrip": true
         },
@@ -1347,10 +1494,10 @@
         },
         {
           "path": "/usr/lib/python3.12/webbrowser.py",
-          "reached": "build",
-          "stage_fail": null,
-          "detail": "",
-          "build_seconds": 0.391,
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: Linux bool() requires int/float/str/collection/None (M14 v1)",
+          "build_seconds": null,
           "roundtrip": true
         },
         {

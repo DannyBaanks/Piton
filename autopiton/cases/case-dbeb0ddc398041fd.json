@@ -1,0 +1,96 @@
+{
+  "case_id": "case-dbeb0ddc398041fd",
+  "created_at": "2026-11-02T17:12:38-06:00",
+  "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=7 c2=12",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "dbeb0ddc398041fde4a1c14c9fa11cd92515a83b392ac5ac89dcb7dbe7559c8d",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 65.57104500097921,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "dbeb0ddc398041fde4a1c14c9fa11cd92515a83b392ac5ac89dcb7dbe7559c8d",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "[7, True, 'ok', [12]] [3, 7] (1, 2, 4)\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "e79516937ba79018f041afe9a095c750e2ce2848822489c106d0e26358a4caa2",
+      "build_exit_code": 0,
+      "build_ms": 1080.3931410009682,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 12.135424000007333,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0018.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "dbeb0ddc398041fde4a1c14c9fa11cd92515a83b392ac5ac89dcb7dbe7559c8d",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 232,
+          "surface_sha256": "e3248223e94165809ad44adc80ff5411730c3a26dcb49c5e6ac0f520623518ad"
+        },
+        "BUILD": {
+          "artifact_bytes": 40480,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "e79516937ba79018f041afe9a095c750e2ce2848822489c106d0e26358a4caa2",
+          "c_chars": 289930,
+          "c_sha256": "707e9002ab8e851464c143b9f171df30662467c19a69cd3aec70c3d6a0da8fba",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "[7, True, 'ok', [12]] [3, 7] (1, 2, 4)\n",
+      "surface_sha256": "e3248223e94165809ad44adc80ff5411730c3a26dcb49c5e6ac0f520623518ad",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "raw = [0, 7, False, True, '', 'ok', [], [12]]\nf_none = list(filter(None, raw))\nnums = [-5, -2, 0, 3, 7]\nf_pos = list(filter(lambda x: x > 0, nums))\nf_bool = tuple(filter(bool, [0, 1, 2, 0, 4]))\nprint(f_none, f_pos, f_bool)\n",
+    "source_hash": "dbeb0ddc398041fde4a1c14c9fa11cd92515a83b392ac5ac89dcb7dbe7559c8d"
+  },
+  "run_id": "run_20261102_171221_bounded_fe_seed2026",
+  "seed": 60269341,
+  "source": "raw = [0, 7, False, True, '', 'ok', [], [12]]\nf_none = list(filter(None, raw))\nnums = [-5, -2, 0, 3, 7]\nf_pos = list(filter(lambda x: x > 0, nums))\nf_bool = tuple(filter(bool, [0, 1, 2, 0, 4]))\nprint(f_none, f_pos, f_bool)\n",
+  "source_hash": "dbeb0ddc398041fde4a1c14c9fa11cd92515a83b392ac5ac89dcb7dbe7559c8d"
+}

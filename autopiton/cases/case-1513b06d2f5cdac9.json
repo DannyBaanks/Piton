@@ -1,0 +1,98 @@
+{
+  "case_id": "case-1513b06d2f5cdac9",
+  "created_at": "2026-11-02T16:40:58-06:00",
+  "description": "bounded[string_format_conversions_and_indexes/str] tag=alpha num=42",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "1513b06d2f5cdac99e586d8bfe0c968ad57ac8f41b1ffce050c253d482c50894",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "UNSUPPORTED",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 64.76265799938119,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "1513b06d2f5cdac99e586d8bfe0c968ad57ac8f41b1ffce050c253d482c50894",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "B A B 'alpha' 42 item='alpha' val=42\n",
+      "timed_out": false
+    },
+    "details": {
+      "piton_stage_error": {
+        "error_message": "str.format(): unsupported placeholder: {!r}",
+        "error_type": "NativeBuildError",
+        "stage": "BUILD"
+      }
+    },
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 265.7914779993007,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "BUILD",
+      "filename": "program_0017.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "1513b06d2f5cdac99e586d8bfe0c968ad57ac8f41b1ffce050c253d482c50894",
+      "stage_reached": "MIR",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 154,
+          "surface_sha256": "58b0bfa06738c523aa97a79671074c274e0b224ba640cb4f7c536e2e4688e889"
+        },
+        "BUILD": {
+          "error_message": "str.format(): unsupported placeholder: {!r}",
+          "error_traceback": "Traceback (most recent call last):\n  File \"/piton-repo/piton/linux_x86.py\", line 4696, in _parse_format_template\n    idx = int(idx_str)\n          ^^^^^^^^^^^^\nValueError: invalid literal for int() with base 10: '!r'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/piton-repo/autopiton/piton_worker.py\", line 172, in main\n    c_source = LinuxCEmitter().emit(mir)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 4028, in emit\n    _pass_lines.extend(self._emit_function(function))\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 4191, in _emit_function\n    lines.extend(self._emit_instruction(instruction, function, aliases, types, bigint_slots))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 12613, in _emit_instruction\n    self._emit_str_method(\n  File \"/piton-repo/piton/linux_x86.py\", line 6196, in _emit_str_method\n    simplified, fields, _fmt_names = self._parse_format_template(template)\n                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 4704, in _parse_format_template\n    raise NativeBuildError(\npiton.x86.NativeBuildError: str.format(): unsupported placeholder: {!r}\n",
+          "error_type": "NativeBuildError",
+          "passed": false
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "58b0bfa06738c523aa97a79671074c274e0b224ba640cb4f7c536e2e4688e889",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON rejected the program at BUILD",
+    "source": "s1 = '{1} {0} {1}'.format('A', 'B')\ns2 = '{!r} {!s}'.format('alpha', 42)\ns3 = 'item={name!r} val={val}'.format(name='alpha', val=42)\nprint(s1, s2, s3)\n",
+    "source_hash": "1513b06d2f5cdac99e586d8bfe0c968ad57ac8f41b1ffce050c253d482c50894"
+  },
+  "run_id": "run_20261102_164053_bounded_fe_seed101",
+  "seed": 2001969799,
+  "source": "s1 = '{1} {0} {1}'.format('A', 'B')\ns2 = '{!r} {!s}'.format('alpha', 42)\ns3 = 'item={name!r} val={val}'.format(name='alpha', val=42)\nprint(s1, s2, s3)\n",
+  "source_hash": "1513b06d2f5cdac99e586d8bfe0c968ad57ac8f41b1ffce050c253d482c50894"
+}

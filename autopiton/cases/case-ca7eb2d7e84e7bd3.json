@@ -1,0 +1,98 @@
+{
+  "case_id": "case-ca7eb2d7e84e7bd3",
+  "created_at": "2026-11-02T16:41:01-06:00",
+  "description": "bounded[map_builtin_callable_dispatch/builtin] b1=int",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "ca7eb2d7e84e7bd3323130bf3fc58b9bb43edeb934b0b9190986f891b15d7cab",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "UNSUPPORTED",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 65.8486879983684,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "ca7eb2d7e84e7bd3323130bf3fc58b9bb43edeb934b0b9190986f891b15d7cab",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "[11, 88, -7] [22, 176, -14]\n",
+      "timed_out": false
+    },
+    "details": {
+      "piton_stage_error": {
+        "error_message": "native map requires a user function callback, not a builtin name",
+        "error_type": "NativeBuildError",
+        "stage": "BUILD"
+      }
+    },
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 226.00617699936265,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "BUILD",
+      "filename": "program_0025.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "ca7eb2d7e84e7bd3323130bf3fc58b9bb43edeb934b0b9190986f891b15d7cab",
+      "stage_reached": "MIR",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 146,
+          "surface_sha256": "21dd4e7e21c6421237cadc82b34ca3ac62839dccd8cb2880f9e2befd45ecdbcb"
+        },
+        "BUILD": {
+          "error_message": "native map requires a user function callback, not a builtin name",
+          "error_traceback": "Traceback (most recent call last):\n  File \"/piton-repo/autopiton/piton_worker.py\", line 172, in main\n    c_source = LinuxCEmitter().emit(mir)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 4028, in emit\n    _pass_lines.extend(self._emit_function(function))\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 4191, in _emit_function\n    lines.extend(self._emit_instruction(instruction, function, aliases, types, bigint_slots))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/piton-repo/piton/linux_x86.py\", line 8370, in _emit_instruction\n    raise NativeBuildError(\npiton.x86.NativeBuildError: native map requires a user function callback, not a builtin name\n",
+          "error_type": "NativeBuildError",
+          "passed": false
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "21dd4e7e21c6421237cadc82b34ca3ac62839dccd8cb2880f9e2befd45ecdbcb",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON rejected the program at BUILD",
+    "source": "vals = ['11', '88', '-7']\nres1 = list(map(int, vals))\ndef double(x):\n    return x * 2\nres2 = list(map(double, res1))\nprint(res1, res2)\n",
+    "source_hash": "ca7eb2d7e84e7bd3323130bf3fc58b9bb43edeb934b0b9190986f891b15d7cab"
+  },
+  "run_id": "run_20261102_164053_bounded_fe_seed101",
+  "seed": 3535790747,
+  "source": "vals = ['11', '88', '-7']\nres1 = list(map(int, vals))\ndef double(x):\n    return x * 2\nres2 = list(map(double, res1))\nprint(res1, res2)\n",
+  "source_hash": "ca7eb2d7e84e7bd3323130bf3fc58b9bb43edeb934b0b9190986f891b15d7cab"
+}

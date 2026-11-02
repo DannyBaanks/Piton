@@ -72,6 +72,28 @@
       "signature": null,
       "source_hash": "01449a6eb5ab727abb454530068af75d4be58368a7f40708a3b86748f11da4c3"
     },
+    "case-01589c288afa682b": {
+      "case_id": "case-01589c288afa682b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:32-06:00",
+      "description": "bounded[inherited_classmethod_dispatch/int] base=34 sub=77",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:32-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 1566942273,
+      "signature": null,
+      "source_hash": "01589c288afa682ba73ff47fbb17aa2e57549aba4a986cbde82589b2b6faf865"
+    },
     "case-019fe3d6739452ea": {
       "case_id": "case-019fe3d6739452ea",
       "classification": "EQUIV",
@@ -119,6 +141,31 @@
       "seed": 0,
       "signature": null,
       "source_hash": "01b500e236e57b8e83cf1f6b7a905b9f5d1fd77ce26b79d6bdc1a0dcb6eff55e"
+    },
+    "case-03a2817e254ca5e0": {
+      "case_id": "case-03a2817e254ca5e0",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:53-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=beta num=98",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:11:50-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 3363013620,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "03a2817e254ca5e065a93084c33d528405cf2e4c6f9272e7e96634c1a2212504"
     },
     "case-03dffbc05d637bc4": {
       "case_id": "case-03dffbc05d637bc4",
@@ -202,12 +249,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:55-06:00",
+      "last_seen_at": "2026-11-02T17:13:36-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 3961228449,
       "signature": null,
@@ -360,12 +408,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:06-06:00",
+      "last_seen_at": "2026-11-02T17:15:12-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 662006161,
       "signature": null,
@@ -393,6 +442,28 @@
       "seed": 3305735829,
       "signature": null,
       "source_hash": "07badb9d057cb7b9584aa49115d01cbb360e603cc877edac475b3a5b6d47acba"
+    },
+    "case-07fd5a5bea330326": {
+      "case_id": "case-07fd5a5bea330326",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:48-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=int",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:48-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 733295235,
+      "signature": null,
+      "source_hash": "07fd5a5bea330326028460f0a08371e0a979cb04cef08b065c2dcf6972d40875"
     },
     "case-082f1009ee8ac3a3": {
       "case_id": "case-082f1009ee8ac3a3",
@@ -451,12 +522,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:33-06:00",
+      "last_seen_at": "2026-11-02T17:14:15-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 3919706735,
       "signature": null,
@@ -869,16 +941,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:04-06:00",
+      "last_seen_at": "2026-11-02T17:13:45-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 4284391408,
       "signature": null,
       "source_hash": "10d4307b7e0980a2809c3cda4a986fd381de1a2afcd166e0dc76ac802056cc78"
+    },
+    "case-1124ee8b93aafdb0": {
+      "case_id": "case-1124ee8b93aafdb0",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:23-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=6 c2=13",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:23-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 1894488586,
+      "signature": null,
+      "source_hash": "1124ee8b93aafdb0032d7da1421bde2266bf726e4e4608bf24f0661dee16ca05"
     },
     "case-113fc7fb0d069267": {
       "case_id": "case-113fc7fb0d069267",
@@ -1063,7 +1158,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:31-06:00",
+      "last_seen_at": "2026-11-02T17:13:13-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1077,7 +1172,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 298737106,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
@@ -1146,6 +1242,28 @@
       "seed": 3280474243,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "13562e1b7bfa4bc078c052b82bc956d5a5eff6205c52578573bab5d794c09efb"
+    },
+    "case-1465d4aeefca12e7": {
+      "case_id": "case-1465d4aeefca12e7",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:44-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=int",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:44-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 1769694667,
+      "signature": null,
+      "source_hash": "1465d4aeefca12e776fa5973d19ab9324bbf754cf8dc8ac6a8b64cae8690d842"
     },
     "case-1486a7b234373577": {
       "case_id": "case-1486a7b234373577",
@@ -1221,6 +1339,31 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:int->other",
       "source_hash": "1487c557e87055c9051a0b0ea6c5023919dfb28bdfc38265ebfc0d1ba84ab262"
     },
+    "case-1513b06d2f5cdac9": {
+      "case_id": "case-1513b06d2f5cdac9",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:58-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=alpha num=42",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:04-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 2001969799,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "1513b06d2f5cdac99e586d8bfe0c968ad57ac8f41b1ffce050c253d482c50894"
+    },
     "case-151e71c891e3746f": {
       "case_id": "case-151e71c891e3746f",
       "classification": "EQUIV",
@@ -1255,12 +1398,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:45-06:00",
+      "last_seen_at": "2026-11-02T17:14:34-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171426_bounded_fd_seed42"
       ],
       "seed": 2522798642,
       "signature": null,
@@ -1581,12 +1725,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:06-06:00",
+      "last_seen_at": "2026-11-02T17:13:47-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 272849424,
       "signature": null,
@@ -1603,12 +1748,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:02-06:00",
+      "last_seen_at": "2026-11-02T17:15:08-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 804478983,
       "signature": null,
@@ -1659,6 +1805,28 @@
       "signature": null,
       "source_hash": "1b3ea5d2e32c8b9171d3317510338def20685ce5cca409aa4e678164f6ba962c"
     },
+    "case-1b9afda17ba3002b": {
+      "case_id": "case-1b9afda17ba3002b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:35-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=5 c2=17",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:35-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 1245837540,
+      "signature": null,
+      "source_hash": "1b9afda17ba3002bb97599437b065f4a4560136bed96657076cb40f0fdd9c4f5"
+    },
     "case-1bccea8dce15bf68": {
       "case_id": "case-1bccea8dce15bf68",
       "classification": "DIVERGENT",
@@ -1671,7 +1839,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:34-06:00",
+      "last_seen_at": "2026-11-02T17:13:15-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1685,7 +1853,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 2783290795,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -1702,12 +1871,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:15-06:00",
+      "last_seen_at": "2026-11-02T17:13:59-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 1051802512,
       "signature": null,
@@ -1761,6 +1931,32 @@
       "seed": 0,
       "signature": null,
       "source_hash": "1e487ed972e18c76885f33c0021420b4166dfdd982c43bc1e0c313a96bcebffe"
+    },
+    "case-1ebfab27519cf852": {
+      "case_id": "case-1ebfab27519cf852",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "DIVERGENT",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:56-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=5 c2=10",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:11:58-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 3736580802,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
+      "source_hash": "1ebfab27519cf852f43105d3dc28009baaebc3df8470e8a261af849772be6ac5"
     },
     "case-1eeab15753293161": {
       "case_id": "case-1eeab15753293161",
@@ -1911,12 +2107,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:27-06:00",
+      "last_seen_at": "2026-11-02T17:14:10-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 613628803,
       "signature": null,
@@ -1978,7 +2175,7 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:31-06:00",
+      "last_seen_at": "2026-11-02T17:07:49-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1996,10 +2193,12 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 7,
-      "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "228d90a490532bbbe409cd9538060838ac4936666f42d41cf3d5c756f8e6efeb"
     },
     "case-22bee7290ac8a7c2": {
@@ -2038,7 +2237,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:32-06:00",
+      "last_seen_at": "2026-11-02T17:13:13-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -2052,7 +2251,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 3673561638,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -2246,6 +2446,28 @@
       "signature": null,
       "source_hash": "24eae6d5c2cbecfa79d9db989dce2796b04b2ced253b222f0945bb66a2b2ad60"
     },
+    "case-24f80f36218f3325": {
+      "case_id": "case-24f80f36218f3325",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:24-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=2 c2=9",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:24-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 421128506,
+      "signature": null,
+      "source_hash": "24f80f36218f332523c3acf5b99272fcf95222fe108a6ebc40f22211af8bb05d"
+    },
     "case-2501c7ac1a6a11d2": {
       "case_id": "case-2501c7ac1a6a11d2",
       "classification": "EQUIV",
@@ -2325,7 +2547,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:36-06:00",
+      "last_seen_at": "2026-11-02T17:13:17-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -2339,7 +2561,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 240251661,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -2356,12 +2579,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:05-06:00",
+      "last_seen_at": "2026-11-02T17:13:46-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 3246059658,
       "signature": null,
@@ -2378,12 +2602,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:30-06:00",
+      "last_seen_at": "2026-11-02T17:14:13-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 4278308761,
       "signature": null,
@@ -2727,12 +2952,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:17-06:00",
+      "last_seen_at": "2026-11-02T17:14:00-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 2340505846,
       "signature": null,
@@ -2772,7 +2998,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:39-06:00",
+      "last_seen_at": "2026-11-02T17:13:20-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2786,11 +3012,34 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 2340505846,
       "signature": null,
       "source_hash": "2b7213b3106c69d625c6b44479ee9b5d3d8b808928891da0ee4d072086e8bfe7"
+    },
+    "case-2b7c767e080cd709": {
+      "case_id": "case-2b7c767e080cd709",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:27-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=beta num=69",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:27-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 1813410345,
+      "signature": null,
+      "source_hash": "2b7c767e080cd70928d8768e6ddf53d4fae7c9c2ceb22179b4923a8bdfcd60ac"
     },
     "case-2c1018d12b4baa16": {
       "case_id": "case-2c1018d12b4baa16",
@@ -2804,7 +3053,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:37-06:00",
+      "last_seen_at": "2026-11-02T17:13:18-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -2818,7 +3067,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 1149938334,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -2835,12 +3085,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:53-06:00",
+      "last_seen_at": "2026-11-02T17:13:35-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 1815115025,
       "signature": null,
@@ -2868,6 +3119,32 @@
       "seed": 799609893,
       "signature": null,
       "source_hash": "2cf29fbba99e78e4ab1c29d08a964abfd1c6b4b2ef6a3a68a27348189d7dd0aa"
+    },
+    "case-2d1e81415cf12302": {
+      "case_id": "case-2d1e81415cf12302",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:54-06:00",
+      "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=orange w2=cat",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:49-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101",
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 822964419,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "2d1e81415cf123020b67bf089582da229318fedd15d99a58a0e545835a1ee650"
     },
     "case-2d8df0adc9d0fb02": {
       "case_id": "case-2d8df0adc9d0fb02",
@@ -2925,12 +3202,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:29-06:00",
+      "last_seen_at": "2026-11-02T17:14:12-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 470939445,
       "signature": null,
@@ -3013,6 +3291,28 @@
       "seed": 2561803281,
       "signature": null,
       "source_hash": "30e676ae6aacf15a68d9cc5cf860150974e6ae9d9e585b6644a6b7229a5e02f7"
+    },
+    "case-31a9c2cb7f62a154": {
+      "case_id": "case-31a9c2cb7f62a154",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:28-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=6 c2=12",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:28-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 3724704225,
+      "signature": null,
+      "source_hash": "31a9c2cb7f62a154bf183831ea205a613a9a19b3297ca16f355917b1cb5d9228"
     },
     "case-32a70c6a30616d3c": {
       "case_id": "case-32a70c6a30616d3c",
@@ -3137,12 +3437,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:26-06:00",
+      "last_seen_at": "2026-11-02T17:14:09-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 3083418319,
       "signature": null,
@@ -3249,16 +3550,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:05-06:00",
+      "last_seen_at": "2026-11-02T17:15:11-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 387050327,
       "signature": null,
       "source_hash": "354f72b7b7ce7291978ba7b886845f4db1c0793b46046271f061bc71e0cec0db"
+    },
+    "case-35966fc27e41982c": {
+      "case_id": "case-35966fc27e41982c",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:15:17-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=abs",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:15:17-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171452_bounded_seed11"
+      ],
+      "seed": 980954811,
+      "signature": null,
+      "source_hash": "35966fc27e41982c0b5c917fc51f21ffbb33f358b58a6dd3de5d7526a2fdc1fa"
     },
     "case-35e5865dcd0f70ac": {
       "case_id": "case-35e5865dcd0f70ac",
@@ -3271,12 +3595,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:31-06:00",
+      "last_seen_at": "2026-11-02T17:14:13-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 3095476665,
       "signature": null,
@@ -3293,12 +3618,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:54-06:00",
+      "last_seen_at": "2026-11-02T17:15:00-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 1660063002,
       "signature": null,
@@ -3482,12 +3808,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:55-06:00",
+      "last_seen_at": "2026-11-02T17:15:02-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 1158677336,
       "signature": null,
@@ -3547,6 +3874,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "38b35a85bb71c733a12949813db15aafec3e1c32459e45032b973e4d57aeff8a"
     },
+    "case-38e3de07a8f11ca3": {
+      "case_id": "case-38e3de07a8f11ca3",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:36-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=int",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:36-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 4145795381,
+      "signature": null,
+      "source_hash": "38e3de07a8f11ca3e1b7ca7341a16361425c3cf25bb4f045a85386f05462b5b2"
+    },
     "case-38e4049f52c62417": {
       "case_id": "case-38e4049f52c62417",
       "classification": "EQUIV",
@@ -3572,6 +3921,28 @@
       "seed": 1249418419,
       "signature": null,
       "source_hash": "38e4049f52c62417245a6e27edee97e6db70f7dbc3e02c5c089df081fa375e87"
+    },
+    "case-3a30d3fa9512aa09": {
+      "case_id": "case-3a30d3fa9512aa09",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:42-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=1 c2=15",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:42-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 3696680071,
+      "signature": null,
+      "source_hash": "3a30d3fa9512aa09562deae6313bf9bb77f5cdc6b842980860c8c6c89f89dde1"
     },
     "case-3a57965dec1341a2": {
       "case_id": "case-3a57965dec1341a2",
@@ -3767,6 +4138,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "3deb17a78a5b5a7a5065c9d4ea417c38fd49482bbc7bd756fc1f029538113176"
     },
+    "case-3df5355e27b4c907": {
+      "case_id": "case-3df5355e27b4c907",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:35-06:00",
+      "description": "bounded[inherited_class_attribute_lookup/int] base_a=12 sub_b=88",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:35-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 1351531223,
+      "signature": null,
+      "source_hash": "3df5355e27b4c9075bc0b898f98c65847a3ad44251b614fea077b07c8d7a2e5c"
+    },
     "case-3e383855a89310e3": {
       "case_id": "case-3e383855a89310e3",
       "classification": "EQUIV",
@@ -3871,13 +4264,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:58-06:00",
+      "last_seen_at": "2026-11-02T17:14:59-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_162843_bounded_fd_seed2026"
+        "run_20261102_162843_bounded_fd_seed2026",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 1090899111,
       "signature": null,
@@ -3917,16 +4311,42 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:52-06:00",
+      "last_seen_at": "2026-11-02T17:13:34-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 1801823908,
       "signature": null,
       "source_hash": "3f6f474287de45e0c44bc8a46a17e78889334d901f2a90f00e050f20f1649918"
+    },
+    "case-3f862b390ded7271": {
+      "case_id": "case-3f862b390ded7271",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:41:00-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=3 c2=20",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:11-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 517307766,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "3f862b390ded7271ba3833b03993c257c791c050633f15bca7538a48024b83e5"
     },
     "case-3fb4969ab4608eac": {
       "case_id": "case-3fb4969ab4608eac",
@@ -3961,12 +4381,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:19-06:00",
+      "last_seen_at": "2026-11-02T17:14:02-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 398340369,
       "signature": null,
@@ -4267,6 +4688,32 @@
       "signature": null,
       "source_hash": "43e9566688cca43c7dd884039d7fccf19ceae494279c351c49ef0434903bbaa5"
     },
+    "case-456743584efce2ed": {
+      "case_id": "case-456743584efce2ed",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "DIVERGENT",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:59-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=2 c2=15",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:07-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 1445152536,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
+      "source_hash": "456743584efce2ed45c9443f3a1fe55ca3d6073ec6f59bb56641b19d809d8429"
+    },
     "case-457a400c27d1717f": {
       "case_id": "case-457a400c27d1717f",
       "classification": "EQUIV",
@@ -4421,12 +4868,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:07-06:00",
+      "last_seen_at": "2026-11-02T17:13:48-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 4047709743,
       "signature": null,
@@ -4672,6 +5120,31 @@
       "signature": null,
       "source_hash": "492420ccd542408b5c7391f24092f3490fa15bd364b5b98a20e085c4b4935d9f"
     },
+    "case-4929604dd43dfd14": {
+      "case_id": "case-4929604dd43dfd14",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:54-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=7 c2=16",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:11:53-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 894502986,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "4929604dd43dfd1418fbde41a987e50a9c79793318043a5806fb17500e7354af"
+    },
     "case-4935548cf1333d43": {
       "case_id": "case-4935548cf1333d43",
       "classification": "EQUIV",
@@ -4761,6 +5234,50 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "4b3025d4cf09b3506b591a56bc07451912747a795ed36a29f65f8bb82949ad9f"
     },
+    "case-4b8561a8f8134de8": {
+      "case_id": "case-4b8561a8f8134de8",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:38-06:00",
+      "description": "bounded[inherited_staticmethod_dispatch/int] c1=5",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:38-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 2188398760,
+      "signature": null,
+      "source_hash": "4b8561a8f8134de8cd016330d10fed819bc51b9534ba0dd8223ab0d5a66268dc"
+    },
+    "case-4b89cda3273abb38": {
+      "case_id": "case-4b89cda3273abb38",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:43-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=3 c2=12",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:43-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 2525159540,
+      "signature": null,
+      "source_hash": "4b89cda3273abb38f1480ec98275af463d93d0250a782fe89c0b4cf225a2a91c"
+    },
     "case-4c792f7c8d69818c": {
       "case_id": "case-4c792f7c8d69818c",
       "classification": "EQUIV",
@@ -4811,14 +5328,15 @@
       "classification": "INVALID_ACCEPTED",
       "classifications": [
         "INVALID_ACCEPTED",
-        "EQUIV"
+        "EQUIV",
+        "INVALID_REFERENCE"
       ],
       "created_at": "2026-10-30T16:13:12-06:00",
       "description": "Canary F: Constructor with invalid args",
       "expected_exception": "TypeError",
       "family": "classes",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T16:28:29-06:00",
+      "last_seen_at": "2026-11-02T17:07:48-06:00",
       "minimization": {
         "accepted": 3,
         "attempts": 11,
@@ -4851,7 +5369,9 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 5,
       "signature": "INVALID_ACCEPTED|cpython:exception:TypeError|piton:EXECUTE:-",
@@ -5063,6 +5583,28 @@
       "signature": null,
       "source_hash": "4f734678a0d941071d88ca6dd76c71d95eb38d04651dfc66cd6ebdea84f6809c"
     },
+    "case-4fb75bd39b6e8be7": {
+      "case_id": "case-4fb75bd39b6e8be7",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:40-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=bool",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:40-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 4107564524,
+      "signature": null,
+      "source_hash": "4fb75bd39b6e8be77d6fd183637055769c42033e1125a22e8f59c4e0018b9314"
+    },
     "case-4fe3f9d34bb2e4ff": {
       "case_id": "case-4fe3f9d34bb2e4ff",
       "classification": "EQUIV",
@@ -5097,12 +5639,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:03-06:00",
+      "last_seen_at": "2026-11-02T17:13:44-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 2314889832,
       "signature": null,
@@ -5186,12 +5729,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:28-06:00",
+      "last_seen_at": "2026-11-02T17:14:11-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 2506254832,
       "signature": null,
@@ -5267,12 +5811,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:58-06:00",
+      "last_seen_at": "2026-11-02T17:13:39-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 3582477022,
       "signature": null,
@@ -5290,7 +5835,7 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:28-06:00",
+      "last_seen_at": "2026-11-02T17:07:47-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -5308,10 +5853,12 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 3,
-      "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "52ec2e43a5d86c64dbc1a1ad924926623e0eecbf0969258f96b75b03d2a178d6"
     },
     "case-530063b0666209d4": {
@@ -5336,6 +5883,28 @@
       "seed": 414392414,
       "signature": null,
       "source_hash": "530063b0666209d4c5be89cdd4ea86cb66652cce15c89f9df064b3ab063c89d8"
+    },
+    "case-53717f9306303650": {
+      "case_id": "case-53717f9306303650",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:43-06:00",
+      "description": "bounded[nested_class_function_scope/int] offset=8 mult=4",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:43-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 2615507143,
+      "signature": null,
+      "source_hash": "53717f9306303650d61943244f6dca07053320d26ba024b5b186baef7efba15c"
     },
     "case-53e0edee5741e624": {
       "case_id": "case-53e0edee5741e624",
@@ -5415,7 +5984,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:40-06:00",
+      "last_seen_at": "2026-11-02T17:13:20-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -5429,11 +5998,34 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 1715412119,
       "signature": null,
       "source_hash": "552cb6c12e846dcd467b32277cd2e9c916f17867b2d25f5bac083bf2740e2e8a"
+    },
+    "case-5539822b930dbf9f": {
+      "case_id": "case-5539822b930dbf9f",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:39-06:00",
+      "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=orange w2=fox",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:51-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 3409218794,
+      "signature": null,
+      "source_hash": "5539822b930dbf9f6c818b6081f74c3888248bc32f96bf47a2597adc7f9ddcaf"
     },
     "case-55e2be756d8e62f7": {
       "case_id": "case-55e2be756d8e62f7",
@@ -5618,12 +6210,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:25-06:00",
+      "last_seen_at": "2026-11-02T17:14:07-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 1985392498,
       "signature": null,
@@ -5938,7 +6531,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:35-06:00",
+      "last_seen_at": "2026-11-02T17:13:16-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -5952,7 +6545,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 3131575764,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
@@ -6040,7 +6634,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:23-06:00",
+      "last_seen_at": "2026-11-02T17:13:05-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -6054,7 +6648,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 3184935163,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -6186,12 +6781,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:57-06:00",
+      "last_seen_at": "2026-11-02T17:13:38-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 433797840,
       "signature": null,
@@ -6230,12 +6826,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:49-06:00",
+      "last_seen_at": "2026-11-02T17:14:56-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 3777702799,
       "signature": null,
@@ -6343,12 +6940,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:01-06:00",
+      "last_seen_at": "2026-11-02T17:13:42-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 240251661,
       "signature": null,
@@ -6377,6 +6975,32 @@
       "seed": 2703488257,
       "signature": null,
       "source_hash": "6496637f5cfe099f35c30fce81d73900f60454a22addeacb669493917150bd81"
+    },
+    "case-64cade0b6d908f5e": {
+      "case_id": "case-64cade0b6d908f5e",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:55-06:00",
+      "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=cherry w2=dog",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:33-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101",
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 2921209091,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "64cade0b6d908f5ee6133a2608b227d18ec321a3023b50a8941cbf1aeca2e19a"
     },
     "case-64e467a060bd851b": {
       "case_id": "case-64e467a060bd851b",
@@ -6411,12 +7035,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:24-06:00",
+      "last_seen_at": "2026-11-02T17:14:07-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 2783290795,
       "signature": null,
@@ -6465,6 +7090,31 @@
       "seed": 2218089442,
       "signature": null,
       "source_hash": "65a7a995b3a88d5a254f5f10cfb7b355149a437affdf1bf44e4d51135b960f94"
+    },
+    "case-65f8ee6189ffb917": {
+      "case_id": "case-65f8ee6189ffb917",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:54-06:00",
+      "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=apple w2=cat",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:11:55-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 830159750,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "65f8ee6189ffb91777c2a91efe30a896feef8ef8cde210c6b08e0b8a3d732f40"
     },
     "case-66b006cd017df056": {
       "case_id": "case-66b006cd017df056",
@@ -6590,14 +7240,15 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:56-06:00",
+      "last_seen_at": "2026-11-02T17:14:42-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
         "run_20261102_160755_bounded_fd_seed99",
         "run_20261102_162337_bounded_fd_seed99",
-        "run_20261102_162843_bounded_fd_seed2026"
+        "run_20261102_162843_bounded_fd_seed2026",
+        "run_20261102_171426_bounded_fd_seed42"
       ],
       "seed": 3092233689,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -6715,6 +7366,28 @@
       "seed": 0,
       "signature": null,
       "source_hash": "6ad2f261ba5cbb6208383b5614afd2b85bc1108f8b78b1dee4eaeba7d47734f9"
+    },
+    "case-6b8969b7b7bb7ac1": {
+      "case_id": "case-6b8969b7b7bb7ac1",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:27-06:00",
+      "description": "bounded[inherited_classmethod_dispatch/int] base=11 sub=65",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:27-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 2585650756,
+      "signature": null,
+      "source_hash": "6b8969b7b7bb7ac116e734fd409bc984971da79145c19442d9cf4cbfd2fbee62"
     },
     "case-6c356d4b35d80d54": {
       "case_id": "case-6c356d4b35d80d54",
@@ -6874,6 +7547,32 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:NameError|stdout:other->absent",
       "source_hash": "6e5f0aa4473d2e50e870b5e532727f4b2bf06ed7e63b2f134723bc2927efa713"
     },
+    "case-6ec3c39b62bcf6b6": {
+      "case_id": "case-6ec3c39b62bcf6b6",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:58-06:00",
+      "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=apple w2=dog",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:45-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101",
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 3541207407,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "6ec3c39b62bcf6b66e9c4f0b9b0054a05f9f9ca91ce803421e87073afedb8ba1"
+    },
     "case-6f004ef75b6c64ef": {
       "case_id": "case-6f004ef75b6c64ef",
       "classification": "EQUIV",
@@ -6895,6 +7594,32 @@
       "seed": 2185560420,
       "signature": null,
       "source_hash": "6f004ef75b6c64ef39fb8884063f30229af41c6ecb392e56e84afc0b19eacd2f"
+    },
+    "case-6f1f7e109453d11a": {
+      "case_id": "case-6f1f7e109453d11a",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "DIVERGENT",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:53-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=4 c2=12",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:11:49-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 2162603472,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
+      "source_hash": "6f1f7e109453d11abfff729a252e1014abf3d1ea56a92bbf868fa2c30cfd14f1"
     },
     "case-6f7a937c50bc202f": {
       "case_id": "case-6f7a937c50bc202f",
@@ -6984,13 +7709,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:50-06:00",
+      "last_seen_at": "2026-11-02T17:15:00-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_162843_bounded_fd_seed2026"
+        "run_20261102_162843_bounded_fd_seed2026",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 3291181424,
       "signature": null,
@@ -7229,6 +7955,28 @@
       "seed": 847458566,
       "signature": null,
       "source_hash": "74cb0e758e22ffc2123f05a822d5a68f0fc43448f7a4a437b8d6916ba0790c17"
+    },
+    "case-75012928b78d75d5": {
+      "case_id": "case-75012928b78d75d5",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:45-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=8 c2=10",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:45-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 1614934286,
+      "signature": null,
+      "source_hash": "75012928b78d75d58277de1269f8623276bbbd13cafb2b13d512f522e43579d4"
     },
     "case-7523e2431e537d1f": {
       "case_id": "case-7523e2431e537d1f",
@@ -7480,12 +8228,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:29:12-06:00",
+      "last_seen_at": "2026-11-02T17:14:29-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162843_bounded_fd_seed2026"
+        "run_20261102_162843_bounded_fd_seed2026",
+        "run_20261102_171426_bounded_fd_seed42"
       ],
       "seed": 3991387404,
       "signature": null,
@@ -7572,12 +8321,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:32-06:00",
+      "last_seen_at": "2026-11-02T17:14:14-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 1948728483,
       "signature": null,
@@ -7595,7 +8345,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:29-06:00",
+      "last_seen_at": "2026-11-02T17:13:10-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -7609,7 +8359,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 398340369,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -7730,6 +8481,31 @@
       "seed": 1202335162,
       "signature": null,
       "source_hash": "7b8d8d5fe7b04b89f3b22f43ccbfcecafd866b9c0ed7fc5ffc71c303024416aa"
+    },
+    "case-7bb350599baf5fee": {
+      "case_id": "case-7bb350599baf5fee",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:59-06:00",
+      "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=orange w2=dog",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:10-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 2299299249,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "7bb350599baf5fee002be5c95bc230d395771d4a121137a0cd52b559e8d16886"
     },
     "case-7bbfee2ef1d84d66": {
       "case_id": "case-7bbfee2ef1d84d66",
@@ -8190,6 +8966,50 @@
       "signature": null,
       "source_hash": "8311037d7240f23f407a1fada562228e4cfccc0124ebfe83c28e2268a1d2713d"
     },
+    "case-833e1cae552a751d": {
+      "case_id": "case-833e1cae552a751d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:50-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=abs",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:50-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 206963583,
+      "signature": null,
+      "source_hash": "833e1cae552a751de6d16216e15fa972f9736e733a6767a86fb08c2bb6dc2303"
+    },
+    "case-83ca51fda2c64ed3": {
+      "case_id": "case-83ca51fda2c64ed3",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:26-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=beta num=28",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:26-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 2480014448,
+      "signature": null,
+      "source_hash": "83ca51fda2c64ed34dff6d6adce7a78ffa55db192f2dd1f619a8a7a46c00de36"
+    },
     "case-84283173c2f70674": {
       "case_id": "case-84283173c2f70674",
       "classification": "EQUIV",
@@ -8246,16 +9066,64 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:00-06:00",
+      "last_seen_at": "2026-11-02T17:15:07-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 4252242025,
       "signature": null,
       "source_hash": "8481fee1e06896a24e0e5f8b9260576035dfa55852aa2e38c496c93260c67a5c"
+    },
+    "case-8482eb69f94d5057": {
+      "case_id": "case-8482eb69f94d5057",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:26-06:00",
+      "description": "bounded[inherited_classmethod_dispatch/int] base=27 sub=75",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:26-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 2342331444,
+      "signature": null,
+      "source_hash": "8482eb69f94d50578d19e4ff6a072785bcc237e42a6d3118232e1edc4f70da1e"
+    },
+    "case-8497b959193b284b": {
+      "case_id": "case-8497b959193b284b",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:56-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=gamma num=56",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:11:56-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 40561083,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "8497b959193b284bcf058693a8c09371681557d501df172fff93df659ee86600"
     },
     "case-853dbe6a6504937e": {
       "case_id": "case-853dbe6a6504937e",
@@ -8383,12 +9251,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:05-06:00",
+      "last_seen_at": "2026-11-02T17:15:11-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 2467764733,
       "signature": null,
@@ -8484,12 +9353,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:46-06:00",
+      "last_seen_at": "2026-11-02T17:14:54-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 799609893,
       "signature": null,
@@ -8507,7 +9377,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:28-06:00",
+      "last_seen_at": "2026-11-02T17:13:09-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -8521,7 +9391,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 667779376,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -8751,12 +9622,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:49-06:00",
+      "last_seen_at": "2026-11-02T17:14:37-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162843_bounded_fd_seed2026"
+        "run_20261102_162843_bounded_fd_seed2026",
+        "run_20261102_171426_bounded_fd_seed42"
       ],
       "seed": 1235240924,
       "signature": null,
@@ -8783,6 +9655,28 @@
       "seed": 1918102982,
       "signature": null,
       "source_hash": "8a92c0436ff982e21736b190f3c8af8b26592f94110cfb6b812f44930863092c"
+    },
+    "case-8b1076fba7a641f4": {
+      "case_id": "case-8b1076fba7a641f4",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:53-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=beta num=67",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:53-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171452_bounded_seed11"
+      ],
+      "seed": 2522798642,
+      "signature": null,
+      "source_hash": "8b1076fba7a641f4d63e6fff739746e1889cd4ba1a4d168d62b1ac0e9479aebb"
     },
     "case-8b34ef8e80fce517": {
       "case_id": "case-8b34ef8e80fce517",
@@ -8989,16 +9883,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:08-06:00",
+      "last_seen_at": "2026-11-02T17:15:14-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 1810144999,
       "signature": null,
       "source_hash": "8dfe044cfe733d09441b8244858728db9dd85b3f3ab9daf761d94434028abf58"
+    },
+    "case-8e4ed7818bd4c3cd": {
+      "case_id": "case-8e4ed7818bd4c3cd",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:31-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=8 c2=13",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:31-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 3009515036,
+      "signature": null,
+      "source_hash": "8e4ed7818bd4c3cd613ce5269e30ee8f3f2c5b98aa9d2abfc7d12137519b8a37"
     },
     "case-8e74c405d9c735aa": {
       "case_id": "case-8e74c405d9c735aa",
@@ -9024,6 +9941,28 @@
       "signature": null,
       "source_hash": "8e74c405d9c735aa73f853874f0dfddebb48bb2b688e29063559808f40965ceb"
     },
+    "case-8e7c0c574fcd3218": {
+      "case_id": "case-8e7c0c574fcd3218",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:30-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=4 c2=15",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:30-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 2672799787,
+      "signature": null,
+      "source_hash": "8e7c0c574fcd3218cce0af5648d635dbe61a5cfbe73b8ba8f0a7bd7e95abe17d"
+    },
     "case-8ec7e0124364bf12": {
       "case_id": "case-8ec7e0124364bf12",
       "classification": "EQUIV",
@@ -9035,7 +9974,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:37-06:00",
+      "last_seen_at": "2026-11-02T17:13:18-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -9049,7 +9988,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 1351531223,
       "signature": null,
@@ -9186,7 +10126,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:25-06:00",
+      "last_seen_at": "2026-11-02T17:13:07-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -9200,7 +10140,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 127978094,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -9263,7 +10204,7 @@
       "expected_exception": "TypeError",
       "family": "functions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T16:28:26-06:00",
+      "last_seen_at": "2026-11-02T17:07:45-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -9281,7 +10222,9 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 1,
       "signature": null,
@@ -9353,6 +10296,32 @@
       "seed": 3870417020,
       "signature": null,
       "source_hash": "919d3ad396775646abbbc07847477402481eefedf8589027e41ba07a4f7505e9"
+    },
+    "case-91cf8d620c4a4eff": {
+      "case_id": "case-91cf8d620c4a4eff",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "DIVERGENT",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:57-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=8 c2=13",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:00-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 3475731663,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
+      "source_hash": "91cf8d620c4a4eff698b49d95787a4fe191d4272871ec67bc587dff9e25effdd"
     },
     "case-922e66ea55959a4f": {
       "case_id": "case-922e66ea55959a4f",
@@ -9541,12 +10510,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:22-06:00",
+      "last_seen_at": "2026-11-02T17:14:05-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 3320303242,
       "signature": null,
@@ -9556,16 +10526,17 @@
       "case_id": "case-95c9b5863dcab5d0",
       "classification": "EQUIV",
       "classifications": [
-        "EQUIV"
+        "EQUIV",
+        "UNSUPPORTED"
       ],
       "created_at": "2026-10-30T16:13:13-06:00",
       "description": "Canary G: Context manager",
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:30-06:00",
+      "last_seen_at": "2026-11-02T17:07:48-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
@@ -9581,10 +10552,12 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 6,
-      "signature": null,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "95c9b5863dcab5d0e4cd8ccfc04147fd893fc6c0edb31da89014d3b475db910b"
     },
     "case-960a8aaf319dedcd": {
@@ -9671,12 +10644,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:20-06:00",
+      "last_seen_at": "2026-11-02T17:14:03-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 3134174160,
       "signature": null,
@@ -9894,6 +10868,28 @@
       "signature": null,
       "source_hash": "9c57e2cc524f5bf88302fe51036db15a768201fd3ff4dd71e38a78dca3956102"
     },
+    "case-9c9233d5cd6df6fd": {
+      "case_id": "case-9c9233d5cd6df6fd",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:32-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=4 c2=13",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:32-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 4287310442,
+      "signature": null,
+      "source_hash": "9c9233d5cd6df6fd089068ea6a5e91c3ee44294febad7a87c494d982c957dc86"
+    },
     "case-9cca63af718d367b": {
       "case_id": "case-9cca63af718d367b",
       "classification": "EQUIV",
@@ -9962,6 +10958,28 @@
       "seed": 2585650756,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "9e042952ac86e66e6571ee6fdda154ea588a6749e116e4b3781f7b7c94c798b3"
+    },
+    "case-9f153aa173eee4fa": {
+      "case_id": "case-9f153aa173eee4fa",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:31-06:00",
+      "description": "bounded[inherited_classmethod_dispatch/int] base=12 sub=74",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:31-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 4231494220,
+      "signature": null,
+      "source_hash": "9f153aa173eee4faedfc381b7092d4fa9c333691919a75a64be3a37ddceeeb37"
     },
     "case-a004f35c132f830a": {
       "case_id": "case-a004f35c132f830a",
@@ -10190,13 +11208,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:53-06:00",
+      "last_seen_at": "2026-11-02T17:15:05-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_162843_bounded_fd_seed2026"
+        "run_20261102_162843_bounded_fd_seed2026",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 2402154336,
       "signature": null,
@@ -10618,6 +11637,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "a8040190eff15dcd5ab3fe0fb45494f7bcabd6d0fa0e99d756c2c0786f426e76"
     },
+    "case-a874d8bb5b9eb9d7": {
+      "case_id": "case-a874d8bb5b9eb9d7",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:30-06:00",
+      "description": "bounded[inherited_classmethod_dispatch/int] base=15 sub=84",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:30-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 3961228449,
+      "signature": null,
+      "source_hash": "a874d8bb5b9eb9d77bde221ce0d89542c71163c4ad329e6173db54455bfa1019"
+    },
     "case-a89e3108e908a11b": {
       "case_id": "case-a89e3108e908a11b",
       "classification": "EQUIV",
@@ -10651,7 +11692,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:24-06:00",
+      "last_seen_at": "2026-11-02T17:13:06-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10665,11 +11706,38 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 2342331444,
       "signature": null,
       "source_hash": "a90870014abadf77b1e756dfc9de87e49d94dfea3ff8e03a346f40b6a413797a"
+    },
+    "case-a908825382eabb7b": {
+      "case_id": "case-a908825382eabb7b",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "DIVERGENT",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:58-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=bool",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:05-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 1049464764,
+      "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
+      "source_hash": "a908825382eabb7b46e827beccae04f49cf6698d282f6ee2ff261d29de375710"
     },
     "case-a9484dbb2a00cb28": {
       "case_id": "case-a9484dbb2a00cb28",
@@ -10868,6 +11936,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "ab6d118c74d9bb3bbd81936dd07aff1997820d8d9e09be035331d86900ba582a"
     },
+    "case-ab7226af1b00d67a": {
+      "case_id": "case-ab7226af1b00d67a",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:31-06:00",
+      "description": "bounded[nested_class_function_scope/int] offset=14 mult=4",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:31-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 3701002945,
+      "signature": null,
+      "source_hash": "ab7226af1b00d67adefaf5616a1d3f4cc78aa235109473107910b4e7d7fe831e"
+    },
     "case-abb02bed735db6ed": {
       "case_id": "case-abb02bed735db6ed",
       "classification": "EQUIV",
@@ -10939,6 +12029,28 @@
       "seed": 1109293664,
       "signature": null,
       "source_hash": "abd9b2e01ea46de505b110910d8186d8dc3ccf81a083dcd84c16e7f20f1fa8db"
+    },
+    "case-ac439e8b60521f23": {
+      "case_id": "case-ac439e8b60521f23",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:39-06:00",
+      "description": "bounded[inherited_classmethod_dispatch/int] base=17 sub=69",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 272849424,
+      "signature": null,
+      "source_hash": "ac439e8b60521f23440734dfac9833f6aa05d10477f8fd4803e6dcdb98e071e3"
     },
     "case-ad5469922d066810": {
       "case_id": "case-ad5469922d066810",
@@ -11024,7 +12136,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:30-06:00",
+      "last_seen_at": "2026-11-02T17:13:12-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -11038,7 +12150,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 1625792787,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -11194,16 +12307,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:23-06:00",
+      "last_seen_at": "2026-11-02T17:14:06-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 3582477022,
       "signature": null,
       "source_hash": "b08fce322b6974775e38b321bb17caeede0fa260885cf453c4a3173c6c803375"
+    },
+    "case-b0d8fe2f6896c96d": {
+      "case_id": "case-b0d8fe2f6896c96d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:33-06:00",
+      "description": "bounded[inherited_class_attribute_lookup/int] base_a=16 sub_b=90",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:33-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 2727210979,
+      "signature": null,
+      "source_hash": "b0d8fe2f6896c96d7d301c2b29406537fbb20ecbb3b940b6eb96f133ee0c89a4"
     },
     "case-b27e0c896135a205": {
       "case_id": "case-b27e0c896135a205",
@@ -11240,7 +12376,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:38-06:00",
+      "last_seen_at": "2026-11-02T17:13:19-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -11254,7 +12390,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 613628803,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -11294,12 +12431,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:10-06:00",
+      "last_seen_at": "2026-11-02T17:15:16-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 2561803281,
       "signature": null,
@@ -11338,16 +12476,42 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:54-06:00",
+      "last_seen_at": "2026-11-02T17:15:01-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 2018579976,
       "signature": null,
       "source_hash": "b4a5925666ae34a5fd07a0ad2ebd26b1a4acb8af8f42724c7155e836c68e2c0a"
+    },
+    "case-b4deed9bddfd1f0b": {
+      "case_id": "case-b4deed9bddfd1f0b",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:59-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=1 c2=10",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:06-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 2718910783,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "b4deed9bddfd1f0bce31590f86e6a15e5ecb4b57847db4adb513689c2c5ca109"
     },
     "case-b529612f75680791": {
       "case_id": "case-b529612f75680791",
@@ -11452,12 +12616,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:51-06:00",
+      "last_seen_at": "2026-11-02T17:13:33-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 939042955,
       "signature": null,
@@ -11522,12 +12687,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:21-06:00",
+      "last_seen_at": "2026-11-02T17:14:04-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 3701002945,
       "signature": null,
@@ -11605,6 +12771,28 @@
       "seed": 0,
       "signature": null,
       "source_hash": "b7808df0eced27d4f221c75bce65729dbbda427640f135c7cc4f004cbf42b3b5"
+    },
+    "case-b7b01b29a1a3c2a7": {
+      "case_id": "case-b7b01b29a1a3c2a7",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:15:18-06:00",
+      "description": "bounded[dunder_rich_comparison/bool] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:15:18-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171452_bounded_seed11"
+      ],
+      "seed": 3929671299,
+      "signature": null,
+      "source_hash": "b7b01b29a1a3c2a71a63f3756bfc872518ef93393c3f356f933a03edb41a2f06"
     },
     "case-b7c87fab664da108": {
       "case_id": "case-b7c87fab664da108",
@@ -11760,12 +12948,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:00-06:00",
+      "last_seen_at": "2026-11-02T17:13:41-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 701808367,
       "signature": null,
@@ -11852,12 +13041,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:09-06:00",
+      "last_seen_at": "2026-11-02T17:15:15-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 1095983971,
       "signature": null,
@@ -12011,6 +13201,28 @@
       "signature": null,
       "source_hash": "bd24d02edcd73ae9aac06c8a6937d5205e910b8d78b56aac7f5193f5524d8d38"
     },
+    "case-bd293524325ed79e": {
+      "case_id": "case-bd293524325ed79e",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:40-06:00",
+      "description": "bounded[nested_class_function_scope/int] offset=19 mult=4",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:40-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 4047709743,
+      "signature": null,
+      "source_hash": "bd293524325ed79e3fb55be25ec6271ae0aa0050d71dd7145c65119474198c96"
+    },
     "case-bd8861a8a0390e04": {
       "case_id": "case-bd8861a8a0390e04",
       "classification": "DIVERGENT",
@@ -12023,7 +13235,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:30-06:00",
+      "last_seen_at": "2026-11-02T17:13:11-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -12037,7 +13249,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 2592983555,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -12292,6 +13505,28 @@
       "signature": null,
       "source_hash": "bf74c4f1273e149c1461a5453926eb8b7f17c3ec0990e269b933005fc5b45391"
     },
+    "case-bfc1cd3557a1ad1a": {
+      "case_id": "case-bfc1cd3557a1ad1a",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:28-06:00",
+      "description": "bounded[nested_class_function_scope/int] offset=18 mult=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:28-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 3733616459,
+      "signature": null,
+      "source_hash": "bfc1cd3557a1ad1a5bab7636c9d25911fc6fd73637e857562fb0947584f5497f"
+    },
     "case-bfe6b043273339f0": {
       "case_id": "case-bfe6b043273339f0",
       "classification": "EQUIV",
@@ -12303,12 +13538,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:25-06:00",
+      "last_seen_at": "2026-11-02T17:14:08-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 240251661,
       "signature": null,
@@ -12372,12 +13608,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:18-06:00",
+      "last_seen_at": "2026-11-02T17:14:01-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 1815115025,
       "signature": null,
@@ -12442,12 +13679,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:16-06:00",
+      "last_seen_at": "2026-11-02T17:14:00-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162514_bounded_fc_seed42"
+        "run_20261102_162514_bounded_fc_seed42",
+        "run_20261102_171358_bounded_fc_seed42"
       ],
       "seed": 1812140441,
       "signature": null,
@@ -12687,12 +13925,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:50-06:00",
+      "last_seen_at": "2026-11-02T17:14:57-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 3618196973,
       "signature": null,
@@ -12774,16 +14013,17 @@
       "case_id": "case-c4cde107c427eac8",
       "classification": "EQUIV",
       "classifications": [
-        "EQUIV"
+        "EQUIV",
+        "UNSUPPORTED"
       ],
       "created_at": "2026-10-30T16:13:04-06:00",
       "description": "Canary A: Lambda real",
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:25-06:00",
+      "last_seen_at": "2026-11-02T17:07:45-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161303_canary",
@@ -12800,10 +14040,12 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 0,
-      "signature": null,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "c4cde107c427eac828392c8f8230b5c062fdcaad87a6becfd327df5a357750f1"
     },
     "case-c585069cc304f889": {
@@ -13072,16 +14314,64 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:07-06:00",
+      "last_seen_at": "2026-11-02T17:15:13-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 815187656,
       "signature": null,
       "source_hash": "c8b1199ab53d714383888ea474875af5a0e48d5170e4889affed888de4052b08"
+    },
+    "case-c8b57ee09f57de7d": {
+      "case_id": "case-c8b57ee09f57de7d",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:41:00-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=abs",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:09-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 2915790803,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "c8b57ee09f57de7d93d3d011691ebedaafd97f1bae089c5a6a6195f7bfdad95e"
+    },
+    "case-c8f165870340c8b1": {
+      "case_id": "case-c8f165870340c8b1",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:35-06:00",
+      "description": "bounded[inherited_class_attribute_lookup/int] base_a=11 sub_b=71",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:35-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 3457645390,
+      "signature": null,
+      "source_hash": "c8f165870340c8b10d18cc36093979e3caa8563c74dddc54a1d83a5bd1acf0ad"
     },
     "case-c953a948a8c83d3a": {
       "case_id": "case-c953a948a8c83d3a",
@@ -13105,6 +14395,31 @@
       "seed": 0,
       "signature": null,
       "source_hash": "c953a948a8c83d3a6ee5c345790aeaf74577d4cd5ee264464fb22ae0ac2233b7"
+    },
+    "case-ca7eb2d7e84e7bd3": {
+      "case_id": "case-ca7eb2d7e84e7bd3",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:41:01-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=int",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:12-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 3535790747,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "ca7eb2d7e84e7bd3323130bf3fc58b9bb43edeb934b0b9190986f891b15d7cab"
     },
     "case-cb1366297d1c477f": {
       "case_id": "case-cb1366297d1c477f",
@@ -13163,7 +14478,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:27-06:00",
+      "last_seen_at": "2026-11-02T17:13:08-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -13177,7 +14492,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 3460967357,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -13194,12 +14510,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:59-06:00",
+      "last_seen_at": "2026-11-02T17:15:06-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 3305071838,
       "signature": null,
@@ -13365,6 +14682,28 @@
       "signature": null,
       "source_hash": "cec7331c2744e42c07b81bf44c6ec44bed0d531d825400e7d00f6cc04f2595b2"
     },
+    "case-cf172dc0e098e321": {
+      "case_id": "case-cf172dc0e098e321",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:22-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=gamma num=75",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:22-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 4092891721,
+      "signature": null,
+      "source_hash": "cf172dc0e098e321fa57fae5291fd9366752385bf580a487f7d3a42cab42db3d"
+    },
     "case-cf28812ae3e06f1e": {
       "case_id": "case-cf28812ae3e06f1e",
       "classification": "DIVERGENT",
@@ -13455,16 +14794,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:03-06:00",
+      "last_seen_at": "2026-11-02T17:15:09-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 4249018436,
       "signature": null,
       "source_hash": "d0432a4618ecd76c005d241d5ec0ec122889973c308b5f177a638bb886d8629d"
+    },
+    "case-d10128cb9a6be220": {
+      "case_id": "case-d10128cb9a6be220",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:47-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=abs",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:47-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 1304260098,
+      "signature": null,
+      "source_hash": "d10128cb9a6be22000eee0c117d74801c41bc4c0741865941537051f2426d002"
     },
     "case-d13269db2f01ee0a": {
       "case_id": "case-d13269db2f01ee0a",
@@ -13478,7 +14840,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:33-06:00",
+      "last_seen_at": "2026-11-02T17:13:14-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -13492,7 +14854,8 @@
         "run_20261102_015202_bounded_fa_seed42",
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
-        "run_20261102_162422_bounded_fa_seed42"
+        "run_20261102_162422_bounded_fa_seed42",
+        "run_20261102_171304_bounded_fa_seed42"
       ],
       "seed": 3582477022,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -13580,12 +14943,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:02-06:00",
+      "last_seen_at": "2026-11-02T17:13:43-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 613628803,
       "signature": null,
@@ -13696,7 +15060,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:47-06:00",
+      "last_seen_at": "2026-11-02T17:14:55-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -13705,7 +15069,9 @@
         "run_20261102_021118_bounded_fb_seed77",
         "run_20261102_025254_bounded_fb_seed77",
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 3630936879,
       "signature": null,
@@ -13744,16 +15110,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:51-06:00",
+      "last_seen_at": "2026-11-02T17:14:58-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 2146509353,
       "signature": null,
       "source_hash": "d354c2f7cc2e83528f9e6491579a07278a3ecc9f99284a20a0206f6143403da0"
+    },
+    "case-d36a84bf47c40471": {
+      "case_id": "case-d36a84bf47c40471",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:36-06:00",
+      "description": "bounded[generator_expression_sequence_consumption/int] factor=5 thresh=1",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:36-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 1137651678,
+      "signature": null,
+      "source_hash": "d36a84bf47c404716426890fbdf0842e1307f61ab1640e796b090ecaaa8936c2"
     },
     "case-d372fe9f53a51add": {
       "case_id": "case-d372fe9f53a51add",
@@ -14077,12 +15466,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:01-06:00",
+      "last_seen_at": "2026-11-02T17:13:42-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 1351531223,
       "signature": null,
@@ -14293,16 +15683,17 @@
       "case_id": "case-db5a45382e9ec23a",
       "classification": "EQUIV",
       "classifications": [
-        "EQUIV"
+        "EQUIV",
+        "UNSUPPORTED"
       ],
       "created_at": "2026-10-30T16:13:15-06:00",
       "description": "Canary I: Multiple starred args",
       "expected_exception": null,
       "family": "unpacking",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:32-06:00",
+      "last_seen_at": "2026-11-02T17:07:50-06:00",
       "minimized_from": null,
-      "nondeterministic": false,
+      "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
@@ -14318,10 +15709,12 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 8,
-      "signature": null,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "db5a45382e9ec23ae378594be7001749ee9bfd473a670130831a39204f0c6b88"
     },
     "case-db5e1c85c5a1679a": {
@@ -14347,6 +15740,28 @@
       "signature": null,
       "source_hash": "db5e1c85c5a1679ab62718bc5cc537569567735eaa32cff6476b8561c023a9fa"
     },
+    "case-dbeb0ddc398041fd": {
+      "case_id": "case-dbeb0ddc398041fd",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:38-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=7 c2=12",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:38-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 60269341,
+      "signature": null,
+      "source_hash": "dbeb0ddc398041fde4a1c14c9fa11cd92515a83b392ac5ac89dcb7dbe7559c8d"
+    },
     "case-dbee3bc1af90ad34": {
       "case_id": "case-dbee3bc1af90ad34",
       "classification": "EQUIV",
@@ -14358,12 +15773,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:56-06:00",
+      "last_seen_at": "2026-11-02T17:13:37-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 3701002945,
       "signature": null,
@@ -14916,7 +16332,7 @@
       "expected_exception": "TypeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T16:28:32-06:00",
+      "last_seen_at": "2026-11-02T17:07:50-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -14934,7 +16350,9 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 9,
       "signature": null,
@@ -14951,7 +16369,7 @@
       "expected_exception": "RuntimeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T16:28:28-06:00",
+      "last_seen_at": "2026-11-02T17:07:47-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -14969,7 +16387,9 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 4,
       "signature": null,
@@ -15350,6 +16770,28 @@
       "signature": null,
       "source_hash": "e8264281bfc36321c53ca0093c19d51ea8a5e2b2e8d2268588c4ecb88e78257b"
     },
+    "case-e83e2ead2a44044f": {
+      "case_id": "case-e83e2ead2a44044f",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:29-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=8 c2=15",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:29-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 3759958078,
+      "signature": null,
+      "source_hash": "e83e2ead2a44044f53e739d197ebabecdb21c59591299464e42cc4c77fe0f1f5"
+    },
     "case-e8e467249af66a85": {
       "case_id": "case-e8e467249af66a85",
       "classification": "DIVERGENT",
@@ -15428,16 +16870,42 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:56-06:00",
+      "last_seen_at": "2026-11-02T17:15:03-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 4140675832,
       "signature": null,
       "source_hash": "e972f289027a754467fe23c5a5cbfc96a5953339f26d45781faa7558b1872c29"
+    },
+    "case-e9b6c64f2359d689": {
+      "case_id": "case-e9b6c64f2359d689",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:57-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=4 c2=18",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:01-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 598757003,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "e9b6c64f2359d68900b0cdc16ae891f5fd82aabfe66355dc8b8a5b4ef091dbf6"
     },
     "case-e9c571912d958cd5": {
       "case_id": "case-e9c571912d958cd5",
@@ -15487,6 +16955,31 @@
       "signature": null,
       "source_hash": "ea38730723669d7e6f5bf774d5a7f9796cbce73aca1eff710c6e60addcf09b34"
     },
+    "case-ead1661b24b3a1fe": {
+      "case_id": "case-ead1661b24b3a1fe",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:56-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=int",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:11:57-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 647503842,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "ead1661b24b3a1feaa01f51088cb29ea6f33ff5f6523431355a3d62557e03418"
+    },
     "case-eb39a8908636f382": {
       "case_id": "case-eb39a8908636f382",
       "classification": "EQUIV",
@@ -15498,12 +16991,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:49-06:00",
+      "last_seen_at": "2026-11-02T17:13:32-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 3184935163,
       "signature": null,
@@ -15557,16 +17051,65 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:24:59-06:00",
+      "last_seen_at": "2026-11-02T17:13:40-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162448_bounded_fb_seed42"
+        "run_20261102_162448_bounded_fb_seed42",
+        "run_20261102_171331_bounded_fb_seed42"
       ],
       "seed": 2783290795,
       "signature": null,
       "source_hash": "ecd7196b010e211dfd16700d3f8e26564002c66f690e042dad614796f6d4e58e"
+    },
+    "case-ecf4ef9e54b28b58": {
+      "case_id": "case-ecf4ef9e54b28b58",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:57-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=beta num=58",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:25-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101",
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 290136735,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "ecf4ef9e54b28b58787b910eca920c62645e9b61ecefe3427dfd59ffa6a55c32"
+    },
+    "case-ed0b1cb745443a2b": {
+      "case_id": "case-ed0b1cb745443a2b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:37-06:00",
+      "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=apple w2=fox",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:37-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 2140700838,
+      "signature": null,
+      "source_hash": "ed0b1cb745443a2b5b1c939cee387522fa8f1833ced852c82f333caff2223ce0"
     },
     "case-ed2489cc47afe5cf": {
       "case_id": "case-ed2489cc47afe5cf",
@@ -15689,16 +17232,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:01-06:00",
+      "last_seen_at": "2026-11-02T17:15:07-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 2545801602,
       "signature": null,
       "source_hash": "eef901093d42ee813b8381b47e1a8568fe56414003040b7ace4751560c91a7f5"
+    },
+    "case-ef224407fcfd3c3f": {
+      "case_id": "case-ef224407fcfd3c3f",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:12:34-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=8 c2=18",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:12:34-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171221_bounded_fe_seed2026"
+      ],
+      "seed": 3981253048,
+      "signature": null,
+      "source_hash": "ef224407fcfd3c3f93dbd20bf9c4e8b7073f28a989c822e65d2b41bdbfe99a39"
     },
     "case-ef41b74fabe54e8f": {
       "case_id": "case-ef41b74fabe54e8f",
@@ -15809,7 +17375,7 @@
       "expected_exception": null,
       "family": "super",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:28:27-06:00",
+      "last_seen_at": "2026-11-02T17:07:46-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -15827,11 +17393,35 @@
         "run_20261102_025402_canary",
         "run_20261102_025649_canary",
         "run_20261102_162411_canary",
-        "run_20261102_162824_canary"
+        "run_20261102_162824_canary",
+        "run_20261102_170553_canary",
+        "run_20261102_170744_canary"
       ],
       "seed": 2,
-      "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "efd722252f2ec8ffe6b352463d5f0ac9a220b2be679debb153dc3c2c1076ec35"
+    },
+    "case-f0d13d8f73eaa2c9": {
+      "case_id": "case-f0d13d8f73eaa2c9",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:14:41-06:00",
+      "description": "bounded[nested_class_function_scope/int] offset=13 mult=4",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:14:41-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_171426_bounded_fd_seed42"
+      ],
+      "seed": 1461042543,
+      "signature": null,
+      "source_hash": "f0d13d8f73eaa2c91711113da7c0fe8b3b3205e0dbb657a373e93c9cc610b719"
     },
     "case-f1133bb355c77e65": {
       "case_id": "case-f1133bb355c77e65",
@@ -15890,12 +17480,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:48-06:00",
+      "last_seen_at": "2026-11-02T17:14:56-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 271291275,
       "signature": null,
@@ -15997,6 +17588,31 @@
       "seed": 0,
       "signature": null,
       "source_hash": "f36a46521089979b559db3f523c5304b86c15605832c849a2c4c10dd90a61f44"
+    },
+    "case-f3b99ded99302171": {
+      "case_id": "case-f3b99ded99302171",
+      "classification": "UNSUPPORTED",
+      "classifications": [
+        "UNSUPPORTED",
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T16:40:56-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=abs",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:11:59-06:00",
+      "minimized_from": null,
+      "nondeterministic": true,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_164053_bounded_fe_seed101",
+        "run_20261102_170755_bounded_fe_seed101",
+        "run_20261102_171148_bounded_fe_seed101"
+      ],
+      "seed": 3761133258,
+      "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
+      "source_hash": "f3b99ded99302171228ce384d95bbbb9a8b6bd1c72ae69a208c1fc26da270650"
     },
     "case-f3c278773f07657d": {
       "case_id": "case-f3c278773f07657d",
@@ -16312,12 +17928,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:25:57-06:00",
+      "last_seen_at": "2026-11-02T17:15:04-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 433990593,
       "signature": null,
@@ -16379,12 +17996,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T16:26:04-06:00",
+      "last_seen_at": "2026-11-02T17:15:10-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_162544_bounded_seed11"
+        "run_20261102_162544_bounded_seed11",
+        "run_20261102_171452_bounded_seed11"
       ],
       "seed": 3566066163,
       "signature": null,
@@ -16965,7 +18583,12 @@
     "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other": [
       "case-12f1927c109c482a",
       "case-5d70255b7c194dce",
-      "case-0d8c4e46dd483884"
+      "case-0d8c4e46dd483884",
+      "case-6f1f7e109453d11a",
+      "case-1ebfab27519cf852",
+      "case-91cf8d620c4a4eff",
+      "case-a908825382eabb7b",
+      "case-456743584efce2ed"
     ],
     "DIVERGENT|cpython:ok:-|piton:EXECUTE:AttributeError|stdout:other->absent": [
       "case-8cc7606a60f547ad",
@@ -17008,12 +18631,32 @@
       "case-197a08a33ad7ddc8",
       "case-5f60999d87bbe0fa",
       "case-7561f203676e567d",
-      "case-48e44585a07fde44"
-    ],
-    "UNSUPPORTED|cpython:ok:-|piton:MIR:-": [
-      "case-efd722252f2ec8ff"
+      "case-48e44585a07fde44",
+      "case-03a2817e254ca5e0",
+      "case-65f8ee6189ffb917",
+      "case-2d1e81415cf12302",
+      "case-4929604dd43dfd14",
+      "case-64cade0b6d908f5e",
+      "case-8497b959193b284b",
+      "case-ead1661b24b3a1fe",
+      "case-f3b99ded99302171",
+      "case-e9b6c64f2359d689",
+      "case-ecf4ef9e54b28b58",
+      "case-6ec3c39b62bcf6b6",
+      "case-1513b06d2f5cdac9",
+      "case-b4deed9bddfd1f0b",
+      "case-7bb350599baf5fee",
+      "case-c8b57ee09f57de7d",
+      "case-3f862b390ded7271",
+      "case-ca7eb2d7e84e7bd3",
+      "case-c4cde107c427eac8",
+      "case-efd722252f2ec8ff",
+      "case-52ec2e43a5d86c64",
+      "case-95c9b5863dcab5d0",
+      "case-228d90a490532bbb",
+      "case-db5a45382e9ec23a"
     ]
   },
-  "updated_at": "2026-11-02T16:29:14-06:00",
+  "updated_at": "2026-11-02T17:15:18-06:00",
   "version": 1
 }

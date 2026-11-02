@@ -1,0 +1,96 @@
+{
+  "case_id": "case-b7b01b29a1a3c2a7",
+  "created_at": "2026-11-02T17:15:18-06:00",
+  "description": "bounded[dunder_rich_comparison/bool] depth=2",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "b7b01b29a1a3c2a71a63f3756bfc872518ef93393c3f356f933a03edb41a2f06",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 67.58524000179023,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "b7b01b29a1a3c2a71a63f3756bfc872518ef93393c3f356f933a03edb41a2f06",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "False True False False\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "69a7b136c327893a503b4105532c166ea56c78b2dfe023e5156b308e8130fb8c",
+      "build_exit_code": 0,
+      "build_ms": 467.40428100019926,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 22.589963999052998,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0030.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "b7b01b29a1a3c2a71a63f3756bfc872518ef93393c3f356f933a03edb41a2f06",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 374,
+          "surface_sha256": "f1a5aac3ff70325c33e8d896211125c433a5639978364b3a7920d7034e38873a"
+        },
+        "BUILD": {
+          "artifact_bytes": 15096,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "69a7b136c327893a503b4105532c166ea56c78b2dfe023e5156b308e8130fb8c",
+          "c_chars": 290271,
+          "c_sha256": "1b3545d1763e1c4383be9778a46e454588bc75a94d7d8b6b34b3d6d01cdb0f43",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "False True False False\n",
+      "surface_sha256": "f1a5aac3ff70325c33e8d896211125c433a5639978364b3a7920d7034e38873a",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "class C1:\n    def __init__(self, p, tag):\n        self.p = p\n        self.tag = tag\n    def __eq__(self, other):\n        return self.p == other.p\n    def __lt__(self, other):\n        return self.p < other.p\n    def __le__(self, other):\n        return self.p <= other.p\n\nx = C1(6, 'x')\ny = C1(0, 'y')\nprint(x == y, x != y, x < y, x <= y)\n",
+    "source_hash": "b7b01b29a1a3c2a71a63f3756bfc872518ef93393c3f356f933a03edb41a2f06"
+  },
+  "run_id": "run_20261102_171452_bounded_seed11",
+  "seed": 3929671299,
+  "source": "class C1:\n    def __init__(self, p, tag):\n        self.p = p\n        self.tag = tag\n    def __eq__(self, other):\n        return self.p == other.p\n    def __lt__(self, other):\n        return self.p < other.p\n    def __le__(self, other):\n        return self.p <= other.p\n\nx = C1(6, 'x')\ny = C1(0, 'y')\nprint(x == y, x != y, x < y, x <= y)\n",
+  "source_hash": "b7b01b29a1a3c2a71a63f3756bfc872518ef93393c3f356f933a03edb41a2f06"
+}

@@ -72,6 +72,14 @@ FRONTIER_D_SHAPES: Tuple[str, ...] = (
     "nested_class_function_scope",
 )
 
+FRONTIER_E_SHAPES: Tuple[str, ...] = (
+    "map_builtin_callable_dispatch",
+    "filter_truthiness_and_builtin_dispatch",
+    "string_format_conversions_and_indexes",
+    "string_split_whitespace_and_splitlines_keepends",
+    "min_max_heterogeneous_key_dispatch",
+)
+
 
 @dataclass(frozen=True)
 class BoundedConfig:
@@ -1131,6 +1139,8 @@ asyncio.run(main())
             candidate_shapes = list(FRONTIER_C_SHAPES)
         elif cfg.frontier and str(cfg.frontier).lower() in ("d", "frontier_d", "inheritance", "object_model"):
             candidate_shapes = list(FRONTIER_D_SHAPES)
+        elif cfg.frontier and str(cfg.frontier).lower() in ("e", "frontier_e", "functional", "builtins"):
+            candidate_shapes = list(FRONTIER_E_SHAPES)
         else:
             candidate_shapes = [
                 "default_expr_fn",
@@ -1150,6 +1160,7 @@ asyncio.run(main())
                 *FRONTIER_B_SHAPES,
                 *FRONTIER_C_SHAPES,
                 *FRONTIER_D_SHAPES,
+                *FRONTIER_E_SHAPES,
             ]
         shape = self.rng.choice(candidate_shapes)
 
@@ -1782,6 +1793,90 @@ asyncio.run(main())
                 f"print(a.get(), b.get())\n"
             )
             desc = f"bounded[nested_class_function_scope/int] offset={offset} mult={multiplier}"
+
+        elif shape == "map_builtin_callable_dispatch":
+            b1 = self.rng.choice(["abs", "int", "bool"])
+            if b1 == "abs":
+                c1 = self.rng.randint(1, 10)
+                c2 = self.rng.randint(11, 20)
+                code = (
+                    f"vals = [-{c1}, {c2}, -5]\n"
+                    f"res1 = list(map(abs, vals))\n"
+                    f"res2 = tuple(map(lambda x: x * 2, res1))\n"
+                    f"print(res1, res2)\n"
+                )
+            elif b1 == "int":
+                c1 = self.rng.randint(10, 50)
+                c2 = self.rng.randint(60, 99)
+                code = (
+                    f"vals = ['{c1}', '{c2}', '-7']\n"
+                    f"res1 = list(map(int, vals))\n"
+                    f"def double(x):\n"
+                    f"    return x * 2\n"
+                    f"res2 = list(map(double, res1))\n"
+                    f"print(res1, res2)\n"
+                )
+            else:  # bool
+                c1 = self.rng.randint(1, 10)
+                code = (
+                    f"vals = [0, {c1}, '', 'hi', [], [1]]\n"
+                    f"res1 = list(map(bool, vals))\n"
+                    f"res2 = tuple(map(len, ['a', 'abc', 'hello']))\n"
+                    f"print(res1, res2)\n"
+                )
+            desc = f"bounded[map_builtin_callable_dispatch/builtin] b1={b1}"
+
+        elif shape == "filter_truthiness_and_builtin_dispatch":
+            c1 = self.rng.randint(1, 9)
+            c2 = self.rng.randint(10, 20)
+            code = (
+                f"raw = [0, {c1}, False, True, '', 'ok', [], [{c2}]]\n"
+                f"f_none = list(filter(None, raw))\n"
+                f"nums = [-5, -2, 0, 3, 7]\n"
+                f"f_pos = list(filter(lambda x: x > 0, nums))\n"
+                f"f_bool = tuple(filter(bool, [0, 1, 2, 0, 4]))\n"
+                f"print(f_none, f_pos, f_bool)\n"
+            )
+            desc = f"bounded[filter_truthiness_and_builtin_dispatch/mixed] c1={c1} c2={c2}"
+
+        elif shape == "string_format_conversions_and_indexes":
+            tag = self.rng.choice(["alpha", "beta", "gamma"])
+            num = self.rng.randint(10, 99)
+            code = (
+                f"s1 = '{{1}} {{0}} {{1}}'.format('A', 'B')\n"
+                f"s2 = '{{!r}} {{!s}}'.format('{tag}', {num})\n"
+                f"s3 = 'item={{name!r}} val={{val}}'.format(name='{tag}', val={num})\n"
+                f"print(s1, s2, s3)\n"
+            )
+            desc = f"bounded[string_format_conversions_and_indexes/str] tag={tag} num={num}"
+
+        elif shape == "string_split_whitespace_and_splitlines_keepends":
+            w1 = self.rng.choice(["apple", "cherry", "orange"])
+            w2 = self.rng.choice(["dog", "cat", "fox"])
+            code = (
+                f"text = '   {w1}   {w2}  \\t  piton  \\n  '\n"
+                f"p1 = text.split()\n"
+                f"p2 = '1:2:3:4:5'.split(':', 2)\n"
+                f"multi = 'line1\\nline2\\nline3'\n"
+                f"l_keep = multi.splitlines(True)\n"
+                f"l_drop = multi.splitlines(False)\n"
+                f"print(p1, p2, l_keep, l_drop)\n"
+            )
+            desc = f"bounded[string_split_whitespace_and_splitlines_keepends/str] w1={w1} w2={w2}"
+
+        elif shape == "min_max_heterogeneous_key_dispatch":
+            c1 = self.rng.randint(2, 8)
+            c2 = self.rng.randint(9, 15)
+            code = (
+                f"m1 = min(True, {c1}, 0)\n"
+                f"m2 = max(False, -5, {c2})\n"
+                f"words = ['banana', 'apple', 'fig', 'strawberry']\n"
+                f"m_word = min(words, key=len)\n"
+                f"nums = [-15, 3, -2, 8]\n"
+                f"m_num = max(nums, key=abs)\n"
+                f"print(m1, m2, m_word, m_num)\n"
+            )
+            desc = f"bounded[min_max_heterogeneous_key_dispatch/mixed] c1={c1} c2={c2}"
 
         else:  # property_computed_class
             cls_name = self.ast_gen.new_class()

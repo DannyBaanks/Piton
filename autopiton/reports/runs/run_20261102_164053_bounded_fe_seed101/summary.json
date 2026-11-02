@@ -1,0 +1,24 @@
+{
+  "cases_registered": 22,
+  "classification_counts": {
+    "CRASH": 0,
+    "DIVERGENT": 0,
+    "EQUIV": 0,
+    "INCONCLUSIVE": 0,
+    "INVALID_ACCEPTED": 0,
+    "INVALID_REFERENCE": 0,
+    "NONDETERMINISTIC": 0,
+    "TIMEOUT": 0,
+    "UNSUPPORTED": 25
+  },
+  "duration_ms": 7854.5,
+  "finished_at": "2026-11-02T16:41:01-06:00",
+  "harness_errors": 0,
+  "programs_executed": 25,
+  "programs_requested": 25,
+  "run_id": "run_20261102_164053_bounded_fe_seed101",
+  "unique_divergences": 1,
+  "unique_signatures": [
+    "UNSUPPORTED|cpython:ok:-|piton:BUILD:-"
+  ]
+}

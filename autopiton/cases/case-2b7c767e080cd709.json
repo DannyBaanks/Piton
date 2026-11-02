@@ -1,0 +1,96 @@
+{
+  "case_id": "case-2b7c767e080cd709",
+  "created_at": "2026-11-02T17:12:27-06:00",
+  "description": "bounded[string_format_conversions_and_indexes/str] tag=beta num=69",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "2b7c767e080cd70928d8768e6ddf53d4fae7c9c2ceb22179b4923a8bdfcd60ac",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 66.71525799902156,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "2b7c767e080cd70928d8768e6ddf53d4fae7c9c2ceb22179b4923a8bdfcd60ac",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "B A B 'beta' 69 item='beta' val=69\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "3c1530011589c7f72295a48b7e5dee4203856a5d87edb90afe3720411754bfce",
+      "build_exit_code": 0,
+      "build_ms": 780.2490680005576,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 18.439538001985056,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0007.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "2b7c767e080cd70928d8768e6ddf53d4fae7c9c2ceb22179b4923a8bdfcd60ac",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 152,
+          "surface_sha256": "51c03da35a139be1e3974e34efad10c6a94787f7f8adec7a91fefc1c8228b3ce"
+        },
+        "BUILD": {
+          "artifact_bytes": 24536,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "3c1530011589c7f72295a48b7e5dee4203856a5d87edb90afe3720411754bfce",
+          "c_chars": 287914,
+          "c_sha256": "ce6a4c5367b8badc591045a54e322d6e95aa34bfb184862d49face09fb55351b",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "B A B 'beta' 69 item='beta' val=69\n",
+      "surface_sha256": "51c03da35a139be1e3974e34efad10c6a94787f7f8adec7a91fefc1c8228b3ce",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "s1 = '{1} {0} {1}'.format('A', 'B')\ns2 = '{!r} {!s}'.format('beta', 69)\ns3 = 'item={name!r} val={val}'.format(name='beta', val=69)\nprint(s1, s2, s3)\n",
+    "source_hash": "2b7c767e080cd70928d8768e6ddf53d4fae7c9c2ceb22179b4923a8bdfcd60ac"
+  },
+  "run_id": "run_20261102_171221_bounded_fe_seed2026",
+  "seed": 1813410345,
+  "source": "s1 = '{1} {0} {1}'.format('A', 'B')\ns2 = '{!r} {!s}'.format('beta', 69)\ns3 = 'item={name!r} val={val}'.format(name='beta', val=69)\nprint(s1, s2, s3)\n",
+  "source_hash": "2b7c767e080cd70928d8768e6ddf53d4fae7c9c2ceb22179b4923a8bdfcd60ac"
+}
