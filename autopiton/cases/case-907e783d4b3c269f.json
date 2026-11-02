@@ -1,0 +1,101 @@
+{
+  "case_id": "case-907e783d4b3c269f",
+  "created_at": "2026-11-01T22:14:43-06:00",
+  "description": "bounded[dunder_subscript_mapping/int] depth=2",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "907e783d4b3c269f3a9a3108c4f8fa01476a6e1637f98692c5621ea941eb42b8",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "DIVERGENT",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 32.0338149977033,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "907e783d4b3c269f3a9a3108c4f8fa01476a6e1637f98692c5621ea941eb42b8",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "8 -9 -8 3\n",
+      "timed_out": false
+    },
+    "details": {
+      "cpython_stdout": "8 -9 -8 3\n",
+      "piton_exit": 1,
+      "piton_stderr": "KeyError: \n",
+      "piton_stdout": ""
+    },
+    "piton": {
+      "artifact_sha256": "dde286390f4da3415406547397ca1e62dde2a8c521fbf0886e5abb4b0d2d3440",
+      "build_exit_code": 0,
+      "build_ms": 514.8513160020229,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 7.835151001927443,
+      "executed": true,
+      "exit_code": 1,
+      "failed_stage": null,
+      "filename": "program_0003.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "907e783d4b3c269f3a9a3108c4f8fa01476a6e1637f98692c5621ea941eb42b8",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 402,
+          "surface_sha256": "0c6294373e1229cecb85e238b7039187a628d63cdbcecd097921009d566d0e02"
+        },
+        "BUILD": {
+          "artifact_bytes": 30088,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "dde286390f4da3415406547397ca1e62dde2a8c521fbf0886e5abb4b0d2d3440",
+          "c_chars": 283414,
+          "c_sha256": "07332b06cc5ffc308304b59525c34d482cfb28d988fa3812fe065eec58dd57b3",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "KeyError: \n",
+      "stdout": "",
+      "surface_sha256": "0c6294373e1229cecb85e238b7039187a628d63cdbcecd097921009d566d0e02",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON failed during execution",
+    "source": "class C1:\n    def __init__(self):\n        self._d = {'k1': (-(-8))}\n    def __getitem__(self, key):\n        return self._d[key]\n    def __setitem__(self, key, val):\n        self._d[key] = val\n    def __len__(self):\n        return len(self._d)\n\ninst = C1()\nv_read = inst['k1']\ninst['k2'] = (-1 - 8)\ninst['k3'] = -8\nprint(v_read, inst['k2'], inst['k3'], len(inst))\n",
+    "source_hash": "907e783d4b3c269f3a9a3108c4f8fa01476a6e1637f98692c5621ea941eb42b8"
+  },
+  "run_id": "run_20261101_221441_bounded_fa_seed42",
+  "seed": 127978094,
+  "source": "class C1:\n    def __init__(self):\n        self._d = {'k1': (-(-8))}\n    def __getitem__(self, key):\n        return self._d[key]\n    def __setitem__(self, key, val):\n        self._d[key] = val\n    def __len__(self):\n        return len(self._d)\n\ninst = C1()\nv_read = inst['k1']\ninst['k2'] = (-1 - 8)\ninst['k3'] = -8\nprint(v_read, inst['k2'], inst['k3'], len(inst))\n",
+  "source_hash": "907e783d4b3c269f3a9a3108c4f8fa01476a6e1637f98692c5621ea941eb42b8"
+}

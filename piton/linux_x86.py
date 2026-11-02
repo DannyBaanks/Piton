@@ -139,6 +139,23 @@ static long piton_object_repr_hook(long obj,const char*cls){
   }
   return 0;
 }
+/* OBJECT_STR_HOOK_V1: tabla clase -> __str__ que el emitter llena. */
+static const char* g_str_hook_cls[PITON_REPR_HOOK_MAX];
+static long g_str_hook_fn[PITON_REPR_HOOK_MAX];
+static long g_str_hook_n=0;
+static void piton_object_str_hook_set(const char*cls,long fn){
+  for(long i=0;i<g_str_hook_n;++i)if(g_str_hook_cls[i]&&piton_strcmp(g_str_hook_cls[i],cls)==0){g_str_hook_fn[i]=fn;return;}
+  if(g_str_hook_n>=PITON_REPR_HOOK_MAX)return;
+  g_str_hook_cls[g_str_hook_n]=cls;g_str_hook_fn[g_str_hook_n]=fn;++g_str_hook_n;
+}
+static long piton_object_str_hook(long obj,const char*cls){
+  if(!cls)return 0;
+  for(long i=0;i<g_str_hook_n;++i)if(g_str_hook_cls[i]&&piton_strcmp(g_str_hook_cls[i],cls)==0){
+    if(!g_str_hook_fn[i])return 0;
+    return((long(*)(long))g_str_hook_fn[i])(obj);
+  }
+  return piton_object_repr_hook(obj,cls);
+}
 /* REPR_V1: repr() byte-identico a CPython. str usa comillas; escalares y
  * colecciones reimitan el camino del printer de slot, pero a un buffer. */
 typedef struct{long len;long cap;char*d;}PitonStrBuf;
@@ -1059,9 +1076,13 @@ static PitonDict*piton_conv_dict(PitonSlot src){
    esta materializado como una secuencia de tuplas, asi que se convierte con
    el mismo helper que dict(lista_de_pares). */
 static long piton_conv_dict_from_genexpr(long raw){PitonGenExpr*g=(PitonGenExpr*)raw;if(!g||!g->source){piton_write(2,"TypeError: cannot convert to a dict\n",33);piton_exit(1);}return(long)piton_conv_dict((PitonSlot){(long)g->source,PK_LIST});}
+#ifndef PITON_GEN_MAGIC
+#define PITON_GEN_MAGIC 0x5049544E47654ELL
+#endif
+static long piton_gen_next(long raw);
 typedef struct{long magic;long kind;void*raw;long index;}PitonAnyIterator;
 static long piton_iterator_new_any(void*raw,long kind){if(!raw||(kind!=PK_LIST&&kind!=PK_TUPLE&&kind!=PK_DICT&&kind!=PK_SET&&kind!=PK_FROZENSET&&kind!=PK_RANGE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonAnyIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->raw=raw;i->index=0;i->kind=kind;return(long)i;}
-static long piton_iterator_next_any(long raw){PitonAnyIterator*i=(PitonAnyIterator*)raw;if(!i||i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_RANGE)n=piton_range_len((PitonRange*)i->raw);else if(i->kind==PK_SET||i->kind==PK_FROZENSET)n=((PitonSet*)i->raw)->length;else{piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else if(i->kind==PK_RANGE){PitonRange*rr=(PitonRange*)i->raw;v.bits=rr->start+(i->index++)*rr->step;v.kind=PK_INT;}else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
+static long piton_iterator_next_any(long raw){if(!raw){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(*(long*)raw==PITON_GEN_MAGIC)return piton_gen_next(raw);PitonAnyIterator*i=(PitonAnyIterator*)raw;if(i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_RANGE)n=piton_range_len((PitonRange*)i->raw);else if(i->kind==PK_SET||i->kind==PK_FROZENSET)n=((PitonSet*)i->raw)->length;else{piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else if(i->kind==PK_RANGE){PitonRange*rr=(PitonRange*)i->raw;v.bits=rr->start+(i->index++)*rr->step;v.kind=PK_INT;}else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
 typedef struct{long magic;const char*str;long index;long length;}PitonStrIterator;
 static long piton_str_iterator_new(const char*str){if(!str){piton_write(2,"TypeError: 'NoneType' object is not iterable\n",42);piton_exit(1);}PitonStrIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E53545249LL;i->str=str;i->index=0;i->length=piton_strlen(str);return(long)i;}
 static long piton_str_iterator_next(long raw){PitonStrIterator*i=(PitonStrIterator*)raw;if(!i||i->magic!=0x5049544E53545249LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->length){piton_raise_set("StopIteration","");return 0;}unsigned char c=i->str[i->index++];char*p=piton_alloc(2);p[0]=(char)c;p[1]=0;return(long)p;}
@@ -1364,7 +1385,8 @@ static int piton_dict_eq(PitonDict*a,PitonDict*b){
 }
 static void piton_print_set(PitonSet*s){if(s->kind==PK_SET&&s->length==0){piton_write(piton_print_fd,"set()",5);return;}piton_write(piton_print_fd,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(piton_print_fd,", ",2);piton_print_slot_repr(s->items[i]);}piton_write(piton_print_fd,"}",1);}
 static long piton_object_repr_hook(long obj,const char*cls);
-static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_repr_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
+static long piton_object_str_hook(long obj,const char*cls);
+static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_str_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
 /* SEQ_ELEM_REPR_V1: los elementos de una coleccion se imprimen con el
    repr completo de CPython (escapes de backslash/comillas); el camino
    viejo escribia el str raw dentro de [ ] y print(["a\\b"]) divergiaba.
@@ -1626,6 +1648,11 @@ static const char* piton_str_of_value(long bits){if(bits==(long)&piton_none_sing
   if(piton_maybe_ptr(bits)){
     long*ptr=(long*)bits;
     if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_OBJECT){
+      if(ptr[1]==PK_OBJECT){
+        long s=piton_object_str_hook(bits,((PitonObject*)bits)->class_name);
+        if(s)return (const char*)s;
+        return "<object>";
+      }
       PitonSeq*s=(PitonSeq*)bits;
       if(s->kind==PK_LIST||s->kind==PK_TUPLE)return (const char*)piton_str_from_seq((PitonSeq*)bits);
       piton_raise_set("TypeError","%s format: unsupported collection value");
@@ -1762,6 +1789,7 @@ static long piton_list_append_bound(long self,long v){piton_seq_append((PitonSeq
    divergir; un no-iterable levanta el TypeError de CPython (exit 1). */
 static long piton_iter_dynamic(long bits){
   if(piton_maybe_ptr(bits)){
+    if(*(long*)bits==PITON_GEN_MAGIC)return bits;
     long*ptr=(long*)bits;long k=ptr[1];
     if(ptr[0]>=0&&ptr[0]<1000000L){
       if(k==PK_LIST||k==PK_TUPLE)return piton_iterator_new_any((void*)bits,(int)k);
@@ -3991,13 +4019,18 @@ class LinuxCEmitter:
         self._cur_slots = slots
         locals_ = sorted((slots if function.frame_abi else slots - set(function.params)) - self._shared_globals)
         lines = [signature + " {"]
-        # OBJECT_REPR_HOOK_V1: registrar __repr__ de clases para el repr de C.
+        # OBJECT_REPR_HOOK_V1 / OBJECT_STR_HOOK_V1: registrar hooks de __repr__ y __str__.
         if is_main:
             for _cls in sorted(self.classes):
                 for _cand in self.class_mro.get(_cls, [_cls]):
                     _target = f"{_cand}____repr__"
                     if "__repr__" in self.classes.get(_cand, set()) and _target in self.function_names:
                         lines.append(f"    piton_object_repr_hook_set({json.dumps(_cls)},(long)&{_name(_target)});")
+                        break
+                for _cand in self.class_mro.get(_cls, [_cls]):
+                    _target = f"{_cand}____str__"
+                    if "__str__" in self.classes.get(_cand, set()) and _target in self.function_names:
+                        lines.append(f"    piton_object_str_hook_set({json.dumps(_cls)},(long)&{_name(_target)});")
                         break
         # the emitted lines of THIS function: a mixed-type y/o rewrites the
         # line of its first arm, which lives here (not in the per-op buffer).
@@ -4222,6 +4255,8 @@ class LinuxCEmitter:
             return True
         if left_type in {"list", "tuple", "dict", "set"} and left_type == right_type:
             return True
+        if left_type.startswith("object:") or right_type.startswith("object:"):
+            return False
         return left_type == right_type and left_type not in {"none", ""}
 
     def _truth_expr(self, value: Any, vtype: str, strict: bool) -> str:
@@ -4434,7 +4469,10 @@ class LinuxCEmitter:
         }.get(value_type or "int", "PK_OBJECT")
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
-        return f"piton_slot({self._value(value)},{self._kind(types.get(value, 'int'))})"
+        vtype = types.get(value)
+        if not vtype:
+            return f"piton_slot_guess({self._value(value)})"
+        return f"piton_slot({self._value(value)},{self._kind(vtype)})"
 
     def _needle_slot(self, value: Any, types: dict[str, str]) -> str:
         """NEEDLE_SLOT_V1: el needle de un `in` como expresion C de PitonSlot.
@@ -6653,7 +6691,7 @@ class LinuxCEmitter:
         out.append(f"    {_name(result)}={prefix}{expression};")
         types[result] = "bool"
 
-    def _resolve_method(self, class_name: str, method: str) -> str:
+    def _find_class_method(self, class_name: str, method: str) -> str | None:
         for candidate in self.class_mro.get(class_name, []):
             if method in self.classes.get(candidate, set()):
                 return candidate
@@ -6662,6 +6700,25 @@ class LinuxCEmitter:
             if method in self.classes.get(current, set()):
                 return current
             current = self.class_parents.get(current)
+        return None
+
+    def _is_subclass(self, cls_b: str, cls_a: str) -> bool:
+        if cls_b == cls_a:
+            return True
+        for candidate in self.class_mro.get(cls_b, []):
+            if candidate == cls_a:
+                return True
+        current = cls_b
+        while current:
+            if current == cls_a:
+                return True
+            current = self.class_parents.get(current)
+        return False
+
+    def _resolve_method(self, class_name: str, method: str) -> str:
+        found = self._find_class_method(class_name, method)
+        if found is not None:
+            return found
         raise NativeBuildError(f"native method not found: {class_name}.{method}")
 
     def _resolve_property_class(self, owner_type: str, name: str) -> str | None:
@@ -7873,7 +7930,17 @@ class LinuxCEmitter:
             elif source_type.startswith("object:"):
                 class_name = source_type.split(":", 1)[1]
                 method_class = self._resolve_method(class_name, "__iter__")
-                out.append(f"    {_name(result)}={_name(method_class+'__'+'__iter__')}({self._value(source)});")
+                iter_fn = method_class + "____iter__"
+                gen_layout = self.generator_layouts.get(iter_fn)
+                if gen_layout is not None:
+                    # ITER_GEN_METHOD_V1: __iter__ con yield es un generador:
+                    # debe instanciarse con piton_gen_new y types='generator'.
+                    params = self.function_params.get(iter_fn, ["self"])
+                    vararg = self.function_varargs.get(iter_fn)
+                    self._emit_gen_args(out, result, iter_fn, gen_layout, params, vararg, [source], types)
+                    types[result] = "generator"
+                    return out
+                out.append(f"    {_name(result)}={_name(iter_fn)}({self._value(source)});")
                 # ITER_DISPATCH_V1: si la clase NO tiene __next__, __iter__()
                 # retorna un iterador independiente (ej: iter([1,2])),
                 # no self. No marcar como iterator:object:P porque iter_next
@@ -8416,7 +8483,10 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"NameError: name '{source}' is not defined")
 
             aliases[result] = source
-            types[result] = types.get(source, "int")
+            if source in types:
+                types[result] = types[source]
+            elif source not in function.params:
+                types[result] = "int"
             if source in self._tuple_elems:
                 self._tuple_elems[result] = self._tuple_elems[source]
             if source in self._dict_elems:
@@ -9695,25 +9765,112 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}={neg}(piton_cx_eq({left_cx},{right_cx}));")
                 types[result] = "bool"
                 return out
-            if operator == "==" and (left_type.startswith("object:") or right_type.startswith("object:")):
-                owner_side = left_type if left_type.startswith("object:") else right_type
-                cls_name = owner_side.split(":", 1)[1]
-                eq_cls = None
-                for candidate in self.class_mro.get(cls_name, []):
-                    if "__eq__" in self.classes.get(candidate, set()):
-                        eq_cls = candidate
-                        break
-                if eq_cls is None and "__eq__" in self.classes.get(cls_name, set()):
-                    eq_cls = cls_name
-                if eq_cls is not None:
-                    target = _name(eq_cls + "__" + "__eq__")
-                    frame_args = ",".join(self._value(v) for v in (left, right))
-                    if self.function_frame_abi.get(eq_cls + "____eq__", False):
-                        out.append(f'    {{long _ee_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},2,_ee_args);}}')
+            _RICH_CMP_OPS = {
+                "==": ("__eq__", "__eq__"),
+                "!=": ("__ne__", "__ne__"),
+                "<":  ("__lt__", "__gt__"),
+                "<=": ("__le__", "__ge__"),
+                ">":  ("__gt__", "__lt__"),
+                ">=": ("__ge__", "__le__"),
+            }
+            if operator in _RICH_CMP_OPS and (left_type.startswith("object:") or right_type.startswith("object:")):
+                left_cls = left_type.split(":", 1)[1] if left_type.startswith("object:") else None
+                right_cls = right_type.split(":", 1)[1] if right_type.startswith("object:") else None
+                prim_d, refl_d = _RICH_CMP_OPS[operator]
+
+                target_cls = None
+                target_method = None
+                call_args = None
+
+                # Python data model dispatch order:
+                # If right is a strict subclass of left, try reflected dunder on right first!
+                if left_cls and right_cls and right_cls != left_cls and self._is_subclass(right_cls, left_cls):
+                    r_cand = self._find_class_method(right_cls, refl_d)
+                    if r_cand is not None:
+                        target_cls, target_method, call_args = r_cand, refl_d, (right, left)
+                    else:
+                        l_cand = self._find_class_method(left_cls, prim_d)
+                        if l_cand is not None:
+                            target_cls, target_method, call_args = l_cand, prim_d, (left, right)
+                else:
+                    if left_cls:
+                        l_cand = self._find_class_method(left_cls, prim_d)
+                        if l_cand is not None:
+                            target_cls, target_method, call_args = l_cand, prim_d, (left, right)
+                    if target_cls is None and right_cls:
+                        r_cand = self._find_class_method(right_cls, refl_d)
+                        if r_cand is not None:
+                            target_cls, target_method, call_args = r_cand, refl_d, (right, left)
+
+                if target_cls is not None:
+                    target_fn = f"{target_cls}__{target_method}"
+                    target = _name(target_fn)
+                    frame_args = ",".join(self._value(v) for v in call_args)
+                    if self.function_frame_abi.get(target_fn, False):
+                        out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},2,_rc_args);}}')
                     else:
                         out.append(f"    {_name(result)}={target}({frame_args});")
+                    self._emit_exc_check(out, function, compare_handler)
                     types[result] = "bool"
                     return out
+
+                # Fallback for != : if neither defines __ne__, try __eq__ and negate!
+                if operator == "!=":
+                    eq_target_cls = None
+                    eq_call_args = None
+                    if left_cls and right_cls and right_cls != left_cls and self._is_subclass(right_cls, left_cls):
+                        r_cand = self._find_class_method(right_cls, "__eq__")
+                        if r_cand is not None:
+                            eq_target_cls, eq_call_args = r_cand, (right, left)
+                        else:
+                            l_cand = self._find_class_method(left_cls, "__eq__")
+                            if l_cand is not None:
+                                eq_target_cls, eq_call_args = l_cand, (left, right)
+                    else:
+                        if left_cls:
+                            l_cand = self._find_class_method(left_cls, "__eq__")
+                            if l_cand is not None:
+                                eq_target_cls, eq_call_args = l_cand, (left, right)
+                        if eq_target_cls is None and right_cls:
+                            r_cand = self._find_class_method(right_cls, "__eq__")
+                            if r_cand is not None:
+                                eq_target_cls, eq_call_args = r_cand, (right, left)
+
+                    if eq_target_cls is not None:
+                        target_fn = f"{eq_target_cls}____eq__"
+                        target = _name(target_fn)
+                        frame_args = ",".join(self._value(v) for v in eq_call_args)
+                        if self.function_frame_abi.get(target_fn, False):
+                            out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=!(piton_frame_call((long)&{target},2,_rc_args));}}')
+                        else:
+                            out.append(f"    {_name(result)}=!({target}({frame_args}));")
+                        self._emit_exc_check(out, function, compare_handler)
+                        types[result] = "bool"
+                        return out
+
+                    # No __ne__ and no __eq__: identity comparison!
+                    if left_cls and right_cls:
+                        out.append(f"    {_name(result)}=({self._value(left)} != {self._value(right)});")
+                    else:
+                        out.append(f"    {_name(result)}=1;")
+                    types[result] = "bool"
+                    return out
+
+                # Fallback for == : no __eq__ defined -> identity comparison!
+                if operator == "==":
+                    if left_cls and right_cls:
+                        out.append(f"    {_name(result)}=({self._value(left)} == {self._value(right)});")
+                    else:
+                        out.append(f"    {_name(result)}=0;")
+                    types[result] = "bool"
+                    return out
+
+                # Ordering operators (<, <=, >, >=) without custom methods: TypeError in Python!
+                lt_name = left_cls or left_type
+                rt_name = right_cls or right_type
+                self._runtime_type_error(out, f"'{operator}' not supported between instances of '{lt_name}' and '{rt_name}'")
+                types[result] = "bool"
+                return out
             if left_type in {"bytes", "bytearray"} or right_type in {"bytes", "bytearray"}:
                 # BYTES_CMP_V1: content comparison across bytes/bytearray;
                 # against any other type only ==/!= are defined.
@@ -10582,6 +10739,34 @@ class LinuxCEmitter:
                         # STR_SEQ_V1 (mismo camino que '%s'): el str() de una
                         # secuencia es su repr, como en CPython.
                         out.append(f"    {_name(result)}=piton_str_from_seq((PitonSeq*){operand});")
+                    elif arg_type and (arg_type.startswith("object:") or arg_type == "object"):
+                        if arg_type.startswith("object:"):
+                            cls_name = arg_type.split(":", 1)[1]
+                            str_cls = self._find_class_method(cls_name, "__str__")
+                            if str_cls is not None:
+                                target_fn = f"{str_cls}____str__"
+                                target = _name(target_fn)
+                                if self.function_frame_abi.get(target_fn, False):
+                                    out.append(f'    {{long _s_args[]={{ {operand} }}; {_name(result)}=piton_frame_call((long)&{target},1,_s_args);}}')
+                                else:
+                                    out.append(f"    {_name(result)}={target}({operand});")
+                                self._emit_exc_check(out, function, call_handler)
+                            else:
+                                repr_cls = self._find_class_method(cls_name, "__repr__")
+                                if repr_cls is not None:
+                                    target_fn = f"{repr_cls}____repr__"
+                                    target = _name(target_fn)
+                                    if self.function_frame_abi.get(target_fn, False):
+                                        out.append(f'    {{long _r_args[]={{ {operand} }}; {_name(result)}=piton_frame_call((long)&{target},1,_r_args);}}')
+                                    else:
+                                        out.append(f"    {_name(result)}={target}({operand});")
+                                    self._emit_exc_check(out, function, call_handler)
+                                else:
+                                    out.append(f"    {{long _pr=piton_object_str_hook({operand},\"{cls_name}\"); {_name(result)}=_pr?_pr:(long)\"<{cls_name} object>\";}}")
+                        else:
+                            out.append(f"    {{long _pr=piton_object_str_hook({operand},((PitonObject*){operand})->class_name); {_name(result)}=_pr?_pr:(long)\"<object>\";}}")
+                    elif arg_type in {"dict", "set", "set:frozen", "bytes", "bytearray"}:
+                        out.append(f"    {_name(result)}=piton_slot_repr({operand},{self._kind(arg_type)});")
                     elif arg_type is None or arg_type == "":
                         # STR_DYNAMIC_V1: tipo desconocido (parametro, bloque
                         # emitido fuera de orden) -> str() de runtime.
@@ -10953,6 +11138,31 @@ class LinuxCEmitter:
                     except NativeBuildError:
                         _iter_cls = None
                     if _iter_cls:
+                        _iter_fn = _iter_cls + "____iter__"
+                        _gen_layout = self.generator_layouts.get(_iter_fn)
+                        if _gen_layout is not None:
+                            _gparams = self.function_params.get(_iter_fn, ["self"])
+                            _gvararg = self.function_varargs.get(_iter_fn)
+                            _named_g = [p for p in _gparams if p != _gvararg]
+                            _self_slot = _gen_layout.get(_named_g[0], 0) if _named_g else 0
+                            _coll_code = f"(long)piton_collect_gen(_gtmp)"
+                            if seq_kind == "PK_TUPLE":
+                                out.append(
+                                    f"    {{long _gtmp=piton_gen_new((long)&{_iter_fn},{len(_gen_layout)});"
+                                    f" ((PitonGenerator*)_gtmp)->slots[{_self_slot}]={self._value(values[0])};"
+                                    f" long _gl={_coll_code};"
+                                    f" {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{_gl,PK_LIST}});}}"
+                                )
+                                types[result] = "tuple"
+                            else:
+                                out.append(
+                                    f"    {{long _gtmp=piton_gen_new((long)&{_iter_fn},{len(_gen_layout)});"
+                                    f" ((PitonGenerator*)_gtmp)->slots[{_self_slot}]={self._value(values[0])};"
+                                    f" {_name(result)}={_coll_code};}}"
+                                )
+                                types[result] = "list"
+                            self._coll_elems[result] = "int"
+                            return out
                         _has_next = any(
                             "__next__" in self.classes.get(c, set())
                             for c in self.class_mro.get(_cls, [])
@@ -11484,7 +11694,8 @@ class LinuxCEmitter:
             )
             return out
         elif op == "subscript_store":
-            collection, index, value = args
+            collection, index, value = args[:3]
+            handler_label = args[3] if len(args) > 3 else None
             coll_type = types.get(collection, "")
             if coll_type in {"list", "tuple"}:
                 # Relax index type check
@@ -11534,13 +11745,36 @@ class LinuxCEmitter:
                 out.append("        }")
                 out.append("        if(_ss_ok){")
                 out.append(f"            piton_seq_set((PitonSeq*)_ss_coll,{self._value(index)},{self._slot(value, types)});")
-                self._emit_exc_check(out, function, None)
+                self._emit_exc_check(out, function, handler_label)
                 out.append("        } else {")
                 out.append('        piton_raise_set("TypeError","\'int\' object does not support item assignment");')
-                self._emit_exc_check(out, function, None)
+                self._emit_exc_check(out, function, handler_label)
                 out.append("        }")
                 out.append("    }")
-            elif coll_type in ("", "int", "slot", "builtin") or coll_type.startswith(("object:", "class:")):
+            elif coll_type is not None and coll_type.startswith("object:"):
+                # SETITEM_DUNDER_V1: obj[k] = v despacha a __setitem__ por MRO.
+                cls_name = coll_type.split(":", 1)[1]
+                hit = None
+                for candidate in self.class_mro.get(cls_name, [cls_name]):
+                    if "__setitem__" in self.classes.get(candidate, set()):
+                        hit = candidate
+                        break
+                if hit is None and "__setitem__" in self.classes.get(cls_name, set()):
+                    hit = cls_name
+                if hit is not None:
+                    target_fn = hit + "____setitem__"
+                    target = _name(target_fn)
+                    if self.function_frame_abi.get(target_fn, False):
+                        out.append(f'    {{long _si_args[]={{ {self._value(collection)},{self._value(index)},{self._value(value)} }}; piton_frame_call((long)&{target},3,_si_args);}}')
+                    else:
+                        out.append(f"    {target}({self._value(collection)},{self._value(index)},{self._value(value)});")
+                    self._emit_exc_check(out, function, handler_label)
+                    return out
+                else:
+                    out.append(f'    piton_raise_set("TypeError","\'{cls_name}\' object does not support item assignment");')
+                    self._emit_exc_check(out, function, handler_label)
+                    return out
+            elif coll_type in ("", "int", "slot", "builtin") or coll_type.startswith("class:"):
                 # SUBSCRIPT_STORE_UNKNOWN_V1: el tipo estatico del target no
                 # se conoce (pipes.py: list[-1][-1] = x sobre elem de lista
                 # heterogenea). Misma politica que SUBSCRIPT_STORE_INT_V1:
@@ -11555,10 +11789,10 @@ class LinuxCEmitter:
                 out.append("        }")
                 out.append("        if(_ss_ok){")
                 out.append(f"            piton_seq_set((PitonSeq*)_ss_coll,{self._value(index)},{self._slot(value, types)});")
-                self._emit_exc_check(out, function, None)
+                self._emit_exc_check(out, function, handler_label)
                 out.append("        } else {")
                 out.append('        piton_raise_set("TypeError","object does not support item assignment");')
-                self._emit_exc_check(out, function, None)
+                self._emit_exc_check(out, function, handler_label)
                 out.append("        }")
                 out.append("    }")
             else:
@@ -12653,6 +12887,11 @@ class LinuxCEmitter:
                         self._call_param_types.setdefault(target, {})[_mparams[_mi]] = _mvt
             all_values = self._pack_call_varargs(out, target, all_values, types)
             values = ",".join(self._value(v) for v in all_values)
+            if target in self.generator_layouts:
+                _glayout = self.generator_layouts[target]
+                self._emit_gen_args(out, result, target, _glayout, _mparams, self.function_varargs.get(target), all_values, types)
+                types[result] = "generator"
+                return out
             if self.function_frame_abi.get(target, False):
                 args_c = ",".join(self._value(v) for v in all_values)
                 out.append(f'    {{long _method_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_values)},_method_args);}}')
@@ -13326,12 +13565,13 @@ class LinuxCEmitter:
                     types[result] = "int"
                     self._emit_exc_check(out, function, _gi_handler)
                     return out
-                target = _name(hit + "____getitem__")
-                if self.function_frame_abi.get(hit + "____getitem__", False):
+                target_fn = hit + "____getitem__"
+                target = _name(target_fn)
+                if self.function_frame_abi.get(target_fn, False):
                     out.append(f'    {{long _gi_args[]={{ {self._value(coll)},{self._value(idx)} }}; {_name(result)}=piton_frame_call((long)&{target},2,_gi_args);}}')
                 else:
                     out.append(f"    {_name(result)}={target}({self._value(coll)},{self._value(idx)});")
-                types[result] = "int"
+                types[result] = self.function_return_types.get(target_fn, "int")
                 self._emit_exc_check(out, function, _gi_handler)
                 return out
             else:

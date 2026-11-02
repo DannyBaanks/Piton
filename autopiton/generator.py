@@ -40,6 +40,14 @@ class ProgramFamily(Enum):
 
 NON_RANDOM_FAMILIES = (ProgramFamily.SYSTEMATIC, ProgramFamily.MODULE)
 
+FRONTIER_A_SHAPES: Tuple[str, ...] = (
+    "dunder_subscript_mapping",
+    "dunder_contains_membership",
+    "dunder_iterable_protocol",
+    "dunder_str_repr",
+    "dunder_rich_comparison",
+)
+
 
 @dataclass(frozen=True)
 class BoundedConfig:
@@ -49,17 +57,22 @@ class BoundedConfig:
     max_args: int = 2
     max_iters: int = 4
     types: Tuple[str, ...] = ("int", "float", "bool", "str")
+    frontier: Optional[str] = None
+    shapes: Optional[Tuple[str, ...]] = None
 
     def clamped(self) -> "BoundedConfig":
         valid_types = tuple(
             t for t in self.types if t in {"int", "float", "bool", "str"}
         ) or ("int", "float", "bool", "str")
+        valid_shapes = tuple(self.shapes) if self.shapes else None
         return BoundedConfig(
             max_depth=max(1, min(4, int(self.max_depth))),
             max_stmts=max(1, min(6, int(self.max_stmts))),
             max_args=max(1, min(4, int(self.max_args))),
             max_iters=max(1, min(6, int(self.max_iters))),
             types=valid_types,
+            frontier=self.frontier,
+            shapes=valid_shapes,
         )
 
 
@@ -1084,21 +1097,28 @@ asyncio.run(main())
         depth = cfg.max_depth
         allowed = cfg.types
         target_type = self.rng.choice(list(allowed))
-        shape = self.rng.choice([
-            "default_expr_fn",
-            "closure_capture_fn",
-            "class_method_default",
-            "super_inheritance_expr",
-            "loop_conditional_call",
-            "try_except_else_call",
-            "comprehension_filter_call",
-            "property_computed_class",
-            "mutable_container_unpack",
-            "generator_yield_try",
-            "dunder_operator_class",
-            "nonlocal_mutable_closure",
-            "try_finally_return_flow",
-        ])
+        if cfg.shapes:
+            candidate_shapes = list(cfg.shapes)
+        elif cfg.frontier and str(cfg.frontier).lower() in ("a", "frontier_a", "dunders"):
+            candidate_shapes = list(FRONTIER_A_SHAPES)
+        else:
+            candidate_shapes = [
+                "default_expr_fn",
+                "closure_capture_fn",
+                "class_method_default",
+                "super_inheritance_expr",
+                "loop_conditional_call",
+                "try_except_else_call",
+                "comprehension_filter_call",
+                "property_computed_class",
+                "mutable_container_unpack",
+                "generator_yield_try",
+                "dunder_operator_class",
+                "nonlocal_mutable_closure",
+                "try_finally_return_flow",
+                *FRONTIER_A_SHAPES,
+            ]
+        shape = self.rng.choice(candidate_shapes)
 
         if shape == "default_expr_fn":
             f = self.ast_gen.new_func()
@@ -1346,6 +1366,101 @@ asyncio.run(main())
                 f"print(r1, r2, {log})\n"
             )
             desc = f"bounded[try_finally_return_flow/int] depth={depth}"
+
+        elif shape == "dunder_subscript_mapping":
+            cls_name = self.ast_gen.new_class()
+            v1 = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), None, ("int", "bool"))
+            v2 = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), None, ("int", "bool"))
+            v3 = self.ast_gen.bounded_expr_source("int", max(1, depth - 1), None, ("int", "bool"))
+            code = (
+                f"class {cls_name}:\n"
+                f"    def __init__(self):\n"
+                f"        self._d = {{'k1': {v1}}}\n"
+                f"    def __getitem__(self, key):\n"
+                f"        return self._d[key]\n"
+                f"    def __setitem__(self, key, val):\n"
+                f"        self._d[key] = val\n"
+                f"    def __len__(self):\n"
+                f"        return len(self._d)\n\n"
+                f"inst = {cls_name}()\n"
+                f"v_read = inst['k1']\n"
+                f"inst['k2'] = {v2}\n"
+                f"inst['k3'] = {v3}\n"
+                f"print(v_read, inst['k2'], inst['k3'], len(inst))\n"
+            )
+            desc = f"bounded[dunder_subscript_mapping/int] depth={depth}"
+
+        elif shape == "dunder_contains_membership":
+            cls_name = self.ast_gen.new_class()
+            t = self.ast_gen.bounded_expr_source("int", 0, None, ("int",))
+            other = repr(int(t) + 7)
+            code = (
+                f"class {cls_name}:\n"
+                f"    def __init__(self, target):\n"
+                f"        self.target = target\n"
+                f"    def __contains__(self, item):\n"
+                f"        return item == self.target\n\n"
+                f"box = {cls_name}({t})\n"
+                f"print({t} in box, {other} in box, {other} not in box)\n"
+            )
+            desc = f"bounded[dunder_contains_membership/bool] depth={depth}"
+
+        elif shape == "dunder_iterable_protocol":
+            cls_name = self.ast_gen.new_class()
+            iters = self.rng.randint(2, cfg.max_iters)
+            step_v = self.ast_gen.bounded_expr_source("int", 0, None, ("int",))
+            code = (
+                f"class {cls_name}:\n"
+                f"    def __init__(self, limit):\n"
+                f"        self.limit = limit\n"
+                f"    def __iter__(self):\n"
+                f"        for i in range(self.limit):\n"
+                f"            yield i + {step_v}\n\n"
+                f"seq = {cls_name}({iters})\n"
+                f"out = []\n"
+                f"for elem in seq:\n"
+                f"    out.append(elem)\n"
+                f"print(out, list(seq))\n"
+            )
+            desc = f"bounded[dunder_iterable_protocol/int] depth={depth} iters={iters}"
+
+        elif shape == "dunder_str_repr":
+            cls_name = self.ast_gen.new_class()
+            tag = self.rng.choice(["val", "item", "node", "elem"])
+            val = self.ast_gen.bounded_expr_source("int", 0, None, ("int",))
+            code = (
+                f"class {cls_name}:\n"
+                f"    def __init__(self, val):\n"
+                f"        self.val = val\n"
+                f"    def __str__(self):\n"
+                f"        return '{tag}:' + str(self.val)\n"
+                f"    def __repr__(self):\n"
+                f"        return '<' + '{tag}' + ' ' + str(self.val) + '>'\n\n"
+                f"obj = {cls_name}({val})\n"
+                f"print(str(obj), repr(obj))\n"
+            )
+            desc = f"bounded[dunder_str_repr/str] depth={depth}"
+
+        elif shape == "dunder_rich_comparison":
+            cls_name = self.ast_gen.new_class()
+            v1 = self.ast_gen.bounded_expr_source("int", 0, None, ("int",))
+            v2 = self.ast_gen.bounded_expr_source("int", 0, None, ("int",))
+            code = (
+                f"class {cls_name}:\n"
+                f"    def __init__(self, p, tag):\n"
+                f"        self.p = p\n"
+                f"        self.tag = tag\n"
+                f"    def __eq__(self, other):\n"
+                f"        return self.p == other.p\n"
+                f"    def __lt__(self, other):\n"
+                f"        return self.p < other.p\n"
+                f"    def __le__(self, other):\n"
+                f"        return self.p <= other.p\n\n"
+                f"x = {cls_name}({v1}, 'x')\n"
+                f"y = {cls_name}({v2}, 'y')\n"
+                f"print(x == y, x != y, x < y, x <= y)\n"
+            )
+            desc = f"bounded[dunder_rich_comparison/bool] depth={depth}"
 
         else:  # property_computed_class
             cls_name = self.ast_gen.new_class()

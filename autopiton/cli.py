@@ -169,11 +169,15 @@ def doctor_command(args):
 def _bounded_config_from_args(args) -> BoundedConfig:
     types_raw = getattr(args, "types", None)
     types_tuple = tuple(types_raw) if types_raw else ("int", "float", "bool", "str")
+    shapes_raw = getattr(args, "shapes", None)
+    shapes_tuple = tuple(shapes_raw) if shapes_raw else None
     return BoundedConfig(
         max_depth=getattr(args, "max_depth", 2) or 2,
         max_stmts=getattr(args, "max_stmts", 3) or 3,
         max_args=getattr(args, "max_args", 2) or 2,
         types=types_tuple,
+        frontier=getattr(args, "frontier", None),
+        shapes=shapes_tuple,
     ).clamped()
 
 
@@ -183,7 +187,7 @@ def generate_command(args):
     if args.seed is not None:
         generator.seed(args.seed)
 
-    if getattr(args, "bounded", False):
+    if getattr(args, "bounded", False) or getattr(args, "frontier", None) or getattr(args, "shapes", None):
         programs = generator.generate_bounded(
             count=args.count,
             config=_bounded_config_from_args(args),
@@ -251,8 +255,9 @@ def compare_command(args):
         mode = "systematic"
         seed = None
         programs = generator.systematic_corpus()
-    elif getattr(args, "bounded", False):
-        mode = "bounded"
+    elif getattr(args, "bounded", False) or getattr(args, "frontier", None) or getattr(args, "shapes", None):
+        frontier_label = getattr(args, "frontier", None)
+        mode = f"bounded_f{frontier_label}" if frontier_label else "bounded"
         seed = args.seed if args.seed is not None else 0
         generator.seed(seed)
         programs = generator.generate_bounded(
@@ -762,6 +767,8 @@ def main():
     gen_parser.add_argument("-c", "--count", type=int, default=10, help="Number of programs")
     gen_parser.add_argument("-f", "--family", nargs="+", help="Program families to generate")
     gen_parser.add_argument("--bounded", action="store_true", help="Use bounded cross-feature generation")
+    gen_parser.add_argument("--frontier", "-F", help="Frontier mode (e.g. 'a' for dunder protocols)")
+    gen_parser.add_argument("--shapes", nargs="+", help="Specific bounded shapes to generate")
     gen_parser.add_argument("--max-depth", type=int, default=2, help="Bounded expression depth (1..4)")
     gen_parser.add_argument("--max-stmts", type=int, default=3, help="Bounded statement count (1..6)")
     gen_parser.add_argument("--max-args", type=int, default=2, help="Bounded parameter count (1..4)")
@@ -780,6 +787,8 @@ def main():
     cmp_parser.add_argument("--canary", action="store_true", help="Use the mandatory canary cases")
     cmp_parser.add_argument("--systematic", action="store_true", help="Use the deterministic systematic grid")
     cmp_parser.add_argument("--bounded", action="store_true", help="Use bounded cross-feature generation")
+    cmp_parser.add_argument("--frontier", "-F", help="Frontier mode (e.g. 'a' for dunder protocols)")
+    cmp_parser.add_argument("--shapes", nargs="+", help="Specific bounded shapes to generate")
     cmp_parser.add_argument("--max-depth", type=int, default=2, help="Bounded expression depth (1..4)")
     cmp_parser.add_argument("--max-stmts", type=int, default=3, help="Bounded statement count (1..6)")
     cmp_parser.add_argument("--max-args", type=int, default=2, help="Bounded parameter count (1..4)")
