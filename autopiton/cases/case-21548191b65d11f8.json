@@ -1,0 +1,96 @@
+{
+  "case_id": "case-21548191b65d11f8",
+  "created_at": "2026-11-02T16:25:27-06:00",
+  "description": "bounded[context_manager_exit_inspection/int] suppress=False",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "21548191b65d11f8a9ad5622797cea5ce5cd58e8e102c48dfcd1ad6439e34eef",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 64.03357900126139,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "21548191b65d11f8a9ad5622797cea5ce5cd58e8e102c48dfcd1ad6439e34eef",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "handled: 402 err\nouter caught: 402 err\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "060b8f33732fec80e521aec641eac801e6cbded77e1da03ae8f6a10056183570",
+      "build_exit_code": 0,
+      "build_ms": 869.6714590005286,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 17.051821003406076,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0014.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "21548191b65d11f8a9ad5622797cea5ce5cd58e8e102c48dfcd1ad6439e34eef",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 500,
+          "surface_sha256": "3b21f1a19ac2da8e71dfecbcdcdb6cee48d10f1f2d31c6e7773961917578905b"
+        },
+        "BUILD": {
+          "artifact_bytes": 25840,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "060b8f33732fec80e521aec641eac801e6cbded77e1da03ae8f6a10056183570",
+          "c_chars": 287243,
+          "c_sha256": "f278c59f915fcb3dc9bc0ea612232377342daa0efda400bc0790bdf6c0a8d655",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "handled: 402 err\nouter caught: 402 err\n",
+      "surface_sha256": "3b21f1a19ac2da8e71dfecbcdcdb6cee48d10f1f2d31c6e7773961917578905b",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "class C2(Exception):\n    def __init__(self, code, msg):\n        self.code = code\n        self.msg = msg\n\nclass C1:\n    def __enter__(self):\n        return self\n    def __exit__(self, exc_type, exc_val, tb):\n        if exc_val is not None:\n            print('handled:', exc_val.code, exc_val.msg)\n            return False\n        return False\n\ntry:\n    with C1():\n        raise C2(402, 'err')\nexcept C2 as e:\n    print('outer caught:', e.code, e.msg)\n",
+    "source_hash": "21548191b65d11f8a9ad5622797cea5ce5cd58e8e102c48dfcd1ad6439e34eef"
+  },
+  "run_id": "run_20261102_162514_bounded_fc_seed42",
+  "seed": 613628803,
+  "source": "class C2(Exception):\n    def __init__(self, code, msg):\n        self.code = code\n        self.msg = msg\n\nclass C1:\n    def __enter__(self):\n        return self\n    def __exit__(self, exc_type, exc_val, tb):\n        if exc_val is not None:\n            print('handled:', exc_val.code, exc_val.msg)\n            return False\n        return False\n\ntry:\n    with C1():\n        raise C2(402, 'err')\nexcept C2 as e:\n    print('outer caught:', e.code, e.msg)\n",
+  "source_hash": "21548191b65d11f8a9ad5622797cea5ce5cd58e8e102c48dfcd1ad6439e34eef"
+}

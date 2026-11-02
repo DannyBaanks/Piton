@@ -1,0 +1,101 @@
+{
+  "case_id": "case-f131931eaee0e57e",
+  "created_at": "2026-11-02T16:08:11-06:00",
+  "description": "bounded[inherited_class_attribute_lookup/int] base_a=22 sub_b=83",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "f131931eaee0e57ef774b9c9d80a8fc6c743fcf66a37f5fe4b1fd0ff855219b4",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "DIVERGENT",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.962315002601827,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "f131931eaee0e57ef774b9c9d80a8fc6c743fcf66a37f5fe4b1fd0ff855219b4",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "22 52\n22 83\n22 83\n22 83 22 83\n",
+      "timed_out": false
+    },
+    "details": {
+      "cpython_stdout": "22 52\n22 83\n22 83\n22 83 22 83\n",
+      "piton_exit": 1,
+      "piton_stderr": "AttributeError\n",
+      "piton_stdout": "22 52\n"
+    },
+    "piton": {
+      "artifact_sha256": "47d28cc00796ff0113d68607a51c2e17d52d46d080588a6114924be66dd76b46",
+      "build_exit_code": 0,
+      "build_ms": 515.2087970018329,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": "",
+      "exception_type": "AttributeError",
+      "execute_ms": 7.632011998794042,
+      "executed": true,
+      "exit_code": 1,
+      "failed_stage": null,
+      "filename": "program_0018.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "f131931eaee0e57ef774b9c9d80a8fc6c743fcf66a37f5fe4b1fd0ff855219b4",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 212,
+          "surface_sha256": "f5b4c531402caa322f770667e1b7f99507801078ddf27df80f0c705beda8593b"
+        },
+        "BUILD": {
+          "artifact_bytes": 25264,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "47d28cc00796ff0113d68607a51c2e17d52d46d080588a6114924be66dd76b46",
+          "c_chars": 287259,
+          "c_sha256": "637015ff98d8f5db58227c3ae61b3d0404c0c19d862c58935cbac46e48dc527e",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "AttributeError\n",
+      "stdout": "22 52\n",
+      "surface_sha256": "f5b4c531402caa322f770667e1b7f99507801078ddf27df80f0c705beda8593b",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON failed during execution",
+    "source": "class C1:\n    a = 22\n    b = 52\n\nclass C2(C1):\n    b = 83\n\nclass C3(C2):\n    pass\n\ns1 = C2()\ns2 = C3()\nprint(C1.a, C1.b)\nprint(C2.a, C2.b)\nprint(C3.a, C3.b)\nprint(s1.a, s1.b, s2.a, s2.b)\n",
+    "source_hash": "f131931eaee0e57ef774b9c9d80a8fc6c743fcf66a37f5fe4b1fd0ff855219b4"
+  },
+  "run_id": "run_20261102_160755_bounded_fd_seed99",
+  "seed": 3494765994,
+  "source": "class C1:\n    a = 22\n    b = 52\n\nclass C2(C1):\n    b = 83\n\nclass C3(C2):\n    pass\n\ns1 = C2()\ns2 = C3()\nprint(C1.a, C1.b)\nprint(C2.a, C2.b)\nprint(C3.a, C3.b)\nprint(s1.a, s1.b, s2.a, s2.b)\n",
+  "source_hash": "f131931eaee0e57ef774b9c9d80a8fc6c743fcf66a37f5fe4b1fd0ff855219b4"
+}

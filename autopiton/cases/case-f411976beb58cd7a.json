@@ -1,0 +1,101 @@
+{
+  "case_id": "case-f411976beb58cd7a",
+  "created_at": "2026-11-02T16:07:59-06:00",
+  "description": "bounded[inherited_staticmethod_dispatch/int] c1=14",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "f411976beb58cd7a8b1d62c7efc2b3c98e50b07095145431987ae3f837c0d1c4",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "UNSUPPORTED",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 67.32584899873473,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "f411976beb58cd7a8b1d62c7efc2b3c98e50b07095145431987ae3f837c0d1c4",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "19 23 27\n",
+      "timed_out": false
+    },
+    "details": {
+      "piton_stage_error": {
+        "error_message": "/usr/bin/ld: /tmp/ccvq2UzE.o: in function `piton_main':\nprogram.c:(.text+0x3044): undefined reference to `C2__calc'\ncollect2: error: ld returned 1 exit status",
+        "error_type": "GccError",
+        "stage": "BUILD"
+      }
+    },
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 672.232675999112,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "BUILD",
+      "filename": "program_0003.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "f411976beb58cd7a8b1d62c7efc2b3c98e50b07095145431987ae3f837c0d1c4",
+      "stage_reached": "MIR",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 185,
+          "surface_sha256": "41ddbc879fd1026d5ef6f329c129b87418b4ec8bc94f0e4feff450827c95bae6"
+        },
+        "BUILD": {
+          "c_chars": 285494,
+          "c_sha256": "da7e33d5bef102e80cdd870428b128009284ad6064d65cecbd19133d19027900",
+          "error_message": "/usr/bin/ld: /tmp/ccvq2UzE.o: in function `piton_main':\nprogram.c:(.text+0x3044): undefined reference to `C2__calc'\ncollect2: error: ld returned 1 exit status",
+          "error_type": "GccError",
+          "gcc_returncode": 1,
+          "gcc_stderr": "/usr/bin/ld: /tmp/ccvq2UzE.o: in function `piton_main':\nprogram.c:(.text+0x3044): undefined reference to `C2__calc'\ncollect2: error: ld returned 1 exit status\n",
+          "passed": false
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "41ddbc879fd1026d5ef6f329c129b87418b4ec8bc94f0e4feff450827c95bae6",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON rejected the program at BUILD",
+    "source": "class C1:\n    @staticmethod\n    def calc(a, b):\n        return a + b + 14\n\nclass C2(C1):\n    pass\n\ninst = C2()\nprint(C1.calc(2, 3), C2.calc(4, 5), inst.calc(6, 7))\n",
+    "source_hash": "f411976beb58cd7a8b1d62c7efc2b3c98e50b07095145431987ae3f837c0d1c4"
+  },
+  "run_id": "run_20261102_160755_bounded_fd_seed99",
+  "seed": 2527189548,
+  "source": "class C1:\n    @staticmethod\n    def calc(a, b):\n        return a + b + 14\n\nclass C2(C1):\n    pass\n\ninst = C2()\nprint(C1.calc(2, 3), C2.calc(4, 5), inst.calc(6, 7))\n",
+  "source_hash": "f411976beb58cd7a8b1d62c7efc2b3c98e50b07095145431987ae3f837c0d1c4"
+}

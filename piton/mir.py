@@ -1034,9 +1034,18 @@ class MIRLowerer:
                     list(getattr(_imp, "body", []) or []),
                     name_prefix=f"{_imp_name.replace('.', '__')}__",
                 )
-            for node in module_body:
-                if node.kind != HIRKind.CLASS_DEF:
-                    continue
+            def _find_classes(nodes):
+                res = []
+                for item in nodes:
+                    if getattr(item, "kind", None) == HIRKind.CLASS_DEF:
+                        res.append(item)
+                    for attr in ("body", "orelse", "finalbody"):
+                        sub = getattr(item, attr, None)
+                        if isinstance(sub, list):
+                            res.extend(_find_classes(sub))
+                return res
+
+            for node in _find_classes(module_body):
                 # METACLASS_KEYWORD_V1: `class ABC(metaclass=ABCMeta)` — el
                 # metaclass no aporta metodos de usuario al subset (los metodos
                 # propios del metaclass fallan cerrados al invocarse), asi que
@@ -1143,6 +1152,7 @@ class MIRLowerer:
                         self.classes[node.name].add(method.name)
                     else:
                         self.class_properties.setdefault(node.name, {}).setdefault(prop_name, {})[role] = symbol
+            self._finalize_mro()
             for node in module_body:
                 # YIELD_SCAN_V1: a `producir` nested inside a loop/if counts —
                 # the old top-level-only scan missed `para x en xs: producir x`
@@ -1227,14 +1237,22 @@ class MIRLowerer:
             # CLASS_ATTR_V1: for classes defined in module with class attributes or decorators,
             # emit a class namespace object at module level so that load('ClassName') works and
             # class-level attributes are accessible as ClassName.attr.
-            needed_classes = set(getattr(self, "class_attrs", {}).keys()) | set(getattr(self, "decorated_classes", set()))
+            all_classes_with_attrs = set(getattr(self, "class_attrs", {}).keys())
+            for cls_name in list(self.classes.keys()):
+                for anc in self.class_mro.get(cls_name, []):
+                    if anc in all_classes_with_attrs:
+                        all_classes_with_attrs.add(cls_name)
+                        break
+            needed_classes = all_classes_with_attrs | set(getattr(self, "decorated_classes", set()))
             for cls_node in (n for n in module_body if n.kind == HIRKind.CLASS_DEF and n.name in needed_classes):
                 cls_name = cls_node.name
-                attrs = getattr(self, "class_attrs", {}).get(cls_name, {})
+                merged_attrs = {}
+                for anc in reversed(self.class_mro.get(cls_name, [cls_name])):
+                    merged_attrs.update(getattr(self, "class_attrs", {}).get(anc, {}))
                 cls_obj = module_builder.temp()
                 parent_name = self.class_parents.get(cls_name)
                 module_builder.emit("object_new", cls_name, parent_name, result=cls_obj)
-                for attr_name, value_node in attrs.items():
+                for attr_name, value_node in merged_attrs.items():
                     val = self._lower_expr(module_builder, value_node)
                     module_builder.emit("set_attr", cls_obj, attr_name, val)
                     if not hasattr(self, "_class_attr_temps"):
@@ -1324,6 +1342,10 @@ class MIRLowerer:
                     _attr_types.setdefault(_cls, {})[_attr] = "float"
                 elif isinstance(_val, int):
                     _attr_types.setdefault(_cls, {})[_attr] = "int"
+        for _cls in getattr(self, "classes", {}):
+            for _anc in reversed(self.class_mro.get(_cls, [_cls])):
+                for _attr, _t in _attr_types.get(_anc, {}).items():
+                    _attr_types.setdefault(_cls, {})[_attr] = _t
         module.class_attr_types = _attr_types
         # INJECTED_ATTR_TYPES_V1: escanear TODAS las funciones por set_attr
         # cuyo valor sea una constante resoluble. Si la constante fluye por
@@ -1800,7 +1822,10 @@ class MIRLowerer:
         self.function_kwonly[qualified_name or node.name] = kwonly_params
         self.function_frame_abi[qualified_name or node.name] = use_frame_abi
         local_names = (
-            set(builder.function.params) | self._assigned_names(body) | self._for_target_names(body)
+            set(builder.function.params)
+            | self._assigned_names(body)
+            | self._for_target_names(body)
+            | {item.name for item in body if getattr(item, "kind", None) in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}}
         )
 
         all_nested_captures: dict[str, tuple[str, tuple[str, ...]]] = {}
@@ -2432,17 +2457,24 @@ class MIRLowerer:
                 current = applied
             builder.emit("store", node.name, current)
         elif kind == HIRKind.CLASS_DEF:
+            cls_name = node.name
+            parent_name = self.class_parents.get(cls_name)
+            cls_obj = builder.temp()
+            builder.emit("object_new", cls_name, parent_name, result=cls_obj)
+            for item in getattr(node, "body", []) or []:
+                if item.kind == HIRKind.ASSIGN:
+                    for target in getattr(item, "targets", ()) or ():
+                        if getattr(target, "kind", None) in (HIRKind.STORE, HIRKind.LOAD):
+                            attr_val = self._lower_expr(builder, item.value)
+                            builder.emit("set_attr", cls_obj, target.name, attr_val)
             decorators = list(getattr(node, "decorators", None) or [])
-            if not decorators:
-                return
-            current = builder.temp()
-            builder.emit("load", node.name, result=current)
+            current = cls_obj
             for decorator in reversed(decorators):
                 dec_val = self._lower_expr(builder, decorator)
                 applied = builder.temp()
                 builder.emit("call", dec_val, (current,), _active_handler(builder), result=applied)
                 current = applied
-            builder.emit("store", node.name, current)
+            builder.emit("store", cls_name, current)
         elif kind == HIRKind.ASSIGN:
             value = self._lower_expr(builder, node.value)
             if (

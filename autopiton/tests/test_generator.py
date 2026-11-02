@@ -275,6 +275,21 @@ class GeneratorTests(unittest.TestCase):
             shapes_seen.add(shape)
         self.assertEqual(shapes_seen, set(FRONTIER_A_SHAPES))
 
+    def test_frontier_d_object_model_generation_covers_all_shapes(self):
+        from autopiton.generator import BoundedConfig, FRONTIER_D_SHAPES
+
+        cfg = BoundedConfig(frontier="d")
+        programs = ProgramGenerator(seed=42).generate_bounded(count=50, config=cfg)
+        self.assertEqual(len(programs), 50)
+        shapes_seen = set()
+        for program in programs:
+            compile(program.code, "<frontier_d>", "exec")
+            self.assertTrue(program.is_valid, program.description)
+            shape = program.description.split("[")[1].split("/")[0]
+            self.assertIn(shape, FRONTIER_D_SHAPES)
+            shapes_seen.add(shape)
+        self.assertEqual(shapes_seen, set(FRONTIER_D_SHAPES))
+
 
 if __name__ == "__main__":
     unittest.main()

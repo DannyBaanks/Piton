@@ -64,6 +64,14 @@ FRONTIER_C_SHAPES: Tuple[str, ...] = (
     "with_multiple_context_managers",
 )
 
+FRONTIER_D_SHAPES: Tuple[str, ...] = (
+    "inherited_classmethod_dispatch",
+    "inherited_staticmethod_dispatch",
+    "inherited_class_attribute_lookup",
+    "generator_expression_sequence_consumption",
+    "nested_class_function_scope",
+)
+
 
 @dataclass(frozen=True)
 class BoundedConfig:
@@ -1121,6 +1129,8 @@ asyncio.run(main())
             candidate_shapes = list(FRONTIER_B_SHAPES)
         elif cfg.frontier and str(cfg.frontier).lower() in ("c", "frontier_c", "contexts", "lifecycle"):
             candidate_shapes = list(FRONTIER_C_SHAPES)
+        elif cfg.frontier and str(cfg.frontier).lower() in ("d", "frontier_d", "inheritance", "object_model"):
+            candidate_shapes = list(FRONTIER_D_SHAPES)
         else:
             candidate_shapes = [
                 "default_expr_fn",
@@ -1139,6 +1149,7 @@ asyncio.run(main())
                 *FRONTIER_A_SHAPES,
                 *FRONTIER_B_SHAPES,
                 *FRONTIER_C_SHAPES,
+                *FRONTIER_D_SHAPES,
             ]
         shape = self.rng.choice(candidate_shapes)
 
@@ -1676,6 +1687,101 @@ asyncio.run(main())
                 f"print(events)\n"
             )
             desc = f"bounded[with_multiple_context_managers/int] v1={v1} v2={v2}"
+
+        elif shape == "inherited_classmethod_dispatch":
+            base_cls = self.ast_gen.new_class()
+            sub_cls = self.ast_gen.new_class()
+            base_val = self.rng.randint(10, 50)
+            sub_val = self.rng.randint(60, 100)
+            mult = self.rng.randint(2, 5)
+            code = (
+                f"class {base_cls}:\n"
+                f"    val = {base_val}\n"
+                f"    @classmethod\n"
+                f"    def compute(cls, x):\n"
+                f"        return cls.val + x * {mult}\n\n"
+                f"class {sub_cls}({base_cls}):\n"
+                f"    val = {sub_val}\n\n"
+                f"print({base_cls}.compute(1), {sub_cls}.compute(1))\n"
+            )
+            desc = f"bounded[inherited_classmethod_dispatch/int] base={base_val} sub={sub_val}"
+
+        elif shape == "inherited_staticmethod_dispatch":
+            base_cls = self.ast_gen.new_class()
+            sub_cls = self.ast_gen.new_class()
+            c1 = self.rng.randint(1, 20)
+            code = (
+                f"class {base_cls}:\n"
+                f"    @staticmethod\n"
+                f"    def calc(a, b):\n"
+                f"        return a + b + {c1}\n\n"
+                f"class {sub_cls}({base_cls}):\n"
+                f"    pass\n\n"
+                f"inst = {sub_cls}()\n"
+                f"print({base_cls}.calc(2, 3), {sub_cls}.calc(4, 5), inst.calc(6, 7))\n"
+            )
+            desc = f"bounded[inherited_staticmethod_dispatch/int] c1={c1}"
+
+        elif shape == "inherited_class_attribute_lookup":
+            base_cls = self.ast_gen.new_class()
+            sub_cls = self.ast_gen.new_class()
+            sub_sub_cls = self.ast_gen.new_class()
+            base_a = self.rng.randint(10, 30)
+            base_b = self.rng.randint(40, 60)
+            sub_b = self.rng.randint(70, 90)
+            code = (
+                f"class {base_cls}:\n"
+                f"    a = {base_a}\n"
+                f"    b = {base_b}\n\n"
+                f"class {sub_cls}({base_cls}):\n"
+                f"    b = {sub_b}\n\n"
+                f"class {sub_sub_cls}({sub_cls}):\n"
+                f"    pass\n\n"
+                f"s1 = {sub_cls}()\n"
+                f"s2 = {sub_sub_cls}()\n"
+                f"print({base_cls}.a, {base_cls}.b)\n"
+                f"print({sub_cls}.a, {sub_cls}.b)\n"
+                f"print({sub_sub_cls}.a, {sub_sub_cls}.b)\n"
+                f"print(s1.a, s1.b, s2.a, s2.b)\n"
+            )
+            desc = f"bounded[inherited_class_attribute_lookup/int] base_a={base_a} sub_b={sub_b}"
+
+        elif shape == "generator_expression_sequence_consumption":
+            factor = self.rng.randint(2, 5)
+            thresh = self.rng.randint(1, 3)
+            code = (
+                f"items = [1, 2, 3, 4]\n"
+                f"g1 = (x * {factor} for x in items if x > {thresh})\n"
+                f"l1 = list(g1)\n"
+                f"g2 = (x + 10 for x in items)\n"
+                f"t1 = tuple(g2)\n"
+                f"g3 = (x % 2 for x in items)\n"
+                f"s1 = sorted(list(set(g3)))\n"
+                f"print(l1, t1, s1)\n"
+            )
+            desc = f"bounded[generator_expression_sequence_consumption/int] factor={factor} thresh={thresh}"
+
+        elif shape == "nested_class_function_scope":
+            factory_name = self.ast_gen.new_func()
+            inner_cls = self.ast_gen.new_class()
+            offset = self.rng.randint(5, 25)
+            multiplier = self.rng.randint(2, 4)
+            code = (
+                f"def {factory_name}(extra):\n"
+                f"    class {inner_cls}:\n"
+                f"        base_extra = extra\n"
+                f"        def __init__(self, val):\n"
+                f"            self.val = val * {multiplier} + self.base_extra + {offset}\n"
+                f"        def get(self):\n"
+                f"            return self.val\n"
+                f"    return {inner_cls}\n\n"
+                f"ClsA = {factory_name}(10)\n"
+                f"ClsB = {factory_name}(20)\n"
+                f"a = ClsA(3)\n"
+                f"b = ClsB(3)\n"
+                f"print(a.get(), b.get())\n"
+            )
+            desc = f"bounded[nested_class_function_scope/int] offset={offset} mult={multiplier}"
 
         else:  # property_computed_class
             cls_name = self.ast_gen.new_class()

@@ -1,0 +1,96 @@
+{
+  "case_id": "case-5e6483de950c8c02",
+  "created_at": "2026-11-02T16:29:00-06:00",
+  "description": "bounded[inherited_class_attribute_lookup/int] base_a=24 sub_b=84",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "5e6483de950c8c029dddde4895e1e9ddaa1209614c9e1a3b44509f9f9fb96381",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 68.41837600222789,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "5e6483de950c8c029dddde4895e1e9ddaa1209614c9e1a3b44509f9f9fb96381",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "24 43\n24 84\n24 84\n24 84 24 84\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "e1ceaedff94b2a4719fcb2793e0fd9c05c9384b1bac0f9403cdfa4bee327a612",
+      "build_exit_code": 0,
+      "build_ms": 869.5213070022874,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 19.342945000971667,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0017.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "5e6483de950c8c029dddde4895e1e9ddaa1209614c9e1a3b44509f9f9fb96381",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 212,
+          "surface_sha256": "ee5114c98d8036fb8a25a39201ee30a4036d7b2198809acadb52b8a898171d49"
+        },
+        "BUILD": {
+          "artifact_bytes": 25232,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "e1ceaedff94b2a4719fcb2793e0fd9c05c9384b1bac0f9403cdfa4bee327a612",
+          "c_chars": 287774,
+          "c_sha256": "4bfb22b2be42893b69622f29e602549e2b8ef9e2a7b0acc4a48767d34c901f4f",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "24 43\n24 84\n24 84\n24 84 24 84\n",
+      "surface_sha256": "ee5114c98d8036fb8a25a39201ee30a4036d7b2198809acadb52b8a898171d49",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "class C1:\n    a = 24\n    b = 43\n\nclass C2(C1):\n    b = 84\n\nclass C3(C2):\n    pass\n\ns1 = C2()\ns2 = C3()\nprint(C1.a, C1.b)\nprint(C2.a, C2.b)\nprint(C3.a, C3.b)\nprint(s1.a, s1.b, s2.a, s2.b)\n",
+    "source_hash": "5e6483de950c8c029dddde4895e1e9ddaa1209614c9e1a3b44509f9f9fb96381"
+  },
+  "run_id": "run_20261102_162843_bounded_fd_seed2026",
+  "seed": 2212652634,
+  "source": "class C1:\n    a = 24\n    b = 43\n\nclass C2(C1):\n    b = 84\n\nclass C3(C2):\n    pass\n\ns1 = C2()\ns2 = C3()\nprint(C1.a, C1.b)\nprint(C2.a, C2.b)\nprint(C3.a, C3.b)\nprint(s1.a, s1.b, s2.a, s2.b)\n",
+  "source_hash": "5e6483de950c8c029dddde4895e1e9ddaa1209614c9e1a3b44509f9f9fb96381"
+}

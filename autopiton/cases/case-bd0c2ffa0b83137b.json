@@ -1,0 +1,101 @@
+{
+  "case_id": "case-bd0c2ffa0b83137b",
+  "created_at": "2026-11-02T16:08:10-06:00",
+  "description": "bounded[nested_class_function_scope/int] offset=6 mult=3",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "bd0c2ffa0b83137b99c3f99d212a9d7d6751f77a604ca26758c1c83c80bee167",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "DIVERGENT",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 31.918796001264127,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "bd0c2ffa0b83137b99c3f99d212a9d7d6751f77a604ca26758c1c83c80bee167",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "25 35\n",
+      "timed_out": false
+    },
+    "details": {
+      "cpython_stdout": "25 35\n",
+      "piton_exit": 1,
+      "piton_stderr": "NameError: name C1 is not defined\n",
+      "piton_stdout": ""
+    },
+    "piton": {
+      "artifact_sha256": "615b03d8fe784f837daf73699e91ad72f36214088d3a150a9fe2541c3c42a36c",
+      "build_exit_code": 0,
+      "build_ms": 264.48773999800324,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": "name C1 is not defined",
+      "exception_type": "NameError",
+      "execute_ms": 16.053503000875935,
+      "executed": true,
+      "exit_code": 1,
+      "failed_stage": null,
+      "filename": "program_0017.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "bd0c2ffa0b83137b99c3f99d212a9d7d6751f77a604ca26758c1c83c80bee167",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 279,
+          "surface_sha256": "ede10e89ce29e7d7c71d578f6603c9d4a7da6d168d592b10aa6ce6775f872367"
+        },
+        "BUILD": {
+          "artifact_bytes": 10088,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "615b03d8fe784f837daf73699e91ad72f36214088d3a150a9fe2541c3c42a36c",
+          "c_chars": 283348,
+          "c_sha256": "d29618f4dfda8c55cbcf825ffe3f26a556d2ddae3c063f1d4f90dd7264e21607",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "NameError: name C1 is not defined\n",
+      "stdout": "",
+      "surface_sha256": "ede10e89ce29e7d7c71d578f6603c9d4a7da6d168d592b10aa6ce6775f872367",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON failed during execution",
+    "source": "def f1(extra):\n    class C1:\n        def __init__(self, val):\n            self.val = val * 3 + extra + 6\n        def get(self):\n            return self.val\n    return C1\n\nClsA = f1(10)\nClsB = f1(20)\na = ClsA(3)\nb = ClsB(3)\nprint(a.get(), b.get())\n",
+    "source_hash": "bd0c2ffa0b83137b99c3f99d212a9d7d6751f77a604ca26758c1c83c80bee167"
+  },
+  "run_id": "run_20261102_160755_bounded_fd_seed99",
+  "seed": 929096601,
+  "source": "def f1(extra):\n    class C1:\n        def __init__(self, val):\n            self.val = val * 3 + extra + 6\n        def get(self):\n            return self.val\n    return C1\n\nClsA = f1(10)\nClsB = f1(20)\na = ClsA(3)\nb = ClsB(3)\nprint(a.get(), b.get())\n",
+  "source_hash": "bd0c2ffa0b83137b99c3f99d212a9d7d6751f77a604ca26758c1c83c80bee167"
+}

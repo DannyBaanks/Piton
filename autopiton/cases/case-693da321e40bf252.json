@@ -1,0 +1,101 @@
+{
+  "case_id": "case-693da321e40bf252",
+  "created_at": "2026-11-02T16:08:12-06:00",
+  "description": "bounded[generator_expression_sequence_consumption/int] factor=3 thresh=2",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "693da321e40bf252fb67a69a92aeb82b46d90abb9474cd225d9fe4b3b5e3f53b",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "DIVERGENT",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 34.17395900032716,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "693da321e40bf252fb67a69a92aeb82b46d90abb9474cd225d9fe4b3b5e3f53b",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "[9, 12] (11, 12, 13, 14) [0, 1]\n",
+      "timed_out": false
+    },
+    "details": {
+      "cpython_stdout": "[9, 12] (11, 12, 13, 14) [0, 1]\n",
+      "piton_exit": 1,
+      "piton_stderr": "TypeError: cannot convert to a sequ",
+      "piton_stdout": ""
+    },
+    "piton": {
+      "artifact_sha256": "0ed7d1ddb3c1efbfb37e0d411dc8c2eed55a41054ebae206b54df34bd8c311e8",
+      "build_exit_code": 0,
+      "build_ms": 618.9441980022821,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": "cannot convert to a sequ",
+      "exception_type": "TypeError",
+      "execute_ms": 10.959533999994164,
+      "executed": true,
+      "exit_code": 1,
+      "failed_stage": null,
+      "filename": "program_0020.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "693da321e40bf252fb67a69a92aeb82b46d90abb9474cd225d9fe4b3b5e3f53b",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 195,
+          "surface_sha256": "0c3a51f4ce102015d5942fc424d67d49cd6026fada938f8dce64e22b400b0dc4"
+        },
+        "BUILD": {
+          "artifact_bytes": 25224,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "0ed7d1ddb3c1efbfb37e0d411dc8c2eed55a41054ebae206b54df34bd8c311e8",
+          "c_chars": 286840,
+          "c_sha256": "5460799b125a136a6378b51bd0e352d77c67d9a9417e369d654462865718b84c",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "TypeError: cannot convert to a sequ",
+      "stdout": "",
+      "surface_sha256": "0c3a51f4ce102015d5942fc424d67d49cd6026fada938f8dce64e22b400b0dc4",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON failed during execution",
+    "source": "items = [1, 2, 3, 4]\ng1 = (x * 3 for x in items if x > 2)\nl1 = list(g1)\ng2 = (x + 10 for x in items)\nt1 = tuple(g2)\ng3 = (x % 2 for x in items)\ns1 = sorted(list(set(g3)))\nprint(l1, t1, s1)\n",
+    "source_hash": "693da321e40bf252fb67a69a92aeb82b46d90abb9474cd225d9fe4b3b5e3f53b"
+  },
+  "run_id": "run_20261102_160755_bounded_fd_seed99",
+  "seed": 3092233689,
+  "source": "items = [1, 2, 3, 4]\ng1 = (x * 3 for x in items if x > 2)\nl1 = list(g1)\ng2 = (x + 10 for x in items)\nt1 = tuple(g2)\ng3 = (x % 2 for x in items)\ns1 = sorted(list(set(g3)))\nprint(l1, t1, s1)\n",
+  "source_hash": "693da321e40bf252fb67a69a92aeb82b46d90abb9474cd225d9fe4b3b5e3f53b"
+}

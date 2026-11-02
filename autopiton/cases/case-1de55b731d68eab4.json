@@ -1,0 +1,101 @@
+{
+  "case_id": "case-1de55b731d68eab4",
+  "created_at": "2026-11-02T16:08:03-06:00",
+  "description": "bounded[inherited_classmethod_dispatch/int] base=20 sub=90",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "1de55b731d68eab43048abc1a1e9a2d6c99405db819ae1379bb9c04d9404490a",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "UNSUPPORTED",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 65.6348379998235,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "1de55b731d68eab43048abc1a1e9a2d6c99405db819ae1379bb9c04d9404490a",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "25 95\n",
+      "timed_out": false
+    },
+    "details": {
+      "piton_stage_error": {
+        "error_message": "/usr/bin/ld: /tmp/ccsDeEwU.o: in function `piton_main':\nprogram.c:(.text+0x3000): undefined reference to `C2__compute'\ncollect2: error: ld returned 1 exit status",
+        "error_type": "GccError",
+        "stage": "BUILD"
+      }
+    },
+    "piton": {
+      "artifact_sha256": null,
+      "build_exit_code": 1,
+      "build_ms": 923.0424769993988,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 0.0,
+      "executed": false,
+      "exit_code": null,
+      "failed_stage": "BUILD",
+      "filename": "program_0009.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "1de55b731d68eab43048abc1a1e9a2d6c99405db819ae1379bb9c04d9404490a",
+      "stage_reached": "MIR",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 179,
+          "surface_sha256": "8e7d7671890ee140722fb6dc052b8b9af6a3ac6868f004d730e409e602611f1d"
+        },
+        "BUILD": {
+          "c_chars": 283661,
+          "c_sha256": "18c4df16ca853c21d44e5d82b58e5e0a502bb117ee87eb64fafea7b2664f6681",
+          "error_message": "/usr/bin/ld: /tmp/ccsDeEwU.o: in function `piton_main':\nprogram.c:(.text+0x3000): undefined reference to `C2__compute'\ncollect2: error: ld returned 1 exit status",
+          "error_type": "GccError",
+          "gcc_returncode": 1,
+          "gcc_stderr": "/usr/bin/ld: /tmp/ccsDeEwU.o: in function `piton_main':\nprogram.c:(.text+0x3000): undefined reference to `C2__compute'\ncollect2: error: ld returned 1 exit status\n",
+          "passed": false
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "",
+      "surface_sha256": "8e7d7671890ee140722fb6dc052b8b9af6a3ac6868f004d730e409e602611f1d",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "CPython completed; PITON rejected the program at BUILD",
+    "source": "class C1:\n    val = 20\n    @classmethod\n    def compute(cls, x):\n        return cls.val + x * 5\n\nclass C2(C1):\n    val = 90\n\nprint(C1.compute(1), C2.compute(1))\n",
+    "source_hash": "1de55b731d68eab43048abc1a1e9a2d6c99405db819ae1379bb9c04d9404490a"
+  },
+  "run_id": "run_20261102_160755_bounded_fd_seed99",
+  "seed": 369448323,
+  "source": "class C1:\n    val = 20\n    @classmethod\n    def compute(cls, x):\n        return cls.val + x * 5\n\nclass C2(C1):\n    val = 90\n\nprint(C1.compute(1), C2.compute(1))\n",
+  "source_hash": "1de55b731d68eab43048abc1a1e9a2d6c99405db819ae1379bb9c04d9404490a"
+}

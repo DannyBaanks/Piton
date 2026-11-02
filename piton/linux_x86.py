@@ -139,6 +139,16 @@ static long piton_object_repr_hook(long obj,const char*cls){
   }
   return 0;
 }
+/* OBJECT_INIT_HOOK_V1: tabla clase -> __init__ que el emitter llena. */
+#define PITON_INIT_HOOK_MAX 64
+static const char* g_init_hook_cls[PITON_INIT_HOOK_MAX];
+static long g_init_hook_fn[PITON_INIT_HOOK_MAX];
+static long g_init_hook_n=0;
+static void piton_object_init_hook_set(const char*cls,long fn,long n_args){
+  for(long i=0;i<g_init_hook_n;++i)if(g_init_hook_cls[i]&&piton_strcmp(g_init_hook_cls[i],cls)==0){g_init_hook_fn[i]=fn;return;}
+  if(g_init_hook_n>=PITON_INIT_HOOK_MAX)return;
+  g_init_hook_cls[g_init_hook_n]=cls;g_init_hook_fn[g_init_hook_n]=fn;++g_init_hook_n;
+}
 /* OBJECT_STR_HOOK_V1: tabla clase -> __str__ que el emitter llena. */
 static const char* g_str_hook_cls[PITON_REPR_HOOK_MAX];
 static long g_str_hook_fn[PITON_REPR_HOOK_MAX];
@@ -1331,7 +1341,7 @@ static int piton_callable_value(long callee){return piton_in_arena(callee)||pito
 static void piton_raise_not_callable(void){piton_write(2,"TypeError: 'X' object is not callable\n",35);piton_exit(1);}
 static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){if(!callee||((long*)callee)[0]!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee))piton_raise_not_callable();return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);}PitonClosure*c=(PitonClosure*)callee;if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;if(total>4){piton_write(2,"TypeError: closure cell count plus arguments exceeds four\n",59);piton_exit(2);}long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);}
 static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells,long has_vararg,long has_kwarg){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=has_vararg;c->has_kwarg=has_kwarg;c->cells=piton_alloc((usize)(n_cells?n_cells:1)*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];return(long)c;}
-static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(piton_is_code_addr(callee)){/* CODE_ADDR_FIRST_V1: un code address se detecta PRIMERO — leer sus magic numbers (el codigo maquina) como si fueran un objeto puede coincidir por azar y fabricar una llamada rota (SIGSEGV). */if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[1]==PK_OBJECT){PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);for(long i=0;i<co->length;++i){piton_object_set(inst,co->attrs[i].name,co->attrs[i].value);}return(long)inst;}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
+static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(piton_is_code_addr(callee)){/* CODE_ADDR_FIRST_V1: un code address se detecta PRIMERO — leer sus magic numbers (el codigo maquina) como si fueran un objeto puede coincidir por azar y fabricar una llamada rota (SIGSEGV). */if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[1]==PK_OBJECT){PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);for(long i=0;i<co->length;++i){piton_object_set(inst,co->attrs[i].name,co->attrs[i].value);}for(long i=0;i<g_init_hook_n;++i){if(g_init_hook_cls[i]&&piton_strcmp(g_init_hook_cls[i],co->class_name)==0){long fn=g_init_hook_fn[i];long a[4]={(long)inst,0,0,0};for(long j=0;j<argc&&j<3;++j)a[j+1]=args[j];((long(*)(long,long,long,long))fn)(a[0],a[1],a[2],a[3]);break;}}return(long)inst;}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
 static long piton_callback_invoke(long callback,long value){long args[1]={value};return piton_closure_call_frame(callback,1,args);}
 /* DYNAMIC_CALL_V1: llamar a un callable que NO se conoce en build time,
    con los argumentos posicionales y el dict de keywords resueltos en
@@ -4060,6 +4070,11 @@ class LinuxCEmitter:
                     if "__str__" in self.classes.get(_cand, set()) and _target in self.function_names:
                         lines.append(f"    piton_object_str_hook_set({json.dumps(_cls)},(long)&{_name(_target)});")
                         break
+                for _cand in self.class_mro.get(_cls, [_cls]):
+                    _target = f"{_cand}____init__"
+                    if "__init__" in self.classes.get(_cand, set()) and _target in self.function_names:
+                        lines.append(f"    piton_object_init_hook_set({json.dumps(_cls)},(long)&{_name(_target)},0);")
+                        break
         # the emitted lines of THIS function: a mixed-type y/o rewrites the
         # line of its first arm, which lives here (not in the per-op buffer).
         self._cur_lines = lines
@@ -5209,7 +5224,7 @@ class LinuxCEmitter:
         objeto de la metaclase es el mismo que produce cargar su nombre, así
         `type(A) es Meta` compara identidad de verdad.
         """
-        if function.name == "<module>" and cls_name in self._module_stored:
+        if (function.name == "<module>" and cls_name in self._module_stored) or cls_name in getattr(self, "_cur_slots", set()):
             out.append(f"    {_name(result)}={_name(cls_name)};")
             return
         # CLASS_OBJECT_INTERN_V1: el objeto de clase es UNO por clase
@@ -5220,8 +5235,16 @@ class LinuxCEmitter:
         out.append(
             f"    if(!{_cvar}){{{_cvar}=(long)piton_object_new(\"{cls_name}\",0);"
             f"    piton_object_set((PitonObject*){_cvar},\"__name__\","
-            f"piton_slot((long)\"{cls_name}\",PK_STR));}}"
+            f"piton_slot((long)\"{cls_name}\",PK_STR));"
         )
+        if hasattr(self, "_class_attrs_map"):
+            merged_attrs = {}
+            for ancestor in reversed(self.class_mro.get(cls_name, [cls_name])):
+                if ancestor in self._class_attrs_map:
+                    merged_attrs.update(self._class_attrs_map[ancestor])
+            for attr_name, val_expr in merged_attrs.items():
+                out.append(f'    piton_object_set((PitonObject*){_cvar},"{attr_name}",{val_expr});')
+        out.append("    }")
         out.append(f"    {_name(result)}={_cvar};")
         self._emit_class_bases_attribute(out, result, cls_name)
 
@@ -11368,13 +11391,28 @@ class LinuxCEmitter:
                     self._coll_elems[result] = "int"
                     self._emit_exc_check(out, function, call_handler)
                     return out
-                if source_type in {"genexpr", "iterator:genexpr"} and alias in {"diccionario", "dict"}:
-                    # DICT_FROM_PAIRS_V1: dict(genexpr de pares) — el genexpr
-                    # ya esta materializado como secuencia de tuplas.
-                    out.append(f"    {_name(result)}=piton_conv_dict_from_genexpr({self._value(values[0])});")
-                    types[result] = "dict"
-                    self._emit_exc_check(out, function, call_handler)
-                    return out
+                if source_type in {"genexpr", "iterator:genexpr"}:
+                    _gl = f"(long)piton_genexpr_to_list({self._value(values[0])})"
+                    if alias in {"lista", "list"}:
+                        out.append(f"    {_name(result)}=(long)piton_conv_seq(PK_LIST,(PitonSlot){{{_gl},PK_LIST}});")
+                        types[result] = "list"
+                        self._coll_elems[result] = "int"
+                        return out
+                    elif alias in {"tupla", "tuple"}:
+                        out.append(f"    {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{{_gl},PK_LIST}});")
+                        types[result] = "tuple"
+                        self._coll_elems[result] = "int"
+                        return out
+                    elif alias in {"conjunto", "set"}:
+                        out.append(f"    {_name(result)}=(long)piton_conv_set((PitonSlot){{{_gl},PK_LIST}});")
+                        types[result] = "set"
+                        self._coll_elems[result] = "int"
+                        return out
+                    elif alias in {"diccionario", "dict"}:
+                        out.append(f"    {_name(result)}=piton_conv_dict_from_genexpr({self._value(values[0])});")
+                        types[result] = "dict"
+                        self._emit_exc_check(out, function, call_handler)
+                        return out
                 if source_type in {"iterator:list", "iterator:any"} and alias in {"lista", "list"}:
                     # LIST_FROM_ITER_V1: lista(reversed(range(n))) — el
                     # iterador generico se materializa entero.
@@ -11517,6 +11555,9 @@ class LinuxCEmitter:
                     out.append(f"    if(!piton_exc_flag){{")
                     out.append(f"        {_name(result)}=(long)piton_sorted_new((void*){_tmp});")
                     out.append("    }")
+                elif types.get(values[0]) in {"genexpr", "iterator:genexpr"}:
+                    _gl = f"(long)piton_genexpr_to_list({self._value(values[0])})"
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*){_gl});")
                 else:
                     out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(values[0])});")
                 if len(values) == 2:
@@ -11728,7 +11769,11 @@ class LinuxCEmitter:
             # CLASS_ATTR_V1: instances of a class with class-level assignments
             # get those attributes set at creation (matching CPython default).
             if hasattr(self, "_class_attrs_map"):
-                for attr_name, val_expr in self._class_attrs_map.get(cls_name, {}).items():
+                merged_attrs = {}
+                for ancestor in reversed(self.class_mro.get(cls_name, [cls_name])):
+                    if ancestor in self._class_attrs_map:
+                        merged_attrs.update(self._class_attrs_map[ancestor])
+                for attr_name, val_expr in merged_attrs.items():
                     out.append(f'    piton_object_set((PitonObject*){_name(result)},"{attr_name}",{val_expr});')
             self._emit_class_bases_attribute(out, result, cls_name)
             types[result] = f"object:{cls_name}"
@@ -12901,12 +12946,12 @@ class LinuxCEmitter:
                             types[result] = "int"
                             return out
                 if unbound_class is not None:
-                    cls_name = unbound_class
-                    target = f"{cls_name}__{method}"
+                    resolved_cls = self._find_class_method(unbound_class, method) or unbound_class
+                    target = f"{resolved_cls}__{method}"
                     if target in self.static_methods:
                         all_values = self._complete_call_args(target, list(call_args))
                     elif target in self.class_methods:
-                        all_values = self._complete_call_args(target, [unbound_class, *call_args])
+                        all_values = self._complete_call_args(target, [obj, *call_args])
                     else:
                         all_values = self._complete_call_args(target, list(call_args))
                     all_values = self._pack_call_varargs(out, target, all_values, types)

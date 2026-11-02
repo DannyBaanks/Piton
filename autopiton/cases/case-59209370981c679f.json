@@ -1,0 +1,96 @@
+{
+  "case_id": "case-59209370981c679f",
+  "created_at": "2026-11-02T16:25:25-06:00",
+  "description": "bounded[with_multiple_context_managers/int] v1=13 v2=32",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "59209370981c679f0ff18d0bcfc7ab27a1164f951b12502bf37e9bdd9a711c47",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 64.10649600002216,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "59209370981c679f0ff18d0bcfc7ab27a1164f951b12502bf37e9bdd9a711c47",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "['m1_enter', 'm2_enter', 45, 'm2_exit', 'm1_exit']\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "3b1f84195e05ca2e662408604cfdd9ba43338de1bfb8803b3783387bd67f497f",
+      "build_exit_code": 0,
+      "build_ms": 818.0094639974413,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 11.21785500072292,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0011.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "59209370981c679f0ff18d0bcfc7ab27a1164f951b12502bf37e9bdd9a711c47",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 510,
+          "surface_sha256": "94e769004b4880fda32bee2b5c9507a16c2ca448bf2dd9f35d806b286647d0be"
+        },
+        "BUILD": {
+          "artifact_bytes": 25080,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "3b1f84195e05ca2e662408604cfdd9ba43338de1bfb8803b3783387bd67f497f",
+          "c_chars": 287248,
+          "c_sha256": "0ba752e3c9a4a90f5270aeec0e707ba04aa1fe1907be5180be9479e877aff313",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "['m1_enter', 'm2_enter', 45, 'm2_exit', 'm1_exit']\n",
+      "surface_sha256": "94e769004b4880fda32bee2b5c9507a16c2ca448bf2dd9f35d806b286647d0be",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "events = []\nclass C1:\n    def __enter__(self):\n        events.append('m1_enter')\n        return 13\n    def __exit__(self, exc_type, exc_val, tb):\n        events.append('m1_exit')\n        return False\n\nclass C2:\n    def __enter__(self):\n        events.append('m2_enter')\n        return 32\n    def __exit__(self, exc_type, exc_val, tb):\n        events.append('m2_exit')\n        return False\n\nwith C1() as a, C2() as b:\n    events.append(a + b)\n\nprint(events)\n",
+    "source_hash": "59209370981c679f0ff18d0bcfc7ab27a1164f951b12502bf37e9bdd9a711c47"
+  },
+  "run_id": "run_20261102_162514_bounded_fc_seed42",
+  "seed": 1985392498,
+  "source": "events = []\nclass C1:\n    def __enter__(self):\n        events.append('m1_enter')\n        return 13\n    def __exit__(self, exc_type, exc_val, tb):\n        events.append('m1_exit')\n        return False\n\nclass C2:\n    def __enter__(self):\n        events.append('m2_enter')\n        return 32\n    def __exit__(self, exc_type, exc_val, tb):\n        events.append('m2_exit')\n        return False\n\nwith C1() as a, C2() as b:\n    events.append(a + b)\n\nprint(events)\n",
+  "source_hash": "59209370981c679f0ff18d0bcfc7ab27a1164f951b12502bf37e9bdd9a711c47"
+}
