@@ -56,7 +56,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:49-06:00",
+      "last_seen_at": "2026-11-01T01:31:57-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -65,9 +65,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -84,7 +82,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:22-06:00",
+      "last_seen_at": "2026-11-01T01:32:32-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -93,9 +91,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -335,7 +331,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:07-06:00",
+      "last_seen_at": "2026-11-01T01:32:14-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -344,9 +340,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -655,7 +649,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:58-06:00",
+      "last_seen_at": "2026-11-01T01:32:06-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -664,9 +658,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -705,7 +697,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:18-06:00",
+      "last_seen_at": "2026-11-01T01:32:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -714,9 +706,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -749,40 +739,22 @@
       "case_id": "case-131d4170b7729d1b",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:54-06:00",
       "description": "systematic[compare_int/lambda] 7 > 3",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:12-06:00",
+      "last_seen_at": "2026-11-01T01:32:21-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-131d4170b7729d1b",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160135_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:36-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "replay case-131d4170b7729d1b",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:49-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -1071,7 +1043,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:03-06:00",
+      "last_seen_at": "2026-11-01T01:32:10-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1080,9 +1052,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1191,7 +1161,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:01-06:00",
+      "last_seen_at": "2026-11-01T01:32:08-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1199,9 +1169,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1300,44 +1268,20 @@
       "case_id": "case-228d90a490532bbb",
       "classification": "UNSUPPORTED",
       "classifications": [
-        "UNSUPPORTED",
-        "EQUIV"
+        "UNSUPPORTED"
       ],
       "created_at": "2026-10-30T16:13:13-06:00",
       "description": "Canary H: Dict merge",
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:43-06:00",
+      "last_seen_at": "2026-10-31T04:56:00-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "UNSUPPORTED",
-          "command": "python3 -m autopiton replay case-228d90a490532bbb",
-          "fingerprint": "69501531ccdec408b405807c826e8fd2bc33d1a50628f3d14675cbf48ba492bf",
-          "run_id": "run_20261101_145846_replay_seed7",
-          "timestamp": "2026-11-01T14:58:47-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "python3 -m autopiton replay case-228d90a490532bbb",
-          "fingerprint": "0ed65f6493318414474678b94d9e7d1d50c9a3270d903b4b1ae15e3e9ff3d123",
-          "run_id": "run_20261101_151614_replay_seed7",
-          "timestamp": "2026-11-01T15:16:15-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "replay case-228d90a490532bbb",
-          "fingerprint": "0ed65f6493318414474678b94d9e7d1d50c9a3270d903b4b1ae15e3e9ff3d123",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:51-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 7,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
@@ -1376,7 +1320,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:45-06:00",
+      "last_seen_at": "2026-11-01T01:31:53-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1385,9 +1329,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1404,18 +1346,10 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:01:51-06:00",
+      "last_seen_at": "2026-10-30T16:38:32-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-2417bb6679adf091",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:51-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -1451,33 +1385,22 @@
       "case_id": "case-24869db1b37fbcf9",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:48-06:00",
       "description": "systematic[compare_bool/lambda] True == True",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:05-06:00",
+      "last_seen_at": "2026-11-01T01:32:12-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-24869db1b37fbcf9",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:52-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -1584,7 +1507,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:17-06:00",
+      "last_seen_at": "2026-11-01T01:32:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1592,9 +1515,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1611,7 +1532,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:14-06:00",
+      "last_seen_at": "2026-11-01T01:32:23-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1620,9 +1541,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -1708,7 +1627,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:06-06:00",
+      "last_seen_at": "2026-11-01T01:32:12-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -1717,9 +1636,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2227,33 +2144,22 @@
       "case_id": "case-37158a4503ff36ad",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:36-06:00",
       "description": "systematic[arith_float/lambda] 7.5 + 3.5",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:47-06:00",
+      "last_seen_at": "2026-11-01T01:31:55-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-37158a4503ff36ad",
-          "fingerprint": "c342dfcd31aaa3a0f009be85b076767dc48aa6d034295b3a813d095d8468851e",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:52-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -2369,18 +2275,10 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:01:54-06:00",
+      "last_seen_at": "2026-10-30T16:38:32-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-3ccfa548c07d1978",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:54-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -2489,7 +2387,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:15-06:00",
+      "last_seen_at": "2026-11-01T01:32:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -2498,9 +2396,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -2755,33 +2651,22 @@
       "case_id": "case-45def1a4575fc272",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:57-06:00",
       "description": "systematic[compare_bool/lambda] True >= True",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:16-06:00",
+      "last_seen_at": "2026-11-01T01:32:25-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-45def1a4575fc272",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:54-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -2979,15 +2864,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:28-06:00",
+      "last_seen_at": "2026-11-01T01:32:46-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3064,15 +2947,14 @@
       "case_id": "case-4d25af23ed64826d",
       "classification": "INVALID_ACCEPTED",
       "classifications": [
-        "INVALID_ACCEPTED",
-        "EQUIV"
+        "INVALID_ACCEPTED"
       ],
       "created_at": "2026-10-30T16:13:12-06:00",
       "description": "Canary F: Constructor with invalid args",
       "expected_exception": "TypeError",
       "family": "classes",
       "is_valid": false,
-      "last_seen_at": "2026-11-01T16:02:42-06:00",
+      "last_seen_at": "2026-10-31T04:55:52-06:00",
       "minimization": {
         "accepted": 3,
         "attempts": 11,
@@ -3081,7 +2963,7 @@
         "stopped_reason": "no reduction preserved the divergence"
       },
       "minimized_from": null,
-      "nondeterministic": true,
+      "nondeterministic": false,
       "replay_history": [
         {
           "classification": "INVALID_ACCEPTED",
@@ -3089,33 +2971,11 @@
           "fingerprint": "9f811d91d7c5b76c85c85b71d3594c28bdd3283586d81a5d807108bcfc0b4ce3",
           "run_id": "run_20261030_161325_replay_seed5",
           "timestamp": "2026-10-30T16:13:26-06:00"
-        },
-        {
-          "classification": "INVALID_ACCEPTED",
-          "command": "python3 -m autopiton replay case-4d25af23ed64826d",
-          "fingerprint": "9f811d91d7c5b76c85c85b71d3594c28bdd3283586d81a5d807108bcfc0b4ce3",
-          "run_id": "run_20261101_145847_replay_seed5",
-          "timestamp": "2026-11-01T14:58:48-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "python3 -m autopiton replay case-4d25af23ed64826d",
-          "fingerprint": "dbfba3840877b39f8ed4c68b3c7b1b27e5883f2ed98faf2b78d6268604a4e688",
-          "run_id": "run_20261101_151616_replay_seed5",
-          "timestamp": "2026-11-01T15:16:17-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "replay case-4d25af23ed64826d",
-          "fingerprint": "dbfba3840877b39f8ed4c68b3c7b1b27e5883f2ed98faf2b78d6268604a4e688",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:55-06:00"
         }
       ],
       "run_ids": [
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 5,
       "signature": "INVALID_ACCEPTED|cpython:exception:TypeError|piton:EXECUTE:-",
@@ -3132,7 +2992,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:47-06:00",
+      "last_seen_at": "2026-11-01T01:31:54-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3141,9 +3001,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -3206,18 +3064,10 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:01:55-06:00",
+      "last_seen_at": "2026-10-30T16:38:17-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-4e4e59b5f3193e13",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:55-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -3375,44 +3225,20 @@
       "case_id": "case-52ec2e43a5d86c64",
       "classification": "UNSUPPORTED",
       "classifications": [
-        "UNSUPPORTED",
-        "EQUIV"
+        "UNSUPPORTED"
       ],
       "created_at": "2026-10-30T16:13:11-06:00",
       "description": "Canary D: zip with three iterables",
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:41-06:00",
+      "last_seen_at": "2026-10-31T04:55:51-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "UNSUPPORTED",
-          "command": "python3 -m autopiton replay case-52ec2e43a5d86c64",
-          "fingerprint": "80915d8658014f39cd03c3ecd8bae5284765e61453b591d351d0ad7754b41b3d",
-          "run_id": "run_20261101_145847_replay_seed3",
-          "timestamp": "2026-11-01T14:58:47-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "python3 -m autopiton replay case-52ec2e43a5d86c64",
-          "fingerprint": "52cf4d71c334f823aae9f07a7085c5e39594a3f9a89c6f46045d60ecd36f7cec",
-          "run_id": "run_20261101_151615_replay_seed3",
-          "timestamp": "2026-11-01T15:16:15-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "replay case-52ec2e43a5d86c64",
-          "fingerprint": "52cf4d71c334f823aae9f07a7085c5e39594a3f9a89c6f46045d60ecd36f7cec",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:56-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 3,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:MIR:-",
@@ -3708,7 +3534,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:57-06:00",
+      "last_seen_at": "2026-11-01T01:32:04-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3717,9 +3543,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -4274,7 +4098,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:21-06:00",
+      "last_seen_at": "2026-11-01T01:32:32-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -4282,9 +4106,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -4370,18 +4192,10 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:01:58-06:00",
+      "last_seen_at": "2026-10-30T16:38:21-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-6debd6132f5794c7",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:58-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -4423,7 +4237,7 @@
       "expected_exception": "TypeError",
       "family": "classes",
       "is_valid": false,
-      "last_seen_at": "2026-11-01T16:01:58-06:00",
+      "last_seen_at": "2026-10-30T16:13:37-06:00",
       "minimized_from": "case-4d25af23ed64826d",
       "nondeterministic": false,
       "replay_history": [
@@ -4433,27 +4247,6 @@
           "fingerprint": "9f811d91d7c5b76c85c85b71d3594c28bdd3283586d81a5d807108bcfc0b4ce3",
           "run_id": "run_20261030_161336_replay_seed5",
           "timestamp": "2026-10-30T16:13:37-06:00"
-        },
-        {
-          "classification": "INVALID_ACCEPTED",
-          "command": "python3 -m autopiton replay case-707d1042403c5de2",
-          "fingerprint": "9f811d91d7c5b76c85c85b71d3594c28bdd3283586d81a5d807108bcfc0b4ce3",
-          "run_id": "run_20261101_145848_replay_seed5",
-          "timestamp": "2026-11-01T14:58:48-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "python3 -m autopiton replay case-707d1042403c5de2",
-          "fingerprint": "dbfba3840877b39f8ed4c68b3c7b1b27e5883f2ed98faf2b78d6268604a4e688",
-          "run_id": "run_20261101_151617_replay_seed5",
-          "timestamp": "2026-11-01T15:16:17-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "replay case-707d1042403c5de2",
-          "fingerprint": "dbfba3840877b39f8ed4c68b3c7b1b27e5883f2ed98faf2b78d6268604a4e688",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:58-06:00"
         }
       ],
       "run_ids": [
@@ -4474,15 +4267,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:23-06:00",
+      "last_seen_at": "2026-11-01T01:32:34-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -4544,7 +4335,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:21-06:00",
+      "last_seen_at": "2026-11-01T01:32:31-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -4553,9 +4344,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -4588,31 +4377,20 @@
       "case_id": "case-743c8555280c1e74",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-31T12:32:19-06:00",
       "description": "systematic[compare_str/lambda] 'ab' != 'cd'",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:27-06:00",
+      "last_seen_at": "2026-11-01T01:32:43-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-743c8555280c1e74",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:58-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -4688,33 +4466,22 @@
       "case_id": "case-75eca1c43accfc16",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:46-06:00",
       "description": "systematic[arith_float/lambda] 7.5 % 3.5",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:03-06:00",
+      "last_seen_at": "2026-11-01T01:32:09-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-75eca1c43accfc16",
-          "fingerprint": "554185450b8d370629831517171d195ae495c1333f877ca957ca33ee98ab34ab",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:01:59-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -4731,15 +4498,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:25-06:00",
+      "last_seen_at": "2026-11-01T01:32:36-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -4872,31 +4637,20 @@
       "case_id": "case-77acdc84437a6633",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-31T12:32:23-06:00",
       "description": "systematic[compare_str/lambda] 'ab' > 'cd'",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:30-06:00",
+      "last_seen_at": "2026-11-01T01:32:48-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-77acdc84437a6633",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:00-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -5160,7 +4914,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:09-06:00",
+      "last_seen_at": "2026-11-01T01:32:16-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -5169,9 +4923,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -5324,7 +5076,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:00-06:00",
+      "last_seen_at": "2026-11-01T01:32:07-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -5333,9 +5085,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -5558,33 +5308,22 @@
       "case_id": "case-89c8b838bd1c6293",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:53-06:00",
       "description": "systematic[compare_bool/lambda] True <= True",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:11-06:00",
+      "last_seen_at": "2026-11-01T01:32:20-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-89c8b838bd1c6293",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:02-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -5805,15 +5544,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:24-06:00",
+      "last_seen_at": "2026-11-01T01:32:35-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -5830,22 +5567,13 @@
       "expected_exception": "TypeError",
       "family": "functions",
       "is_valid": false,
-      "last_seen_at": "2026-11-01T16:02:39-06:00",
+      "last_seen_at": "2026-10-31T04:55:49-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "INVALID_REFERENCE",
-          "command": "replay case-912241919394a987",
-          "fingerprint": "f661e5be84ad003ab7f51bdad9a400730a717888f56d464b8e798af0499f206f",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:02-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 1,
       "signature": null,
@@ -5907,7 +5635,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:23-06:00",
+      "last_seen_at": "2026-11-01T01:32:33-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -5915,9 +5643,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -6004,33 +5730,22 @@
       "case_id": "case-93198047b71e24a2",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:52-06:00",
       "description": "systematic[compare_int/lambda] 7 <= 3",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:10-06:00",
+      "last_seen_at": "2026-11-01T01:32:18-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-93198047b71e24a2",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:03-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -6040,31 +5755,20 @@
       "case_id": "case-932cbe168be0e8a1",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-31T12:32:20-06:00",
       "description": "systematic[compare_str/lambda] 'ab' < 'cd'",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:28-06:00",
+      "last_seen_at": "2026-11-01T01:32:45-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-932cbe168be0e8a1",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:04-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -6081,14 +5785,13 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:42-06:00",
+      "last_seen_at": "2026-10-31T04:55:59-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 6,
       "signature": null,
@@ -6127,7 +5830,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:58-06:00",
+      "last_seen_at": "2026-11-01T01:32:05-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -6135,9 +5838,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -6169,31 +5870,20 @@
       "case_id": "case-98da3ede1fa88314",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-31T12:32:17-06:00",
       "description": "systematic[compare_str/lambda] 'ab' == 'cd'",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:26-06:00",
+      "last_seen_at": "2026-11-01T01:32:38-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-98da3ede1fa88314",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:04-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -6348,18 +6038,10 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:05-06:00",
+      "last_seen_at": "2026-10-30T16:37:56-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-9e042952ac86e66e",
-          "fingerprint": "1ba52d848458671319ee92bcaf35269d1f0b5d5ff2ca4042422827c62b0d19d0",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:05-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -6613,18 +6295,10 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:06-06:00",
+      "last_seen_at": "2026-10-30T16:37:56-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-a2e82a07a2e539ec",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:06-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -6637,33 +6311,22 @@
       "case_id": "case-a2ea90d1dbb8ca02",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:40-06:00",
       "description": "systematic[arith_float/lambda] 7.5 * 3.5",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:53-06:00",
+      "last_seen_at": "2026-11-01T01:32:01-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-a2ea90d1dbb8ca02",
-          "fingerprint": "b9bd870fd10ecf5adfd79fe219e4c1bd85ca8dbabcfb0ceffb5ce65fdbc6e6de",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:07-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -6946,33 +6609,22 @@
       "case_id": "case-a8040190eff15dcd",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:55-06:00",
       "description": "systematic[compare_bool/lambda] True > True",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:13-06:00",
+      "last_seen_at": "2026-11-01T01:32:22-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-a8040190eff15dcd",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:08-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -7005,33 +6657,22 @@
       "case_id": "case-a949099c2101f118",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:51-06:00",
       "description": "systematic[compare_int/lambda] 7 < 3",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:08-06:00",
+      "last_seen_at": "2026-11-01T01:32:16-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-a949099c2101f118",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:08-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -7165,31 +6806,20 @@
       "case_id": "case-abb76133927f2b5b",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-31T12:32:22-06:00",
       "description": "systematic[compare_str/lambda] 'ab' <= 'cd'",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:29-06:00",
+      "last_seen_at": "2026-11-01T01:32:47-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-abb76133927f2b5b",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:09-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -7296,7 +6926,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:49-06:00",
+      "last_seen_at": "2026-11-01T01:31:57-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7304,9 +6934,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -7316,33 +6944,22 @@
       "case_id": "case-b05438e3217928f1",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:41-06:00",
       "description": "systematic[arith_int/lambda] 7 / 3",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:55-06:00",
+      "last_seen_at": "2026-11-01T01:32:02-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-b05438e3217928f1",
-          "fingerprint": "261959d6b6cb6ea5a2d4b9f84ec7ad731f72eff3f09aa2f5edc298d7914a7938",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:10-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -7473,18 +7090,10 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:11-06:00",
+      "last_seen_at": "2026-10-30T16:38:42-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-b5e148df78c46ca7",
-          "fingerprint": "dbd06370298ec5dda8599baec33b479c9496f75cd13b1c28ec7d9720f65e3c46",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:11-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -7548,7 +7157,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:18-06:00",
+      "last_seen_at": "2026-11-01T01:32:28-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7556,9 +7165,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -7575,7 +7182,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:54-06:00",
+      "last_seen_at": "2026-11-01T01:32:01-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7584,9 +7191,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -7626,7 +7231,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:52-06:00",
+      "last_seen_at": "2026-11-01T01:32:00-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7635,9 +7240,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -7654,18 +7257,10 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:11-06:00",
+      "last_seen_at": "2026-10-30T16:38:08-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-b92a3a119fdbbf98",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:11-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -7767,33 +7362,22 @@
       "case_id": "case-bad788f2784c4652",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:49-06:00",
       "description": "systematic[compare_int/lambda] 7 != 3",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:06-06:00",
+      "last_seen_at": "2026-11-01T01:32:13-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-bad788f2784c4652",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:12-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -7865,7 +7449,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:19-06:00",
+      "last_seen_at": "2026-11-01T01:32:29-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7874,9 +7458,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -7961,7 +7543,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:02-06:00",
+      "last_seen_at": "2026-11-01T01:32:08-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7970,9 +7552,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -7989,7 +7569,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:13-06:00",
+      "last_seen_at": "2026-11-01T01:32:22-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -7998,9 +7578,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -8086,7 +7664,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:55-06:00",
+      "last_seen_at": "2026-11-01T01:32:03-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -8095,9 +7673,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -8207,18 +7783,10 @@
       "expected_exception": null,
       "family": "functions",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:13-06:00",
+      "last_seen_at": "2026-10-30T16:38:07-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-c40807ea966ad9e4",
-          "fingerprint": "89dc082b69c8d8450006fa83c31f2970e9e29fac9e1cb7b7f3bdc8e2751dd022",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:13-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -8305,15 +7873,14 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:39-06:00",
+      "last_seen_at": "2026-10-31T04:55:49-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161303_canary",
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 0,
       "signature": null,
@@ -8378,33 +7945,22 @@
       "case_id": "case-c69f2278220f35c6",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:52-06:00",
       "description": "systematic[compare_bool/lambda] True < True",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:09-06:00",
+      "last_seen_at": "2026-11-01T01:32:17-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-c69f2278220f35c6",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:15-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -8421,7 +7977,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:12-06:00",
+      "last_seen_at": "2026-11-01T01:32:20-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -8430,9 +7986,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -8498,33 +8052,22 @@
       "case_id": "case-c7aa2ef686c189dd",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:42-06:00",
       "description": "systematic[arith_float/lambda] 7.5 / 3.5",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:56-06:00",
+      "last_seen_at": "2026-11-01T01:32:03-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-c7aa2ef686c189dd",
-          "fingerprint": "84cbf7e9a4a0f24bdf2ede9e9bc2d2c7366488fbf70c499720f862d1a6531022",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:16-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -8564,15 +8107,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:24-06:00",
+      "last_seen_at": "2026-11-01T01:32:35-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -8733,7 +8274,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:46-06:00",
+      "last_seen_at": "2026-11-01T01:31:54-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -8741,9 +8282,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -8804,15 +8343,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:29-06:00",
+      "last_seen_at": "2026-11-01T01:32:48-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -8829,15 +8366,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:31-06:00",
+      "last_seen_at": "2026-11-01T01:32:49-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -8958,33 +8493,22 @@
       "case_id": "case-d5420760a7f3fcf4",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:50-06:00",
       "description": "systematic[compare_bool/lambda] True != True",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:07-06:00",
+      "last_seen_at": "2026-11-01T01:32:14-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-d5420760a7f3fcf4",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:17-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -9017,33 +8541,22 @@
       "case_id": "case-d680aaf6f05aa384",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:56-06:00",
       "description": "systematic[compare_int/lambda] 7 >= 3",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:15-06:00",
+      "last_seen_at": "2026-11-01T01:32:24-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-d680aaf6f05aa384",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:18-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -9077,39 +8590,18 @@
       "classifications": [
         "DIVERGENT"
       ],
-      "created_at": "2026-11-01T01:59:32-06:00",
+      "created_at": "2026-11-01T01:57:38-06:00",
       "description": "case-eca1f5b2bf2ae439.py",
       "expected_exception": null,
       "family": "arithmetic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:18-06:00",
+      "last_seen_at": "2026-11-01T01:57:46-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "DIVERGENT",
-          "command": "python3 -m autopiton replay case-d6c99c747cd13463",
-          "fingerprint": "2d17d7f9e078e7bf90b94f4918d5abacb95bf2b9c2735acedfceadaba07ed734",
-          "run_id": "run_20261101_020717_replay_seed0",
-          "timestamp": "2026-11-01T02:07:17-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "python3 -m autopiton replay case-d6c99c747cd13463",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_021018_replay_seed0",
-          "timestamp": "2026-11-01T02:10:19-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "replay case-d6c99c747cd13463",
-          "fingerprint": "b6a161e49a262f973e010c6387e81b56f9746cf5c1c7eb132e430430f822e840",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:18-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
-        "run_20261101_015932_input"
+        "run_20261101_015737_input",
+        "run_20261101_015745_input"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->none",
@@ -9261,14 +8753,13 @@
       "expected_exception": null,
       "family": "unpacking",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:44-06:00",
+      "last_seen_at": "2026-10-31T04:56:01-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 8,
       "signature": null,
@@ -9548,31 +9039,20 @@
       "case_id": "case-e1592dba3360cae3",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-31T12:32:25-06:00",
       "description": "systematic[compare_str/lambda] 'ab' >= 'cd'",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:31-06:00",
+      "last_seen_at": "2026-11-01T01:32:50-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-e1592dba3360cae3",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:19-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -9679,7 +9159,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:52-06:00",
+      "last_seen_at": "2026-11-01T01:31:59-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -9687,9 +9167,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -9762,15 +9240,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:26-06:00",
+      "last_seen_at": "2026-11-01T01:32:41-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -9787,22 +9263,13 @@
       "expected_exception": "TypeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-01T16:02:44-06:00",
+      "last_seen_at": "2026-10-31T04:56:01-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "INVALID_REFERENCE",
-          "command": "replay case-e40e23b17c444ddb",
-          "fingerprint": "e8f063d95c122828e3b21101eb37bfe98bedbb01357216fdb29f5bb1f1e39c6d",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:20-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 9,
       "signature": null,
@@ -9819,22 +9286,13 @@
       "expected_exception": "RuntimeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-01T16:02:41-06:00",
+      "last_seen_at": "2026-10-31T04:55:51-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "INVALID_REFERENCE",
-          "command": "replay case-e49b5c7a9e738d48",
-          "fingerprint": "f55172bf90ebbacb2204aa392c8e84e06828145db217528e2e36f0443092f99f",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:20-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 4,
       "signature": null,
@@ -9936,7 +9394,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:08-06:00",
+      "last_seen_at": "2026-11-01T01:32:15-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -9945,9 +9403,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -10106,18 +9562,10 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:21-06:00",
+      "last_seen_at": "2026-10-30T16:38:42-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-e8e467249af66a85",
-          "fingerprint": "33b4bc8c52abc67305fd15b6954b6c7602e6bbee8c798511d08e81396e6c3fec",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:21-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -10159,7 +9607,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:10-06:00",
+      "last_seen_at": "2026-11-01T01:32:18-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10168,9 +9616,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -10290,7 +9736,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:16-06:00",
+      "last_seen_at": "2026-11-01T01:32:26-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10299,9 +9745,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -10318,15 +9762,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:27-06:00",
+      "last_seen_at": "2026-11-01T01:32:44-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -10360,44 +9802,20 @@
       "case_id": "case-efd722252f2ec8ff",
       "classification": "UNSUPPORTED",
       "classifications": [
-        "UNSUPPORTED",
-        "EQUIV"
+        "UNSUPPORTED"
       ],
       "created_at": "2026-10-30T16:13:11-06:00",
       "description": "Canary C: super() with multiple args",
       "expected_exception": null,
       "family": "super",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:40-06:00",
+      "last_seen_at": "2026-10-31T04:55:50-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "UNSUPPORTED",
-          "command": "python3 -m autopiton replay case-efd722252f2ec8ff",
-          "fingerprint": "504f7a484876fd5547ba63ed503c9d042965aa7ed110c461d6d6d4e891419616",
-          "run_id": "run_20261101_145847_replay_seed2",
-          "timestamp": "2026-11-01T14:58:47-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "python3 -m autopiton replay case-efd722252f2ec8ff",
-          "fingerprint": "05a5d25bfd59dd99921bd07f6861970e715531c4b37451a47101b5de0769e5f5",
-          "run_id": "run_20261101_151615_replay_seed2",
-          "timestamp": "2026-11-01T15:16:16-06:00"
-        },
-        {
-          "classification": "EQUIV",
-          "command": "replay case-efd722252f2ec8ff",
-          "fingerprint": "05a5d25bfd59dd99921bd07f6861970e715531c4b37451a47101b5de0769e5f5",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:22-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161309_canary",
-        "run_20261031_045547_canary",
-        "run_20261101_160238_canary"
+        "run_20261031_045547_canary"
       ],
       "seed": 2,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -10414,7 +9832,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:48-06:00",
+      "last_seen_at": "2026-11-01T01:31:56-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10423,9 +9841,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -10442,7 +9858,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:51-06:00",
+      "last_seen_at": "2026-11-01T01:31:59-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10451,9 +9867,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -10651,15 +10065,13 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:25-06:00",
+      "last_seen_at": "2026-11-01T01:32:37-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -10698,7 +10110,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:04-06:00",
+      "last_seen_at": "2026-11-01T01:32:11-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10707,9 +10119,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -10726,7 +10136,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:11-06:00",
+      "last_seen_at": "2026-11-01T01:32:19-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10735,9 +10145,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,
@@ -10847,33 +10255,22 @@
       "case_id": "case-f914d3bc70eb8c48",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:47-06:00",
       "description": "systematic[compare_int/lambda] 7 == 3",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:04-06:00",
+      "last_seen_at": "2026-11-01T01:32:10-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-f914d3bc70eb8c48",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:23-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
@@ -10890,18 +10287,10 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:24-06:00",
+      "last_seen_at": "2026-10-30T16:38:10-06:00",
       "minimized_from": null,
       "nondeterministic": false,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-f9a227a8e3b48ccd",
-          "fingerprint": "865d5a1e66aa7e1e20d63943bc2e68db58fa23bf7886330623764617818925ed",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:24-06:00"
-        }
-      ],
+      "replay_history": [],
       "run_ids": [
         "run_20261030_161934_generated_seed42",
         "run_20261030_163754_generated_seed42"
@@ -11042,33 +10431,22 @@
       "case_id": "case-fd4e794d2ee46f35",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:38-06:00",
       "description": "systematic[arith_float/lambda] 7.5 - 3.5",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:50-06:00",
+      "last_seen_at": "2026-11-01T01:31:58-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-fd4e794d2ee46f35",
-          "fingerprint": "3ec623c90cc6f19482451025e70cc8da2ae4fe0aa25c0c7f024faba49bf565ae",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:25-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -11078,33 +10456,22 @@
       "case_id": "case-fe0687a154d45013",
       "classification": "DIVERGENT",
       "classifications": [
-        "DIVERGENT",
-        "EQUIV"
+        "DIVERGENT"
       ],
       "created_at": "2026-10-30T17:06:44-06:00",
       "description": "systematic[arith_float/lambda] 7.5 // 3.5",
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:02:59-06:00",
+      "last_seen_at": "2026-11-01T01:32:06-06:00",
       "minimized_from": null,
-      "nondeterministic": true,
-      "replay_history": [
-        {
-          "classification": "EQUIV",
-          "command": "replay case-fe0687a154d45013",
-          "fingerprint": "91450f91229673924d328de8dc21c7746a40686d87a276e9e3a5375012ce041f",
-          "run_id": "run_20261101_160149_reconcile_replay",
-          "timestamp": "2026-11-01T16:02:26-06:00"
-        }
-      ],
+      "nondeterministic": false,
+      "replay_history": [],
       "run_ids": [
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
@@ -11121,7 +10488,7 @@
       "expected_exception": null,
       "family": "systematic",
       "is_valid": true,
-      "last_seen_at": "2026-11-01T16:03:20-06:00",
+      "last_seen_at": "2026-11-01T01:32:30-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -11129,9 +10496,7 @@
         "run_20261030_170633_systematic",
         "run_20261031_044219_systematic",
         "run_20261031_123128_systematic",
-        "run_20261101_142506_systematic",
-        "run_20261101_144510_systematic",
-        "run_20261101_160244_systematic"
+        "run_20261101_013152_systematic"
       ],
       "seed": 0,
       "signature": null,

@@ -1,6 +1,6 @@
 {
   "case_id": "case-d6c99c747cd13463",
-  "created_at": "2026-11-01T01:59:32-06:00",
+  "created_at": "2026-11-01T01:57:38-06:00",
   "description": "case-eca1f5b2bf2ae439.py",
   "expected_exception": null,
   "family": "arithmetic",
@@ -18,7 +18,7 @@
       "context_message": null,
       "context_type": null,
       "crash": false,
-      "duration_ms": 32.33026399902883,
+      "duration_ms": 32.24378799859551,
       "exception_message": null,
       "exception_traceback": null,
       "exception_type": null,
@@ -46,13 +46,13 @@
     "piton": {
       "artifact_sha256": "7f7726e5b9e9f6c17bc13df8f21248403afd8aad0d2451d94196cd6077f54708",
       "build_exit_code": 0,
-      "build_ms": 715.8728709982825,
+      "build_ms": 966.0775480006123,
       "build_stderr_tail": "",
       "build_timed_out": false,
       "crash": false,
       "exception_message": null,
       "exception_type": null,
-      "execute_ms": 8.04811200214317,
+      "execute_ms": 8.033803998841904,
       "executed": true,
       "exit_code": 0,
       "failed_stage": null,
@@ -96,7 +96,7 @@
     "source": "def _f(_x=True == True):\n    return _x\n_b = _f()\nprint(_b)\n\n",
     "source_hash": "d6c99c747cd1346387bf7be36dbae5ceb1a2406f39cae384265a952ae1fade0e"
   },
-  "run_id": "run_20261101_015932_input",
+  "run_id": "run_20261101_015737_input",
   "seed": 0,
   "source": "def _f(_x=True == True):\n    return _x\n_b = _f()\nprint(_b)\n\n",
   "source_hash": "d6c99c747cd1346387bf7be36dbae5ceb1a2406f39cae384265a952ae1fade0e"

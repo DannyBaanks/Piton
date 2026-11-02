@@ -1,0 +1,16 @@
+{
+  "cases_registered": 0,
+  "classification_counts": {
+    "DIVERGENT": 1
+  },
+  "duration_ms": 3054.2,
+  "finished_at": "2026-11-01T01:35:18-06:00",
+  "harness_errors": 0,
+  "programs_executed": 1,
+  "programs_requested": 1,
+  "run_id": "run_20261101_013515_minimize_seed0",
+  "unique_divergences": 1,
+  "unique_signatures": [
+    "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->none"
+  ]
+}
