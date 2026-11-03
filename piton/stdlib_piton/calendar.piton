@@ -10,10 +10,10 @@ month_abbr = 0
 month_name = 0
 
 
-funcion isleap (*args ) :
+funcion isleap (*args , **kwargs):
     lanzar NotImplementedError ('calendar.isleap no esta implementado en el backend nativo')
 
 
-funcion timegm (*args ) :
+funcion timegm (*args , **kwargs):
     lanzar NotImplementedError ('calendar.timegm no esta implementado en el backend nativo')
 

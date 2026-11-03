@@ -1,5 +1,5 @@
 clase Pdb :
-    funcion __init__ (self,completekey='tab',stdin=Nada,stdout=Nada):
+    funcion __init__ (self, completekey='tab', stdin=Nada, stdout=Nada, *args, **kwargs):
         pasar
     funcion set_trace (self,frame=Nada):
         pasar

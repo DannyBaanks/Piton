@@ -1,25 +1,25 @@
 compress = 0
 decompress = 0
 
-funcion compress (data,level=6):
+funcion compress (data,level=6, *args, **kwargs):
     devolver b""
 
-funcion decompress (data,wbits=15,bufsize=0):
+funcion decompress (data,wbits=15,bufsize=0, *args, **kwargs):
     devolver b""
 
-funcion compressobj (level=6,method=8,wbits=15,memLevel=8,strategy=0,zdict=b''):
-    class CompressObj :
-        funcion compress (self,data):
+funcion compressobj (level=6,method=8,wbits=15,memLevel=8,strategy=0,zdict=b'', *args, **kwargs):
+    clase CompressObj :
+        funcion compress (self,data, *args, **kwargs):
             devolver b""
-        funcion flush (self,mode=0):
+        funcion flush (self,mode=0, *args, **kwargs):
             devolver b""
     devolver CompressObj()
 
-funcion decompressobj (wbits=15,zdict=b''):
-    class DecompressObj :
-        funcion decompress (self,data):
+funcion decompressobj (wbits=15,zdict=b'', *args, **kwargs):
+    clase DecompressObj :
+        funcion decompress (self,data, *args, **kwargs):
             devolver b""
-        funcion flush (self):
+        funcion flush (self, *args, **kwargs):
             devolver b""
     devolver DecompressObj()
 

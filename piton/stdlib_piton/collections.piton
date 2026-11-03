@@ -5,30 +5,30 @@ clase ChainMap :
 abc = 0
 
 
-funcion Counter (*args ) :
+funcion Counter (*args , **kwargs):
     lanzar NotImplementedError ('collections.Counter no esta implementado en el backend nativo')
 
 
-funcion OrderedDict (*args ) :
+funcion OrderedDict (*args , **kwargs):
     lanzar NotImplementedError ('collections.OrderedDict no esta implementado en el backend nativo')
 
 
-funcion _ChainMap (*args ) :
+funcion _ChainMap (*args , **kwargs):
     lanzar NotImplementedError ('collections._ChainMap no esta implementado en el backend nativo')
 
 
-funcion _namedtuple (*args ) :
+funcion _namedtuple (*args , **kwargs):
     lanzar NotImplementedError ('collections._namedtuple no esta implementado en el backend nativo')
 
 
-funcion defaultdict (*args ) :
+funcion defaultdict (*args , **kwargs):
     lanzar NotImplementedError ('collections.defaultdict no esta implementado en el backend nativo')
 
 
-funcion deque (*args ) :
+funcion deque (*args , **kwargs):
     lanzar NotImplementedError ('collections.deque no esta implementado en el backend nativo')
 
 
-funcion namedtuple (*args ) :
+funcion namedtuple (*args , **kwargs):
     lanzar NotImplementedError ('collections.namedtuple no esta implementado en el backend nativo')
 

@@ -20,26 +20,26 @@ encode = 0
 register = 0
 
 
-funcion escape_decode (*args ) :
+funcion escape_decode (*args , **kwargs):
     lanzar NotImplementedError ('codecs.escape_decode no esta implementado en el backend nativo')
 
 
-funcion getincrementaldecoder (*args ) :
+funcion getincrementaldecoder (*args , **kwargs):
     lanzar NotImplementedError ('codecs.getincrementaldecoder no esta implementado en el backend nativo')
 
 
-funcion getincrementalencoder (*args ) :
+funcion getincrementalencoder (*args , **kwargs):
     lanzar NotImplementedError ('codecs.getincrementalencoder no esta implementado en el backend nativo')
 
 
-funcion lookup (*args ) :
+funcion lookup (*args , **kwargs):
     lanzar NotImplementedError ('codecs.lookup no esta implementado en el backend nativo')
 
 
-funcion lookup_error (*args ) :
+funcion lookup_error (*args , **kwargs):
     lanzar NotImplementedError ('codecs.lookup_error no esta implementado en el backend nativo')
 
 
-funcion open (*args ) :
+funcion open (*args , **kwargs):
     lanzar NotImplementedError ('codecs.open no esta implementado en el backend nativo')
 

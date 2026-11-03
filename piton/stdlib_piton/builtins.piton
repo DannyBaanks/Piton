@@ -25,30 +25,30 @@ object = 0
 quit = 0
 
 
-funcion _abs (*args ) :
+funcion _abs (*args , **kwargs):
     lanzar NotImplementedError ('builtins._abs no esta implementado en el backend nativo')
 
 
-funcion _builtin_open (*args ) :
+funcion _builtin_open (*args , **kwargs):
     lanzar NotImplementedError ('builtins._builtin_open no esta implementado en el backend nativo')
 
 
-funcion abs (*args ) :
+funcion abs (*args , **kwargs):
     lanzar NotImplementedError ('builtins.abs no esta implementado en el backend nativo')
 
 
-funcion bltn_open (*args ) :
+funcion bltn_open (*args , **kwargs):
     lanzar NotImplementedError ('builtins.bltn_open no esta implementado en el backend nativo')
 
 
-funcion open (*args ) :
+funcion open (*args , **kwargs):
     lanzar NotImplementedError ('builtins.open no esta implementado en el backend nativo')
 
 
-funcion repr (*args ) :
+funcion repr (*args , **kwargs):
     lanzar NotImplementedError ('builtins.repr no esta implementado en el backend nativo')
 
 
-funcion str (*args ) :
+funcion str (*args , **kwargs):
     lanzar NotImplementedError ('builtins.str no esta implementado en el backend nativo')
 

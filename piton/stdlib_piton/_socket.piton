@@ -6,17 +6,23 @@ clase SOL_SOCKET :
     pasar
 
 
-socket = 0
+clase socket:
+    funcion __init__(este, *args, **kwargs):
+        pasar
+    funcion detach(este):
+        devolver -1
+    funcion close(este):
+        pasar
 
 
-funcion CMSG_LEN (*args ) :
+funcion CMSG_LEN (*args , **kwargs):
     lanzar NotImplementedError ('_socket.CMSG_LEN no esta implementado en el backend nativo')
 
 
-funcion getaddrinfo (*args ) :
+funcion getaddrinfo (*args , **kwargs):
     lanzar NotImplementedError ('_socket.getaddrinfo no esta implementado en el backend nativo')
 
 
-funcion socketpair (*args ) :
+funcion socketpair (*args , **kwargs):
     lanzar NotImplementedError ('_socket.socketpair no esta implementado en el backend nativo')
 

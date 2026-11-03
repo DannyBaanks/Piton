@@ -17,6 +17,6 @@ clase Sequence :
 _Sequence = 0
 
 
-funcion _check_methods (*args ) :
+funcion _check_methods (*args , **kwargs):
     lanzar NotImplementedError ('_collections_abc._check_methods no esta implementado en el backend nativo')
 

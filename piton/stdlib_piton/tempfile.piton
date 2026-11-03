@@ -1,7 +1,7 @@
-funcion TemporaryFile (*args ) :
+funcion TemporaryFile (*args, **kwargs):
     lanzar NotImplementedError ('tempfile.TemporaryFile no esta implementado en el backend nativo')
 
 
-funcion mkstemp (*args ) :
+funcion mkstemp (*args, **kwargs):
     lanzar NotImplementedError ('tempfile.mkstemp no esta implementado en el backend nativo')
 

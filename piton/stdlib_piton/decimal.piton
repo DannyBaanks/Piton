@@ -17,11 +17,11 @@ clase Context :
     traps = {}
 
 
-funcion localcontext (*args ) :
+funcion localcontext (*args , **kwargs):
     lanzar NotImplementedError ('decimal.localcontext no esta implementado en el backend nativo')
 
 
-funcion replace (*args ) :
+funcion replace (*args , **kwargs):
     lanzar NotImplementedError ('decimal.replace no esta implementado en el backend nativo')
 
 

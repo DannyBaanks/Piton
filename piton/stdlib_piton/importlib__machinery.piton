@@ -43,7 +43,7 @@ SOURCE_SUFFIXES = ['.py']
 BYTECODE_SUFFIXES = ['.pyc']
 
 
-funcion all_suffixes (*args ) :
+funcion all_suffixes (*args , **kwargs):
     lanzar NotImplementedError ('importlib.machinery.all_suffixes no esta implementado en el backend nativo')
 
 

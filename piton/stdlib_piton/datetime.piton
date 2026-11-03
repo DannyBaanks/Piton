@@ -6,38 +6,38 @@ clase MINYEAR :
     pasar
 
 
-funcion date (*args ) :
+funcion date (*args , **kwargs):
     lanzar NotImplementedError ('datetime.date no esta implementado en el backend nativo')
 
 
-funcion datetime (*args ) :
+funcion datetime (*args , **kwargs):
     lanzar NotImplementedError ('datetime.datetime no esta implementado en el backend nativo')
 
 
-funcion datetime_date (*args ) :
+funcion datetime_date (*args , **kwargs):
     lanzar NotImplementedError ('datetime.datetime_date no esta implementado en el backend nativo')
 
 
-funcion datetime_timedelta (*args ) :
+funcion datetime_timedelta (*args , **kwargs):
     lanzar NotImplementedError ('datetime.datetime_timedelta no esta implementado en el backend nativo')
 
 
-funcion datetime_timezone (*args ) :
+funcion datetime_timezone (*args , **kwargs):
     lanzar NotImplementedError ('datetime.datetime_timezone no esta implementado en el backend nativo')
 
 
-funcion fromtimestamp (*args ) :
+funcion fromtimestamp (*args , **kwargs):
     lanzar NotImplementedError ('datetime.fromtimestamp no esta implementado en el backend nativo')
 
 
-funcion now (*args ) :
+funcion now (*args , **kwargs):
     lanzar NotImplementedError ('datetime.now no esta implementado en el backend nativo')
 
 
-funcion timedelta (*args ) :
+funcion timedelta (*args , **kwargs):
     lanzar NotImplementedError ('datetime.timedelta no esta implementado en el backend nativo')
 
 
-funcion timezone (*args ) :
+funcion timezone (*args , **kwargs):
     lanzar NotImplementedError ('datetime.timezone no esta implementado en el backend nativo')
 

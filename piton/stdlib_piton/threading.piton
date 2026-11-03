@@ -1,34 +1,34 @@
 local = 0
 
 
-funcion Condition (*args ) :
+funcion Condition (*args , **kwargs):
     lanzar NotImplementedError ('threading.Condition no esta implementado en el backend nativo')
 
 
-funcion Event (*args ) :
+funcion Event (*args , **kwargs):
     lanzar NotImplementedError ('threading.Event no esta implementado en el backend nativo')
 
 
-funcion Lock (*args ) :
+funcion Lock (*args , **kwargs):
     lanzar NotImplementedError ('threading.Lock no esta implementado en el backend nativo')
 
 
-funcion RLock (*args ) :
+funcion RLock (*args , **kwargs):
     lanzar NotImplementedError ('threading.RLock no esta implementado en el backend nativo')
 
 
-funcion Semaphore (*args ) :
+funcion Semaphore (*args , **kwargs):
     lanzar NotImplementedError ('threading.Semaphore no esta implementado en el backend nativo')
 
 
-funcion Thread (*args ) :
+funcion Thread (*args , **kwargs):
     lanzar NotImplementedError ('threading.Thread no esta implementado en el backend nativo')
 
 
-funcion current_thread (*args ) :
+funcion current_thread (*args , **kwargs):
     lanzar NotImplementedError ('threading.current_thread no esta implementado en el backend nativo')
 
 
-funcion settrace (*args ) :
+funcion settrace (*args , **kwargs):
     lanzar NotImplementedError ('threading.settrace no esta implementado en el backend nativo')
 

@@ -39,9 +39,9 @@ FIRST_EXCEPTION = 'FIRST_EXCEPTION'
 ALL_COMPLETED = 'ALL_COMPLETED'
 
 
-funcion wait (*args ) :
+funcion wait (*args , **kwargs):
     lanzar NotImplementedError ('concurrent.futures.wait no esta implementado en el backend nativo')
 
 
-funcion as_completed (*args ) :
+funcion as_completed (*args , **kwargs):
     lanzar NotImplementedError ('concurrent.futures.as_completed no esta implementado en el backend nativo')

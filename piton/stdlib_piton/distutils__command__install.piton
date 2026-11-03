@@ -2,14 +2,21 @@ clase INSTALL_SCHEMES :
     pasar
 
 
-funcion _inject_headers (*args ) :
+funcion _inject_headers (*args , **kwargs):
     lanzar NotImplementedError ('distutils.command.install._inject_headers no esta implementado en el backend nativo')
 
 
-funcion _load_schemes (*args ) :
+funcion _load_schemes (*args , **kwargs):
     lanzar NotImplementedError ('distutils.command.install._load_schemes no esta implementado en el backend nativo')
 
 
-funcion install (*args ) :
-    lanzar NotImplementedError ('distutils.command.install.install no esta implementado en el backend nativo')
+clase install:
+    funcion __init__(este, *args, **kwargs):
+        pasar
+    funcion initialize_options(este):
+        pasar
+    funcion finalize_options(este):
+        pasar
+    funcion run(este):
+        pasar
 

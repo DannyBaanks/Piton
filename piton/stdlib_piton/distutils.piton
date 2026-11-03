@@ -1,2 +1,2 @@
-funcion comando_no_operativo (*args ):
+funcion comando_no_operativo (*args , **kwargs):
     lanzar NotImplementedError ('distutils no esta implementado en el backend nativo')

@@ -1,11 +1,11 @@
-funcion dump (*args ) :
+funcion dump (*args , **kwargs):
     lanzar NotImplementedError ('marshal.dump no esta implementado en el backend nativo')
 
 
-funcion load (*args ) :
+funcion load (*args , **kwargs):
     lanzar NotImplementedError ('marshal.load no esta implementado en el backend nativo')
 
 
-funcion loads (*args ) :
+funcion loads (*args , **kwargs):
     lanzar NotImplementedError ('marshal.loads no esta implementado en el backend nativo')
 

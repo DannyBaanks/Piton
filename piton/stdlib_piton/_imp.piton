@@ -1,4 +1,3 @@
-# _imp.piton — stub para _imp (stdlib CPython)
 funcion create_builtin (spec):
     devolver None
 

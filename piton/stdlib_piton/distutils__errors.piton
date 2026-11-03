@@ -1,3 +1,14 @@
-clase DistutilsOptionError :
+clase DistutilsError (Exception):
     pasar
 
+clase DistutilsOptionError (DistutilsError):
+    pasar
+
+clase DistutilsPlatformError (DistutilsError):
+    pasar
+
+clase DistutilsFileError (DistutilsError):
+    pasar
+
+clase DistutilsSetupError (DistutilsError):
+    pasar

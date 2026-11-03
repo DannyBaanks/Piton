@@ -23,14 +23,14 @@ _IntFlag = 0
 global_enum = 0
 
 
-funcion Enum (*args ) :
+funcion Enum (*args , **kwargs):
     lanzar NotImplementedError ('enum.Enum no esta implementado en el backend nativo')
 
 
-funcion _simple_enum (*args ) :
+funcion _simple_enum (*args , **kwargs):
     lanzar NotImplementedError ('enum._simple_enum no esta implementado en el backend nativo')
 
 
-funcion auto (*args ) :
+funcion auto (*args , **kwargs):
     lanzar NotImplementedError ('enum.auto no esta implementado en el backend nativo')
 

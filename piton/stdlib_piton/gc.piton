@@ -1,15 +1,15 @@
-funcion disable (*args ) :
+funcion disable (*args , **kwargs):
     lanzar NotImplementedError ('gc.disable no esta implementado en el backend nativo')
 
 
-funcion enable (*args ) :
+funcion enable (*args , **kwargs):
     lanzar NotImplementedError ('gc.enable no esta implementado en el backend nativo')
 
 
-funcion get_referrers (*args ) :
+funcion get_referrers (*args , **kwargs):
     lanzar NotImplementedError ('gc.get_referrers no esta implementado en el backend nativo')
 
 
-funcion isenabled (*args ) :
+funcion isenabled (*args , **kwargs):
     lanzar NotImplementedError ('gc.isenabled no esta implementado en el backend nativo')
 

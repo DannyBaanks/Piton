@@ -94,22 +94,22 @@ clase WrapperDescriptorType :
     pasar
 
 
-funcion GenericAlias (*args ) :
+funcion GenericAlias (*args , **kwargs):
     lanzar NotImplementedError ('types.GenericAlias no esta implementado en el backend nativo')
 
 
-funcion MappingProxyType (*args ) :
+funcion MappingProxyType (*args , **kwargs):
     lanzar NotImplementedError ('types.MappingProxyType no esta implementado en el backend nativo')
 
 
-funcion MethodType (*args ) :
+funcion MethodType (*args , **kwargs):
     lanzar NotImplementedError ('types.MethodType no esta implementado en el backend nativo')
 
 
-funcion items (*args ) :
+funcion items (*args , **kwargs):
     lanzar NotImplementedError ('types.items no esta implementado en el backend nativo')
 
 
-funcion new_class (*args ) :
+funcion new_class (*args , **kwargs):
     lanzar NotImplementedError ('types.new_class no esta implementado en el backend nativo')
 

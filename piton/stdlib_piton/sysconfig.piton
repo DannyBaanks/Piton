@@ -1,7 +1,7 @@
-funcion get_config_var (*args ) :
+funcion get_config_var (*args , **kwargs):
     lanzar NotImplementedError ('sysconfig.get_config_var no esta implementado en el backend nativo')
 
 
-funcion get_path (*args ) :
+funcion get_path (*args , **kwargs):
     lanzar NotImplementedError ('sysconfig.get_path no esta implementado en el backend nativo')
 

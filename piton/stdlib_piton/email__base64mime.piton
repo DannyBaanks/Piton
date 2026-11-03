@@ -1,15 +1,15 @@
-funcion body_encode (*args ) :
+funcion body_encode (*args , **kwargs):
     lanzar NotImplementedError ('email.base64mime.body_encode no esta implementado en el backend nativo')
 
 
-funcion decode (*args ) :
+funcion decode (*args , **kwargs):
     lanzar NotImplementedError ('email.base64mime.decode no esta implementado en el backend nativo')
 
 
-funcion encode_base64 (*args ) :
+funcion encode_base64 (*args , **kwargs):
     lanzar NotImplementedError ('email.base64mime.encode_base64 no esta implementado en el backend nativo')
 
 
-funcion header_length (*args ) :
+funcion header_length (*args , **kwargs):
     lanzar NotImplementedError ('email.base64mime.header_length no esta implementado en el backend nativo')
 

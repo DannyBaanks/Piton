@@ -1,46 +1,46 @@
-funcion urlparse (*args ) :
+funcion urlparse (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.urlparse no esta implementado en el backend nativo')
 
 
-funcion unquote (*args ) :
+funcion unquote (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.unquote no esta implementado en el backend nativo')
 
 
-funcion quote (*args ) :
+funcion quote (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.quote no esta implementado en el backend nativo')
 
 
-funcion urlsplit (*args ) :
+funcion urlsplit (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.urlsplit no esta implementado en el backend nativo')
 
 
-funcion urlunparse (*args ) :
+funcion urlunparse (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.urlunparse no esta implementado en el backend nativo')
 
 
-funcion parse_qsl (*args ) :
+funcion parse_qsl (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.parse_qsl no esta implementado en el backend nativo')
 
 
-funcion unquote_to_bytes (*args ) :
+funcion unquote_to_bytes (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.unquote_to_bytes no esta implementado en el backend nativo')
 
 
-funcion urljoin (*args ) :
+funcion urljoin (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.urljoin no esta implementado en el backend nativo')
 
 
-funcion urlunsplit (*args ) :
+funcion urlunsplit (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.urlunsplit no esta implementado en el backend nativo')
 
 
-funcion parse_qs (*args ) :
+funcion parse_qs (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.parse_qs no esta implementado en el backend nativo')
 
 
-funcion urlencode (*args ) :
+funcion urlencode (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse.urlencode no esta implementado en el backend nativo')
 
 
-funcion _splituser (*args ) :
+funcion _splituser (*args , **kwargs):
     lanzar NotImplementedError ('urllib.parse._splituser no esta implementado en el backend nativo')

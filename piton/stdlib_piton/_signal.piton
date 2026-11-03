@@ -1,23 +1,23 @@
-funcion getsignal (*args ) :
+funcion getsignal (*args , **kwargs):
     lanzar NotImplementedError ('_signal.getsignal no esta implementado en el backend nativo')
 
 
-funcion pthread_sigmask (*args ) :
+funcion pthread_sigmask (*args , **kwargs):
     lanzar NotImplementedError ('_signal.pthread_sigmask no esta implementado en el backend nativo')
 
 
-funcion signal (*args ) :
+funcion signal (*args , **kwargs):
     lanzar NotImplementedError ('_signal.signal no esta implementado en el backend nativo')
 
 
-funcion sigpending (*args ) :
+funcion sigpending (*args , **kwargs):
     lanzar NotImplementedError ('_signal.sigpending no esta implementado en el backend nativo')
 
 
-funcion sigwait (*args ) :
+funcion sigwait (*args , **kwargs):
     lanzar NotImplementedError ('_signal.sigwait no esta implementado en el backend nativo')
 
 
-funcion valid_signals (*args ) :
+funcion valid_signals (*args , **kwargs):
     lanzar NotImplementedError ('_signal.valid_signals no esta implementado en el backend nativo')
 

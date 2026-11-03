@@ -29,18 +29,18 @@ clase TokenError :
     pasar
 
 
-funcion detect_encoding (*args ) :
+funcion detect_encoding (*args , **kwargs):
     lanzar NotImplementedError ('tokenize.detect_encoding no esta implementado en el backend nativo')
 
 
-funcion generate_tokens (*args ) :
+funcion generate_tokens (*args , **kwargs):
     lanzar NotImplementedError ('tokenize.generate_tokens no esta implementado en el backend nativo')
 
 
-funcion open (*args ) :
+funcion open (*args , **kwargs):
     lanzar NotImplementedError ('tokenize.open no esta implementado en el backend nativo')
 
 
-funcion tokenize (*args ) :
+funcion tokenize (*args , **kwargs):
     lanzar NotImplementedError ('tokenize.tokenize no esta implementado en el backend nativo')
 

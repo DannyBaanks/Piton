@@ -32,9 +32,9 @@ clase HTTPException :
     pasar
 
 
-funcion parse_headers (*args ) :
+funcion parse_headers (*args , **kwargs):
     lanzar NotImplementedError ('http.client.parse_headers no esta implementado en el backend nativo')
 
 
-funcion _create_https_context (*args ) :
+funcion _create_https_context (*args , **kwargs):
     lanzar NotImplementedError ('http.client._create_https_context no esta implementado en el backend nativo')

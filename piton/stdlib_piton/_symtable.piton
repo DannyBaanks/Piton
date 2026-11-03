@@ -89,6 +89,6 @@ clase USE :
     pasar
 
 
-funcion symtable (*args ) :
+funcion symtable (*args , **kwargs):
     lanzar NotImplementedError ('_symtable.symtable no esta implementado en el backend nativo')
 

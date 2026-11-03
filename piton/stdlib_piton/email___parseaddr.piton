@@ -2,26 +2,26 @@ clase AddressList :
     pasar
 
 
-funcion _AddressList (*args ) :
+funcion _AddressList (*args , **kwargs):
     lanzar NotImplementedError ('email._parseaddr._AddressList no esta implementado en el backend nativo')
 
 
-funcion _parsedate_tz (*args ) :
+funcion _parsedate_tz (*args , **kwargs):
     lanzar NotImplementedError ('email._parseaddr._parsedate_tz no esta implementado en el backend nativo')
 
 
-funcion mktime_tz (*args ) :
+funcion mktime_tz (*args , **kwargs):
     lanzar NotImplementedError ('email._parseaddr.mktime_tz no esta implementado en el backend nativo')
 
 
-funcion parsedate (*args ) :
+funcion parsedate (*args , **kwargs):
     lanzar NotImplementedError ('email._parseaddr.parsedate no esta implementado en el backend nativo')
 
 
-funcion parsedate_tz (*args ) :
+funcion parsedate_tz (*args , **kwargs):
     lanzar NotImplementedError ('email._parseaddr.parsedate_tz no esta implementado en el backend nativo')
 
 
-funcion quote (*args ) :
+funcion quote (*args , **kwargs):
     lanzar NotImplementedError ('email._parseaddr.quote no esta implementado en el backend nativo')
 

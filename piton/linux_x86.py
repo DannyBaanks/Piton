@@ -1792,7 +1792,15 @@ static long piton_math_fabs_bits(long bits){return bits&0x7FFFFFFFFFFFFFFFL;}
 static long piton_math_gcd(long a,long b){if(a<0)a=-a;if(b<0)b=-b;while(b){long t=a%b;a=b;b=t;}return a;}
 static long piton_math_isinf(long bits){unsigned long u=(unsigned long)bits;return(((u>>52)&0x7FF)==0x7FF)&&((u&0xFFFFFFFFFFFFFUL)==0);}
 static long piton_math_isnan(long bits){unsigned long u=(unsigned long)bits;return(((u>>52)&0x7FF)==0x7FF)&&((u&0xFFFFFFFFFFFFFUL)!=0);}
+static long piton_math_isfinite(long bits){unsigned long u=(unsigned long)bits;return ((u>>52)&0x7FF)!=0x7FF;}
+static long piton_math_copysign(long x_bits,long y_bits){return (x_bits&0x7FFFFFFFFFFFFFFFUL)|(y_bits&0x8000000000000000UL);}
+static long piton_math_modf(long bits){double x=piton_bits_double(bits);double iptr=0;double frac=__builtin_modf(x,&iptr);PitonSeq*s=piton_seq_new(PK_TUPLE,0);piton_seq_append(s,(PitonSlot){piton_double_bits(frac),PK_FLOAT});piton_seq_append(s,(PitonSlot){piton_double_bits(iptr),PK_FLOAT});return (long)s;}
+static long piton_math_frexp(long bits){double x=piton_bits_double(bits);int exp=0;double m=__builtin_frexp(x,&exp);PitonSeq*s=piton_seq_new(PK_TUPLE,0);piton_seq_append(s,(PitonSlot){piton_double_bits(m),PK_FLOAT});piton_seq_append(s,(PitonSlot){(long)exp,PK_INT});return (long)s;}
+static long piton_math_isqrt(long n){if(n<0){piton_raise_set("ValueError","isqrt() only accepts nonnegative integers");return 0;}if(n<2)return n;double d=(double)n,r;__asm__ volatile("sqrtsd %1,%0":"=x"(r):"x"(d));unsigned long x0=(unsigned long)r;while(x0*x0>(unsigned long)n)x0--;while((x0+1)*(x0+1)<=(unsigned long)n)x0++;return (long)x0;}
+static long piton_math_ldexp(long x_bits,long exp){unsigned long u=(unsigned long)x_bits;unsigned long e=(u>>52)&0x7FF;if(e==0||e==0x7FF)return x_bits;long ne=(long)e+exp;if(ne>=0x7FF){piton_raise_set("OverflowError","math range error");return 0;}if(ne<=0)return piton_double_bits(0.0);return (long)((u&0x800FFFFFFFFFFFFFUL)|(((unsigned long)ne)<<52));}
 static long piton_math_radians(long bits){double d=piton_bits_double(bits);return piton_double_bits(d*(3.14159265358979323846/180.0));}
+static long piton_math_degrees(long bits){double d=piton_bits_double(bits);return piton_double_bits(d*(180.0/3.14159265358979323846));}
+static long piton_math_atan2(long y_bits,long x_bits){double y=piton_bits_double(y_bits);double x=piton_bits_double(x_bits);return piton_double_bits(__builtin_atan2(y,x));}
 static int piton_is_printable_str(const char*s){if(!s)return 0;int has=0;for(int i=0;i<256;++i){char c=s[i];if(c==0)return has;if((unsigned char)c<9||((unsigned char)c>13&&(unsigned char)c<32))return 0;has=1;}return 0;}
 static int piton_is_double_bits(long bits){unsigned long u=(unsigned long)bits;unsigned long exp=(u>>52)&0x7FF;return(exp>=0x3CC&&exp<=0x434&&(u&0xFFFFFFFFFFFFFUL)!=0);}
 /* INT_OF_VALUE_V1: int(x) con tipo estatico desconocido (_aix_support.py:
@@ -13683,18 +13691,62 @@ class LinuxCEmitter:
                 raise NativeBuildError("Linux math.gcd requires int arguments")
             out.append(f"    {_name(result)}=piton_math_gcd({self._value(args[0])},{self._value(args[1])});")
             types[result] = "int"
-        elif op in {"math_isinf", "math_isnan"}:
+        elif op in {"math_isinf", "math_isnan", "math_isfinite"}:
             operand = self._value(args[0])
             if types.get(args[0]) != "float":
                 operand = f"piton_double_bits((double){operand})"
             helper = f"piton_{op}"
             out.append(f"    {_name(result)}={helper}({operand});")
             types[result] = "bool"
-        elif op == "math_radians":
+        elif op == "math_copysign":
+            left = self._value(args[0])
+            right = self._value(args[1])
+            if types.get(args[0]) != "float":
+                left = f"piton_double_bits((double){left})"
+            if types.get(args[1]) != "float":
+                right = f"piton_double_bits((double){right})"
+            out.append(f"    {_name(result)}=piton_math_copysign({left},{right});")
+            types[result] = "float"
+        elif op == "math_modf":
             operand = self._value(args[0])
             if types.get(args[0]) != "float":
                 operand = f"piton_double_bits((double){operand})"
-            out.append(f"    {_name(result)}=piton_math_radians({operand});")
+            out.append(f"    {_name(result)}=piton_math_modf({operand});")
+            types[result] = "tuple"
+            self._coll_elems[result] = "float"
+            self._tuple_elems[result] = [(None, "float"), (None, "float")]
+        elif op == "math_frexp":
+            operand = self._value(args[0])
+            if types.get(args[0]) != "float":
+                operand = f"piton_double_bits((double){operand})"
+            out.append(f"    {_name(result)}=piton_math_frexp({operand});")
+            types[result] = "tuple"
+            self._tuple_elems[result] = [(None, "float"), (None, "int")]
+        elif op == "math_isqrt":
+            out.append(f"    {_name(result)}=piton_math_isqrt({self._value(args[0])});")
+            types[result] = "int"
+        elif op == "math_ldexp":
+            left = self._value(args[0])
+            right = self._value(args[1])
+            if types.get(args[0]) != "float":
+                left = f"piton_double_bits((double){left})"
+            out.append(f"    {_name(result)}=piton_math_ldexp({left},{right});")
+            types[result] = "float"
+        elif op in {"math_radians", "math_degrees"}:
+            operand = self._value(args[0])
+            if types.get(args[0]) != "float":
+                operand = f"piton_double_bits((double){operand})"
+            _fn = "piton_math_radians" if op == "math_radians" else "piton_math_degrees"
+            out.append(f"    {_name(result)}={_fn}({operand});")
+            types[result] = "float"
+        elif op == "math_atan2":
+            left = self._value(args[0])
+            right = self._value(args[1])
+            if types.get(args[0]) != "float":
+                left = f"piton_double_bits((double){left})"
+            if types.get(args[1]) != "float":
+                right = f"piton_double_bits((double){right})"
+            out.append(f"    {_name(result)}=piton_math_atan2({left},{right});")
             types[result] = "float"
         elif op == "terminal_init":
             # TERMINAL_V1: initialize terminal (raw mode, no echo)

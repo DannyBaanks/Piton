@@ -26,18 +26,18 @@ stack_size = 0
 start_new_thread = 0
 
 
-funcion Lock (*args ) :
+funcion Lock (*args , **kwargs):
     lanzar NotImplementedError ('_thread.Lock no esta implementado en el backend nativo')
 
 
-funcion RLock (*args ) :
+funcion RLock (*args , **kwargs):
     lanzar NotImplementedError ('_thread.RLock no esta implementado en el backend nativo')
 
 
-funcion _thread_allocate_lock (*args ) :
+funcion _thread_allocate_lock (*args , **kwargs):
     lanzar NotImplementedError ('_thread._thread_allocate_lock no esta implementado en el backend nativo')
 
 
-funcion get_ident (*args ) :
+funcion get_ident (*args , **kwargs):
     lanzar NotImplementedError ('_thread.get_ident no esta implementado en el backend nativo')
 

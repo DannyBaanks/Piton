@@ -1,73 +1,69 @@
-class Type:
-    funcionar __init__ (self):
+clase Type:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Any:
-    funcionar __init__ (self):
+clase Any:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Union:
-    funcionar __init__ (self):
+clase Union:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Optional:
-    funcionar __init__ (self):
+clase Optional:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class List:
-    funcionar __init__ (self):
+clase List:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Dict:
-    funcionar __init__ (self):
+clase Dict:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Tuple:
-    funcionar __init__ (self):
+clase Tuple:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Set:
-    funcionar __init__ (self):
+clase Set:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Callable:
-    funcionar __init__ (self):
+clase Callable:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class TypeVar:
-    funcionar __init__ (self, name, bound=None, covariant=Falso, contravariant=Falso):
+clase TypeVar:
+    funcion __init__ (self, name, bound=Nada, covariant=Falso, contravariant=Falso, *args, **kwargs):
         self.name = name
 
-class Generic:
-    funcionar __init__ (self):
+clase Generic:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class ClassVar:
-    funcionar __init__ (self):
+clase ClassVar:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Final:
-    funcionar __init__ (self):
+clase Final:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Literal:
-    funcionar __init__ (self):
+clase Literal:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Protocol:
-    funcionar __init__ (self):
+clase Protocol:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class Final:
-    funcionar __init__ (self):
+clase _ProtocolMeta:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
-class _ProtocolMeta:
-    funcionar __init__ (self):
-        pasar
-
-class _GenericAlias:
-    funcionar __init__ (self):
+clase _GenericAlias:
+    funcion __init__ (self, *args, **kwargs):
         pasar
 
 definir = 0

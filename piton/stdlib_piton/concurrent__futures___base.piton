@@ -34,10 +34,10 @@ clase TimeoutError :
     pasar
 
 
-funcion as_completed (*args ) :
+funcion as_completed (*args , **kwargs):
     lanzar NotImplementedError ('concurrent.futures._base.as_completed no esta implementado en el backend nativo')
 
 
-funcion wait (*args ) :
+funcion wait (*args , **kwargs):
     lanzar NotImplementedError ('concurrent.futures._base.wait no esta implementado en el backend nativo')
 

@@ -21,14 +21,31 @@ funcion text_encoding (codificacion ,*args ):
 
 
 clase IOBase :
+    funcion close (este):
+        pasar
+    funcion tell (este):
+        devolver 0
+    funcion seek (este, offset=0, whence=0):
+        devolver 0
+    funcion flush (este):
+        pasar
+    funcion read (este, n=-1):
+        devolver b""
+    funcion write (este, b):
+        devolver 0
+    funcion readable (este):
+        devolver Verdadero
+    funcion writable (este):
+        devolver Verdadero
+    funcion seekable (este):
+        devolver Verdadero
+
+
+clase RawIOBase (IOBase):
     pasar
 
 
-clase RawIOBase :
-    pasar
-
-
-clase BufferedIOBase :
+clase BufferedIOBase (IOBase):
     pasar
 
 

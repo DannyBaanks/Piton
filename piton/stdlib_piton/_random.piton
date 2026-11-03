@@ -1,4 +1,3 @@
-# _random.piton — stub para _random (stdlib CPython)
 funcion random ():
     devolver 0
 
@@ -11,10 +10,18 @@ funcion choice (seq):
 funcion shuffle (x):
     pasar
 
-funcion seed (a=None, version=2):
+funcion seed (a=Nada, version=2):
     pasar
 
 funcion getrandbits (k):
     devolver 0
 
-Random = 0
+clase Random:
+    funcion __init__(este, *args, **kwargs):
+        pasar
+    funcion seed(este, a=Nada, version=2):
+        pasar
+    funcion random(este):
+        devolver 0.0
+    funcion getrandbits(este, k):
+        devolver 0

@@ -1,5 +1,5 @@
 clase Message :
     pasar
 
-funcion from_string (*args ) :
+funcion from_string (*args , **kwargs):
     lanzar NotImplementedError ('email.message.from_string no esta implementado')

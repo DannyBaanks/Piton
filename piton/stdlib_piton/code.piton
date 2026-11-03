@@ -1,20 +1,20 @@
-funcion compile_command (source, filename='<input>', symbol='single'):
+funcion compile_command (source, filename='<input>', symbol='single', *args, **kwargs):
     devolver Nada
 
-class InteractiveConsole:
-    funcionar __init__ (self, locals=Nada, filename='<console>'):
+clase InteractiveConsole:
+    funcion __init__ (self, locals=Nada, filename='<console>', *args, **kwargs):
         self.locals = locals si locals sino {}
-    funcionar push (self, line):
+    funcion push (self, line, *args, **kwargs):
         devolver Falso
-    funcionar runsource (self, source, filename='<input>', symbol='single'):
+    funcion runsource (self, source, filename='<input>', symbol='single', *args, **kwargs):
         devolver Falso
 
-class InteractiveInterpreter:
-    funcionar __init__ (self, locals=Nada):
+clase InteractiveInterpreter:
+    funcion __init__ (self, locals=Nada, *args, **kwargs):
         self.locals = locals si locals sino {}
-    funcionar runcode (self, code):
+    funcion runcode (self, code, *args, **kwargs):
         pasar
-    funcionar showsyntaxerror (self, filename=Nada):
+    funcion showsyntaxerror (self, filename=Nada, *args, **kwargs):
         pasar
-    funcionar showtraceback (self):
+    funcion showtraceback (self, *args, **kwargs):
         pasar

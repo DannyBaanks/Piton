@@ -1,14 +1,14 @@
-funcion cmp (f1, f2, shallow=Verdadero):
+funcion cmp (f1, f2, shallow=Verdadero, *args, **kwargs):
     devolver 0
 
-funcion cmpfiles (dir1, dir2, common, shallow=Verdadero):
+funcion cmpfiles (dir1, dir2, common, shallow=Verdadero, *args, **kwargs):
     devolver ([], [], [])
 
-funcion dircmp (a, b, ignore=None, hide=None):
-    class Dircmp:
-        funcionar __init__ (self, a, b, ignore, hide):
+funcion dircmp (a, b, ignore=Nada, hide=Nada, *args, **kwargs):
+    clase Dircmp:
+        funcion __init__ (self, a, b, ignore, hide, *args, **kwargs):
             self.left = a
             self.right = b
-        funcionar report (self):
+        funcion report (self, *args, **kwargs):
             pasar
     devolver Dircmp(a, b, ignore, hide)

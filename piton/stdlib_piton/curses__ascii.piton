@@ -58,10 +58,10 @@ clase VT :
     pasar
 
 
-funcion ascii (*args ) :
+funcion ascii (*args , **kwargs):
     lanzar NotImplementedError ('curses.ascii.ascii no esta implementado en el backend nativo')
 
 
-funcion isprint (*args ) :
+funcion isprint (*args , **kwargs):
     lanzar NotImplementedError ('curses.ascii.isprint no esta implementado en el backend nativo')
 

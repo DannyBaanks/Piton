@@ -36,7 +36,11 @@ def bundled_module_source(name: str) -> str | None:
     path = bundled_modules().get(name)
     if path is None:
         return None
-    return path.read_text(encoding="utf-8")
+    raw = path.read_text(encoding="utf-8")
+    # PITON syntax does not support '#' comments; strip whole-line comments
+    # from bundled stubs so they do not cause ParseErrors during MIR lowering.
+    lines = [line for line in raw.splitlines() if not line.strip().startswith("#")]
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def bundled_module_path(name: str) -> str | None:

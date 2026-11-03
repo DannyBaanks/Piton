@@ -52,6 +52,6 @@ clase TestResult :
     pasar
 
 
-funcion main (*args ):
+funcion main (*args , **kwargs):
     lanzar NotImplementedError ('unittest.main no esta implementado en el backend nativo')
 

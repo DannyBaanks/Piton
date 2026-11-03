@@ -1,0 +1,15 @@
+clase _Feature :
+    funcion __init__ (este, *args, **kwargs):
+        pasar
+
+
+nested_scopes = _Feature ()
+generators = _Feature ()
+division = _Feature ()
+absolute_import = _Feature ()
+with_statement = _Feature ()
+print_function = _Feature ()
+unicode_literals = _Feature ()
+barry_as_FLUFL = _Feature ()
+generator_stop = _Feature ()
+annotations = _Feature ()

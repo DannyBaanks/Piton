@@ -16,21 +16,21 @@ clase SourcelessFileLoader :
     pasar
 
 
-funcion _classify_pyc (*args ) :
+funcion _classify_pyc (*args , **kwargs):
     lanzar NotImplementedError ('importlib._bootstrap_external._classify_pyc no esta implementado en el backend nativo')
 
 
-funcion _code_to_timestamp_pyc (*args ) :
+funcion _code_to_timestamp_pyc (*args , **kwargs):
     lanzar NotImplementedError ('importlib._bootstrap_external._code_to_timestamp_pyc no esta implementado en el backend nativo')
 
 
-funcion _code_to_hash_pyc (*args ) :
+funcion _code_to_hash_pyc (*args , **kwargs):
     lanzar NotImplementedError ('importlib._bootstrap_external._code_to_hash_pyc no esta implementado en el backend nativo')
 
 
-funcion _calc_mode (*args ) :
+funcion _calc_mode (*args , **kwargs):
     lanzar NotImplementedError ('importlib._bootstrap_external._calc_mode no esta implementado en el backend nativo')
 
 
-funcion _write_atomic (*args ) :
+funcion _write_atomic (*args , **kwargs):
     lanzar NotImplementedError ('importlib._bootstrap_external._write_atomic no esta implementado en el backend nativo')

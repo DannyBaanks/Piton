@@ -1,0 +1,23 @@
+clase error (Exception):
+    pasar
+
+
+TCSAFLUSH = 2
+TCSANOW = 0
+TCSADRAIN = 1
+
+
+funcion setraw (fd, when=TCSAFLUSH):
+    pasar
+
+
+funcion setcbreak (fd, when=TCSAFLUSH):
+    pasar
+
+
+funcion tcgetattr (fd):
+    devolver []
+
+
+funcion tcsetattr (fd, when, mode):
+    pasar

@@ -6,14 +6,14 @@ clase This :
     pasar
 
 
-funcion getencoding (*args ) :
+funcion getencoding (*args , **kwargs):
     lanzar NotImplementedError ('locale.getencoding no esta implementado en el backend nativo')
 
 
-funcion getlocale (*args ) :
+funcion getlocale (*args , **kwargs):
     lanzar NotImplementedError ('locale.getlocale no esta implementado en el backend nativo')
 
 
-funcion getpreferredencoding (*args ) :
+funcion getpreferredencoding (*args , **kwargs):
     lanzar NotImplementedError ('locale.getpreferredencoding no esta implementado en el backend nativo')
 

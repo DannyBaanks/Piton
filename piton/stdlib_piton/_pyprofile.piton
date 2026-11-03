@@ -1,6 +1,4 @@
-# Piton stub for _pyprofile
-
-def run():
-    pass
+funcion run (*args, **kwargs):
+    pasar
 
 __doc__ = "placeholder"

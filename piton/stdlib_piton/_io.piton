@@ -57,14 +57,14 @@ _TextIOBase = 0
 text_encoding = 0
 
 
-funcion FileIO (*args ) :
+funcion FileIO (*args , **kwargs):
     lanzar NotImplementedError ('_io.FileIO no esta implementado en el backend nativo')
 
 
-funcion open (*args ) :
+funcion open (*args , **kwargs):
     lanzar NotImplementedError ('_io.open no esta implementado en el backend nativo')
 
 
-funcion open_code (*args ) :
+funcion open_code (*args , **kwargs):
     lanzar NotImplementedError ('_io.open_code no esta implementado en el backend nativo')
 

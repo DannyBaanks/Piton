@@ -71,15 +71,15 @@ gaierror = 0
 h = 0
 
 
-funcion accept (*args ) :
+funcion accept (*args, **kwargs):
     lanzar NotImplementedError ('socket.accept no esta implementado en el backend nativo')
 
 
-funcion bind (*args ) :
+funcion bind (*args, **kwargs):
     lanzar NotImplementedError ('socket.bind no esta implementado en el backend nativo')
 
 
-funcion close (*args ) :
+funcion close (*args, **kwargs):
     lanzar NotImplementedError ('socket.close no esta implementado en el backend nativo')
 
 
@@ -87,54 +87,54 @@ funcion create_connection (address,timeout=_GLOBAL_DEFAULT_TIMEOUT,source_addres
     lanzar NotImplementedError ('socket.create_connection no esta implementado en el backend nativo')
 
 
-funcion create_server (*args ) :
+funcion create_server (*args, **kwargs):
     lanzar NotImplementedError ('socket.create_server no esta implementado en el backend nativo')
 
 
-funcion fileno (*args ) :
+funcion fileno (*args, **kwargs):
     lanzar NotImplementedError ('socket.fileno no esta implementado en el backend nativo')
 
 
-funcion getfqdn (*args ) :
+funcion getfqdn (*args, **kwargs):
     lanzar NotImplementedError ('socket.getfqdn no esta implementado en el backend nativo')
 
 
-funcion gethostbyname (*args ) :
+funcion gethostbyname (*args, **kwargs):
     lanzar NotImplementedError ('socket.gethostbyname no esta implementado en el backend nativo')
 
 
-funcion gethostname (*args ) :
+funcion gethostname (*args, **kwargs):
     lanzar NotImplementedError ('socket.gethostname no esta implementado en el backend nativo')
 
 
-funcion getservbyname (*args ) :
+funcion getservbyname (*args, **kwargs):
     lanzar NotImplementedError ('socket.getservbyname no esta implementado en el backend nativo')
 
 
-funcion getsockname (*args ) :
+funcion getsockname (*args, **kwargs):
     lanzar NotImplementedError ('socket.getsockname no esta implementado en el backend nativo')
 
 
-funcion gettimeout (*args ) :
+funcion gettimeout (*args, **kwargs):
     lanzar NotImplementedError ('socket.gettimeout no esta implementado en el backend nativo')
 
 
-funcion listen (*args ) :
+funcion listen (*args, **kwargs):
     lanzar NotImplementedError ('socket.listen no esta implementado en el backend nativo')
 
 
-funcion recvfrom (*args ) :
+funcion recvfrom (*args, **kwargs):
     lanzar NotImplementedError ('socket.recvfrom no esta implementado en el backend nativo')
 
 
-funcion sendto (*args ) :
+funcion sendto (*args, **kwargs):
     lanzar NotImplementedError ('socket.sendto no esta implementado en el backend nativo')
 
 
-funcion setsockopt (*args ) :
+funcion setsockopt (*args, **kwargs):
     lanzar NotImplementedError ('socket.setsockopt no esta implementado en el backend nativo')
 
 
-funcion socket (*args ) :
+funcion socket (*args, **kwargs):
     lanzar NotImplementedError ('socket.socket no esta implementado en el backend nativo')
 
