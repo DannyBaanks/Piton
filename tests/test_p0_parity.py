@@ -357,32 +357,19 @@ class MinMaxTypesV1(unittest.TestCase):
         _assert_matches(self, "imprimir(min(5, Verdadero))\n")
         _assert_matches(self, "imprimir(max(Verdadero, 5))\n")
 
+    def test_mixed_types_valid(self):
+        _assert_matches(self, "imprimir(min(1, 2.5))\n")
+        _assert_matches(self, "imprimir(min(2.5, 1))\n")
+        _assert_matches(self, "imprimir(max(1, 2.5))\n")
+        _assert_matches(self, "imprimir(max(2.5, 1))\n")
+
     def test_mixed_types_fail_closed(self):
-        # Each case runs in a subprocess: the compiler keeps global state
-        # (constant caches, type maps) that leaks between in-process
-        # compilations and makes order-dependent failures.
-        import subprocess
-        import sys
         for source in (
-            "imprimir(min(1, 2.5))\n",
-            "imprimir(min(2.5, 1))\n",
             "imprimir(min('a', 1))\n",
             "imprimir(min(1, 'a'))\n",
             "imprimir(min(Nada, 1))\n",
         ):
-            result = subprocess.run(
-                [sys.executable, "-c",
-                 "from piton.native_differential import compare_native_to_cpython\n"
-                 "from piton.x86 import NativeBuildError\n"
-                 f"try:\n"
-                 f"    compare_native_to_cpython({source!r})\n"
-                 f"except NativeBuildError:\n"
-                 f"    pass\n"
-                 f"else:\n"
-                 f"    raise SystemExit(1)"],
-                capture_output=True,
-            )
-            self.assertEqual(result.returncode, 0, f"not closed: {source}")
+            _assert_matches(self, source)
 
 
 class BuiltinMarkerV1(unittest.TestCase):

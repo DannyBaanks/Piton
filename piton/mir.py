@@ -617,6 +617,16 @@ class MIRLowerer:
         self.module_aliases: dict[str, str] = {}
         self.decorated_symbols: dict[int, str] = {}
         self._bundled_hir_cache: dict[str, Any] = {}
+        self._local_classes: set[str] = set()
+
+    def _mod_prefix(self, module_name: str) -> str:
+        norm = module_name.replace('.', '__')
+        if module_name in self._local_classes or norm in self._local_classes:
+            return f"_mod__{norm}__"
+        return f"{norm}__"
+
+    def _mod_func_symbol(self, module_name: str, func_name: str) -> str:
+        return f"{self._mod_prefix(module_name)}{func_name}"
 
     def _store_loop_target(self, builder: _Builder, target: str, value: str) -> None:
         """FOR_LOOP_CAPTURE_V1: a captured loop target must cell_store. A
@@ -1045,6 +1055,19 @@ class MIRLowerer:
                     self.class_base_list[_local] = list(self.class_base_list.get(_cqual, []))
                     self.class_mro[_local] = [_cqual]
                     self._mro_memo[_local] = [_cqual]
+            def _find_classes(nodes):
+                res = []
+                for item in nodes:
+                    if getattr(item, "kind", None) == HIRKind.CLASS_DEF:
+                        res.append(item)
+                    for attr in ("body", "orelse", "finalbody"):
+                        sub = getattr(item, attr, None)
+                        if isinstance(sub, list):
+                            res.extend(_find_classes(sub))
+                return res
+
+            self._local_classes = {node.name for node in _find_classes(module_body)}
+
             # FUNC_SIG_PRESCAN_V1: registrar las firmas de TODAS las funciones
             # de nivel modulo ANTES de bajar cualquier cuerpo — los de las
             # clases tambien (warnings: `catch_warnings.__exit__` llama a
@@ -1059,18 +1082,8 @@ class MIRLowerer:
             for _imp_name, _imp in sorted(imported_modules.items()):
                 self._prescan_module_signatures(
                     list(getattr(_imp, "body", []) or []),
-                    name_prefix=f"{_imp_name.replace('.', '__')}__",
+                    name_prefix=self._mod_prefix(_imp_name),
                 )
-            def _find_classes(nodes):
-                res = []
-                for item in nodes:
-                    if getattr(item, "kind", None) == HIRKind.CLASS_DEF:
-                        res.append(item)
-                    for attr in ("body", "orelse", "finalbody"):
-                        sub = getattr(item, attr, None)
-                        if isinstance(sub, list):
-                            res.extend(_find_classes(sub))
-                return res
 
             for node in _find_classes(module_body):
                 # METACLASS_KEYWORD_V1: `class ABC(metaclass=ABCMeta)` — el
@@ -1341,7 +1354,7 @@ class MIRLowerer:
                 self._module_scope_stack.append((_bnames, _bmodules, _bvars))
                 try:
                     self._lower_function(
-                        _bfunc, f"{_bmod_name.replace('.', '__')}__{_bfunc.name}"
+                        _bfunc, self._mod_func_symbol(_bmod_name, _bfunc.name)
                     )
                     for _litem in getattr(_bimported, "body", []) or []:
                         if _litem.kind == HIRKind.CLASS_DEF:
@@ -4606,7 +4619,7 @@ class MIRLowerer:
                 # keywords. Solo para symbols registrados como funciones de
                 # modulo nativo.
                 if node.keywords and module_name != "asyncio":
-                    symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                    symbol = self._mod_func_symbol(module_name, node.func.attr)
                     if symbol in self.function_params or symbol in self.function_varargs or symbol in self.function_kwargs:
                         args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
                         result = builder.temp()
@@ -4862,7 +4875,7 @@ class MIRLowerer:
                         and node.func.value.name in builder.module_aliases
                     ):
                         module_name = builder.module_aliases[node.func.value.name]
-                        _msymbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                        _msymbol = self._mod_func_symbol(module_name, node.func.attr)
                         _reg = (
                             _msymbol in self.function_params
                             or _msymbol in self.function_varargs
@@ -4878,7 +4891,7 @@ class MIRLowerer:
                                 self.imported_modules[module_name] = _lazy
                                 self._prescan_module_signatures(
                                     list(getattr(_lazy, "body", []) or []),
-                                    name_prefix=f"{module_name.replace('.', '__')}__",
+                                    name_prefix=self._mod_prefix(module_name),
                                 )
                                 _reg = (
                                     _msymbol in self.function_params
@@ -5887,7 +5900,7 @@ class MIRLowerer:
                 # keywords. Solo para symbols registrados como funciones de
                 # modulo nativo.
                 if node.keywords and module_name != "asyncio":
-                    symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                    symbol = self._mod_func_symbol(module_name, node.func.attr)
                     if symbol in self.function_params or symbol in self.function_varargs or symbol in self.function_kwargs:
                         args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
                         result = builder.temp()
@@ -6142,7 +6155,7 @@ class MIRLowerer:
                         and node.func.value.name in builder.module_aliases
                     ):
                         module_name = builder.module_aliases[node.func.value.name]
-                        _msymbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
+                        _msymbol = self._mod_func_symbol(module_name, node.func.attr)
                         _reg = (
                             _msymbol in self.function_params
                             or _msymbol in self.function_varargs
@@ -6158,7 +6171,7 @@ class MIRLowerer:
                                 self.imported_modules[module_name] = _lazy
                                 self._prescan_module_signatures(
                                     list(getattr(_lazy, "body", []) or []),
-                                    name_prefix=f"{module_name.replace('.', '__')}__",
+                                    name_prefix=self._mod_prefix(module_name),
                                 )
                                 _reg = (
                                     _msymbol in self.function_params
@@ -6632,7 +6645,7 @@ class MIRLowerer:
                     builder.emit("const", _NATIVE_MODULE_CONSTS[_mmod][_mattrs[0]], result=result)
                     return result
                 if len(_mattrs) == 1:
-                    _mq = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
+                    _mq = self._mod_func_symbol(_mmod, _mattrs[0])
                     if (
                         _mq in self.function_params
                         or _mq in self.function_varargs
