@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from piton.hir import BoolOp, Call, ExceptHandler, HIRKind, HIRNode, Keyword, With
 
 
-_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError", "KeyError", "IndexError", "AttributeError", "NameError", "ZeroDivisionError", "OverflowError", "NotImplementedError"}
+_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError", "KeyError", "IndexError", "AttributeError", "NameError", "ZeroDivisionError", "OverflowError", "NotImplementedError", "ModuleNotFoundError"}
 # EXC_HIERARCHY_V1: builtins cuya madre NO es Exception. Se declaran aparte
 # para no aplanar la jerarquia (un `excepto UserWarning` NO debe atrapar un
 # Warning pelado). warnings.py usa Warning como default y los construye.
@@ -126,7 +126,7 @@ _NATIVE_MODULE_CONSTS: dict[str, dict[str, Any]] = {
 }
 # Builtins con schema FIJO de keywords (el resto de una llamada con
 # keywords a un nombre desconocido baja como DYNAMIC_CALL_V1).
-_BUILTIN_KEYWORD_SCHEMAS = {"sorted", "ordenar", "min", "max", "print", "imprimir"}
+_BUILTIN_KEYWORD_SCHEMAS = {"sorted", "ordenar", "min", "max", "print", "imprimir", "open", "abrir"}
 
 
 def _os_name_const() -> str:
@@ -656,7 +656,7 @@ class MIRLowerer:
             # _module), filters) y caia al runtime_call set_target, que el
             # backend no implementa).
             owner = self._lower_expr(builder, target.value)
-            builder.emit("set_attr", owner, target.attr, value)
+            builder.emit("set_attr", owner, target.attr, value, _active_handler(builder))
         elif target.kind == HIRKind.SUBSCR:
             obj = self._lower_expr(builder, target.value)
             slice_info = (
@@ -679,7 +679,7 @@ class MIRLowerer:
                 hi = upper if upper is not None else _cst(0x7FFFFFFFFFFFFFFF)
                 if step is None:
                     step = _cst(1)
-                builder.emit("slice_store", obj, lo, hi, step, value)
+                builder.emit("slice_store", obj, lo, hi, step, value, _active_handler(builder))
                 return
             idx = self._lower_expr(builder, target.slice)
             builder.emit("subscript_store", obj, idx, value, _active_handler(builder))
@@ -824,7 +824,7 @@ class MIRLowerer:
                 if node.kind == HIRKind.IMPORT:
                     for alias in node.names:
                         if (
-                            alias.name in {"asyncio", "math", "sys", "os", "terminal"}
+                            alias.name in {"asyncio", "math", "sys", "os", "terminal", "builtins"}
                             or alias.name in _NATIVE_MODULE_CONSTS
                         ):
                             self.module_aliases[alias.asname or alias.name] = alias.name
@@ -881,7 +881,8 @@ class MIRLowerer:
                             else:
                                 # Allow user-defined packages to be imported
                                 pass
-                        self.module_aliases[alias.asname or alias.name] = alias.name
+                        if alias.name in imported_modules or alias.name in {"asyncio", "math", "sys", "os", "terminal", "builtins"} or alias.name in _NATIVE_MODULE_CONSTS:
+                            self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
                     if getattr(node, "is_star", False):
@@ -1791,8 +1792,10 @@ class MIRLowerer:
         if entry_file:
             emit_store("__file__", emit_const(entry_file))
         sys_obj = module_object("sys", None, "")
+        builtins_obj = module_object("builtins", None, "")
         entries: list[tuple[str, str]] = [
             ("sys", sys_obj),
+            ("builtins", builtins_obj),
             ("__main__", module_object("__main__", entry_file, None)),
         ]
         module_objects: dict[str, str] = {}
@@ -1811,6 +1814,7 @@ class MIRLowerer:
         builder.emit("build_collection", "dict", tuple(entries), result=modules_dict)
         builder.emit("set_attr", sys_obj, "modules", modules_dict)
         builder.emit("store", "sys", sys_obj)
+        builder.emit("store", "builtins", builtins_obj)
         # IMPORT_BINDS_SUBMODULE_V1: CPython's import machinery sets each
         # imported submodule as an attribute of its parent package
         # (`importar pkg.sub` makes `pkg.sub` reachable). Without the runtime
@@ -2700,7 +2704,7 @@ class MIRLowerer:
             # ya viven en el binario.
             for alias in getattr(node, "names", ()) or ():
                 if (
-                            alias.name in {"asyncio", "math", "sys", "os", "terminal"}
+                            alias.name in {"asyncio", "math", "sys", "os", "terminal", "builtins"}
                             or alias.name in _NATIVE_MODULE_CONSTS
                         ):
                     builder.module_aliases[alias.asname or alias.name] = alias.name
@@ -2729,8 +2733,16 @@ class MIRLowerer:
                         for _it in (getattr(_lazy, "body", []) or []):
                             if _it.kind == HIRKind.CLASS_DEF:
                                 self._lower_imported_class(alias.name, _it)
+                            elif _it.kind == HIRKind.FUNC_DEF:
+                                if hasattr(self, "_deferred_bundled_functions"):
+                                    self._deferred_bundled_functions.append((alias.name, _it))
                 if alias.name in self.imported_modules:
                     builder.module_aliases[alias.asname or alias.name] = alias.name
+                    continue
+                t_msg = builder.temp()
+                builder.emit("const", f"No module named '{alias.name}'", result=t_msg)
+                builder.emit("raise_typed", "ModuleNotFoundError", t_msg, _active_handler(builder))
+                return
             return
         elif kind == HIRKind.IMPORT_FROM:
             # STMT_FROMIMPORT_V1: un from-import dentro de un statement anidado
@@ -2739,6 +2751,18 @@ class MIRLowerer:
             # las estructuras de clase para que el constructor y los metodos
             # (Template.substitute) resuelvan (stdlib2.py).
             mod_name = getattr(node, "module", None)
+            if (
+                mod_name
+                and mod_name not in self.imported_modules
+                and mod_name not in {"asyncio", "math", "sys", "os", "terminal", "builtins"}
+                and mod_name not in _NATIVE_MODULE_CONSTS
+            ):
+                _pre = _bundled_module_hir(mod_name)
+                if _pre is None:
+                    t_msg = builder.temp()
+                    builder.emit("const", f"No module named '{mod_name}'", result=t_msg)
+                    builder.emit("raise_typed", "ModuleNotFoundError", t_msg, _active_handler(builder))
+                    return
             if mod_name and not getattr(node, "is_star", False) and not getattr(node, "level", 0):
                 _nombres = {getattr(_a, "name", None) for _a in (getattr(node, "names", ()) or ())}
                 _pre = _bundled_module_hir(mod_name)
@@ -4246,17 +4270,17 @@ class MIRLowerer:
                     builder.emit("const", _c_value, result=result)
                     return result
             result = builder.temp()
-            builder.emit("load", alias_target if alias_target is not None else node.name, result=result)
+            builder.emit("load", alias_target if alias_target is not None else node.name, _active_handler(builder), result=result)
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()
             _state_name = (getattr(builder, "module_state_vars", None) or {}).get(node.name)
             if _state_name:
-                builder.emit("load", _state_name, result=result)
+                builder.emit("load", _state_name, _active_handler(builder), result=result)
             elif node.name in builder.cell_params:
                 builder.emit("cell_load", node.name, result=result)
             else:
-                builder.emit("load", node.name, result=result)
+                builder.emit("load", node.name, _active_handler(builder), result=result)
             return result
         if kind == HIRKind.BINOP:
             # BINOP_CHAIN_ITER_V1 (mir): una cadena IZQUIERDA del mismo operador
@@ -4327,6 +4351,22 @@ class MIRLowerer:
                 gen = node.args[0]
                 from piton.hir import ListComp as _HIRListComp
                 node.args = (_HIRListComp(elt=gen.elt, generators=gen.generators, kind=HIRKind.LIST_COMP),)
+            if (
+                node.func.kind == HIRKind.LOAD
+                and node.func.name in {"dict", "diccionario"}
+                and len(node.args) == 0
+                and node.keywords
+                and all(kw.arg is not None for kw in node.keywords)
+            ):
+                from piton.hir import Const as _HIRConst
+                items = tuple(
+                    (self._lower_expr(builder, _HIRConst(kind=HIRKind.CONST, value=kw.arg)),
+                     self._lower_expr(builder, kw.value))
+                    for kw in node.keywords
+                )
+                result = builder.temp()
+                builder.emit("build_collection", "dict", items, result=result)
+                return result
             if self._call_has_dynamic_unpack(node):
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
@@ -4338,7 +4378,7 @@ class MIRLowerer:
                     raise MIRLoweringError("native iter requires one positional argument")
                 value = self._lower_expr(builder, node.args[0])
                 result = builder.temp()
-                builder.emit("iter_new", value, result=result)
+                builder.emit("iter_new", value, _active_handler(builder), result=result)
                 return result
             if node.func.kind == HIRKind.LOAD and node.func.name in {"next", "siguiente"}:
                 if len(node.args) != 1 or node.keywords:
@@ -4354,8 +4394,8 @@ class MIRLowerer:
                 return result
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.LOAD:
                 attr_name = node.func.attr
-                owner = self._lower_expr(builder, node.func.value)
                 if attr_name in {"throw", "arrojar"}:
+                    owner = self._lower_expr(builder, node.func.value)
                     # GENERATOR_THROW_V1: generators cannot catch (yield-in-try is
                     # fail-closed), so throw() = mark finished + raise at the
                     # caller's enclosing handler, mirroring CPython when the
@@ -4379,6 +4419,7 @@ class MIRLowerer:
                     )
                     return result
                 if attr_name in {"close", "cerrar"}:
+                    owner = self._lower_expr(builder, node.func.value)
                     # GEN_CLOSE_V1: `gen.close()` — marcar el generador como
                     # terminado. Algunos call sites (ej. manejo de
                     # StopIteration en next(it)) pueden pasar argumentos
@@ -4388,6 +4429,7 @@ class MIRLowerer:
                     builder.emit("gen_close", owner, result=result)
                     return result
                 if attr_name in {"send", "enviar"}:
+                    owner = self._lower_expr(builder, node.func.value)
                     if len(node.args) != 1 or node.keywords:
                         raise MIRLoweringError("native generator send requires one argument")
                     value = self._lower_expr(builder, node.args[0])
@@ -4639,7 +4681,7 @@ class MIRLowerer:
                     if symbol in self.function_params or symbol in self.function_varargs or symbol in self.function_kwargs:
                         args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
                         result = builder.temp()
-                        builder.emit("call", symbol, args, result=result)
+                        builder.emit("call", symbol, args, _active_handler(builder), result=result)
                         return result
                 if module_name == "asyncio" and node.func.attr == "run":
                     if len(node.args) != 1 or node.keywords or node.args[0].kind != HIRKind.CALL:
@@ -4822,7 +4864,7 @@ class MIRLowerer:
                 _starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
                 _has_star = any(id(arg) in _starred_ids for arg in node.args)
                 _has_kwstar = any(k.arg is None for k in (node.keywords or ()))
-                if _has_star or _has_kwstar:
+                if _has_star or (_has_kwstar and node.func.attr != "format"):
                     return self._lower_dynamic_method_call(builder, node, owner)
                 if (
                     node.keywords
@@ -4919,7 +4961,7 @@ class MIRLowerer:
                                 builder, _msymbol, node.args, node.keywords
                             )
                             result = builder.temp()
-                            builder.emit("call", _msymbol, args, result=result)
+                            builder.emit("call", _msymbol, args, _active_handler(builder), result=result)
                             return result
                         raise MIRLoweringError(
                             f"native method calls do not support keyword arguments yet "
@@ -4975,15 +5017,16 @@ class MIRLowerer:
                 owner = self._lower_expr(builder, node.func.value)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 if node.keywords and any(k.arg is None for k in node.keywords):
-                    raise MIRLoweringError("native method calls do not support **kwargs unpacking yet")
+                    if node.func.attr != "format":
+                        raise MIRLoweringError("native method calls do not support **kwargs unpacking yet")
                 kw = tuple(
                     (k.arg, self._lower_expr(builder, k.value)) for k in (node.keywords or ())
                 )
                 result = builder.temp()
                 if kw:
-                    builder.emit("method_call", None, node.func.attr, owner, args, kw, result=result)
+                    builder.emit("method_call", None, node.func.attr, owner, args, kw, _active_handler(builder), result=result)
                 else:
-                    builder.emit("method_call", None, node.func.attr, owner, args, result=result)
+                    builder.emit("method_call", None, node.func.attr, owner, args, (), _active_handler(builder), result=result)
                 return result
             closure = builder.closures.get(node.func.name) if node.func.kind == HIRKind.LOAD else None
             if closure:
@@ -5103,7 +5146,7 @@ class MIRLowerer:
                 builder.emit("store", target.name, value)
         elif target.kind == HIRKind.ATTR and target.value.kind in {HIRKind.LOAD, HIRKind.STORE}:
             owner = self._lower_expr(builder, target.value)
-            builder.emit("set_attr", owner, target.attr, value)
+            builder.emit("set_attr", owner, target.attr, value, _active_handler(builder))
         elif target.kind == HIRKind.SUBSCR:
             obj = self._lower_expr(builder, target.value)
             slice_info = (
@@ -5126,7 +5169,7 @@ class MIRLowerer:
                 hi = upper if upper is not None else _cst(0x7FFFFFFFFFFFFFFF)
                 if step is None:
                     step = _cst(1)
-                builder.emit("slice_store", obj, lo, hi, step, value)
+                builder.emit("slice_store", obj, lo, hi, step, value, _active_handler(builder))
                 return
             idx = self._lower_expr(builder, target.slice)
             builder.emit("subscript_store", obj, idx, value, _active_handler(builder))
@@ -5349,20 +5392,20 @@ class MIRLowerer:
             if alias_qual is not None and alias_qual.startswith("os."):
                 # Relajar os.*: fallback a nombre cualificado
                 result = builder.temp()
-                builder.emit("load", f"os__{alias_qual[3:]}", result=result)
+                builder.emit("load", f"os__{alias_qual[3:]}", _active_handler(builder), result=result)
                 return result
             result = builder.temp()
-            builder.emit("load", builder.from_import_aliases.get(node.name, node.name), result=result)
+            builder.emit("load", builder.from_import_aliases.get(node.name, node.name), _active_handler(builder), result=result)
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()
             _state_name = (getattr(builder, "module_state_vars", None) or {}).get(node.name)
             if _state_name:
-                builder.emit("load", _state_name, result=result)
+                builder.emit("load", _state_name, _active_handler(builder), result=result)
             elif node.name in builder.cell_params:
                 builder.emit("cell_load", node.name, result=result)
             else:
-                builder.emit("load", node.name, result=result)
+                builder.emit("load", node.name, _active_handler(builder), result=result)
             return result
         if kind == HIRKind.BINOP:
             # BINOP_CHAIN_ITER_V1 (mir): una cadena IZQUIERDA del mismo operador
@@ -5522,6 +5565,22 @@ class MIRLowerer:
                 gen = node.args[0]
                 from piton.hir import ListComp as _HIRListComp
                 node.args = (_HIRListComp(elt=gen.elt, generators=gen.generators, kind=HIRKind.LIST_COMP),)
+            if (
+                node.func.kind == HIRKind.LOAD
+                and node.func.name in {"dict", "diccionario"}
+                and len(node.args) == 0
+                and node.keywords
+                and all(kw.arg is not None for kw in node.keywords)
+            ):
+                from piton.hir import Const as _HIRConst
+                items = tuple(
+                    (self._lower_expr(builder, _HIRConst(kind=HIRKind.CONST, value=kw.arg)),
+                     self._lower_expr(builder, kw.value))
+                    for kw in node.keywords
+                )
+                result = builder.temp()
+                builder.emit("build_collection", "dict", items, result=result)
+                return result
             if self._call_has_dynamic_unpack(node):
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
@@ -5540,7 +5599,7 @@ class MIRLowerer:
                     return result
                 value = self._lower_expr(builder, node.args[0])
                 result = builder.temp()
-                builder.emit("iter_new", value, result=result)
+                builder.emit("iter_new", value, _active_handler(builder), result=result)
                 return result
             if (
                 node.func.kind == HIRKind.LOAD
@@ -5637,8 +5696,8 @@ class MIRLowerer:
 
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.LOAD:
                 attr_name = node.func.attr
-                owner = self._lower_expr(builder, node.func.value)
                 if attr_name in {"throw", "arrojar"}:
+                    owner = self._lower_expr(builder, node.func.value)
                     # GENERATOR_THROW_V1: generators cannot catch (yield-in-try is
                     # fail-closed), so throw() = mark finished + raise at the
                     # caller's enclosing handler, mirroring CPython when the
@@ -5662,6 +5721,7 @@ class MIRLowerer:
                     )
                     return result
                 if attr_name in {"close", "cerrar"}:
+                    owner = self._lower_expr(builder, node.func.value)
                     # GEN_CLOSE_V1: `gen.close()` — marcar el generador como
                     # terminado. Algunos call sites (ej. manejo de
                     # StopIteration en next(it)) pueden pasar argumentos
@@ -5671,6 +5731,7 @@ class MIRLowerer:
                     builder.emit("gen_close", owner, result=result)
                     return result
                 if attr_name in {"send", "enviar"}:
+                    owner = self._lower_expr(builder, node.func.value)
                     if len(node.args) != 1 or node.keywords:
                         raise MIRLoweringError("native generator send requires one argument")
                     value = self._lower_expr(builder, node.args[0])
@@ -5920,7 +5981,7 @@ class MIRLowerer:
                     if symbol in self.function_params or symbol in self.function_varargs or symbol in self.function_kwargs:
                         args = self._lower_variadic_call(builder, symbol, node.args, node.keywords)
                         result = builder.temp()
-                        builder.emit("call", symbol, args, result=result)
+                        builder.emit("call", symbol, args, _active_handler(builder), result=result)
                         return result
                 if module_name == "asyncio" and node.func.attr == "run":
                     if len(node.args) != 1 or node.keywords or node.args[0].kind != HIRKind.CALL:
@@ -6073,7 +6134,7 @@ class MIRLowerer:
                     return result
                 function = builder.temp()
                 _symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
-                builder.emit("load", _symbol, result=function)
+                builder.emit("load", _symbol, _active_handler(builder), result=function)
                 # VARIADIC_MODULE_CALL_V1: una funcion de modulo con
                 # *args/**kwargs baja por el camino variadico (el empaquetado
                 # de la tupla del vararg lo hace el MIR).
@@ -6102,7 +6163,7 @@ class MIRLowerer:
                 _starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
                 _has_star = any(id(arg) in _starred_ids for arg in node.args)
                 _has_kwstar = any(k.arg is None for k in (node.keywords or ()))
-                if _has_star or _has_kwstar:
+                if _has_star or (_has_kwstar and node.func.attr != "format"):
                     return self._lower_dynamic_method_call(builder, node, owner)
                 if (
                     node.keywords
@@ -6199,7 +6260,7 @@ class MIRLowerer:
                                 builder, _msymbol, node.args, node.keywords
                             )
                             result = builder.temp()
-                            builder.emit("call", _msymbol, args, result=result)
+                            builder.emit("call", _msymbol, args, _active_handler(builder), result=result)
                             return result
                         raise MIRLoweringError(
                             f"native method calls do not support keyword arguments yet "
@@ -6255,15 +6316,16 @@ class MIRLowerer:
                 owner = self._lower_expr(builder, node.func.value)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 if node.keywords and any(k.arg is None for k in node.keywords):
-                    raise MIRLoweringError("native method calls do not support **kwargs unpacking yet")
+                    if node.func.attr != "format":
+                        raise MIRLoweringError("native method calls do not support **kwargs unpacking yet")
                 kw = tuple(
                     (k.arg, self._lower_expr(builder, k.value)) for k in (node.keywords or ())
                 )
                 result = builder.temp()
                 if kw:
-                    builder.emit("method_call", None, node.func.attr, owner, args, kw, result=result)
+                    builder.emit("method_call", None, node.func.attr, owner, args, kw, _active_handler(builder), result=result)
                 else:
-                    builder.emit("method_call", None, node.func.attr, owner, args, result=result)
+                    builder.emit("method_call", None, node.func.attr, owner, args, (), _active_handler(builder), result=result)
                 return result
             closure = builder.closures.get(node.func.name) if node.func.kind == HIRKind.LOAD else None
             if closure:
@@ -6721,7 +6783,7 @@ class MIRLowerer:
                 builder.emit("load", f"super__{node.attr}", result=result)
                 return result
             result = builder.temp()
-            builder.emit("get_attr", self._lower_expr(builder, node.value), node.attr, result=result)
+            builder.emit("get_attr", self._lower_expr(builder, node.value), node.attr, _active_handler(builder), result=result)
             return result
         if kind == HIRKind.AWAIT:
             if not builder.is_async:
@@ -7114,7 +7176,7 @@ class MIRLowerer:
         """
         attr = node.func.attr
         callee = builder.temp()
-        builder.emit("get_attr", owner, attr, result=callee)
+        builder.emit("get_attr", owner, attr, _active_handler(builder), result=callee)
         starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
         plain = [arg for arg in node.args if id(arg) not in starred_ids]
         starred = [arg for arg in node.args if id(arg) in starred_ids]
@@ -7535,6 +7597,36 @@ class MIRLowerer:
                 else self._lower_expr(builder, _HIRConstFalse2(kind=HIRKind.CONST, value=False))
             )
             values.append(self._lower_expr(builder, _HIRConstFalse2(kind=HIRKind.CONST, value=False)))
+            return tuple(values)
+        if params is None and func_name in {"open", "abrir"}:
+            if len(positional) > 2:
+                raise MIRLoweringError(f"too many positional arguments to {func_name}")
+            values = [self._lower_expr(builder, arg) for arg in positional]
+            file_kw = None
+            mode_kw = None
+            for kw in keywords or ():
+                if kw.arg in {"file", "archivo", "ruta"}:
+                    file_kw = self._lower_expr(builder, kw.value)
+                elif kw.arg in {"mode", "modo"}:
+                    mode_kw = self._lower_expr(builder, kw.value)
+                elif kw.arg in {"encoding", "errors", "newline", "buffering", "closefd", "opener"}:
+                    pass
+                else:
+                    raise MIRLoweringError(f"unexpected keyword argument to {func_name}: {kw.arg}")
+            if not values:
+                if file_kw is None:
+                    raise MIRLoweringError(f"{func_name}() missing required argument 'file'")
+                values.append(file_kw)
+            elif file_kw is not None:
+                raise MIRLoweringError(f"{func_name}() got multiple values for argument 'file'")
+            if len(values) == 1:
+                if mode_kw is not None:
+                    values.append(mode_kw)
+                else:
+                    from piton.hir import Const as _HIRConstR
+                    values.append(self._lower_expr(builder, _HIRConstR(kind=HIRKind.CONST, value="r")))
+            elif len(values) == 2 and mode_kw is not None:
+                raise MIRLoweringError(f"{func_name}() got multiple values for argument 'mode'")
             return tuple(values)
         if params is None:
             raise MIRLoweringError(f"native keyword call requires known function: {func_name}")

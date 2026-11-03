@@ -286,6 +286,16 @@ def python_to_piton(src: str) -> str:
               and result
               and result[-1][0] in (tokenize.STRING,
                                     getattr(tokenize, "FSTRING_END", -4))):
+            if kind == tokenize.STRING and result[-1][0] == tokenize.STRING:
+                import ast as _ast_mod
+                try:
+                    _p1 = _ast_mod.literal_eval(result[-1][1])
+                    _p2 = _ast_mod.literal_eval(value)
+                    if type(_p1) is type(_p2):
+                        result[-1] = (tokenize.STRING, repr(_p1 + _p2))
+                        continue
+                except Exception:
+                    pass
             # FSTRING_CONCAT_V1: la concatenacion implicita une f-strings
             # adyacentes; 3.12 las tokeniza como FSTRING_* (no STRING), sin
             # esta condicion el `f".." f".."` llegaba pegado -> RPAREN.
@@ -592,6 +602,17 @@ def _short(blob: bytes, limit: int = 160) -> str:
     return blob.decode("utf-8", "replace").strip().replace("\n", " | ")[:limit]
 
 
+def _normalize_set_reprs(text: str) -> str:
+    """Canonicalize elements inside set reprs {a, b} where ordering is hash-seed dependent."""
+    def _repl(m: re.Match) -> str:
+        inner = m.group(1)
+        if ":" in inner:
+            return m.group(0)
+        items = [x.strip() for x in inner.split(",")]
+        return "{" + ", ".join(sorted(items)) + "}"
+    return re.sub(r"\{([^{}\n]+)\}", _repl, text)
+
+
 def run_script(path_str: str, timeout: float = 10.0) -> dict:
     """Si el embudo llego a build, ejecuta nativo (adaptado) vs CPython
     (ORIGINAL, sin adaptar) y bucketiza."""
@@ -610,20 +631,23 @@ def run_script(path_str: str, timeout: float = 10.0) -> dict:
                           detail=f"{type(exc).__name__}: {exc}"[:300])
             return record
         try:
-            native = subprocess.run([str(exe)], capture_output=True, timeout=timeout, cwd=directory)
+            native = subprocess.run([str(exe)], capture_output=True, timeout=timeout, cwd=directory, stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired:
             record.update(bucket=TIMEOUT, detail="native did not terminate")
             return record
         try:
             oracle = subprocess.run(
                 [sys.executable, "-c", original_src], capture_output=True, timeout=timeout,
-                cwd=directory,
+                cwd=directory, stdin=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired:
             record.update(bucket=TIMEOUT, detail="oracle did not terminate")
             return record
     record["native_rc"], record["oracle_rc"] = native.returncode, oracle.returncode
-    if native.returncode == oracle.returncode and native.stdout == oracle.stdout:
+    if native.returncode == oracle.returncode and (
+        native.stdout == oracle.stdout
+        or _normalize_set_reprs(native.stdout.decode("utf-8", "replace")) == _normalize_set_reprs(oracle.stdout.decode("utf-8", "replace"))
+    ):
         record["bucket"] = EQUIV
         return record
     native_exc = _exception_name(native.stderr)

@@ -25,8 +25,30 @@ funcion defaultdict (*args , **kwargs):
     lanzar NotImplementedError ('collections.defaultdict no esta implementado en el backend nativo')
 
 
-funcion deque (*args , **kwargs):
-    lanzar NotImplementedError ('collections.deque no esta implementado en el backend nativo')
+clase deque :
+    funcion __init__ (self ,iterable =Nada ,maxlen =Nada ):
+        si iterable no es Nada :
+            self._items = lista (iterable )
+        sino :
+            self._items = []
+
+    funcion append (self ,x ):
+        self._items.append (x )
+
+    funcion appendleft (self ,x ):
+        self._items.insert (0 ,x )
+
+    funcion pop (self ):
+        devolver self._items.pop ()
+
+    funcion popleft (self ):
+        devolver self._items.pop (0 )
+
+    funcion clear (self ):
+        self._items = []
+
+    funcion __len__ (self ):
+        devolver len (self._items )
 
 
 funcion namedtuple (*args , **kwargs):

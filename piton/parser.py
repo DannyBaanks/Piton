@@ -1504,9 +1504,22 @@ class Parser:
                         expression[spec_idx + 1:],
                     )
                     format_spec = Constant(value=format_text)
+            has_debug_eq = False
+            debug_prefix = ""
+            eq_idx = expression.rfind("=")
+            if eq_idx != -1 and expression[eq_idx + 1:].strip() == "":
+                if eq_idx == 0 or expression[eq_idx - 1] not in {"=", "!", "<", ">"}:
+                    has_debug_eq = True
+                    expr_name = expression[:eq_idx].strip()
+                    debug_prefix = expr_name + "="
+                    expression = expr_name
+                    if conversion == -1 and format_spec is None:
+                        conversion = ord("r")
             nested = Parser(tokenize(expression, "<fstring>"))
             nested._source = expression
             expr = nested._parse_expression(0)
+            if has_debug_eq:
+                parts.append(FStringPart(value=debug_prefix))
             parts.append(FStringExpr(value=expr, format_spec=format_spec,
                                      conversion=conversion))
             cursor = end
