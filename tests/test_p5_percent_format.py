@@ -218,10 +218,16 @@ class PercentSpecsP14(unittest.TestCase):
             "intentar:\n    imprimir('%05d' % 7)\nexcepto ValueError:\n    imprimir('caught')\n",
         )
 
+    def test_sign_flags(self):
+        # PCT_SIGN_FLAGS_V1: '+' forces sign on non-negative, ' ' leaves leading space.
+        _assert_matches(self, "imprimir('%+d' % 5)\n")
+        _assert_matches(self, "imprimir('%+d' % -5)\n")
+        _assert_matches(self, "imprimir('% d' % 5)\n")
+        _assert_matches(self, "imprimir('% d' % -5)\n")
+
     def test_still_closed(self):
         for source in (
-            "imprimir('%+d' % 5)\n",
-            "imprimir('% d' % 5)\n",
+            # '%+d' and '% d' now supported (PCT_SIGN_FLAGS_V1)
             # '%#x' now supported (PCT_ALT_FLAG_V1):
             "imprimir('%*d' % (5, 42))\n",
             "imprimir('%.*s' % (3, 'abcdef'))\n",
