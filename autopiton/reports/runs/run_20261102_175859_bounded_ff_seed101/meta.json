@@ -1,0 +1,38 @@
+{
+  "config": {
+    "build_timeout_s": 60.0,
+    "count": 25,
+    "memory_limit_mb": 256,
+    "oracle_timeout_s": 10.0,
+    "repeat": 1,
+    "runner_timeout_s": 10.0
+  },
+  "corpus_version": 1,
+  "environment": {
+    "bwrap": "/usr/bin/bwrap",
+    "cpython_version": "3.12.3",
+    "piton": {
+      "commit": "a6642aba4f90edb8acc61d9939143cd913ad1a76",
+      "dirty": true,
+      "dirty_paths": [
+        " M autopiton/cases/index.json",
+        " M autopiton/cli.py",
+        " M autopiton/generator.py",
+        " M autopiton/tests/test_generator.py",
+        " M piton/linux_x86.py",
+        " M piton/mir.py",
+        "?? autopiton/reports/runs/run_20261102_175746_canary/",
+        "?? autopiton/reports/runs/run_20261102_175824_canary/"
+      ],
+      "repo": "PITON"
+    },
+    "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
+    "python_executable": "/usr/bin/python3",
+    "sandbox_backend": "bwrap"
+  },
+  "mode": "bounded_ff",
+  "notes": "compare bounded_ff",
+  "run_id": "run_20261102_175859_bounded_ff_seed101",
+  "seed": 101,
+  "started_at": "2026-11-02T17:58:59-06:00"
+}

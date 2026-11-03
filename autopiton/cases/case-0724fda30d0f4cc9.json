@@ -1,0 +1,96 @@
+{
+  "case_id": "case-0724fda30d0f4cc9",
+  "created_at": "2026-11-02T18:03:17-06:00",
+  "description": "bounded[math_module_builtins] deg=180 val=26",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "0724fda30d0f4cc9a7dde647089e30ed7ea350c5ebf1a9ee4cb27986fed99afa",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 37.14164099994832,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "0724fda30d0f4cc9a7dde647089e30ed7ea350c5ebf1a9ee4cb27986fed99afa",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "3.1416 False False 3 4\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "a2b5b9f13fe637579e35d759fe12d39ca92145b9c53f55a449420719143e789d",
+      "build_exit_code": 0,
+      "build_ms": 1024.5623199999727,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 16.56550600000628,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0028.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "0724fda30d0f4cc9a7dde647089e30ed7ea350c5ebf1a9ee4cb27986fed99afa",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 182,
+          "surface_sha256": "b9207ee825701f65a939961bd3b14dedf707e41c137fcd142048745430c17732"
+        },
+        "BUILD": {
+          "artifact_bytes": 31440,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "a2b5b9f13fe637579e35d759fe12d39ca92145b9c53f55a449420719143e789d",
+          "c_chars": 290515,
+          "c_sha256": "ce7b55a52e460326d6056dc6469424ad6bffce34035274ca4e321fd925db1878",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "3.1416 False False 3 4\n",
+      "surface_sha256": "b9207ee825701f65a939961bd3b14dedf707e41c137fcd142048745430c17732",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "import math\nr = math.radians(180)\nis_inf = math.isinf(26)\nis_nan = math.isnan(26)\nfl = math.floor(3.7)\nce = math.ceil(3.2)\nprint(round(r, 4), is_inf, is_nan, fl, ce)\n",
+    "source_hash": "0724fda30d0f4cc9a7dde647089e30ed7ea350c5ebf1a9ee4cb27986fed99afa"
+  },
+  "run_id": "run_20261102_180249_bounded_seed11",
+  "seed": 337145535,
+  "source": "import math\nr = math.radians(180)\nis_inf = math.isinf(26)\nis_nan = math.isnan(26)\nfl = math.floor(3.7)\nce = math.ceil(3.2)\nprint(round(r, 4), is_inf, is_nan, fl, ce)\n",
+  "source_hash": "0724fda30d0f4cc9a7dde647089e30ed7ea350c5ebf1a9ee4cb27986fed99afa"
+}

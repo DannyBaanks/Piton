@@ -1,0 +1,96 @@
+{
+  "case_id": "case-61317ccd4e25a562",
+  "created_at": "2026-11-02T18:02:32-06:00",
+  "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=cherry w2=fox",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "61317ccd4e25a562a8c8300c89aa350aeb8160beb90dc6229407d2938c96e5e5",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 67.14011000008213,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "61317ccd4e25a562a8c8300c89aa350aeb8160beb90dc6229407d2938c96e5e5",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "['cherry', 'fox', 'piton'] ['1', '2', '3:4:5'] ['line1\\n', 'line2\\n', 'line3'] ['line1', 'line2', 'line3']\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "663b7ce4e9d28098f7c35751524cde4c38285b73d06308ec3b6e7f034722579d",
+      "build_exit_code": 0,
+      "build_ms": 1023.2239829999799,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 19.348722000017915,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0012.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "61317ccd4e25a562a8c8300c89aa350aeb8160beb90dc6229407d2938c96e5e5",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 226,
+          "surface_sha256": "28a9fab5b8b8754ce071d8a9925913daf68d81787e125378ce0b70cb289434f8"
+        },
+        "BUILD": {
+          "artifact_bytes": 25064,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "663b7ce4e9d28098f7c35751524cde4c38285b73d06308ec3b6e7f034722579d",
+          "c_chars": 290489,
+          "c_sha256": "742ffe3d8b4b92fef6c00035d43241a2fbfbab29212d913952b16e23439665b5",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "['cherry', 'fox', 'piton'] ['1', '2', '3:4:5'] ['line1\\n', 'line2\\n', 'line3'] ['line1', 'line2', 'line3']\n",
+      "surface_sha256": "28a9fab5b8b8754ce071d8a9925913daf68d81787e125378ce0b70cb289434f8",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "text = '   cherry   fox  \\t  piton  \\n  '\np1 = text.split()\np2 = '1:2:3:4:5'.split(':', 2)\nmulti = 'line1\\nline2\\nline3'\nl_keep = multi.splitlines(True)\nl_drop = multi.splitlines(False)\nprint(p1, p2, l_keep, l_drop)\n",
+    "source_hash": "61317ccd4e25a562a8c8300c89aa350aeb8160beb90dc6229407d2938c96e5e5"
+  },
+  "run_id": "run_20261102_180218_bounded_fe_seed42",
+  "seed": 240251661,
+  "source": "text = '   cherry   fox  \\t  piton  \\n  '\np1 = text.split()\np2 = '1:2:3:4:5'.split(':', 2)\nmulti = 'line1\\nline2\\nline3'\nl_keep = multi.splitlines(True)\nl_drop = multi.splitlines(False)\nprint(p1, p2, l_keep, l_drop)\n",
+  "source_hash": "61317ccd4e25a562a8c8300c89aa350aeb8160beb90dc6229407d2938c96e5e5"
+}

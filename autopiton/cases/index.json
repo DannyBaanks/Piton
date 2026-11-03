@@ -83,16 +83,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:32-06:00",
+      "last_seen_at": "2026-11-02T18:01:52-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 1566942273,
       "signature": null,
       "source_hash": "01589c288afa682ba73ff47fbb17aa2e57549aba4a986cbde82589b2b6faf865"
+    },
+    "case-019eccedafebd49f": {
+      "case_id": "case-019eccedafebd49f",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:31-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=7 c2=10",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:31-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 1051454923,
+      "signature": null,
+      "source_hash": "019eccedafebd49f6117247c9d7a98fc74a664ac331aef90ef05511bed54dbb3"
     },
     "case-019fe3d6739452ea": {
       "case_id": "case-019fe3d6739452ea",
@@ -141,6 +164,50 @@
       "seed": 0,
       "signature": null,
       "source_hash": "01b500e236e57b8e83cf1f6b7a905b9f5d1fd77ce26b79d6bdc1a0dcb6eff55e"
+    },
+    "case-0255128df634ac7b": {
+      "case_id": "case-0255128df634ac7b",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:01-06:00",
+      "description": "bounded[default_expr_fn/float] depth=2 args=1",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:01-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 2018579976,
+      "signature": null,
+      "source_hash": "0255128df634ac7b2bddc5dd40f669ad0db8a212a09d184920b80c8964358166"
+    },
+    "case-025708c4c91c81cf": {
+      "case_id": "case-025708c4c91c81cf",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:41-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=8 c2=9",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:41-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 3224995600,
+      "signature": null,
+      "source_hash": "025708c4c91c81cf30ba6fc36b2f8134224853d9c89642f269b3390864c7f713"
     },
     "case-03a2817e254ca5e0": {
       "case_id": "case-03a2817e254ca5e0",
@@ -212,6 +279,28 @@
       "signature": null,
       "source_hash": "03f536345cb6738bfe5301f8675f8a66f8ad1fe5d2373f3f82fe4f6f00ad0752"
     },
+    "case-040a8039f0eef138": {
+      "case_id": "case-040a8039f0eef138",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:59-06:00",
+      "description": "bounded[loop_conditional_call/int] depth=2 iters=4",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:59-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 3291181424,
+      "signature": null,
+      "source_hash": "040a8039f0eef138383cbee5489a86f4d9011eef2fc28dfc89a0404a4841f973"
+    },
     "case-04ccb06a6c28f051": {
       "case_id": "case-04ccb06a6c28f051",
       "classification": "EQUIV",
@@ -249,13 +338,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:36-06:00",
+      "last_seen_at": "2026-11-02T18:00:47-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 3961228449,
       "signature": null,
@@ -397,6 +487,28 @@
       "signature": null,
       "source_hash": "06795b54e3c08fa996c5622b22bf419e36201de7ab171b22b9e110e44e831c7c"
     },
+    "case-0724fda30d0f4cc9": {
+      "case_id": "case-0724fda30d0f4cc9",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:17-06:00",
+      "description": "bounded[math_module_builtins] deg=180 val=26",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:17-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 337145535,
+      "signature": null,
+      "source_hash": "0724fda30d0f4cc9a7dde647089e30ed7ea350c5ebf1a9ee4cb27986fed99afa"
+    },
     "case-078e96175f5fd891": {
       "case_id": "case-078e96175f5fd891",
       "classification": "EQUIV",
@@ -511,6 +623,28 @@
       "signature": null,
       "source_hash": "08edc057c8925239f8ba08fe42383f7f1acc39055a75e24c6e34f3279ab1d4a9"
     },
+    "case-08fcf7c3f2f91bfa": {
+      "case_id": "case-08fcf7c3f2f91bfa",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:35-06:00",
+      "description": "bounded[math_module_builtins] deg=90 val=19",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:35-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 2480014448,
+      "signature": null,
+      "source_hash": "08fcf7c3f2f91bfaaa992b461b89116a4d003887e366227acacc29dc11ff3ff4"
+    },
     "case-0986ee8f989dfdb0": {
       "case_id": "case-0986ee8f989dfdb0",
       "classification": "EQUIV",
@@ -522,17 +656,40 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:15-06:00",
+      "last_seen_at": "2026-11-02T18:01:36-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 3919706735,
       "signature": null,
       "source_hash": "0986ee8f989dfdb0315af7acc93444478a00bdedb1ab503d1f244ca3e78b6857"
+    },
+    "case-09c8d3bb28aa74dc": {
+      "case_id": "case-09c8d3bb28aa74dc",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:50-06:00",
+      "description": "bounded[int_radix_conversion] val=236",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:50-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 853803852,
+      "signature": null,
+      "source_hash": "09c8d3bb28aa74dc678c6ce737068b5cae04c1f8a2b83bfb58819e71720592ad"
     },
     "case-0a2a5df2fc7c2da5": {
       "case_id": "case-0a2a5df2fc7c2da5",
@@ -648,6 +805,28 @@
       "signature": null,
       "source_hash": "0bb8b94ce14b28219c6d3c0959c35ac5a09be05d97ef926e83aeb74eed7299a5"
     },
+    "case-0c192f72ff32590d": {
+      "case_id": "case-0c192f72ff32590d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:36-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=alpha num=41",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:36-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 2314889832,
+      "signature": null,
+      "source_hash": "0c192f72ff32590d46ffeb682705e32f5e7fbd2b8c45b6721d9265702a51d1eb"
+    },
     "case-0cb697b897b78cbb": {
       "case_id": "case-0cb697b897b78cbb",
       "classification": "EQUIV",
@@ -671,6 +850,29 @@
       "seed": 1095983971,
       "signature": null,
       "source_hash": "0cb697b897b78cbbb5fa60b33dd366711a1061f1907f8020a37c29cb3b68ff75"
+    },
+    "case-0ce7b350c610646d": {
+      "case_id": "case-0ce7b350c610646d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:43-06:00",
+      "description": "bounded[module_constant_attribute_access] mult=4",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:07-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026",
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 869865480,
+      "signature": null,
+      "source_hash": "0ce7b350c610646dc851ed2fed565aec9a6189aee864bb95d2ec90cb5df8c96a"
     },
     "case-0d4853c601af2768": {
       "case_id": "case-0d4853c601af2768",
@@ -772,6 +974,28 @@
       "signature": null,
       "source_hash": "0df63b43e8bab1493e160965459199ae15b9f1d5b36291a2e5ec68caf049d3f2"
     },
+    "case-0e8857beeb4a7cf3": {
+      "case_id": "case-0e8857beeb4a7cf3",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:22-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=abs",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:22-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 2585650756,
+      "signature": null,
+      "source_hash": "0e8857beeb4a7cf317b5baff536bbe2aa6e4a2405b86f525a06f424b7c8f7963"
+    },
     "case-0ea32dd39fbec420": {
       "case_id": "case-0ea32dd39fbec420",
       "classification": "EQUIV",
@@ -816,6 +1040,50 @@
       "seed": 2758994527,
       "signature": null,
       "source_hash": "0f0dad3ae6852e447391ac2a03dcd780983e886fc2e95c7a7432ae3c47c7e9be"
+    },
+    "case-0f1894f75d13bc4a": {
+      "case_id": "case-0f1894f75d13bc4a",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:26-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=abs",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:26-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 3961228449,
+      "signature": null,
+      "source_hash": "0f1894f75d13bc4ab590e70550ef0b88c1c0bf8eff1d18fdf234f6cc809ebe90"
+    },
+    "case-0f2d012921ff3a4a": {
+      "case_id": "case-0f2d012921ff3a4a",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:31-06:00",
+      "description": "bounded[math_module_builtins] deg=180 val=66",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:31-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 4092891721,
+      "signature": null,
+      "source_hash": "0f2d012921ff3a4a817a52436c7e2660c2cb97c1633df77d8f4f9f61c6c6b6bc"
     },
     "case-0f2f949692c53f5a": {
       "case_id": "case-0f2f949692c53f5a",
@@ -862,6 +1130,28 @@
       "seed": 2506254832,
       "signature": null,
       "source_hash": "0f826d007aaab3de679a29767e16eb07dc1f0927be965d5eea1b9864653e64d2"
+    },
+    "case-105906974c400714": {
+      "case_id": "case-105906974c400714",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:42-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=int",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:42-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 1948728483,
+      "signature": null,
+      "source_hash": "105906974c4007142f08f931ae5cdb08eb8fff7267fcf7f542020a6eda451079"
     },
     "case-109916f796a8f7de": {
       "case_id": "case-109916f796a8f7de",
@@ -941,13 +1231,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:45-06:00",
+      "last_seen_at": "2026-11-02T18:00:58-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 4284391408,
       "signature": null,
@@ -974,6 +1265,28 @@
       "seed": 1894488586,
       "signature": null,
       "source_hash": "1124ee8b93aafdb0032d7da1421bde2266bf726e4e4608bf24f0661dee16ca05"
+    },
+    "case-1127f97a06fb7299": {
+      "case_id": "case-1127f97a06fb7299",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:12-06:00",
+      "description": "bounded[loop_conditional_call/int] depth=2 iters=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:12-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 2734122106,
+      "signature": null,
+      "source_hash": "1127f97a06fb729969f42c94e5a578117b61634d28eb6f50fe0a13fa4a3c873e"
     },
     "case-113fc7fb0d069267": {
       "case_id": "case-113fc7fb0d069267",
@@ -1158,7 +1471,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:13-06:00",
+      "last_seen_at": "2026-11-02T18:00:16-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1173,7 +1486,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 298737106,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
@@ -1242,6 +1556,28 @@
       "seed": 3280474243,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "13562e1b7bfa4bc078c052b82bc956d5a5eff6205c52578573bab5d794c09efb"
+    },
+    "case-13b4c12c6aab20c0": {
+      "case_id": "case-13b4c12c6aab20c0",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:19-06:00",
+      "description": "bounded[generator_throw_internal_catch/int] y1=5 y2=99",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:19-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 295391205,
+      "signature": null,
+      "source_hash": "13b4c12c6aab20c04e2d96f95fe781b782ba70914b69192d729e0c3089f94f94"
     },
     "case-1465d4aeefca12e7": {
       "case_id": "case-1465d4aeefca12e7",
@@ -1398,13 +1734,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:34-06:00",
+      "last_seen_at": "2026-11-02T18:01:54-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 2522798642,
       "signature": null,
@@ -1599,6 +1936,28 @@
       "signature": null,
       "source_hash": "18058898ba6763f022dd0993231d6184142722e6c554f61da15da1cd891c2bbf"
     },
+    "case-189d037d6c2fb2ff": {
+      "case_id": "case-189d037d6c2fb2ff",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:41-06:00",
+      "description": "bounded[int_radix_conversion] val=325",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:41-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 2896110047,
+      "signature": null,
+      "source_hash": "189d037d6c2fb2ff8e219ea73d3fb781db7ed91c8920d3c603aeacefb0fc029d"
+    },
     "case-19712d31496b8dc6": {
       "case_id": "case-19712d31496b8dc6",
       "classification": "EQUIV",
@@ -1669,6 +2028,28 @@
       "signature": null,
       "source_hash": "19801b249e041e62748881c9944650466e0ab131b7af3137e3cebb28dfeae066"
     },
+    "case-19847c11737071b1": {
+      "case_id": "case-19847c11737071b1",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:08-06:00",
+      "description": "bounded[math_module_builtins] deg=360 val=47",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:08-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 40561083,
+      "signature": null,
+      "source_hash": "19847c11737071b15f10c7e0e4e019962dd0c6c1271a3fd46e00ffae27e7333d"
+    },
     "case-198718a64eb9df07": {
       "case_id": "case-198718a64eb9df07",
       "classification": "EQUIV",
@@ -1725,13 +2106,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:47-06:00",
+      "last_seen_at": "2026-11-02T18:01:00-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 272849424,
       "signature": null,
@@ -1839,7 +2221,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:15-06:00",
+      "last_seen_at": "2026-11-02T18:00:20-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -1854,7 +2236,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 2783290795,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -1871,17 +2254,40 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:59-06:00",
+      "last_seen_at": "2026-11-02T18:01:13-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 1051802512,
       "signature": null,
       "source_hash": "1bfc3667266c3b287a9c8154aab2e0659b3166bbbd00632fa4507c7ffbfa4019"
+    },
+    "case-1d854c61c283ef2a": {
+      "case_id": "case-1d854c61c283ef2a",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:34-06:00",
+      "description": "bounded[math_module_builtins] deg=45 val=49",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:34-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 1461983573,
+      "signature": null,
+      "source_hash": "1d854c61c283ef2ac1c1da486f0c9a9e954d7a4de6b731ad4c34d000ea00bcbe"
     },
     "case-1de55b731d68eab4": {
       "case_id": "case-1de55b731d68eab4",
@@ -1906,6 +2312,28 @@
       "seed": 369448323,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "1de55b731d68eab43048abc1a1e9a2d6c99405db819ae1379bb9c04d9404490a"
+    },
+    "case-1deeeb1ff5df27a5": {
+      "case_id": "case-1deeeb1ff5df27a5",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:18-06:00",
+      "description": "bounded[comprehension_filter_call/int] depth=2 iters=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:18-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 4134685600,
+      "signature": null,
+      "source_hash": "1deeeb1ff5df27a5e4ed1ad11464bec0b84d3c8ecc836d53f2a14e4dd8166e35"
     },
     "case-1e487ed972e18c76": {
       "case_id": "case-1e487ed972e18c76",
@@ -1945,14 +2373,15 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:11:58-06:00",
+      "last_seen_at": "2026-11-02T18:02:24-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
       "run_ids": [
         "run_20261102_164053_bounded_fe_seed101",
         "run_20261102_170755_bounded_fe_seed101",
-        "run_20261102_171148_bounded_fe_seed101"
+        "run_20261102_171148_bounded_fe_seed101",
+        "run_20261102_180218_bounded_fe_seed42"
       ],
       "seed": 3736580802,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
@@ -2107,13 +2536,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:10-06:00",
+      "last_seen_at": "2026-11-02T18:01:29-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 613628803,
       "signature": null,
@@ -2175,7 +2605,7 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:07:49-06:00",
+      "last_seen_at": "2026-11-02T17:58:31-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -2195,7 +2625,9 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 7,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -2237,7 +2669,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:13-06:00",
+      "last_seen_at": "2026-11-02T18:00:18-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -2252,7 +2684,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 3673561638,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -2547,7 +2980,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:17-06:00",
+      "last_seen_at": "2026-11-02T18:00:22-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -2562,7 +2995,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 240251661,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -2579,13 +3013,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:46-06:00",
+      "last_seen_at": "2026-11-02T18:00:59-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 3246059658,
       "signature": null,
@@ -2602,13 +3037,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:13-06:00",
+      "last_seen_at": "2026-11-02T18:01:32-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 4278308761,
       "signature": null,
@@ -2873,6 +3309,28 @@
       "signature": null,
       "source_hash": "280e5c0950767e0e6334c3a76ea02f932c938ea0da409b73b8ad634377757bd9"
     },
+    "case-28c47d1557a04539": {
+      "case_id": "case-28c47d1557a04539",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:22-06:00",
+      "description": "bounded[int_radix_conversion] val=79",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:22-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 521511664,
+      "signature": null,
+      "source_hash": "28c47d1557a04539bfaa48149eb95f6be6c9099f81afeeefaa8291da9bd03a4d"
+    },
     "case-2a4070d4bd3bfd93": {
       "case_id": "case-2a4070d4bd3bfd93",
       "classification": "DIVERGENT",
@@ -2952,13 +3410,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:00-06:00",
+      "last_seen_at": "2026-11-02T18:01:15-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 2340505846,
       "signature": null,
@@ -2998,7 +3457,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:20-06:00",
+      "last_seen_at": "2026-11-02T18:00:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -3013,7 +3472,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 2340505846,
       "signature": null,
@@ -3053,7 +3513,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:18-06:00",
+      "last_seen_at": "2026-11-02T18:00:23-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -3068,7 +3528,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 1149938334,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -3085,13 +3546,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:35-06:00",
+      "last_seen_at": "2026-11-02T18:00:44-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 1815115025,
       "signature": null,
@@ -3169,6 +3631,28 @@
       "signature": null,
       "source_hash": "2d8df0adc9d0fb0246bf73b1e868baa6b6355b9d95b38fd2ac925bde92c198e1"
     },
+    "case-2f0885f3d60d05e2": {
+      "case_id": "case-2f0885f3d60d05e2",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:15-06:00",
+      "description": "bounded[int_radix_conversion] val=103",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:15-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 1406922867,
+      "signature": null,
+      "source_hash": "2f0885f3d60d05e2abf62632c5e0ccceb552c979b0a48f70f7a1e22d60b18400"
+    },
     "case-2f3cc77c2f0952b6": {
       "case_id": "case-2f3cc77c2f0952b6",
       "classification": "EQUIV",
@@ -3202,17 +3686,40 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:12-06:00",
+      "last_seen_at": "2026-11-02T18:01:31-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 470939445,
       "signature": null,
       "source_hash": "2f90e3ceb6a7ac97535d38aa36e07aa0a9e093652f3009188d464d2f0d677308"
+    },
+    "case-3030f9f9768f68fc": {
+      "case_id": "case-3030f9f9768f68fc",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:09-06:00",
+      "description": "bounded[int_radix_conversion] val=226",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:09-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 1192900792,
+      "signature": null,
+      "source_hash": "3030f9f9768f68fcb7ffefa7e7af105fef25b2278b43614e840bfafc38bdca0a"
     },
     "case-304d33f1f6021160": {
       "case_id": "case-304d33f1f6021160",
@@ -3267,6 +3774,28 @@
       "seed": 488071808,
       "signature": null,
       "source_hash": "3067b8f4b7647b23ec71045dd9e9cd38afc7e37aa3196178679e85b54c6cd0e5"
+    },
+    "case-306a86b108eb3ade": {
+      "case_id": "case-306a86b108eb3ade",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:12-06:00",
+      "description": "bounded[int_radix_conversion] val=351",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:12-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 3404019790,
+      "signature": null,
+      "source_hash": "306a86b108eb3adefe3aa71b8d999eb3b2c0d32887ba408a9b63f110d3ecda5e"
     },
     "case-30e676ae6aacf15a": {
       "case_id": "case-30e676ae6aacf15a",
@@ -3337,6 +3866,28 @@
       "signature": null,
       "source_hash": "32a70c6a30616d3c5fca291ddec3bd064ee8a14db504c4fd4652b1d246e2bf92"
     },
+    "case-32c9c0606aae0ae0": {
+      "case_id": "case-32c9c0606aae0ae0",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:42-06:00",
+      "description": "bounded[format_modulo_flags] n=52 tag=agent",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:42-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 4287310442,
+      "signature": null,
+      "source_hash": "32c9c0606aae0ae0525e108f4efe972387de8f999550ffaf39565304bfe2875b"
+    },
     "case-32cd79d84a9a584f": {
       "case_id": "case-32cd79d84a9a584f",
       "classification": "EQUIV",
@@ -3380,6 +3931,28 @@
       "seed": 0,
       "signature": null,
       "source_hash": "32d979c793d9939272ba1985b8436392000c7e3a882490d9c02a1f80aae3a7bd"
+    },
+    "case-32dd3916248927d6": {
+      "case_id": "case-32dd3916248927d6",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:17-06:00",
+      "description": "bounded[int_radix_conversion] val=273",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:17-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 1049464764,
+      "signature": null,
+      "source_hash": "32dd3916248927d68ce84af1c982c86830de6d1c97a8ef0c5488f042d1538b0c"
     },
     "case-3351b2910c615539": {
       "case_id": "case-3351b2910c615539",
@@ -3437,13 +4010,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:09-06:00",
+      "last_seen_at": "2026-11-02T18:01:28-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 3083418319,
       "signature": null,
@@ -3573,12 +4147,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:15:17-06:00",
+      "last_seen_at": "2026-11-02T18:02:38-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180218_bounded_fe_seed42"
       ],
       "seed": 980954811,
       "signature": null,
@@ -3595,13 +4170,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:13-06:00",
+      "last_seen_at": "2026-11-02T18:01:33-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 3095476665,
       "signature": null,
@@ -3700,6 +4276,28 @@
       "signature": null,
       "source_hash": "364973ac4aeef82bc9a2010a3abaf58044298eddeb333051d332726ab96e1f66"
     },
+    "case-366196e4f020ba9e": {
+      "case_id": "case-366196e4f020ba9e",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:08-06:00",
+      "description": "bounded[dunder_subscript_mapping/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:08-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 2022542,
+      "signature": null,
+      "source_hash": "366196e4f020ba9e7ac6c552618cf14a76dbbd37b0aea00e8797ce9cf6694dac"
+    },
     "case-367c25e322f2f78d": {
       "case_id": "case-367c25e322f2f78d",
       "classification": "EQUIV",
@@ -3726,6 +4324,28 @@
       "seed": 374281491,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "367c25e322f2f78d3e0a32d2279b2b7dc2719676ef62edb78afe4fcffca26931"
+    },
+    "case-36d30e71455aec54": {
+      "case_id": "case-36d30e71455aec54",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:44-06:00",
+      "description": "bounded[int_radix_conversion] val=21",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:44-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 2102461783,
+      "signature": null,
+      "source_hash": "36d30e71455aec54b22575c830542b440844d54a83f7f811c5c46e85d5ba80bd"
     },
     "case-370439291e9b7670": {
       "case_id": "case-370439291e9b7670",
@@ -3808,13 +4428,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:15:02-06:00",
+      "last_seen_at": "2026-11-02T18:03:02-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 1158677336,
       "signature": null,
@@ -4070,6 +4691,28 @@
       "signature": null,
       "source_hash": "3c4c5809b273680a8fc3d4d7268dda78a28eeb5360ca52524695b187b0134996"
     },
+    "case-3c89feb87d4af4ba": {
+      "case_id": "case-3c89feb87d4af4ba",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:40-06:00",
+      "description": "bounded[format_modulo_flags] n=55 tag=python",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:40-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 611657276,
+      "signature": null,
+      "source_hash": "3c89feb87d4af4bae33eba27ee624035d3d9bdd74629ac4a102c8f2c098c1b6b"
+    },
     "case-3ccfa548c07d1978": {
       "case_id": "case-3ccfa548c07d1978",
       "classification": "DIVERGENT",
@@ -4149,12 +4792,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:35-06:00",
+      "last_seen_at": "2026-11-02T18:01:57-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 1351531223,
       "signature": null,
@@ -4253,6 +4897,28 @@
       "signature": null,
       "source_hash": "3e8f88f60d7adc7f1d4b66a8277d65f2c4f55686c452dc2ae7f1ee07b795b67d"
     },
+    "case-3ea9461328ef1c44": {
+      "case_id": "case-3ea9461328ef1c44",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:10-06:00",
+      "description": "bounded[module_constant_attribute_access] mult=5",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:10-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 3736580802,
+      "signature": null,
+      "source_hash": "3ea9461328ef1c44c689aae676a1f14ef0c770518991f8bf6468ee7f47054ab2"
+    },
     "case-3eb4559844ce4555": {
       "case_id": "case-3eb4559844ce4555",
       "classification": "EQUIV",
@@ -4311,13 +4977,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:34-06:00",
+      "last_seen_at": "2026-11-02T18:00:43-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 1801823908,
       "signature": null,
@@ -4381,13 +5048,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:02-06:00",
+      "last_seen_at": "2026-11-02T18:01:18-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 398340369,
       "signature": null,
@@ -4552,6 +5220,28 @@
       "seed": 3776436931,
       "signature": null,
       "source_hash": "416f2ab670e27e113fc87edc1228f3fe452ad6a19b33f6c0718294d7943c6416"
+    },
+    "case-418d53fd41974744": {
+      "case_id": "case-418d53fd41974744",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:21-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=bool",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:21-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 1812140441,
+      "signature": null,
+      "source_hash": "418d53fd419747445697d55894c7b4fe76fab34e0d523bf4bf23598b749daecb"
     },
     "case-41fabb21f8b69a3e": {
       "case_id": "case-41fabb21f8b69a3e",
@@ -4868,13 +5558,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:48-06:00",
+      "last_seen_at": "2026-11-02T18:01:01-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 4047709743,
       "signature": null,
@@ -4993,6 +5684,28 @@
       "seed": 3452536678,
       "signature": null,
       "source_hash": "4833fedba60ad49f11ede6739341fcd7947faa0dd2582aba15ff5505faa58383"
+    },
+    "case-488b89702f01e7bd": {
+      "case_id": "case-488b89702f01e7bd",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:00-06:00",
+      "description": "bounded[math_module_builtins] deg=90 val=89",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:00-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 3363013620,
+      "signature": null,
+      "source_hash": "488b89702f01e7bd1a78e0e958aca00374215f194855ac624eb72014c51aec5c"
     },
     "case-48a59aebb0d5b75b": {
       "case_id": "case-48a59aebb0d5b75b",
@@ -5245,12 +5958,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:38-06:00",
+      "last_seen_at": "2026-11-02T18:02:00-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 2188398760,
       "signature": null,
@@ -5336,7 +6050,7 @@
       "expected_exception": "TypeError",
       "family": "classes",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T17:07:48-06:00",
+      "last_seen_at": "2026-11-02T17:58:29-06:00",
       "minimization": {
         "accepted": 3,
         "attempts": 11,
@@ -5371,7 +6085,9 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 5,
       "signature": "INVALID_ACCEPTED|cpython:exception:TypeError|piton:EXECUTE:-",
@@ -5605,6 +6321,28 @@
       "signature": null,
       "source_hash": "4fb75bd39b6e8be77d6fd183637055769c42033e1125a22e8f59c4e0018b9314"
     },
+    "case-4fe281ce3e1e9c85": {
+      "case_id": "case-4fe281ce3e1e9c85",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:13-06:00",
+      "description": "bounded[int_radix_conversion] val=193",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:13-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 2672110599,
+      "signature": null,
+      "source_hash": "4fe281ce3e1e9c85161455ccf8c4e75d851bf1a5a957574a63efa85d72ea3671"
+    },
     "case-4fe3f9d34bb2e4ff": {
       "case_id": "case-4fe3f9d34bb2e4ff",
       "classification": "EQUIV",
@@ -5639,13 +6377,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:44-06:00",
+      "last_seen_at": "2026-11-02T18:00:57-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 2314889832,
       "signature": null,
@@ -5729,13 +6468,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:11-06:00",
+      "last_seen_at": "2026-11-02T18:01:30-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 2506254832,
       "signature": null,
@@ -5811,13 +6551,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:39-06:00",
+      "last_seen_at": "2026-11-02T18:00:50-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 3582477022,
       "signature": null,
@@ -5835,7 +6576,7 @@
       "expected_exception": null,
       "family": "collections",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:07:47-06:00",
+      "last_seen_at": "2026-11-02T17:58:28-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -5855,7 +6596,9 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 3,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -5884,6 +6627,28 @@
       "signature": null,
       "source_hash": "530063b0666209d4c5be89cdd4ea86cb66652cce15c89f9df064b3ab063c89d8"
     },
+    "case-535aedc7aa46f450": {
+      "case_id": "case-535aedc7aa46f450",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:16-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=33",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:16-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 2001969799,
+      "signature": null,
+      "source_hash": "535aedc7aa46f4501b7704ebf99dcea68338116090001935ec16aab7af0635b9"
+    },
     "case-53717f9306303650": {
       "case_id": "case-53717f9306303650",
       "classification": "EQUIV",
@@ -5895,16 +6660,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:43-06:00",
+      "last_seen_at": "2026-11-02T18:02:06-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 2615507143,
       "signature": null,
       "source_hash": "53717f9306303650d61943244f6dca07053320d26ba024b5b186baef7efba15c"
+    },
+    "case-53bc90c5cf542da4": {
+      "case_id": "case-53bc90c5cf542da4",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:28-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=alpha num=39",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:28-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 3721519026,
+      "signature": null,
+      "source_hash": "53bc90c5cf542da453f6f1a59fea18503ac81311778f0b3bb46576dffb6a11e8"
     },
     "case-53e0edee5741e624": {
       "case_id": "case-53e0edee5741e624",
@@ -5984,7 +6772,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:20-06:00",
+      "last_seen_at": "2026-11-02T18:00:28-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -5999,7 +6787,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 1715412119,
       "signature": null,
@@ -6093,6 +6882,50 @@
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "56dac03cbf5b1649a1b16beee69dfc7e34f957122a6caa6a3d182c52ff9b81ee"
+    },
+    "case-5750153a59f570f2": {
+      "case_id": "case-5750153a59f570f2",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:51-06:00",
+      "description": "bounded[format_modulo_flags] n=6 tag=agent",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:51-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 4107564524,
+      "signature": null,
+      "source_hash": "5750153a59f570f2856159fcd26db9252d9321afd1d22ff7169de8c9fca0ce4d"
+    },
+    "case-57901a8547e87dae": {
+      "case_id": "case-57901a8547e87dae",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:03-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=82",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:03-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 3398156566,
+      "signature": null,
+      "source_hash": "57901a8547e87dae4dd529d7d661a5e0d44480622d2158ae4f6daa7f7f07d5d3"
     },
     "case-57b6cbea19215534": {
       "case_id": "case-57b6cbea19215534",
@@ -6210,13 +7043,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:07-06:00",
+      "last_seen_at": "2026-11-02T18:01:25-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 1985392498,
       "signature": null,
@@ -6312,6 +7146,50 @@
       "seed": 0,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:int->other",
       "source_hash": "597b45887191e1cb09f674457c6ac7f7daad60540d835f6fdda9a4f1eecc3372"
+    },
+    "case-598a8c32cd12816d": {
+      "case_id": "case-598a8c32cd12816d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:16-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=32",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:16-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 3115530475,
+      "signature": null,
+      "source_hash": "598a8c32cd12816d05d14af2745e91d673f108a9d80ed143db4427eaa36ed131"
+    },
+    "case-59a1172b79078c8e": {
+      "case_id": "case-59a1172b79078c8e",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:11-06:00",
+      "description": "bounded[int_radix_conversion] val=38",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:11-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 2472506132,
+      "signature": null,
+      "source_hash": "59a1172b79078c8ef651a428778d6d8bd70d88dd8328598c29fbddd2ba550808"
     },
     "case-5a1f0b45fa37fa62": {
       "case_id": "case-5a1f0b45fa37fa62",
@@ -6519,6 +7397,29 @@
       "signature": null,
       "source_hash": "5c2f72918763b9701eb9319ca7ed31d97b5ad2197f3bdc93608a85914bc2a963"
     },
+    "case-5c73d1420e164f3d": {
+      "case_id": "case-5c73d1420e164f3d",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:10-06:00",
+      "description": "bounded[module_constant_attribute_access] mult=3",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:48-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101",
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 2444134007,
+      "signature": null,
+      "source_hash": "5c73d1420e164f3da3b40f5ae11ee9daa5248ebb7c964cb8555854920cc55ea6"
+    },
     "case-5d70255b7c194dce": {
       "case_id": "case-5d70255b7c194dce",
       "classification": "DIVERGENT",
@@ -6531,7 +7432,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:16-06:00",
+      "last_seen_at": "2026-11-02T18:00:20-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -6546,7 +7447,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 3131575764,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
@@ -6634,7 +7536,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:05-06:00",
+      "last_seen_at": "2026-11-02T18:00:07-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -6649,7 +7551,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 3184935163,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -6747,6 +7650,28 @@
       "signature": null,
       "source_hash": "5f83d6d05e238d4412a320c375a172ea51e675c22a068e6b51b93a7aecd9faf9"
     },
+    "case-605b18cf337f0e14": {
+      "case_id": "case-605b18cf337f0e14",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:56-06:00",
+      "description": "bounded[math_module_builtins] deg=45 val=64",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:56-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 365023967,
+      "signature": null,
+      "source_hash": "605b18cf337f0e14ce2d111f22103569a0ae6d443a28a036e8dc2d57563f71a2"
+    },
     "case-60c2d221c4195864": {
       "case_id": "case-60c2d221c4195864",
       "classification": "EQUIV",
@@ -6781,17 +7706,40 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:38-06:00",
+      "last_seen_at": "2026-11-02T18:00:49-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 433797840,
       "signature": null,
       "source_hash": "60c982c2bc3bd61cd91d825586cb6d665cade33b4514af076b088712bebabff1"
+    },
+    "case-61317ccd4e25a562": {
+      "case_id": "case-61317ccd4e25a562",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:32-06:00",
+      "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=cherry w2=fox",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:32-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 240251661,
+      "signature": null,
+      "source_hash": "61317ccd4e25a562a8c8300c89aa350aeb8160beb90dc6229407d2938c96e5e5"
     },
     "case-61c20e05afe9c8fa": {
       "case_id": "case-61c20e05afe9c8fa",
@@ -6826,13 +7774,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:56-06:00",
+      "last_seen_at": "2026-11-02T18:02:54-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 3777702799,
       "signature": null,
@@ -6940,13 +7889,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:42-06:00",
+      "last_seen_at": "2026-11-02T18:00:53-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 240251661,
       "signature": null,
@@ -7024,6 +7974,28 @@
       "signature": null,
       "source_hash": "64e467a060bd851b24a13a080183838201a4cc9430822084893814ff0dfc9dd7"
     },
+    "case-65038ed3640fdaeb": {
+      "case_id": "case-65038ed3640fdaeb",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:15-06:00",
+      "description": "bounded[nonlocal_mutable_closure/int] depth=2 iters=4",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:15-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 662006161,
+      "signature": null,
+      "source_hash": "65038ed3640fdaebca152ac7f97d89f076b78991041f1a2148884130cfd82b4c"
+    },
     "case-65150b6ab7d3ce08": {
       "case_id": "case-65150b6ab7d3ce08",
       "classification": "EQUIV",
@@ -7035,13 +8007,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:07-06:00",
+      "last_seen_at": "2026-11-02T18:01:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 2783290795,
       "signature": null,
@@ -7206,6 +8179,28 @@
       "signature": null,
       "source_hash": "675b947cdd3dbdb08f3f46b23e395a8bfd2e393592175ab932d3f114872b7223"
     },
+    "case-67f7a6ced4e18061": {
+      "case_id": "case-67f7a6ced4e18061",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:19-06:00",
+      "description": "bounded[math_module_builtins] deg=30 val=35",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:19-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 1354472076,
+      "signature": null,
+      "source_hash": "67f7a6ced4e18061d3da9000a90c8bab44cca102d4f245614a3280c4c1da1132"
+    },
     "case-67f9dbdb212bc4ea": {
       "case_id": "case-67f9dbdb212bc4ea",
       "classification": "EQUIV",
@@ -7240,7 +8235,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:42-06:00",
+      "last_seen_at": "2026-11-02T18:02:04-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -7248,11 +8243,34 @@
         "run_20261102_160755_bounded_fd_seed99",
         "run_20261102_162337_bounded_fd_seed99",
         "run_20261102_162843_bounded_fd_seed2026",
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 3092233689,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
       "source_hash": "693da321e40bf252fb67a69a92aeb82b46d90abb9474cd225d9fe4b3b5e3f53b"
+    },
+    "case-69506fd7676f91c7": {
+      "case_id": "case-69506fd7676f91c7",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:25-06:00",
+      "description": "bounded[string_split_whitespace_and_splitlines_keepends/str] w1=cherry w2=cat",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:25-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 667779376,
+      "signature": null,
+      "source_hash": "69506fd7676f91c7be84b6eaea558e58053c8e89122b2a9052019b0a82065943"
     },
     "case-69c465e2c2d6f3d0": {
       "case_id": "case-69c465e2c2d6f3d0",
@@ -7320,6 +8338,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "6a4037df7616c76e44d52b37ff67aa535443b7311a249e5bfe50d96f0db8e2af"
     },
+    "case-6a5e9f2f7e9156aa": {
+      "case_id": "case-6a5e9f2f7e9156aa",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:10-06:00",
+      "description": "bounded[int_radix_conversion] val=333",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:10-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 628605420,
+      "signature": null,
+      "source_hash": "6a5e9f2f7e9156aa9d39d0804b0a5287ab23bb8ecab41cd77a549feae292a510"
+    },
     "case-6a625455f66bccf5": {
       "case_id": "case-6a625455f66bccf5",
       "classification": "EQUIV",
@@ -7378,12 +8418,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:27-06:00",
+      "last_seen_at": "2026-11-02T18:01:46-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 2585650756,
       "signature": null,
@@ -7584,12 +8625,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T02:54:48-06:00",
+      "last_seen_at": "2026-11-02T18:02:58-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_025434_bounded_seed11"
+        "run_20261102_025434_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 2185560420,
       "signature": null,
@@ -7745,6 +8787,28 @@
       "signature": null,
       "source_hash": "71558d85f9ebd949f6393529fc106398c6275c9c30c64e97187b5dee5622b237"
     },
+    "case-7162cfdfd81bc8a5": {
+      "case_id": "case-7162cfdfd81bc8a5",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:13-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=11",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:13-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 4110814056,
+      "signature": null,
+      "source_hash": "7162cfdfd81bc8a584cf7376b7ad7a80ac07fe67390da60535501be7944e6219"
+    },
     "case-71c82e02769ba8f5": {
       "case_id": "case-71c82e02769ba8f5",
       "classification": "EQUIV",
@@ -7790,6 +8854,28 @@
       "seed": 3255542466,
       "signature": null,
       "source_hash": "71f853fb5dcc6598ebd3e41058d29c427f7526efe32fbe354c594f56ce698e61"
+    },
+    "case-7212e1a5a6168a0e": {
+      "case_id": "case-7212e1a5a6168a0e",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:52-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=1",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:52-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 957467056,
+      "signature": null,
+      "source_hash": "7212e1a5a6168a0e8cf37c2465782fb83c9c02b4cf0e2947ac914376eaf83644"
     },
     "case-731a1da153bd8f4a": {
       "case_id": "case-731a1da153bd8f4a",
@@ -8228,17 +9314,40 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:29-06:00",
+      "last_seen_at": "2026-11-02T18:01:48-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162843_bounded_fd_seed2026",
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 3991387404,
       "signature": null,
       "source_hash": "7752d34550c732e8c342761c04fbe70be98b4f2ac1945e3d43d0d2099e68a2ff"
+    },
+    "case-775df8fc7134ada5": {
+      "case_id": "case-775df8fc7134ada5",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:36-06:00",
+      "description": "bounded[math_module_builtins] deg=45 val=60",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:36-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 1813410345,
+      "signature": null,
+      "source_hash": "775df8fc7134ada51d55fe3b9283abd772facf811fb3e44d91ad17002f9e0ec9"
     },
     "case-77acdc84437a6633": {
       "case_id": "case-77acdc84437a6633",
@@ -8321,13 +9430,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:14-06:00",
+      "last_seen_at": "2026-11-02T18:01:34-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 1948728483,
       "signature": null,
@@ -8345,7 +9455,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:10-06:00",
+      "last_seen_at": "2026-11-02T18:00:13-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -8360,11 +9470,34 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 398340369,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
       "source_hash": "78c3951676add4f6d22880290a3b2af6513b9a472303f3058d28ab94549970fa"
+    },
+    "case-7907e5a02dda9833": {
+      "case_id": "case-7907e5a02dda9833",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:37-06:00",
+      "description": "bounded[format_modulo_flags] n=71 tag=python",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:37-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 3724704225,
+      "signature": null,
+      "source_hash": "7907e5a02dda98336021dbcca27a9e2c402a26f3c9b5c8b0fe66d773fdd0be8b"
     },
     "case-7914ea4f86fd1087": {
       "case_id": "case-7914ea4f86fd1087",
@@ -8460,6 +9593,50 @@
       "signature": null,
       "source_hash": "7a321aa974fbd8f196015b39f5d4d4ee9997a0417a22c835d65b870f547b209d"
     },
+    "case-7a6f59c7735cd960": {
+      "case_id": "case-7a6f59c7735cd960",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:04-06:00",
+      "description": "bounded[mutable_container_unpack/int] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:04-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 433990593,
+      "signature": null,
+      "source_hash": "7a6f59c7735cd96064a167dea633abb0f7fe42b6d6d51bb4a5daea64de9ca50b"
+    },
+    "case-7abd9a02a12e0c8c": {
+      "case_id": "case-7abd9a02a12e0c8c",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:45-06:00",
+      "description": "bounded[math_module_builtins] deg=360 val=63",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:45-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 1245837540,
+      "signature": null,
+      "source_hash": "7abd9a02a12e0c8c49d572146869c29a1a9abd3dcdd6385b4d9140eea8a46600"
+    },
     "case-7b8d8d5fe7b04b89": {
       "case_id": "case-7b8d8d5fe7b04b89",
       "classification": "EQUIV",
@@ -8550,6 +9727,28 @@
       "seed": 3970013537,
       "signature": null,
       "source_hash": "7d1dcc271dc0ed4b3d74ee36fba3755630a36bf837e1ba43d73886e7eb334c5d"
+    },
+    "case-7d59f9e5dd1bba02": {
+      "case_id": "case-7d59f9e5dd1bba02",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:01-06:00",
+      "description": "bounded[module_constant_attribute_access] mult=1",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:01-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 1096255766,
+      "signature": null,
+      "source_hash": "7d59f9e5dd1bba02c4cb84c835bedfc0f464c1603445c3944b2545ad49315fd0"
     },
     "case-7d6ad36b85722cb0": {
       "case_id": "case-7d6ad36b85722cb0",
@@ -8988,6 +10187,28 @@
       "signature": null,
       "source_hash": "833e1cae552a751de6d16216e15fa972f9736e733a6767a86fb08c2bb6dc2303"
     },
+    "case-8369f2e14cf44099": {
+      "case_id": "case-8369f2e14cf44099",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:35-06:00",
+      "description": "bounded[filter_truthiness_and_builtin_dispatch/mixed] c1=8 c2=16",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:35-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 2761027762,
+      "signature": null,
+      "source_hash": "8369f2e14cf44099a338061fd80ce9b0070a29e3153fa5e9ea760335235c5e86"
+    },
     "case-83ca51fda2c64ed3": {
       "case_id": "case-83ca51fda2c64ed3",
       "classification": "EQUIV",
@@ -9089,12 +10310,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:26-06:00",
+      "last_seen_at": "2026-11-02T18:01:45-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 2342331444,
       "signature": null,
@@ -9353,13 +10575,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:54-06:00",
+      "last_seen_at": "2026-11-02T18:02:51-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 799609893,
       "signature": null,
@@ -9377,7 +10600,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:09-06:00",
+      "last_seen_at": "2026-11-02T18:00:12-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -9392,7 +10615,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 667779376,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -9420,6 +10644,28 @@
       "seed": 315244400,
       "signature": null,
       "source_hash": "885ecbb559a4e567d0984b41c21f975d3281b174cedf0b1b357e31fe66b29d27"
+    },
+    "case-88918d64a80fe924": {
+      "case_id": "case-88918d64a80fe924",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:57-06:00",
+      "description": "bounded[context_manager_exit_inspection/int] suppress=True",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:57-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 3040019196,
+      "signature": null,
+      "source_hash": "88918d64a80fe924c0e9d5b47beece79139273c92f0bf8ce965dfed894b1931c"
     },
     "case-88ab763ff0c4ed0a": {
       "case_id": "case-88ab763ff0c4ed0a",
@@ -9622,13 +10868,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:37-06:00",
+      "last_seen_at": "2026-11-02T18:01:59-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162843_bounded_fd_seed2026",
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 1235240924,
       "signature": null,
@@ -9667,12 +10914,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:53-06:00",
+      "last_seen_at": "2026-11-02T18:02:50-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 2522798642,
       "signature": null,
@@ -9825,6 +11073,28 @@
       "signature": null,
       "source_hash": "8d30c80481deebca559598c123f1fc588a2b6577b74004c75154fd85c94f25cc"
     },
+    "case-8d5c5f52830ed3e2": {
+      "case_id": "case-8d5c5f52830ed3e2",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:05-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=15",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:05-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 1148124468,
+      "signature": null,
+      "source_hash": "8d5c5f52830ed3e23243114d9ea2991f9ae5e6928c490a6a84aa121a7c21dc2e"
+    },
     "case-8dd956643be5bfa1": {
       "case_id": "case-8dd956643be5bfa1",
       "classification": "EQUIV",
@@ -9952,12 +11222,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:12:30-06:00",
+      "last_seen_at": "2026-11-02T18:02:27-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171221_bounded_fe_seed2026"
+        "run_20261102_171221_bounded_fe_seed2026",
+        "run_20261102_180218_bounded_fe_seed42"
       ],
       "seed": 2672799787,
       "signature": null,
@@ -9974,7 +11245,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:18-06:00",
+      "last_seen_at": "2026-11-02T18:00:24-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -9989,7 +11260,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 1351531223,
       "signature": null,
@@ -10064,6 +11336,28 @@
       "signature": null,
       "source_hash": "8fe359f043ae510a544f3e978c7c4993bb1e26c27feb00d8f383f73cd59bc1ab"
     },
+    "case-9029019913ee44f1": {
+      "case_id": "case-9029019913ee44f1",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:52-06:00",
+      "description": "bounded[format_modulo_flags] n=89 tag=agent",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:52-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 1248461747,
+      "signature": null,
+      "source_hash": "9029019913ee44f16eda09624c0e28c162ac56ddd46b4ddb464fed76742a8726"
+    },
     "case-90427247a0d5e282": {
       "case_id": "case-90427247a0d5e282",
       "classification": "DIVERGENT",
@@ -10126,7 +11420,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:07-06:00",
+      "last_seen_at": "2026-11-02T18:00:09-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -10141,7 +11435,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 127978094,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->absent",
@@ -10204,7 +11499,7 @@
       "expected_exception": "TypeError",
       "family": "functions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T17:07:45-06:00",
+      "last_seen_at": "2026-11-02T17:58:26-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -10224,7 +11519,9 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 1,
       "signature": null,
@@ -10297,6 +11594,28 @@
       "signature": null,
       "source_hash": "919d3ad396775646abbbc07847477402481eefedf8589027e41ba07a4f7505e9"
     },
+    "case-91c4ebea0dc2a296": {
+      "case_id": "case-91c4ebea0dc2a296",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:53-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=18",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:53-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 1769694667,
+      "signature": null,
+      "source_hash": "91c4ebea0dc2a29633bd18935aa58e219598cc9d3895fb1067480e380d615bfb"
+    },
     "case-91cf8d620c4a4eff": {
       "case_id": "case-91cf8d620c4a4eff",
       "classification": "UNSUPPORTED",
@@ -10322,6 +11641,28 @@
       "seed": 3475731663,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:other->other",
       "source_hash": "91cf8d620c4a4eff698b49d95787a4fe191d4272871ec67bc587dff9e25effdd"
+    },
+    "case-91ee83420639a311": {
+      "case_id": "case-91ee83420639a311",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:37-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=5 c2=11",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:37-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 4284391408,
+      "signature": null,
+      "source_hash": "91ee83420639a3112df41ed59f87a6397768f80732cc9d3e6c38b7742ef72afa"
     },
     "case-922e66ea55959a4f": {
       "case_id": "case-922e66ea55959a4f",
@@ -10510,13 +11851,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:05-06:00",
+      "last_seen_at": "2026-11-02T18:01:22-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 3320303242,
       "signature": null,
@@ -10534,7 +11876,7 @@
       "expected_exception": null,
       "family": "classes",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:07:48-06:00",
+      "last_seen_at": "2026-11-02T17:58:30-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -10554,11 +11896,35 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 6,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "95c9b5863dcab5d0e4cd8ccfc04147fd893fc6c0edb31da89014d3b475db910b"
+    },
+    "case-95eb99e1efbb5dfa": {
+      "case_id": "case-95eb99e1efbb5dfa",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:39-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=2 c2=12",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 4278308761,
+      "signature": null,
+      "source_hash": "95eb99e1efbb5dfa720a891186e27261836dc73eb9e31b8bc04d03b5bd7052ef"
     },
     "case-960a8aaf319dedcd": {
       "case_id": "case-960a8aaf319dedcd",
@@ -10644,13 +12010,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:03-06:00",
+      "last_seen_at": "2026-11-02T18:01:19-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 3134174160,
       "signature": null,
@@ -10746,6 +12113,28 @@
       "seed": 1137651678,
       "signature": null,
       "source_hash": "98eaed99ac232786270decc2ff4fb485620b3507a1c080be58eb16457c002a70"
+    },
+    "case-98fc821324a2b594": {
+      "case_id": "case-98fc821324a2b594",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:07-06:00",
+      "description": "bounded[int_radix_conversion] val=451",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:07-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 406732790,
+      "signature": null,
+      "source_hash": "98fc821324a2b594a98dfee2d99bb505a95af178a61781d604da7d7db428276f"
     },
     "case-996a6b0de05f1d93": {
       "case_id": "case-996a6b0de05f1d93",
@@ -10843,6 +12232,28 @@
       "seed": 1288477634,
       "signature": null,
       "source_hash": "9c1863ddd1284814e83d85c7341df5f9ed4dd73204501ad6b6fbe8d4f50de21b"
+    },
+    "case-9c27ff38dc538dfa": {
+      "case_id": "case-9c27ff38dc538dfa",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:11-06:00",
+      "description": "bounded[dunder_str_repr/str] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:11-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 1272705168,
+      "signature": null,
+      "source_hash": "9c27ff38dc538dfaaf06e9efe7bca719434d995862bfbbe8b9aea5d9e2f161c5"
     },
     "case-9c57e2cc524f5bf8": {
       "case_id": "case-9c57e2cc524f5bf8",
@@ -10970,16 +12381,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:31-06:00",
+      "last_seen_at": "2026-11-02T18:01:51-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 4231494220,
       "signature": null,
       "source_hash": "9f153aa173eee4faedfc381b7092d4fa9c333691919a75a64be3a37ddceeeb37"
+    },
+    "case-9f7f7177181a168e": {
+      "case_id": "case-9f7f7177181a168e",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:29-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=beta num=91",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:29-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 3582477022,
+      "signature": null,
+      "source_hash": "9f7f7177181a168ebec62de7854b3bfc1ad344c10114e70080239ff65747ea11"
     },
     "case-a004f35c132f830a": {
       "case_id": "case-a004f35c132f830a",
@@ -11208,14 +12642,15 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:15:05-06:00",
+      "last_seen_at": "2026-11-02T18:03:05-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
         "run_20261102_162843_bounded_fd_seed2026",
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 2402154336,
       "signature": null,
@@ -11243,6 +12678,28 @@
       "seed": 1695882304,
       "signature": null,
       "source_hash": "a1abb23f45af0998346bf573e3323e46daf977ce400ef8ba793fbf164ec1ee4d"
+    },
+    "case-a1b44bda4df41304": {
+      "case_id": "case-a1b44bda4df41304",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:00-06:00",
+      "description": "bounded[comprehension_filter_call/int] depth=2 iters=3",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:00-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 1660063002,
+      "signature": null,
+      "source_hash": "a1b44bda4df413043fb6e48e51c566afeb5b4b366992359bcf6ec12f6c4bb08a"
     },
     "case-a269e428de60db89": {
       "case_id": "case-a269e428de60db89",
@@ -11455,6 +12912,28 @@
       "signature": null,
       "source_hash": "a505f4f8ff755c31c02e5beeaf1172eda855e3e87c7e62349049b6a85098e9cf"
     },
+    "case-a5379850081cd073": {
+      "case_id": "case-a5379850081cd073",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:02-06:00",
+      "description": "bounded[int_radix_conversion] val=232",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:02-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 822964419,
+      "signature": null,
+      "source_hash": "a5379850081cd0737d9b1be1b7457c54dc7bd1aa3947389905a135187235bbfc"
+    },
     "case-a582efcea4a33b7a": {
       "case_id": "case-a582efcea4a33b7a",
       "classification": "EQUIV",
@@ -11521,6 +13000,28 @@
       "seed": 0,
       "signature": null,
       "source_hash": "a68ad58522fe55dbd64c15465ce63793ddd5d7f86ff131c82e97a5025246dd4c"
+    },
+    "case-a6dcbd028b97d121": {
+      "case_id": "case-a6dcbd028b97d121",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:46-06:00",
+      "description": "bounded[int_radix_conversion] val=229",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:46-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 1111671333,
+      "signature": null,
+      "source_hash": "a6dcbd028b97d121eeba660c7b28a93e3d22c068595fca4ab0f2c087ffa35a40"
     },
     "case-a786534af323ea2f": {
       "case_id": "case-a786534af323ea2f",
@@ -11648,12 +13149,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:30-06:00",
+      "last_seen_at": "2026-11-02T18:01:49-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 3961228449,
       "signature": null,
@@ -11692,7 +13194,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:06-06:00",
+      "last_seen_at": "2026-11-02T18:00:08-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -11707,7 +13209,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 2342331444,
       "signature": null,
@@ -11947,12 +13450,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:31-06:00",
+      "last_seen_at": "2026-11-02T18:01:50-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 3701002945,
       "signature": null,
@@ -12041,12 +13545,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:39-06:00",
+      "last_seen_at": "2026-11-02T18:02:01-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 272849424,
       "signature": null,
@@ -12136,7 +13641,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:12-06:00",
+      "last_seen_at": "2026-11-02T18:00:16-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -12151,7 +13656,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 1625792787,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -12225,6 +13731,28 @@
       "seed": 0,
       "signature": null,
       "source_hash": "af87cdb0fd84ec03e4a4fa7c2fd0fe4b066990b36406760a60ede590a2582203"
+    },
+    "case-b024ca91a8d40da9": {
+      "case_id": "case-b024ca91a8d40da9",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:38-06:00",
+      "description": "bounded[format_modulo_flags] n=97 tag=agent",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:38-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 3759958078,
+      "signature": null,
+      "source_hash": "b024ca91a8d40da9843311cef529a2effa874b72cbeba18140ab1bf86fe79d8f"
     },
     "case-b02675007d168a99": {
       "case_id": "case-b02675007d168a99",
@@ -12307,13 +13835,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:06-06:00",
+      "last_seen_at": "2026-11-02T18:01:23-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 3582477022,
       "signature": null,
@@ -12330,12 +13859,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:33-06:00",
+      "last_seen_at": "2026-11-02T18:01:53-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 2727210979,
       "signature": null,
@@ -12376,7 +13906,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:19-06:00",
+      "last_seen_at": "2026-11-02T18:00:27-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -12391,7 +13921,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 613628803,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -12537,6 +14068,28 @@
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "b529612f75680791a402eb61367c4620256b5afc8c81e3741c606193ff7c78fd"
     },
+    "case-b52a798a8b9c1c07": {
+      "case_id": "case-b52a798a8b9c1c07",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:57-06:00",
+      "description": "bounded[int_radix_conversion] val=259",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:57-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 3457185027,
+      "signature": null,
+      "source_hash": "b52a798a8b9c1c07d785c00e147e37fdb2b76ac482280e545981516423b670a4"
+    },
     "case-b558ddc4a59f1042": {
       "case_id": "case-b558ddc4a59f1042",
       "classification": "EQUIV",
@@ -12583,6 +14136,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:float->int",
       "source_hash": "b5e148df78c46ca72b5f3a57e04783b41cda2da4301521a43f1450029c96b8d1"
     },
+    "case-b64dc683c4402a22": {
+      "case_id": "case-b64dc683c4402a22",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:14-06:00",
+      "description": "bounded[math_module_builtins] deg=90 val=9",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:14-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 4288781504,
+      "signature": null,
+      "source_hash": "b64dc683c4402a22376dcb1608325b3d1d137970ef39c9afd2b9bbfbe1670bec"
+    },
     "case-b6542d11dd112ebf": {
       "case_id": "case-b6542d11dd112ebf",
       "classification": "DIVERGENT",
@@ -12616,13 +14191,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:33-06:00",
+      "last_seen_at": "2026-11-02T18:00:42-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 939042955,
       "signature": null,
@@ -12687,13 +14263,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:04-06:00",
+      "last_seen_at": "2026-11-02T18:01:21-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 3701002945,
       "signature": null,
@@ -12948,17 +14525,40 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:41-06:00",
+      "last_seen_at": "2026-11-02T18:00:52-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 701808367,
       "signature": null,
       "source_hash": "ba8a3c1400b9e0b7630571c66dd97bc2f70ae880c8dc9652ab41a15507a20ddd"
+    },
+    "case-ba8b05dcff2daf97": {
+      "case_id": "case-ba8b05dcff2daf97",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:58:59-06:00",
+      "description": "bounded[format_modulo_flags] n=46 tag=python",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:58:59-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 2162603472,
+      "signature": null,
+      "source_hash": "ba8b05dcff2daf97134cd5148dfba3495c418141bd0d7d2466e7ebd7e94609db"
     },
     "case-baa3d5b167a872e8": {
       "case_id": "case-baa3d5b167a872e8",
@@ -13212,12 +14812,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:40-06:00",
+      "last_seen_at": "2026-11-02T18:02:02-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 4047709743,
       "signature": null,
@@ -13235,7 +14836,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:11-06:00",
+      "last_seen_at": "2026-11-02T18:00:14-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -13250,7 +14851,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 2592983555,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
@@ -13505,6 +15107,28 @@
       "signature": null,
       "source_hash": "bf74c4f1273e149c1461a5453926eb8b7f17c3ec0990e269b933005fc5b45391"
     },
+    "case-bf96f64d35ed2de5": {
+      "case_id": "case-bf96f64d35ed2de5",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:14-06:00",
+      "description": "bounded[min_max_heterogeneous_key_dispatch/mixed] c1=5 c2=15",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:14-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 2467764733,
+      "signature": null,
+      "source_hash": "bf96f64d35ed2de57c2d6eef211d060b13696179eb1492179421680cbddac175"
+    },
     "case-bfc1cd3557a1ad1a": {
       "case_id": "case-bfc1cd3557a1ad1a",
       "classification": "EQUIV",
@@ -13516,12 +15140,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:28-06:00",
+      "last_seen_at": "2026-11-02T18:01:47-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 3733616459,
       "signature": null,
@@ -13538,13 +15163,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:08-06:00",
+      "last_seen_at": "2026-11-02T18:01:26-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 240251661,
       "signature": null,
@@ -13608,13 +15234,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:01-06:00",
+      "last_seen_at": "2026-11-02T18:01:17-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 1815115025,
       "signature": null,
@@ -13679,13 +15306,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:00-06:00",
+      "last_seen_at": "2026-11-02T18:01:14-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162514_bounded_fc_seed42",
-        "run_20261102_171358_bounded_fc_seed42"
+        "run_20261102_171358_bounded_fc_seed42",
+        "run_20261102_180112_bounded_fc_seed42"
       ],
       "seed": 1812140441,
       "signature": null,
@@ -13820,6 +15448,28 @@
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "c2c14e34108a0aec05e664e971a3d6d2b71a4bb475a2661b60cd2fd47bb12e67"
     },
+    "case-c2f43e7b4c5dda72": {
+      "case_id": "case-c2f43e7b4c5dda72",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:03:09-06:00",
+      "description": "bounded[closure_capture_fn/bool] depth=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:03:09-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180249_bounded_seed11"
+      ],
+      "seed": 904993522,
+      "signature": null,
+      "source_hash": "c2f43e7b4c5dda729a1da3dd1c96b260d35c1e86f5b32dcfbceee5e567d8aa9f"
+    },
     "case-c2f89ea919704211": {
       "case_id": "case-c2f89ea919704211",
       "classification": "EQUIV",
@@ -13841,6 +15491,28 @@
       "seed": 0,
       "signature": null,
       "source_hash": "c2f89ea9197042110f0368853e437c949f8d5924135ed623ce57c4d3fc89f3c2"
+    },
+    "case-c34fb9328ea8ed95": {
+      "case_id": "case-c34fb9328ea8ed95",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:49-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=58",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:49-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 3936254645,
+      "signature": null,
+      "source_hash": "c34fb9328ea8ed95c3bc0fe9d0b93811892575ffcbe8d6ac0304747ac421013d"
     },
     "case-c3a57f808978dbbc": {
       "case_id": "case-c3a57f808978dbbc",
@@ -13925,13 +15597,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:57-06:00",
+      "last_seen_at": "2026-11-02T18:02:55-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 3618196973,
       "signature": null,
@@ -14021,7 +15694,7 @@
       "expected_exception": null,
       "family": "lambdas",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:07:45-06:00",
+      "last_seen_at": "2026-11-02T17:58:25-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -14042,7 +15715,9 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 0,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -14176,6 +15851,28 @@
       "signature": null,
       "source_hash": "c6b8cfcbf5cb006a8af6370f144cf9c9dc05b415f32f9137ba110b06002e01a3"
     },
+    "case-c71663fa93042cc1": {
+      "case_id": "case-c71663fa93042cc1",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:55-06:00",
+      "description": "bounded[int_radix_conversion] val=431",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:55-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 2775719018,
+      "signature": null,
+      "source_hash": "c71663fa93042cc1205baa9002c8990a821c905c80184c37b9b26f148d837b22"
+    },
     "case-c73046570d555c24": {
       "case_id": "case-c73046570d555c24",
       "classification": "DIVERGENT",
@@ -14231,6 +15928,28 @@
       "seed": 369448323,
       "signature": null,
       "source_hash": "c762c8f7d67e4eb228e08465203ce8a08ac859e4865f1acd981cd0e3ad2fa170"
+    },
+    "case-c77176a853add52a": {
+      "case_id": "case-c77176a853add52a",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:32-06:00",
+      "description": "bounded[format_modulo_flags] n=80 tag=agent",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:32-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 1894488586,
+      "signature": null,
+      "source_hash": "c77176a853add52a9af373285c8fcc5c5a42a421a477e60d9c4c4fa726e97a50"
     },
     "case-c7aa2ef686c189dd": {
       "case_id": "case-c7aa2ef686c189dd",
@@ -14362,16 +16081,39 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:35-06:00",
+      "last_seen_at": "2026-11-02T18:01:56-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 3457645390,
       "signature": null,
       "source_hash": "c8f165870340c8b10d18cc36093979e3caa8563c74dddc54a1d83a5bd1acf0ad"
+    },
+    "case-c92c8fd0a5a87d58": {
+      "case_id": "case-c92c8fd0a5a87d58",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:39-06:00",
+      "description": "bounded[format_modulo_flags] n=29 tag=piton",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 3513851069,
+      "signature": null,
+      "source_hash": "c92c8fd0a5a87d583fbd25c7271283fe6c556505b701cd4e5a7346f8ec207201"
     },
     "case-c953a948a8c83d3a": {
       "case_id": "case-c953a948a8c83d3a",
@@ -14478,7 +16220,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:08-06:00",
+      "last_seen_at": "2026-11-02T18:00:11-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -14493,11 +16235,34 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 3460967357,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "cb77c3cae8b0531ed6c8a0bd3c04ddc9f4dd8fd4a973471213d8e88012abe661"
+    },
+    "case-cb92afecfb7aa2ef": {
+      "case_id": "case-cb92afecfb7aa2ef",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:06-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=55",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:06-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 330020003,
+      "signature": null,
+      "source_hash": "cb92afecfb7aa2ef944c7d403ebf0a47140c86cf45b597211628b45ccaa6a76f"
     },
     "case-cb93a9d3ac6cd40d": {
       "case_id": "case-cb93a9d3ac6cd40d",
@@ -14510,13 +16275,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:15:06-06:00",
+      "last_seen_at": "2026-11-02T18:03:06-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 3305071838,
       "signature": null,
@@ -14588,6 +16354,28 @@
       "signature": null,
       "source_hash": "cc616a8c49b651afd21cbea54935016bcf55fa1f44cf5aeb3788206c38370825"
     },
+    "case-ccb1749005f2abdf": {
+      "case_id": "case-ccb1749005f2abdf",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:56-06:00",
+      "description": "bounded[int_radix_conversion] val=266",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:56-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 1304260098,
+      "signature": null,
+      "source_hash": "ccb1749005f2abdfae1e3404ed7608968c35adee1989657a6958e140a8bb95ca"
+    },
     "case-cde15cd410b88579": {
       "case_id": "case-cde15cd410b88579",
       "classification": "EQUIV",
@@ -14636,6 +16424,28 @@
       "seed": 0,
       "signature": null,
       "source_hash": "cdfdc89b6960f54b9f8a177913b16646c09822b9c55bb457c2e6969410d5cb12"
+    },
+    "case-ce5b2ef88fb00feb": {
+      "case_id": "case-ce5b2ef88fb00feb",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:54-06:00",
+      "description": "bounded[format_modulo_flags] n=26 tag=python",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:54-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 455841806,
+      "signature": null,
+      "source_hash": "ce5b2ef88fb00febfafcad111298206e41756d8bb0e510e17d61287a6224e055"
     },
     "case-ce95104aef3a48d6": {
       "case_id": "case-ce95104aef3a48d6",
@@ -14828,6 +16638,28 @@
       "signature": null,
       "source_hash": "d10128cb9a6be22000eee0c117d74801c41bc4c0741865941537051f2426d002"
     },
+    "case-d11ac96c141c37f7": {
+      "case_id": "case-d11ac96c141c37f7",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:39-06:00",
+      "description": "bounded[format_modulo_flags] n=34 tag=python",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:39-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 4218789391,
+      "signature": null,
+      "source_hash": "d11ac96c141c37f7f94b298a707b5e4820220a88fc1c71ec7c2b5e7def14abcc"
+    },
     "case-d13269db2f01ee0a": {
       "case_id": "case-d13269db2f01ee0a",
       "classification": "UNSUPPORTED",
@@ -14840,7 +16672,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:14-06:00",
+      "last_seen_at": "2026-11-02T18:00:19-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -14855,7 +16687,8 @@
         "run_20261102_021142_bounded_fa_seed42",
         "run_20261102_025337_bounded_fa_seed42",
         "run_20261102_162422_bounded_fa_seed42",
-        "run_20261102_171304_bounded_fa_seed42"
+        "run_20261102_171304_bounded_fa_seed42",
+        "run_20261102_180006_bounded_fa_seed42"
       ],
       "seed": 3582477022,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -14943,13 +16776,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:43-06:00",
+      "last_seen_at": "2026-11-02T18:00:56-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 613628803,
       "signature": null,
@@ -15049,6 +16883,28 @@
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:TypeError|stdout:other->absent",
       "source_hash": "d284e5e80b4a1ffee2f9870cd0e5eca2ccebc031662ff884fe62416627dc4fcb"
     },
+    "case-d2970f0370ce5533": {
+      "case_id": "case-d2970f0370ce5533",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:34-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=beta num=44",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:34-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 284277889,
+      "signature": null,
+      "source_hash": "d2970f0370ce5533c1b5da2f788f184b5ac8dac9d76bcd86fca676d7c752604b"
+    },
     "case-d2a6c901532865f6": {
       "case_id": "case-d2a6c901532865f6",
       "classification": "EQUIV",
@@ -15060,7 +16916,7 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:55-06:00",
+      "last_seen_at": "2026-11-02T18:02:52-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -15071,7 +16927,9 @@
         "run_20261102_162448_bounded_fb_seed42",
         "run_20261102_162544_bounded_seed11",
         "run_20261102_171331_bounded_fb_seed42",
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180039_bounded_fb_seed42",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 3630936879,
       "signature": null,
@@ -15133,12 +16991,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:36-06:00",
+      "last_seen_at": "2026-11-02T18:01:58-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 1137651678,
       "signature": null,
@@ -15233,6 +17092,28 @@
       "seed": 1305132983,
       "signature": null,
       "source_hash": "d48362bc0010f443acc2c70b72f86b5489826f4edd4b2243456bae3983f8d2a9"
+    },
+    "case-d498d9cdf9208a5c": {
+      "case_id": "case-d498d9cdf9208a5c",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:20-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=37",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:20-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 1731908054,
+      "signature": null,
+      "source_hash": "d498d9cdf9208a5cf28e360db30ebe3a2b3bde65041527ce075292f30eef633b"
     },
     "case-d49eb96000c7eb23": {
       "case_id": "case-d49eb96000c7eb23",
@@ -15466,13 +17347,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:42-06:00",
+      "last_seen_at": "2026-11-02T18:00:55-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 1351531223,
       "signature": null,
@@ -15691,7 +17573,7 @@
       "expected_exception": null,
       "family": "unpacking",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:07:50-06:00",
+      "last_seen_at": "2026-11-02T17:58:32-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -15711,7 +17593,9 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 8,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
@@ -15773,13 +17657,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:37-06:00",
+      "last_seen_at": "2026-11-02T18:00:48-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 3701002945,
       "signature": null,
@@ -16082,6 +17967,28 @@
       "signature": null,
       "source_hash": "e0d486cb9b36e3e7c036cf01fbbbc4e762785dd50e1a6b153d2d8a5221a018db"
     },
+    "case-e145fa52fc07fe82": {
+      "case_id": "case-e145fa52fc07fe82",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:20-06:00",
+      "description": "bounded[map_builtin_callable_dispatch/builtin] b1=bool",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:20-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 1051802512,
+      "signature": null,
+      "source_hash": "e145fa52fc07fe82fc04353b7a044b4dcc81193aa2f6af2cd23995efcbcfa046"
+    },
     "case-e1592dba3360cae3": {
       "case_id": "case-e1592dba3360cae3",
       "classification": "DIVERGENT",
@@ -16332,7 +18239,7 @@
       "expected_exception": "TypeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T17:07:50-06:00",
+      "last_seen_at": "2026-11-02T17:58:32-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -16352,7 +18259,9 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 9,
       "signature": null,
@@ -16369,7 +18278,7 @@
       "expected_exception": "RuntimeError",
       "family": "exceptions",
       "is_valid": false,
-      "last_seen_at": "2026-11-02T17:07:47-06:00",
+      "last_seen_at": "2026-11-02T17:58:28-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
@@ -16389,7 +18298,9 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 4,
       "signature": null,
@@ -16870,13 +18781,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:15:03-06:00",
+      "last_seen_at": "2026-11-02T18:03:03-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 4140675832,
       "signature": null,
@@ -16955,6 +18867,28 @@
       "signature": null,
       "source_hash": "ea38730723669d7e6f5bf774d5a7f9796cbce73aca1eff710c6e60addcf09b34"
     },
+    "case-ea7be3886b1fc863": {
+      "case_id": "case-ea7be3886b1fc863",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T18:02:30-06:00",
+      "description": "bounded[string_format_conversions_and_indexes/str] tag=beta num=36",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T18:02:30-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_180218_bounded_fe_seed42"
+      ],
+      "seed": 2878380452,
+      "signature": null,
+      "source_hash": "ea7be3886b1fc8636d9974df425a22b462f060ae4fe048e43ffab88aed753f53"
+    },
     "case-ead1661b24b3a1fe": {
       "case_id": "case-ead1661b24b3a1fe",
       "classification": "UNSUPPORTED",
@@ -16991,13 +18925,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:32-06:00",
+      "last_seen_at": "2026-11-02T18:00:40-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 3184935163,
       "signature": null,
@@ -17051,13 +18986,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:13:40-06:00",
+      "last_seen_at": "2026-11-02T18:00:51-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162448_bounded_fb_seed42",
-        "run_20261102_171331_bounded_fb_seed42"
+        "run_20261102_171331_bounded_fb_seed42",
+        "run_20261102_180039_bounded_fb_seed42"
       ],
       "seed": 2783290795,
       "signature": null,
@@ -17221,6 +19157,28 @@
       "signature": null,
       "source_hash": "eeaa05aaef2ebf30d91b54e35dab82a98f2469581a9c0729ec4029d4bc7a3b52"
     },
+    "case-eed4786fcbf5d784": {
+      "case_id": "case-eed4786fcbf5d784",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:21-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=67",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:21-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 284721345,
+      "signature": null,
+      "source_hash": "eed4786fcbf5d784fa391a7204b1c6c9c8d1a9379c9c9dfc7adc512a833a0f57"
+    },
     "case-eef901093d42ee81": {
       "case_id": "case-eef901093d42ee81",
       "classification": "EQUIV",
@@ -17375,7 +19333,7 @@
       "expected_exception": null,
       "family": "super",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:07:46-06:00",
+      "last_seen_at": "2026-11-02T17:58:27-06:00",
       "minimized_from": null,
       "nondeterministic": true,
       "replay_history": [],
@@ -17395,11 +19353,35 @@
         "run_20261102_162411_canary",
         "run_20261102_162824_canary",
         "run_20261102_170553_canary",
-        "run_20261102_170744_canary"
+        "run_20261102_170744_canary",
+        "run_20261102_175746_canary",
+        "run_20261102_175824_canary"
       ],
       "seed": 2,
       "signature": "UNSUPPORTED|cpython:ok:-|piton:BUILD:-",
       "source_hash": "efd722252f2ec8ffe6b352463d5f0ac9a220b2be679debb153dc3c2c1076ec35"
+    },
+    "case-f07b495ef42373e8": {
+      "case_id": "case-f07b495ef42373e8",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:32-06:00",
+      "description": "bounded[format_modulo_flags] n=11 tag=piton",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:32-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175930_bounded_ff_seed2026"
+      ],
+      "seed": 421128506,
+      "signature": null,
+      "source_hash": "f07b495ef42373e84a3ff1c59e99cbf90c8cffc80030dba38b64b9807ca1971d"
     },
     "case-f0d13d8f73eaa2c9": {
       "case_id": "case-f0d13d8f73eaa2c9",
@@ -17412,12 +19394,13 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:41-06:00",
+      "last_seen_at": "2026-11-02T18:02:03-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
-        "run_20261102_171426_bounded_fd_seed42"
+        "run_20261102_171426_bounded_fd_seed42",
+        "run_20261102_180144_bounded_fd_seed42"
       ],
       "seed": 1461042543,
       "signature": null,
@@ -17480,13 +19463,14 @@
       "expected_exception": null,
       "family": "bounded",
       "is_valid": true,
-      "last_seen_at": "2026-11-02T17:14:56-06:00",
+      "last_seen_at": "2026-11-02T18:02:53-06:00",
       "minimized_from": null,
       "nondeterministic": false,
       "replay_history": [],
       "run_ids": [
         "run_20261102_162544_bounded_seed11",
-        "run_20261102_171452_bounded_seed11"
+        "run_20261102_171452_bounded_seed11",
+        "run_20261102_180249_bounded_seed11"
       ],
       "seed": 271291275,
       "signature": null,
@@ -17798,6 +19782,28 @@
       "signature": null,
       "source_hash": "f515c2368c1127d23fb202d5d6f9b146e837fe9c11b9b7b295042acf84bbfe97"
     },
+    "case-f5267b21cf870ae0": {
+      "case_id": "case-f5267b21cf870ae0",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:04-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=9",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:04-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 1847497524,
+      "signature": null,
+      "source_hash": "f5267b21cf870ae0af61606f956577bf95f3c9ad0513dbd6604daab16a98b86d"
+    },
     "case-f534b40c029d24d5": {
       "case_id": "case-f534b40c029d24d5",
       "classification": "EQUIV",
@@ -18062,6 +20068,28 @@
       "seed": 374281491,
       "signature": "DIVERGENT|cpython:ok:-|piton:EXECUTE:-|stdout:bool->int",
       "source_hash": "f8bde450d407f544b1631596012a5fca79b5c5ac9a176836c58fc8a2a47fc845"
+    },
+    "case-f9102244b52539e8": {
+      "case_id": "case-f9102244b52539e8",
+      "classification": "EQUIV",
+      "classifications": [
+        "EQUIV"
+      ],
+      "created_at": "2026-11-02T17:59:18-06:00",
+      "description": "bounded[arithmetic_none_typeerror] c1=2",
+      "expected_exception": null,
+      "family": "bounded",
+      "is_valid": true,
+      "last_seen_at": "2026-11-02T17:59:18-06:00",
+      "minimized_from": null,
+      "nondeterministic": false,
+      "replay_history": [],
+      "run_ids": [
+        "run_20261102_175859_bounded_ff_seed101"
+      ],
+      "seed": 2632784964,
+      "signature": null,
+      "source_hash": "f9102244b52539e8fd7b934b027eebc62db86c16c77180d271490bfb234b8048"
     },
     "case-f914d3bc70eb8c48": {
       "case_id": "case-f914d3bc70eb8c48",
@@ -18657,6 +20685,6 @@
       "case-db5a45382e9ec23a"
     ]
   },
-  "updated_at": "2026-11-02T17:15:18-06:00",
+  "updated_at": "2026-11-02T18:03:19-06:00",
   "version": 1
 }

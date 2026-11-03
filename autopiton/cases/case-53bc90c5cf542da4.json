@@ -1,0 +1,96 @@
+{
+  "case_id": "case-53bc90c5cf542da4",
+  "created_at": "2026-11-02T18:02:28-06:00",
+  "description": "bounded[string_format_conversions_and_indexes/str] tag=alpha num=39",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "53bc90c5cf542da453f6f1a59fea18503ac81311778f0b3bb46576dffb6a11e8",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 66.39710500007823,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "53bc90c5cf542da453f6f1a59fea18503ac81311778f0b3bb46576dffb6a11e8",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "B A B 'alpha' 39 item='alpha' val=39\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "d85c7f64c04f8cb7369f812545a906241c07ac79997948ea351efb195dbc9639",
+      "build_exit_code": 0,
+      "build_ms": 917.6800369999683,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 10.562717999960114,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0008.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "53bc90c5cf542da453f6f1a59fea18503ac81311778f0b3bb46576dffb6a11e8",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 154,
+          "surface_sha256": "2bfbf5dbf1846afa01ae16e7e8c6692fb9ce2f720d13c809f9bf184a7d37a1a4"
+        },
+        "BUILD": {
+          "artifact_bytes": 24536,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "d85c7f64c04f8cb7369f812545a906241c07ac79997948ea351efb195dbc9639",
+          "c_chars": 290543,
+          "c_sha256": "e276e786d7987615a83b96003b7bfffd1d5d89b90128eff453fc525eee46a27d",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "B A B 'alpha' 39 item='alpha' val=39\n",
+      "surface_sha256": "2bfbf5dbf1846afa01ae16e7e8c6692fb9ce2f720d13c809f9bf184a7d37a1a4",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "s1 = '{1} {0} {1}'.format('A', 'B')\ns2 = '{!r} {!s}'.format('alpha', 39)\ns3 = 'item={name!r} val={val}'.format(name='alpha', val=39)\nprint(s1, s2, s3)\n",
+    "source_hash": "53bc90c5cf542da453f6f1a59fea18503ac81311778f0b3bb46576dffb6a11e8"
+  },
+  "run_id": "run_20261102_180218_bounded_fe_seed42",
+  "seed": 3721519026,
+  "source": "s1 = '{1} {0} {1}'.format('A', 'B')\ns2 = '{!r} {!s}'.format('alpha', 39)\ns3 = 'item={name!r} val={val}'.format(name='alpha', val=39)\nprint(s1, s2, s3)\n",
+  "source_hash": "53bc90c5cf542da453f6f1a59fea18503ac81311778f0b3bb46576dffb6a11e8"
+}

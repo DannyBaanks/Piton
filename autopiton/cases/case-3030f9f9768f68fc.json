@@ -1,0 +1,96 @@
+{
+  "case_id": "case-3030f9f9768f68fc",
+  "created_at": "2026-11-02T17:59:09-06:00",
+  "description": "bounded[int_radix_conversion] val=226",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "3030f9f9768f68fcb7ffefa7e7af105fef25b2278b43614e840bfafc38bdca0a",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 34.39681799989103,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "3030f9f9768f68fcb7ffefa7e7af105fef25b2278b43614e840bfafc38bdca0a",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "0 226 226 226 226 226 226 226 13 2\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "5f3c2301e3b8e8191f446c6b3a19b75d593feafd2ddb006e09e54854baf6f1b5",
+      "build_exit_code": 0,
+      "build_ms": 880.0311580000653,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 9.385914000063167,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0011.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "3030f9f9768f68fcb7ffefa7e7af105fef25b2278b43614e840bfafc38bdca0a",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 508,
+          "surface_sha256": "5a9f215dda57623751939fb2e95b96048dcef3e5c30c3675a19e8efe5a5860a7"
+        },
+        "BUILD": {
+          "artifact_bytes": 25664,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "5f3c2301e3b8e8191f446c6b3a19b75d593feafd2ddb006e09e54854baf6f1b5",
+          "c_chars": 293268,
+          "c_sha256": "fd15cd5f31285199893afc9531120b41fd3a01c2f5424c82c61a6552921708cf",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "0 226 226 226 226 226 226 226 13 2\n",
+      "surface_sha256": "5a9f215dda57623751939fb2e95b96048dcef3e5c30c3675a19e8efe5a5860a7",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "i_zero = int()\ni_hex = int('0xe2', 16)\ni_oct = int('0o342', 8)\ni_bin = int('0b11100010', 2)\ni_raw_hex = int('e2', 16)\ni_base0_hex = int('0xe2', 0)\ni_base0_oct = int('0o342', 0)\ni_base0_bin = int('0b11100010', 0)\ni_base36 = int('d', 36)\nerr_caught = 0\ntry:\n    int('bad_digit', 10)\nexcept ValueError:\n    err_caught += 1\ntry:\n    int(123, 10)\nexcept TypeError:\n    err_caught += 1\nprint(i_zero, i_hex, i_oct, i_bin, i_raw_hex, i_base0_hex, i_base0_oct, i_base0_bin, i_base36, err_caught)\n",
+    "source_hash": "3030f9f9768f68fcb7ffefa7e7af105fef25b2278b43614e840bfafc38bdca0a"
+  },
+  "run_id": "run_20261102_175859_bounded_ff_seed101",
+  "seed": 1192900792,
+  "source": "i_zero = int()\ni_hex = int('0xe2', 16)\ni_oct = int('0o342', 8)\ni_bin = int('0b11100010', 2)\ni_raw_hex = int('e2', 16)\ni_base0_hex = int('0xe2', 0)\ni_base0_oct = int('0o342', 0)\ni_base0_bin = int('0b11100010', 0)\ni_base36 = int('d', 36)\nerr_caught = 0\ntry:\n    int('bad_digit', 10)\nexcept ValueError:\n    err_caught += 1\ntry:\n    int(123, 10)\nexcept TypeError:\n    err_caught += 1\nprint(i_zero, i_hex, i_oct, i_bin, i_raw_hex, i_base0_hex, i_base0_oct, i_base0_bin, i_base36, err_caught)\n",
+  "source_hash": "3030f9f9768f68fcb7ffefa7e7af105fef25b2278b43614e840bfafc38bdca0a"
+}

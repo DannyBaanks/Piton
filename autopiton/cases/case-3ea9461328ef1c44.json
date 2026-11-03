@@ -1,0 +1,96 @@
+{
+  "case_id": "case-3ea9461328ef1c44",
+  "created_at": "2026-11-02T17:59:10-06:00",
+  "description": "bounded[module_constant_attribute_access] mult=5",
+  "expected_exception": null,
+  "family": "bounded",
+  "generator": {
+    "code_hash": "3ea9461328ef1c44c689aae676a1f14ef0c770518991f8bf6468ee7f47054ab2",
+    "complexity": 5
+  },
+  "is_valid": true,
+  "minimized_from": null,
+  "result": {
+    "classification": "EQUIV",
+    "cpython": {
+      "cause_message": null,
+      "cause_type": null,
+      "context_message": null,
+      "context_type": null,
+      "crash": false,
+      "duration_ms": 41.895801999999094,
+      "exception_message": null,
+      "exception_traceback": null,
+      "exception_type": null,
+      "exit_code": 0,
+      "fs_created": [],
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "python_executable": "/usr/bin/python3",
+      "python_version": "3.12.3",
+      "signal_number": null,
+      "source_hash": "3ea9461328ef1c44c689aae676a1f14ef0c770518991f8bf6468ee7f47054ab2",
+      "status": "ok",
+      "stderr": "",
+      "stdout": "15.708 2.7183 True True True\n",
+      "timed_out": false
+    },
+    "details": {},
+    "piton": {
+      "artifact_sha256": "115439ed712dc5a0507850568c81417a82bb1fc63dcf32fcf90899407ba1bae2",
+      "build_exit_code": 0,
+      "build_ms": 772.4345620000577,
+      "build_stderr_tail": "",
+      "build_timed_out": false,
+      "crash": false,
+      "exception_message": null,
+      "exception_type": null,
+      "execute_ms": 17.58213000005071,
+      "executed": true,
+      "exit_code": 0,
+      "failed_stage": null,
+      "filename": "program_0013.py",
+      "memory_exceeded": false,
+      "output_truncated": false,
+      "overlay_sha256": {},
+      "signal_number": null,
+      "source_hash": "3ea9461328ef1c44c689aae676a1f14ef0c770518991f8bf6468ee7f47054ab2",
+      "stage_reached": "EXECUTE",
+      "stages": {
+        "ADAPT": {
+          "passed": true,
+          "surface_chars": 338,
+          "surface_sha256": "986f3292651acc56d0ed9163db6f5e5c94680b576e8bd4b738b781d49a4ce6c0"
+        },
+        "BUILD": {
+          "artifact_bytes": 22872,
+          "artifact_name": "program.bin",
+          "artifact_sha256": "115439ed712dc5a0507850568c81417a82bb1fc63dcf32fcf90899407ba1bae2",
+          "c_chars": 290861,
+          "c_sha256": "9a7e4f39acd74443f080c631ea6ca660631ea26b14139a2bd00b3a9fa99e0dc8",
+          "gcc_returncode": 0,
+          "gcc_stderr": "",
+          "passed": true
+        },
+        "MIR": {
+          "passed": true
+        },
+        "PARSE": {
+          "passed": true
+        }
+      },
+      "stderr": "",
+      "stdout": "15.708 2.7183 True True True\n",
+      "surface_sha256": "986f3292651acc56d0ed9163db6f5e5c94680b576e8bd4b738b781d49a4ce6c0",
+      "timed_out": false,
+      "worker_error": null
+    },
+    "reason": "identical stdout, stderr and exit status",
+    "source": "import math\nimport sys\npi_val = round(math.pi * 5, 4)\ne_val = round(math.e, 4)\nhas_maxsize = sys.maxsize > 1000000\nfrom math import pi as my_pi\nfrom sys import maxsize as my_maxsize\nmatch_pi = round(my_pi * 5, 4) == pi_val\nmatch_max = my_maxsize == sys.maxsize\nprint(pi_val, e_val, has_maxsize, match_pi, match_max)\n",
+    "source_hash": "3ea9461328ef1c44c689aae676a1f14ef0c770518991f8bf6468ee7f47054ab2"
+  },
+  "run_id": "run_20261102_175859_bounded_ff_seed101",
+  "seed": 3736580802,
+  "source": "import math\nimport sys\npi_val = round(math.pi * 5, 4)\ne_val = round(math.e, 4)\nhas_maxsize = sys.maxsize > 1000000\nfrom math import pi as my_pi\nfrom sys import maxsize as my_maxsize\nmatch_pi = round(my_pi * 5, 4) == pi_val\nmatch_max = my_maxsize == sys.maxsize\nprint(pi_val, e_val, has_maxsize, match_pi, match_max)\n",
+  "source_hash": "3ea9461328ef1c44c689aae676a1f14ef0c770518991f8bf6468ee7f47054ab2"
+}

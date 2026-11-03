@@ -72,6 +72,14 @@ _BUILTIN_BASES = {"object", "classmethod", "staticmethod", "property"}
 # objetos _Feature — no son constantes, asi que no se proveen aqui (el
 # backend falla cerrado al usarlos).
 _NATIVE_MODULE_CONSTS: dict[str, dict[str, Any]] = {
+    "math": {
+        "pi": 3.141592653589793,
+        "e": 2.718281828459045,
+        "tau": 6.283185307179586,
+    },
+    "sys": {
+        "maxsize": 9223372036854775807,
+    },
     "stat": {
         "S_IFDIR": 0o040000, "S_IFCHR": 0o020000, "S_IFBLK": 0o060000,
         "S_IFREG": 0o100000, "S_IFIFO": 0o010000, "S_IFLNK": 0o120000,
@@ -281,6 +289,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "math_sin": "PURE", "math_cos": "PURE", "math_log": "PURE", "math_log2": "PURE",
     "math_floor": "PURE", "math_ceil": "PURE", "math_trunc": "PURE",
     "math_fabs": "PURE", "math_gcd": "PURE",
+    "math_isinf": "PURE", "math_isnan": "PURE", "math_radians": "PURE",
     "terminal_init": "PURE", "terminal_size": "PURE", "terminal_write": "PURE",
     "object_new": "PURE", "closure_new": "PURE", "cell_new": "PURE",
     # DYNAMIC_CALL_V1: llamada a un callable desconocido (el frame lo arma
@@ -4363,6 +4372,8 @@ class MIRLowerer:
                     "math.fabs": "math_fabs", "math.gcd": "math_gcd",
                     "math.sin": "math_sin", "math.cos": "math_cos",
                     "math.log": "math_log",
+                    "math.isinf": "math_isinf", "math.isnan": "math_isnan",
+                    "math.radians": "math_radians",
                 }
                 if qualified in _MATH_FUNCS:
                     op = _MATH_FUNCS[qualified]
@@ -4574,6 +4585,8 @@ class MIRLowerer:
                         "fabs": "math_fabs", "gcd": "math_gcd",
                         "sin": "math_sin", "cos": "math_cos",
                         "log": "math_log",
+                        "isinf": "math_isinf", "isnan": "math_isnan",
+                        "radians": "math_radians",
                     }
                     attr = node.func.attr
                     op = _MATH_ATTRS.get(attr)
@@ -5594,6 +5607,8 @@ class MIRLowerer:
                     "math.fabs": "math_fabs", "math.gcd": "math_gcd",
                     "math.sin": "math_sin", "math.cos": "math_cos",
                     "math.log": "math_log",
+                    "math.isinf": "math_isinf", "math.isnan": "math_isnan",
+                    "math.radians": "math_radians",
                 }
                 if qualified in _MATH_FUNCS:
                     op = _MATH_FUNCS[qualified]
@@ -5805,6 +5820,8 @@ class MIRLowerer:
                         "trunc": "math_trunc", "fabs": "math_fabs", "gcd": "math_gcd",
                         "sin": "math_sin", "cos": "math_cos",
                         "log": "math_log",
+                        "isinf": "math_isinf", "isnan": "math_isnan",
+                        "radians": "math_radians",
                     }.get(attr)
                     arity = 2 if op == "math_gcd" else 1
                     if op == "math_log" and len(node.args) == 2:
@@ -7725,7 +7742,7 @@ class MIREvaluator:
         elif op == "math_sqrt":
             import math
             env[instruction.result] = math.sqrt(self._value(args[0], env))
-        elif op in {"math_floor", "math_ceil", "math_trunc", "math_fabs"}:
+        elif op in {"math_floor", "math_ceil", "math_trunc", "math_fabs", "math_isinf", "math_isnan", "math_radians"}:
             import math
             value = self._value(args[0], env)
             env[instruction.result] = getattr(math, op.removeprefix("math_"))(value)

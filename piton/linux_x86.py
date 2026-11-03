@@ -551,7 +551,72 @@ static char* piton_str_apply_spec(const char*s,const char*spec){
     else{if(zero&&!center){piton_memcpy(out+o,sign_str,sign_len);o+=sign_len;for(long i=0;i<pad;++i)out[o++]='0';}else{for(long i=0;i<pad;++i)out[o++]=fill;piton_memcpy(out+o,sign_str,sign_len);o+=sign_len;}piton_memcpy(out+o,core,core_len);o+=core_len;}
     out[o]=0;return out;
 }
-static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum){int neg=0;const char*digits=s;if(isnum&&s[0]=='-'){neg=1;digits=s+1;}usize dl=piton_strlen(digits);const char*core=digits;usize cl=dl;if(prec>=0){if(isnum){usize need=(usize)prec;if(dl==1&&digits[0]=='0'&&prec==0)need=0;if(dl<need){char*pad=piton_alloc(need+1);for(usize i=0;i<need-dl;++i)pad[i]='0';piton_memcpy(pad+need-dl,digits,dl);pad[need]=0;core=pad;cl=need;}}else{usize cut=piton_utf8_chars(s,(usize)prec);char*tr=piton_alloc(cut+1);piton_memcpy(tr,s,cut);tr[cut]=0;core=tr;cl=cut;neg=0;}}usize totallen=cl+(neg?1:0);long pad=(width>0&&totallen<(usize)width)?(width-(long)totallen):0;int left=(flags&1)!=0;int zero=(flags&2)&&!left&&isnum&&prec<0;char*out=piton_alloc(totallen+(usize)pad+1);usize o=0;if(!left){if(zero){if(neg)out[o++]='-';for(long i=0;i<pad;++i)out[o++]='0';}else{for(long i=0;i<pad;++i)out[o++]=' ';if(neg)out[o++]='-';}}else if(neg){out[o++]='-';}piton_memcpy(out+o,core,cl);o+=cl;if(left){for(long i=0;i<pad;++i)out[o++]=' ';}out[o]=0;return(long)out;}
+static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum){
+  int neg=0;
+  char sign_ch=0;
+  const char*digits=s;
+  if(isnum){
+    if(s[0]=='-'){
+      neg=1;
+      sign_ch='-';
+      digits=s+1;
+    } else {
+      if(flags&8) sign_ch='+';
+      else if(flags&16) sign_ch=' ';
+    }
+  }
+  usize dl=piton_strlen(digits);
+  const char*core=digits;
+  usize cl=dl;
+  if(prec>=0){
+    if(isnum){
+      usize need=(usize)prec;
+      if(dl==1&&digits[0]=='0'&&prec==0)need=0;
+      if(dl<need){
+        char*pad=piton_alloc(need+1);
+        for(usize i=0;i<need-dl;++i)pad[i]='0';
+        piton_memcpy(pad+need-dl,digits,dl);
+        pad[need]=0;
+        core=pad;
+        cl=need;
+      }
+    }else{
+      usize cut=piton_utf8_chars(s,(usize)prec);
+      char*tr=piton_alloc(cut+1);
+      piton_memcpy(tr,s,cut);
+      tr[cut]=0;
+      core=tr;
+      cl=cut;
+      neg=0;
+      sign_ch=0;
+    }
+  }
+  int has_sign=(sign_ch!=0);
+  usize totallen=cl+(has_sign?1:0);
+  long pad=(width>0&&totallen<(usize)width)?(width-(long)totallen):0;
+  int left=(flags&1)!=0;
+  int zero=(flags&2)&&!left&&isnum&&prec<0;
+  char*out=piton_alloc(totallen+(usize)pad+1);
+  usize o=0;
+  if(!left){
+    if(zero){
+      if(has_sign)out[o++]=sign_ch;
+      for(long i=0;i<pad;++i)out[o++]='0';
+    }else{
+      for(long i=0;i<pad;++i)out[o++]=' ';
+      if(has_sign)out[o++]=sign_ch;
+    }
+  }else if(has_sign){
+    out[o++]=sign_ch;
+  }
+  piton_memcpy(out+o,core,cl);
+  o+=cl;
+  if(left){
+    for(long i=0;i<pad;++i)out[o++]=' ';
+  }
+  out[o]=0;
+  return(long)out;
+}
 static long piton_str_pred(const char*s,int mode){if(!s||!s[0])return 0;long r=1;int saw_cased=0;int i=0;while(s[i]){unsigned char c=(unsigned char)s[i];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');int dig=(c>='0'&&c<='9');if(alpha)saw_cased=1;if(mode==0){if(!alpha){r=0;break;}}else if(mode==1){if(!dig){r=0;break;}}else if(mode==2){if(!alpha&&!dig){r=0;break;}}else if(mode==3){if(!(c==' '||c=='\t'||c=='\n'||c=='\r'||c=='\v'||c=='\f')){r=0;break;}}i++;}if(mode>=4&&mode<=6){if(!saw_cased)return 0;if(mode==4){int prev_alpha=0;for(usize j=0;s[j];++j){unsigned char c=(unsigned char)s[j];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(alpha){if(!prev_alpha){if(!(c>='A'&&c<='Z'))return 0;}else{if(!(c>='a'&&c<='z'))return 0;}}prev_alpha=alpha;}return 1;}for(usize j=0;s[j];++j){unsigned char c=(unsigned char)s[j];int alpha=(c>='a'&&c<='z')||(c>='A'&&c<='Z');if(!alpha)continue;if(mode==5){if(!(c>='A'&&c<='Z'))return 0;}else{if(!(c>='a'&&c<='z'))return 0;}}return 1;}return r;}
 static long piton_str_just(const char*s,long width,long fill,int mode){if(!s)return 0;usize n=piton_strlen(s);long pad=(width>(long)n)?(width-(long)n):0;char f=(char)fill;char*p=piton_alloc((usize)(n+pad)+1);usize o=0;if(mode==0){for(usize i=0;i<n;++i)p[o++]=s[i];for(long i=0;i<pad;++i)p[o++]=f;}else if(mode==1){for(long i=0;i<pad;++i)p[o++]=f;for(usize i=0;i<n;++i)p[o++]=s[i];}else{long lp=pad/2+((pad&width)&1),rp=pad-lp;for(long i=0;i<lp;++i)p[o++]=f;for(usize i=0;i<n;++i)p[o++]=s[i];for(long i=0;i<rp;++i)p[o++]=f;}p[o]=0;return(long)p;}
 static long piton_str_subindex(const char*s,const char*n){long i=piton_str_find(s,n);if(i<0){piton_write(2,"ValueError: substring not found\n",32);piton_exit(1);}return i;}
@@ -1143,6 +1208,7 @@ static long piton_conv_dict_from_genexpr(long raw){PitonGenExpr*g=(PitonGenExpr*
 #define PITON_CB_MAGIC 0x5049544ECB17E2LL
 static long piton_gen_next(long raw);
 static long piton_callback_iterator_next(long raw);
+static int piton_is_printable_str(const char*s);
 typedef struct{long magic;long kind;void*raw;long index;}PitonAnyIterator;
 static long piton_iterator_new_any(void*raw,long kind){if(!raw||(kind!=PK_LIST&&kind!=PK_TUPLE&&kind!=PK_DICT&&kind!=PK_SET&&kind!=PK_FROZENSET&&kind!=PK_RANGE)){piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}PitonAnyIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E2LL;i->raw=raw;i->index=0;i->kind=kind;return(long)i;}
 static long piton_iterator_next_any(long raw){if(!raw){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(*(long*)raw==PITON_GEN_MAGIC)return piton_gen_next(raw);if((*(long*)raw&~1L)==PITON_CB_MAGIC)return piton_callback_iterator_next(raw);PitonAnyIterator*i=(PitonAnyIterator*)raw;if(i->magic!=0x5049544E17E2LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_RANGE)n=piton_range_len((PitonRange*)i->raw);else if(i->kind==PK_SET||i->kind==PK_FROZENSET)n=((PitonSet*)i->raw)->length;else{piton_write(2,"TypeError: object is not iterable\n",34);piton_exit(1);}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else if(i->kind==PK_RANGE){PitonRange*rr=(PitonRange*)i->raw;v.bits=rr->start+(i->index++)*rr->step;v.kind=PK_INT;}else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
@@ -1659,7 +1725,59 @@ static long piton_round_float(long bits){double x=piton_bits_double(bits);double
  * exacta, ver float_repr.h) y reinterpreta el texto, no x*10^n/10^n. */
 
 /* M14 TYPE_CONVERSION_V1 + MATH_TIER1_V1 (matriz: ver native_runtime.c) */
-static long piton_int_from_str(const char*s){if(!s){piton_raise_set("TypeError","int() argument must be a string");return 0;}while(*s==' '||*s=='\t'||*s=='\n')++s;int neg=0;if(*s=='-'||*s=='+'){neg=*s=='-';++s;}if(!*s||*s<'0'||*s>'9'){piton_raise_set("ValueError","invalid literal for int() with base 10");return 0;}long v=0;while(*s>='0'&&*s<='9'){v=v*10+(*s-'0');++s;}while(*s==' '||*s=='\t'||*s=='\n')++s;if(*s){piton_raise_set("ValueError","invalid literal for int() with base 10");return 0;}return neg?-v:v;}
+static long piton_int_from_str_base(const char*s,long base){
+  if(base<0||base==1||base>36){piton_raise_set("ValueError","int() base must be >= 2 and <= 36, or 0");return 0;}
+  if(!s){piton_raise_set("TypeError","int() argument must be a string");return 0;}
+  while(*s==' '||*s=='\t'||*s=='\n'||*s=='\r'||*s=='\v'||*s=='\f')++s;
+  int neg=0;
+  if(*s=='-'||*s=='+'){neg=(*s=='-');++s;}
+  if(base==0){
+    if(s[0]=='0'&&(s[1]=='x'||s[1]=='X')){base=16;s+=2;}
+    else if(s[0]=='0'&&(s[1]=='o'||s[1]=='O')){base=8;s+=2;}
+    else if(s[0]=='0'&&(s[1]=='b'||s[1]=='B')){base=2;s+=2;}
+    else if(s[0]=='0'){
+      const char*p=s;
+      while(*p=='0')++p;
+      while(*p==' '||*p=='\t'||*p=='\n'||*p=='\r'||*p=='\v'||*p=='\f')++p;
+      if(*p==0)return 0;
+      piton_raise_set("ValueError","leading zeros in decimal integer literals are not permitted; use an 0o prefix for octal integers");
+      return 0;
+    }else{base=10;}
+  }else if(base==16){
+    if(s[0]=='0'&&(s[1]=='x'||s[1]=='X'))s+=2;
+  }else if(base==8){
+    if(s[0]=='0'&&(s[1]=='o'||s[1]=='O'))s+=2;
+  }else if(base==2){
+    if(s[0]=='0'&&(s[1]=='b'||s[1]=='B'))s+=2;
+  }
+  long v=0;
+  int has_digit=0;
+  while(*s){
+    char c=*s;
+    if(c=='_'){++s;continue;}
+    int d=-1;
+    if(c>='0'&&c<='9')d=c-'0';
+    else if(c>='a'&&c<='z')d=c-'a'+10;
+    else if(c>='A'&&c<='Z')d=c-'A'+10;
+    if(d<0||d>=base)break;
+    v=v*base+d;
+    has_digit=1;
+    ++s;
+  }
+  if(!has_digit){piton_raise_set("ValueError","invalid literal for int() with base");return 0;}
+  while(*s==' '||*s=='\t'||*s=='\n'||*s=='\r'||*s=='\v'||*s=='\f')++s;
+  if(*s){piton_raise_set("ValueError","invalid literal for int() with base");return 0;}
+  return neg?-v:v;
+}
+static long piton_int_from_str(const char*s){return piton_int_from_str_base(s,10);}
+static long piton_int_of_value_base(long bits,long base){
+  if(base<0||base==1||base>36){piton_raise_set("ValueError","int() base must be >= 2 and <= 36, or 0");return 0;}
+  if(!piton_maybe_ptr(bits)||!piton_is_printable_str((const char*)bits)){
+    piton_raise_set("TypeError","int() can't convert non-string with explicit base");
+    return 0;
+  }
+  return piton_int_from_str_base((const char*)bits,base);
+}
 static long piton_float_from_str(const char*s){if(!s){piton_raise_set("TypeError","float() argument must be a string");return 0;}while(*s==' '||*s=='\t'||*s=='\n')++s;int neg=0;if(*s=='-'||*s=='+'){neg=*s=='-';++s;}const char*q=s;long ip=0;int has=0;while(*q>='0'&&*q<='9'){ip=ip*10+(*q-'0');++q;has=1;}double frac=0.0;double div=1.0;if(*q=='.'){++q;while(*q>='0'&&*q<='9'){frac=frac*10+(*q-'0');div*=10;++q;has=1;}}if(!has){piton_raise_set("ValueError","could not convert string to float");return 0;}while(*q==' '||*q=='\t'||*q=='\n')++q;if(*q){piton_raise_set("ValueError","could not convert string to float");return 0;}double v=(double)ip+frac/div;if(neg)v=-v;return piton_double_bits(v);}
 /* OS_FSPATH_V1: os.fspath de un str es el mismo str (el backend no tiene
    objetos PathLike: esos llegan como error de tipo en runtime). */
@@ -1672,6 +1790,9 @@ static long piton_math_ceil_bits(long bits){double d=piton_bits_double(bits);lon
 static long piton_math_trunc_bits(long bits){double d=piton_bits_double(bits);return (long)d;}
 static long piton_math_fabs_bits(long bits){return bits&0x7FFFFFFFFFFFFFFFL;}
 static long piton_math_gcd(long a,long b){if(a<0)a=-a;if(b<0)b=-b;while(b){long t=a%b;a=b;b=t;}return a;}
+static long piton_math_isinf(long bits){unsigned long u=(unsigned long)bits;return(((u>>52)&0x7FF)==0x7FF)&&((u&0xFFFFFFFFFFFFFUL)==0);}
+static long piton_math_isnan(long bits){unsigned long u=(unsigned long)bits;return(((u>>52)&0x7FF)==0x7FF)&&((u&0xFFFFFFFFFFFFFUL)!=0);}
+static long piton_math_radians(long bits){double d=piton_bits_double(bits);return piton_double_bits(d*(3.14159265358979323846/180.0));}
 static int piton_is_printable_str(const char*s){if(!s)return 0;int has=0;for(int i=0;i<256;++i){char c=s[i];if(c==0)return has;if((unsigned char)c<9||((unsigned char)c>13&&(unsigned char)c<32))return 0;has=1;}return 0;}
 static int piton_is_double_bits(long bits){unsigned long u=(unsigned long)bits;unsigned long exp=(u>>52)&0x7FF;return(exp>=0x3CC&&exp<=0x434&&(u&0xFFFFFFFFFFFFFUL)!=0);}
 /* INT_OF_VALUE_V1: int(x) con tipo estatico desconocido (_aix_support.py:
@@ -4717,17 +4838,18 @@ class LinuxCEmitter:
                     if i >= n:
                         raise NativeBuildError("str % mapping: trailing %()")
                 flags = 0
-                while i < n and template[i] in "-0":
+                while i < n and template[i] in "-0#+ ":
                     if template[i] == "-":
                         flags |= 1
-                    else:
+                    elif template[i] == "0":
                         flags |= 2
+                    elif template[i] == "#":
+                        flags |= 4
+                    elif template[i] == "+":
+                        flags |= 8
+                    elif template[i] == " ":
+                        flags |= 16
                     i += 1
-                if i < n and template[i] == "#":
-                    flags |= 4  # PCT_ALT_FLAG_V1: forma alternativa (0x, 0o, etc.)
-                    i += 1
-                if i < n and template[i] in "+ ":
-                    raise NativeBuildError("str % + and space flags are not supported")
                 width = -1
                 if i < n and template[i] == "*":
                     raise NativeBuildError("str % dynamic width (*) is not supported")
@@ -9677,7 +9799,7 @@ class LinuxCEmitter:
                         else:
                             raise NativeBuildError(f"Linux str %{spec} is not supported")
                         bases.append(f"const char*_pb{index}=(const char*){base};")
-                        if width >= 0 or prec >= 0:
+                        if width >= 0 or prec >= 0 or flags:
                             isnum = 1 if spec in {"d", "x", "X", "o", "f", "F", "e", "E", "g", "G"} else 0
                             pads.append((width, prec if spec in {"d", "x", "X", "o", "s", "r", "c"} else -1, flags, isnum))
                         else:
@@ -9797,11 +9919,13 @@ class LinuxCEmitter:
                 types[result] = "complex"
                 return out
             if "none" in {left_type, right_type}:
-                # WRETURNTYPE_V1 (mirrors the Windows guard): None in
-                # arithmetic is a CPython TypeError, not pointer math.
-                raise NativeBuildError(
-                    f"Linux {operator} with None is not supported (CPython raises TypeError)"
-                )
+                lt_name = "NoneType" if left_type == "none" else left_type
+                rt_name = "NoneType" if right_type == "none" else right_type
+                msg = f"unsupported operand type(s) for {operator}: '{lt_name}' and '{rt_name}'"
+                out.append(f'    piton_raise_set("TypeError", {_str_c_literal(msg)});')
+                self._emit_exc_check(out, function, handler_label)
+                types[result] = "none"
+                return out
             if "float" in {left_type, right_type}:
                 # TRUEDIV_V1: float / and // join the supported set. CPython
                 # raises ZeroDivisionError on float division by zero instead
@@ -11037,26 +11161,38 @@ class LinuxCEmitter:
                 else:
                     out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
             elif function_name in {"entero", "int"}:
-                if len(values) != 1:
-                    raise NativeBuildError("Linux int requires exactly one argument")
-                arg_type = types.get(values[0])
-                operand = self._value(values[0])
-                if arg_type in {"int", "bool"}:
-                    out.append(f"    {_name(result)}={operand};")
-                elif arg_type == "float":
-                    out.append(f"    {_name(result)}=(long)piton_bits_double({operand});")
-                elif arg_type == "str":
-                    out.append(f"    {_name(result)}=piton_int_from_str((const char*){operand});")
-                    if call_handler is not None:
-                        out.append(f"    if(piton_exc_flag){{goto {_name(function.name + '_' + call_handler)};}}")
+                if len(values) == 0:
+                    out.append(f"    {_name(result)}=0;")
+                elif len(values) == 1:
+                    arg_type = types.get(values[0])
+                    operand = self._value(values[0])
+                    if arg_type in {"int", "bool"}:
+                        out.append(f"    {_name(result)}={operand};")
+                    elif arg_type == "float":
+                        out.append(f"    {_name(result)}=(long)piton_bits_double({operand});")
+                    elif arg_type == "str":
+                        out.append(f"    {_name(result)}=piton_int_from_str((const char*){operand});")
+                        self._emit_exc_check(out, function, call_handler)
                     else:
-                        out.append('    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}')
-                else:
-                    # INT_OF_VALUE_V1: tipo estatico desconocido — despacha en
-                    # runtime (str -> parse, double -> truncado; el resto es
-                    # TypeError con el texto de CPython).
-                    out.append(f"    {_name(result)}=piton_int_of_value({operand});")
+                        # INT_OF_VALUE_V1: tipo estatico desconocido — despacha en
+                        # runtime (str -> parse, double -> truncado; el resto es
+                        # TypeError con el texto de CPython).
+                        out.append(f"    {_name(result)}=piton_int_of_value({operand});")
+                        self._emit_exc_check(out, function, call_handler)
+                elif len(values) == 2:
+                    arg_type = types.get(values[0])
+                    base_type = types.get(values[1])
+                    operand = self._value(values[0])
+                    base_op = self._value(values[1])
+                    if base_type == "float":
+                        base_op = f"((long)piton_bits_double({base_op}))"
+                    if arg_type == "str":
+                        out.append(f"    {_name(result)}=piton_int_from_str_base((const char*){operand}, {base_op});")
+                    else:
+                        out.append(f"    {_name(result)}=piton_int_of_value_base({operand}, {base_op});")
                     self._emit_exc_check(out, function, call_handler)
+                else:
+                    self._runtime_type_error(out, f"int expected at most 2 arguments, got {len(values)}")
                 types[result] = "int"
             elif function_name in {"decimal", "float"}:
                 if len(values) != 1:
@@ -13547,6 +13683,19 @@ class LinuxCEmitter:
                 raise NativeBuildError("Linux math.gcd requires int arguments")
             out.append(f"    {_name(result)}=piton_math_gcd({self._value(args[0])},{self._value(args[1])});")
             types[result] = "int"
+        elif op in {"math_isinf", "math_isnan"}:
+            operand = self._value(args[0])
+            if types.get(args[0]) != "float":
+                operand = f"piton_double_bits((double){operand})"
+            helper = f"piton_{op}"
+            out.append(f"    {_name(result)}={helper}({operand});")
+            types[result] = "bool"
+        elif op == "math_radians":
+            operand = self._value(args[0])
+            if types.get(args[0]) != "float":
+                operand = f"piton_double_bits((double){operand})"
+            out.append(f"    {_name(result)}=piton_math_radians({operand});")
+            types[result] = "float"
         elif op == "terminal_init":
             # TERMINAL_V1: initialize terminal (raw mode, no echo)
             out.append(f"    {_name(result)}=piton_terminal_init();")

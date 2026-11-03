@@ -80,6 +80,14 @@ FRONTIER_E_SHAPES: Tuple[str, ...] = (
     "min_max_heterogeneous_key_dispatch",
 )
 
+FRONTIER_F_SHAPES: Tuple[str, ...] = (
+    "int_radix_conversion",
+    "arithmetic_none_typeerror",
+    "math_module_builtins",
+    "module_constant_attribute_access",
+    "format_modulo_flags",
+)
+
 
 @dataclass(frozen=True)
 class BoundedConfig:
@@ -1141,6 +1149,8 @@ asyncio.run(main())
             candidate_shapes = list(FRONTIER_D_SHAPES)
         elif cfg.frontier and str(cfg.frontier).lower() in ("e", "frontier_e", "functional", "builtins"):
             candidate_shapes = list(FRONTIER_E_SHAPES)
+        elif cfg.frontier and str(cfg.frontier).lower() in ("f", "frontier_f", "stdlib", "primitives"):
+            candidate_shapes = list(FRONTIER_F_SHAPES)
         else:
             candidate_shapes = [
                 "default_expr_fn",
@@ -1161,6 +1171,7 @@ asyncio.run(main())
                 *FRONTIER_C_SHAPES,
                 *FRONTIER_D_SHAPES,
                 *FRONTIER_E_SHAPES,
+                *FRONTIER_F_SHAPES,
             ]
         shape = self.rng.choice(candidate_shapes)
 
@@ -1877,6 +1888,106 @@ asyncio.run(main())
                 f"print(m1, m2, m_word, m_num)\n"
             )
             desc = f"bounded[min_max_heterogeneous_key_dispatch/mixed] c1={c1} c2={c2}"
+
+        elif shape == "int_radix_conversion":
+            val = self.rng.randint(5, 500)
+            h_str = hex(val)
+            o_str = oct(val)
+            b_str = bin(val)
+            base36_chars = "0123456789abcdefghijklmnopqrstuvwxyz"
+            c1 = self.rng.randint(2, 35)
+            ch1 = base36_chars[c1]
+            code = (
+                f"i_zero = int()\n"
+                f"i_hex = int('{h_str}', 16)\n"
+                f"i_oct = int('{o_str}', 8)\n"
+                f"i_bin = int('{b_str}', 2)\n"
+                f"i_raw_hex = int('{val:x}', 16)\n"
+                f"i_base0_hex = int('{h_str}', 0)\n"
+                f"i_base0_oct = int('{o_str}', 0)\n"
+                f"i_base0_bin = int('{b_str}', 0)\n"
+                f"i_base36 = int('{ch1}', 36)\n"
+                f"err_caught = 0\n"
+                f"try:\n"
+                f"    int('bad_digit', 10)\n"
+                f"except ValueError:\n"
+                f"    err_caught += 1\n"
+                f"try:\n"
+                f"    int(123, 10)\n"
+                f"except TypeError:\n"
+                f"    err_caught += 1\n"
+                f"print(i_zero, i_hex, i_oct, i_bin, i_raw_hex, i_base0_hex, i_base0_oct, i_base0_bin, i_base36, err_caught)\n"
+            )
+            desc = f"bounded[int_radix_conversion] val={val}"
+
+        elif shape == "arithmetic_none_typeerror":
+            c1 = self.rng.randint(1, 100)
+            code = (
+                f"caught = 0\n"
+                f"try:\n"
+                f"    x = {c1} + None\n"
+                f"except TypeError:\n"
+                f"    caught += 1\n"
+                f"try:\n"
+                f"    y = None - {c1}\n"
+                f"except TypeError:\n"
+                f"    caught += 1\n"
+                f"try:\n"
+                f"    z = None * 2\n"
+                f"except TypeError:\n"
+                f"    caught += 1\n"
+                f"try:\n"
+                f"    w = 10 // None\n"
+                f"except TypeError:\n"
+                f"    caught += 1\n"
+                f"print('typeerror_none_caught', caught)\n"
+            )
+            desc = f"bounded[arithmetic_none_typeerror] c1={c1}"
+
+        elif shape == "math_module_builtins":
+            deg = self.rng.choice([0, 30, 45, 90, 180, 360])
+            val = self.rng.randint(1, 100)
+            code = (
+                f"import math\n"
+                f"r = math.radians({deg})\n"
+                f"is_inf = math.isinf({val})\n"
+                f"is_nan = math.isnan({val})\n"
+                f"fl = math.floor(3.7)\n"
+                f"ce = math.ceil(3.2)\n"
+                f"print(round(r, 4), is_inf, is_nan, fl, ce)\n"
+            )
+            desc = f"bounded[math_module_builtins] deg={deg} val={val}"
+
+        elif shape == "module_constant_attribute_access":
+            mult = self.rng.randint(1, 5)
+            code = (
+                f"import math\n"
+                f"import sys\n"
+                f"pi_val = round(math.pi * {mult}, 4)\n"
+                f"e_val = round(math.e, 4)\n"
+                f"has_maxsize = sys.maxsize > 1000000\n"
+                f"from math import pi as my_pi\n"
+                f"from sys import maxsize as my_maxsize\n"
+                f"match_pi = round(my_pi * {mult}, 4) == pi_val\n"
+                f"match_max = my_maxsize == sys.maxsize\n"
+                f"print(pi_val, e_val, has_maxsize, match_pi, match_max)\n"
+            )
+            desc = f"bounded[module_constant_attribute_access] mult={mult}"
+
+        elif shape == "format_modulo_flags":
+            n = self.rng.randint(1, 99)
+            tag = self.rng.choice(["piton", "python", "agent"])
+            code = (
+                f"s_plus = '%+d' % {n}\n"
+                f"s_space = '% d' % {n}\n"
+                f"s_neg_plus = '%+d' % -{n}\n"
+                f"s_neg_space = '% d' % -{n}\n"
+                f"s_width_right = '%10s' % '{tag}'\n"
+                f"s_width_left = '%-10s' % '{tag}'\n"
+                f"s_zero_pad = '%05d' % {n}\n"
+                f"print(s_plus, s_space, s_neg_plus, s_neg_space, s_width_right, s_width_left, s_zero_pad)\n"
+            )
+            desc = f"bounded[format_modulo_flags] n={n} tag={tag}"
 
         else:  # property_computed_class
             cls_name = self.ast_gen.new_class()
