@@ -2462,7 +2462,7 @@ static PitonSlot piton_str_minmax(const char*s,int want_min){if(!s||!*s){piton_r
 static long piton_collect(int which,long raw,int elemkind){PitonSeq*s=piton_seq_new(PK_LIST,0);if(!s)return 0;for(;;){long v;if(which==0)v=piton_enumerate_next(raw);else if(which==1)v=piton_reversed_next(raw);else if(which==2)v=piton_callback_iterator_next(raw);else if(which==3)v=piton_zip_next(raw);else if(which==4)v=piton_gen_next(raw);else{piton_raise_set("TypeError","collect");return 0;}if(piton_exc_flag){if(piton_exc_type&&piton_strcmp(piton_exc_type,"StopIteration")==0){piton_catch_clear();break;}return 0;}piton_seq_append(s,(PitonSlot){v,elemkind});}return(long)s;}
 static PitonSeq* piton_collect_gen(long raw){return (PitonSeq*)piton_collect(4,raw,PK_INT);}
 static PitonSlot piton_slot_from_bits(long bits){
-  if(bits==(long)&piton_none_singleton||!bits)return (PitonSlot){bits,PK_NONE};
+  if(bits==(long)&piton_none_singleton)return (PitonSlot){bits,PK_NONE};
   if(piton_is_double_bits(bits))return (PitonSlot){bits,PK_FLOAT};
   if(piton_maybe_ptr(bits)){
     long*ptr=(long*)bits;

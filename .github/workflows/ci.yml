@@ -109,6 +109,11 @@ jobs:
       run: |
         python -m pytest autopiton/tests -q -rs
 
+    - name: Run AutoPiton Frontier E differential suite (clean verification)
+      run: |
+        python -m autopiton compare --frontier e --count 25 --seed 101 --repeat 2
+        python -m autopiton compare --frontier e --count 30 --seed 2026 --repeat 2
+
   verify-oracle:
     runs-on: ubuntu-latest
     needs: [test-linux, test-windows, test-autopiton]

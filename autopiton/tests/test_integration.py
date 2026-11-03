@@ -22,38 +22,18 @@ from pathlib import Path
 
 from autopiton.comparator import Classification, DifferentialComparator
 from autopiton.cpython_oracle import CPythonOracle
-from autopiton.generator import ProgramGenerator
+from autopiton.generator import BoundedConfig, ProgramGenerator
 from autopiton.piton_runner import PitonRunner, PitonStage
 from autopiton.sandbox import sandbox_available
 
 CANARIES = {canary.description.split(":")[0]: canary
             for canary in ProgramGenerator().generate_canary_cases()}
 
-REQUIRED_PITON_COMMIT = "fd76a88d50d6052188f986eed11a4f21d9375b20"
-
 BAD_HARNESS_VERDICTS = {
     Classification.INCONCLUSIVE,
     Classification.TIMEOUT,
     Classification.CRASH,
 }
-
-
-def _piton_at_least(commit: str) -> bool:
-    root = Path(__file__).resolve().parents[2]
-    try:
-        exists = subprocess.run(
-            ["git", "-C", str(root), "cat-file", "-e", f"{commit}^{{commit}}"],
-            capture_output=True, timeout=15,
-        )
-        if exists.returncode != 0:
-            return False
-        ancestor = subprocess.run(
-            ["git", "-C", str(root), "merge-base", "--is-ancestor", commit, "HEAD"],
-            capture_output=True, timeout=15,
-        )
-        return ancestor.returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
 
 
 @unittest.skipUnless(sandbox_available(), "bubblewrap is not available")
@@ -70,10 +50,6 @@ class IntegrationCanaries(unittest.TestCase):
         self.assertEqual(result.cpython.stdout, "6\n")
         self.assertEqual(result.piton.stdout, "6\n")
 
-    @unittest.skipUnless(
-        _piton_at_least(REQUIRED_PITON_COMMIT),
-        f"requires PITON commit {REQUIRED_PITON_COMMIT[:7]} (mir: relax) in HEAD",
-    )
     def test_canary_f_constructor_args_is_invalid_accepted(self):
         result = self.compare_canary("F")
         self.assertEqual(result.classification, Classification.EQUIV)
@@ -82,10 +58,6 @@ class IntegrationCanaries(unittest.TestCase):
         self.assertEqual(result.piton.exception_type, "TypeError")
         self.assertNotEqual(result.piton.exit_code, 0)
 
-    @unittest.skipUnless(
-        _piton_at_least(REQUIRED_PITON_COMMIT),
-        f"requires PITON commit {REQUIRED_PITON_COMMIT[:7]} (mir: relax) in HEAD",
-    )
     def test_canary_c_super_is_unsupported_at_build(self):
         result = self.compare_canary("C")
         self.assertEqual(result.classification, Classification.EQUIV)
@@ -110,6 +82,28 @@ class IntegrationCanaries(unittest.TestCase):
                 Classification.UNSUPPORTED,
             },
         )
+
+    def test_regression_list_reversed_range_zero_element(self):
+        code = "print(list(reversed(range(3))))\n"
+        cpython = CPythonOracle(timeout=10).execute(code, "test_rev.py")
+        piton = PitonRunner(timeout=10, build_timeout=60).execute(code, "test_rev.py")
+        result = DifferentialComparator().compare(code, cpython, piton)
+        self.assertEqual(result.classification, Classification.EQUIV)
+        self.assertEqual(result.cpython.stdout, "[2, 1, 0]\n")
+        self.assertEqual(result.piton.stdout, "[2, 1, 0]\n")
+
+    def test_frontier_e_differential_execution_sample(self):
+        gen = ProgramGenerator(seed=101)
+        cfg = BoundedConfig(frontier="e")
+        programs = gen.generate_bounded(count=5, config=cfg)
+        comparator = DifferentialComparator()
+        oracle = CPythonOracle(timeout=10)
+        runner = PitonRunner(timeout=10, build_timeout=60)
+        for prog in programs:
+            cpython = oracle.execute(prog.code, "fe.py")
+            piton = runner.execute(prog.code, "fe.py")
+            res = comparator.compare(prog.code, cpython, piton)
+            self.assertEqual(res.classification, Classification.EQUIV, f"Failed for {prog.description}")
 
 
 if __name__ == "__main__":

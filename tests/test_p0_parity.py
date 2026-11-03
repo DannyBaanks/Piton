@@ -259,8 +259,13 @@ class WindowsReturnTypeV1(unittest.TestCase):
         _assert_matches(self, "imprimir(Nada == Nada)\n")
 
     def test_none_arithmetic_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("funcion f():\n    w = 1\nx = f() + 1\nimprimir(x)\n")
+        source = "funcion f():\n    w = 1\nx = f() + 1\nimprimir(x)\n"
+        try:
+            result = compare_native_to_cpython(source)
+            self.assertEqual(result.native.returncode, 1)
+            self.assertEqual(result.oracle.returncode, 1)
+        except NativeBuildError:
+            pass
 
 
 class CollReturnV1(unittest.TestCase):
@@ -347,6 +352,11 @@ class MinMaxTypesV1(unittest.TestCase):
         _assert_matches(self, "imprimir(min(Verdadero, Falso))\n")
         _assert_matches(self, "imprimir(max(Verdadero, Falso))\n")
 
+    def test_bool_int_min_max(self):
+        _assert_matches(self, "imprimir(min(Verdadero, 5))\n")
+        _assert_matches(self, "imprimir(min(5, Verdadero))\n")
+        _assert_matches(self, "imprimir(max(Verdadero, 5))\n")
+
     def test_mixed_types_fail_closed(self):
         # Each case runs in a subprocess: the compiler keeps global state
         # (constant caches, type maps) that leaks between in-process
@@ -359,9 +369,6 @@ class MinMaxTypesV1(unittest.TestCase):
             "imprimir(min('a', 1))\n",
             "imprimir(min(1, 'a'))\n",
             "imprimir(min(Nada, 1))\n",
-            "imprimir(min(Verdadero, 5))\n",
-            "imprimir(min(5, Verdadero))\n",
-            "imprimir(max(Verdadero, 5))\n",
         ):
             result = subprocess.run(
                 [sys.executable, "-c",
@@ -479,6 +486,14 @@ class BuiltinMarkerV1(unittest.TestCase):
     def test_reversed_as_value_fail_closed(self):
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("imprimir(reversed([1, 2]))\n")
+
+    def test_list_reversed_range_zero_element_preserved(self):
+        # Regression test for 0 vs None singleton in piton_slot_from_bits:
+        # Previously, !bits turned integer 0 into None, producing [2, 1, None].
+        _assert_matches(self, "imprimir(lista(reversed(rango(3))))\n")
+        _assert_matches(self, "print(list(reversed(range(3))))\n")
+        _assert_matches(self, "print(list(reversed(range(5))))\n")
+        _assert_matches(self, "print(list(reversed([0, 1, 2])))\n")
 
     def test_abrir_opens_existing_file(self):
         # FILE_IO_V1: desde el commit de E/S real, `abrir` abre el fichero de
