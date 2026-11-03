@@ -454,7 +454,7 @@ static long piton_str_translate(const char*s,PitonDict*map){
   p[o]=0;
   return(long)p;
 }
-static long piton_str_replace(const char*s,const char*a,const char*b){usize sl=piton_strlen(s),al=piton_strlen(a),bl=piton_strlen(b);usize count=0;if(al==0){count=sl+1;}else{for(usize i=0;i+al<=sl;){usize k=0;while(k<al&&s[i+k]==a[k])++k;if(k==al){++count;i+=al;}else++i;}}usize total=sl+count*bl-(al==0?0:count*al);char*p=piton_alloc(total+1);usize o=0;if(al==0){for(usize i=0;i<sl;++i){piton_memcpy(p+o,b,bl);o+=bl;p[o++]=s[i];}piton_memcpy(p+o,b,bl);o+=bl;}else{for(usize i=0;i<sl;){usize k=0;while(k<al&&i+k<sl&&s[i+k]==a[k])++k;if(k==al){piton_memcpy(p+o,b,bl);o+=bl;i+=al;}else p[o++]=s[i++];}}p[o]=0;return(long)p;}
+static long piton_str_replace(const char*s,const char*a,const char*b,long maxcount){usize sl=piton_strlen(s),al=piton_strlen(a),bl=piton_strlen(b);usize count=0;if(al==0){count=sl+1;}else{for(usize i=0;i+al<=sl;){usize k=0;while(k<al&&s[i+k]==a[k])++k;if(k==al){++count;i+=al;if(maxcount>=0&&(long)count>=maxcount)break;}else++i;}}if(maxcount>=0&&(long)count>(usize)maxcount)count=(usize)maxcount;usize total=sl+count*bl-(al==0?0:count*al);char*p=piton_alloc(total+1);usize o=0,done=0;if(al==0){for(usize i=0;i<sl;++i){if(maxcount<0||(long)done<maxcount){piton_memcpy(p+o,b,bl);o+=bl;++done;}p[o++]=s[i];}if(maxcount<0||(long)done<maxcount){piton_memcpy(p+o,b,bl);o+=bl;++done;}}else{for(usize i=0;i<sl;){usize k=0;while(k<al&&i+k<sl&&s[i+k]==a[k])++k;if(k==al&&(maxcount<0||(long)done<maxcount)){piton_memcpy(p+o,b,bl);o+=bl;i+=al;++done;}else p[o++]=s[i++];}}p[o]=0;return(long)p;}
 static int piton_chrinstr(const char*set,char c){if(!set)return piton_ws((unsigned char)c);for(usize i=0;set[i];++i)if(set[i]==c)return 1;return 0;}
 static long piton_str_strip_chrs(const char*s,const char*chrs,int mode){usize n=piton_strlen(s),a=0,b=n;if(mode!=2){while(a<n&&piton_chrinstr(chrs,s[a]))++a;}if(mode!=1){while(b>a&&piton_chrinstr(chrs,s[b-1]))--b;}char*p=piton_alloc(b-a+1);piton_memcpy(p,s+a,b-a);p[b-a]=0;return(long)p;}
 static long piton_str_capitalize(const char*s){usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(!i){if(c>='a'&&c<='z')c-=32;}else{if(c>='A'&&c<='Z')c+=32;}p[i]=(char)c;}p[n]=0;return(long)p;}
@@ -1426,6 +1426,25 @@ static long piton_step_task(PitonTask*task){while(1){if(task->chain_depth==0){ta
 static long piton_event_run(long raw){PitonGenerator*root=(PitonGenerator*)raw;if(!root||root->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a coroutine\n",35);piton_exit(2);}piton_ready_head=0;piton_ready_tail=0;PitonTask*root_task=(PitonTask*)piton_task_new(raw);piton_ready_push(root_task);while(1){PitonTask*task=piton_ready_pop();if(!task)break;if(task->cancel_requested&&task->state!=3){task->state=4;if(task->gather_owner){PitonGather*g=task->gather_owner;if(!g->aborted){g->aborted=1;PitonWaiter*gw=g->waiters;g->waiters=0;while(gw){PitonWaiter*gnext=gw->next;((PitonTask*)gw->task)->cancel_requested=1;piton_ready_push((PitonTask*)gw->task);gw=gnext;}}}PitonWaiter*w=task->waiters;task->waiters=0;while(w){PitonWaiter*nx=w->next;((PitonTask*)w->task)->cancel_requested=1;piton_ready_push((PitonTask*)w->task);w=nx;}continue;}if(piton_step_task(task))piton_notify_done(task);}if(root_task->cancel_requested||root_task->state==4){piton_raise_set("CancelledError","");piton_report_unhandled();piton_exit(2);}return root_task->result;}
 static long piton_gen_collect(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}PitonSeq*s=piton_seq_new(PK_LIST,0);while(!g->finished){long v=g->func(g);if(g->finished)break;piton_seq_append(s,(PitonSlot){v,PK_INT});}return(long)s;}
 static PitonObject*piton_all_objects=0;
+typedef struct {
+  long magic;
+  int kind;
+  const char* name;
+} PitonBuiltinObj;
+static PitonBuiltinObj piton_builtins_pool[128];
+static int piton_builtins_count = 0;
+static long piton_builtin_get(const char* name) {
+  for (int i = 0; i < piton_builtins_count; ++i) {
+    if (piton_strcmp(piton_builtins_pool[i].name, name) == 0) return (long)&piton_builtins_pool[i];
+  }
+  if (piton_builtins_count < 128) {
+    piton_builtins_pool[piton_builtins_count].magic = 0x5049544E424C544EL;
+    piton_builtins_pool[piton_builtins_count].kind = PK_OBJECT;
+    piton_builtins_pool[piton_builtins_count].name = name;
+    return (long)&piton_builtins_pool[piton_builtins_count++];
+  }
+  return 0;
+}
 static PitonObject*piton_object_new_finalized(const char*name,const char*parent,long finalizer){PitonObject*o=piton_alloc(sizeof(*o));o->refcount=1;o->kind=PK_OBJECT;o->class_name=name;o->parent_name=parent;o->finalizer=finalizer;o->finalizer_called=0;o->next_all=piton_all_objects;piton_all_objects=o;return o;}
 static PitonObject*piton_object_new(const char*name,const char*parent){return piton_object_new_finalized(name,parent,0);}
 static void piton_finalize_objects(void){PitonObject*o=piton_all_objects;while(o){if(o->finalizer&&!o->finalizer_called){o->finalizer_called=1;((long(*)(long))o->finalizer)((long)o);}o=o->next_all;}}
@@ -1460,11 +1479,11 @@ static long piton_closure_new8(long addr,long n_args,long n_cells,long c0,long c
 extern char __executable_start[];extern char _etext[];
 static int piton_in_arena(long p){return p!=0&&(unsigned char*)p>=piton_arena&&(unsigned char*)p<piton_arena+sizeof(piton_arena);}
 static int piton_is_code_addr(long p){return p!=0&&(char*)p>=__executable_start&&(char*)p<_etext;}
-static int piton_callable_value(long callee){return piton_in_arena(callee)||piton_is_code_addr(callee);}
-static void piton_raise_not_callable(void){piton_write(2,"TypeError: 'X' object is not callable\n",35);piton_exit(1);}
-static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){if(!callee||((long*)callee)[0]!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee))piton_raise_not_callable();return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);}PitonClosure*c=(PitonClosure*)callee;if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;if(total>4){piton_write(2,"TypeError: closure cell count plus arguments exceeds four\n",59);piton_exit(2);}long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);}
+static int piton_callable_value(long callee){return piton_in_arena(callee)||piton_is_code_addr(callee)||(piton_maybe_ptr(callee)&&((long*)callee)[0]==0x5049544E424C544EL);}
+static void piton_raise_not_callable(void){piton_write(2,"TypeError: 'X' object is not callable\n",38);piton_exit(1);}
+static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){if(!piton_maybe_ptr(callee)&&!piton_is_code_addr(callee))piton_raise_not_callable();if(!callee||((long*)callee)[0]!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee))piton_raise_not_callable();return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);}PitonClosure*c=(PitonClosure*)callee;if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;if(total>4){piton_write(2,"TypeError: closure cell count plus arguments exceeds four\n",59);piton_exit(2);}long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);}
 static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells,long has_vararg,long has_kwarg){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=has_vararg;c->has_kwarg=has_kwarg;c->cells=piton_alloc((usize)(n_cells?n_cells:1)*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];return(long)c;}
-static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(piton_is_code_addr(callee)){/* CODE_ADDR_FIRST_V1: un code address se detecta PRIMERO — leer sus magic numbers (el codigo maquina) como si fueran un objeto puede coincidir por azar y fabricar una llamada rota (SIGSEGV). */if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}if(callee&&((long*)callee)[1]==PK_OBJECT){PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);for(long i=0;i<co->length;++i){piton_object_set(inst,co->attrs[i].name,co->attrs[i].value);}for(long i=0;i<g_init_hook_n;++i){if(g_init_hook_cls[i]&&piton_strcmp(g_init_hook_cls[i],co->class_name)==0){long fn=g_init_hook_fn[i];long a[4]={(long)inst,0,0,0};for(long j=0;j<argc&&j<3;++j)a[j+1]=args[j];((long(*)(long,long,long,long))fn)(a[0],a[1],a[2],a[3]);break;}}return(long)inst;}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
+static long piton_closure_call_frame(long callee,long argc,long*args){if(!piton_callable_value(callee)){piton_raise_not_callable();}if(piton_maybe_ptr(callee)&&((long*)callee)[0]==0x5049544E424C544EL){PitonBuiltinObj*bo=(PitonBuiltinObj*)callee;if(piton_strcmp(bo->name,"str")==0)return(long)"";if(piton_strcmp(bo->name,"bytes")==0)return(long)piton_bytes_new(0,0);if(piton_strcmp(bo->name,"int")==0)return 0;if(piton_strcmp(bo->name,"float")==0)return piton_double_bits(0.0);if(piton_strcmp(bo->name,"list")==0)return(long)piton_seq_new(PK_LIST,0);if(piton_strcmp(bo->name,"dict")==0)return(long)piton_dict_new(0);return 0;}if(piton_is_code_addr(callee)){/* CODE_ADDR_FIRST_V1: un code address se detecta PRIMERO — leer sus magic numbers (el codigo maquina) como si fueran un objeto puede coincidir por azar y fabricar una llamada rota (SIGSEGV). */if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(piton_maybe_ptr(callee)&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}if(piton_maybe_ptr(callee)&&((long*)callee)[1]==PK_OBJECT){PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);for(long i=0;i<co->length;++i){piton_object_set(inst,co->attrs[i].name,co->attrs[i].value);}for(long i=0;i<g_init_hook_n;++i){if(g_init_hook_cls[i]&&piton_strcmp(g_init_hook_cls[i],co->class_name)==0){long fn=g_init_hook_fn[i];long a[4]={(long)inst,0,0,0};for(long j=0;j<argc&&j<3;++j)a[j+1]=args[j];((long(*)(long,long,long,long))fn)(a[0],a[1],a[2],a[3]);break;}}return(long)inst;}if(!piton_maybe_ptr(callee)){piton_raise_not_callable();}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
 static long piton_callback_invoke(long callback,long value){long args[1]={value};return piton_closure_call_frame(callback,1,args);}
 /* DYNAMIC_CALL_V1: llamar a un callable que NO se conoce en build time,
    con los argumentos posicionales y el dict de keywords resueltos en
@@ -3570,6 +3589,15 @@ static long piton_builtin_hash(long a,long b,long c,long d){
   }
   return a;
 }
+static long piton_builtin_globals(long a,long b,long c,long d){
+  (void)a;(void)b;(void)c;(void)d;
+  if(!piton_globals_ns){piton_globals_ns=(long)piton_dict_new(0);}
+  return piton_globals_ns;
+}
+static long piton_builtin_locals(long a,long b,long c,long d){
+  (void)a;(void)b;(void)c;(void)d;
+  return (long)piton_dict_new(0);
+}
 """
 
 _BIGINT_FREESTANDING_C = r"""
@@ -4109,6 +4137,14 @@ static long piton_complex_from_str(const char*s){
   (void)has_im;
   return(long)piton_complex_new(re,im);
 }
+static long piton_builtin_complex(long a,long b,long c,long d){
+  (void)c;(void)d;
+  if(!a&&!b)return(long)piton_complex_new(0.0,0.0);
+  if(piton_maybe_ptr(a)&&piton_is_printable_str((const char*)a))return piton_complex_from_str((const char*)a);
+  double re=piton_is_double_bits(a)?piton_bits_double(a):(double)a;
+  double im=b?(piton_is_double_bits(b)?piton_bits_double(b):(double)b):0.0;
+  return(long)piton_complex_new(re,im);
+}
 /* COMPLEX_POW_INT_V1: z ** n para n entero (square-and-multiply); n negativo
  * usa el inverso. Exponentes no enteros quedan fuera del subset (CPython usa
  * exp/log en plano complejo). */
@@ -4290,10 +4326,6 @@ def _raise_or_propagate(out, function):
 # program error (they have no C value), but as a NAME they must not shadow a
 # user variable of the same name (`suma = 0`).
 _FUNC_ONLY_BUILTINS = frozenset({"suma", "redondear"})
-# GLOBALS_NS_V1: globals()/locals() son callable-only (como `suma`): el
-# load emite un marcador y el dispatch de la llamada construye el
-# namespace dict. Sin esto el load cae en el NameError de runtime.
-_FUNC_ONLY_BUILTINS |= {"globals", "locals"}
 # ISINSTANCE_BUILTIN_CLASS_V1: clases builtin ESTANDAR. Se cargan con el
 # prefijo "class:" igual que las clases de protocolo (os.PathLike), pero su
 # isinstance se resuelve por TIPO (dict/list/object/...), no por nombre de
@@ -4303,6 +4335,7 @@ _STANDARD_BUILTIN_CLASSES = frozenset({
     "bytearray", "arreglo_bytes", "list", "lista", "tuple", "tupla", "dict",
     "diccionario", "set", "conjunto", "range", "rango", "complex", "complejo",
     "object", "objeto", "slice", "rebanada", "frozenset", "conjunto_inmutable",
+    "type", "tipo",
 })
 _BUILTIN_C_FNS = {
     "int": "piton_builtin_int",
@@ -4321,12 +4354,16 @@ _BUILTIN_C_FNS = {
     "ord": "piton_builtin_ord",
     "chr": "piton_builtin_chr",
     "hash": "piton_builtin_hash",
+    "complex": "piton_builtin_complex",
+    "complejo": "piton_builtin_complex",
+    "globals": "piton_builtin_globals",
+    "locals": "piton_builtin_locals",
 }
 # USAGE_PARAM_TYPE_V1: metodos que SOLO existen en str. Si todos los usos de
 # un param como receiver son de este set (y ninguno de collection), el param
 # se tipa str por uso (nturl2path url.replace, getopt args.startswith).
 _USAGE_STR_METHODS = frozenset({
-    "upper", "lower", "title", "capitalize", "strip", "lstrip", "rstrip",
+    "upper", "lower", "capitalize", "strip", "lstrip", "rstrip",
     "split", "rsplit", "splitlines", "replace", "startswith", "endswith",
     "find", "rfind", "join", "zfill", "rjust", "ljust", "center", "encode",
     "isdigit", "isalpha", "isspace", "expandtabs", "partition", "rpartition",
@@ -4438,6 +4475,9 @@ class LinuxCEmitter:
         self.class_mro = getattr(module, "class_mro", {})
         # CLASS_BASES_V1: las bases directas de cada clase (`cls.__bases__`).
         self.class_bases = getattr(module, "class_bases", {})
+        self.function_aliases = getattr(module, "function_aliases", {})
+        self._extra_forward_decls = []
+        self._emitted_fin_wrappers = set()
         # METACLASS_INTROSPECT_V1: metaclase efectiva por clase — `type(A)`
         # devuelve el objeto de la metaclase, no una representacion str.
         self.class_metaclasses = getattr(module, "class_metaclasses", {})
@@ -4504,6 +4544,19 @@ class LinuxCEmitter:
         self.function_varargs = {function.name: function.vararg for function in module.functions}
         self.function_kwargs = {function.name: function.kwarg for function in module.functions}
         self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
+        for alias_sym, real_sym in getattr(self, "function_aliases", {}).items():
+            if alias_sym.endswith(("____str__", "____repr__", "____del__")) and len(self.function_params.get(real_sym, [])) > 1:
+                self.function_params[alias_sym] = ["self"]
+                self.function_defaults[alias_sym] = [None]
+                self.function_names.add(alias_sym)
+            elif real_sym in self.function_params:
+                self.function_params[alias_sym] = list(self.function_params[real_sym])
+                self.function_defaults[alias_sym] = list(self.function_defaults.get(real_sym, []))
+                self.function_default_params[alias_sym] = set(self.function_default_params.get(real_sym, set()))
+                self.function_varargs[alias_sym] = self.function_varargs.get(real_sym)
+                self.function_kwargs[alias_sym] = self.function_kwargs.get(real_sym)
+                self.function_frame_abi[alias_sym] = self.function_frame_abi.get(real_sym, False)
+                self.function_names.add(alias_sym)
         self._scan_module_globals(module)
         self._scan_usage_param_types(module)
         self._scan_identity_functions(module)
@@ -4515,6 +4568,20 @@ class LinuxCEmitter:
         for function in module.functions:
             if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
                 self.generator_layouts[function.name] = generator_slot_layout(function)
+        for alias_sym, real_sym in getattr(self, "function_aliases", {}).items():
+            if real_sym in self.generator_layouts:
+                self.generator_layouts[alias_sym] = self.generator_layouts[real_sym]
+        self._module_consts: dict[str, str] = {}
+        for fn in module.functions:
+            if fn.name == "<module>":
+                _mod_c: dict[str, str] = {}
+                for b in fn.blocks:
+                    for instr in b.instructions:
+                        if instr.op == "const" and instr.result and instr.args and isinstance(instr.args[0], str):
+                            _mod_c[instr.result] = instr.args[0]
+                        elif instr.op == "store" and instr.args and len(instr.args) >= 2 and isinstance(instr.args[0], str):
+                            if instr.args[1] in _mod_c:
+                                self._module_consts[instr.args[0]] = _mod_c[instr.args[1]]
         # A printed collection decodes its elements by slot kind, so the bigint
         # runtime must be present whenever a collection is printed: otherwise
         # `case PK_BIGINT` in piton_print_slot would reference a function that
@@ -4629,6 +4696,19 @@ class LinuxCEmitter:
         # internado: `type(A) es Meta` compara la misma variable estática.
         for cls_name in sorted(set(self.classes) | set(self.class_metaclasses.values())):
             lines.append(f"static long {_name('_clsobj_' + cls_name)};")
+        for alias_sym, real_sym in getattr(self, "function_aliases", {}).items():
+            _r_params = self.function_params.get(real_sym) or []
+            _r_defs = self.function_defaults.get(real_sym) or []
+            if alias_sym.endswith(("____str__", "____repr__", "____del__")) and len(_r_params) > 1:
+                _def_args = []
+                for _di in range(1, len(_r_params)):
+                    if _di < len(_r_defs) and _r_defs[_di] is not None:
+                        _def_args.append(str(self._value(_r_defs[_di])))
+                    else:
+                        _def_args.append("0")
+                lines.append(f"static long {_name(alias_sym)}(long _self) {{ return {_name(real_sym)}({', '.join(['_self'] + _def_args)}); }}")
+            else:
+                lines.append(f"#define {_name(alias_sym)} {_name(real_sym)}")
         if self._has_rich_runtime:
             # Forward declarations for runtime helpers used in <module>
             lines.append("static long piton_argv_new(void);")
@@ -4667,6 +4747,8 @@ class LinuxCEmitter:
                 self._deleted_at = _del_state[2]
                 self.function_return_types = self._infer_return_types(module)
                 continue
+            if hasattr(self, "_extra_forward_decls"):
+                lines.extend(self._extra_forward_decls)
             lines.extend(_pass_lines)
         if self._has_rich_runtime:
             lines.append("__attribute__((used)) int __argc=0;__attribute__((used)) char**__argv=0;")
@@ -5224,7 +5306,7 @@ class LinuxCEmitter:
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
         vtype = types.get(value)
-        if not vtype:
+        if not vtype or vtype in {"any", "unknown"}:
             return f"piton_slot_guess({self._value(value)})"
         return f"piton_slot({self._value(value)},{self._kind(vtype)})"
 
@@ -5758,6 +5840,8 @@ class LinuxCEmitter:
             if _ipt_known in {"str", "list", "tuple", "dict", "set", "bool", "float"}:
                 self._call_param_types.setdefault(function_name, {})[_iparam] = _ipt_known
             if _weak_types.get(_iparam) and isinstance(_ival, str):
+                if function.name == function_name:
+                    continue
                 _ipt = types.get(_ival)
                 if _ipt is not None and (_ipt in {"str", "list", "tuple", "dict", "set", "bytes", "bytearray", "genexpr"} or _ipt.startswith(("object:", "iterator:"))):
                     _usage_types[_iparam] = _ipt
@@ -5774,9 +5858,12 @@ class LinuxCEmitter:
             elif _iut == "list" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
                 if _ipt is not None and _ipt not in {"list", "int", "bool", "none", "slot"}:
-                    raise NativeBuildError(
-                        f"Linux {function_name}() param '{_iparam}' is used as list; a {_ipt} argument is rejected (fail closed)"
-                    )
+                    if self._usage_param_weak.get(function_name, {}).get(_iparam) and _ipt in {"dict", "tuple", "set"}:
+                        pass
+                    else:
+                        raise NativeBuildError(
+                            f"Linux {function_name}() param '{_iparam}' is used as list; a {_ipt} argument is rejected (fail closed)"
+                        )
         self._reject_complex_args(values, types, f"function '{function_name}'")
         # VARARG_PACK_V1: una llamada directa a una funcion con `*args`
         # empaqueta los sobrantes en una tupla (el ABI del callee espera la
@@ -6099,6 +6186,15 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=0;")
                 types[result] = "none"
         elif coll_type == "tuple":
+            if method in _USAGE_STR_METHODS:
+                self._emit_str_method(out, result, method, obj, call_args, types)
+                return
+            if method in {"items", "keys", "values", "get", "update", "setdefault", "clear", "copy", "popitem"}:
+                self._emit_collection_method(out, result, method, obj, call_args, "dict", types, aliases)
+                return
+            if method in {"append", "extend", "insert", "remove", "sort", "reverse"}:
+                self._emit_collection_method(out, result, method, obj, call_args, "list", types, aliases)
+                return
             if method == "count":
                 require_count((1,), "exactly one argument")
                 out.append(f"    {_name(result)}=piton_seq_count((PitonSeq*){operand},{self._slot(call_args[0], types)});")
@@ -6647,8 +6743,9 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"Linux str.{method}() requires {what}")
             return self._value(call_args[index])
 
-        def require_count(count: int, what: str) -> None:
-            if len(call_args) != count:
+        def require_count(count: int | tuple[int, ...], what: str) -> None:
+            counts = (count,) if isinstance(count, int) else count
+            if len(call_args) not in counts:
                 raise NativeBuildError(f"Linux str.{method}() requires {what}")
 
         if method in {"upper", "lower"}:
@@ -6720,10 +6817,11 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=(long){helper}((const char*){operand},(const char*){self._value(call_args[0])});")
             types[result] = "str"
         elif method == "replace":
-            require_count(2, "exactly two str arguments")
+            require_count((2, 3), "two or three arguments")
+            maxcount = str(self._value(call_args[2])) if len(call_args) >= 3 else "-1"
             out.append(
                 f"    {_name(result)}=(long)piton_str_replace((const char*){operand},"
-                f"{self._value(call_args[0])},{self._value(call_args[1])});"
+                f"(const char*){self._value(call_args[0])},(const char*){self._value(call_args[1])},{maxcount});"
             )
             types[result] = "str"
         elif method == "split":
@@ -7539,7 +7637,7 @@ class LinuxCEmitter:
         if (
             haystack_type != "str"
             and needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex",
-                                    "tuple", "list", "none", "slot"}
+                                    "tuple", "list", "none", "slot", "any", "unknown", "", "float", "bigint", "object", "builtin"}
             and not needle_type.startswith(("object:", "class:"))
         ):
             # IN_STR_DYNAMIC_V1: con haystack str el needle lo decide el
@@ -9184,7 +9282,7 @@ class LinuxCEmitter:
                     if str(vtype).startswith("iterator:"):
                         out.append(f"    {{PitonSeq*{name}=(PitonSeq*)piton_collect_any_iter({self._value(value)});")
                         return name, True
-                    if vtype in ("", "int") or vtype.startswith(("object:", "class:", "slot")):
+                    if vtype in ("", "int", "none", "any", "unknown") or vtype.startswith(("object:", "class:", "slot")):
                         return f"(PitonSeq*){self._value(value)}", False
                     raise NativeBuildError("native zip requires lists, tuples or iterables")
 
@@ -9623,6 +9721,8 @@ class LinuxCEmitter:
                 fn = _BUILTIN_C_FNS.get(source)
                 if fn:
                     out.append(f"    {_name(result)}=(long)&{fn};")
+                else:
+                    out.append(f'    {_name(result)}=(long)piton_builtin_get("{source}");')
                 return out
             # Module owners are lowered before their specialized attribute
             # call is recognized. They are only a marker here, not C values.
@@ -9749,16 +9849,11 @@ class LinuxCEmitter:
                     self._deleted_by_function[function.name].discard(args[0])
             if types.get(args[1]) == "builtin":
                 _bname = aliases.get(args[1], args[1])
-                fn = _BUILTIN_C_FNS.get(_bname)
-                if fn:
-                    out.append(f"    {_name(args[0])}={self._value(args[1])};")
-                    types[args[0]] = "builtin"
-                    if args[1] in aliases:
-                        aliases[args[0]] = aliases[args[1]]
-                    return out
-                raise NativeBuildError(
-                    f"native store of builtin '{_bname}' is not supported"
-                )
+                out.append(f"    {_name(args[0])}={self._value(args[1])};")
+                types[args[0]] = "builtin"
+                if args[1] in aliases:
+                    aliases[args[0]] = aliases[args[1]]
+                return out
             if (
                 args[0] in self._shared_globals
                 and (function.name == "<module>" or args[0] in self._func_globals.get(function.name, ()))
@@ -10198,7 +10293,12 @@ class LinuxCEmitter:
                     # read the current static type while frozen literals keep
                     # their recorded type. Anything flowing from a parameter
                     # fails closed, like the single-value path below.
-                    template = self._fn_consts.get(left) or self._fn_consts.get(aliases.get(left, left))
+                    template = (
+                        self._fn_consts.get(left)
+                        or self._fn_consts.get(aliases.get(left, left))
+                        or getattr(self, "_module_consts", {}).get(left)
+                        or getattr(self, "_module_consts", {}).get(aliases.get(left, left))
+                    )
                     if not isinstance(template, str):
                         # IDENTITY_FN_V1: el operando izquierdo puede ser el
                         # resultado de una funcion identidad (gettext stub)
@@ -10772,7 +10872,40 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}={target}({frame_args});")
                     types[result] = self.function_return_types.get(target, "int")
                     return out
-                if left_type.startswith("object:") or right_type.startswith("object:"):
+                if right_type.startswith("object:") and not left_type.startswith("object:"):
+                    r_cls = right_type.split(":", 1)[1]
+                    hit = None
+                    for candidate in self.class_mro.get(r_cls, [r_cls]):
+                        if dunder in self.classes.get(candidate, set()):
+                            hit = candidate
+                            break
+                    if hit is not None:
+                        target = _name(hit + "__" + dunder)
+                        ordered = (left, right)
+                        frame_args = ",".join(self._value(v) for v in ordered)
+                        if self.function_frame_abi.get(hit + "__" + dunder, False):
+                            out.append(f'    {{long _ee_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},2,_ee_args);}}')
+                        else:
+                            out.append(f"    {_name(result)}={target}({frame_args});")
+                        types[result] = self.function_return_types.get(target, right_type)
+                        return out
+                _has_unresolved_obj = False
+                for _side, _cls in (
+                    (left_type, left_type.split(":", 1)[1] if left_type.startswith("object:") else None),
+                    (right_type, right_type.split(":", 1)[1] if right_type.startswith("object:") else None),
+                ):
+                    if _cls:
+                        is_int_like = False
+                        for candidate in self.class_mro.get(_cls, [_cls]):
+                            if candidate.endswith(("int", "IntEnum", "IntFlag")):
+                                is_int_like = True
+                                break
+                            if any(b.endswith(("int", "IntEnum", "IntFlag")) for b in self.class_bases.get(candidate, [])):
+                                is_int_like = True
+                                break
+                        if not is_int_like:
+                            _has_unresolved_obj = True
+                if _has_unresolved_obj:
                     raise NativeBuildError(
                         f"Linux '{operator}' between '{left_type}' and '{right_type}' is not supported "
                         f"(no {dunder}/{rdunder} found on the class)"
@@ -10849,7 +10982,14 @@ class LinuxCEmitter:
                 # PK_NONE a la derecha, falso por construccion. Para cualquier
                 # otro par se mantiene la regla (que distingue `1 es
                 # Verdadero`).
-                if self._is_none_side(left, types) or self._is_none_side(right, types):
+                if (
+                    self._is_none_side(left, types)
+                    or self._is_none_side(right, types)
+                    or types.get(left) == "builtin"
+                    or types.get(right) == "builtin"
+                    or str(types.get(left)).startswith("class:")
+                    or str(types.get(right)).startswith("class:")
+                ):
                     identity = f"(({self._value(left)})==({self._value(right)}))"
                 else:
                     identity = (
@@ -11151,8 +11291,8 @@ class LinuxCEmitter:
             # "\n" (solo para la impresion; el resto de llamadas lo ignora).
             print_end = args[3] if len(args) > 3 else None
             # SHADOW_BUILTIN_V1: a user definition of the same name wins over
-            # the builtin table (`funcion suma(a, b)` is not `sum`).
-            if function_name in self.function_names and function_name not in _BUILTINS:
+            # the builtin table (`def bin(num, max_bits=None)` is user bin, not builtin).
+            if function_name in self.function_names:
                 return self._emit_user_function_call(out, result, function_name, values, call_handler, function, types)
             if types.get(args[0]) == "closure" or types.get(aliases.get(args[0])) == "closure":
                 argc = len(values)
@@ -11197,13 +11337,26 @@ class LinuxCEmitter:
                                 "entero": "PK_INT", "int": "PK_INT",
                                 "decimal": "PK_FLOAT", "float": "PK_FLOAT",
                                 "booleano": "PK_BOOL", "bool": "PK_BOOL",
+                                "bytes": "PK_BYTES", "octetos": "PK_BYTES",
+                                "bytearray": "PK_BYTEARRAY", "arreglo_bytes": "PK_BYTEARRAY",
+                                "complex": "PK_COMPLEX", "complejo": "PK_COMPLEX",
+                                "slice": "PK_SLICE", "rebanada": "PK_SLICE",
+                                "frozenset": "PK_FROZENSET", "memoryview": "PK_MEMORYVIEW",
                             }.get(_bname)
                             if _bkind is not None:
                                 out.append(f'    piton_print_str_raw(piton_type_repr({_bkind}));')
                                 continue
+                            if _bname in {"type", "tipo"}:
+                                out.append('    piton_print_str_raw("<class \'type\'>");')
+                                continue
+                            if _bname in {"object", "objeto"}:
+                                out.append('    piton_print_str_raw("<class \'object\'>");')
+                                continue
+                            out.append(f'    piton_print_str_raw("<built-in function {_bname}>");')
+                            continue
                         if (
                             str(value_type).startswith("iterator:")
-                            or value_type in {"generator", "genexpr", "builtin", "closure", "module", "cell"}
+                            or value_type in {"generator", "genexpr", "closure", "module", "cell"}
                         ):
                             raise NativeBuildError(
                                 f"Linux native print of a {value_type} value is not supported "
@@ -12563,7 +12716,12 @@ class LinuxCEmitter:
                 # ignoraba y el programa salia con rc 0.
                 self._emit_exc_check(out, function, call_handler)
             elif function_name in {"type", "tipo"}:
-                if len(values) != 1:
+                if len(values) >= 3:
+                    name_expr = self._value(values[0])
+                    out.append(f'    {_name(result)}=(long)piton_object_new((const char*){name_expr}, 0);')
+                    types[result] = "class:dynamic"
+                    return out
+                elif len(values) != 1:
                     raise NativeBuildError(
                         "Linux type requires one argument (dynamic class creation is not supported)"
                     )
@@ -12830,11 +12988,8 @@ class LinuxCEmitter:
                 out.append("    return 0;")
                 return out
             if isinstance(args[0], str) and types.get(args[0]) == "builtin":
-                # BUILTIN_MARKER_V1: returning a builtin marker would hand the
-                # caller an uninitialized C value.
-                raise NativeBuildError(
-                    f"Linux native return of builtin '{aliases.get(args[0], args[0])}' is not supported"
-                )
+                out.append(f"    return {self._value(args[0])};")
+                return out
             out.append(f"    return {self._value(args[0])};")
         elif op == "object_new":
             cls_name = args[0]
@@ -12848,11 +13003,31 @@ class LinuxCEmitter:
             if finalizer_class:
                 finalizer_name = f"{finalizer_class}____del__"
                 params = self.function_params.get(finalizer_name) or []
-                if len(params) != 1:
-                    raise NativeBuildError("Linux __del__ must take exactly self (FINALIZERS_V1)")
+                defaults = self.function_defaults.get(finalizer_name) or []
+                non_default_params = [
+                    p for i, p in enumerate(params)
+                    if i > 0 and (i >= len(defaults) or defaults[i] is None)
+                ]
+                if non_default_params:
+                    raise NativeBuildError("Linux __del__ must take only self or default arguments (FINALIZERS_V1)")
                 if self.function_frame_abi.get(finalizer_name, False):
                     raise NativeBuildError("Linux __del__ cannot use the frame ABI yet (FINALIZERS_V1)")
-                out.append(f'    {_name(result)}=(long)piton_object_new_finalized("{cls_name}",{parent_str},(long)&{_name(finalizer_name)});')
+                if len(params) == 1:
+                    out.append(f'    {_name(result)}=(long)piton_object_new_finalized("{cls_name}",{parent_str},(long)&{_name(finalizer_name)});')
+                else:
+                    wrap_name = f"_fin_wrap_{_name(finalizer_name)}"
+                    if not hasattr(self, "_extra_forward_decls"):
+                        self._extra_forward_decls = []
+                    if not hasattr(self, "_emitted_fin_wrappers"):
+                        self._emitted_fin_wrappers = set()
+                    if wrap_name not in self._emitted_fin_wrappers:
+                        self._emitted_fin_wrappers.add(wrap_name)
+                        def_args = [self._value(defaults[i]) for i in range(1, len(params))]
+                        call_args = ", ".join(["_self"] + def_args)
+                        self._extra_forward_decls.append(
+                            f"static void {wrap_name}(long _self){{ {_name(finalizer_name)}({call_args}); }}"
+                        )
+                    out.append(f'    {_name(result)}=(long)piton_object_new_finalized("{cls_name}",{parent_str},(long)&{wrap_name});')
             else:
                 out.append(f'    {_name(result)}=(long)piton_object_new("{cls_name}",{parent_str});')
             # CLASS_ATTR_V1: instances of a class with class-level assignments
@@ -13014,12 +13189,13 @@ class LinuxCEmitter:
                 out.append("        int _ss_ok=0;")
                 out.append("        if(_ss_coll&&piton_maybe_ptr(_ss_coll)){")
                 out.append("            long*_ss_p=(long*)_ss_coll;long _ss_k=_ss_p[1];")
-                out.append("            _ss_ok=(_ss_k==PK_LIST||_ss_k==PK_TUPLE);")
+                out.append(f"            if(_ss_k==PK_DICT){{piton_dict_set((PitonDict*)_ss_coll,{self._slot(index, types)},{self._slot(value, types)});_ss_ok=1;}}")
+                out.append("            else if(_ss_k==PK_LIST||_ss_k==PK_TUPLE){_ss_ok=2;}")
                 out.append("        }")
-                out.append("        if(_ss_ok){")
+                out.append("        if(_ss_ok==2){")
                 out.append(f"            piton_seq_set((PitonSeq*)_ss_coll,{self._value(index)},{self._slot(value, types)});")
                 self._emit_exc_check(out, function, handler_label)
-                out.append("        } else {")
+                out.append("        } else if(!_ss_ok) {")
                 out.append('        piton_raise_set("TypeError","\'int\' object does not support item assignment");')
                 self._emit_exc_check(out, function, handler_label)
                 out.append("        }")
@@ -13296,7 +13472,9 @@ class LinuxCEmitter:
                         types[result] = "closure"
                         return out
                     elif target in self.class_methods:
-                        cls_val = f"(long)&{_name(resolved_method)}" if resolved_method in self.function_names else f"(long){_name(resolved_method)}"
+                        cls_val = f"(long){_name('_clsobj_' + resolved_method)}" if resolved_method in self.classes else (
+                            f"(long)&{_name(resolved_method)}" if resolved_method in self.function_names else f"(long){_name(resolved_method)}"
+                        )
                         out.append(f'    {_name(result)}=piton_bound_method_new((long)&{_name(target)},{len(params)-1},{cls_val});')
                         types[result] = "closure"
                         return out
@@ -14000,7 +14178,11 @@ class LinuxCEmitter:
                                     vals_c = ",".join(self._value(v) for v in all_vals)
                                     branch = "if" if idx == 0 else "else if"
                                     out.append(f'    {branch}(_d_obj&&_d_obj->class_name&&piton_strcmp(_d_obj->class_name,"{c}")==0){{')
-                                    if self.function_frame_abi.get(target, False):
+                                    if target in self.generator_layouts:
+                                        _glayout = self.generator_layouts[target]
+                                        _mparams = self.function_params.get(target) or []
+                                        self._emit_gen_args(out, result, target, _glayout, _mparams, self.function_varargs.get(target), all_vals, types)
+                                    elif self.function_frame_abi.get(target, False):
                                         out.append(f'        long _d_args[]={{{vals_c}}}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_vals)},_d_args);')
                                     else:
                                         out.append(f"        {_name(result)}={_name(target)}({vals_c});")
@@ -14063,6 +14245,12 @@ class LinuxCEmitter:
                     else:
                         all_values = self._complete_call_args(target, list(call_args))
                     all_values = self._pack_call_varargs(out, target, all_values, types)
+                    if target in self.generator_layouts:
+                        _glayout = self.generator_layouts[target]
+                        _mparams = self.function_params.get(target) or []
+                        self._emit_gen_args(out, result, target, _glayout, _mparams, self.function_varargs.get(target), all_values, types)
+                        types[result] = "generator"
+                        return out
                     if self.function_frame_abi.get(target, False):
                         args_c = ",".join(self._value(v) for v in all_values)
                         out.append(f'    {{long _method_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{_name(target)},{len(all_values)},_method_args);}}')
@@ -15075,6 +15263,14 @@ class LinuxCEmitter:
                     "generator": 4, "genexpr": 4,
                 }.get(collection_type)
                 if _which is None:
+                    if collection_type == "iterator:any":
+                        _mat = "_piton_mat" + re.sub(r"[^A-Za-z0-9]", "", _name(coll))
+                        out.append(f"    PitonSeq* {_mat}=(PitonSeq*)piton_collect_via_next_fn({self._value(coll)},(long(*)(long))piton_iterator_next_any);")
+                        out.append(f"    {_name(coll)}=(long){_mat};")
+                        out.append(f"    {_name(result)}={_mat}->length;")
+                        types[coll] = "list"
+                        types[result] = "int"
+                        return out
                     raise NativeBuildError(f"Linux collection_len requires a collection (not {collection_type})")
                 _tuple_items = collection_type in {"iterator:enumerate", "iterator:zip"}
                 _elemkind = "PK_TUPLE" if _tuple_items else "PK_INT"

@@ -505,12 +505,14 @@ class BuiltinMarkerV1(unittest.TestCase):
         assert b"FileNotFoundError" in result.oracle.stderr
 
     def test_store_builtin_fail_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("x = rango\nimprimir(1)\n")
+        # BUILTIN_VALUE_V1: storing a builtin as a value is valid in CPython
+        # and unlocked via piton_builtin_get pool (required by csv, timeit, types).
+        _assert_matches(self, "x = rango\nimprimir(1)\n")
 
     def test_return_builtin_fail_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("funcion f():\n    devolver rango\nimprimir(1)\n")
+        # BUILTIN_VALUE_V1: returning a builtin as a value is valid in CPython
+        # and unlocked via piton_builtin_get pool (required by tempfile).
+        _assert_matches(self, "funcion f():\n    devolver rango\nimprimir(1)\n")
 
     def test_print_generator_fail_closed(self):
         # a generator object prints as <generator ... at 0x...> in CPython —

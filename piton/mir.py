@@ -265,6 +265,7 @@ class MIRModule:
     # = "PITON"). Clave global: el get_attr no sabe que clase recibe la
     # inyeccion. Conflicto de tipos -> se omite (default "int" del emisor).
     injected_attr_types: dict = field(default_factory=dict)
+    function_aliases: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {"functions": [function.to_dict() for function in self.functions]}
@@ -1121,6 +1122,13 @@ class MIRLowerer:
                 # el nombre LOCAL se traduce al cualificado del from-import,
                 # que es el que el levantamiento de modulos registro.
                 bases = [self.from_import_aliases.get(_b, _b) for _b in bases]
+                for dec in (getattr(node, "decorators", []) or []):
+                    if getattr(dec, "kind", None) == HIRKind.CALL:
+                        func_name = getattr(getattr(dec, "func", None), "name", None)
+                        if func_name in ("_simple_enum", "simple_enum") and getattr(dec, "args", None):
+                            first_arg = getattr(dec.args[0], "name", None)
+                            if first_arg:
+                                bases.append(self.from_import_aliases.get(first_arg, first_arg))
                 # METACLASS_CONFLICT_V1: `clase C(A, B)` cuyas bases tienen
                 # metaclases incompatibles debe fallar cerrado (CPython lanza
                 # TypeError "metaclass conflict"); antes la clase se creaba en
@@ -1205,6 +1213,15 @@ class MIRLowerer:
                         self.classes[node.name].add(method.name)
                     else:
                         self.class_properties.setdefault(node.name, {}).setdefault(prop_name, {})[role] = symbol
+            if hasattr(self, "class_attrs"):
+                for _cname, _attrs in self.class_attrs.items():
+                    for _aname, _aval in _attrs.items():
+                        _vname = getattr(_aval, "name", None)
+                        if isinstance(_vname, str) and _vname in self.classes.get(_cname, set()):
+                            self.classes[_cname].add(_aname)
+                            if not hasattr(self, "function_aliases"):
+                                self.function_aliases = {}
+                            self.function_aliases[f"{_cname}__{_aname}"] = f"{_cname}__{_vname}"
             self._finalize_mro()
             for node in module_body:
                 # YIELD_SCAN_V1: a `producir` nested inside a loop/if counts —
@@ -1461,6 +1478,7 @@ class MIRLowerer:
         module.class_properties = dict(self.class_properties)
         module.static_methods = set(self.static_methods)
         module.class_methods = set(self.class_methods)
+        module.function_aliases = dict(getattr(self, "function_aliases", {}))
         # ME — effect lattice: every emitted op is classified and chained at
         # lowering time, so a new op born without classification fails closed.
         annotate_module_effects(module)
