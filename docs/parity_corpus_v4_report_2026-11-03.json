@@ -1,26 +1,25 @@
 {
   "meta": {
-    "date": "2026-11-03T08:20:22+00:00",
+    "date": "2026-11-03T09:54:39+00:00",
     "oracle": "CPython 3.12.3",
     "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.39",
-    "git_sha": "fbc4b01",
+    "git_sha": "3dcf6f7",
     "git_clean": false,
     "git_dirty_files": [
+      "M docs/parity_corpus_v4_report_2026-11-03.json",
+      "M docs/parity_corpus_v4_report_2026-11-03.md",
       "M piton/linux_x86.py",
-      "M piton/mir.py",
-      "M tests/test_p0_parity.py",
-      "?? docs/parity_corpus_v4_report_2026-11-03.json",
-      "?? docs/parity_corpus_v4_report_2026-11-03.md"
+      "M piton/mir.py"
     ],
     "verified": false,
     "instrument_hash": "0387d6c489c87131814a4aaa12412cb15792cce9b2d86591b8208ebb3c8060e0",
-    "piton_mir_hash": "28afd74dbc7f5e1717f2e87c90ba6d0fa8cf68a4a28de7a24e3cce9de76437d5",
-    "piton_linux_hash": "f94305e6e0077fd0accf61a860e55df88b67eb3e1ba4f367f17ca51bbb2bc9e4",
+    "piton_mir_hash": "74d033c0f358363fd60a7f9385185e873af9301b9e23faed67e6bdfdedd857e1",
+    "piton_linux_hash": "41eb4f24a81e5e9db7cf0adf69470d736fa14ea85b422005dfc2b2c2ebc080e6",
     "tool": "tools/parity_corpus_v4.py",
     "tiers": "a",
     "recursive": false,
     "exclude": [],
-    "isolate": false
+    "isolate": true
   },
   "results": {
     "tier_a": {
@@ -29,19 +28,16 @@
         "passed": {
           "adapt": 167,
           "parse": 167,
-          "mir": 165,
-          "build": 135
+          "mir": 167,
+          "build": 167
         },
         "pct": {
           "adapt": 100.0,
           "parse": 100.0,
-          "mir": 98.8,
-          "build": 80.8
+          "mir": 100.0,
+          "build": 100.0
         },
-        "fail_classes": {
-          "BUILD_FAIL": 30,
-          "MIR_FAIL": 2
-        },
+        "fail_classes": {},
         "read_failed": 0
       },
       "records": [
@@ -50,7 +46,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.623,
+          "build_seconds": 0.711,
           "roundtrip": true
         },
         {
@@ -58,7 +54,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.206,
+          "build_seconds": 0.177,
           "roundtrip": true
         },
         {
@@ -66,7 +62,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.224,
+          "build_seconds": 0.264,
           "roundtrip": true
         },
         {
@@ -82,7 +78,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.461,
+          "build_seconds": 0.371,
           "roundtrip": true
         },
         {
@@ -90,7 +86,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.286,
+          "build_seconds": 0.298,
           "roundtrip": true
         },
         {
@@ -98,7 +94,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.651,
+          "build_seconds": 0.722,
           "roundtrip": true
         },
         {
@@ -106,7 +102,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.257,
+          "build_seconds": 0.242,
           "roundtrip": true
         },
         {
@@ -114,7 +110,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.01,
+          "build_seconds": 0.013,
           "roundtrip": true
         },
         {
@@ -122,23 +118,23 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.359,
+          "build_seconds": 0.464,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/_pydatetime.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux '*' between 'int' and 'object:timedelta' is not supported (no __mul__/__rmul__ found on the class)",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.861,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/_pydecimal.py",
-          "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: lambda *args/**kwargs is not supported in the native subset yet",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 2.531,
           "roundtrip": true
         },
         {
@@ -146,7 +142,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.707,
+          "build_seconds": 1.802,
           "roundtrip": true
         },
         {
@@ -154,7 +150,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.324,
+          "build_seconds": 0.316,
           "roundtrip": true
         },
         {
@@ -162,7 +158,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.003,
+          "build_seconds": 1.017,
           "roundtrip": true
         },
         {
@@ -170,7 +166,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.341,
+          "build_seconds": 0.316,
           "roundtrip": true
         },
         {
@@ -178,7 +174,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 3.908,
+          "build_seconds": 4.15,
           "roundtrip": true
         },
         {
@@ -186,7 +182,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 4.167,
+          "build_seconds": 4.214,
           "roundtrip": true
         },
         {
@@ -194,7 +190,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.637,
+          "build_seconds": 0.546,
           "roundtrip": true
         },
         {
@@ -202,7 +198,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.945,
+          "build_seconds": 0.898,
           "roundtrip": true
         },
         {
@@ -210,7 +206,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.244,
+          "build_seconds": 0.278,
           "roundtrip": true
         },
         {
@@ -218,7 +214,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.413,
+          "build_seconds": 0.38,
           "roundtrip": true
         },
         {
@@ -226,7 +222,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.213,
+          "build_seconds": 0.161,
           "roundtrip": true
         },
         {
@@ -234,15 +230,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.684,
+          "build_seconds": 1.791,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/ast.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux '+' between 'object:_Precedence' and 'int' is not supported (no __add__/__radd__ found on the class)",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.361,
           "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 1266\ncolumna: 20\n\nPython rechazó la traducción:\ninvalid syntax\n\n        elif value es ...:"
         },
         {
@@ -250,7 +246,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.389,
+          "build_seconds": 1.35,
           "roundtrip": true
         },
         {
@@ -258,7 +254,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.218,
+          "build_seconds": 1.204,
           "roundtrip": true
         },
         {
@@ -266,7 +262,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.249,
+          "build_seconds": 0.218,
           "roundtrip": true
         },
         {
@@ -274,7 +270,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.827,
+          "build_seconds": 0.691,
           "roundtrip": true
         },
         {
@@ -282,15 +278,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.221,
+          "build_seconds": 0.206,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/calendar.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-69jnhxec/program.c: In function ‘Calendar__itermonthdates’:\n/tmp/piton-v4-69jnhxec/program.c:5927:12: error: too many arguments to function ‘Calendar__itermonthdays3’\n 5927 |         _5=Calendar__itermonthdays3(_2,_3,_4);\n      |            ^~~~~~~~~~~~~~~~~~~~~~~~\n/t",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.789,
           "roundtrip": true
         },
         {
@@ -298,7 +294,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.654,
+          "build_seconds": 1.631,
           "roundtrip": true
         },
         {
@@ -306,7 +302,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.228,
+          "build_seconds": 0.246,
           "roundtrip": true
         },
         {
@@ -314,7 +310,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.252,
+          "build_seconds": 0.285,
           "roundtrip": true
         },
         {
@@ -322,7 +318,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.293,
+          "build_seconds": 0.32,
           "roundtrip": true
         },
         {
@@ -330,7 +326,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.212,
+          "build_seconds": 0.239,
           "roundtrip": true
         },
         {
@@ -338,7 +334,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.784,
+          "build_seconds": 0.771,
           "roundtrip": true
         },
         {
@@ -346,7 +342,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.249,
+          "build_seconds": 0.25,
           "roundtrip": true
         },
         {
@@ -354,7 +350,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.225,
+          "build_seconds": 0.261,
           "roundtrip": true
         },
         {
@@ -362,7 +358,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.373,
+          "build_seconds": 0.391,
           "roundtrip": true
         },
         {
@@ -370,15 +366,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.051,
+          "build_seconds": 0.049,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/contextlib.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-v65co120/program.c: In function ‘AsyncExitStack__aclose’:\n/tmp/piton-v4-v65co120/program.c:7112:12: error: too many arguments to function ‘AbstractAsyncContextManager____aexit__’\n 7112 |         _6=AbstractAsyncContextManager____aexit__(_2,_3,_4,_5);\n      |          ",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.41,
           "roundtrip": true
         },
         {
@@ -386,15 +382,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.224,
+          "build_seconds": 0.231,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/copy.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-oy2q1fyc/program.c: In function ‘_deepcopy_list’:\n/tmp/piton-v4-oy2q1fyc/program.c:5468:9: error: called object ‘deepcopy’ is not a function or function pointer\n 5468 |     _15=deepcopy(_13,_14,(long)({PitonSeq*_d=piton_seq_new(PK_LIST,0);_d;}));\n      |         ^~~~~",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.303,
           "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 279\ncolumna: 16\n\nPython rechazó la traducción:\ninvalid syntax\n\n                and [key ]=value "
         },
         {
@@ -402,7 +398,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.279,
+          "build_seconds": 0.233,
           "roundtrip": true
         },
         {
@@ -410,15 +406,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.216,
+          "build_seconds": 0.268,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/csv.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: native store of builtin 'complex' is not supported",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.657,
           "roundtrip": true
         },
         {
@@ -426,7 +422,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.847,
+          "build_seconds": 0.831,
           "roundtrip": true
         },
         {
@@ -434,7 +430,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.188,
+          "build_seconds": 0.219,
           "roundtrip": true
         },
         {
@@ -442,7 +438,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.194,
+          "build_seconds": 0.217,
           "roundtrip": true
         },
         {
@@ -450,7 +446,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.659,
+          "build_seconds": 0.764,
           "roundtrip": true
         },
         {
@@ -458,7 +454,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.963,
+          "build_seconds": 0.984,
           "roundtrip": true
         },
         {
@@ -466,23 +462,23 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.411,
+          "build_seconds": 1.405,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/enum.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux collection_len requires a collection (not iterator:any)",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.132,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/filecmp.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-4abyigjp/program.c: In function ‘_cmp’:\n/tmp/piton-v4-4abyigjp/program.c:6097:8: error: called object ‘cmp’ is not a function or function pointer\n 6097 |     _5=cmp(_2,_3,_4);\n      |        ^~~\n/tmp/piton-v4-4abyigjp/program.c:6080:81: note: declared here\n 6080 |    ",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.274,
           "roundtrip": true
         },
         {
@@ -490,7 +486,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.436,
+          "build_seconds": 0.415,
           "roundtrip": true
         },
         {
@@ -498,7 +494,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.282,
+          "build_seconds": 0.358,
           "roundtrip": true
         },
         {
@@ -506,7 +502,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.866,
+          "build_seconds": 0.767,
           "roundtrip": true
         },
         {
@@ -514,15 +510,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.19,
+          "build_seconds": 1.116,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/functools.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux 'in' requires an int/bool/str/bytes/bytearray/complex/tuple/list/object needle, not object",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.055,
           "roundtrip": true
         },
         {
@@ -530,7 +526,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.191,
+          "build_seconds": 0.244,
           "roundtrip": true
         },
         {
@@ -538,7 +534,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.043,
+          "build_seconds": 1.052,
           "roundtrip": true
         },
         {
@@ -546,7 +542,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.165,
+          "build_seconds": 0.199,
           "roundtrip": true
         },
         {
@@ -554,7 +550,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.811,
+          "build_seconds": 0.772,
           "roundtrip": true
         },
         {
@@ -562,7 +558,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.269,
+          "build_seconds": 0.242,
           "roundtrip": true
         },
         {
@@ -570,7 +566,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.47,
+          "build_seconds": 0.537,
           "roundtrip": true
         },
         {
@@ -578,7 +574,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.139,
+          "build_seconds": 1.477,
           "roundtrip": true
         },
         {
@@ -586,7 +582,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.377,
+          "build_seconds": 0.369,
           "roundtrip": true
         },
         {
@@ -594,7 +590,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.232,
+          "build_seconds": 0.24,
           "roundtrip": true
         },
         {
@@ -602,15 +598,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.341,
+          "build_seconds": 0.331,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/imaplib.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux unpack of nested tuple targets is not supported",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.323,
           "roundtrip": true
         },
         {
@@ -618,31 +614,31 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.169,
+          "build_seconds": 0.191,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/inspect.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux 'in' requires an int/bool/str/bytes/bytearray/complex/tuple/list/object needle, not object",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.943,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/io.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /usr/bin/ld: /tmp/cc5oFc62.o: en la función `piton_main':\nprogram.c:(.text+0xca7): referencia a `RawIOBase__register' sin definir\n/usr/bin/ld: program.c:(.text+0xef1): referencia a `BufferedIOBase__register' sin definir\n/usr/bin/ld: program.c:(.text+0x1009): referencia a `TextIOBas",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.209,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/ipaddress.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: property '_address_class' of 'IPv4Network' object has no setter",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 4.574,
           "roundtrip": true
         },
         {
@@ -650,7 +646,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.189,
+          "build_seconds": 0.23,
           "roundtrip": true
         },
         {
@@ -658,7 +654,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.341,
+          "build_seconds": 0.323,
           "roundtrip": true
         },
         {
@@ -666,7 +662,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.838,
+          "build_seconds": 0.354,
           "roundtrip": true
         },
         {
@@ -674,7 +670,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.844,
+          "build_seconds": 0.975,
           "roundtrip": true
         },
         {
@@ -682,23 +678,23 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.074,
+          "build_seconds": 0.093,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/mailcap.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux native print of a builtin value is not supported (can never match CPython output)",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.2,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/mimetypes.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-4aypw8pp/program.c: In function ‘MimeTypes___read_windows_registry’:\n/tmp/piton-v4-4aypw8pp/program.c:5953:9: error: called object ‘add_type’ is not a function or function pointer\n 5953 |     _37=add_type(_35,_36,1);\n      |         ^~~~~~~~\n/tmp/piton-v4-4aypw8pp/pro",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.273,
           "roundtrip": true
         },
         {
@@ -706,7 +702,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.712,
+          "build_seconds": 0.854,
           "roundtrip": true
         },
         {
@@ -714,15 +710,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.217,
+          "build_seconds": 1.288,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/nntplib.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-xyzzrkeo/program.c: In function ‘_unparse_datetime’:\n/tmp/piton-v4-xyzzrkeo/program.c:9625:10: error: redefinition of ‘_fa1’\n 9625 |     long _fa1=piton_object_get((PitonObject*)_18,\"month\").bits;\n      |          ^~~~\n/tmp/piton-v4-xyzzrkeo/program.c:9602:10: note: p",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.154,
           "roundtrip": true
         },
         {
@@ -730,7 +726,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.022,
+          "build_seconds": 0.024,
           "roundtrip": true
         },
         {
@@ -738,15 +734,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.238,
+          "build_seconds": 0.237,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/numbers.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /usr/bin/ld: /tmp/ccCpGf5D.o: en la función `piton_main':\nprogram.c:(.text+0x14db): referencia a `Complex__register' sin definir\n/usr/bin/ld: program.c:(.text+0x14e7): referencia a `Real__register' sin definir\n/usr/bin/ld: program.c:(.text+0x14f3): referencia a `Integral__register'",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.311,
           "roundtrip": true
         },
         {
@@ -754,7 +750,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.357,
+          "build_seconds": 1.587,
           "roundtrip": true
         },
         {
@@ -770,7 +766,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.071,
+          "build_seconds": 0.058,
           "roundtrip": true
         },
         {
@@ -778,15 +774,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.732,
+          "build_seconds": 0.959,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/pathlib.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-wq5qoapz/program.c: In function ‘_ParentSelector___select_from’:\n/tmp/piton-v4-wq5qoapz/program.c:5684:12: error: too many arguments to function ‘_TerminatingSelector___select_from’\n 5684 |         _8=_TerminatingSelector___select_from(_4,_6,_7);\n      |            ^~",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.523,
           "roundtrip": true
         },
         {
@@ -794,7 +790,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.112,
+          "build_seconds": 0.135,
           "roundtrip": true
         },
         {
@@ -802,7 +798,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.931,
+          "build_seconds": 1.151,
           "roundtrip": true
         },
         {
@@ -810,7 +806,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.741,
+          "build_seconds": 0.825,
           "roundtrip": true
         },
         {
@@ -818,7 +814,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.535,
+          "build_seconds": 0.736,
           "roundtrip": true
         },
         {
@@ -826,23 +822,23 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.244,
+          "build_seconds": 0.321,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/platform.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: bound method 'from_subprocess' has no native signature",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.73,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/plistlib.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux tuple.items() is not supported",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.413,
           "roundtrip": true
         },
         {
@@ -850,7 +846,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.44,
+          "build_seconds": 0.455,
           "roundtrip": true
         },
         {
@@ -858,7 +854,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.357,
+          "build_seconds": 0.379,
           "roundtrip": true
         },
         {
@@ -866,7 +862,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.982,
+          "build_seconds": 1.106,
           "roundtrip": true
         },
         {
@@ -874,7 +870,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.832,
+          "build_seconds": 1.015,
           "roundtrip": true
         },
         {
@@ -882,7 +878,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.028,
+          "build_seconds": 0.04,
           "roundtrip": true
         },
         {
@@ -890,7 +886,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.265,
+          "build_seconds": 0.223,
           "roundtrip": true
         },
         {
@@ -898,7 +894,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.77,
+          "build_seconds": 0.759,
           "roundtrip": true
         },
         {
@@ -906,7 +902,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.107,
+          "build_seconds": 1.371,
           "roundtrip": true
         },
         {
@@ -914,7 +910,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.356,
+          "build_seconds": 0.353,
           "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 1709\ncolumna: 10\n\nPython rechazó la traducción:\ninvalid syntax\n\n        (if nextmodule :module ,n )=(nextmodule ,n +1 )"
         },
         {
@@ -922,7 +918,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.25,
+          "build_seconds": 0.22,
           "roundtrip": true
         },
         {
@@ -930,7 +926,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.197,
+          "build_seconds": 0.245,
           "roundtrip": true
         },
         {
@@ -938,7 +934,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.843,
+          "build_seconds": 0.877,
           "roundtrip": true
         },
         {
@@ -946,7 +942,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.374,
+          "build_seconds": 0.454,
           "roundtrip": true
         },
         {
@@ -954,7 +950,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.327,
+          "build_seconds": 0.196,
           "roundtrip": true
         },
         {
@@ -962,7 +958,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.996,
+          "build_seconds": 1.106,
           "roundtrip": true
         },
         {
@@ -970,7 +966,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.246,
+          "build_seconds": 0.209,
           "roundtrip": true
         },
         {
@@ -978,7 +974,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.289,
+          "build_seconds": 0.283,
           "roundtrip": true
         },
         {
@@ -986,7 +982,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.361,
+          "build_seconds": 0.47,
           "roundtrip": true
         },
         {
@@ -1002,7 +998,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.31,
+          "build_seconds": 0.457,
           "roundtrip": true
         },
         {
@@ -1010,7 +1006,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.416,
+          "build_seconds": 0.564,
           "roundtrip": true
         },
         {
@@ -1018,7 +1014,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.261,
+          "build_seconds": 0.208,
           "roundtrip": true
         },
         {
@@ -1026,7 +1022,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.392,
+          "build_seconds": 1.675,
           "roundtrip": true
         },
         {
@@ -1034,7 +1030,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.142,
+          "build_seconds": 0.116,
           "roundtrip": true
         },
         {
@@ -1042,7 +1038,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.051,
+          "build_seconds": 0.081,
           "roundtrip": true
         },
         {
@@ -1058,7 +1054,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.02,
+          "build_seconds": 0.038,
           "roundtrip": true
         },
         {
@@ -1066,7 +1062,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.414,
+          "build_seconds": 0.474,
           "roundtrip": true
         },
         {
@@ -1074,7 +1070,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.556,
+          "build_seconds": 0.772,
           "roundtrip": true
         },
         {
@@ -1082,7 +1078,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.571,
+          "build_seconds": 0.755,
           "roundtrip": true
         },
         {
@@ -1090,15 +1086,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.585,
+          "build_seconds": 0.666,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/ssl.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-zmab7wd9/program.c: In function ‘_ssl__create_default_context’:\n/tmp/piton-v4-zmab7wd9/program.c:10796:79: error: ‘_82’ undeclared (first use in this function)\n10796 |     piton_object_set((PitonObject*)_0,\"_windows_cert_stores\",piton_slot_guess(_82));\n      |        ",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.403,
           "roundtrip": true
         },
         {
@@ -1106,15 +1102,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.284,
+          "build_seconds": 0.293,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/statistics.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: native zip requires lists, tuples or iterables",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.446,
           "roundtrip": true
         },
         {
@@ -1122,7 +1118,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.891,
+          "build_seconds": 0.876,
           "roundtrip": true
         },
         {
@@ -1130,7 +1126,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.239,
+          "build_seconds": 0.208,
           "roundtrip": true
         },
         {
@@ -1138,15 +1134,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.286,
+          "build_seconds": 0.413,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/subprocess.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux __del__ must take exactly self (FINALIZERS_V1)",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.502,
           "roundtrip": true
         },
         {
@@ -1154,7 +1150,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.52,
+          "build_seconds": 0.681,
           "roundtrip": true
         },
         {
@@ -1162,7 +1158,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.208,
+          "build_seconds": 1.608,
           "roundtrip": true
         },
         {
@@ -1170,7 +1166,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.964,
+          "build_seconds": 1.025,
           "roundtrip": true
         },
         {
@@ -1178,7 +1174,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.452,
+          "build_seconds": 0.506,
           "roundtrip": true
         },
         {
@@ -1186,7 +1182,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 3.408,
+          "build_seconds": 4.656,
           "roundtrip": true
         },
         {
@@ -1194,15 +1190,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.3,
+          "build_seconds": 0.398,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/tempfile.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux native return of builtin 'return_type' is not supported",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.595,
           "roundtrip": true
         },
         {
@@ -1210,7 +1206,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.804,
+          "build_seconds": 0.888,
           "roundtrip": true
         },
         {
@@ -1218,7 +1214,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.402,
+          "build_seconds": 0.585,
           "roundtrip": true
         },
         {
@@ -1226,15 +1222,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.405,
+          "build_seconds": 1.834,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/timeit.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: native store of builtin 'globals' is not supported",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.464,
           "roundtrip": true
         },
         {
@@ -1242,15 +1238,15 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.473,
+          "build_seconds": 0.208,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/tokenize.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: CALL_UNPACK_VARIADIC_V1: * operand must be a statically-known list or tuple",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.072,
           "roundtrip": true
         },
         {
@@ -1258,23 +1254,23 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.535,
+          "build_seconds": 1.753,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/traceback.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /tmp/piton-v4-0mikolgp/program.c: In function ‘TracebackException__format_exception_only’:\n/tmp/piton-v4-0mikolgp/program.c:8058:13: error: too many arguments to function ‘TracebackException___format_syntax_error’\n 8058 |         _46=TracebackException___format_syntax_error(_44,_45",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.68,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/tracemalloc.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: /usr/bin/ld: /tmp/ccMup3OS.o: en la función `_Traces____init__':\nprogram.c:(.text+0x24d1): referencia a `collections__abc__Sequence____init__' sin definir\n/usr/bin/ld: /tmp/ccMup3OS.o: en la función `Traceback____init__':\nprogram.c:(.text+0x27d1): referencia a `collections__abc__Se",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 1.655,
           "roundtrip": true
         },
         {
@@ -1282,31 +1278,31 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.193,
+          "build_seconds": 0.205,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/turtle.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: Linux tuple.lower() is not supported",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 2.963,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/types.py",
-          "reached": "mir",
-          "stage_fail": "BUILD_FAIL",
-          "detail": "NativeBuildError: native store of builtin 'type' is not supported",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 0.248,
           "roundtrip": true
         },
         {
           "path": "/usr/lib/python3.12/typing.py",
-          "reached": "mir",
-          "stage_fail": "MIR_FAIL",
-          "detail": "MIRLoweringError: native backend does not support metaclasses yet",
-          "build_seconds": null,
+          "reached": "build",
+          "stage_fail": null,
+          "detail": "",
+          "build_seconds": 2.069,
           "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 88\ncolumna: 16\n\nPython rechazó la traducción:\ninvalid syntax\n\n    return arg es ...o isinstance (arg ,(tuple ,list ,ParamSpec"
         },
         {
@@ -1314,7 +1310,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.221,
+          "build_seconds": 0.194,
           "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 137\ncolumna: 17\n\nPython rechazó la traducción:\ninvalid syntax. Perhaps you forgot a comma?\n\n            if (out_file .startsw"
         },
         {
@@ -1322,7 +1318,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 1.001,
+          "build_seconds": 1.291,
           "roundtrip": true
         },
         {
@@ -1330,7 +1326,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.993,
+          "build_seconds": 0.986,
           "roundtrip": true
         },
         {
@@ -1338,7 +1334,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.52,
+          "build_seconds": 0.719,
           "roundtrip": true
         },
         {
@@ -1346,7 +1342,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.693,
+          "build_seconds": 0.91,
           "roundtrip": true
         },
         {
@@ -1354,7 +1350,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.606,
+          "build_seconds": 1.021,
           "roundtrip": true
         },
         {
@@ -1362,7 +1358,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.572,
+          "build_seconds": 0.652,
           "roundtrip": true
         },
         {
@@ -1370,7 +1366,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.311,
+          "build_seconds": 0.326,
           "roundtrip": true
         },
         {
@@ -1378,7 +1374,7 @@
           "reached": "build",
           "stage_fail": null,
           "detail": "",
-          "build_seconds": 0.369,
+          "build_seconds": 0.409,
           "roundtrip": true
         }
       ]

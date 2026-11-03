@@ -1322,6 +1322,9 @@ class MIRLowerer:
                 merged_attrs = {}
                 for anc in reversed(self.class_mro.get(cls_name, [cls_name])):
                     merged_attrs.update(getattr(self, "class_attrs", {}).get(anc, {}))
+                if not hasattr(self, "_class_attr_nodes"):
+                    self._class_attr_nodes = {}
+                self._class_attr_nodes[cls_name] = merged_attrs
                 cls_obj = module_builder.temp()
                 parent_name = self.class_parents.get(cls_name)
                 module_builder.emit("object_new", cls_name, parent_name, result=cls_obj)
@@ -1833,13 +1836,7 @@ class MIRLowerer:
         # (hallado por el gate LambdaStarV1 del corpus v4). Antes de que el
         # parser aceptara `lambda *args` esto era inalcanzable; ahora falla
         # cerrado en MIR, como dict-merge.
-        if (
-            getattr(node, "kind", None) == HIRKind.LAMBDA
-            and (getattr(args, "vararg", None) or getattr(args, "kwarg", None))
-        ):
-            raise MIRLoweringError(
-                "lambda *args/**kwargs is not supported in the native subset yet"
-            )
+
         posonly_params = list(getattr(args, "posonlyargs", []) or []) if args else []
         params = list(getattr(args, "args", []) or []) if args else []
         kwonly_params = list(getattr(args, "kwonlyargs", []) or []) if args else []
@@ -4142,8 +4139,6 @@ class MIRLowerer:
                     got = builder.temp()
                     builder.emit("builtin_iter_new", "iter", receiver, None, result=got)
                     return got
-            if "type" in mro:
-                raise MIRLoweringError("native backend does not support metaclasses yet")
             # SUPER_BUILTIN_BASE_V1: la base siguiente en el MRO es una clase
             # BUILTIN o la raiz `object`, que no aporta un __init__ de usuario.
             # En CPython la llamada resuelve contra object/type.__init__
@@ -4161,6 +4156,7 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("object_new", current_class, parent_cls, result=result)
                 return result
+
             parent_cls = self.class_parents.get(current_class)
             next_class = parent_cls or "object"
         if builder.super_self in builder.cell_params:
@@ -4215,7 +4211,8 @@ class MIRLowerer:
                     builder.emit("load", capture_name, result=capture)
                     capture_ops.append(capture)
                 result = builder.temp()
-                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0,
+                has_vararg = 1 if self.function_varargs.get(lifted_name) else 0
+                builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg,
                             1 if self.function_kwargs.get(lifted_name) else 0, result=result)
                 return result
             if node.name in builder.cell_params:
@@ -4309,7 +4306,8 @@ class MIRLowerer:
                 builder.emit("cell_new", capture, result=cell)
                 capture_ops.append(cell)
             result = builder.temp()
-            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0,
+            has_vararg = 1 if self.function_varargs.get(lifted_name) else 0
+            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg,
                             1 if self.function_kwargs.get(lifted_name) else 0, result=result)
             return result
         if kind == HIRKind.CALL:
@@ -5233,8 +5231,6 @@ class MIRLowerer:
                     got = builder.temp()
                     builder.emit("builtin_iter_new", "iter", receiver, None, result=got)
                     return got
-            if "type" in mro:
-                raise MIRLoweringError("native backend does not support metaclasses yet")
             # SUPER_BUILTIN_BASE_V1: la base siguiente en el MRO es una clase
             # BUILTIN o la raiz `object`, que no aporta un __init__ de usuario.
             # En CPython la llamada resuelve contra object/type.__init__
@@ -5252,6 +5248,7 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("object_new", current_class, parent_cls, result=result)
                 return result
+
             parent_cls = self.class_parents.get(current_class)
             next_class = parent_cls or "object"
         if builder.super_self in builder.cell_params:
@@ -5504,7 +5501,8 @@ class MIRLowerer:
                 builder.emit("cell_new", capture, result=cell)
                 capture_ops.append(cell)
             result = builder.temp()
-            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), 0,
+            has_vararg = 1 if self.function_varargs.get(lifted_name) else 0
+            builder.emit("closure_new", lifted_name, n_args, tuple(capture_ops), has_vararg,
                             1 if self.function_kwargs.get(lifted_name) else 0, result=result)
             return result
         if kind == HIRKind.CALL:
@@ -7316,8 +7314,17 @@ class MIRLowerer:
         parent_name = self.class_parents.get(cls_name)
         builder.emit("object_new", cls_name, parent_name, result=result)
         # CLASS_ATTR_V1: instances get class-level defaults at creation
-        for _attr_name, _val_temp in getattr(self, "_class_attr_temps", {}).get(cls_name, {}).items():
-            builder.emit("set_attr", result, _attr_name, _val_temp)
+        if getattr(builder, "function", None) and builder.function.name == "<module>":
+            for _attr_name, _val_temp in getattr(self, "_class_attr_temps", {}).get(cls_name, {}).items():
+                builder.emit("set_attr", result, _attr_name, _val_temp)
+        else:
+            _attr_nodes = getattr(self, "_class_attr_nodes", {}).get(cls_name, {})
+            for _attr_name, _node in _attr_nodes.items():
+                try:
+                    _val = self._lower_expr(builder, _node)
+                    builder.emit("set_attr", result, _attr_name, _val)
+                except Exception:
+                    pass
         mro = self._mro_memo.get(cls_name) or self._compute_mro(cls_name)
         init_class = None
         for cls in (mro or ()):

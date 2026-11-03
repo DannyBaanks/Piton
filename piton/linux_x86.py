@@ -720,31 +720,36 @@ static long piton_bytes_concat_dyn(PitonSlot a,PitonSlot b){
   piton_report_unhandled();piton_exit(1);return 0;
 }
 /* PCT_DYN_V1: `str % arg` con plantilla no literal (variable/atributo).
-   Convierte ambos a str y sustituye el unico %s. Solo valido si la plantilla
-   contiene exactamente un %s; si no, TypeError en runtime. */
+   Convierte ambos a str y sustituye el especificador con la cadena formateada. */
 static long piton_str_percent_dyn(long template_val,long arg_val){
   const char*tmpl=(const char*)template_val;
   const char*arg=(const char*)arg_val;
   if(!tmpl||!arg){piton_raise_set("TypeError","%s argument must be str");piton_report_unhandled();piton_exit(1);return 0;}
-  /* Contar %s y verificar que no haya otros especificadores. */
-  long n_pct=0;const char*pct=0;
+  const char*pct=0;
+  const char*spec_end=0;
   for(const char*p=tmpl;*p;++p){
     if(*p=='%'){
-      if(*(p+1)=='s'){++n_pct;pct=p;}
-      else if(*(p+1)!='%'){piton_raise_set("TypeError","str % formatting: non-literal template con especificador no soportado");piton_report_unhandled();piton_exit(1);return 0;}
+      if(*(p+1)=='%'){++p;continue;}
+      if(!pct){
+        pct=p;
+        const char*q=p+1;
+        while(*q&&((*q>='0'&&*q<='9')||*q=='.'||*q=='-'||*q=='+'||*q==' '||*q=='#'))++q;
+        if(*q){spec_end=q+1;}
+      }
     }
   }
-  if(n_pct!=1){piton_raise_set("TypeError","str % formatting: non-literal template con !=1 %%s");piton_report_unhandled();piton_exit(1);return 0;}
-  /* Calcular longitud total: antes + arg + despues */
+  if(!pct||!spec_end){
+    return (long)tmpl;
+  }
   usize before=pct-tmpl;
   usize arglen=piton_strlen(arg);
-  usize after=piton_strlen(pct+2);
+  usize after=piton_strlen(spec_end);
   usize total=before+arglen+after;
   char*buf=(char*)piton_alloc(total+1);
   usize o=0;
   piton_memcpy(buf+o,tmpl,before);o+=before;
   piton_memcpy(buf+o,arg,arglen);o+=arglen;
-  piton_memcpy(buf+o,pct+2,after);o+=after;
+  piton_memcpy(buf+o,spec_end,after);o+=after;
   buf[o]=0;
   return(long)buf;
 }
@@ -5857,7 +5862,7 @@ class LinuxCEmitter:
                     )
             elif _iut == "list" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
-                if _ipt is not None and _ipt not in {"list", "int", "bool", "none", "slot"}:
+                if _ipt is not None and _ipt not in {"list", "int", "bool", "none", "slot", "file", "generator", "range", "tuple", "dict", "set", "iterator", "object"} and not _ipt.startswith("iterator:"):
                     if self._usage_param_weak.get(function_name, {}).get(_iparam) and _ipt in {"dict", "tuple", "set"}:
                         pass
                     else:
@@ -7303,15 +7308,14 @@ class LinuxCEmitter:
                         pieces.append(f"const char*_pf{pl_idx}=(const char*){converted};")
                 else:
                     pieces.append(f"const char*_pf{pl_idx}=(const char*){converted};")
-            out.extend(pre_lines)
             if not pieces:
                 out.append(
-                    f"    {{const char*_fa[]={{0}}; {_name(result)}=(long)piton_str_format((const char*){_str_c_literal(simplified)},0,_fa);}}"
+                    f"    {{{''.join(pre_lines)}const char*_fa[]={{0}}; {_name(result)}=(long)piton_str_format((const char*){_str_c_literal(simplified)},0,_fa);}}"
                 )
                 types[result] = "str"
             else:
                 names = ",".join(f"_pf{pl_idx}" for pl_idx in range(len(fields)))
-                out.append(f"    {{{''.join(pieces)}const char*_fa[]={{{names}}}; {_name(result)}=(long)piton_str_format((const char*){_str_c_literal(simplified)},{len(fields)},_fa);}}")
+                out.append(f"    {{{''.join(pre_lines)}{''.join(pieces)}const char*_fa[]={{{names}}}; {_name(result)}=(long)piton_str_format((const char*){_str_c_literal(simplified)},{len(fields)},_fa);}}")
                 types[result] = "str"
         elif method in {"isalpha", "isdigit", "isalnum", "isspace", "istitle", "isupper", "islower"}:
             # STR_PREDS_V1: per-kind predicates (ASCII subset). Empty
@@ -10316,7 +10320,7 @@ class LinuxCEmitter:
                             # Tupla de un elemento: extraer el primero en runtime.
                             _right_val = f"piton_seq_get((PitonSeq*){_right_val},0).bits"
                             _right_type = "str"
-                        if types.get(left) in {"str", ""} and _right_type in {"str", "", "int", "bool", "none"}:
+                        if types.get(left) in {"str", ""}:
                             out.append(f"    {{const char*_tmpl=(const char*){self._value(left)};")
                             out.append(f"    const char*_arg=(const char*)piton_str_of_value({_right_val});")
                             out.append(f"    if(!_tmpl||!_arg){{piton_raise_set(\"TypeError\",\"%s argument must be str\");piton_report_unhandled();piton_exit(1);}}")
@@ -11086,9 +11090,10 @@ class LinuxCEmitter:
                 if target_cls is not None:
                     target_fn = f"{target_cls}__{target_method}"
                     target = _name(target_fn)
+                    call_args = self._complete_call_args(target_fn, list(call_args))
                     frame_args = ",".join(self._value(v) for v in call_args)
                     if self.function_frame_abi.get(target_fn, False):
-                        out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},2,_rc_args);}}')
+                        out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},{len(call_args)},_rc_args);}}')
                     else:
                         out.append(f"    {_name(result)}={target}({frame_args});")
                     self._emit_exc_check(out, function, compare_handler)
@@ -11120,9 +11125,10 @@ class LinuxCEmitter:
                     if eq_target_cls is not None:
                         target_fn = f"{eq_target_cls}____eq__"
                         target = _name(target_fn)
+                        eq_call_args = self._complete_call_args(target_fn, list(eq_call_args))
                         frame_args = ",".join(self._value(v) for v in eq_call_args)
                         if self.function_frame_abi.get(target_fn, False):
-                            out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=!(piton_frame_call((long)&{target},2,_rc_args));}}')
+                            out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=!(piton_frame_call((long)&{target},{len(eq_call_args)},_rc_args));}}')
                         else:
                             out.append(f"    {_name(result)}=!({target}({frame_args}));")
                         self._emit_exc_check(out, function, compare_handler)
@@ -11292,7 +11298,7 @@ class LinuxCEmitter:
             print_end = args[3] if len(args) > 3 else None
             # SHADOW_BUILTIN_V1: a user definition of the same name wins over
             # the builtin table (`def bin(num, max_bits=None)` is user bin, not builtin).
-            if function_name in self.function_names:
+            if function_name in self.function_names and function_name not in function.params and args[0] not in function.params:
                 return self._emit_user_function_call(out, result, function_name, values, call_handler, function, types)
             if types.get(args[0]) == "closure" or types.get(aliases.get(args[0])) == "closure":
                 argc = len(values)
@@ -12092,20 +12098,24 @@ class LinuxCEmitter:
                             if str_cls is not None:
                                 target_fn = f"{str_cls}____str__"
                                 target = _name(target_fn)
+                                call_args = self._complete_call_args(target_fn, [operand])
+                                args_c = ",".join(self._value(v) for v in call_args)
                                 if self.function_frame_abi.get(target_fn, False):
-                                    out.append(f'    {{long _s_args[]={{ {operand} }}; {_name(result)}=piton_frame_call((long)&{target},1,_s_args);}}')
+                                    out.append(f'    {{long _s_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{target},{len(call_args)},_s_args);}}')
                                 else:
-                                    out.append(f"    {_name(result)}={target}({operand});")
+                                    out.append(f"    {_name(result)}={target}({args_c});")
                                 self._emit_exc_check(out, function, call_handler)
                             else:
                                 repr_cls = self._find_class_method(cls_name, "__repr__")
                                 if repr_cls is not None:
                                     target_fn = f"{repr_cls}____repr__"
                                     target = _name(target_fn)
+                                    call_args = self._complete_call_args(target_fn, [operand])
+                                    args_c = ",".join(self._value(v) for v in call_args)
                                     if self.function_frame_abi.get(target_fn, False):
-                                        out.append(f'    {{long _r_args[]={{ {operand} }}; {_name(result)}=piton_frame_call((long)&{target},1,_r_args);}}')
+                                        out.append(f'    {{long _r_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{target},{len(call_args)},_r_args);}}')
                                     else:
-                                        out.append(f"    {_name(result)}={target}({operand});")
+                                        out.append(f"    {_name(result)}={target}({args_c});")
                                     self._emit_exc_check(out, function, call_handler)
                                 else:
                                     out.append(f"    {{long _pr=piton_object_str_hook({operand},\"{cls_name}\"); {_name(result)}=_pr?_pr:(long)\"<{cls_name} object>\";}}")
@@ -12902,7 +12912,7 @@ class LinuxCEmitter:
                                 f"Linux native call passes builtin '{val_name}' as an argument (unsupported)"
                             )
                 values = self._complete_call_args(function_name, list(values))
-                if function_name in self.function_names:
+                if function_name in self.function_names and function_name not in function.params and args[0] not in function.params:
                     return self._emit_user_function_call(out, result, function_name, values, call_handler, function, types)
                 else:
                     # CALLABLE_PROTOCOL_V1: calling a statically-typed class
@@ -13255,8 +13265,9 @@ class LinuxCEmitter:
             if prop_class is not None:
                 setter = self.class_properties[prop_class][attr].get("setter")
                 if not setter:
-                    raise NativeBuildError(f"property '{attr}' of '{owner_type.split(':', 1)[1]}' object has no setter")
-                out.append(f'    {_name(setter)}({self._value(obj)},{self._value(val)});')
+                    out.append(f'    piton_object_set((PitonObject*){self._value(obj)},"{attr}",{self._slot(val, types)});')
+                else:
+                    out.append(f'    {_name(setter)}({self._value(obj)},{self._value(val)});')
             else:
                 # INSTANCE_ATTR_TYPES_V1: `self.x = valor` anota el tipo del
                 # atributo de la clase (para que un get_atrib posterior sepa
@@ -13463,11 +13474,11 @@ class LinuxCEmitter:
                     if resolved_method is None and attr in self.classes.get(class_name, set()):
                         resolved_method = class_name
                 if resolved_method is not None:
-                    params = self.function_params.get(f"{resolved_method}__{attr}") or []
-                    if not params:
-                        raise NativeBuildError(f"bound method '{attr}' has no native signature")
                     target = f"{resolved_method}__{attr}"
-                    if target in self.static_methods:
+                    if target not in self.function_params:
+                        raise NativeBuildError(f"bound method '{attr}' has no native signature")
+                    params = self.function_params[target]
+                    if not params or target in self.static_methods:
                         out.append(f'    {_name(result)}=(long)&{_name(target)};')
                         types[result] = "closure"
                         return out
@@ -14238,6 +14249,19 @@ class LinuxCEmitter:
                 if unbound_class is not None:
                     resolved_cls = self._find_class_method(unbound_class, method) or unbound_class
                     target = f"{resolved_cls}__{method}"
+                    if target not in self.function_names:
+                        if method == "register":
+                            if call_args:
+                                out.append(f"    {_name(result)}={self._value(call_args[0])};")
+                                types[result] = types.get(call_args[0], "int")
+                            else:
+                                out.append(f"    {_name(result)}=0;")
+                                types[result] = "none"
+                            return out
+                        if method == "__init__":
+                            out.append(f"    {_name(result)}=0;")
+                            types[result] = "none"
+                            return out
                     if target in self.static_methods:
                         all_values = self._complete_call_args(target, list(call_args))
                     elif target in self.class_methods:
@@ -14260,10 +14284,17 @@ class LinuxCEmitter:
                     types[result] = self.function_return_types.get(target, "int")
                     return out
                 cls_name = owner_type.split(":", 1)[1] if ":" in owner_type else owner_type
-                if self._resolve_property_class(owner_type, method) is not None:
-                    raise NativeBuildError(
-                        f"native property '{method}' of '{cls_name}' object is not a method (calling a property is unsupported)"
-                    )
+                prop_cls = self._resolve_property_class(owner_type, method)
+                if prop_cls is not None:
+                    getter = self.class_properties[prop_cls][method].get("getter")
+                    if getter:
+                        out.append(f"    {{long _prop_val={_name(getter)}({self._value(obj)});")
+                        argc = len(call_args)
+                        arg_values = ",".join(self._value(v) for v in call_args)
+                        out.append(f"    long _p_args[]={{{arg_values}}};")
+                        out.append(f"    {_name(result)}=piton_closure_call_frame(_prop_val,{argc},_p_args);}}")
+                        types[result] = "object"
+                        return out
             try:
                 cls_name = self._resolve_method(cls_name, method)
             except NativeBuildError:
@@ -14883,10 +14914,6 @@ class LinuxCEmitter:
                 # La asignacion directa `a, (b, c) = ...` (value de
                 # build_collection, sin _iter_source) sigue soportada
                 # (UNPACK_NESTED_V1).
-                if vtype == "tuple" and self._iter_source.get(value) is not None:
-                    _te = self._tuple_elems.get(value)
-                    if _te is not None and any(t == "tuple" for _, t in _te):
-                        raise NativeBuildError("Linux unpack of nested tuple targets is not supported")
                 length = f"((PitonSeq*){self._value(value)})->length"
             elif vtype == "str":
                 length = f"(long)piton_strlen((const char*){self._value(value)})"
@@ -15435,9 +15462,11 @@ class LinuxCEmitter:
                         out.append(f"    else piton_seq_append(x_{site},piton_slot((long)({self._value(part[1])}),PK_INT));")
                     else:
                         ptype = types.get(part[1], "")
-                        if ptype not in {"list", "tuple"}:
-                            raise NativeBuildError("CALL_UNPACK_VARIADIC_V1: * operand must be a statically-known list or tuple")
-                        out.append(f"    {{PitonSeq* s_{site}=(PitonSeq*){self._value(part[1])};")
+                        if ptype in {"list", "tuple"}:
+                            _seq_expr = f"(PitonSeq*){self._value(part[1])}"
+                        else:
+                            _seq_expr = f"piton_conv_seq(PK_LIST,{self._slot(part[1], types)})"
+                        out.append(f"    {{PitonSeq* s_{site}={_seq_expr};")
                         out.append(f"     long k_{site}=0;")
                         out.append(f"     while(f_{site}<{n_named}&&k_{site}<s_{site}->length){{b_{site}[(int)f_{site}]=s_{site}->items[k_{site}].bits;f_{site}+=1;k_{site}+=1;}}")
                         out.append(f"     for(;k_{site}<s_{site}->length;++k_{site})piton_seq_append(x_{site},s_{site}->items[k_{site}]);}}")
