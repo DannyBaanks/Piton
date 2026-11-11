@@ -372,6 +372,44 @@ class MinMaxTypesV1(unittest.TestCase):
             _assert_matches(self, source)
 
 
+class FileAttrV1(unittest.TestCase):
+    """FILE_ATTR_V1: los atributos del handle de fichero (`closed`, `name`,
+    `mode`) son campos del PitonFile, no entradas de un objeto.
+
+    Antes caian al dispatch generico de atributos y levantaban
+    AttributeError sobre un puntero que no es un PitonObject — el tutorial de
+    CPython usa `f.closed` en el ejemplo de E/S.
+    """
+
+    def test_closed_attribute_is_false_on_open_file(self):
+        result = compare_native_to_cpython(
+            "fp = abrir('tests/test_p0_parity.py')\n"
+            "imprimir(fp.closed)\n"
+            "fp.close()\n"
+        )
+        self.assertEqual(result.native.returncode, 0)
+        self.assertEqual(result.native.stdout, result.oracle.stdout)
+
+    def test_closed_attribute_is_true_after_close(self):
+        result = compare_native_to_cpython(
+            "fp = abrir('tests/test_p0_parity.py')\n"
+            "fp.close()\n"
+            "imprimir(fp.closed)\n"
+        )
+        self.assertEqual(result.native.returncode, 0)
+        self.assertEqual(result.native.stdout, result.oracle.stdout)
+
+    def test_name_and_mode_attributes(self):
+        result = compare_native_to_cpython(
+            "fp = abrir('tests/test_p0_parity.py')\n"
+            "imprimir(fp.name)\n"
+            "imprimir(fp.mode)\n"
+            "fp.close()\n"
+        )
+        self.assertEqual(result.native.returncode, 0)
+        self.assertEqual(result.native.stdout, result.oracle.stdout)
+
+
 class BuiltinMarkerV1(unittest.TestCase):
     """BUILTIN_MARKER_V1: builtins outside their supported context fail closed.
 

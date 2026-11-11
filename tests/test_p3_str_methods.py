@@ -8,7 +8,10 @@ both backends, differentials vs CPython:
   upper/lower (ASCII; non-ASCII fails closed at runtime), find,
   startswith/endswith, replace (including the empty-old edge),
   split (sep and no-arg whitespace mode), strip/lstrip/rstrip,
-  join (list/tuple of str), format ({} and {N} positional, {{ }} escapes).
+  join (list/tuple of str), format ({} and {N} positional, {{ }} escapes,
+  named fields `{name}` with keyword arguments — the keyword namespace is
+  independent from the positional one — and `format(**mapping)` with the
+  mapping resolved at runtime, FMT_NS_V1).
 
 Everything else — arity, static arg types, unknown method names, format
 specs/keywords, float % — fails closed at BUILD time. Valid-Python but
@@ -206,6 +209,75 @@ class FormatV1(unittest.TestCase):
             _assert_matches(self, "imprimir('a'.format_map({}))\n")
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("imprimir('a'.translate(None))\n")
+
+
+class FormatNamedSlotV1(unittest.TestCase):
+    """FMT_NAMED_SLOT_V1: el namespace de keywords de str.format() es
+    INDEPENDIENTE de los posicionales (CPython los numera por separado).
+
+    Antes los campos con nombre se numeraban desde 0 y pisaban los
+    posicionales: '{0} {1} {o}'.format('Bill','Manfred',o='Georg') imprimia
+    'Georg Manfred Georg' — datos correctos con el nombre equivocado, el
+    peor modo de divergir.
+    """
+
+    def test_named_and_positional_do_not_collide(self):
+        _assert_matches(
+            self,
+            "imprimir('{0} {1} {o}'.format('Bill', 'Manfred', o='Georg'))\n",
+        )
+
+    def test_named_only(self):
+        _assert_matches(self, "imprimir('{o}'.format(o='Georg'))\n")
+
+    def test_named_repeated_keeps_one_slot(self):
+        _assert_matches(self, "imprimir('{x} {x}'.format(x=7))\n")
+
+    def test_named_with_spaces_around_positional(self):
+        _assert_matches(self, "imprimir('{0} {x}'.format('a', x='b'))\n")
+
+
+class FormatRuntimeMappingV1(unittest.TestCase):
+    """FMT_NS_V1: `s.format(**mapping)` con el mapping resuelto en RUNTIME.
+
+    Antes caia en el call dinamico generico, que leia `.format` como atributo
+    de un str y levantaba TypeError: 'str' object has no attribute 'format'.
+    Ahora el mapping se busca en runtime; un nombre ausente levanta KeyError
+    como en CPython (nunca una aproximacion).
+    """
+
+    def test_runtime_mapping_literal_receiver(self):
+        _assert_matches(self, "d = {'a': 7}\nimprimir('x={a}'.format(**d))\n")
+
+    def test_runtime_mapping_variable_receiver(self):
+        _assert_matches(
+            self,
+            "d = {'a': 7}\ns = 'x={a}'\nimprimir(s.format(**d))\n",
+        )
+
+    def test_runtime_mapping_with_spec(self):
+        _assert_matches(
+            self,
+            "d = {'n': 42, 's': 'hi'}\nimprimir('{s}={n:d}'.format(**d))\n",
+        )
+
+    def test_runtime_mapping_escaped_braces(self):
+        _assert_matches(self, "d = {'n': 1}\nimprimir('{{literal}} {n}'.format(**d))\n")
+
+    def test_runtime_mapping_missing_key_is_keyerror(self):
+        result = compare_native_to_cpython("d = {'n': 1}\nimprimir('{zz}'.format(**d))\n")
+        self.assertEqual(result.native.returncode, 1)
+        self.assertIn(b"KeyError", result.native.stderr)
+
+    def test_runtime_mapping_is_catchable(self):
+        _assert_matches(
+            self,
+            "d = {'n': 1}\n"
+            "intentar:\n"
+            "    imprimir('{zz}'.format(**d))\n"
+            "excepto KeyError:\n"
+            "    imprimir('capturado')\n",
+        )
 
 
 class StrMethodsChainedV1(unittest.TestCase):

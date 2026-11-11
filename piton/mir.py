@@ -319,6 +319,9 @@ MIR_OP_EFFECTS: dict[str, str] = {
     # DYNAMIC_CALL_V1: llamada a un callable desconocido (el frame lo arma
     # el runtime; no hay efecto observable en build).
     "dynamic_call": "PURE",
+    # FMT_NS_V1: str.format(**mapping) resuelto en runtime (levanta KeyError
+    # como mucho; no escribe estado observable).
+    "str_format_ns": "PURE",
     # OS_FSPATH_V1 / OS_PATHLIKE_V1: valores nativos de `os`.
     "os_fspath": "PURE", "os_fsencode": "PURE", "builtin_class": "PURE",
     # RAISE_VALUE_V1: levantar una instancia (no una clase).
@@ -7279,6 +7282,31 @@ class MIRLowerer:
         frame con los args y el dict de keywords resueltos en runtime.
         """
         func = node.func
+        # FMT_NS_V1: `s.format(**mapping)` con el mapping resuelto en runtime.
+        # El namespace de keywords de CPython es independiente de los
+        # posicionales, asi que esta forma solo admite `**` y ningun
+        # posicional; el resto de combinaciones falla cerrado (antes caia en
+        # el call dinamico generico, que intentaba leer `.format` como
+        # atributo de un str y levantaba AttributeError en runtime).
+        if func.kind == HIRKind.ATTR and func.attr == "format" and not node.args:
+            star_kw = [kw for kw in node.keywords if kw.arg is None]
+            named_kw = [kw for kw in node.keywords if kw.arg is not None]
+            if len(star_kw) == 1 and not named_kw:
+                owner = self._lower_expr(builder, func.value)
+                mapping = self._lower_expr(builder, star_kw[0].value)
+                result = builder.temp()
+                builder.emit(
+                    "str_format_ns",
+                    owner,
+                    mapping,
+                    self._find_exception_handler(builder, "KeyError"),
+                    result=result,
+                )
+                return result
+            if star_kw:
+                raise MIRLoweringError(
+                    "native str.format() with **kwargs supports a single mapping and no positional arguments"
+                )
         if func.kind != HIRKind.LOAD or func.name not in self.function_params:
             return self._lower_dynamic_call(builder, node)
         name = func.name

@@ -1872,6 +1872,96 @@ static long piton_float_from_str(const char*s){if(!s){piton_raise_set("TypeError
 static long piton_fspath_str(const char*s){return(long)s;}
 static long piton_str_from_int(long v){char*p=piton_alloc(24);usize o=0;unsigned long u;if(v<0){p[o++]='-';u=(unsigned long)(-(v+1))+1;}else u=(unsigned long)v;char tmp[24];long n=0;do{tmp[n++]=(char)('0'+u%10);u/=10;}while(u);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static long piton_str_from_float(long bits){char*p=piton_alloc(PITON_REPR_MAX+1);int n=piton_repr_double(p,(unsigned long long)bits);p[n]=0;return(long)p;}
+/* FMT_NS_V1: `str.format(**mapping)` con el mapping resuelto en RUNTIME.
+   CPython mantiene el namespace de keywords SEPARADO del de posicionales; en
+   esta forma no hay posicionales, asi que los unicos campos admitidos son
+   `{name}` y `{name:spec}` con spec vacia, 's' o 'd'. Cualquier otro campo
+   (posicional `{}`/`{0}`, accessor, conversion `!r`, spec no soportada) o un
+   nombre ausente levanta la excepcion de CPython: nunca se imprime una
+   aproximacion. Devuelve "" con la excepcion ya armada cuando falla. */
+static const char* piton_fmt_ns_field(const char*t,usize*i,PitonDict*ns){
+  usize j=*i+1,s,e,sp0=0,sp1=0;PitonSlot v;char name[128];usize nl;
+  if(!((t[j]>='A'&&t[j]<='Z')||(t[j]>='a'&&t[j]<='z')||t[j]=='_')){
+    /* Un campo POSICIONAL dentro de una llamada solo de keywords no tiene
+       argumento: CPython levanta IndexError ("Replacement index N out of
+       range for positional args tuple"), no KeyError. */
+    if(t[j]=='}'){
+      /* Campo automatico `{}`: tambien es posicional. */
+      piton_raise_set("IndexError","Replacement index out of range for positional args tuple");
+      return 0;}
+    if(t[j]>='0'&&t[j]<='9'){
+      usize k=j;long idx=0;
+      while(t[k]>='0'&&t[k]<='9'){idx=idx*10+(t[k]-'0');++k;}
+      piton_raise_set("IndexError","Replacement index out of range for positional args tuple");
+      return 0;}
+    piton_raise_set("KeyError","");return 0;}
+  s=j;
+  while((t[j]>='A'&&t[j]<='Z')||(t[j]>='a'&&t[j]<='z')||(t[j]>='0'&&t[j]<='9')||t[j]=='_')++j;
+  e=j;
+  if(t[j]==':'){sp0=++j;while(t[j]&&t[j]!='}')++j;sp1=j;}
+  if(t[j]!='}'){piton_raise_set("ValueError","expected '}' before end of string");return 0;}
+  *i=j+1;
+  nl=e-s;
+  if(nl==0||nl>=sizeof(name)){piton_raise_set("KeyError","");return 0;}
+  for(usize k=0;k<nl;++k)name[k]=t[s+k];
+  name[nl]=0;
+  /* KEY_LOOKUP_STRICT_V1: piton_dict_get_1 devuelve PK_NONE tanto para una
+     clave AUSENTE como para un None almacenado; CPython levanta KeyError en
+     el primer caso y escribe 'None' en el segundo. La busqueda es explicita. */
+  {int found=0;v=(PitonSlot){0,PK_NONE};
+   for(long q=0;q<ns->length;++q){
+     PitonSlot key=ns->items[q].key;
+     if(key.kind==PK_STR&&piton_strcmp((const char*)key.bits,name)==0){v=ns->items[q].value;found=1;break;}
+   }
+   if(!found){piton_raise_set("KeyError",name);return 0;}}
+  /* spec: solo vacia, 's' o 'd' (el resto fail-closed). */
+  if(sp1>sp0){
+    if(!((sp1-sp0==1)&&(t[sp0]=='s'||t[sp0]=='d'))){
+      piton_raise_set("ValueError","unsupported format spec in str.format(**mapping)");return 0;}
+    if(t[sp0]=='d'&&v.kind!=PK_INT&&v.kind!=PK_BOOL){
+      piton_raise_set("ValueError","Unknown format code 'd' for object");return 0;}
+    if(t[sp0]=='s'&&v.kind!=PK_STR){
+      piton_raise_set("ValueError","Unknown format code 's' for object");return 0;}
+  }
+  if(v.kind==PK_STR)return(const char*)v.bits;
+  if(v.kind==PK_INT)return(const char*)piton_str_from_int(v.bits);
+  if(v.kind==PK_BOOL)return v.bits?"True":"False";
+  if(v.kind==PK_NONE)return"None";
+  piton_raise_set("TypeError","unsupported format value from str.format(**mapping)");
+  return 0;
+}
+static long piton_str_format_ns(const char*t,PitonDict*ns){
+  usize total=0,i=0,o=0;char*p;
+  if(!ns||((long*)ns)[1]!=PK_DICT){
+    piton_raise_set("TypeError","str.format() argument after ** must be a mapping");return(long)"";}
+  while(t[i]){
+    if(t[i]=='{'){
+      if(t[i+1]=='{'){total+=1;i+=2;continue;}
+      const char*f=piton_fmt_ns_field(t,&i,ns);
+      if(!f)return(long)"";
+      total+=piton_strlen(f);
+    }else if(t[i]=='}'){
+      if(t[i+1]=='}'){total+=1;i+=2;continue;}
+      piton_raise_set("ValueError","single '}' encountered in format string");return(long)"";
+    }else{total+=1;++i;}
+  }
+  p=(char*)piton_alloc(total+1);
+  i=0;
+  while(t[i]){
+    if(t[i]=='{'){
+      if(t[i+1]=='{'){p[o++]='{';i+=2;continue;}
+      const char*f=piton_fmt_ns_field(t,&i,ns);
+      if(!f){p[o]=0;return(long)p;}
+      usize fl=piton_strlen(f);
+      for(usize k=0;k<fl;++k)p[o++]=f[k];
+    }else if(t[i]=='}'){
+      if(t[i+1]=='}'){p[o++]='}';i+=2;continue;}
+      p[o]=0;return(long)p;
+    }else p[o++]=t[i++];
+  }
+  p[o]=0;
+  return(long)p;
+}
 static long piton_str_truthy(const char*s){return(s&&s[0])?1:0;}
 static long piton_math_floor_bits(long bits){double d=piton_bits_double(bits);long t=(long)d;if((double)t>d)--t;return t;}
 static long piton_math_ceil_bits(long bits){double d=piton_bits_double(bits);long t=(long)d;if((double)t<d)++t;return t;}
@@ -5567,19 +5657,28 @@ class LinuxCEmitter:
         return operand
 
     @staticmethod
-    def _parse_format_template(template: str) -> tuple[str, list[tuple[int, str]]]:
+    def _parse_format_template(
+        template: str, named_base: int = 0
+    ) -> tuple[str, list[tuple[int, str]]]:
         """FMT_SPEC_V1: parse a str.format() template into a simplified
         template (all placeholders replaced with {}) and a list of
         (index, spec, token) tuples. Named placeholders fail closed. Escaped
         braces ({{ }}) are left intact for the format engine, which
-        renders them as single literal braces."""
+        renders them as single literal braces.
+
+        FMT_NAMED_SLOT_V1: `named_base` es el primer slot libre del array de
+        argumentos (el numero de posicionales del call-site). Los campos con
+        nombre se numeran A PARTIR DE AHI: en CPython el namespace de keywords
+        es independiente de los posicionales, asi que numerarlos desde 0 pisaba
+        los posicionales (`'{0} {1} {o}'.format('Bill','Manfred',o='Georg')`
+        imprimia 'Georg Manfred Georg')."""
         out: list[str] = []
         fields: list[tuple[int, str, str, tuple | None, str | None]] = []
         names: dict[str, int] = {}
         named_fields: set[int] = set()
         i, n = 0, len(template)
         auto_idx = 0
-        named_idx = 0
+        named_idx = named_base
         saw_manual = saw_auto = False
         while i < n:
             ch = template[i]
@@ -7259,7 +7358,9 @@ class LinuxCEmitter:
                 raise NativeBuildError(
                     "Linux str.format() with a format spec requires a literal template"
                 )
-            simplified, fields, _fmt_names = self._parse_format_template(template)
+            simplified, fields, _fmt_names = self._parse_format_template(
+                template, named_base=len(call_args)
+            )
             # FMT_NAMED_V1: los argumentos por keyword se colocan en los
             # campos con NOMBRE (el mapa nombre->indice del parser).
             if _fmt_names and not _fmt_kw:
@@ -13709,6 +13810,26 @@ class LinuxCEmitter:
                     )
                     types[result] = "int"
                     return out
+                if owner_type == "file" and attr in {"closed", "name", "mode"}:
+                    # FILE_ATTR_V1: los atributos del handle son campos del
+                    # PitonFile, no entradas de un PitonObject. Antes caian al
+                    # dispatch generico y levantaban AttributeError sobre un
+                    # puntero que no es un objeto (`f.closed` en un fichero
+                    # abierto es un bug del tutorial de CPython).
+                    if attr == "closed":
+                        out.append(
+                            f"    {_name(result)}=((PitonFile*){self._value(obj)})->closed?1:0;"
+                        )
+                        types[result] = "bool"
+                    else:
+                        # CPython llama `name` al path del fichero; el campo
+                        # del handle es `path`.
+                        _fattr = "path" if attr == "name" else attr
+                        out.append(
+                            f"    {_name(result)}=(long)((PitonFile*){self._value(obj)})->{_fattr};"
+                        )
+                        types[result] = "str"
+                    return out
                 if attr in {"__bases__", "__mro__"}:
                     # CLASS_BASES_V1: el atributo lo lleva la clase (creada con
                     # su tupla de bases y su MRO) — el receptor puede ser
@@ -15729,6 +15850,22 @@ class LinuxCEmitter:
         elif op == "task_new":
             out.append(f"    {_name(result)}=piton_task_new({self._value(args[0])});")
             types[result] = "task"
+        elif op == "str_format_ns":
+            # FMT_NS_V1: `s.format(**mapping)` — el mapping se resuelve en
+            # runtime; el helper levanta KeyError/ValueError/TypeError como
+            # CPython y el handler de excepciones del frame decide.
+            owner, mapping, handler_label = args
+            _ot = types.get(owner, "")
+            if _ot not in {"str", ""}:
+                raise NativeBuildError(
+                    f"Linux str.format(**mapping) requires a str receiver, not {_ot}"
+                )
+            out.append(
+                f"    {_name(result)}=(long)piton_str_format_ns((const char*){self._value(owner)},"
+                f"(PitonDict*){self._value(mapping)});"
+            )
+            types[result] = "str"
+            self._emit_exc_check(out, function, handler_label)
         elif op == "task_cancel":
             out.append(f"    {_name(result)}=piton_task_cancel({self._value(args[0])});")
             types[result] = "int"
