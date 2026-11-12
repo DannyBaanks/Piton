@@ -10002,7 +10002,16 @@ class LinuxCEmitter:
                 # entrega str, y `ch en self.whitespace` lo necesita).
                 types[result] = self._calliter_elem.get(args[0], "int")
             else:
-                types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:mapstr" else "int"
+                # ITER_ELEM_STR_V1: el elemento es str si el iterador rinde
+                # caracteres (iterar una cadena) o si es un map de repr/str
+                # (los iteradores especializados). "iterator:str" es iterar
+                # una cadena; "iterator:mapstr" es map(str, seq) — nombres
+                # distintos a proposito: el primero es PITON previo.
+                types[result] = (
+                    "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"}
+                    else "str" if iterator_type in {"iterator:str", "iterator:mapstr", "iterator:repr"}
+                    else "int"
+                )
             out.append("    if(piton_exc_flag){")
             if handler_label:
                 out.append(f"        goto {_name(function.name + '_' + handler_label)};")
