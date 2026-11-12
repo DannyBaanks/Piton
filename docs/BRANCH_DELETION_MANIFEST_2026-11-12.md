@@ -127,10 +127,20 @@ limpio (sin ese fichero) `import json` falla y las divergencias son
 (5 de 68) frente al worktree principal (3 de 68). No se ha tocado el gate:
 es una decision sobre el stub, no de esta operacion de unificacion.
 
-## 8. Verificacion posterior al borrado
+## 8. Verificacion posterior al borrado (ejecutada 2026-11-12)
 
-- [ ] `git branch -a` muestra solo `main` (+ `origin/main` + `origin/HEAD`)
-- [ ] `git log main` == `git log origin/main` (mismo SHA)
-- [ ] `git worktree list` no contiene worktrees de rama
-- [ ] `git bundle verify` sigue verificando el bundle de seguridad
-- [ ] el arbol de trabajo solo conserva los 3 ficheros sin trackear de 5
+| comprobacion | resultado |
+|---|---|
+| `git branch -a` | `* main` + `remotes/origin/HEAD -> origin/main` + `remotes/origin/main` — ninguna otra rama |
+| `main` == `origin/main` | `dd2f9f8f1b6b6e45a3dc45ca25e35edac9bf916d` == `dd2f9f8f1b6b6e45a3dc45ca25e35edac9bf916d` |
+| `git ls-remote --heads origin` (estado REAL del remoto) | una sola ref: `refs/heads/main` -> `dd2f9f8` |
+| ramas locales borradas | 18/18 con `git branch -d` (git confirmo "fusionada" en cada una) |
+| ramas remotas borradas | 11/11 con `git push origin --delete` (GitHub confirmo `[deleted]` en cada una) |
+| `git worktree list` | solo el worktree principal (`main`) + los 2 snapshots de datavendor (detached, intactos) |
+| `git bundle verify` | "El bundle registra una historia completa" — 19 refs recuperables |
+| restauracion real desde el bundle | `git fetch <bundle> refs/heads/coder/copyreg-builtin-type-value:refs/tmp/restore-test` -> `788c67f`, contenido en `main`; ref temporal borrada |
+| `git status --short` | solo los 3 ficheros sin trackear de la seccion 5; **0 cambios sin commitear** |
+
+Nota: el remoto se movio de `DannyBaanks/PITON.git` a `DannyBaanks/Piton.git`
+(aviso de GitHub); la URL de `origin` se actualizo.
+
