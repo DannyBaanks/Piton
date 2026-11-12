@@ -52,7 +52,12 @@ Con esos tres arreglos, `inputoutput` paso de 6 ejemplos divergentes a 3.
 ## Bugs reales que quedan (no arreglados aqui)
 
 - `del <nombre no definido>` deberia levantar `NameError`; PITON no lo hace
-  (stdlib2, ejemplo 32). Es un bug de una linea en el lowering de `del`.
+  (stdlib2, ejemplo 32). NO es un arreglo de una linea: el backend no tiene
+  la nocion runtime de "nombre ligado" — los globales del modulo son
+  variables C locales inicializadas a 0, y un `int 0` es indistinguible de
+  "nunca asignado". El `del` se modela en build (borra el nombre del mapa de
+  tipos) y no emite codigo. Arreglarlo de verdad pide un flag de binding por
+  global (o un centinela de "no ligado" que no colisione con el int 0).
 - `f.write(bytes)` sobre un fichero abierto en `rb+` falla cerrado con
   `io.UnsupportedOperation: not writable` (inputoutput, ejemplo 61). El
   modelo de ficheros actual carga el fichero entero en memoria al abrirlo y
