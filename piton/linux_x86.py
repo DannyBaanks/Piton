@@ -7482,11 +7482,11 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=piton_str_join_dyn((const char*){operand},{self._value(call_args[0])});")
                 types[result] = "str"
                 return out
-            if types.get(call_args[0]) in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter", "iterator:repr", "iterator:len", "iterator:str", "generator", "genexpr"}:
+            if types.get(call_args[0]) in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:map", "iterator:filter", "iterator:repr", "iterator:len", "iterator:mapstr", "generator", "genexpr"}:
                 # JOIN_OF_ITER_V1: `sep.join(iterator)` materializa el
                 # iterador a lista antes de unir (CPython acepta cualquier
                 # iterable). Los elementos deben ser str.
-                _jwhich = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3, "iterator:repr": 5, "iterator:len": 6, "iterator:str": 7, "generator": 4, "genexpr": 4}[types.get(call_args[0])]
+                _jwhich = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3, "iterator:repr": 5, "iterator:len": 6, "iterator:mapstr": 7, "generator": 4, "genexpr": 4}[types.get(call_args[0])]
                 out.append(
                     f"    {{PitonSeq*_jl=(PitonSeq*)piton_collect({_jwhich},{self._value(call_args[0])},PK_STR);"
                 )
@@ -9743,14 +9743,22 @@ class LinuxCEmitter:
                 if types.get(source) not in {"list", "tuple"}:
                     # Relajar map/filter: permitir iterables genéricos
                     pass
-                _bname = aliases.get(start, start)
+                # BUILTIN_CB_ALIAS_V1: los builtins tienen nombre ingles y
+                # alias en espanol (texto=str, longitud=len); el dispatch del
+                # callback usa el nombre canonico.
+                _bname = {
+                    "texto": "str", "longitud": "len", "entero": "int",
+                    "booleano": "bool", "decimal": "float", "complejo": "complex",
+                }.get(aliases.get(start, start), aliases.get(start, start))
                 if types.get(start) == "builtin" or start in self._typeobj_names:
                     # REPR_MAP_V1 / LEN_ITER_V1 / STR_MAP_ITER_V1: map(repr),
                     # map(len) y map(str) necesitan el KIND real de cada
                     # elemento (un long no dice si era str o int), asi que
                     # usan iteradores especializados que validan el tipo en
                     # runtime. El resto de builtins sigue el camino generico.
-                    _builtin_cb = self._builtin_loads.get(start) or _bname
+                    _builtin_cb = {
+                        "texto": "str", "longitud": "len",
+                    }.get(self._builtin_loads.get(start) or "", self._builtin_loads.get(start) or _bname)
                     if builtin == "map" and _builtin_cb in {"repr", "ascii"}:
                         out.append(
                             f"    {_name(result)}=piton_repr_iterator_new((void*){self._value(source)});"
@@ -9767,11 +9775,20 @@ class LinuxCEmitter:
                         out.append(
                             f"    {_name(result)}=piton_str_map_iterator_new((void*){self._value(source)});"
                         )
-                        types[result] = "iterator:str"
+                        types[result] = "iterator:mapstr"
                         return out
+                    if types.get(start) != "builtin":
+                        # BUILTIN_TYPE_VALUE_V1: un TIPO builtin como valor NO
+                        # es un callback. `map(int, xs)` es un TypeError en
+                        # CPython; antes el valor (una cadena) se pasaba como
+                        # puntero de funcion y el bucle no iteraba nada:
+                        # divergencia SILENCIOSA. Se falla cerrado en build.
+                        raise NativeBuildError(
+                            f"native {builtin} requires a user function callback, not a builtin name"
+                        )
 
                 if types.get(start) == "builtin":
-                    _builtin_name = aliases.get(start, start)
+                    _builtin_name = _bname
                     _bmap = {
                         "abs": "(long)&piton_abs_of_value",
                         "int": "(long)&piton_int_of_value",
@@ -9883,7 +9900,7 @@ class LinuxCEmitter:
                 else:
                     out.append(f"    {_name(result)}=piton_iterator_next_any({self._value(iterator)});")
             else:
-                next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:repr": "piton_repr_iterator_next", "iterator:len": "piton_len_iterator_next", "iterator:str": "piton_str_map_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
+                next_helper = {"iterator:enumerate": "piton_enumerate_next", "iterator:reversed": "piton_reversed_next", "iterator:zip": "piton_zip_next", "iterator:map": "piton_callback_iterator_next", "iterator:filter": "piton_callback_iterator_next", "iterator:repr": "piton_repr_iterator_next", "iterator:len": "piton_len_iterator_next", "iterator:mapstr": "piton_str_map_iterator_next", "iterator:calliter": "piton_calliter_next"}.get(iterator_type, "piton_iterator_next_any")
                 out.append(f"    {_name(result)}={next_helper}({self._value(iterator)});")
             # DICT_KEY_TYPE_V1: a dict iterator yields its KEYS, whose static
             # type comes from the dict it was built from. Only when it is
@@ -9985,7 +10002,7 @@ class LinuxCEmitter:
                 # entrega str, y `ch en self.whitespace` lo necesita).
                 types[result] = self._calliter_elem.get(args[0], "int")
             else:
-                types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:str" else "int"
+                types[result] = "tuple" if iterator_type in {"iterator:enumerate", "iterator:zip"} else "str" if iterator_type == "iterator:mapstr" else "int"
             out.append("    if(piton_exc_flag){")
             if handler_label:
                 out.append(f"        goto {_name(function.name + '_' + handler_label)};")
@@ -13190,7 +13207,7 @@ class LinuxCEmitter:
                         types[result] = "list"
                     self._coll_elems[result] = self._coll_elems.get(values[0], "int")
                     return out
-                if source_type in {"iterator:map", "iterator:filter", "iterator:repr", "iterator:len", "iterator:str"} and alias in {"conjunto", "set"}:
+                if source_type in {"iterator:map", "iterator:filter", "iterator:repr", "iterator:len", "iterator:mapstr"} and alias in {"conjunto", "set"}:
                     if source_type in {"iterator:map", "iterator:filter"}:
                         _it_tmp = f"(long)piton_collect_any_iter({self._value(values[0])})"
                         _it_elem = self._coll_elems.get(values[0], "int")
@@ -13198,19 +13215,19 @@ class LinuxCEmitter:
                         # REPR/LEN/STR map iterators: el kind del elemento es
                         # conocido (str/int), asi que se colecta con el kind
                         # correcto en vez de perderlo como PK_INT.
-                        _it_which = {"iterator:repr": 5, "iterator:len": 6, "iterator:str": 7}[source_type]
-                        _it_kind = "PK_STR" if source_type in {"iterator:repr", "iterator:str"} else "PK_INT"
+                        _it_which = {"iterator:repr": 5, "iterator:len": 6, "iterator:mapstr": 7}[source_type]
+                        _it_kind = "PK_STR" if source_type in {"iterator:repr", "iterator:mapstr"} else "PK_INT"
                         _it_tmp = f"(long)piton_collect({_it_which},{self._value(values[0])},{_it_kind})"
-                        _it_elem = "str" if source_type in {"iterator:repr", "iterator:str"} else "int"
+                        _it_elem = "str" if source_type in {"iterator:repr", "iterator:mapstr"} else "int"
                     out.append(f"    {_name(result)}=(long)piton_conv_set((PitonSlot){{{_it_tmp},PK_LIST}});")
                     types[result] = "set"
                     self._coll_elems[result] = _it_elem
                     return out
-                if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:repr", "iterator:len", "iterator:str"} and seq_kind in {"PK_LIST", "PK_TUPLE"}:
-                    _which = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:zip": 3, "iterator:repr": 5, "iterator:len": 6, "iterator:str": 7}[source_type]
+                if source_type in {"iterator:enumerate", "iterator:reversed", "iterator:zip", "iterator:repr", "iterator:len", "iterator:mapstr"} and seq_kind in {"PK_LIST", "PK_TUPLE"}:
+                    _which = {"iterator:enumerate": 0, "iterator:reversed": 1, "iterator:zip": 3, "iterator:repr": 5, "iterator:len": 6, "iterator:mapstr": 7}[source_type]
                     _elemkind = (
                         "PK_TUPLE" if source_type in {"iterator:enumerate", "iterator:zip"}
-                        else ("PK_STR" if source_type in {"iterator:repr", "iterator:str"} else "PK_INT")
+                        else ("PK_STR" if source_type in {"iterator:repr", "iterator:mapstr"} else "PK_INT")
                     )
                     _it_tmp = f"(long)piton_collect({_which},{self._value(values[0])},{_elemkind})"
                     if seq_kind == "PK_TUPLE":
@@ -13221,7 +13238,7 @@ class LinuxCEmitter:
                     else:
                         out.append(f"    {_name(result)}={_it_tmp};")
                         types[result] = "list"
-                    self._coll_elems[result] = "str" if source_type == "iterator:repr" else ("int" if source_type == "iterator:len" else ("str" if source_type == "iterator:str" else ("tuple" if source_type in {"iterator:enumerate", "iterator:zip"} else "int")))
+                    self._coll_elems[result] = "str" if source_type == "iterator:repr" else ("int" if source_type == "iterator:len" else ("str" if source_type == "iterator:mapstr" else ("tuple" if source_type in {"iterator:enumerate", "iterator:zip"} else "int")))
                     return out
                 if source_type == "none" and alias in {"lista", "list", "tuple", "tupla"}:
                     # CONV_NONE_V1: lista(none) — si la llamada que produjo
@@ -13768,12 +13785,13 @@ class LinuxCEmitter:
                 # se tipa como "list" por flow-insensitive pero es un dict en
                 # runtime. Con indice str se hace dict_set; con indice int,
                 # seq_set.
-                if types.get(index, "") not in {"int", "bool"}:
-                    if types.get(index, "") == "str":
-                        out.append(f"    piton_dict_set((PitonDict*){self._value(collection)},{self._slot(index, types)},{self._slot(value, types)});")
-                    else:
-                        raise NativeBuildError("Linux subscript store requires an int index")
+                if types.get(index, "") == "str":
+                    out.append(f"    piton_dict_set((PitonDict*){self._value(collection)},{self._slot(index, types)},{self._slot(value, types)});")
                 else:
+                    # Con indice int (o de tipo desconocido, como un
+                    # parametro) se mantiene el seq_set de main: el
+                    # subscript store sobre un parametro es lo que PRUEBA que
+                    # la coleccion es una lista (SUBSCRIPT_STORE_SEED_V1).
                     out.append(f"    piton_seq_set((PitonSeq*){self._value(collection)},{self._value(index)},{self._slot(value, types)});")
                 self._emit_exc_check(out, function, handler_label)
             elif coll_type in {"dict", "dict:module"}:
@@ -13897,6 +13915,12 @@ class LinuxCEmitter:
                     _vt = types.get(val, "")
                     if _vt and _vt != "int":
                         self._instance_attr_types.setdefault(_cls, {}).setdefault(attr, _vt)
+                    # CALLABLE_INSTANCE_ATTR_V1: un atributo que la clase
+                    # asigna sobre la instancia puede ser un callable en
+                    # runtime aunque no sea un metodo de la clase
+                    # (`self._call = func`).
+                    if isinstance(attr, str) and not attr.startswith("%"):
+                        self._instance_attr_names.setdefault(_cls, set()).add(attr)
                 # MODULE_ATTR_TYPES_V1: track module attribute types for get_attr.
                 # BOOTSTRAP_ATTRS_KEEP_V1: el bootstrap de sys.modules construye
                 # el catalogo como build_collection "dict" (validos tambien para
@@ -13909,8 +13933,6 @@ class LinuxCEmitter:
                     _vt = types.get(val, "")
                     if _vt and _vt != "none" and attr not in self.module_attr_types:
                         self.module_attr_types[attr] = _vt
-                    if isinstance(attr, str) and not attr.startswith("%"):
-                        self._instance_attr_names.setdefault(_cls, set()).add(attr)
                 # ATTRIBUTE_LOOKUP_V2: __setattr__ hook routes normal stores;
                 # the hook body itself stores raw (bypass, mirror of Win).
                 hook = None
@@ -14022,7 +14044,7 @@ class LinuxCEmitter:
                     "iterator:filter": "piton_callback_iterator_next",
                     "iterator:repr": "piton_repr_iterator_next",
                     "iterator:len": "piton_len_iterator_next",
-                    "iterator:str": "piton_str_map_iterator_next",
+                    "iterator:mapstr": "piton_str_map_iterator_next",
                     "iterator:calliter": "piton_calliter_next",
                 }.get(owner_type, "piton_iterator_next_any")
                 out.append(
@@ -14554,7 +14576,6 @@ class LinuxCEmitter:
                             method == "translate"
                             and len(_rest) == 1
                             and not kw_args
-                            and types.get(_rest[0], "") in {"dict", "int"}
                         ):
                             # UNBOUND_TRANSLATE_V1: `str.translate(x, m)` con
                             # `m` sin tipo estatico (rot_13: tabla creada por
@@ -16018,7 +16039,7 @@ class LinuxCEmitter:
                 _which = {
                     "iterator:enumerate": 0, "iterator:reversed": 1,
                     "iterator:map": 2, "iterator:filter": 2, "iterator:zip": 3,
-                    "iterator:repr": 5, "iterator:len": 6, "iterator:str": 7,
+                    "iterator:repr": 5, "iterator:len": 6, "iterator:mapstr": 7,
                     "generator": 4, "genexpr": 4,
                 }.get(collection_type)
                 if _which is None:
@@ -16036,7 +16057,7 @@ class LinuxCEmitter:
                     _elemkind = "PK_STR"
                 elif collection_type == "iterator:len":
                     _elemkind = "PK_INT"
-                elif collection_type == "iterator:str":
+                elif collection_type == "iterator:mapstr":
                     _elemkind = "PK_STR"
                 else:
                     _elemkind = "PK_TUPLE" if _tuple_items else "PK_INT"

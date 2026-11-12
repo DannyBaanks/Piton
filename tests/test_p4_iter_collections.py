@@ -71,9 +71,23 @@ class IterPassthroughV1(unittest.TestCase):
             "para x en map(doble, [1, 2]):\n    imprimir(x)\n",
         )
 
+    def test_for_map_builtin_callback_matches_cpython(self):
+        # STR_MAP_ITER_V1: map(str|texto, seq) usa el iterador especializado
+        # (el KIND real de cada elemento); antes fallaba cerrado en build.
+        _assert_matches(self, "para x en map(texto, [1, 2]):\n    imprimir(x)\n")
+        _assert_matches(self, "para x en map(str, [1, 2]):\n    imprimir(x)\n")
+        _assert_matches(self, "para x en map(longitud, [[1, 2], [3]]):\n    imprimir(x)\n")
+        _assert_matches(self, "para x en map(repr, [1, 'a']):\n    imprimir(x)\n")
+
     def test_for_map_builtin_callback_fails_closed(self):
+        # Un builtin SIN callback nativo (dir) y un TIPO builtin como valor
+        # (int) siguen fallando cerrado:(map(int, xs) es un TypeError en
+        # CPython; pasar la cadena del tipo como puntero de funcion era una
+        # divergencia silenciosa — el bucle no iteraba nada).
         with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("para x en map(texto, [1, 2]):\n    imprimir(x)\n")
+            compare_native_to_cpython("para x en map(dir, [1, 2]):\n    imprimir(x)\n")
+        with pytest.raises(NativeBuildError):
+            compare_native_to_cpython("para x en map(int, [1, 2]):\n    imprimir(x)\n")
 
     def test_iter_of_iterator_is_itself(self):
         _assert_matches(self, "e = enumerar([7])\npara p en e:\n    imprimir(p)\n")
