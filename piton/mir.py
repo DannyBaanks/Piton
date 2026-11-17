@@ -5445,7 +5445,7 @@ class MIRLowerer:
         ("zlib", "crc32"): (1, 2), ("zlib", "adler32"): (1, 2),
         ("zlib", "compress"): (1, 2), ("zlib", "decompress"): (1, 1),
         ("os", "getcwd"): (0, 0), ("os", "system"): (1, 1),
-        **{("statistics", _f): (1, 1) for _f in (
+        **{("statistics", _f): (1, 2 if _f in {"variance", "pvariance", "stdev", "pstdev"} else 1) for _f in (
             "mean", "median", "median_low", "median_high", "variance", "pvariance", "stdev", "pstdev")},
         ("time", "time"): (0, 0),
         ("time", "localtime"): (0, 1),
@@ -5458,21 +5458,47 @@ class MIRLowerer:
 
     def _lower_native_call(self, builder, module, attr, args, keywords, starred):
         if module == "zlib" and attr == "compress":
-            if starred or len(args) > 2:
-                raise MIRLoweringError("native zlib.compress requires data and an optional level")
-            values = [None, None]
+            if starred or len(args) > 3:
+                raise MIRLoweringError("native zlib.compress requires data, optional level, and optional wbits")
+            values = [None, None, None]
             for index, arg in enumerate(args):
                 values[index] = arg
             for kw in keywords or ():
                 if kw.arg is None:
                     raise MIRLoweringError("native zlib.compress does not support **kwargs")
-                if kw.arg != "level":
+                if kw.arg == "data":
+                    raise MIRLoweringError("native zlib.compress() takes positional-only argument 'data'")
+                if kw.arg == "level":
+                    index = 1
+                elif kw.arg == "wbits":
+                    index = 2
+                else:
                     raise MIRLoweringError(f"native zlib.compress got an unexpected keyword argument '{kw.arg}'")
-                if values[1] is not None:
-                    raise MIRLoweringError("multiple values for argument: level")
-                values[1] = kw.value
+                if values[index] is not None:
+                    raise MIRLoweringError(f"multiple values for argument: {kw.arg}")
+                values[index] = kw.value
             if values[0] is None:
                 raise MIRLoweringError("native zlib.compress requires data")
+            # The native encoder emits the RFC 1950 zlib wrapper only. It
+            # cannot produce raw DEFLATE or gzip framing, so do not silently
+            # ignore a non-default wbits (gzip.compress uses 31 and -15).
+            if values[2] is not None and not (
+                values[2].kind == HIRKind.CONST
+                and type(values[2].value) is int
+                and values[2].value == 15
+            ):
+                raise MIRLoweringError(
+                    "native zlib.compress supports only wbits=15; raw DEFLATE and gzip wrappers are unsupported"
+                )
+            if values[2] is not None and not (
+                values[1] is not None
+                and values[1].kind == HIRKind.CONST
+                and type(values[1].value) is int
+                and values[1].value == 0
+            ):
+                raise MIRLoweringError(
+                    "native zlib.compress requires explicit level=0 when wbits is supplied"
+                )
             data = self._lower_expr(builder, values[0])
             level = self._lower_expr(builder, values[1]) if values[1] is not None else None
             if level is None:
@@ -5480,6 +5506,45 @@ class MIRLowerer:
                 builder.emit("const", -1, result=level)
             res = builder.temp()
             builder.emit("native_call", module, attr, data, level, _active_handler(builder), result=res)
+            return res
+        if module == "statistics":
+            # CPython accepts data= for every supported statistics function.
+            # The variance family additionally accepts xbar=/mu= and a
+            # second positional argument.
+            second_name = {
+                "variance": "xbar",
+                "pvariance": "mu",
+                "stdev": "xbar",
+                "pstdev": "mu",
+            }.get(attr)
+            params = ("data", second_name) if second_name else ("data",)
+            if starred or len(args) > len(params):
+                raise MIRLoweringError(
+                    f"native statistics.{attr} takes from 1 to {len(params)} positional argument(s)"
+                )
+            values = [None] * len(params)
+            for index, arg in enumerate(args):
+                values[index] = arg
+            for kw in keywords or ():
+                if kw.arg is None:
+                    raise MIRLoweringError(f"native statistics.{attr} does not support **kwargs")
+                if kw.arg not in params:
+                    raise MIRLoweringError(
+                        f"native statistics.{attr} got an unexpected keyword argument '{kw.arg}'"
+                    )
+                index = params.index(kw.arg)
+                if values[index] is not None:
+                    raise MIRLoweringError(
+                        f"statistics.{attr}() got multiple values for argument '{kw.arg}'"
+                    )
+                values[index] = kw.value
+            if values[0] is None:
+                raise MIRLoweringError(f"statistics.{attr}() missing required argument: 'data'")
+            vals = [self._lower_expr(builder, values[0])]
+            if len(values) == 2 and values[1] is not None:
+                vals.append(self._lower_expr(builder, values[1]))
+            res = builder.temp()
+            builder.emit("native_call", module, attr, *vals, _active_handler(builder), result=res)
             return res
         lo, hi = self._NATIVE_CALLS[(module, attr)]
         if keywords or starred or not (lo <= len(args) <= hi):

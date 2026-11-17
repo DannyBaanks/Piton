@@ -1505,14 +1505,47 @@ static int st_var_frac(PitonSlot c,int ddof,const char*who,StData*d,st_i128*P,st
   if(__builtin_mul_overflow(den,(st_i128)1<<(2*d->k),&den)){st_range_error();return 0;}
   *P=A;*Q=den;return 1;
 }
-static PitonSlot piton_st_variance(PitonSlot c){
+static int st_rescale_value(st_i128 value,int shift,st_i128*out){
+  if(shift<0||shift>=120){st_range_error();return 0;}
+  st_u128 mag=value<0?(st_u128)(-value):(st_u128)value;
+  if(mag&&st_bits(mag)+shift>120){st_range_error();return 0;}
+  st_i128 scaled=(st_i128)(mag<<shift);
+  *out=value<0?-scaled:scaled;
+  return 1;
+}
+static int st_var_frac_with_mean(PitonSlot c,PitonSlot xbar,int ddof,const char*who,StData*d,st_i128*P,st_i128*Q){
+  if(xbar.kind==PK_NONE)return st_var_frac(c,ddof,who,d,P,Q);
+  if(!st_load(c,d))return 0;
+  long need=ddof?2:1;
+  if(d->n<need){
+    PitonStrBuf m;sb_init(&m);sb_puts(&m,who);sb_puts(&m,ddof?" requires at least two data points":" requires at least one data point");
+    piton_raise_set("ValueError",m.d);return 0;
+  }
+  PitonSeq*one=piton_seq_new(PK_LIST,1);one->items[0]=xbar;
+  PitonSlot one_slot={(long)one,PK_LIST};StData xd;
+  if(!st_load(one_slot,&xd))return 0;
+  int k=d->k>xd.k?d->k:xd.k;
+  st_i128 center;
+  if(!st_rescale_value(xd.X[0],k-xd.k,&center))return 0;
+  st_i128 acc=0;
+  for(long i=0;i<d->n;++i){
+    st_i128 value,diff,square;
+    if(!st_rescale_value(d->X[i],k-d->k,&value))return 0;
+    if(__builtin_sub_overflow(value,center,&diff)||__builtin_mul_overflow(diff,diff,&square)||__builtin_add_overflow(acc,square,&acc)){st_range_error();return 0;}
+  }
+  if(2*k>=120){st_range_error();return 0;}
+  st_i128 den=(st_i128)1<<(2*k);
+  if(__builtin_mul_overflow(den,(st_i128)(ddof?d->n-1:d->n),&den)){st_range_error();return 0;}
+  *P=acc;*Q=den;return 1;
+}
+static PitonSlot piton_st_variance(PitonSlot c,PitonSlot xbar){
   PitonSlot r={0,PK_NONE};StData d;st_i128 P,Q;
-  if(!st_var_frac(c,1,"variance",&d,&P,&Q))return r;
+  if(!st_var_frac_with_mean(c,xbar,1,"variance",&d,&P,&Q))return r;
   return st_result(P,Q,d.all_int);
 }
-static PitonSlot piton_st_pvariance(PitonSlot c){
+static PitonSlot piton_st_pvariance(PitonSlot c,PitonSlot mu){
   PitonSlot r={0,PK_NONE};StData d;st_i128 P,Q;
-  if(!st_var_frac(c,0,"pvariance",&d,&P,&Q))return r;
+  if(!st_var_frac_with_mean(c,mu,0,"pvariance",&d,&P,&Q))return r;
   return st_result(P,Q,d.all_int);
 }
 static st_u128 st_isqrt(st_u128 x){
@@ -1540,16 +1573,16 @@ static int st_sqrt_frac(st_u128 n,st_u128 m,double*out){
   }
   return st_rat_double((st_i128)num,den,out);
 }
-static PitonSlot st_stdev_common(PitonSlot c,int ddof,const char*who){
+static PitonSlot st_stdev_common(PitonSlot c,PitonSlot xbar,int ddof,const char*who){
   PitonSlot r={0,PK_NONE};StData d;st_i128 P,Q;
-  if(!st_var_frac(c,ddof,who,&d,&P,&Q))return r;
+  if(!st_var_frac_with_mean(c,xbar,ddof,who,&d,&P,&Q))return r;
   st_u128 g=P==0?1:st_gcd((st_u128)P,(st_u128)Q);
   double v;
   if(!st_sqrt_frac((st_u128)P/g,(st_u128)Q/g,&v)){st_range_error();return r;}
   return st_float_slot(v);
 }
-static PitonSlot piton_st_stdev(PitonSlot c){return st_stdev_common(c,1,"stdev");}
-static PitonSlot piton_st_pstdev(PitonSlot c){return st_stdev_common(c,0,"pstdev");}
+static PitonSlot piton_st_stdev(PitonSlot c,PitonSlot xbar){return st_stdev_common(c,xbar,1,"stdev");}
+static PitonSlot piton_st_pstdev(PitonSlot c,PitonSlot mu){return st_stdev_common(c,mu,0,"pstdev");}
 /* median: ordena una copia con piton_dyn_cmp('<') (TypeError como sorted()) */
 static PitonSeq*st_sorted(PitonSlot c){
   if(c.kind!=PK_LIST&&c.kind!=PK_TUPLE){
@@ -21250,10 +21283,10 @@ class LinuxCEmitter:
                 ("statistics", "median"): ("piton_st_median", "slot", 1),
                 ("statistics", "median_low"): ("piton_st_median_low", "slot", 1),
                 ("statistics", "median_high"): ("piton_st_median_high", "slot", 1),
-                ("statistics", "variance"): ("piton_st_variance", "slot", 1),
-                ("statistics", "pvariance"): ("piton_st_pvariance", "slot", 1),
-                ("statistics", "stdev"): ("piton_st_stdev", "slot", 1),
-                ("statistics", "pstdev"): ("piton_st_pstdev", "slot", 1),
+                ("statistics", "variance"): ("piton_st_variance", "slot", 2),
+                ("statistics", "pvariance"): ("piton_st_pvariance", "slot", 2),
+                ("statistics", "stdev"): ("piton_st_stdev", "slot", 2),
+                ("statistics", "pstdev"): ("piton_st_pstdev", "slot", 2),
                 ("time", "time"): ("piton_time_time", "float", 0),
                 ("time", "localtime"): ("piton_time_localtime", "list", 1),
                 ("time", "gmtime"): ("piton_time_gmtime", "list", 1),
