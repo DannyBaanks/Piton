@@ -10222,7 +10222,7 @@ class LinuxCEmitter:
                         out.append(
                             f"    {{PitonSlot*_gp=piton_slot_box_new("
                             f"piton_dict_get_d((PitonDict*){operand},"
-                            f"{self._slot(call_args[0], types)},{default});"
+                            f"{self._slot(call_args[0], types)},{default}));"
                             f" {_name(result)}=(long)_gp;}}"
                         )
                         types[result] = "slot"
@@ -10239,7 +10239,7 @@ class LinuxCEmitter:
                     out.append(
                         f"    {{PitonSlot*_gp=piton_slot_box_new("
                         f"piton_dict_get_d((PitonDict*){operand},"
-                        f"{self._slot(call_args[0], types)},{default});"
+                        f"{self._slot(call_args[0], types)},{default}));"
                         f" {_name(result)}=(long)_gp;}}"
                     )
                     types[result] = "slot"
