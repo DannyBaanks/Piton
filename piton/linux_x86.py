@@ -130,7 +130,7 @@ typedef struct{PitonSlot key;PitonSlot value;}PitonDictEntry;
 typedef struct{long refcount;long kind;long length;long capacity;PitonDictEntry*items;long owner_object;}PitonDict;
 typedef struct{long refcount;long kind;long length;long capacity;PitonSlot*items;}PitonSet;
 typedef struct{const char*name;PitonSlot value;long instance_owned;}PitonAttr;
-typedef struct PitonObject{long refcount;long kind;const char*class_name;const char*parent_name;long length;PitonAttr attrs[32];long finalizer;long finalizer_called;struct PitonObject*next_all;long dict_cache;}PitonObject;
+typedef struct PitonObject{long refcount;long kind;const char*class_name;const char*parent_name;long length;PitonAttr attrs[32];long finalizer;long finalizer_called;struct PitonObject*next_all;long dict_cache;long is_class;}PitonObject;
 
 static int g_piton_ascii_mode=0;
 /* OBJECT_REPR_HOOK_V1: tabla clase -> __repr__ que el emitter llena. */
@@ -1852,7 +1852,839 @@ static long piton_dict_contains(PitonDict*d,PitonSlot v){if(!d)return 0;for(long
 static long piton_set_contains(PitonSet*s,PitonSlot v){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_eq(s->items[i],v))return 1;return 0;}
 static void piton_seq_append(PitonSeq*s,PitonSlot v){if(s->length>=s->capacity){long nc=s->capacity?s->capacity*2:4;PitonSlot*na=piton_alloc((usize)nc*sizeof(PitonSlot));if(s->items)piton_memcpy(na,s->items,(usize)s->capacity*sizeof(PitonSlot));s->items=na;s->capacity=nc;}s->items[s->length++]=v;}
 static int piton_ws(unsigned char c){return c==' '||c=='\t'||c=='\n'||c=='\r'||c=='\v'||c=='\f';}
-static long piton_str_case(const char*s,int upper){usize n=piton_strlen(s);char*p=piton_alloc(n+1);for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c>=0x80){piton_write(2,"ValueError: str case conversion on non-ASCII text is not supported in the native subset\n",88);piton_exit(1);}p[i]=(char)(upper?((c>='a'&&c<='z')?c-32:c):((c>='A'&&c<='Z')?c+32:c));}p[n]=0;return(long)p;}
+typedef struct{unsigned int first,last;int delta;}PitonUpperRange;
+typedef struct{unsigned int lower,upper;}PitonUpperPair;
+typedef struct{unsigned int lower;unsigned char length;unsigned int upper[3];}PitonUpperExpansion;
+static const PitonUpperRange piton_upper_ranges[]={
+  {0x61,0x7A,-32},
+  {0xE0,0xF6,-32},
+  {0xF8,0xFE,-32},
+  {0x23F,0x240,10815},
+  {0x256,0x257,-205},
+  {0x28A,0x28B,-217},
+  {0x37B,0x37D,130},
+  {0x3AD,0x3AF,-37},
+  {0x3B1,0x3C1,-32},
+  {0x3C3,0x3CB,-32},
+  {0x3CD,0x3CE,-63},
+  {0x430,0x44F,-32},
+  {0x450,0x45F,-80},
+  {0x561,0x586,-48},
+  {0x10D0,0x10FA,3008},
+  {0x10FD,0x10FF,3008},
+  {0x13F8,0x13FD,-8},
+  {0x1C83,0x1C84,-6242},
+  {0x1F00,0x1F07,8},
+  {0x1F10,0x1F15,8},
+  {0x1F20,0x1F27,8},
+  {0x1F30,0x1F37,8},
+  {0x1F40,0x1F45,8},
+  {0x1F60,0x1F67,8},
+  {0x1F70,0x1F71,74},
+  {0x1F72,0x1F75,86},
+  {0x1F76,0x1F77,100},
+  {0x1F78,0x1F79,128},
+  {0x1F7A,0x1F7B,112},
+  {0x1F7C,0x1F7D,126},
+  {0x1FB0,0x1FB1,8},
+  {0x1FD0,0x1FD1,8},
+  {0x1FE0,0x1FE1,8},
+  {0x2170,0x217F,-16},
+  {0x24D0,0x24E9,-26},
+  {0x2C30,0x2C5F,-48},
+  {0x2D00,0x2D25,-7264},
+  {0xAB70,0xABBF,-38864},
+  {0xFF41,0xFF5A,-32},
+  {0x10428,0x1044F,-40},
+  {0x104D8,0x104FB,-40},
+  {0x10597,0x105A1,-39},
+  {0x105A3,0x105B1,-39},
+  {0x105B3,0x105B9,-39},
+  {0x105BB,0x105BC,-39},
+  {0x10CC0,0x10CF2,-64},
+  {0x118C0,0x118DF,-32},
+  {0x16E60,0x16E7F,-32},
+  {0x1E922,0x1E943,-34},
+};
+static const PitonUpperPair piton_upper_pairs[]={
+  {0xB5,0x39C},
+  {0xFF,0x178},
+  {0x101,0x100},
+  {0x103,0x102},
+  {0x105,0x104},
+  {0x107,0x106},
+  {0x109,0x108},
+  {0x10B,0x10A},
+  {0x10D,0x10C},
+  {0x10F,0x10E},
+  {0x111,0x110},
+  {0x113,0x112},
+  {0x115,0x114},
+  {0x117,0x116},
+  {0x119,0x118},
+  {0x11B,0x11A},
+  {0x11D,0x11C},
+  {0x11F,0x11E},
+  {0x121,0x120},
+  {0x123,0x122},
+  {0x125,0x124},
+  {0x127,0x126},
+  {0x129,0x128},
+  {0x12B,0x12A},
+  {0x12D,0x12C},
+  {0x12F,0x12E},
+  {0x131,0x49},
+  {0x133,0x132},
+  {0x135,0x134},
+  {0x137,0x136},
+  {0x13A,0x139},
+  {0x13C,0x13B},
+  {0x13E,0x13D},
+  {0x140,0x13F},
+  {0x142,0x141},
+  {0x144,0x143},
+  {0x146,0x145},
+  {0x148,0x147},
+  {0x14B,0x14A},
+  {0x14D,0x14C},
+  {0x14F,0x14E},
+  {0x151,0x150},
+  {0x153,0x152},
+  {0x155,0x154},
+  {0x157,0x156},
+  {0x159,0x158},
+  {0x15B,0x15A},
+  {0x15D,0x15C},
+  {0x15F,0x15E},
+  {0x161,0x160},
+  {0x163,0x162},
+  {0x165,0x164},
+  {0x167,0x166},
+  {0x169,0x168},
+  {0x16B,0x16A},
+  {0x16D,0x16C},
+  {0x16F,0x16E},
+  {0x171,0x170},
+  {0x173,0x172},
+  {0x175,0x174},
+  {0x177,0x176},
+  {0x17A,0x179},
+  {0x17C,0x17B},
+  {0x17E,0x17D},
+  {0x17F,0x53},
+  {0x180,0x243},
+  {0x183,0x182},
+  {0x185,0x184},
+  {0x188,0x187},
+  {0x18C,0x18B},
+  {0x192,0x191},
+  {0x195,0x1F6},
+  {0x199,0x198},
+  {0x19A,0x23D},
+  {0x19E,0x220},
+  {0x1A1,0x1A0},
+  {0x1A3,0x1A2},
+  {0x1A5,0x1A4},
+  {0x1A8,0x1A7},
+  {0x1AD,0x1AC},
+  {0x1B0,0x1AF},
+  {0x1B4,0x1B3},
+  {0x1B6,0x1B5},
+  {0x1B9,0x1B8},
+  {0x1BD,0x1BC},
+  {0x1BF,0x1F7},
+  {0x1C5,0x1C4},
+  {0x1C6,0x1C4},
+  {0x1C8,0x1C7},
+  {0x1C9,0x1C7},
+  {0x1CB,0x1CA},
+  {0x1CC,0x1CA},
+  {0x1CE,0x1CD},
+  {0x1D0,0x1CF},
+  {0x1D2,0x1D1},
+  {0x1D4,0x1D3},
+  {0x1D6,0x1D5},
+  {0x1D8,0x1D7},
+  {0x1DA,0x1D9},
+  {0x1DC,0x1DB},
+  {0x1DD,0x18E},
+  {0x1DF,0x1DE},
+  {0x1E1,0x1E0},
+  {0x1E3,0x1E2},
+  {0x1E5,0x1E4},
+  {0x1E7,0x1E6},
+  {0x1E9,0x1E8},
+  {0x1EB,0x1EA},
+  {0x1ED,0x1EC},
+  {0x1EF,0x1EE},
+  {0x1F2,0x1F1},
+  {0x1F3,0x1F1},
+  {0x1F5,0x1F4},
+  {0x1F9,0x1F8},
+  {0x1FB,0x1FA},
+  {0x1FD,0x1FC},
+  {0x1FF,0x1FE},
+  {0x201,0x200},
+  {0x203,0x202},
+  {0x205,0x204},
+  {0x207,0x206},
+  {0x209,0x208},
+  {0x20B,0x20A},
+  {0x20D,0x20C},
+  {0x20F,0x20E},
+  {0x211,0x210},
+  {0x213,0x212},
+  {0x215,0x214},
+  {0x217,0x216},
+  {0x219,0x218},
+  {0x21B,0x21A},
+  {0x21D,0x21C},
+  {0x21F,0x21E},
+  {0x223,0x222},
+  {0x225,0x224},
+  {0x227,0x226},
+  {0x229,0x228},
+  {0x22B,0x22A},
+  {0x22D,0x22C},
+  {0x22F,0x22E},
+  {0x231,0x230},
+  {0x233,0x232},
+  {0x23C,0x23B},
+  {0x242,0x241},
+  {0x247,0x246},
+  {0x249,0x248},
+  {0x24B,0x24A},
+  {0x24D,0x24C},
+  {0x24F,0x24E},
+  {0x250,0x2C6F},
+  {0x251,0x2C6D},
+  {0x252,0x2C70},
+  {0x253,0x181},
+  {0x254,0x186},
+  {0x259,0x18F},
+  {0x25B,0x190},
+  {0x25C,0xA7AB},
+  {0x260,0x193},
+  {0x261,0xA7AC},
+  {0x263,0x194},
+  {0x265,0xA78D},
+  {0x266,0xA7AA},
+  {0x268,0x197},
+  {0x269,0x196},
+  {0x26A,0xA7AE},
+  {0x26B,0x2C62},
+  {0x26C,0xA7AD},
+  {0x26F,0x19C},
+  {0x271,0x2C6E},
+  {0x272,0x19D},
+  {0x275,0x19F},
+  {0x27D,0x2C64},
+  {0x280,0x1A6},
+  {0x282,0xA7C5},
+  {0x283,0x1A9},
+  {0x287,0xA7B1},
+  {0x288,0x1AE},
+  {0x289,0x244},
+  {0x28C,0x245},
+  {0x292,0x1B7},
+  {0x29D,0xA7B2},
+  {0x29E,0xA7B0},
+  {0x345,0x399},
+  {0x371,0x370},
+  {0x373,0x372},
+  {0x377,0x376},
+  {0x3AC,0x386},
+  {0x3C2,0x3A3},
+  {0x3CC,0x38C},
+  {0x3D0,0x392},
+  {0x3D1,0x398},
+  {0x3D5,0x3A6},
+  {0x3D6,0x3A0},
+  {0x3D7,0x3CF},
+  {0x3D9,0x3D8},
+  {0x3DB,0x3DA},
+  {0x3DD,0x3DC},
+  {0x3DF,0x3DE},
+  {0x3E1,0x3E0},
+  {0x3E3,0x3E2},
+  {0x3E5,0x3E4},
+  {0x3E7,0x3E6},
+  {0x3E9,0x3E8},
+  {0x3EB,0x3EA},
+  {0x3ED,0x3EC},
+  {0x3EF,0x3EE},
+  {0x3F0,0x39A},
+  {0x3F1,0x3A1},
+  {0x3F2,0x3F9},
+  {0x3F3,0x37F},
+  {0x3F5,0x395},
+  {0x3F8,0x3F7},
+  {0x3FB,0x3FA},
+  {0x461,0x460},
+  {0x463,0x462},
+  {0x465,0x464},
+  {0x467,0x466},
+  {0x469,0x468},
+  {0x46B,0x46A},
+  {0x46D,0x46C},
+  {0x46F,0x46E},
+  {0x471,0x470},
+  {0x473,0x472},
+  {0x475,0x474},
+  {0x477,0x476},
+  {0x479,0x478},
+  {0x47B,0x47A},
+  {0x47D,0x47C},
+  {0x47F,0x47E},
+  {0x481,0x480},
+  {0x48B,0x48A},
+  {0x48D,0x48C},
+  {0x48F,0x48E},
+  {0x491,0x490},
+  {0x493,0x492},
+  {0x495,0x494},
+  {0x497,0x496},
+  {0x499,0x498},
+  {0x49B,0x49A},
+  {0x49D,0x49C},
+  {0x49F,0x49E},
+  {0x4A1,0x4A0},
+  {0x4A3,0x4A2},
+  {0x4A5,0x4A4},
+  {0x4A7,0x4A6},
+  {0x4A9,0x4A8},
+  {0x4AB,0x4AA},
+  {0x4AD,0x4AC},
+  {0x4AF,0x4AE},
+  {0x4B1,0x4B0},
+  {0x4B3,0x4B2},
+  {0x4B5,0x4B4},
+  {0x4B7,0x4B6},
+  {0x4B9,0x4B8},
+  {0x4BB,0x4BA},
+  {0x4BD,0x4BC},
+  {0x4BF,0x4BE},
+  {0x4C2,0x4C1},
+  {0x4C4,0x4C3},
+  {0x4C6,0x4C5},
+  {0x4C8,0x4C7},
+  {0x4CA,0x4C9},
+  {0x4CC,0x4CB},
+  {0x4CE,0x4CD},
+  {0x4CF,0x4C0},
+  {0x4D1,0x4D0},
+  {0x4D3,0x4D2},
+  {0x4D5,0x4D4},
+  {0x4D7,0x4D6},
+  {0x4D9,0x4D8},
+  {0x4DB,0x4DA},
+  {0x4DD,0x4DC},
+  {0x4DF,0x4DE},
+  {0x4E1,0x4E0},
+  {0x4E3,0x4E2},
+  {0x4E5,0x4E4},
+  {0x4E7,0x4E6},
+  {0x4E9,0x4E8},
+  {0x4EB,0x4EA},
+  {0x4ED,0x4EC},
+  {0x4EF,0x4EE},
+  {0x4F1,0x4F0},
+  {0x4F3,0x4F2},
+  {0x4F5,0x4F4},
+  {0x4F7,0x4F6},
+  {0x4F9,0x4F8},
+  {0x4FB,0x4FA},
+  {0x4FD,0x4FC},
+  {0x4FF,0x4FE},
+  {0x501,0x500},
+  {0x503,0x502},
+  {0x505,0x504},
+  {0x507,0x506},
+  {0x509,0x508},
+  {0x50B,0x50A},
+  {0x50D,0x50C},
+  {0x50F,0x50E},
+  {0x511,0x510},
+  {0x513,0x512},
+  {0x515,0x514},
+  {0x517,0x516},
+  {0x519,0x518},
+  {0x51B,0x51A},
+  {0x51D,0x51C},
+  {0x51F,0x51E},
+  {0x521,0x520},
+  {0x523,0x522},
+  {0x525,0x524},
+  {0x527,0x526},
+  {0x529,0x528},
+  {0x52B,0x52A},
+  {0x52D,0x52C},
+  {0x52F,0x52E},
+  {0x1C80,0x412},
+  {0x1C81,0x414},
+  {0x1C82,0x41E},
+  {0x1C85,0x422},
+  {0x1C86,0x42A},
+  {0x1C87,0x462},
+  {0x1C88,0xA64A},
+  {0x1D79,0xA77D},
+  {0x1D7D,0x2C63},
+  {0x1D8E,0xA7C6},
+  {0x1E01,0x1E00},
+  {0x1E03,0x1E02},
+  {0x1E05,0x1E04},
+  {0x1E07,0x1E06},
+  {0x1E09,0x1E08},
+  {0x1E0B,0x1E0A},
+  {0x1E0D,0x1E0C},
+  {0x1E0F,0x1E0E},
+  {0x1E11,0x1E10},
+  {0x1E13,0x1E12},
+  {0x1E15,0x1E14},
+  {0x1E17,0x1E16},
+  {0x1E19,0x1E18},
+  {0x1E1B,0x1E1A},
+  {0x1E1D,0x1E1C},
+  {0x1E1F,0x1E1E},
+  {0x1E21,0x1E20},
+  {0x1E23,0x1E22},
+  {0x1E25,0x1E24},
+  {0x1E27,0x1E26},
+  {0x1E29,0x1E28},
+  {0x1E2B,0x1E2A},
+  {0x1E2D,0x1E2C},
+  {0x1E2F,0x1E2E},
+  {0x1E31,0x1E30},
+  {0x1E33,0x1E32},
+  {0x1E35,0x1E34},
+  {0x1E37,0x1E36},
+  {0x1E39,0x1E38},
+  {0x1E3B,0x1E3A},
+  {0x1E3D,0x1E3C},
+  {0x1E3F,0x1E3E},
+  {0x1E41,0x1E40},
+  {0x1E43,0x1E42},
+  {0x1E45,0x1E44},
+  {0x1E47,0x1E46},
+  {0x1E49,0x1E48},
+  {0x1E4B,0x1E4A},
+  {0x1E4D,0x1E4C},
+  {0x1E4F,0x1E4E},
+  {0x1E51,0x1E50},
+  {0x1E53,0x1E52},
+  {0x1E55,0x1E54},
+  {0x1E57,0x1E56},
+  {0x1E59,0x1E58},
+  {0x1E5B,0x1E5A},
+  {0x1E5D,0x1E5C},
+  {0x1E5F,0x1E5E},
+  {0x1E61,0x1E60},
+  {0x1E63,0x1E62},
+  {0x1E65,0x1E64},
+  {0x1E67,0x1E66},
+  {0x1E69,0x1E68},
+  {0x1E6B,0x1E6A},
+  {0x1E6D,0x1E6C},
+  {0x1E6F,0x1E6E},
+  {0x1E71,0x1E70},
+  {0x1E73,0x1E72},
+  {0x1E75,0x1E74},
+  {0x1E77,0x1E76},
+  {0x1E79,0x1E78},
+  {0x1E7B,0x1E7A},
+  {0x1E7D,0x1E7C},
+  {0x1E7F,0x1E7E},
+  {0x1E81,0x1E80},
+  {0x1E83,0x1E82},
+  {0x1E85,0x1E84},
+  {0x1E87,0x1E86},
+  {0x1E89,0x1E88},
+  {0x1E8B,0x1E8A},
+  {0x1E8D,0x1E8C},
+  {0x1E8F,0x1E8E},
+  {0x1E91,0x1E90},
+  {0x1E93,0x1E92},
+  {0x1E95,0x1E94},
+  {0x1E9B,0x1E60},
+  {0x1EA1,0x1EA0},
+  {0x1EA3,0x1EA2},
+  {0x1EA5,0x1EA4},
+  {0x1EA7,0x1EA6},
+  {0x1EA9,0x1EA8},
+  {0x1EAB,0x1EAA},
+  {0x1EAD,0x1EAC},
+  {0x1EAF,0x1EAE},
+  {0x1EB1,0x1EB0},
+  {0x1EB3,0x1EB2},
+  {0x1EB5,0x1EB4},
+  {0x1EB7,0x1EB6},
+  {0x1EB9,0x1EB8},
+  {0x1EBB,0x1EBA},
+  {0x1EBD,0x1EBC},
+  {0x1EBF,0x1EBE},
+  {0x1EC1,0x1EC0},
+  {0x1EC3,0x1EC2},
+  {0x1EC5,0x1EC4},
+  {0x1EC7,0x1EC6},
+  {0x1EC9,0x1EC8},
+  {0x1ECB,0x1ECA},
+  {0x1ECD,0x1ECC},
+  {0x1ECF,0x1ECE},
+  {0x1ED1,0x1ED0},
+  {0x1ED3,0x1ED2},
+  {0x1ED5,0x1ED4},
+  {0x1ED7,0x1ED6},
+  {0x1ED9,0x1ED8},
+  {0x1EDB,0x1EDA},
+  {0x1EDD,0x1EDC},
+  {0x1EDF,0x1EDE},
+  {0x1EE1,0x1EE0},
+  {0x1EE3,0x1EE2},
+  {0x1EE5,0x1EE4},
+  {0x1EE7,0x1EE6},
+  {0x1EE9,0x1EE8},
+  {0x1EEB,0x1EEA},
+  {0x1EED,0x1EEC},
+  {0x1EEF,0x1EEE},
+  {0x1EF1,0x1EF0},
+  {0x1EF3,0x1EF2},
+  {0x1EF5,0x1EF4},
+  {0x1EF7,0x1EF6},
+  {0x1EF9,0x1EF8},
+  {0x1EFB,0x1EFA},
+  {0x1EFD,0x1EFC},
+  {0x1EFF,0x1EFE},
+  {0x1F51,0x1F59},
+  {0x1F53,0x1F5B},
+  {0x1F55,0x1F5D},
+  {0x1F57,0x1F5F},
+  {0x1FBE,0x399},
+  {0x1FE5,0x1FEC},
+  {0x214E,0x2132},
+  {0x2184,0x2183},
+  {0x2C61,0x2C60},
+  {0x2C65,0x23A},
+  {0x2C66,0x23E},
+  {0x2C68,0x2C67},
+  {0x2C6A,0x2C69},
+  {0x2C6C,0x2C6B},
+  {0x2C73,0x2C72},
+  {0x2C76,0x2C75},
+  {0x2C81,0x2C80},
+  {0x2C83,0x2C82},
+  {0x2C85,0x2C84},
+  {0x2C87,0x2C86},
+  {0x2C89,0x2C88},
+  {0x2C8B,0x2C8A},
+  {0x2C8D,0x2C8C},
+  {0x2C8F,0x2C8E},
+  {0x2C91,0x2C90},
+  {0x2C93,0x2C92},
+  {0x2C95,0x2C94},
+  {0x2C97,0x2C96},
+  {0x2C99,0x2C98},
+  {0x2C9B,0x2C9A},
+  {0x2C9D,0x2C9C},
+  {0x2C9F,0x2C9E},
+  {0x2CA1,0x2CA0},
+  {0x2CA3,0x2CA2},
+  {0x2CA5,0x2CA4},
+  {0x2CA7,0x2CA6},
+  {0x2CA9,0x2CA8},
+  {0x2CAB,0x2CAA},
+  {0x2CAD,0x2CAC},
+  {0x2CAF,0x2CAE},
+  {0x2CB1,0x2CB0},
+  {0x2CB3,0x2CB2},
+  {0x2CB5,0x2CB4},
+  {0x2CB7,0x2CB6},
+  {0x2CB9,0x2CB8},
+  {0x2CBB,0x2CBA},
+  {0x2CBD,0x2CBC},
+  {0x2CBF,0x2CBE},
+  {0x2CC1,0x2CC0},
+  {0x2CC3,0x2CC2},
+  {0x2CC5,0x2CC4},
+  {0x2CC7,0x2CC6},
+  {0x2CC9,0x2CC8},
+  {0x2CCB,0x2CCA},
+  {0x2CCD,0x2CCC},
+  {0x2CCF,0x2CCE},
+  {0x2CD1,0x2CD0},
+  {0x2CD3,0x2CD2},
+  {0x2CD5,0x2CD4},
+  {0x2CD7,0x2CD6},
+  {0x2CD9,0x2CD8},
+  {0x2CDB,0x2CDA},
+  {0x2CDD,0x2CDC},
+  {0x2CDF,0x2CDE},
+  {0x2CE1,0x2CE0},
+  {0x2CE3,0x2CE2},
+  {0x2CEC,0x2CEB},
+  {0x2CEE,0x2CED},
+  {0x2CF3,0x2CF2},
+  {0x2D27,0x10C7},
+  {0x2D2D,0x10CD},
+  {0xA641,0xA640},
+  {0xA643,0xA642},
+  {0xA645,0xA644},
+  {0xA647,0xA646},
+  {0xA649,0xA648},
+  {0xA64B,0xA64A},
+  {0xA64D,0xA64C},
+  {0xA64F,0xA64E},
+  {0xA651,0xA650},
+  {0xA653,0xA652},
+  {0xA655,0xA654},
+  {0xA657,0xA656},
+  {0xA659,0xA658},
+  {0xA65B,0xA65A},
+  {0xA65D,0xA65C},
+  {0xA65F,0xA65E},
+  {0xA661,0xA660},
+  {0xA663,0xA662},
+  {0xA665,0xA664},
+  {0xA667,0xA666},
+  {0xA669,0xA668},
+  {0xA66B,0xA66A},
+  {0xA66D,0xA66C},
+  {0xA681,0xA680},
+  {0xA683,0xA682},
+  {0xA685,0xA684},
+  {0xA687,0xA686},
+  {0xA689,0xA688},
+  {0xA68B,0xA68A},
+  {0xA68D,0xA68C},
+  {0xA68F,0xA68E},
+  {0xA691,0xA690},
+  {0xA693,0xA692},
+  {0xA695,0xA694},
+  {0xA697,0xA696},
+  {0xA699,0xA698},
+  {0xA69B,0xA69A},
+  {0xA723,0xA722},
+  {0xA725,0xA724},
+  {0xA727,0xA726},
+  {0xA729,0xA728},
+  {0xA72B,0xA72A},
+  {0xA72D,0xA72C},
+  {0xA72F,0xA72E},
+  {0xA733,0xA732},
+  {0xA735,0xA734},
+  {0xA737,0xA736},
+  {0xA739,0xA738},
+  {0xA73B,0xA73A},
+  {0xA73D,0xA73C},
+  {0xA73F,0xA73E},
+  {0xA741,0xA740},
+  {0xA743,0xA742},
+  {0xA745,0xA744},
+  {0xA747,0xA746},
+  {0xA749,0xA748},
+  {0xA74B,0xA74A},
+  {0xA74D,0xA74C},
+  {0xA74F,0xA74E},
+  {0xA751,0xA750},
+  {0xA753,0xA752},
+  {0xA755,0xA754},
+  {0xA757,0xA756},
+  {0xA759,0xA758},
+  {0xA75B,0xA75A},
+  {0xA75D,0xA75C},
+  {0xA75F,0xA75E},
+  {0xA761,0xA760},
+  {0xA763,0xA762},
+  {0xA765,0xA764},
+  {0xA767,0xA766},
+  {0xA769,0xA768},
+  {0xA76B,0xA76A},
+  {0xA76D,0xA76C},
+  {0xA76F,0xA76E},
+  {0xA77A,0xA779},
+  {0xA77C,0xA77B},
+  {0xA77F,0xA77E},
+  {0xA781,0xA780},
+  {0xA783,0xA782},
+  {0xA785,0xA784},
+  {0xA787,0xA786},
+  {0xA78C,0xA78B},
+  {0xA791,0xA790},
+  {0xA793,0xA792},
+  {0xA794,0xA7C4},
+  {0xA797,0xA796},
+  {0xA799,0xA798},
+  {0xA79B,0xA79A},
+  {0xA79D,0xA79C},
+  {0xA79F,0xA79E},
+  {0xA7A1,0xA7A0},
+  {0xA7A3,0xA7A2},
+  {0xA7A5,0xA7A4},
+  {0xA7A7,0xA7A6},
+  {0xA7A9,0xA7A8},
+  {0xA7B5,0xA7B4},
+  {0xA7B7,0xA7B6},
+  {0xA7B9,0xA7B8},
+  {0xA7BB,0xA7BA},
+  {0xA7BD,0xA7BC},
+  {0xA7BF,0xA7BE},
+  {0xA7C1,0xA7C0},
+  {0xA7C3,0xA7C2},
+  {0xA7C8,0xA7C7},
+  {0xA7CA,0xA7C9},
+  {0xA7D1,0xA7D0},
+  {0xA7D7,0xA7D6},
+  {0xA7D9,0xA7D8},
+  {0xA7F6,0xA7F5},
+  {0xAB53,0xA7B3},
+};
+static const PitonUpperExpansion piton_upper_expansions[]={
+  {0xDF,2,{0x53,0x53,0x0}},
+  {0x149,2,{0x2BC,0x4E,0x0}},
+  {0x1F0,2,{0x4A,0x30C,0x0}},
+  {0x390,3,{0x399,0x308,0x301}},
+  {0x3B0,3,{0x3A5,0x308,0x301}},
+  {0x587,2,{0x535,0x552,0x0}},
+  {0x1E96,2,{0x48,0x331,0x0}},
+  {0x1E97,2,{0x54,0x308,0x0}},
+  {0x1E98,2,{0x57,0x30A,0x0}},
+  {0x1E99,2,{0x59,0x30A,0x0}},
+  {0x1E9A,2,{0x41,0x2BE,0x0}},
+  {0x1F50,2,{0x3A5,0x313,0x0}},
+  {0x1F52,3,{0x3A5,0x313,0x300}},
+  {0x1F54,3,{0x3A5,0x313,0x301}},
+  {0x1F56,3,{0x3A5,0x313,0x342}},
+  {0x1F80,2,{0x1F08,0x399,0x0}},
+  {0x1F81,2,{0x1F09,0x399,0x0}},
+  {0x1F82,2,{0x1F0A,0x399,0x0}},
+  {0x1F83,2,{0x1F0B,0x399,0x0}},
+  {0x1F84,2,{0x1F0C,0x399,0x0}},
+  {0x1F85,2,{0x1F0D,0x399,0x0}},
+  {0x1F86,2,{0x1F0E,0x399,0x0}},
+  {0x1F87,2,{0x1F0F,0x399,0x0}},
+  {0x1F88,2,{0x1F08,0x399,0x0}},
+  {0x1F89,2,{0x1F09,0x399,0x0}},
+  {0x1F8A,2,{0x1F0A,0x399,0x0}},
+  {0x1F8B,2,{0x1F0B,0x399,0x0}},
+  {0x1F8C,2,{0x1F0C,0x399,0x0}},
+  {0x1F8D,2,{0x1F0D,0x399,0x0}},
+  {0x1F8E,2,{0x1F0E,0x399,0x0}},
+  {0x1F8F,2,{0x1F0F,0x399,0x0}},
+  {0x1F90,2,{0x1F28,0x399,0x0}},
+  {0x1F91,2,{0x1F29,0x399,0x0}},
+  {0x1F92,2,{0x1F2A,0x399,0x0}},
+  {0x1F93,2,{0x1F2B,0x399,0x0}},
+  {0x1F94,2,{0x1F2C,0x399,0x0}},
+  {0x1F95,2,{0x1F2D,0x399,0x0}},
+  {0x1F96,2,{0x1F2E,0x399,0x0}},
+  {0x1F97,2,{0x1F2F,0x399,0x0}},
+  {0x1F98,2,{0x1F28,0x399,0x0}},
+  {0x1F99,2,{0x1F29,0x399,0x0}},
+  {0x1F9A,2,{0x1F2A,0x399,0x0}},
+  {0x1F9B,2,{0x1F2B,0x399,0x0}},
+  {0x1F9C,2,{0x1F2C,0x399,0x0}},
+  {0x1F9D,2,{0x1F2D,0x399,0x0}},
+  {0x1F9E,2,{0x1F2E,0x399,0x0}},
+  {0x1F9F,2,{0x1F2F,0x399,0x0}},
+  {0x1FA0,2,{0x1F68,0x399,0x0}},
+  {0x1FA1,2,{0x1F69,0x399,0x0}},
+  {0x1FA2,2,{0x1F6A,0x399,0x0}},
+  {0x1FA3,2,{0x1F6B,0x399,0x0}},
+  {0x1FA4,2,{0x1F6C,0x399,0x0}},
+  {0x1FA5,2,{0x1F6D,0x399,0x0}},
+  {0x1FA6,2,{0x1F6E,0x399,0x0}},
+  {0x1FA7,2,{0x1F6F,0x399,0x0}},
+  {0x1FA8,2,{0x1F68,0x399,0x0}},
+  {0x1FA9,2,{0x1F69,0x399,0x0}},
+  {0x1FAA,2,{0x1F6A,0x399,0x0}},
+  {0x1FAB,2,{0x1F6B,0x399,0x0}},
+  {0x1FAC,2,{0x1F6C,0x399,0x0}},
+  {0x1FAD,2,{0x1F6D,0x399,0x0}},
+  {0x1FAE,2,{0x1F6E,0x399,0x0}},
+  {0x1FAF,2,{0x1F6F,0x399,0x0}},
+  {0x1FB2,2,{0x1FBA,0x399,0x0}},
+  {0x1FB3,2,{0x391,0x399,0x0}},
+  {0x1FB4,2,{0x386,0x399,0x0}},
+  {0x1FB6,2,{0x391,0x342,0x0}},
+  {0x1FB7,3,{0x391,0x342,0x399}},
+  {0x1FBC,2,{0x391,0x399,0x0}},
+  {0x1FC2,2,{0x1FCA,0x399,0x0}},
+  {0x1FC3,2,{0x397,0x399,0x0}},
+  {0x1FC4,2,{0x389,0x399,0x0}},
+  {0x1FC6,2,{0x397,0x342,0x0}},
+  {0x1FC7,3,{0x397,0x342,0x399}},
+  {0x1FCC,2,{0x397,0x399,0x0}},
+  {0x1FD2,3,{0x399,0x308,0x300}},
+  {0x1FD3,3,{0x399,0x308,0x301}},
+  {0x1FD6,2,{0x399,0x342,0x0}},
+  {0x1FD7,3,{0x399,0x308,0x342}},
+  {0x1FE2,3,{0x3A5,0x308,0x300}},
+  {0x1FE3,3,{0x3A5,0x308,0x301}},
+  {0x1FE4,2,{0x3A1,0x313,0x0}},
+  {0x1FE6,2,{0x3A5,0x342,0x0}},
+  {0x1FE7,3,{0x3A5,0x308,0x342}},
+  {0x1FF2,2,{0x1FFA,0x399,0x0}},
+  {0x1FF3,2,{0x3A9,0x399,0x0}},
+  {0x1FF4,2,{0x38F,0x399,0x0}},
+  {0x1FF6,2,{0x3A9,0x342,0x0}},
+  {0x1FF7,3,{0x3A9,0x342,0x399}},
+  {0x1FFC,2,{0x3A9,0x399,0x0}},
+  {0xFB00,2,{0x46,0x46,0x0}},
+  {0xFB01,2,{0x46,0x49,0x0}},
+  {0xFB02,2,{0x46,0x4C,0x0}},
+  {0xFB03,3,{0x46,0x46,0x49}},
+  {0xFB04,3,{0x46,0x46,0x4C}},
+  {0xFB05,2,{0x53,0x54,0x0}},
+  {0xFB06,2,{0x53,0x54,0x0}},
+  {0xFB13,2,{0x544,0x546,0x0}},
+  {0xFB14,2,{0x544,0x535,0x0}},
+  {0xFB15,2,{0x544,0x53B,0x0}},
+  {0xFB16,2,{0x54E,0x546,0x0}},
+  {0xFB17,2,{0x544,0x53D,0x0}},
+};
+static unsigned int piton_unicode_upper(unsigned int cp,unsigned int out[3]){
+  for(unsigned long i=0;i<sizeof(piton_upper_ranges)/sizeof(piton_upper_ranges[0]);++i){
+    PitonUpperRange r=piton_upper_ranges[i];
+    if(cp>=r.first&&cp<=r.last){out[0]=(unsigned int)((int)cp+r.delta);return 1;}
+  }
+  long lo=0,hi=(long)(sizeof(piton_upper_pairs)/sizeof(piton_upper_pairs[0]));
+  while(lo<hi){long mid=lo+(hi-lo)/2;PitonUpperPair p=piton_upper_pairs[mid];if(cp<p.lower)hi=mid;else if(cp>p.lower)lo=mid+1;else{out[0]=p.upper;return 1;}}
+  lo=0;hi=(long)(sizeof(piton_upper_expansions)/sizeof(piton_upper_expansions[0]));
+  while(lo<hi){long mid=lo+(hi-lo)/2;PitonUpperExpansion e=piton_upper_expansions[mid];if(cp<e.lower)hi=mid;else if(cp>e.lower)lo=mid+1;else{for(int i=0;i<e.length;++i)out[i]=e.upper[i];return e.length;}}
+  out[0]=cp;return 1;
+}
+static unsigned int piton_utf8_read(const unsigned char**cursor,int*valid){
+  const unsigned char*p=*cursor;unsigned int cp;int n;
+  *valid=1;
+  if(p[0]<0x80){*cursor=p+1;return p[0];}
+  if((p[0]&0xE0)==0xC0){cp=p[0]&0x1F;n=2;if(cp<2)*valid=0;}
+  else if((p[0]&0xF0)==0xE0){cp=p[0]&0x0F;n=3;}
+  else if((p[0]&0xF8)==0xF0){cp=p[0]&0x07;n=4;if(cp>4)*valid=0;}
+  else{*valid=0;*cursor=p+1;return p[0];}
+  if(*valid){for(int i=1;i<n;++i){if((p[i]&0xC0)!=0x80){*valid=0;break;}cp=(cp<<6)|(p[i]&0x3F);}}
+  if(*valid&&((n==3&&cp<0x800)||(n==4&&cp<0x10000)||cp>0x10FFFF||(cp>=0xD800&&cp<=0xDFFF)))*valid=0;
+  if(!*valid){*cursor=p+1;return p[0];}
+  *cursor=p+n;return cp;
+}
+static usize piton_utf8_write(unsigned int cp,char*out){
+  if(cp<0x80){out[0]=(char)cp;return 1;}
+  if(cp<0x800){out[0]=(char)(0xC0|(cp>>6));out[1]=(char)(0x80|(cp&0x3F));return 2;}
+  if(cp<0x10000){out[0]=(char)(0xE0|(cp>>12));out[1]=(char)(0x80|((cp>>6)&0x3F));out[2]=(char)(0x80|(cp&0x3F));return 3;}
+  out[0]=(char)(0xF0|(cp>>18));out[1]=(char)(0x80|((cp>>12)&0x3F));out[2]=(char)(0x80|((cp>>6)&0x3F));out[3]=(char)(0x80|(cp&0x3F));return 4;
+}
+static long piton_str_case(const char*s,int upper){
+  usize n=piton_strlen(s);char*p=(char*)piton_alloc(n*6+1);
+  if(!upper){
+    for(usize i=0;i<n;++i){unsigned char c=(unsigned char)s[i];if(c>=0x80){piton_write(2,"ValueError: str case conversion on non-ASCII text is not supported in the native subset\n",88);piton_exit(1);}p[i]=(char)((c>='A'&&c<='Z')?c+32:c);}
+    p[n]=0;return(long)p;
+  }
+  const unsigned char*cursor=(const unsigned char*)s;usize o=0;
+  while(*cursor){const unsigned char*start=cursor;int valid=0;unsigned int cp=piton_utf8_read(&cursor,&valid);
+    if(!valid){p[o++]=(char)*start;continue;}
+    unsigned int mapped[3];int count=piton_unicode_upper(cp,mapped);
+    for(int i=0;i<count;++i)o+=piton_utf8_write(mapped[i],p+o);
+  }
+  p[o]=0;return(long)p;
+}
 static long piton_str_find(const char*s,const char*n){usize hl=piton_strlen(s),nl=piton_strlen(n);if(nl==0)return 0;if(nl>hl)return -1;for(usize i=0;i+nl<=hl;++i){usize j=0;while(j<nl&&s[i+j]==n[j])++j;if(j==nl)return(long)i;}return -1;}
 /* STR_FIND_OFFSET_V1: str.find(sub, start) — busqueda desde el offset
    start con la misma receta que startswith/endswith: negativo se mide
@@ -3261,7 +4093,7 @@ static long piton_type_new(long raw_name,long raw_bases,long raw_namespace){
       parent=((PitonObject*)bases->items[0].bits)->class_name;
   }
   if(!name){piton_raise_set("TypeError","type.__new__() name must be str");return 0;}
-  PitonObject*cls=piton_object_new(name,parent);
+  PitonObject*cls=piton_object_new(name,parent);cls->is_class=1;
   piton_object_set(cls,"__name__",piton_slot((long)name,PK_STR));
   if(raw_namespace&&piton_maybe_ptr(raw_namespace)&&((long*)raw_namespace)[1]==PK_DICT){
     PitonDict*ns=(PitonDict*)raw_namespace;
@@ -3767,14 +4599,79 @@ static long piton_bytes_maketrans(PitonSeq*frm,PitonSeq*to){
   r->refcount=1; r->kind=PK_BYTES; r->length=256; r->data=t;
   return(long)r;
 }
-/* FLOAT_FROMHEX_V1: float.fromhex(str) — classmethod. Hex float parsing
- * (0x1.23p+4) delega a piton_strtod_local (ya implementado). Falla cerrado
- * si str no es str/bytes o parsing no avanza (formato invalido). */
+/* FLOAT_FROMHEX_V1: float.fromhex(str) — classmethod. Convert the hexadecimal
+ * significand with guard/sticky bits so long inputs round exactly to binary64. */
+static int piton_hex_word_span_eq(const char*s,const char*end,const char*word){
+  while(s<end&&*word){char a=*s++,b=*word++;if(a>='A'&&a<='Z')a=(char)(a+32);if(b>='A'&&b<='Z')b=(char)(b+32);if(a!=b)return 0;}
+  return s==end&&*word==0;
+}
+static int piton_hex_digit(int c){
+  if(c>='0'&&c<='9')return c-'0';
+  if(c>='a'&&c<='f')return c-'a'+10;
+  if(c>='A'&&c<='F')return c-'A'+10;
+  return -1;
+}
+static int piton_hex_digit_bits(unsigned int d){
+  if(d>=8)return 4;if(d>=4)return 3;if(d>=2)return 2;return 1;
+}
 static long piton_float_fromhex(const char*s){
-  if(!s){piton_write(2,"TypeError: float.fromhex() argument must be a string\n",49);piton_exit(1);}
-  char*end=0; double d=piton_strtod_local(s,&end);
-  if(end==s){piton_write(2,"ValueError: float.fromhex() invalid hex format\n",45);piton_exit(1);}
-  return piton_double_bits(d);
+  if(!s){piton_raise_set("TypeError","float.fromhex() argument must be a string");return 0;}
+  const char*start=s;while(*start==' '||*start=='\t'||*start=='\n'||*start=='\r'||*start=='\v'||*start=='\f')++start;
+  const char*finish=start+piton_strlen(start);while(finish>start&&(finish[-1]==' '||finish[-1]=='\t'||finish[-1]=='\n'||finish[-1]=='\r'||finish[-1]=='\v'||finish[-1]=='\f'))--finish;
+  int neg=0;const char*body=start;if(*body=='+'||*body=='-'){neg=*body=='-';++body;}
+  if(finish<=start){piton_raise_set("ValueError","invalid hexadecimal floating-point string");return 0;}
+  if(piton_hex_word_span_eq(body,finish,"inf")||piton_hex_word_span_eq(body,finish,"infinity"))return(long)(0x7FF0000000000000ULL|(neg?0x8000000000000000ULL:0));
+  if(piton_hex_word_span_eq(body,finish,"nan"))return(long)(0x7FF8000000000000ULL|(neg?0x8000000000000000ULL:0));
+  const char*digits=body;
+  if(body+1<finish&&body[0]=='0'&&(body[1]=='x'||body[1]=='X'))digits=body+2;
+  const char*p=digits;const char*sig_end=digits;long total_digits=0,frac_digits=0,first_nonzero=-1;unsigned int first_digit=0;int saw_dot=0;
+  while(p<finish){
+    int d=piton_hex_digit((unsigned char)*p);
+    if(d>=0){if(saw_dot)++frac_digits;if(first_nonzero<0&&d){first_nonzero=total_digits;first_digit=(unsigned int)d;}++total_digits;++p;continue;}
+    if(*p=='.'&&!saw_dot){saw_dot=1;++p;continue;}
+    break;
+  }
+  sig_end=p;
+  if(!total_digits){piton_raise_set("ValueError","invalid hexadecimal floating-point string");return 0;}
+  long long exponent=0;int exponent_negative=0;
+  if(p<finish&&(*p=='p'||*p=='P')){
+    ++p;if(p<finish&&(*p=='+'||*p=='-')){exponent_negative=*p=='-';++p;}
+    int has_exponent_digits=0;long long magnitude=0;
+    while(p<finish&&*p>='0'&&*p<='9'){
+      if(magnitude<1000000000LL){magnitude=magnitude*10+(*p-'0');if(magnitude>1000000000LL)magnitude=1000000000LL;}
+      has_exponent_digits=1;++p;
+    }
+    if(!has_exponent_digits){piton_raise_set("ValueError","invalid hexadecimal floating-point string");return 0;}
+    exponent=exponent_negative?-magnitude:magnitude;
+  }
+  if(p!=finish){piton_raise_set("ValueError","invalid hexadecimal floating-point string");return 0;}
+  unsigned long long sign=neg?0x8000000000000000ULL:0ULL;
+  if(first_nonzero<0)return(long)sign;
+  long long mantissa_bits=(long long)(total_digits-first_nonzero-1)*4+piton_hex_digit_bits(first_digit);
+  long long top_exponent=exponent-4LL*(long long)frac_digits+mantissa_bits-1;
+  if(top_exponent>1023){piton_raise_set("OverflowError","hexadecimal value too large to represent as a float");return 0;}
+  if(top_exponent< -1075)return(long)sign;
+  long keep_bits=top_exponent>=-1022?53L:(long)(top_exponent+1075);
+  unsigned long long significand=0;long bit_index=0;int guard=0,sticky=0,active=0;
+  for(const char*q=digits;q<sig_end;++q){
+    int d=piton_hex_digit((unsigned char)*q);if(d<0)continue;
+    if(!active){if(!d)continue;active=1;}
+    int highest=active&&bit_index==0?piton_hex_digit_bits((unsigned int)d)-1:3;
+    for(int b=highest;b>=0;--b){int bit=(d>>b)&1;
+      if(bit_index<keep_bits)significand=(significand<<1)|(unsigned long long)bit;
+      else if(bit_index==keep_bits)guard=bit;
+      else if(bit)sticky=1;
+      ++bit_index;
+    }
+  }
+  if(bit_index<keep_bits)significand<<=(unsigned long long)(keep_bits-bit_index);
+  if(guard&&(sticky||(significand&1ULL)))++significand;
+  if(top_exponent>=-1022){
+    if(significand==(1ULL<<53)){significand>>=1;++top_exponent;}
+    if(top_exponent>1023){piton_raise_set("OverflowError","hexadecimal value too large to represent as a float");return 0;}
+    return(long)(sign|((unsigned long long)(top_exponent+1023)<<52)|(significand&0xFFFFFFFFFFFFFULL));
+  }
+  return(long)(sign|significand);
 }
 static long piton_bin(long v){char*p=piton_alloc(70);usize o=0;unsigned long m;if(v<0){p[o++]='-';m=(unsigned long)(-(v+1))+1;}else m=(unsigned long)v;p[o++]='0';p[o++]='b';char tmp[64];long n=0;do{tmp[n++]=(char)('0'+(m&1));m>>=1;}while(m);while(n)p[o++]=tmp[--n];p[o]=0;return(long)p;}
 static long piton_round_float(long bits){double x=piton_bits_double(bits);double ax=x<0?-x:x;if(ax>=9.0e18){piton_raise_set("OverflowError","round() float too large to convert to int");return 0;}long t=(long)ax;double frac=ax-(double)t;long r;if(frac>0.5)r=t+1;else if(frac<0.5)r=t;else r=(t&1)?t+1:t;return x<0?-r:r;}
@@ -4093,6 +4990,163 @@ static const char* piton_dynamic_type_name(long bits){if(bits==(long)&piton_none
     if(piton_is_printable_str((const char*)bits))return "str";}
   return "int";
 }
+/* UNBOUND_BUILTIN_METHOD_V1: class values have explicit metadata, so
+   type.__instancecheck__ can distinguish them from ordinary instances. */
+static int piton_is_type_value(long bits){
+  if(piton_maybe_ptr(bits)){
+    long*ptr=(long*)bits;
+    if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]==PK_OBJECT)
+      return ((PitonObject*)bits)->is_class!=0;
+  }
+  return 0;
+}
+static const char*piton_unbound_value_type(long bits,int hint){
+  if(hint==-2)return "type";
+  if(piton_is_type_value(bits))return "type";
+  if(bits==(long)&piton_none_singleton)return "NoneType";
+  if(bits==(long)&piton_ellipsis_singleton)return "ellipsis";
+  if(hint==PK_FLOAT)return "float";
+  if(hint==PK_STR)return "str";
+  if(piton_is_double_bits(bits))return "float";
+  if(hint==PK_COMPLEX)return "complex";
+  if(hint==PK_BIGINT)return "int";
+  if(piton_maybe_ptr(bits)){
+    if(piton_is_printable_str((const char*)bits))return "str";
+    long*ptr=(long*)bits;
+    if(ptr[0]>0&&ptr[0]<1000000L){
+      switch(ptr[1]){
+        case PK_LIST:return "list";case PK_TUPLE:return "tuple";
+        case PK_DICT:return "dict";case PK_SET:return "set";
+        case PK_OBJECT:return ((PitonObject*)bits)->class_name;
+        case PK_BIGINT:return "int";case PK_RANGE:return "range";
+        case PK_BYTES:return "bytes";case PK_BYTEARRAY:return "bytearray";
+        case PK_COMPLEX:return "complex";case PK_FROZENSET:return "frozenset";
+        case PK_SLICE:return "slice";case PK_MEMORYVIEW:return "memoryview";
+        default:break;
+      }
+    }
+  }
+  if(hint==PK_BOOL)return "bool";
+  if(hint==PK_NONE)return "NoneType";
+  return "int";
+}
+static void piton_raise_unbound_descriptor(const char*method,const char*owner,long receiver,int hint){
+  const char*actual=piton_unbound_value_type(receiver,hint);
+  const char*a="descriptor '";const char*b="' for '";const char*c="' objects doesn't apply to a '";const char*d="' object";
+  usize n=piton_strlen(a)+piton_strlen(method)+piton_strlen(b)+piton_strlen(owner)+piton_strlen(c)+piton_strlen(actual)+piton_strlen(d);
+  char*m=(char*)piton_alloc(n+1);usize o=0;
+  #define PITON_DESC_APPEND(S) do{const char*_s=(S);usize _n=piton_strlen(_s);piton_memcpy(m+o,_s,_n);o+=_n;}while(0)
+  PITON_DESC_APPEND(a);PITON_DESC_APPEND(method);PITON_DESC_APPEND(b);PITON_DESC_APPEND(owner);PITON_DESC_APPEND(c);PITON_DESC_APPEND(actual);PITON_DESC_APPEND(d);m[o]=0;
+  #undef PITON_DESC_APPEND
+  piton_raise_set("TypeError",m);
+}
+static int piton_unbound_receiver_matches(long receiver,const char*owner,int hint){
+  const char*actual=piton_unbound_value_type(receiver,hint);
+  if(!piton_strcmp(owner,"int"))return !piton_strcmp(actual,"int")||!piton_strcmp(actual,"bool");
+  if(!piton_strcmp(owner,"type"))return piton_is_type_value(receiver);
+  return !piton_strcmp(owner,actual);
+}
+static long piton_bigint_bit_length(long raw);
+static PitonObject*g_unbound_class_registry[256];static long g_unbound_class_registry_n=0;
+static void piton_unbound_class_register(PitonObject*cls){
+  if(!cls||!cls->class_name)return;
+  for(long i=0;i<g_unbound_class_registry_n;++i)
+    if(!piton_strcmp(g_unbound_class_registry[i]->class_name,cls->class_name))return;
+  if(g_unbound_class_registry_n<256)g_unbound_class_registry[g_unbound_class_registry_n++]=cls;
+}
+static PitonObject*piton_unbound_class_find(const char*name){
+  if(!name)return 0;
+  for(long i=0;i<g_unbound_class_registry_n;++i)
+    if(!piton_strcmp(g_unbound_class_registry[i]->class_name,name))return g_unbound_class_registry[i];
+  return 0;
+}
+static int piton_class_mro_contains(PitonObject*cls,const char*name){
+  if(!cls||!name)return 0;
+  if(cls->class_name&&!piton_strcmp(cls->class_name,name))return 1;
+  if(cls->parent_name&&!piton_strcmp(cls->parent_name,name))return 1;
+  for(long i=0;i<cls->length;++i){
+    if(piton_strcmp(cls->attrs[i].name,"__mro__")!=0)continue;
+    PitonSlot mro=cls->attrs[i].value;
+    if(mro.kind!=PK_TUPLE||!mro.bits)continue;
+    PitonSeq*seq=(PitonSeq*)mro.bits;
+    for(long j=0;j<seq->length;++j){
+      PitonSlot entry=seq->items[j];
+      if(entry.kind==PK_OBJECT&&entry.bits){
+        const char*base=((PitonObject*)entry.bits)->class_name;
+        if(base&&!piton_strcmp(base,name))return 1;
+      }
+    }
+  }
+  return 0;
+}
+static int piton_class_has_instance_type(PitonObject*target,long instance,int instance_hint,const char*instance_type){
+  if(!target||!instance_type)return 0;
+  if(target->class_name&&!piton_strcmp(target->class_name,instance_type))return 1;
+  if(instance_hint==PK_OBJECT&&piton_maybe_ptr(instance)&&target->class_name&&
+     piton_class_mro_contains((PitonObject*)instance,target->class_name))return 1;
+  PitonObject*actual=piton_unbound_class_find(instance_type);
+  if(actual&&target->class_name)return piton_class_mro_contains(actual,target->class_name);
+  return actual&&actual->parent_name&&target->class_name&&!piton_strcmp(actual->parent_name,target->class_name);
+}
+static int piton_builtin_instance_matches(const char*target,long instance,int hint,int instance_is_type){
+  const char*actual=instance_is_type?"type":piton_unbound_value_type(instance,hint);
+  if(!piton_strcmp(target,"object"))return 1;
+  if(!piton_strcmp(target,"type"))return instance_is_type||piton_is_type_value(instance);
+  if(!piton_strcmp(target,"int"))return !piton_strcmp(actual,"int")||!piton_strcmp(actual,"bool");
+  if(!piton_strcmp(target,"NoneType"))return !piton_strcmp(actual,"NoneType");
+  return !piton_strcmp(target,actual);
+}
+static long piton_type_instancecheck_builtin(const char*target,long instance,int instance_hint,int instance_is_type){
+  return piton_builtin_instance_matches(target,instance,instance_hint,instance_is_type);
+}
+static long piton_type_instancecheck(long cls_bits,long instance,int cls_hint,int instance_hint,int instance_is_type){
+  if(!piton_unbound_receiver_matches(cls_bits,"type",cls_hint)){
+    piton_raise_unbound_descriptor("__instancecheck__","type",cls_bits,cls_hint);
+    return 0;
+  }
+  PitonObject*cls=(PitonObject*)cls_bits;
+  if(instance_is_type||piton_is_type_value(instance))return 0;
+  const char*instance_type=piton_unbound_value_type(instance,instance_hint);
+  return piton_class_has_instance_type(cls,instance,instance_hint,instance_type);
+}
+static long piton_unbound_str_upper(long receiver,int hint){
+  if(!piton_unbound_receiver_matches(receiver,"str",hint)){
+    piton_raise_unbound_descriptor("upper","str",receiver,hint);return 0;
+  }
+  return piton_str_case((const char*)receiver,1);
+}
+static long piton_unbound_int_bit_length(long receiver,int hint){
+  if(!piton_unbound_receiver_matches(receiver,"int",hint)){
+    piton_raise_unbound_descriptor("bit_length","int",receiver,hint);return 0;
+  }
+  if(hint==PK_BIGINT)return piton_bigint_bit_length(receiver);
+  if(piton_maybe_ptr(receiver)){
+    long*ptr=(long*)receiver;
+    if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]==PK_BIGINT){
+      return piton_bigint_bit_length(receiver);
+    }
+  }
+  unsigned long value=receiver<0?(unsigned long)(-(receiver+1))+1UL:(unsigned long)receiver;
+  long count=0;while(value){++count;value>>=1;}return count;
+}
+static long piton_unbound_list_append(long receiver,PitonSlot value,int receiver_hint){
+  if(!piton_unbound_receiver_matches(receiver,"list",receiver_hint)){
+    piton_raise_unbound_descriptor("append","list",receiver,receiver_hint);return 0;
+  }
+  piton_seq_append((PitonSeq*)receiver,value);
+  return (long)&piton_none_singleton;
+}
+static long piton_unbound_float_fromhex(long value,int hint){
+  if(piton_strcmp(piton_unbound_value_type(value,hint),"str")!=0){
+    piton_raise_set("TypeError","bad argument type for built-in operation");return 0;
+  }
+  return piton_float_fromhex((const char*)value);
+}
+static long piton_unbound_str_upper_frame(long*frame){return piton_unbound_str_upper(frame[0],-1);}
+static long piton_unbound_int_bit_length_frame(long*frame){return piton_unbound_int_bit_length(frame[0],-1);}
+static long piton_unbound_float_fromhex_frame(long*frame){return piton_unbound_float_fromhex(frame[0],-1);}
+static long piton_unbound_list_append_frame(long*frame){return piton_unbound_list_append(frame[0],piton_slot_guess(frame[1]),-1);}
+static long piton_unbound_type_instancecheck_frame(long*frame){return piton_type_instancecheck(frame[0],frame[1],-1,-1,0);}
 /* PCT_UNKNOWN_ARG_V1: `'%s' % x` con x de tipo DESCONOCIDO (un param sin
    inferencia) — CPython aplica str(x). La conversion es dinamica: se mira
    el valor en runtime (misma politica que piton_print_auto: puntero
@@ -5292,6 +6346,10 @@ static long piton_collect_any_iter(long raw){
         }else if(ci->callback == (long)&piton_str_of_value || ci->callback == (long)&piton_repr_of_value || ci->callback == (long)&piton_builtin_ascii){
           out_slot = (PitonSlot){mapped, PK_STR};
         }else if(ci->callback == (long)&piton_float_of_value){
+          out_slot = (PitonSlot){mapped, PK_FLOAT};
+        }else if(piton_is_closure((long)ci->callback) &&
+                 ((PitonClosure*)ci->callback)->n_args==1 &&
+                 ((PitonClosure*)ci->callback)->addr==(long)&piton_unbound_float_fromhex_frame){
           out_slot = (PitonSlot){mapped, PK_FLOAT};
         }else{
           out_slot = piton_slot_from_bits(mapped);
@@ -6756,6 +7814,12 @@ static long piton_callback_apply(PitonSlot v,long callback){
   if(callback==(long)&piton_iter_dynamic){
     if(v.kind==PK_LIST||v.kind==PK_TUPLE||v.kind==PK_DICT||v.kind==PK_SET||v.kind==PK_FROZENSET||v.kind==PK_RANGE||v.kind==PK_STR)return piton_iter_dynamic(v.bits);
     piton_raise_set("TypeError","object is not iterable");return 0;
+  }
+  if(piton_is_closure(callback)){
+    PitonClosure*c=(PitonClosure*)callback;
+    if(c->n_args==1&&c->addr==(long)&piton_unbound_str_upper_frame)return piton_unbound_str_upper(v.bits,v.kind);
+    if(c->n_args==1&&c->addr==(long)&piton_unbound_int_bit_length_frame)return piton_unbound_int_bit_length(v.bits,v.kind);
+    if(c->n_args==1&&c->addr==(long)&piton_unbound_float_fromhex_frame)return piton_unbound_float_fromhex(v.bits,v.kind);
   }
   return piton_callback_invoke(callback,v.bits);
 }
@@ -8237,6 +9301,10 @@ static long bi_width_from_limbs(const unsigned long *limbs, long count) {
     }
     return 0;
 }
+static long piton_bigint_bit_length(long raw) {
+    PitonBigInt *value = (PitonBigInt *)raw;
+    return value ? bi_width_from_limbs(value->limbs, value->count) : 0;
+}
 
 static long piton_bigint_cmp_int(void*raw,long v){PitonBigInt*x=(PitonBigInt*)raw;if(!x)return v>0?-1:(v<0?1:0);int vs=v<0?-1:(v>0?1:0);if(x->sign!=vs)return x->sign?-1:1;unsigned long mag=v<0?(unsigned long)(-(v+1))+1UL:(unsigned long)v;long width=bi_width_from_limbs(x->limbs,x->count);
 int mw=0;for(unsigned long t=mag;t;t>>=1)++mw;if(width!=mw)return width>mw?1:-1;for(long i=x->count-1;i>=0;--i){unsigned long lo=(i==0)?mag:0UL;if(x->limbs[i]!=lo)return x->limbs[i]>lo?1:-1;}
@@ -8692,6 +9760,8 @@ class LinuxCEmitter:
         # valor (repr "<class 'X'>") y temps que contienen una union de tipos
         # (`int | str`). tipo()/callable() los distinguen de un str normal.
         self._typeobj_names: dict[str, str] = {}
+        self._unbound_builtin_values: dict[str, tuple[str, str, int, str]] = {}
+        self._module_unbound_builtin_values: dict[str, tuple[str, str, int, str]] = {}
         self._union_type_temps: set[str] = set()
         self.function_params = {function.name: list(function.params) for function in module.functions}
         self.function_varargs = {function.name: function.vararg for function in module.functions}
@@ -9086,6 +10156,7 @@ class LinuxCEmitter:
         # <module> (%18 = complex) no debe alcanzar al %18 de otra funcion
         # (_reconstructor: base.__init__).
         self._typeobj_names = {}
+        self._unbound_builtin_values = {}
         self._union_type_temps = set()
         self._unpack_counter = 0
         self._literal_str_temps = {
@@ -10920,6 +11991,7 @@ class LinuxCEmitter:
         _cvar = _name("_clsobj_" + cls_name)
         out.append(
             f"    if(!{_cvar}){{{_cvar}=(long)piton_object_new(\"{cls_name}\",0);"
+            f"    ((PitonObject*){_cvar})->is_class=1;"
             f"    piton_object_set((PitonObject*){_cvar},\"__name__\","
             f"piton_slot((long)\"{cls_name}\",PK_STR));"
         )
@@ -10933,6 +12005,7 @@ class LinuxCEmitter:
         out.append("    }")
         out.append(f"    {_name(result)}={_cvar};")
         self._emit_class_bases_attribute(out, result, cls_name)
+        out.append(f"    piton_unbound_class_register((PitonObject*){_cvar});")
 
     def _emit_collection_method(self, out: list[str], result: Any, method: str, obj: Any,
                                 call_args: list[Any], coll_type: str, types: dict[str, str],
@@ -11601,6 +12674,86 @@ class LinuxCEmitter:
             types[result] = "none"
         else:
             raise NativeBuildError(f"Linux {target_type}.{method}() is not supported")
+
+    def _emit_unbound_builtin_call(
+        self,
+        out: list[str],
+        result: Any,
+        owner: str,
+        method: str,
+        call_args: list[Any],
+        types: dict[str, str],
+        aliases: dict[str, str],
+        function: MIRFunction,
+        handler_label: Any,
+        kw_args: tuple = (),
+    ) -> bool:
+        """Emit the explicitly supported unbound builtin descriptors."""
+        specs = {
+            ("str", "upper"): (1, "str"),
+            ("int", "bit_length"): (1, "int"),
+            ("float", "fromhex"): (1, "float"),
+            ("list", "append"): (2, "none"),
+            ("type", "__instancecheck__"): (2, "bool"),
+        }
+        spec = specs.get((owner, method))
+        if spec is None:
+            return False
+        expected, result_type = spec
+        if kw_args:
+            raise NativeBuildError(f"Linux unbound {owner}.{method}() does not support keyword arguments")
+        if len(call_args) != expected:
+            raise NativeBuildError(
+                f"Linux unbound {owner}.{method}() requires exactly {expected} positional argument(s)"
+            )
+        value = lambda index: self._value(call_args[index])
+        kind = lambda index: self._kind(types.get(call_args[index], "int"))
+        receiver_kind = lambda index: (
+            "-2" if call_args[index] in self._typeobj_names else kind(index)
+        )
+        if owner == "float":
+            out.append(
+                f"    {_name(result)}=piton_unbound_float_fromhex({value(0)},{kind(0)});"
+            )
+        elif owner == "int":
+            out.append(
+                f"    {_name(result)}=piton_unbound_int_bit_length({value(0)},{receiver_kind(0)});"
+            )
+        elif owner == "str":
+            out.append(
+                f"    {_name(result)}=piton_unbound_str_upper({value(0)},{receiver_kind(0)});"
+            )
+        elif owner == "list":
+            out.append(
+                f"    {_name(result)}=piton_unbound_list_append({value(0)},{self._slot(call_args[1], types)},{receiver_kind(0)});"
+            )
+            list_name = aliases.get(call_args[0], call_args[0])
+            if isinstance(list_name, str):
+                elem_type = types.get(call_args[1])
+                current = self._coll_elems.get(list_name)
+                if elem_type and current is None:
+                    self._coll_elems[list_name] = elem_type
+                elif elem_type and current and elem_type not in current.split("|"):
+                    self._coll_elems[list_name] = current + "|" + elem_type
+        else:
+            _instance_is_type = int(
+                call_args[1] in self._typeobj_names
+                or types.get(call_args[1], "").startswith("class:")
+            )
+            _builtin_target = self._typeobj_names.get(call_args[0])
+            if _builtin_target is not None:
+                out.append(
+                    f"    {_name(result)}=piton_type_instancecheck_builtin("
+                    f"{json.dumps(_builtin_target)},{value(1)},{kind(1)},{_instance_is_type});"
+                )
+            else:
+                out.append(
+                    f"    {_name(result)}=piton_type_instancecheck("
+                    f"{value(0)},{value(1)},{kind(0)},{kind(1)},{_instance_is_type});"
+                )
+        types[result] = result_type
+        self._emit_exc_check(out, function, handler_label)
+        return True
 
     def _emit_str_method(self, out: list[str], result: Any, method: str, obj: Any,
                          call_args: list[Any], types: dict[str, str],
@@ -14729,6 +15882,16 @@ class LinuxCEmitter:
                 if types.get(source) not in {"list", "tuple"}:
                     # Relajar map/filter: permitir iterables genéricos
                     pass
+                _unbound_cb = (
+                    self._unbound_builtin_values.get(start)
+                    or self._unbound_builtin_values.get(aliases.get(start, start))
+                    or self._module_unbound_builtin_values.get(aliases.get(start, start))
+                )
+                if _unbound_cb is not None and _unbound_cb[2] != 1:
+                    raise NativeBuildError(
+                        f"Linux {builtin} callback for unbound {_unbound_cb[0]}.{_unbound_cb[1]}() "
+                        f"requires {_unbound_cb[2]} positional arguments; only unary callbacks are supported"
+                    )
                 # BUILTIN_CB_ALIAS_V1: los builtins tienen nombre ingles y
                 # alias en espanol (texto=str, longitud=len); el dispatch del
                 # callback usa el nombre canonico.
@@ -14838,6 +16001,8 @@ class LinuxCEmitter:
                     }.get(_bname)
                     if _bname == "iter":
                         _b_elem = "iterator:any"
+                    if _unbound_cb is not None:
+                        _b_elem = _unbound_cb[3]
                     if _b_elem is None:
                         _cb_origin = self._closure_origin.get(start)
                         if _cb_origin:
@@ -15204,6 +16369,9 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"NameError: name '{source}' is not defined")
 
             aliases[result] = source
+            _unbound_value = self._unbound_builtin_values.get(source) or self._module_unbound_builtin_values.get(source)
+            if _unbound_value is not None:
+                self._unbound_builtin_values[result] = _unbound_value
             if source in types:
                 types[result] = types[source]
             elif source not in function.params:
@@ -15276,7 +16444,7 @@ class LinuxCEmitter:
                 # marca el dispatch la tomaba por una llamada ligada y
                 # duplicaba el self.
                 types[result] = f"class:{source}"
-                out.append(f'    {_name(result)}=(long)piton_object_new("{source}",0);')
+                out.append(f'    {_name(result)}=(long)piton_object_new("{source}",0); ((PitonObject*){_name(result)})->is_class=1;')
                 return out
             if source in {"object", "objeto"}:
                 # OBJECT_CLASS_V1: `object` es la clase base. Como VALOR debe
@@ -15484,6 +16652,18 @@ class LinuxCEmitter:
             return out
         elif op == "store":
             if isinstance(args[0], str):
+                _unbound_value = (
+                    self._unbound_builtin_values.get(args[1])
+                    or self._module_unbound_builtin_values.get(args[1])
+                )
+                if _unbound_value is not None:
+                    self._unbound_builtin_values[args[0]] = _unbound_value
+                    if function.name == "<module>" or args[0] in self._shared_globals:
+                        self._module_unbound_builtin_values[args[0]] = _unbound_value
+                else:
+                    self._unbound_builtin_values.pop(args[0], None)
+                    if function.name == "<module>" or args[0] in self._shared_globals:
+                        self._module_unbound_builtin_values.pop(args[0], None)
                 # _bound_<n> models the MODULE-level binding only: a same-named
                 # local in another function (e.g. an imported stdlib helper)
                 # must not mark it bound unless that function declares it global.
@@ -17307,6 +18487,21 @@ class LinuxCEmitter:
                 or self._closure_origin.get(_cb_alias)
                 or self._closure_param_origin.get(function.name, {}).get(_cb_alias)
             )
+            _unbound_cb = (
+                self._unbound_builtin_values.get(args[0])
+                or self._unbound_builtin_values.get(_cb_alias)
+                or self._module_unbound_builtin_values.get(_cb_alias)
+            )
+            if _unbound_cb is not None:
+                _ub_owner, _ub_method, _ub_arity, _ub_return = _unbound_cb
+                if not self._emit_unbound_builtin_call(
+                    out, result, _ub_owner, _ub_method, values, types, aliases,
+                    function, call_handler,
+                ):
+                    raise NativeBuildError(
+                        f"Linux unbound {_ub_owner}.{_ub_method}() callable is not supported"
+                    )
+                return out
             if (
                 types.get(args[0]) == "closure"
                 or types.get(aliases.get(args[0])) == "closure"
@@ -19735,6 +20930,33 @@ class LinuxCEmitter:
             obj, attr = args[0], args[1]
             handler_label = args[2] if len(args) > 2 else None
             owner_type = types.get(obj, "")
+            if obj in self._typeobj_names:
+                _builtin_owner = self._typeobj_names[obj]
+                _unbound_specs = {
+                    ("str", "upper"): ("piton_unbound_str_upper_frame", 1, "str"),
+                    ("int", "bit_length"): ("piton_unbound_int_bit_length_frame", 1, "int"),
+                    ("float", "fromhex"): ("piton_unbound_float_fromhex_frame", 1, "float"),
+                    ("list", "append"): ("piton_unbound_list_append_frame", 2, "none"),
+                    ("type", "__instancecheck__"): ("piton_unbound_type_instancecheck_frame", 2, "bool"),
+                }
+                _spec = _unbound_specs.get((_builtin_owner, attr))
+                if _spec is not None:
+                    _frame_fn, _arity, _return_type = _spec
+                    out.append(
+                        f"    {_name(result)}=piton_closure_new_frame((long)&{_frame_fn},{_arity},0,(long*)0,0,0);"
+                    )
+                    types[result] = "closure"
+                    self._unbound_builtin_values[result] = (
+                        _builtin_owner, attr, _arity, _return_type
+                    )
+                    return out
+                if attr in {"__name__", "__qualname__"}:
+                    out.append(f"    {_name(result)}=(long){json.dumps(_builtin_owner)};")
+                    types[result] = "str"
+                    return out
+                raise NativeBuildError(
+                    f"Linux unbound builtin type attribute {_builtin_owner}.{attr} is not supported as a value"
+                )
             if owner_type.startswith("class:") and attr in {"__name__", "__qualname__"}:
                 # CLASS_NAME_ATTR_V1: `A.__name__` y `type(categoria).__name__`
                 # — el nombre de la clase como literal. El objeto de clase lo
@@ -20230,6 +21452,11 @@ class LinuxCEmitter:
             if isinstance(kw_args, str):
                 handler_label = kw_args
                 kw_args = ()
+            if obj in self._typeobj_names and self._emit_unbound_builtin_call(
+                out, result, self._typeobj_names[obj], method, list(call_args),
+                types, aliases, function, handler_label, tuple(kw_args) if kw_args else (),
+            ):
+                return out
             if kw_args:
                 _int_class_receiver = (
                     self._typeobj_names.get(obj) == "int"
