@@ -4247,6 +4247,18 @@ static PitonSlot piton_object_get(PitonObject*o,const char*name){
   }
   piton_raise_set("AttributeError",name?name:"");return (PitonSlot){0,PK_NONE};
 }
+/* MODULE_ATTR_MISSING_V1: atributo ausente de un modulo -> AttributeError con el
+   mensaje exacto de CPython: "module 'M' has no attribute 'a'". */
+static PitonSlot piton_object_get_mod(PitonObject*o,const char*name,const char*mod){
+  if(o&&piton_is_closure((long)o))o=piton_closure_attrs((long)o,0);
+  if(o&&piton_maybe_ptr((long)o)&&((long*)o)[1]==PK_OBJECT){
+    for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value;
+    if(piton_is_exception_object(o)&&name&&(!piton_strcmp(name,"__cause__")||!piton_strcmp(name,"__context__")))return piton_slot((long)&piton_none_singleton,PK_NONE);
+    if(piton_is_exception_object(o)&&name&&!piton_strcmp(name,"__suppress_context__"))return piton_slot(0,PK_BOOL);
+  }
+  PitonStrBuf m;sb_init(&m);sb_puts(&m,"module '");sb_puts(&m,mod?mod:"?");sb_puts(&m,"' has no attribute '");sb_puts(&m,name?name:"");sb_putc(&m,'\'');
+  piton_raise_set("AttributeError",m.d);return (PitonSlot){0,PK_NONE};
+}
 static long piton_object_lookup(PitonObject*o,const char*name,long fallback){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;return ((long(*)(long,long))fallback)((long)o,(long)name);}
 static long piton_hasattr(long raw,const char*name){if(piton_is_closure(raw))raw=(long)piton_closure_attrs(raw,0);if(!raw||!name||!piton_maybe_ptr(raw))return 0;PitonObject*o=(PitonObject*)raw;if(o->kind==PK_OBJECT){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return 1;}return 0;}
 static long piton_getattr(long raw,const char*name,int has_def,long def_val){if(piton_is_closure(raw))raw=(long)piton_closure_attrs(raw,0);if(raw&&name&&piton_maybe_ptr(raw)){PitonObject*o=(PitonObject*)raw;if(o->kind==PK_OBJECT){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;}}if(has_def)return def_val;piton_raise_set("AttributeError","object has no attribute");return 0;}
@@ -22123,6 +22135,8 @@ class LinuxCEmitter:
         elif op == "get_attr":
             obj, attr = args[0], args[1]
             handler_label = args[2] if len(args) > 2 else None
+            # MODULE_ATTR_MISSING_V1: nombre real del modulo (4.o argumento, literal).
+            module_display = args[3] if len(args) > 3 and isinstance(args[3], str) else None
             owner_type = types.get(obj, "")
             if obj in self._typeobj_names:
                 _builtin_owner = self._typeobj_names[obj]
@@ -22456,9 +22470,16 @@ class LinuxCEmitter:
                     if owner_type == "slot" else
                     f"(PitonObject*){self._value(obj)}"
                 )
-                out.append(
-                    f'    {_name(result)}=piton_object_get({_get_obj_expr},{attr_expr_g}).bits;'
-                )
+                if module_display is not None:
+                    # MODULE_ATTR_MISSING_V1: AttributeError con el mensaje de CPython
+                    # (el MIR solo envia el nombre si el alias no esta ligado localmente).
+                    out.append(
+                        f'    {_name(result)}=piton_object_get_mod({_get_obj_expr},{attr_expr_g},{_str_c_literal(module_display)}).bits;'
+                    )
+                else:
+                    out.append(
+                        f'    {_name(result)}=piton_object_get({_get_obj_expr},{attr_expr_g}).bits;'
+                    )
                 if attr in {"__cause__", "__context__", "__suppress_context__"}:
                     _final_type = "slot"
                     self._dyn_slot_temps.add((function.name, result))

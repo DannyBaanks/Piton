@@ -670,6 +670,23 @@ def _is_bundled_module(module_name: str) -> bool:
     return False
 
 
+def _bundled_module_lacks_attr(module_name: str, attr: str) -> bool:
+    """True solo si el identificador `attr` no aparece en absoluto en el fuente
+    del modulo empaquetado. Conservador: cualquier mencion (definicion, import,
+    cadena para setattr) o un `__getattr__`/import-estrella lo deja a False,
+    y entonces el camino de siempre decide."""
+    import re
+    from piton.bundled_stdlib import bundled_module_source
+    source = bundled_module_source(module_name)
+    if source is None:
+        source = bundled_module_source(module_name.replace('.', '__'))
+    if source is None:
+        return False
+    if "__getattr__" in source or re.search(r"importar\s+\*|import\s+\*", source):
+        return False
+    return re.search(r"\b" + re.escape(attr) + r"\b", source) is None
+
+
 def _module_state_name(module_name: str, var_name: str) -> str:
     """MODULE_STATE_V1: el nombre CUALIFICADO de una variable de nivel de
     modulo de un modulo importado ("warnings__var__filtros"). El prefijo
@@ -798,6 +815,17 @@ class MIRLowerer:
 
     def _mod_func_symbol(self, module_name: str, func_name: str) -> str:
         return f"{self._mod_prefix(module_name)}{func_name}"
+
+    def _emit_missing_module_attr(self, builder: "_Builder", module_name: str, attr: str) -> str:
+        """MODULE_ATTR_MISSING_V1: AttributeError capturable con el mensaje de CPython
+        para un atributo que el modulo empaquetado no define. Devuelve un temp
+        nulo: tras raise_typed el flujo no continua si hay intentar activo."""
+        _amsg = builder.temp()
+        builder.emit("const", f"module '{module_name}' has no attribute '{attr}'", result=_amsg)
+        builder.emit("raise_typed", "AttributeError", _amsg, _active_handler(builder))
+        result = builder.temp()
+        builder.emit("const", None, result=result)
+        return result
 
     def _module_function_binding(self, builder: "_Builder", name: str) -> str:
         """Resolve mutable module-function bindings after lexical scopes."""
@@ -9449,6 +9477,10 @@ class MIRLowerer:
                     return result
                 if module_name == "os" and node.func.attr == "makedirs":
                     return self._lower_os_makedirs(builder, node)
+                if _is_bundled_module(module_name) and _bundled_module_lacks_attr(module_name, node.func.attr):
+                    # MODULE_ATTR_MISSING_V1: CPython falla en la busqueda del atributo,
+                    # antes de evaluar los argumentos.
+                    return self._emit_missing_module_attr(builder, module_name, node.func.attr)
                 function = builder.temp()
                 _symbol = f"{module_name.replace('.', '__')}__{node.func.attr}"
                 builder.emit("load", _symbol, _active_handler(builder), result=function)
@@ -10139,6 +10171,11 @@ class MIRLowerer:
                                         return result
                     # Fallback verificable: si el modulo es empaquetado, cargar como simbolo cualificado
                     if _is_bundled_module(_mmod) or _mmod in {"sys", "os"}:
+                        # MODULE_ATTR_MISSING_V1: un atributo que el modulo empaquetado
+                        # no define en absoluto (ni en su fuente) es AttributeError de
+                        # CPython, capturable, no un NameError del simbolo mangled.
+                        if _is_bundled_module(_mmod) and _bundled_module_lacks_attr(_mmod, _mattrs[0]):
+                            return self._emit_missing_module_attr(builder, _mmod, _mattrs[0])
                         _mq_fallback = f"{_mmod.replace('.', '__')}__{_mattrs[0]}"
                         result = builder.temp()
                         builder.emit("load", _mq_fallback, result=result)
@@ -10192,7 +10229,23 @@ class MIRLowerer:
                     f"native first-class decorated method access '{node.attr}' is not supported"
                 )
             result = builder.temp()
-            builder.emit("get_attr", self._lower_expr(builder, node.value), node.attr, _active_handler(builder), result=result)
+            _owner_module = None
+            if (
+                node.value.kind == HIRKind.LOAD
+                and node.value.name not in builder.local_names
+                and node.value.name not in builder.function.params
+            ):
+                # MODULE_ATTR_MISSING_V1: nombre real del modulo para el mensaje
+                # de AttributeError ("module 'math' has no attribute ...").
+                # Las funciones no heredan builder.module_aliases: se usa el del
+                # lowerer. Un nombre ligado localmente no es el modulo: sin nombre.
+                _owner_module = (builder.module_aliases.get(node.value.name)
+                                 or self.module_aliases.get(node.value.name))
+            _owner_val = self._lower_expr(builder, node.value)
+            if isinstance(_owner_module, str):
+                builder.emit("get_attr", _owner_val, node.attr, _active_handler(builder), _owner_module, result=result)
+            else:
+                builder.emit("get_attr", _owner_val, node.attr, _active_handler(builder), result=result)
             return result
         if kind == HIRKind.AWAIT:
             if not builder.is_async:
