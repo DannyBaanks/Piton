@@ -256,18 +256,18 @@ funcion _cuenta_grupos (patron ):
     devolver cuenta
 
 
-funcion _coincide_escape_clase (codigo_escape ,c ,banderas ):
-    si codigo_escape == 'd' :
+funcion _coincide_escape_clase (escape ,c ,banderas ):
+    si escape == 'd' :
         devolver _es_decimal (c ,banderas )
-    si codigo_escape == 'D' :
+    si escape == 'D' :
         devolver no _es_decimal (c ,banderas )
-    si codigo_escape == 'w' :
+    si escape == 'w' :
         devolver _es_palabra (c ,banderas )
-    si codigo_escape == 'W' :
+    si escape == 'W' :
         devolver no _es_palabra (c ,banderas )
-    si codigo_escape == 's' :
+    si escape == 's' :
         devolver _es_espacio (c ,banderas )
-    si codigo_escape == 'S' :
+    si escape == 'S' :
         devolver no _es_espacio (c ,banderas )
     devolver Falso
 
@@ -283,14 +283,14 @@ funcion _coincide_clase (c ,patron ,apertura ,cierre ,banderas ):
         especial = Falso
         valor = ''
         si patron[i] == '\\' y i + 1 < cierre :
-            codigo_escape = patron[i + 1 ]
-            si codigo_escape == 'd' o codigo_escape == 'D' o codigo_escape == 'w' o codigo_escape == 'W' o codigo_escape == 's' o codigo_escape == 'S' :
+            escape = patron[i + 1 ]
+            si escape == 'd' o escape == 'D' o escape == 'w' o escape == 'W' o escape == 's' o escape == 'S' :
                 especial = Verdadero
-                si _coincide_escape_clase (codigo_escape ,c ,banderas ):
+                si _coincide_escape_clase (escape ,c ,banderas ):
                     encontrado = Verdadero
                 i = i + 2
             sino :
-                valor = _escapar_literal (codigo_escape )
+                valor = _escapar_literal (escape )
                 i = i + 2
         sino :
             valor = patron[i]
@@ -423,8 +423,8 @@ funcion _atomos_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valo
                 salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
         devolver salida
     si clase_atomo == 'escape' :
-        codigo_escape = valor_texto
-        si codigo_escape == 'b' o codigo_escape == 'B' :
+        escape = valor_texto
+        si escape == 'b' o escape == 'B' :
             palabra_antes = Falso
             palabra_despues = Falso
             si pos > 0 :
@@ -432,18 +432,18 @@ funcion _atomos_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valo
             si pos < n :
                 palabra_despues = _es_palabra (cadena[pos] ,banderas )
             limite = palabra_antes != palabra_despues
-            si codigo_escape == 'B' :
+            si escape == 'B' :
                 limite = no limite
-            si codigo_escape == 'B' y n == 0 :
+            si escape == 'B' y n == 0 :
                 limite = Falso
             si limite :
                 salida.append (estado )
             devolver salida
-        si codigo_escape == 'd' o codigo_escape == 'D' o codigo_escape == 'w' o codigo_escape == 'W' o codigo_escape == 's' o codigo_escape == 'S' :
-            si pos < n y _coincide_escape_clase (codigo_escape ,cadena[pos] ,banderas ):
+        si escape == 'd' o escape == 'D' o escape == 'w' o escape == 'W' o escape == 's' o escape == 'S' :
+            si pos < n y _coincide_escape_clase (escape ,cadena[pos] ,banderas ):
                 salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
             devolver salida
-        literal = _escapar_literal (codigo_escape )
+        literal = _escapar_literal (escape )
         si pos < n y _igual_caracter (cadena[pos] ,literal ,banderas ):
             salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
         devolver salida

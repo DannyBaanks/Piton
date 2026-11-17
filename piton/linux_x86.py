@@ -14897,6 +14897,18 @@ class LinuxCEmitter:
                 out.append(f"    {_name(result)}=PITON_NOTIMPLEMENTED;")
                 types[result] = "notimplemented"
                 return out
+            # LOCAL_SHADOWS_FUNCTION_V1: a local slot/parameter/captured cell
+            # shadows a same-named module function. Resolve the stack binding
+            # before treating the identifier as a C function symbol.
+            local_binding = (
+                function.name != "<module>"
+                and source not in self._func_globals.get(function.name, ())
+                and (
+                    source in function.params
+                    or source in self._cur_slots
+                    or source in getattr(function, "cell_params", ())
+                )
+            )
             if result and source in getattr(self, "_param_dict_names", ()):
                 self._param_load_temps.add(result)
             # DEL_FN_SCOPE_V1: el NameError estatico de `borrar` aplica al
@@ -14972,7 +14984,7 @@ class LinuxCEmitter:
                 _ek = self._usage_param_elems.get(function.name, {}).get(source)
                 if _ek:
                     self._coll_elems[result] = _ek
-            if source in self.function_names:
+            if source in self.function_names and not local_binding:
                 # FUNC_AS_VALUE_V1: una funcion cargada como VALOR (no llamada
                 # directa) es un callable. Se anota como "closure" con su
                 # origen (la propia funcion) para que el call-site que la

@@ -514,6 +514,14 @@ class _Builder:
         self.module_aliases: dict[str, str] = {}
         self.from_import_aliases: dict[str, str] = {}
         self.module_state_vars: dict[str, str] = {}
+        # LOCAL_SHADOWS_FUNCTION_V1: keep lexical bindings separate from
+        # module-level function symbols. A same-named local must be loaded
+        # from its stack/cell slot, while an explicit global binding may use
+        # the module's mutable function-value slot.
+        self.local_names: set[str] = set()
+        self.nonlocal_names: set[str] = set()
+        self.global_names: set[str] = set()
+        self.module_function_bindings: dict[str, str] = {}
         self.super_class: str | None = None
         self.super_self: str | None = None
         self.is_async = False
@@ -721,6 +729,7 @@ class MIRLowerer:
         # que se esta bajando. El alias dialectal de zip no debe comerse una
         # funcion del usuario con el mismo nombre.
         self._module_function_names: set[str] = set()
+        self._module_function_bindings: dict[str, str] = {}
 
     def _mod_prefix(self, module_name: str) -> str:
         norm = module_name.replace('.', '__')
@@ -730,6 +739,12 @@ class MIRLowerer:
 
     def _mod_func_symbol(self, module_name: str, func_name: str) -> str:
         return f"{self._mod_prefix(module_name)}{func_name}"
+
+    def _module_function_binding(self, builder: "_Builder", name: str) -> str:
+        """Resolve mutable module-function bindings after lexical scopes."""
+        if name in builder.local_names or name in builder.nonlocal_names:
+            return name
+        return builder.module_function_bindings.get(name, name)
 
     def _name_shadows_builtin(self, name: str, builder: "_Builder") -> bool:
         """ZIP_ALIAS_SHADOW_V1: True si `name` esta ligado por el usuario
@@ -757,11 +772,17 @@ class MIRLowerer:
         loop value and segfault the next cell_load (observed rc=-11)."""
         if target in builder.cell_params:
             builder.emit("cell_store", target, value)
+        elif self._module_function_binding(builder, target) != target:
+            builder.emit(
+                "store", self._module_function_binding(builder, target), value,
+                "internal",
+            )
         else:
             builder.emit("store", target, value)
 
     def _store(self, builder: _Builder, target: HIRNode, value: str) -> None:
         if target.kind == HIRKind.STORE:
+            _binding_name = self._module_function_binding(builder, target.name)
             _class_name = builder.value_classes.get(value)
             if _class_name is None:
                 builder.name_classes.pop(target.name, None)
@@ -775,6 +796,8 @@ class MIRLowerer:
                 builder.emit("store", _state_name, value)
             elif target.name in builder.cell_params:
                 builder.emit("cell_store", target.name, value)
+            elif _binding_name != target.name:
+                builder.emit("store", _binding_name, value, "internal")
             else:
                 builder.emit("store", target.name, value)
         elif target.kind == HIRKind.ATTR:
@@ -811,6 +834,11 @@ class MIRLowerer:
             # que el backend no implementa.
             if target.name in builder.cell_params:
                 builder.emit("cell_store", target.name, value)
+            elif self._module_function_binding(builder, target.name) != target.name:
+                builder.emit(
+                    "store", self._module_function_binding(builder, target.name),
+                    value, "internal",
+                )
             else:
                 builder.emit("store", target.name, value)
         else:
@@ -1103,6 +1131,7 @@ class MIRLowerer:
         self.module_aliases = {}
         self._identity_decorator_names = set()
         self._module_function_names = set()
+        self._module_function_bindings = {}
         self.decorated_symbols = {}
         self.from_import_aliases = {}  # {local_name: qualified_name}
         self._module_scope_stack: list[tuple[dict[str, str], dict[str, str]]] = []
@@ -1137,6 +1166,30 @@ class MIRLowerer:
             self._module_function_names = {
                 node.name for node in module_body if node.kind == HIRKind.FUNC_DEF
             }
+            # GLOBAL_FUNCTION_BINDING_V1: Python stores functions in the
+            # module namespace, so a `global escape; escape = value` must be
+            # able to replace the function binding. Materialize a distinct
+            # slot only for module functions named by a global declaration.
+            _global_function_names: set[str] = set()
+            for _function in _module_level_defs(module_body):
+                for _scope_node in self._walk(getattr(_function, "body", ())):
+                    if _scope_node.kind == HIRKind.GLOBAL:
+                        _global_function_names.update(
+                            name for name in (getattr(_scope_node, "names", ()) or ())
+                            if name in self._module_function_names
+                        )
+            _used_binding_names = {
+                getattr(_node, "name", None)
+                for _node in _iter_hir(hir)
+                if _node.kind in {HIRKind.LOAD, HIRKind.STORE, HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}
+            }
+            self._module_function_bindings = {}
+            for _name in sorted(_global_function_names):
+                _binding = f"__piton_module_binding__{_name}"
+                while _binding in _used_binding_names:
+                    _binding = f"_{_binding}"
+                self._module_function_bindings[_name] = _binding
+                _used_binding_names.add(_binding)
             self.async_functions = {
                 node.name for node in module_body
                 if node.kind == HIRKind.FUNC_DEF and getattr(node, "is_async", False)
@@ -1648,6 +1701,11 @@ class MIRLowerer:
             module_builder = _Builder("<module>")
             module_builder.module_aliases = dict(self.module_aliases)
             module_builder.from_import_aliases = dict(self.from_import_aliases)
+            module_builder.module_function_bindings = dict(self._module_function_bindings)
+            for _function_name, _binding_name in sorted(self._module_function_bindings.items()):
+                _function_value = module_builder.temp()
+                module_builder.emit("load", _function_name, result=_function_value)
+                module_builder.emit("store", _binding_name, _function_value, "internal")
             module_available = self._assigned_names(module_body)
             for lambda_node in (item for item in self._walk(module_body) if item.kind == HIRKind.LAMBDA):
                 if self._contains_kind(lambda_node.body, {HIRKind.GLOBAL}):
@@ -2543,6 +2601,8 @@ class MIRLowerer:
         else:
             builder.module_aliases = dict(self.module_aliases)
             builder.from_import_aliases = dict(self.from_import_aliases)
+        if not self._module_scope_stack:
+            builder.module_function_bindings = dict(self._module_function_bindings)
         if cell_vars:
             builder.cell_params = set(cell_vars)
             if qualified_name and qualified_name != node.name:
@@ -2603,11 +2663,29 @@ class MIRLowerer:
         self.function_posonly[qualified_name or node.name] = posonly_params
         self.function_kwonly[qualified_name or node.name] = kwonly_params
         self.function_frame_abi[qualified_name or node.name] = use_frame_abi
+        global_names = {
+            name
+            for scope_node in self._walk(body)
+            if scope_node.kind == HIRKind.GLOBAL
+            for name in (getattr(scope_node, "names", ()) or ())
+        }
+        nonlocal_names = {
+            name
+            for scope_node in self._walk(body)
+            if scope_node.kind == HIRKind.NONLOCAL
+            for name in (getattr(scope_node, "names", ()) or ())
+        }
         local_names = (
             set(builder.function.params)
             | self._assigned_names(body)
             | self._for_target_names(body)
             | {item.name for item in body if getattr(item, "kind", None) in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}}
+        ) - global_names - nonlocal_names
+        builder.local_names = local_names
+        builder.global_names = global_names
+        builder.nonlocal_names = nonlocal_names
+        self._validate_local_shadow_initialization(
+            body, local_names, set(builder.function.params)
         )
 
         all_nested_captures: dict[str, tuple[str, tuple[str, ...]]] = {}
@@ -3185,8 +3263,14 @@ class MIRLowerer:
     def _nested_free_loads(self, node: HIRNode) -> set[str]:
         args = getattr(node, "args", None)
         params_here = set(getattr(args, "args", []) or []) if args else set()
+        global_here = {
+            name
+            for statement in self._walk(getattr(node, "body", ()) or ())
+            if statement.kind == HIRKind.GLOBAL
+            for name in (getattr(statement, "names", ()) or ())
+        }
         locals_here = params_here | self._assigned_names(node.body)
-        free = self._loaded_names(node.body) - locals_here
+        free = self._loaded_names(node.body) - locals_here - global_here
         free |= {
             name
             for statement in node.body
@@ -3196,6 +3280,199 @@ class MIRLowerer:
         for nested in (item for item in node.body if item.kind == HIRKind.FUNC_DEF):
             free |= {name for name in self._nested_free_loads(nested) if name not in locals_here}
         return free
+
+    def _validate_local_shadow_initialization(
+        self, body: Sequence[HIRNode], local_names: set[str], initialized: set[str]
+    ) -> None:
+        """Fail closed on a local shadow read before its first binding.
+
+        The native C backend does not track Python's unbound-local sentinel.
+        Without this check, `escape` could read as zero before a later local
+        assignment instead of raising UnboundLocalError. Track definite
+        bindings across branches so an assignment in every continuing branch
+        is recognized, while a branch that returns or raises need not bind.
+        """
+        candidates = (local_names & self._module_function_names) - initialized
+        if not candidates:
+            return
+
+        def children(node: HIRNode):
+            for descriptor in fields(node):
+                if descriptor.name in {"kind", "line", "col", "annotations"}:
+                    continue
+                value = getattr(node, descriptor.name, None)
+                if isinstance(value, HIRNode):
+                    yield value
+                elif isinstance(value, (list, tuple)):
+                    yield from (item for item in value if isinstance(item, HIRNode))
+
+        def check_expr(node: Optional[HIRNode], bound: set[str]) -> None:
+            if node is None:
+                return
+            stack = [node]
+            while stack:
+                current = stack.pop()
+                kind = getattr(current, "kind", None)
+                if kind == HIRKind.LOAD:
+                    name = getattr(current, "name", None)
+                    if name in candidates and name not in bound:
+                        raise MIRLoweringError(
+                            f"native local '{name}' shadowing a module function may be read before assignment"
+                        )
+                    continue
+                # A nested scope reads captured cells when called, not when
+                # its definition is evaluated. Its own lowering checks its
+                # local loads independently.
+                if kind in self._SCOPE_STOP:
+                    continue
+                stack.extend(reversed(tuple(children(current))))
+
+        def target_names(target: Optional[HIRNode]) -> set[str]:
+            if target is None:
+                return set()
+            kind = getattr(target, "kind", None)
+            if kind == HIRKind.STORE:
+                name = getattr(target, "name", None)
+                return {name} if name else set()
+            if kind in {HIRKind.TUPLE, HIRKind.LIST, HIRKind.STARRED}:
+                names: set[str] = set()
+                for child in children(target):
+                    names.update(target_names(child))
+                return names
+            return set()
+
+        def check_target_address(target: Optional[HIRNode], bound: set[str]) -> None:
+            if target is None:
+                return
+            kind = getattr(target, "kind", None)
+            if kind in {HIRKind.TUPLE, HIRKind.LIST, HIRKind.STARRED}:
+                for child in children(target):
+                    check_target_address(child, bound)
+            elif kind == HIRKind.ATTR:
+                check_expr(getattr(target, "value", None), bound)
+            elif kind == HIRKind.SUBSCR:
+                check_expr(getattr(target, "value", None), bound)
+                check_expr(getattr(target, "slice", None), bound)
+
+        def merge_fallthrough(paths: list[tuple[set[str], bool]], fallback: set[str]):
+            normal = [state for state, falls in paths if falls]
+            return (set.intersection(*normal) if normal else fallback), bool(normal)
+
+        def sequence(statements, incoming: set[str]) -> tuple[set[str], bool]:
+            bound = set(incoming)
+            falls = True
+            for statement in statements or ():
+                if not falls:
+                    break
+                bound, falls = statement_flow(statement, bound)
+            return bound, falls
+
+        def statement_flow(statement: HIRNode, incoming: set[str]) -> tuple[set[str], bool]:
+            kind = getattr(statement, "kind", None)
+            bound = set(incoming)
+            if kind == HIRKind.ASSIGN:
+                check_expr(getattr(statement, "value", None), bound)
+                targets = getattr(statement, "targets", ()) or ()
+                for target in targets:
+                    check_target_address(target, bound)
+                for target in targets:
+                    bound.update(target_names(target))
+                return bound, True
+            if kind == HIRKind.ANN_ASSIGN:
+                target = getattr(statement, "target", None)
+                check_expr(getattr(statement, "value", None), bound)
+                check_target_address(target, bound)
+                if getattr(statement, "value", None) is not None:
+                    bound.update(target_names(target))
+                return bound, True
+            if kind == HIRKind.AUG_ASSIGN:
+                target = getattr(statement, "target", None)
+                # Augmented assignment reads a name target before writing it.
+                if getattr(target, "kind", None) == HIRKind.STORE:
+                    name = getattr(target, "name", None)
+                    if name in candidates and name not in bound:
+                        raise MIRLoweringError(
+                            f"native local '{name}' shadowing a module function may be read before assignment"
+                        )
+                else:
+                    check_target_address(target, bound)
+                check_expr(getattr(statement, "value", None), bound)
+                bound.update(target_names(target))
+                return bound, True
+            if kind == HIRKind.IF:
+                check_expr(getattr(statement, "test", None), bound)
+                body_state = sequence(getattr(statement, "body", ()), bound)
+                else_body = getattr(statement, "orelse", ()) or ()
+                else_state = sequence(else_body, bound) if else_body else (set(bound), True)
+                return merge_fallthrough([body_state, else_state], bound)
+            if kind in {HIRKind.RETURN, HIRKind.RAISE}:
+                for child in children(statement):
+                    check_expr(child, bound)
+                return bound, False
+            if kind in {HIRKind.WHILE, HIRKind.FOR}:
+                if kind == HIRKind.WHILE:
+                    check_expr(getattr(statement, "test", None), bound)
+                    body_in = set(bound)
+                else:
+                    check_expr(getattr(statement, "iter", None), bound)
+                    target = getattr(statement, "target", None)
+                    check_target_address(target, bound)
+                    body_in = set(bound) | target_names(target)
+                sequence(getattr(statement, "body", ()), body_in)
+                # A loop can execute zero times; only its else suite can add
+                # bindings guaranteed on every normal exit.
+                else_state = sequence(getattr(statement, "orelse", ()), bound)
+                return set(bound) & else_state[0], True
+            if kind == HIRKind.WITH:
+                for item in getattr(statement, "items", ()) or ():
+                    check_expr(getattr(item, "context_expr", None), bound)
+                    target = getattr(item, "optional_vars", None)
+                    check_target_address(target, bound)
+                    bound.update(target_names(target))
+                return sequence(getattr(statement, "body", ()), bound)
+            if kind == HIRKind.TRY:
+                body_state = sequence(getattr(statement, "body", ()), bound)
+                paths = [body_state]
+                for handler in getattr(statement, "handlers", ()) or ():
+                    check_expr(getattr(handler, "type_", None), bound)
+                    handler_in = set(bound)
+                    handler_name = getattr(handler, "name", None)
+                    if handler_name:
+                        handler_in.add(handler_name)
+                    paths.append(sequence(getattr(handler, "body", ()), handler_in))
+                before_final, falls = merge_fallthrough(paths, bound)
+                if not falls:
+                    return before_final, False
+                else_state = sequence(getattr(statement, "orelse", ()), before_final)
+                if not else_state[1]:
+                    before_final, falls = else_state
+                else:
+                    before_final = else_state[0]
+                final_state = sequence(getattr(statement, "finalbody", ()), before_final)
+                return final_state
+            if kind in {HIRKind.IMPORT, HIRKind.IMPORT_FROM}:
+                for alias in getattr(statement, "names", ()) or ():
+                    name = getattr(alias, "asname", None) or getattr(alias, "name", "")
+                    if statement.kind == HIRKind.IMPORT and not getattr(alias, "asname", None):
+                        name = name.split(".")[0]
+                    if name:
+                        bound.add(name)
+                return bound, True
+            if kind in {HIRKind.BREAK, HIRKind.CONTINUE}:
+                return bound, False
+            # For other statement forms, consume the ordered scope events.
+            # The common assignment and control-flow forms above are handled
+            # explicitly because HIR lists assignment targets before values.
+            for event, name in self._scope_events_of(statement):
+                if event == "use" and name in candidates and name not in bound:
+                    raise MIRLoweringError(
+                        f"native local '{name}' shadowing a module function may be read before assignment"
+                    )
+                if event == "bind":
+                    bound.add(name)
+            return bound, True
+
+        sequence(body, initialized)
 
     def _loaded_names(self, body: Sequence[HIRNode]) -> set[str]:
         return {
@@ -3408,7 +3685,11 @@ class MIRLowerer:
                 # MODULE_STATE_V1: el `global` de una variable de estado del
                 # modulo importado usa el nombre cualificado.
                 _state_name = (getattr(builder, "module_state_vars", None) or {}).get(name)
-                builder.emit("global_decl", _state_name if _state_name else name)
+                _binding_name = self._module_function_binding(builder, name)
+                builder.emit(
+                    "global_decl",
+                    _state_name if _state_name else _binding_name,
+                )
         elif kind == HIRKind.IF:
             self._lower_if(builder, node)
         elif kind == HIRKind.WHILE:
@@ -6656,7 +6937,11 @@ class MIRLowerer:
             target_name = node.target.name if node.target.kind in (HIRKind.LOAD, HIRKind.STORE) else None
             if target_name is None:
                 raise MIRLoweringError("native walrus target must be a plain name")
-            builder.emit("store", target_name, value)
+            _binding_name = self._module_function_binding(builder, target_name)
+            if _binding_name != target_name:
+                builder.emit("store", _binding_name, value, "internal")
+            else:
+                builder.emit("store", target_name, value)
             return value
         if kind == HIRKind.LOAD and node.name in getattr(builder, "json_param_alias", {}):
             raise MIRLoweringError(f"json.{builder.json_param_alias[node.name]} usado como valor dentro de una funcion especializada: solo se admite llamarlo (fail closed en compilacion)")
@@ -6674,6 +6959,10 @@ class MIRLowerer:
             builder.emit("load", f"json__{_jattr}", _active_handler(builder), result=_jres)
             return _jres
         if kind == HIRKind.LOAD:
+            _lexical_local = (
+                node.name in builder.local_names
+                or node.name in builder.nonlocal_names
+            )
             if node.name in builder.closures:
                 lifted_name, _, n_args = builder.closures[node.name]
                 capture_ops: list[Any] = []
@@ -6698,14 +6987,14 @@ class MIRLowerer:
             # de un paquete son marcadores estáticos. Si el nombre del alias
             # resuelve a un módulo importado, emitimos un placeholder (None) en
             # vez de un load que no existe en el backend.
-            alias_target = builder.module_aliases.get(node.name)
+            alias_target = None if _lexical_local else builder.module_aliases.get(node.name)
             if alias_target and alias_target != node.name and alias_target in self.imported_modules:
                 result = builder.temp()
                 builder.emit("const", None, result=result)
                 return result
             # OS_TIER1_V1 / SYS_ARGV_V1: attributes reached through a
             # `desde ... importar ...` alias are values, not backend symbols.
-            alias_qual = builder.from_import_aliases.get(node.name)
+            alias_qual = None if _lexical_local else builder.from_import_aliases.get(node.name)
             if alias_qual == "os.PathLike":
                 # OS_PATHLIKE_V1: os.PathLike es una clase builtin (protocolo
                 # de ruta); el backend la representa como objeto de clase.
@@ -6737,7 +7026,14 @@ class MIRLowerer:
                 builder.emit("load", f"os__{alias_qual[3:]}", _active_handler(builder), result=result)
                 return result
             result = builder.temp()
-            builder.emit("load", builder.from_import_aliases.get(node.name, node.name), _active_handler(builder), result=result)
+            _binding_name = self._module_function_binding(builder, node.name)
+            if node.name in builder.module_function_bindings and not _lexical_local:
+                _load_name = _binding_name
+            else:
+                _load_name = builder.from_import_aliases.get(node.name, _binding_name)
+            if _lexical_local:
+                _load_name = node.name
+            builder.emit("load", _load_name, _active_handler(builder), result=result)
             if node.name in builder.name_classes:
                 builder.value_classes[result] = builder.name_classes[node.name]
             return result
@@ -6749,7 +7045,10 @@ class MIRLowerer:
             elif node.name in builder.cell_params:
                 builder.emit("cell_load", node.name, result=result)
             else:
-                builder.emit("load", node.name, _active_handler(builder), result=result)
+                builder.emit(
+                    "load", self._module_function_binding(builder, node.name),
+                    _active_handler(builder), result=result,
+                )
             return result
         if kind == HIRKind.BINOP:
             # BINOP_CHAIN_ITER_V1 (mir): una cadena IZQUIERDA del mismo operador
@@ -6894,6 +7193,18 @@ class MIRLowerer:
                             1 if self.function_kwargs.get(lifted_name) else 0, result=result)
             return result
         if kind == HIRKind.CALL:
+            if (
+                node.func.kind == HIRKind.LOAD
+                and node.func.name in self._module_function_names
+                and (
+                    node.func.name in builder.local_names
+                    or node.func.name in builder.nonlocal_names
+                    or node.func.name in builder.module_function_bindings
+                )
+            ):
+                # LOCAL_SHADOWS_FUNCTION_V1: direct calls are valid only when
+                # LEGB resolves the name to its unshadowed module function.
+                return self._lower_dynamic_call(builder, node)
             # JSON_INTERNAL_V2: _json_native_loads(texto) es la operacion nativa usada por el stub json.loads
             # (valor de primera clase). Baja a json_loads con el tipo estatico del argumento.
             if node.func.kind == HIRKind.LOAD and node.func.name == "_json_native_loads":
