@@ -4081,7 +4081,9 @@ static void piton_finalize_objects(void){PitonObject*o=piton_all_objects;while(o
  * closure se redirigen ahi. Antes `f.attr` sobre un closure leia 0 y la
  * llamada posterior moria con "'X' object is not callable". */
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
-typedef struct{long magic;long addr;long n_args;long n_cells;long*cells;long has_vararg;long has_kwarg;PitonObject*attrs;}PitonClosure;
+typedef struct{long n_params;long positional_n;long vararg_index;long kwarg_index;unsigned long long kwonly_mask;unsigned long long posonly_mask;unsigned long long default_mask;int frame_abi;const char**param_names;PitonSlot*defaults;}PitonCallSignature;
+typedef struct{long magic;long addr;long n_args;long n_cells;long*cells;long has_vararg;long has_kwarg;PitonObject*attrs;PitonCallSignature*signature;}PitonClosure;
+static long piton_call_signature_invoke(PitonClosure*,long,PitonSlot*,long);
 static int piton_is_closure(long raw){return raw!=0&&piton_maybe_ptr(raw)&&((long*)raw)[0]==PITON_CLOSURE_MAGIC;}
 static PitonObject*piton_closure_attrs(long raw,int create){PitonClosure*c=(PitonClosure*)raw;if(!c->attrs&&create)c->attrs=piton_object_new("function",0);return c->attrs;}
 static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){if(o&&piton_is_closure((long)o))o=piton_closure_attrs((long)o,1);if(!o||!piton_maybe_ptr((long)o)||((long*)o)[1]!=PK_OBJECT){piton_raise_set("AttributeError","null object");return;}for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].value=v;o->attrs[i].instance_owned=1;if(o->dict_cache)piton_dict_set_raw((PitonDict*)o->dict_cache,piton_slot((long)name,PK_STR),v);return;}if(o->length>=32){piton_raise_set("AttributeError","attribute limit exceeded");return;}o->attrs[o->length].name=name;o->attrs[o->length].value=v;o->attrs[o->length].instance_owned=1;o->length++;if(o->dict_cache)piton_dict_set_raw((PitonDict*)o->dict_cache,piton_slot((long)name,PK_STR),v);}
@@ -4216,9 +4218,151 @@ static int piton_type_repr_construct(const char*s,long*out){
 }
 static int piton_callable_value(long callee){return piton_in_arena(callee)||piton_is_code_addr(callee)||(piton_maybe_ptr(callee)&&((long*)callee)[0]==0x5049544E424C544EL);}
 static void piton_raise_not_callable(void){piton_raise_set("TypeError","'X' object is not callable");}
-static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){{long _ctor=0;if(piton_maybe_ptr(callee)&&piton_is_printable_str((const char*)callee)&&piton_type_repr_construct((const char*)callee,&_ctor)){return _ctor;}}if(!piton_maybe_ptr(callee)&&!piton_is_code_addr(callee)){piton_raise_not_callable();return 0;}if(!callee||((long*)callee)[0]!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();return 0;}return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);}PitonClosure*c=(PitonClosure*)callee;if(argc!=c->n_args){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long total=c->n_cells+argc;if(total>4){piton_write(2,"TypeError: closure cell count plus arguments exceeds four\n",59);piton_exit(2);}long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);}
-static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells,long has_vararg,long has_kwarg){PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=has_vararg;c->has_kwarg=has_kwarg;c->cells=piton_alloc((usize)(n_cells?n_cells:1)*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];return(long)c;}
-static long piton_closure_call_frame(long callee,long argc,long*args){{long _ctor=0;if(piton_maybe_ptr(callee)&&piton_is_printable_str((const char*)callee)&&piton_type_repr_construct((const char*)callee,&_ctor)){return _ctor;}}if(!piton_callable_value(callee)){piton_raise_not_callable();return 0;}if(piton_maybe_ptr(callee)&&((long*)callee)[0]==0x5049544E424C544EL){PitonBuiltinObj*bo=(PitonBuiltinObj*)callee;if(piton_strcmp(bo->name,"str")==0)return(long)"";if(piton_strcmp(bo->name,"bytes")==0)return(long)piton_bytes_new(0,0);if(piton_strcmp(bo->name,"int")==0)return 0;if(piton_strcmp(bo->name,"float")==0)return piton_double_bits(0.0);if(piton_strcmp(bo->name,"list")==0)return(long)piton_seq_new(PK_LIST,0);if(piton_strcmp(bo->name,"dict")==0)return(long)piton_dict_new(0);/* OBJECT_CLASS_V1: object() crea una instancia de la clase base. */if(piton_strcmp(bo->name,"object")==0||piton_strcmp(bo->name,"objeto")==0)return(long)piton_object_new("object",0);return 0;}if(piton_is_code_addr(callee)){/* CODE_ADDR_FIRST_V1: un code address se detecta PRIMERO — leer sus magic numbers (el codigo maquina) como si fueran un objeto puede coincidir por azar y fabricar una llamada rota (SIGSEGV). */if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(piton_maybe_ptr(callee)&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){PitonBoundMethod*m=(PitonBoundMethod*)callee;if(argc!=m->n_args||argc>3){piton_write(2,"TypeError: bound method called with wrong number of arguments\n",61);piton_exit(2);}long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);}if(piton_maybe_ptr(callee)&&((long*)callee)[1]==PK_OBJECT){PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);for(long i=0;i<co->length;++i){piton_object_copy_class_attr(inst,co->attrs[i].name,co->attrs[i].value);}for(long i=0;i<g_init_hook_n;++i){if(g_init_hook_cls[i]&&piton_strcmp(g_init_hook_cls[i],co->class_name)==0){long fn=g_init_hook_fn[i];long a[4]={(long)inst,0,0,0};for(long j=0;j<argc&&j<3;++j)a[j+1]=args[j];((long(*)(long,long,long,long))fn)(a[0],a[1],a[2],a[3]);break;}}return(long)inst;}if(!piton_maybe_ptr(callee)){piton_raise_not_callable();return 0;}PitonClosure*c=(PitonClosure*)callee;if(!c||c->magic!=PITON_CLOSURE_MAGIC){if(!piton_is_code_addr(callee)){piton_raise_not_callable();return 0;}if(argc>4){piton_write(2,"TypeError: native call exceeds four direct arguments\n",52);piton_exit(2);}long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);}if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_write(2,"TypeError: closure called with wrong number of arguments\n",56);piton_exit(2);}long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;long total=c->n_cells+c->n_args+(c->has_vararg?1:0);long*frame=piton_alloc((usize)total*sizeof(long));for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[c->n_args+i],PK_INT};frame[c->n_cells+c->n_args]=(long)t;}return((long(*)(long*))c->addr)(frame);}
+static long piton_call_signature_invoke(PitonClosure*c,long argc,PitonSlot*args,long kwargs_raw){
+  PitonCallSignature*s=c?c->signature:0;
+  if(!s){piton_raise_set("TypeError","callable has no signature metadata");return 0;}
+  if(argc<0||argc>64){piton_raise_set("TypeError","too many arguments in a dynamic call");return 0;}
+  long n=s->n_params;
+  PitonSlot bound[63];
+  unsigned long long supplied=0;
+  for(long i=0;i<n;++i){
+    bound[i]=(s->default_mask&(1ULL<<i))?s->defaults[i]:(PitonSlot){0x504954554E424E44LL,PK_INT};
+  }
+  PitonSeq*varargs=s->vararg_index>=0?piton_seq_new(PK_TUPLE,0):0;
+  PitonDict*extra_keywords=s->kwarg_index>=0?piton_dict_new(0):0;
+  long pos_index=0;
+  for(long i=0;i<argc;++i){
+    PitonSlot value=args[i];
+    while(pos_index<n&&(pos_index==s->vararg_index||pos_index==s->kwarg_index||(s->kwonly_mask&(1ULL<<pos_index))))pos_index++;
+    if(pos_index<s->positional_n){
+      bound[pos_index]=value;supplied|=1ULL<<pos_index;pos_index++;
+    }else if(s->vararg_index>=0){
+      piton_seq_append(varargs,value);
+    }else{
+      piton_raise_set("TypeError","too many positional arguments");return 0;
+    }
+  }
+  if(kwargs_raw){
+    PitonDict*kwargs=(PitonDict*)kwargs_raw;
+    for(long k=0;k<kwargs->length;++k){
+      PitonSlot key=kwargs->items[k].key,value=kwargs->items[k].value;
+      if(key.kind!=PK_STR||!key.bits){piton_raise_set("TypeError","keywords must be strings");return 0;}
+      long found=-1;
+      for(long i=0;i<n;++i){
+        if(i==s->vararg_index||i==s->kwarg_index)continue;
+        if((s->posonly_mask&(1ULL<<i))==0&&s->param_names[i]&&piton_strcmp((const char*)key.bits,s->param_names[i])==0){found=i;break;}
+      }
+      if(found>=0){
+        if(supplied&(1ULL<<found)){piton_raise_set("TypeError","multiple values for argument");return 0;}
+        bound[found]=value;supplied|=1ULL<<found;
+      }else if(extra_keywords){
+        piton_dict_set_raw(extra_keywords,key,value);
+      }else{
+        piton_raise_set("TypeError","unexpected keyword argument");return 0;
+      }
+    }
+  }
+  for(long i=0;i<n;++i){
+    if(i==s->vararg_index){bound[i]=(PitonSlot){(long)varargs,PK_TUPLE};continue;}
+    if(i==s->kwarg_index){bound[i]=(PitonSlot){(long)extra_keywords,PK_DICT};continue;}
+    if(!(s->default_mask&(1ULL<<i))&&bound[i].bits==0x504954554E424E44LL){piton_raise_set("TypeError","missing required argument");return 0;}
+  }
+  long total=c->n_cells+n;
+  long*frame=piton_alloc((usize)(total?total:1)*sizeof(long));
+  for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];
+  for(long i=0;i<n;++i)frame[c->n_cells+i]=bound[i].bits;
+  if(s->frame_abi)return((long(*)(long*))c->addr)(frame);
+  if(total>4){piton_raise_set("TypeError","native call exceeds four direct arguments");return 0;}
+  long a[4]={0,0,0,0};for(long i=0;i<total;++i)a[i]=frame[i];
+  return((long(*)(long,long,long,long))c->addr)(a[0],a[1],a[2],a[3]);
+}
+static PitonCallSignature*piton_call_signature_new(long n_params,long positional_n,long vararg_index,long kwarg_index,unsigned long long kwonly_mask,unsigned long long posonly_mask,unsigned long long default_mask,int frame_abi,const char**names,PitonSlot*defaults){
+  if(n_params<0||n_params>63){piton_raise_set("RuntimeError","invalid native call signature");return 0;}
+  PitonCallSignature*s=(PitonCallSignature*)piton_alloc(sizeof(*s));
+  s->n_params=n_params;s->positional_n=positional_n;s->vararg_index=vararg_index;s->kwarg_index=kwarg_index;
+  s->kwonly_mask=kwonly_mask;s->posonly_mask=posonly_mask;s->default_mask=default_mask;s->frame_abi=frame_abi;
+  s->param_names=(const char**)piton_alloc((usize)(n_params?n_params:1)*sizeof(const char*));
+  s->defaults=(PitonSlot*)piton_alloc((usize)(n_params?n_params:1)*sizeof(PitonSlot));
+  for(long i=0;i<n_params;++i){s->param_names[i]=names[i];s->defaults[i]=defaults[i];}
+  return s;
+}
+static long piton_closure_new_frame_sig(long addr,long n_args,long n_cells,long*cells,long has_vararg,long has_kwarg,PitonCallSignature*signature,const char*name){
+  PitonClosure*c=(PitonClosure*)piton_alloc(sizeof(PitonClosure));c->magic=PITON_CLOSURE_MAGIC;c->addr=addr;c->n_args=n_args;c->n_cells=n_cells;c->has_vararg=has_vararg;c->has_kwarg=has_kwarg;c->signature=signature;
+  c->cells=(long*)piton_alloc((usize)(n_cells?n_cells:1)*sizeof(long));for(long i=0;i<n_cells;++i)c->cells[i]=cells[i];
+  if(name){piton_object_set((PitonObject*)c,"__name__",piton_slot((long)name,PK_STR));piton_object_set((PitonObject*)c,"__qualname__",piton_slot((long)name,PK_STR));}
+  return(long)c;
+}
+static long piton_function_value_new(long addr,PitonCallSignature*signature,const char*name){
+  return piton_closure_new_frame_sig(addr,signature?signature->positional_n:0,0,(long*)0,signature&&signature->vararg_index>=0,signature&&signature->kwarg_index>=0,signature,name);
+}
+static long piton_closure_new_frame(long addr,long n_args,long n_cells,long*cells,long has_vararg,long has_kwarg){return piton_closure_new_frame_sig(addr,n_args,n_cells,cells,has_vararg,has_kwarg,0,0);}
+static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,long a3){
+  {long _ctor=0;if(piton_maybe_ptr(callee)&&piton_is_printable_str((const char*)callee)&&piton_type_repr_construct((const char*)callee,&_ctor))return _ctor;}
+  if(!piton_callable_value(callee)){piton_raise_not_callable();return 0;}
+  if(piton_is_code_addr(callee)){return((long(*)(long,long,long,long))callee)(a0,a1,a2,a3);}
+  if(piton_maybe_ptr(callee)&&((long*)callee)[0]==0x5049544E424C544EL){piton_raise_not_callable();return 0;}
+  if(piton_maybe_ptr(callee)&&((long*)callee)[0]==PITON_CLOSURE_MAGIC){
+    PitonClosure*c=(PitonClosure*)callee;
+    if(c->signature){PitonSlot args[4]={piton_slot_guess(a0),piton_slot_guess(a1),piton_slot_guess(a2),piton_slot_guess(a3)};return piton_call_signature_invoke(c,argc,args,0);}
+    if(argc!=c->n_args){piton_raise_set("TypeError","closure called with wrong number of arguments");return 0;}
+    long total=c->n_cells+argc;if(total>4){piton_raise_set("TypeError","closure cell count plus arguments exceeds four");return 0;}
+    long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}
+    return((long(*)(long,long,long,long))c->addr)(x[0],x[1],x[2],x[3]);
+  }
+  piton_raise_not_callable();return 0;
+}
+static long piton_closure_call_frame(long callee,long argc,long*args){
+  long ctor=0;
+  if(piton_maybe_ptr(callee)&&piton_is_printable_str((const char*)callee)&&piton_type_repr_construct((const char*)callee,&ctor))return ctor;
+  if(!piton_callable_value(callee)){piton_raise_not_callable();return 0;}
+  if(piton_maybe_ptr(callee)&&((long*)callee)[0]==0x5049544E424C544EL){
+    PitonBuiltinObj*bo=(PitonBuiltinObj*)callee;
+    if(piton_strcmp(bo->name,"str")==0)return(long)"";
+    if(piton_strcmp(bo->name,"bytes")==0)return(long)piton_bytes_new(0,0);
+    if(piton_strcmp(bo->name,"int")==0)return 0;
+    if(piton_strcmp(bo->name,"float")==0)return piton_double_bits(0.0);
+    if(piton_strcmp(bo->name,"list")==0)return(long)piton_seq_new(PK_LIST,0);
+    if(piton_strcmp(bo->name,"dict")==0)return(long)piton_dict_new(0);
+    if(piton_strcmp(bo->name,"object")==0||piton_strcmp(bo->name,"objeto")==0)return(long)piton_object_new("object",0);
+    return 0;
+  }
+  if(piton_is_code_addr(callee)){
+    if(argc>4){piton_raise_set("TypeError","native call exceeds four direct arguments");return 0;}
+    long a[4]={0,0,0,0};for(long i=0;i<argc;++i)a[i]=args[i];
+    return((long(*)(long,long,long,long))callee)(a[0],a[1],a[2],a[3]);
+  }
+  if(piton_maybe_ptr(callee)&&((long*)callee)[0]==PITON_BOUND_METHOD_MAGIC){
+    PitonBoundMethod*m=(PitonBoundMethod*)callee;
+    if(argc!=m->n_args||argc>3){piton_raise_set("TypeError","bound method called with wrong number of arguments");return 0;}
+    long a[4]={m->self,0,0,0};for(long i=0;i<argc;++i)a[i+1]=args[i];
+    return((long(*)(long,long,long,long))m->addr)(a[0],a[1],a[2],a[3]);
+  }
+  if(piton_maybe_ptr(callee)&&((long*)callee)[1]==PK_OBJECT){
+    PitonObject*co=(PitonObject*)callee;PitonObject*inst=piton_object_new(co->class_name,co->parent_name);
+    for(long i=0;i<co->length;++i)piton_object_copy_class_attr(inst,co->attrs[i].name,co->attrs[i].value);
+    for(long i=0;i<g_init_hook_n;++i)if(g_init_hook_cls[i]&&piton_strcmp(g_init_hook_cls[i],co->class_name)==0){
+      long fn=g_init_hook_fn[i];long a[4]={(long)inst,0,0,0};for(long j=0;j<argc&&j<3;++j)a[j+1]=args[j];
+      ((long(*)(long,long,long,long))fn)(a[0],a[1],a[2],a[3]);break;
+    }
+    return(long)inst;
+  }
+  if(!piton_maybe_ptr(callee)){piton_raise_not_callable();return 0;}
+  PitonClosure*c=(PitonClosure*)callee;
+  if(c->magic!=PITON_CLOSURE_MAGIC){piton_raise_not_callable();return 0;}
+  if(c->signature){
+    if(argc>64){piton_raise_set("TypeError","too many arguments in a dynamic call");return 0;}
+    PitonSlot values[64];for(long i=0;i<argc;++i)values[i]=piton_slot_guess(args[i]);
+    return piton_call_signature_invoke(c,argc,values,0);
+  }
+  if(argc<c->n_args||(!c->has_vararg&&argc!=c->n_args)){piton_raise_set("TypeError","closure called with wrong number of arguments");return 0;}
+  long extra=c->has_vararg&&argc>c->n_args?argc-c->n_args:0;
+  long total=c->n_cells+c->n_args+(c->has_vararg?1:0);
+  long*frame=(long*)piton_alloc((usize)(total?total:1)*sizeof(long));
+  for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];
+  for(long i=0;i<c->n_args;++i)frame[c->n_cells+i]=args[i];
+  if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=piton_slot_guess(args[c->n_args+i]);frame[c->n_cells+c->n_args]=(long)t;}
+  return((long(*)(long*))c->addr)(frame);
+}
 static long piton_callback_invoke(long callback,long value){long args[1]={value};return piton_closure_call_frame(callback,1,args);}
 /* DYNAMIC_CALL_V1: llamar a un callable que NO se conoce en build time,
    con los argumentos posicionales y el dict de keywords resueltos en
@@ -4228,9 +4372,9 @@ static long piton_callback_invoke(long callback,long value){long args[1]={value}
      - closure: [celdas..., params fijos..., tupla del *args?, dict de **kw?]
      - metodo ligado: [self, args...]
      - code address: hasta 4 argumentos directos.
-   Los defaults NO se pueden llenar (no se conoce la firma): si faltan
-   argumentos posicionales, es un TypeError en runtime, como en CPython
-   cuando la llamada no encaja. */
+   Los callable compilados llevan firma y enlazan defaults/keywords antes
+   de entrar aqui. Las closures heredadas y code addresses sin firma no
+   pueden completar defaults: una llamada que no encaja es TypeError. */
 static long piton_list_of_dynamic(long bits);
 static const char* piton_str_of_value(long bits);
 static long piton_collect_any_iter(long raw);
@@ -4238,9 +4382,9 @@ static long piton_call_dynamic(long callee,long pos_seq,long star_seq,long kwarg
   PitonSeq*pos=(PitonSeq*)pos_seq,*star=(PitonSeq*)star_seq;
   long np=pos?pos->length:0,ns=star?star->length:0,total=np+ns;
   if(total>64){piton_write(2,"TypeError: too many arguments in a dynamic call\n",48);piton_exit(2);}
-  long args[64];
-  for(long i=0;i<np;++i)args[i]=pos->items[i].bits;
-  for(long i=0;i<ns;++i)args[np+i]=star->items[i].bits;
+  long args[64];PitonSlot arg_slots[64];
+  for(long i=0;i<np;++i){arg_slots[i]=pos->items[i];args[i]=arg_slots[i].bits;}
+  for(long i=0;i<ns;++i){arg_slots[np+i]=star->items[i];args[np+i]=arg_slots[np+i].bits;}
   if(!piton_callable_value(callee)){piton_raise_not_callable();return 0;}
   if(callee&&piton_maybe_ptr(callee)&&((long*)callee)[0]==0x5049544E424C544EL){
     PitonBuiltinObj*bo=(PitonBuiltinObj*)callee;
@@ -4296,6 +4440,7 @@ static long piton_call_dynamic(long callee,long pos_seq,long star_seq,long kwarg
   }
   if(callee&&((long*)callee)[0]==PITON_CLOSURE_MAGIC){
     PitonClosure*c=(PitonClosure*)callee;
+    if(c->signature)return piton_call_signature_invoke(c,total,arg_slots,kwargs_dict);
     long n_pos=c->n_args;
     if(!c->has_vararg&&total<n_pos){piton_write(2,"TypeError: missing positional arguments in a dynamic call\n",52);piton_exit(2);}
     long extra=(c->has_vararg&&total>n_pos)?total-n_pos:0;
@@ -4304,7 +4449,7 @@ static long piton_call_dynamic(long callee,long pos_seq,long star_seq,long kwarg
     for(long i=0;i<c->n_cells;++i)frame[i]=c->cells[i];
     long nf=total<n_pos?total:n_pos;
     for(long i=0;i<nf;++i)frame[c->n_cells+i]=args[i];
-    if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=(PitonSlot){args[n_pos+i],PK_INT};frame[c->n_cells+n_pos]=(long)t;}
+    if(c->has_vararg){PitonSeq*t=piton_seq_new(PK_TUPLE,extra);for(long i=0;i<extra;++i)t->items[i]=arg_slots[n_pos+i];frame[c->n_cells+n_pos]=(long)t;}
     if(c->has_kwarg)frame[slots-1]=kwargs_dict;
     return((long(*)(long*))c->addr)(frame);
   }
@@ -14108,6 +14253,84 @@ class LinuxCEmitter:
             out.append(f"    if(!{c_symbol}) {c_symbol}={self._value(value)};")
         return symbol
 
+    def _emit_call_signature(
+        self, out: list[str], function_name: str, capture_count: int,
+        types: dict[str, str],
+    ) -> tuple[str, str]:
+        """Materialize a callable's argument metadata at its value-creation site.
+
+        The C code address alone does not say whether a function uses the
+        direct or frame ABI, or how its positional, keyword, default, vararg,
+        and kwarg slots are laid out. A closure that forwards ``*args`` and
+        ``**kwargs`` therefore needs this metadata alongside the captured
+        function object.
+        """
+        all_params = self.function_params.get(function_name, [])
+        if capture_count < 0 or capture_count > len(all_params):
+            raise NativeBuildError(
+                f"Linux callable '{function_name}' has an invalid capture layout"
+            )
+        params = all_params[capture_count:]
+        if len(params) > 63:
+            raise NativeBuildError(
+                f"Linux dynamic call binding for '{function_name}' supports at most 63 parameters"
+            )
+        vararg = self.function_varargs.get(function_name)
+        kwarg = self.function_kwargs.get(function_name)
+        kwonly = set(self.function_kwonly.get(function_name, []))
+        posonly = set(self.function_posonly.get(function_name, []))
+        vararg_index = params.index(vararg) if vararg in params else -1
+        kwarg_index = params.index(kwarg) if kwarg in params else -1
+        positional_n = sum(
+            1 for param in params
+            if param not in {vararg, kwarg} and param not in kwonly
+        )
+        kwonly_mask = 0
+        posonly_mask = 0
+        default_mask = 0
+        all_defaults = self.function_defaults.get(function_name, [])
+        default_params = self.function_default_params.get(function_name, set())
+        default_exprs: list[str] = []
+        for index, param in enumerate(params):
+            full_index = capture_count + index
+            if param in kwonly:
+                kwonly_mask |= 1 << index
+            if param in posonly:
+                posonly_mask |= 1 << index
+            if param in default_params:
+                default_mask |= 1 << index
+                default = all_defaults[full_index] if full_index < len(all_defaults) else None
+                default = self._default_call_value(out, function_name, param, default)
+                default_exprs.append(self._slot(default, types))
+            else:
+                default_exprs.append("piton_slot(0,PK_INT)")
+
+        self._call_signature_counter = getattr(self, "_call_signature_counter", 0) + 1
+        signature_id = self._call_signature_counter
+        names_name = f"_piton_call_names_{signature_id}"
+        defaults_name = f"_piton_call_defaults_{signature_id}"
+        signature_name = f"_piton_call_signature_{signature_id}"
+        array_size = max(1, len(params))
+        names_expr = ",".join(json.dumps(param) for param in params) or '""'
+        defaults_expr = ",".join(default_exprs) or "piton_slot(0,PK_INT)"
+        out.append(f"        const char* {names_name}[{array_size}]={{{names_expr}}};")
+        out.append(f"        PitonSlot {defaults_name}[{array_size}]={{{defaults_expr}}};")
+        out.append(
+            f"        PitonCallSignature* {signature_name}=piton_call_signature_new("
+            f"{len(params)},{positional_n},{vararg_index},{kwarg_index},"
+            f"{kwonly_mask}ULL,{posonly_mask}ULL,{default_mask}ULL,"
+            f"{1 if self.function_frame_abi.get(function_name, False) else 0},"
+            f"{names_name},{defaults_name});"
+        )
+        python_name = function_name
+        if python_name.startswith("__decorated__"):
+            python_name = python_name[len("__decorated__"):]
+        elif "__lambda_" in python_name:
+            python_name = "<lambda>"
+        elif "__" in python_name:
+            python_name = python_name.rsplit("__", 1)[-1]
+        return signature_name, python_name
+
     def _complete_call_args(
         self, function_name: str, values: list[Any], out: list[str] | None = None
     ) -> list[Any]:
@@ -16514,7 +16737,18 @@ class LinuxCEmitter:
                 # recibe como argumento pueda propagar el tipo de sus params
                 # (p.ej. `itertools.filterfalse(es_par, xs)` -> es_par recibe
                 # un elemento ETIQUETADO y debe compararlo como tal).
-                out.append(f"    {_name(result)}=(long)&{_name(source)};")
+                if source in self.generator_layouts:
+                    out.append(f"    {_name(result)}=(long)&{_name(source)};")
+                else:
+                    out.append("    {")
+                    signature, python_name = self._emit_call_signature(
+                        out, source, 0, types,
+                    )
+                    out.append(
+                        f"        {_name(result)}=piton_function_value_new("
+                        f"(long)&{_name(source)},{signature},{json.dumps(python_name)});"
+                    )
+                    out.append("    }")
                 types[result] = "closure"
                 self._closure_origin[result] = source
                 return out
@@ -16702,7 +16936,11 @@ class LinuxCEmitter:
             # NAME_RESOLVE_V1: every resolution above declined, so this bare
             # identifier would reach the C file undeclared (gcc naming a
             # Spanish builtin like `suma` is not a PITON diagnostic).
-            if source in _FUNC_ONLY_BUILTINS and source not in getattr(self, "_cur_slots", set()):
+            if (
+                source in _FUNC_ONLY_BUILTINS
+                and source not in getattr(self, "_cur_slots", set())
+                and not self._shadowed_name(source, function)
+            ):
                 # callable-only builtin used as a callee: a marker, no value
                 types[result] = "builtin"
                 aliases[result] = source
@@ -18569,6 +18807,21 @@ class LinuxCEmitter:
             # the builtin table (`def bin(num, max_bits=None)` is user bin, not builtin).
             if function_name in self.function_names and function_name not in function.params and args[0] not in function.params:
                 return self._emit_user_function_call(out, result, function_name, values, call_handler, function, types)
+            if function_name in _FUNC_ONLY_BUILTINS and self._shadowed_name(function_name, function):
+                # A decorated definition is stored under its source name while
+                # its body has the internal `__decorated__...` symbol. This
+                # must call the runtime value created by the decorator, not
+                # dispatch the shadowed name to the callable-only builtin.
+                _call_values = ",".join(self._value(value) for value in values)
+                out.append(f"    {{long _shadow_args[]={{{_call_values or '0'}}};")
+                out.append(
+                    f"        {_name(result)}=piton_closure_call_frame("
+                    f"{self._value(args[0])},{len(values)},_shadow_args);}}"
+                )
+                self._emit_exc_check(out, function, call_handler)
+                _decorated_target = "__decorated__" + function_name
+                types[result] = self.function_return_types.get(_decorated_target, "int")
+                return out
             _cb_alias = aliases.get(args[0], args[0])
             _cb_origin = (
                 self._closure_origin.get(args[0])
@@ -20767,10 +21020,17 @@ class LinuxCEmitter:
             lifted_name, n_args, capture_ops, has_vararg = args[:4]
             has_kwarg = args[4] if len(args) > 4 else 0
             cell_values = [self._value(cap) for cap in capture_ops]
-            out.append(
-                f"    {_name(result)}=piton_closure_new_frame((long)&{_name(lifted_name)},{n_args},"
-                f"{len(capture_ops)},(long[]){{ {','.join(cell_values)} }},{int(has_vararg)},{int(has_kwarg)});"
+            out.append("    {")
+            signature, python_name = self._emit_call_signature(
+                out, lifted_name, len(capture_ops), types,
             )
+            cells_expr = f"(long[]){{ {','.join(cell_values)} }}" if cell_values else "(long*)0"
+            out.append(
+                f"        {_name(result)}=piton_closure_new_frame_sig("
+                f"(long)&{_name(lifted_name)},{n_args},{len(capture_ops)},{cells_expr},"
+                f"{int(has_vararg)},{int(has_kwarg)},{signature},{json.dumps(python_name)});"
+            )
+            out.append("    }")
             self._closure_origin[result] = lifted_name
             types[result] = "closure"
         elif op == "dynamic_call":
@@ -20805,9 +21065,16 @@ class LinuxCEmitter:
             self._reject_complex_args(call_args, types, "a lifted frame-ABI function")
             arg_values = ",".join(self._value(arg) for arg in call_args)
             out.append(f"    {{long _frame_args[]={{ {arg_values} }};")
-            out.append(
-                f"    {_name(result)}=piton_frame_call({self._value(callee)},{len(call_args)},_frame_args);"
-            )
+            if types.get(callee) == "closure":
+                out.append(
+                    f"    {_name(result)}=piton_closure_call_frame("
+                    f"{self._value(callee)},{len(call_args)},_frame_args);"
+                )
+            else:
+                out.append(
+                    f"    {_name(result)}=piton_frame_call("
+                    f"{self._value(callee)},{len(call_args)},_frame_args);"
+                )
             out.append("    }")
             types[result] = self.function_return_types.get(_fname, "int") if isinstance(_fname, str) else "int"
         elif op == "closure_call":

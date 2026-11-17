@@ -15,6 +15,8 @@ funcion reduce (funcion ,iterable ,*inicial ) :
 
 funcion wraps (envuelta ) :
     funcion envoltorio (_fn_objetivo ) :
+        _fn_objetivo.__name__ = envuelta.__name__
+        _fn_objetivo.__qualname__ = envuelta.__qualname__
         devolver _fn_objetivo
     devolver envoltorio
 
