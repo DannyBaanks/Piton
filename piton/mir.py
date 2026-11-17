@@ -1520,6 +1520,7 @@ class MIRLowerer:
                 self._validate_nonlocal_bindings(imported)
         if hir.kind == HIRKind.MODULE:
             module_body = getattr(hir, "body", [])
+            self._module_body_nodes = module_body
             self._identity_decorator_names = self._module_identity_decorator_names(module_body)
             self._module_statement_positions = {
                 id(item): index for index, item in enumerate(module_body)
@@ -1845,6 +1846,7 @@ class MIRLowerer:
                     self.class_base_list[_local] = list(self.class_base_list.get(_cqual, []))
                     self.class_mro[_local] = [_cqual]
                     self._mro_memo[_local] = [_cqual]
+                    self.class_metaclasses[_local] = self.class_metaclasses.get(_cqual, "type")
             def _find_classes(nodes):
                 res = []
                 for item in nodes:
@@ -1969,7 +1971,7 @@ class MIRLowerer:
                 _explicit_meta = None
                 for _kw in (getattr(node, "keywords", None) or []):
                     if getattr(_kw, "arg", None) in {"metaclass", "metaclase"}:
-                        _raw_meta = getattr(getattr(_kw, "value", None), "name", None)
+                        _raw_meta = _extract_base_name(getattr(_kw, "value", None))
                         if _raw_meta:
                             _explicit_meta = self.from_import_aliases.get(_raw_meta, _raw_meta)
                 _meta_winner = _explicit_meta or "type"
@@ -2526,6 +2528,22 @@ class MIRLowerer:
         self.classes[qualified] = set()
         self.class_base_list[qualified] = bases
         self.class_parents[qualified] = bases[0] if bases else None
+        # `abc.ABC` is an ABCMeta-created base class. Keep this identity in
+        # the class graph so subclasses inherit ABCMeta just as they do in
+        # CPython; other bundled classes inherit the metaclass of their bases.
+        meta_winner = "abc__ABCMeta" if qualified == "abc__ABC" else "type"
+        for base in bases:
+            base_meta = self.class_metaclasses.get(base, "type")
+            if base_meta == "type" or base_meta == meta_winner:
+                continue
+            if self._metaclass_is_subclass(base_meta, meta_winner):
+                meta_winner = base_meta
+            elif not self._metaclass_is_subclass(meta_winner, base_meta):
+                raise MIRLoweringError(
+                    "metaclass conflict: the metaclasses of the bases are "
+                    f"incompatible ('{meta_winner}' and '{base_meta}')"
+                )
+        self.class_metaclasses[qualified] = meta_winner
         property_methods: dict[str, dict[str, str | None]] = {}
         used_symbols: set[str] = set()
         for method in node.body:
@@ -4036,6 +4054,8 @@ class MIRLowerer:
             builder.emit("store", node.name, current)
         elif kind == HIRKind.CLASS_DEF:
             cls_name = node.name
+            previous_class_position = self._current_class_position
+            self._current_class_position = self._module_statement_positions.get(id(node))
             parent_name = self.class_parents.get(cls_name)
             cls_obj = builder.temp()
             builder.emit("object_new", cls_name, parent_name, result=cls_obj)
@@ -4077,6 +4097,7 @@ class MIRLowerer:
                 builder.emit("call", dec_val, (current,), _active_handler(builder), result=applied)
                 current = applied
             builder.emit("store", cls_name, current)
+            self._current_class_position = previous_class_position
         elif kind == HIRKind.ASSIGN:
             if id(node) in getattr(self, "_json_alias_assign_ids", ()):
                 # JSON_VALUE_ALIAS_V2: el alias no se evalua; solo marca "ligado" en runtime.
@@ -5205,13 +5226,98 @@ class MIRLowerer:
                 missing.add(method)
         return missing
 
-    @staticmethod
-    def _class_method_is_abstract(method: HIRNode) -> bool:
-        return any(
-            getattr(decorator, "name", None) == "abstractmethod"
-            or getattr(decorator, "attr", None) == "abstractmethod"
-            for decorator in getattr(method, "decorators", None) or []
-        )
+    def _module_import_binding_before_class(self, name: str):
+        """Return the import that binds ``name`` at the current class statement.
+
+        Abstractness depends on the decorator object Python resolves when the
+        class body executes. A spelling-only check would incorrectly treat a
+        later local definition named ``abstractmethod`` as ``abc``'s decorator.
+        """
+        class_position = getattr(self, "_current_class_position", None)
+        if class_position is None:
+            return None
+        active_binding = None
+        for index, statement in enumerate(getattr(self, "_module_body_nodes", ())):
+            if index >= class_position:
+                break
+            kind = getattr(statement, "kind", None)
+            if kind == HIRKind.IMPORT:
+                for alias in getattr(statement, "names", ()) or ():
+                    bound = getattr(alias, "asname", None) or getattr(alias, "name", "").split(".", 1)[0]
+                    if bound == name:
+                        active_binding = ("module", getattr(alias, "name", ""))
+            elif kind == HIRKind.IMPORT_FROM:
+                for alias in getattr(statement, "names", ()) or ():
+                    bound = getattr(alias, "asname", None) or getattr(alias, "name", None)
+                    if bound == name:
+                        active_binding = (
+                            "from", getattr(statement, "module", None), getattr(alias, "name", None)
+                        )
+            else:
+                bound_names = set()
+                if kind in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
+                    bound_names.add(getattr(statement, "name", None))
+                elif kind == HIRKind.ASSIGN:
+                    bound_names.update(
+                        getattr(target, "name", None)
+                        for target in getattr(statement, "targets", ()) or ()
+                    )
+                elif kind == HIRKind.ANN_ASSIGN:
+                    bound_names.add(getattr(getattr(statement, "target", None), "name", None))
+                elif kind == HIRKind.DELETE:
+                    bound_names.update(
+                        getattr(target, "name", None)
+                        for target in getattr(statement, "targets", ()) or ()
+                    )
+                if name in bound_names:
+                    active_binding = None
+        return active_binding
+
+    def _class_method_is_abstract(self, method: HIRNode) -> bool:
+        for decorator in getattr(method, "decorators", None) or []:
+            if self._module_scope_stack:
+                scope_names, scope_modules, _scope_vars = self._module_scope_stack[-1]
+                if getattr(decorator, "kind", None) == HIRKind.LOAD:
+                    qualified = scope_names.get(getattr(decorator, "name", ""), "")
+                    if qualified.replace("__", ".") == "abc.abstractmethod":
+                        return True
+                elif getattr(decorator, "kind", None) == HIRKind.ATTR:
+                    value = getattr(decorator, "value", None)
+                    alias = getattr(value, "name", None) if getattr(value, "kind", None) == HIRKind.LOAD else None
+                    if (alias and alias not in scope_names
+                            and scope_modules.get(alias) == "abc"
+                            and getattr(decorator, "attr", None) == "abstractmethod"):
+                        return True
+                continue
+
+            if getattr(decorator, "kind", None) == HIRKind.LOAD:
+                binding = self._module_import_binding_before_class(
+                    getattr(decorator, "name", "")
+                )
+                if binding == ("from", "abc", "abstractmethod"):
+                    return True
+            elif getattr(decorator, "kind", None) == HIRKind.ATTR:
+                value = getattr(decorator, "value", None)
+                alias = getattr(value, "name", None) if getattr(value, "kind", None) == HIRKind.LOAD else None
+                binding = self._module_import_binding_before_class(alias) if alias else None
+                if (binding == ("module", "abc")
+                        and getattr(decorator, "attr", None) == "abstractmethod"):
+                    return True
+        return False
+
+    def _class_uses_abc_meta(self, class_name: str) -> bool:
+        """True only when this class has abc.ABCMeta (or a subclass) as meta."""
+        pending = [self.class_metaclasses.get(class_name, "type")]
+        seen: set[str] = set()
+        while pending:
+            current = pending.pop()
+            if current == "abc__ABCMeta":
+                return True
+            if current in seen:
+                continue
+            seen.add(current)
+            pending.extend(self.class_base_list.get(current, ()))
+        return False
 
     def _innermost_static_accepted(self, builder: _Builder) -> str | None:
         """Static accepted type of the innermost enclosing except handler.
@@ -7705,6 +7811,13 @@ class MIRLowerer:
             # OS_TIER1_V1 / SYS_ARGV_V1: attributes reached through a
             # `desde ... importar ...` alias are values, not backend symbols.
             alias_qual = None if _lexical_local else builder.from_import_aliases.get(node.name)
+            _shadowed_from_import = False
+            if alias_qual is not None and self._current_class_position is not None:
+                if self._module_import_binding_before_class(node.name) is None:
+                    # A later module-level function/assignment replaced this
+                    # imported name before the class body executed.
+                    alias_qual = None
+                    _shadowed_from_import = True
             if alias_qual == "os.PathLike":
                 # OS_PATHLIKE_V1: os.PathLike es una clase builtin (protocolo
                 # de ruta); el backend la representa como objeto de clase.
@@ -7738,6 +7851,8 @@ class MIRLowerer:
             result = builder.temp()
             _binding_name = self._module_function_binding(builder, node.name)
             if node.name in builder.module_function_bindings and not _lexical_local:
+                _load_name = _binding_name
+            elif _shadowed_from_import:
                 _load_name = _binding_name
             else:
                 _load_name = builder.from_import_aliases.get(node.name, _binding_name)
@@ -10105,7 +10220,11 @@ class MIRLowerer:
         (CONSTRUCTOR_KW_BIND_V1) y viajan en el slot kw de method_call cuando
         si la tiene, que es lo unico que el emisor sabe empaquetar.
         """
-        _abstract_methods = self._unimplemented_abstract_methods(cls_name)
+        _abstract_methods = (
+            self._unimplemented_abstract_methods(cls_name)
+            if self._class_uses_abc_meta(cls_name)
+            else set()
+        )
         if _abstract_methods:
             _names = ", ".join(sorted(_abstract_methods))
             raise MIRLoweringError(
