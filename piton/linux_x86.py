@@ -114,6 +114,7 @@ static void piton_gc_unregister(void*raw){
 }
 /* ── Container struct definitions (needed by GC functions below) ─────── */
 static void piton_raise_set(const char*,const char*);
+static int piton_bigint_is_zero(void*);
 static long piton_str_concat(const char*,const char*);
 typedef struct{long refcount;long kind;long length;long capacity;PitonSlot*items;}PitonSeq;
 typedef struct{long magic;PitonSeq*seq;long index;}PitonIterator;
@@ -4607,7 +4608,7 @@ static int piton_object_truthy_rt(long raw){
   if(hk)return piton_dunder_invoke(hk,1,&raw)!=0;
   return 1;
 }
-static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_COMPLEX:return piton_cx_truthy_bits(v.bits);case PK_DICT:return ((PitonDict*)v.bits)->length>0;case PK_SET:return ((PitonSet*)v.bits)->length>0;case PK_FROZENSET:return ((PitonSet*)v.bits)->length>0;case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;case PK_RANGE:return piton_range_len((PitonRange*)v.bits)>0;case PK_OBJECT:return piton_object_truthy_rt(v.bits);default:return v.bits!=0;}}
+static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_BIGINT:return !piton_bigint_is_zero((void*)v.bits);case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_COMPLEX:return piton_cx_truthy_bits(v.bits);case PK_DICT:return ((PitonDict*)v.bits)->length>0;case PK_SET:return ((PitonSet*)v.bits)->length>0;case PK_FROZENSET:return ((PitonSet*)v.bits)->length>0;case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;case PK_RANGE:return piton_range_len((PitonRange*)v.bits)>0;case PK_OBJECT:return piton_object_truthy_rt(v.bits);default:return v.bits!=0;}}
 static long piton_all_seq(PitonSeq*s){if(!s)return 1;for(long i=0;i<s->length;++i)if(!piton_slot_truthy(s->items[i]))return 0;return 1;}
 static long piton_any_seq(PitonSeq*s){if(!s)return 0;for(long i=0;i<s->length;++i)if(piton_slot_truthy(s->items[i]))return 1;return 0;}
 /* POW_MOD_V1: pow(base, exp, mod) por exponenciación binaria (i64). */
@@ -4696,41 +4697,50 @@ static long piton_str_maketrans_strings(const char*from,const char*to,const char
   if(deletechars){usize dl=piton_strlen(deletechars),di=0;while(di<dl){long cp;piton_utf8_decode((const unsigned char*)deletechars,dl,&di,&cp);piton_dict_set(t,piton_slot(cp,PK_INT),(PitonSlot){0,PK_NONE});}}
   return(long)t;
 }
-/* INT_FROM_BYTES_V1: int.from_bytes(bytes, byteorder='big', signed=False) —
- * classmethod. Convierte bytes/bytearray a int (64-bit signed). byteorder:
- * 'big' | 'little' (default 'big'); signed: bool (default False).
- * Falla cerrado en runtime si: buffer no bytes/bytearray, byteorder invalido,
- * overflow 64-bit (CPython usa arbitrary precision; aqui limitamos a 64-bit
- * igual que el resto del subset nativo). El dispatch pasa PitonSeq*; 
- * bytearray (PK_BYTEARRAY) tiene campo capacity extra -> data en offset
- * distinto; distinguimos por kind. */
-static long piton_int_from_bytes(PitonSeq*buf,const char*order,int is_signed){
-  if(!buf||(buf->kind!=PK_BYTES&&buf->kind!=PK_BYTEARRAY)){
-    piton_write(2,"TypeError: int.from_bytes() argument must support the buffer protocol\n",70);piton_exit(1);}
+/* INT_FROM_BYTES_V2: the integer result is a PitonBigInt, so byte sequences
+ * longer than the machine word remain exact. Definitions that need the
+ * bigint layout live in _BIGINT_FREESTANDING_C, which follows this prelude. */
+static long piton_bigint_from_byte_data(const unsigned char*,long,int,int);
+static int piton_bigint_byte_value(PitonSlot,unsigned char*);
+static long piton_int_to_bytes(PitonSlot,long,const char*,int);
+static int piton_bigint_is_zero(void*);
+static long piton_int_from_bytes(PitonSlot source,const char*order,int is_signed){
   if(!order||(piton_strcmp(order,"big")&&piton_strcmp(order,"little"))){
-    piton_write(2,"ValueError: byteorder must be either 'big' or 'little'\n",51);piton_exit(1);}
-  unsigned char*b; long n;
-  if(buf->kind==PK_BYTES){
-    PitonBytes*bb=(PitonBytes*)buf; b=bb->data; n=bb->length;
-  }else{
-    PitonByteArray*ba=(PitonByteArray*)buf; b=ba->data; n=ba->length;
+    piton_raise_set("ValueError","byteorder must be either 'little' or 'big'");return 0;}
+  unsigned char*b=0;long n=0;PitonSeq*seq=0;
+  if(source.kind==PK_BYTES){PitonBytes*bb=(PitonBytes*)source.bits;b=bb->data;n=bb->length;}
+  else if(source.kind==PK_BYTEARRAY){PitonByteArray*ba=(PitonByteArray*)source.bits;b=ba->data;n=ba->length;}
+  else if(source.kind==PK_MEMORYVIEW){
+    PitonMemoryView*mv=(PitonMemoryView*)source.bits;n=mv->length;
+    b=(unsigned char*)piton_alloc((usize)(n?n:1));unsigned char*base=piton_mv_buf(mv);
+    for(long i=0;i<n;++i)b[i]=base[mv->offset+i*mv->stride];
   }
-  unsigned long long acc=0;
-  if(piton_strcmp(order,"big")==0){
-    for(long i=0;i<n;++i){acc=(acc<<8)|b[i];}}
+  else if(source.kind==PK_LIST||source.kind==PK_TUPLE||source.kind==PK_DICT||
+          source.kind==PK_SET||source.kind==PK_FROZENSET||source.kind==PK_RANGE||
+          source.kind==PK_STR){
+    long items=piton_list_of_dynamic(source.bits);if(piton_exc_flag)return 0;
+    seq=(PitonSeq*)items;n=seq->length;b=(unsigned char*)piton_alloc((usize)(n?n:1));
+  }
+  else if(source.kind==PK_OBJECT&&source.bits&&piton_maybe_ptr(source.bits)){
+    long magic=*(long*)source.bits;
+    if(magic==PITON_GEN_MAGIC||magic==PITON_GENEXPR_MAGIC||magic==0x5049544E17E2LL||
+       magic==0x5049544E4459LL||magic==0x5049544E53545249LL||magic==0x5049544E5A495049LL||
+       magic==0x5049544E52455649LL||magic==0x5049544E454E554DLL||
+       magic==0x5049544E17E3LL||magic==0x5049544E17E4LL||magic==0x5049544E17E5LL||
+       ((magic&~1L)==PITON_CB_MAGIC)){
+      long items=piton_collect_any_iter(source.bits);if(piton_exc_flag)return 0;
+      seq=(PitonSeq*)items;n=seq->length;b=(unsigned char*)piton_alloc((usize)(n?n:1));
+    }else{
+      PitonStrBuf m;sb_init(&m);sb_puts(&m,"cannot convert '");sb_puts(&m,js_type_name(source));sb_puts(&m,"' object to bytes");
+      piton_raise_set("TypeError",m.d);return 0;
+    }
+  }
   else{
-    for(long i=n-1;i>=0;--i){acc=(acc<<8)|b[i];}}
-  if(is_signed){
-    if(n>0&&n<8&&((piton_strcmp(order,"big")==0?b[0]:b[n-1])&0x80))
-      acc|=~0ULL<<(8*n);
-    long long sval = (long long)acc;
-    if(sval < -0x8000000000000000LL || sval > 0x7FFFFFFFFFFFFFFFLL){
-      piton_write(2,"OverflowError: int.from_bytes() overflow\n",41);piton_exit(1);}
-    return sval;
-  }else{
-    if(acc>0xFFFFFFFFFFFFFFFFULL){piton_write(2,"OverflowError: int.from_bytes() overflow\n",41);piton_exit(1);}
-    return (long)acc;
+    PitonStrBuf m;sb_init(&m);sb_puts(&m,"cannot convert '");sb_puts(&m,js_type_name(source));sb_puts(&m,"' object to bytes");
+    piton_raise_set("TypeError",m.d);return 0;
   }
+  if(seq){for(long i=0;i<n;++i)if(!piton_bigint_byte_value(seq->items[i],b+i))return 0;}
+  return piton_bigint_from_byte_data(b,n,piton_strcmp(order,"little")==0,is_signed);
 }
 /* BYTES_MAKETRANS_V1: bytes.maketrans(frm, to) -> 256-byte translation table.
  * frm y to son bytes/bytearray de igual longitud. Retorna bytes de 256 bytes
@@ -8621,6 +8631,87 @@ static void bi_add_mag(PitonBigInt*r,PitonBigInt*a,PitonBigInt*b){long max_c=a->
 static void bi_sub_mag(PitonBigInt*r,PitonBigInt*a,PitonBigInt*b){long max_c=a->count>b->count?a->count:b->count;bi_ensure(r,max_c);u128 borrow=0;for(long i=0;i<max_c;++i){u128 av=i<a->count?a->limbs[i]:0;u128 bv=i<b->count?b->limbs[i]:0;u128 diff=av-bv-borrow;r->limbs[i]=(unsigned long)diff;borrow=(diff>>127)&1;r->count=i+1;}bi_trim(r);}
 static void*bi_from_u64(unsigned long v){PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=0;r->count=0;r->capacity=0;r->limbs=0;if(v){bi_ensure(r,1);r->limbs[0]=v;r->count=1;}return r;}
 static void*piton_bigint_from_i64(long v){if(v==0)return bi_from_u64(0);int neg=v<0?-1:1;unsigned long av=(unsigned long)(v<0?-v:v);void*r=bi_from_u64(av);((PitonBigInt*)r)->sign=neg;return r;}
+static long piton_bigint_width_local(PitonBigInt*x){
+  if(!x)return 0;for(long i=x->count-1;i>=0;--i)if(x->limbs[i])return i*64+64-__builtin_clzll(x->limbs[i]);return 0;
+}
+static int piton_bigint_is_power_of_two_at(PitonBigInt*x,long bit){
+  if(!x||bit<0)return 0;long word=bit/64;int offset=(int)(bit%64);
+  if(x->count!=word+1)return 0;
+  for(long i=0;i<word;++i)if(x->limbs[i])return 0;
+  return x->limbs[word]==(1UL<<offset);
+}
+static long piton_bigint_from_byte_data(const unsigned char*data,long n,int little,int is_signed){
+  PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));
+  r->sign=0;r->count=0;r->capacity=0;r->limbs=0;
+  int negative=n>0&&is_signed&&((little?data[n-1]:data[0])&0x80);
+  long count=(n+7)/8;
+  bi_ensure(r,count?count:1);for(long i=0;i<count;++i)r->limbs[i]=0;
+  unsigned int carry=negative?1:0;
+  for(long i=0;i<n;++i){
+    unsigned char byte=data[little?i:n-1-i];unsigned int value=byte;
+    if(negative){value=(unsigned int)(255-byte)+carry;carry=value>>8;}
+    r->limbs[i/8]|=(unsigned long)(value&255U)<<((i%8)*8);
+  }
+  r->count=count;r->sign=negative?-1:1;
+  bi_trim(r);
+  return(long)r;
+}
+static int piton_bigint_byte_value(PitonSlot item,unsigned char*out){
+  long value=0;
+  if(item.kind==PK_INT||item.kind==PK_BOOL)value=item.bits;
+  else if(item.kind==PK_BIGINT){
+    PitonBigInt*x=(PitonBigInt*)item.bits;
+    if(!x||x->sign<0||x->count>1||(x->count==1&&x->limbs[0]>255)){
+      piton_raise_set("ValueError","bytes must be in range(0, 256)");return 0;
+    }
+    value=x->count?x->limbs[0]:0;
+  }else{
+    PitonStrBuf m;sb_init(&m);sb_putc(&m,'\'');sb_puts(&m,js_type_name(item));
+    sb_puts(&m,"' object cannot be interpreted as an integer");piton_raise_set("TypeError",m.d);return 0;
+  }
+  if(value<0||value>255){piton_raise_set("ValueError","bytes must be in range(0, 256)");return 0;}
+  *out=(unsigned char)value;return 1;
+}
+static long piton_int_to_bytes(PitonSlot value,long length,const char*order,int is_signed){
+  if(!order||(piton_strcmp(order,"big")&&piton_strcmp(order,"little"))){
+    piton_raise_set("ValueError","byteorder must be either 'little' or 'big'");return 0;
+  }
+  if(length<0){piton_raise_set("ValueError","length argument must be non-negative");return 0;}
+  PitonBigInt*number=0;
+  if(value.kind==PK_BIGINT)number=(PitonBigInt*)value.bits;
+  else if(value.kind==PK_INT||value.kind==PK_BOOL){
+    long raw=value.bits;unsigned long mag=raw<0?(unsigned long)(-(raw+1))+1UL:(unsigned long)raw;
+    number=(PitonBigInt*)bi_from_u64(mag);number->sign=raw<0?-1:(mag?1:0);
+  }else{
+    PitonStrBuf m;sb_init(&m);sb_puts(&m,"'int' object cannot be interpreted as an integer");
+    piton_raise_set("TypeError",m.d);return 0;
+  }
+  if(length>0x0FFFFFFFFFFFFFFFL){piton_raise_set("OverflowError","int too big to convert");return 0;}
+  long width=piton_bigint_width_local(number),bits=length*8;
+  if(!is_signed&&number->sign<0){piton_raise_set("OverflowError","can't convert negative int to unsigned");return 0;}
+  if(!is_signed){
+    if(width>bits){piton_raise_set("OverflowError","int too big to convert");return 0;}
+  }else if(length==0){
+    if(number->sign){piton_raise_set("OverflowError","int too big to convert");return 0;}
+  }else if(number->sign<0){
+    long sign_bit=bits-1;
+    if(width>sign_bit+1||
+       (width==sign_bit+1&&!piton_bigint_is_power_of_two_at(number,sign_bit))){
+      piton_raise_set("OverflowError","int too big to convert");return 0;
+    }
+  }else if(width>bits-1){
+    piton_raise_set("OverflowError","int too big to convert");return 0;
+  }
+  PitonBytes*result=piton_bytes_new(length,0);unsigned int carry=number->sign<0?1:0;
+  int little=piton_strcmp(order,"little")==0;
+  for(long i=0;i<length;++i){
+    unsigned long limb=(i/8<number->count)?number->limbs[i/8]:0;
+    unsigned char byte=(unsigned char)(limb>>((i%8)*8));
+    if(number->sign<0){unsigned int transformed=(unsigned int)(255-byte)+carry;carry=transformed>>8;byte=(unsigned char)transformed;}
+    result->data[little?i:length-1-i]=byte;
+  }
+  return(long)result;
+}
 static long piton_bigint_to_i64(void*a){PitonBigInt*x=(PitonBigInt*)a;if(!x||x->count==0||x->sign==0)return 0;unsigned long v=x->limbs[0];return x->sign<0?-(long)v:(long)v;}
 static void*piton_bigint_from_str(const char*s){PitonBigInt*a=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));a->sign=1;a->count=0;a->capacity=0;a->limbs=0;while(*s==' '||*s=='\t')++s;if(*s=='-'){a->sign=-1;++s;}else if(*s=='+'){++s;}while(*s>='0'&&*s<='9'){int digit=*s++-'0';u128 carry=0;for(long i=0;i<a->count;++i){carry+=(u128)a->limbs[i]*10;a->limbs[i]=(unsigned long)carry;carry>>=64;}if(carry){bi_ensure(a,a->count+1);a->limbs[a->count++]=(unsigned long)carry;}carry=digit;for(long i=0;i<a->count&&carry;++i){carry+=a->limbs[i];a->limbs[i]=(unsigned long)carry;carry>>=64;}if(carry){bi_ensure(a,a->count+1);a->limbs[a->count++]=(unsigned long)carry;}}bi_trim(a);return a;}
 static int piton_bigint_is_zero(void*a){PitonBigInt*x=(PitonBigInt*)a;if(!x)return 1;for(long i=0;i<x->count;++i)if(x->limbs[i])return 0;return 1;}
@@ -10101,13 +10192,21 @@ class LinuxCEmitter:
             for block in function.blocks
             for instruction in block.instructions
         )
+        _uses_int_byte_methods = any(
+            instruction.op == "method_call"
+            and len(instruction.args) > 1
+            and instruction.args[1] in {"from_bytes", "to_bytes"}
+            for function in module.functions
+            for block in function.blocks
+            for instruction in block.instructions
+        )
         self._has_bigint = any(
             instruction.op == "const" and instruction.args
             and isinstance(instruction.args[0], int) and abs(instruction.args[0]) > 9223372036854775807
             for function in module.functions
             for block in function.blocks
             for instruction in block.instructions
-        ) or self._const_fold_overflows(module) or self._uses_float_mod(module) or _prints_collection or _raises_with_args
+        ) or self._const_fold_overflows(module) or self._uses_float_mod(module) or _prints_collection or _raises_with_args or _uses_int_byte_methods
         # Rich runtime (with __argc/__argv/_start and object/dict/set structs) needed for
         # bigint or sys.argv/os.name or any object/dict/set/bytes operations
         self._has_rich_runtime = self._has_bigint or _uses_repr_runtime or any(
@@ -19218,7 +19317,7 @@ class LinuxCEmitter:
                             out.append(f'    {{PitonSlot _sl=piton_dyn_unbox({self._value(value)});if(_sl.kind==PK_STR){{piton_print_str_raw((char*)_sl.bits);}}else if(_sl.kind==PK_OBJECT){{piton_print_str_raw((const char*)piton_str_of_slot_value(_sl));}}else{{piton_print_slot(_sl);}}}}')
                         elif value_type in {"list", "tuple", "dict", "set", "set:frozen", "bytes", "bytearray"}:
                             out.append(f'    piton_print_slot({self._slot(value, types)});')
-                        elif value_type == "int":
+                        elif value_type in {"int", "bigint"}:
                             # PRINT_INT_V1 (al final: los tipos difusos como
                             # module-pkg/none tiene su propia rama antes).
                             out.append(f'    piton_print_int_safe({self._value(value)});')
@@ -22066,6 +22165,46 @@ class LinuxCEmitter:
                 types, aliases, function, handler_label, tuple(kw_args) if kw_args else (),
             ):
                 return out
+            if method == "to_bytes" and types.get(obj, "") in {"int", "bigint", "bool"}:
+                if len(call_args) > 2:
+                    raise NativeBuildError("Linux int.to_bytes() takes 1-2 positional arguments")
+                _itb_length = call_args[0] if call_args else None
+                _itb_order_arg = call_args[1] if len(call_args) == 2 else None
+                _itb_signed_arg = None
+                for _itb_name, _itb_value in kw_args:
+                    if _itb_name == "length":
+                        if _itb_length is not None:
+                            raise NativeBuildError("Linux int.to_bytes() got multiple length values")
+                        _itb_length = _itb_value
+                    elif _itb_name == "byteorder":
+                        if _itb_order_arg is not None:
+                            raise NativeBuildError("Linux int.to_bytes() got multiple byteorder values")
+                        _itb_order_arg = _itb_value
+                    elif _itb_name == "signed":
+                        _itb_signed_arg = _itb_value
+                    else:
+                        raise NativeBuildError(f"Linux int.to_bytes() got unexpected keyword '{_itb_name}'")
+                if _itb_length is None:
+                    _itb_length_value = "1"
+                else:
+                    if types.get(_itb_length, "") not in {"int", "bool"}:
+                        raise NativeBuildError("Linux int.to_bytes() length must be an integer")
+                    _itb_length_value = self._value(_itb_length)
+                _itb_order = '"big"'
+                if _itb_order_arg is not None:
+                    if types.get(_itb_order_arg, "") != "str":
+                        raise NativeBuildError("Linux int.to_bytes() byteorder must be a string")
+                    _itb_order = f"(const char*){self._value(_itb_order_arg)}"
+                _itb_signed = "0"
+                if _itb_signed_arg is not None:
+                    _itb_signed = f"piton_slot_truthy({self._slot(_itb_signed_arg, types)})"
+                out.append(
+                    f"    {_name(result)}=piton_int_to_bytes({self._slot(obj, types)},"
+                    f"{_itb_length_value},{_itb_order},{_itb_signed});"
+                )
+                self._emit_exc_check(out, function, handler_label)
+                types[result] = "bytes"
+                return out
             if kw_args:
                 _int_class_receiver = (
                     self._typeobj_names.get(obj) == "int"
@@ -22076,10 +22215,8 @@ class LinuxCEmitter:
                         raise NativeBuildError(
                             "Linux int.from_bytes() takes 1-2 positional arguments"
                         )
-                    if types.get(call_args[0], "") not in {"bytes", "bytearray"}:
-                        raise NativeBuildError(
-                            "Linux int.from_bytes() requires bytes or bytearray"
-                        )
+                    if types.get(call_args[0], "").startswith(("object:", "class:")):
+                        raise NativeBuildError("Linux int.from_bytes() does not support custom iterables")
                     _ifb_order_arg = call_args[1] if len(call_args) == 2 else None
                     _ifb_signed_arg = None
                     for _ifb_name, _ifb_value in kw_args:
@@ -22104,16 +22241,13 @@ class LinuxCEmitter:
                         _ifb_order = f"(const char*){self._value(_ifb_order_arg)}"
                     _ifb_signed = "0"
                     if _ifb_signed_arg is not None:
-                        if types.get(_ifb_signed_arg, "") not in {"bool", "int"}:
-                            raise NativeBuildError(
-                                "Linux int.from_bytes() signed must be bool"
-                            )
-                        _ifb_signed = self._value(_ifb_signed_arg)
+                        _ifb_signed = f"piton_slot_truthy({self._slot(_ifb_signed_arg, types)})"
                     out.append(
-                        f"    {_name(result)}=(long)piton_int_from_bytes("
-                        f"(PitonSeq*){self._value(call_args[0])},{_ifb_order},{_ifb_signed});"
+                        f"    {_name(result)}=piton_int_from_bytes("
+                        f"{self._slot(call_args[0], types)},{_ifb_order},{_ifb_signed});"
                     )
-                    types[result] = "int"
+                    self._emit_exc_check(out, function, handler_label)
+                    types[result] = "bigint"
                     return out
                 # DICT_UPDATE_KW_V1: `d.update(b=2)` -> un piton_dict_append
                 # por keyword (equivalente exacto de CPython d[k] = v).
@@ -22479,10 +22613,8 @@ class LinuxCEmitter:
                             raise NativeBuildError(
                                 "Linux int.from_bytes() takes 1-2 positional arguments"
                             )
-                        if types.get(call_args[0], "") not in {"bytes", "bytearray"}:
-                            raise NativeBuildError(
-                                "Linux int.from_bytes() requires bytes or bytearray"
-                            )
+                        if types.get(call_args[0], "").startswith(("object:", "class:")):
+                            raise NativeBuildError("Linux int.from_bytes() does not support custom iterables")
                         _ifb_order = '"big"'
                         if len(call_args) >= 2:
                             if types.get(call_args[1], "") != "str":
@@ -22491,10 +22623,11 @@ class LinuxCEmitter:
                                 )
                             _ifb_order = f"(const char*){self._value(call_args[1])}"
                         out.append(
-                            f"    {_name(result)}=(long)piton_int_from_bytes("
-                            f"(PitonSeq*){self._value(call_args[0])},{_ifb_order},0);"
+                            f"    {_name(result)}=piton_int_from_bytes("
+                            f"{self._slot(call_args[0], types)},{_ifb_order},0);"
                         )
-                        types[result] = "int"
+                        self._emit_exc_check(out, function, handler_label)
+                        types[result] = "bigint"
                         return out
                     if _tname == "str":
                         if (
@@ -22606,25 +22739,22 @@ class LinuxCEmitter:
                         and (aliases.get(obj) if aliases else None) in {"int", "entero"}
                     )
                 ):
-                    # INT_FROM_BYTES_V1: int.from_bytes(bytes, byteorder='big', signed=False)
-                    if len(call_args) < 1 or len(call_args) > 3:
-                        raise NativeBuildError("Linux int.from_bytes() takes 1-3 arguments")
-                    _arg0_type = types.get(call_args[0], "")
-                    if _arg0_type in {"float", "none", "dict", "set", "slice"}:
-                        raise NativeBuildError("Linux int.from_bytes() requires bytes or bytearray")
+                    # INT_FROM_BYTES_V2: Python's signed parameter is keyword-only.
+                    if len(call_args) < 1 or len(call_args) > 2:
+                        raise NativeBuildError("Linux int.from_bytes() takes 1-2 positional arguments")
+                    if types.get(call_args[0], "").startswith(("object:", "class:")):
+                        raise NativeBuildError("Linux int.from_bytes() does not support custom iterables")
                     _ifb_order = '"big"'
-                    _ifb_signed = 0
                     if len(call_args) >= 2:
+                        if types.get(call_args[1], "") != "str":
+                            raise NativeBuildError("Linux int.from_bytes() byteorder must be a string")
                         _ifb_order = f"(const char*){self._value(call_args[1])}"
-                    if len(call_args) == 3:
-                        if types.get(call_args[2], "") not in {"bool", "int"}:
-                            raise NativeBuildError("Linux int.from_bytes() signed must be bool")
-                        _ifb_signed = self._value(call_args[2])
                     out.append(
-                        f"    {_name(result)}=(long)piton_int_from_bytes("
-                        f"(PitonSeq*){self._value(call_args[0])},{_ifb_order},{_ifb_signed});"
+                        f"    {_name(result)}=piton_int_from_bytes("
+                        f"{self._slot(call_args[0], types)},{_ifb_order},0);"
                     )
-                    types[result] = "int"
+                    self._emit_exc_check(out, function, handler_label)
+                    types[result] = "bigint"
                     return out
                 if method == "maketrans" and (
                     owner_type == "class:bytes"
