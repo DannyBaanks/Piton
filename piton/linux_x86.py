@@ -10538,8 +10538,13 @@ class LinuxCEmitter:
             self._mv_noncontig = {k for k in self._mv_noncontig if not k.startswith('%')}
         if function.vararg:
             types[function.vararg] = "tuple"
+            # VARARG_SLOT_ELEMS_V1: the call ABI stores each extra argument as
+            # a PitonSlot. Preserve its tag when the tuple is indexed or
+            # iterated inside the callee.
+            self._coll_elems[function.vararg] = "slot"
         if function.kwarg:
             types[function.kwarg] = "dict"
+            self._dict_val_types[function.kwarg] = "slot"
         # M6 SEQ_PARAM_DEFAULT_V1: un param cuyo default estatico es
         # list/tuple hereda ese tipo dentro del callee (el ABI no trae tipos;
         # sin esto la collection default se imprimia como puntero crudo).
@@ -10725,8 +10730,10 @@ class LinuxCEmitter:
         types: dict[str, str] = {}
         if function.vararg:
             types[function.vararg] = "tuple"
+            self._coll_elems[function.vararg] = "slot"
         if function.kwarg:
             types[function.kwarg] = "dict"
+            self._dict_val_types[function.kwarg] = "slot"
         self._fn_consts = {}
         self._boolh_types: dict[str, str] = {}
         _is_main_gen = False
@@ -12443,6 +12450,16 @@ class LinuxCEmitter:
                     raise NativeBuildError(
                         "native dict.get requires a statically known value type"
                     )
+                if val_type == "slot":
+                    out.append(
+                        f"    {{PitonSlot*_gp=piton_slot_box_new("
+                        f"piton_dict_get_d((PitonDict*){operand},"
+                        f"{self._slot(call_args[0], types)},{default}));"
+                        f" {_name(result)}=(long)_gp;}}"
+                    )
+                    types[result] = "slot"
+                    self._dyn_slot_temps.add((function.name, result))
+                    return out
                 if len(call_args) == 2:
                     out.append(
                         f"    {_name(result)}=piton_dict_get_d((PitonDict*){operand},"
@@ -15475,6 +15492,28 @@ class LinuxCEmitter:
                                     or closure_src.get(load_src.get(iargs[0], ""))
                                     or load_src.get(iargs[0], iargs[0] if isinstance(iargs[0], str) else None)
                                 )
+                                # COLLECTION_CALL_RETTYPE_V1: the return kind of
+                                # these builtins is independent of their input
+                                # element types. Without this, a function such as
+                                # `return sorted(kwargs.items())` is inferred as
+                                # int, and its caller stores the collection
+                                # pointer in a PK_INT slot.
+                                _collection_call_types = {
+                                    "list": "list", "lista": "list",
+                                    "sorted": "list", "ordenar": "list",
+                                    "tuple": "tuple", "tupla": "tuple",
+                                    "dict": "dict", "diccionario": "dict",
+                                    "set": "set", "conjunto": "set",
+                                    "frozenset": "set:frozen",
+                                }
+                                _local_names = self._func_stores.get(function.name, set())
+                                _is_unshadowed_builtin = (
+                                    isinstance(callee, str)
+                                    and callee in _collection_call_types
+                                    and callee not in by_name
+                                    and callee not in _local_names
+                                    and callee not in self._module_stored
+                                )
                                 if (
                                     isinstance(callee, str)
                                     and callee in {"str", "texto"}
@@ -15486,6 +15525,8 @@ class LinuxCEmitter:
                                     # el puntero como int y lo imprime como
                                     # direccion (o falla al concatenar).
                                     origins[result] = ("kind", "str")
+                                elif _is_unshadowed_builtin:
+                                    origins[result] = ("kind", _collection_call_types[callee])
                                 elif isinstance(callee, str) and callee in self.classes:
                                     # CLASS_CALL_V1: llamar a una clase (p. ej.
                                     # _NTInst(...)) construye una instancia;
@@ -16356,6 +16397,42 @@ class LinuxCEmitter:
                 out.append(
                     f"    {{PitonSlot*_ds=piton_slot_box_new("
                     f"piton_dyn_iter_next({self._value(iterator)}));"
+                    f" {_name(result)}=(long)_ds;}}"
+                )
+                types[result] = "slot"
+                self._dyn_slot_temps.add((function.name, result))
+                out.append("    if(piton_exc_flag){")
+                if handler_label:
+                    out.append(f"        goto {_name(function.name + '_' + handler_label)};")
+                else:
+                    out.append("        piton_report_unhandled();piton_exit(1);")
+                out.append("    }")
+                return out
+            if (
+                iterator_type == "iterator:dict"
+                and self._dict_key_types.get(iterator) == "slot"
+            ):
+                out.append(
+                    f"    {{PitonSlot*_dk=piton_slot_box_new("
+                    f"piton_iterator_next_slot_any({self._value(iterator)}));"
+                    f" {_name(result)}=(long)_dk;}}"
+                )
+                types[result] = "slot"
+                self._dyn_slot_temps.add((function.name, result))
+                out.append("    if(piton_exc_flag){")
+                if handler_label:
+                    out.append(f"        goto {_name(function.name + '_' + handler_label)};")
+                else:
+                    out.append("        piton_report_unhandled();piton_exit(1);")
+                out.append("    }")
+                return out
+            if (
+                iterator_type in {"iterator:list", "iterator:tuple", "iterator:set"}
+                and self._coll_elems.get(iterator) == "slot"
+            ):
+                out.append(
+                    f"    {{PitonSlot*_ds=piton_slot_box_new("
+                    f"piton_iterator_next_slot_any({self._value(iterator)}));"
                     f" {_name(result)}=(long)_ds;}}"
                 )
                 types[result] = "slot"
@@ -23498,7 +23575,12 @@ class LinuxCEmitter:
                         elem_kinds.add("str")
                     else:
                         elem_kinds.add("int")
-                if len(elem_kinds) == 1:
+                if "slot" in elem_kinds:
+                    # Dynamic elements can carry different runtime kinds in
+                    # the same sequence. All collection entries are already
+                    # PitonSlots, so consumers should read the tag at runtime.
+                    self._coll_elems[result] = "slot"
+                elif len(elem_kinds) == 1:
                     self._coll_elems[result] = next(iter(elem_kinds))
                 elif elem_kinds:
                     # COLL_ELEM_TYPE_V1: a MIXED collection is recorded as the
@@ -23569,7 +23651,9 @@ class LinuxCEmitter:
                             kinds.add("str")
                         else:
                             kinds.add(types.get(key, "int"))
-                    if len(kinds) == 1:
+                    if "slot" in kinds:
+                        self._dict_key_types[result] = "slot"
+                    elif len(kinds) == 1:
                         self._dict_key_types[result] = next(iter(kinds))
                     # DICT_VAL_TYPE_V1: record the value kind so `d[k]` and
                     # `d.get(k)` return a correctly typed result.
@@ -23582,7 +23666,9 @@ class LinuxCEmitter:
                                 v_kinds.add("str")
                             else:
                                 v_kinds.add("int")
-                        if len(v_kinds) == 1:
+                        if "slot" in v_kinds:
+                            self._dict_val_types[result] = "slot"
+                        elif len(v_kinds) == 1:
                             self._dict_val_types[result] = next(iter(v_kinds))
                     if result and items:
                         v_kinds = set()
@@ -23593,7 +23679,9 @@ class LinuxCEmitter:
                                 v_kinds.add("str")
                             else:
                                 v_kinds.add("int")
-                        if len(v_kinds) == 1:
+                        if "slot" in v_kinds:
+                            self._dict_val_types[result] = "slot"
+                        elif len(v_kinds) == 1:
                             self._dict_val_types[result] = next(iter(v_kinds))
                 if result and not items:
                     # DICT_VAL_TYPE_V1: an empty literal records no value
@@ -23603,8 +23691,8 @@ class LinuxCEmitter:
                 out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
                 for index, (key, value) in enumerate(items):
                     key_is_str = isinstance(key, str) and not key.startswith("%")
-                    key_kind = "PK_STR" if key_is_str else self._kind(types.get(key, "int"))
-                    out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},piton_slot({self._value(key)},{key_kind}),{self._slot(value, types)});')
+                    key_slot = f"piton_slot({self._value(key)},PK_STR)" if key_is_str else self._slot(key, types)
+                    out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},{key_slot},{self._slot(value, types)});')
             elif kind == "dict:module":
                 # dict:module is a dict whose values are module objects
                 if result and items:
@@ -23615,8 +23703,8 @@ class LinuxCEmitter:
                 out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
                 for index, (key, value) in enumerate(items):
                     key_is_str = isinstance(key, str) and not key.startswith("%")
-                    key_kind = "PK_STR" if key_is_str else self._kind(types.get(key, "int"))
-                    out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},piton_slot({self._value(key)},{key_kind}),{self._slot(value, types)});')
+                    key_slot = f"piton_slot({self._value(key)},PK_STR)" if key_is_str else self._slot(key, types)
+                    out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},{key_slot},{self._slot(value, types)});')
             elif kind == "set":
                 out.append(f'    {_name(result)}=(long)piton_set_new({len(items)});')
                 for value in items:
@@ -23820,6 +23908,20 @@ class LinuxCEmitter:
                     self._dyn_slot_temps.add((function.name, result))
                     self._emit_exc_check(out, function, _gi_handler)
                     return out
+                _seq_elem_kind = self._coll_elems.get(coll) or self._coll_elems.get(aliases.get(coll, coll))
+                if _seq_elem_kind == "slot":
+                    # A dynamic-element sequence already stores full tagged
+                    # slots. Box the selected slot for subsequent dynamic
+                    # operations instead of returning only its bits.
+                    out.append(
+                        f"    {{PitonSlot*_gb=piton_slot_box_new("
+                        f"piton_seq_get((PitonSeq*){self._value(coll)},{self._value(idx)}));"
+                        f" {_name(result)}=(long)_gb;}}"
+                    )
+                    types[result] = "slot"
+                    self._dyn_slot_temps.add((function.name, result))
+                    self._emit_exc_check(out, function, _gi_handler)
+                    return out
                 out.append(f'    {_name(result)}=piton_seq_get((PitonSeq*){self._value(coll)},{self._value(idx)}).bits;')
                 # COLL_ELEM_TYPE_V1: an index carries the element kind. Without it
                 # `lista('abc')[1]` returned a str pointer in an int slot and
@@ -23950,7 +24052,15 @@ class LinuxCEmitter:
                 # address).
                 val_type = self._dict_val_types.get(coll)
                 if val_type is not None:
-                    out.append(f'    {_name(result)}=piton_dict_get((PitonDict*){self._value(coll)},{self._dict_key_slot(coll, idx, types)}).bits;')
+                    if val_type == "slot":
+                        out.append(
+                            f"    {{PitonSlot*_dgb=piton_slot_box_new("
+                            f"piton_dict_get((PitonDict*){self._value(coll)},{self._dict_key_slot(coll, idx, types)}));"
+                            f" {_name(result)}=(long)_dgb;}}"
+                        )
+                        self._dyn_slot_temps.add((function.name, result))
+                    else:
+                        out.append(f'    {_name(result)}=piton_dict_get((PitonDict*){self._value(coll)},{self._dict_key_slot(coll, idx, types)}).bits;')
                     types[result] = val_type
                 elif collection_type == "dict:module":
                     # GETITEM_MODULE_TYPE_V1: sin tipo de valor conocido, el
@@ -24230,8 +24340,9 @@ class LinuxCEmitter:
             vararg = self.function_varargs.get(func_name)
             _named2 = [p for p in params if p != vararg]
             if self.function_kwargs.get(func_name):
-                # Relax
-                pass
+                raise NativeBuildError(
+                    f"native generator '{func_name}' with **kwargs is not supported yet"
+                )
             if vararg is None:
                 if len(gen_args) != len(_named2):
                     # Relax
