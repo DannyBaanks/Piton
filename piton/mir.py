@@ -1094,6 +1094,7 @@ class MIRLowerer:
         self.class_base_list = {}
         self.class_mro = {}
         self._mro_memo = {}
+        self.abstract_methods: dict[str, set[str]] = {}
         self.class_properties = {}
         self.static_methods = set()
         self.class_methods = set()
@@ -1415,6 +1416,43 @@ class MIRLowerer:
 
             self._local_classes = {node.name for node in _find_classes(module_body)}
 
+            # CLASS_BASE_ALIAS_V1: recognize the narrow, unambiguous
+            # `class A; Alias = A; class B(Alias)` sequence. Requiring the
+            # alias assignment to be adjacent to both class statements avoids
+            # folding over intervening calls or rebinding, where the runtime
+            # base expression could have changed. Other dynamic bases remain
+            # unresolved and super() fails closed for them.
+            self._class_base_aliases_by_class_id: dict[int, dict[str, str]] = {}
+            for _index in range(1, len(module_body) - 1):
+                _alias_stmt = module_body[_index]
+                _base_class_stmt = module_body[_index - 1]
+                _derived_class_stmt = module_body[_index + 1]
+                if (
+                    _alias_stmt.kind != HIRKind.ASSIGN
+                    or _base_class_stmt.kind != HIRKind.CLASS_DEF
+                    or _derived_class_stmt.kind != HIRKind.CLASS_DEF
+                ):
+                    continue
+                _targets = [
+                    target.name for target in getattr(_alias_stmt, "targets", []) or []
+                    if getattr(target, "kind", None) == HIRKind.STORE
+                ]
+                _value = getattr(_alias_stmt, "value", None)
+                if len(_targets) != 1 or getattr(_value, "kind", None) != HIRKind.LOAD:
+                    continue
+                _alias, _source = _targets[0], _value.name
+                if _base_class_stmt.name != _source:
+                    continue
+                _derived_bases = {
+                    getattr(getattr(base, "value", base), "name", None)
+                    for base in getattr(_derived_class_stmt, "bases", []) or []
+                }
+                if _alias not in _derived_bases:
+                    continue
+                self._class_base_aliases_by_class_id[id(_derived_class_stmt)] = {
+                    _alias: _source,
+                }
+
             # FUNC_SIG_PRESCAN_V1: registrar las firmas de TODAS las funciones
             # de nivel modulo ANTES de bajar cualquier cuerpo — los de las
             # clases tambien (warnings: `catch_warnings.__exit__` llama a
@@ -1466,6 +1504,8 @@ class MIRLowerer:
                 # el nombre LOCAL se traduce al cualificado del from-import,
                 # que es el que el levantamiento de modulos registro.
                 bases = [self.from_import_aliases.get(_b, _b) for _b in bases]
+                _base_aliases = self._class_base_aliases_by_class_id.get(id(node), {})
+                bases = [_base_aliases.get(_b, _b) for _b in bases]
                 for dec in (getattr(node, "decorators", []) or []):
                     if getattr(dec, "kind", None) == HIRKind.CALL:
                         func_name = getattr(getattr(dec, "func", None), "name", None)
@@ -1541,6 +1581,8 @@ class MIRLowerer:
                         node.name, method, property_methods,
                         class_local_names=class_local_names,
                     )
+                    if self._class_method_is_abstract(method):
+                        self.abstract_methods.setdefault(node.name, set()).add(method.name)
                     if used_symbols and symbol in used_symbols:
                         raise MIRLoweringError(
                             f"native '{node.name}.{method.name}' collides with another member lowered to symbol '{symbol}'"
@@ -1997,6 +2039,11 @@ class MIRLowerer:
                 _b = _b.value
             if getattr(_b, "name", None):
                 n = _b.name
+                if self._module_scope_stack:
+                    _scope_names = self._module_scope_stack[-1][0]
+                    _resolved = _scope_names.get(n)
+                    if _resolved in self.classes:
+                        return _resolved
                 _cand = f"{module_name.replace('.', '__')}__{n}"
                 if _cand in self.classes or n not in self.classes:
                     return _cand
@@ -2035,6 +2082,8 @@ class MIRLowerer:
             symbol, role, prop_name = self._class_method_symbol(
                 qualified, method, property_methods, allow_user_identity=False,
             )
+            if self._class_method_is_abstract(method):
+                self.abstract_methods.setdefault(qualified, set()).add(method.name)
             if used_symbols and symbol in used_symbols:
                 raise MIRLoweringError(
                     f"native '{qualified}.{method.name}' collides with another member lowered to symbol '{symbol}'"
@@ -2646,9 +2695,19 @@ class MIRLowerer:
             nested_captures = tuple(name for name in sorted(self._nested_free_loads(nested)) if name in available)
             lifted_name = f"{builder.function.name}__{nested.name}"
             inner_cell_vars = [c for c in nested_captures if c in captured_var_names]
+            nested_args = getattr(nested, "args", None)
+            nested_positional = [
+                *list(getattr(nested_args, "posonlyargs", []) or []),
+                *list(getattr(nested_args, "args", []) or []),
+            ] if nested_args else []
+            nested_super_context = (
+                (builder.super_class, nested_positional[0])
+                if builder.super_class and nested_positional else None
+            )
             self._lower_function(
                 nested, lifted_name, nested_captures,
-                cell_vars=inner_cell_vars, frame_abi=True,
+                cell_vars=inner_cell_vars, super_context=nested_super_context,
+                frame_abi=True,
             )
 
         lambda_counter = 0
@@ -2658,9 +2717,19 @@ class MIRLowerer:
             lifted_name = f"{builder.function.name}__lambda_{lambda_counter}"
             lambda_counter += 1
             inner_cell_vars = [c for c in lambda_captures if c in captured_var_names]
+            lambda_args = getattr(lambda_node, "args", None)
+            lambda_positional = [
+                *list(getattr(lambda_args, "posonlyargs", []) or []),
+                *list(getattr(lambda_args, "args", []) or []),
+            ] if lambda_args else []
+            lambda_super_context = (
+                (builder.super_class, lambda_positional[0])
+                if builder.super_class and lambda_positional else None
+            )
             self._lower_function(
                 lambda_node, lifted_name, lambda_captures,
-                cell_vars=inner_cell_vars, frame_abi=True,
+                cell_vars=inner_cell_vars, super_context=lambda_super_context,
+                frame_abi=True,
             )
 
         self._lower_statements(
@@ -4380,6 +4449,28 @@ class MIRLowerer:
                 return cls
         return None
 
+    def _unimplemented_abstract_methods(self, class_name: str) -> set[str]:
+        """Return abstract methods whose first MRO definition is abstract."""
+        mro = self._mro_memo.get(class_name) or self._compute_mro(class_name) or [class_name]
+        declared = set().union(*(self.abstract_methods.get(cls, set()) for cls in mro))
+        missing: set[str] = set()
+        for method in declared:
+            owner = next(
+                (cls for cls in mro if method in self.classes.get(cls, set())),
+                None,
+            )
+            if owner is not None and method in self.abstract_methods.get(owner, set()):
+                missing.add(method)
+        return missing
+
+    @staticmethod
+    def _class_method_is_abstract(method: HIRNode) -> bool:
+        return any(
+            getattr(decorator, "name", None) == "abstractmethod"
+            or getattr(decorator, "attr", None) == "abstractmethod"
+            for decorator in getattr(method, "decorators", None) or []
+        )
+
     def _innermost_static_accepted(self, builder: _Builder) -> str | None:
         """Static accepted type of the innermost enclosing except handler.
 
@@ -4500,9 +4591,33 @@ class MIRLowerer:
         enter_cls = self._with_mro_method(class_name, enter_name)
         exit_cls = self._with_mro_method(class_name, exit_name)
         if enter_cls is None or exit_cls is None:
-            raise MIRLoweringError(
-                f"native class '{class_name}' used in `con` must define {enter_name} and {exit_name}"
+            # WITH_PROTOCOL_MISSING_V1: lookup of special methods happens on
+            # the type at runtime in CPython. Preserve constructor side effects,
+            # then raise the protocol TypeError through the active handler.
+            # A build-time rejection would disagree with `try/except TypeError`
+            # and a successful no-op would silently skip the manager protocol.
+            _ctx = self._lower_expr(builder, expr)
+            _ctx_type = class_name.rsplit("__", 1)[-1]
+            _protocol = (
+                "asynchronous context manager protocol"
+                if is_async_with else "context manager protocol"
             )
+            _missing_method = (
+                enter_name if enter_cls is None and exit_cls is not None
+                else exit_name if exit_cls is None and enter_cls is not None
+                else None
+            )
+            _suffix = f" (missed {_missing_method} method)" if _missing_method else ""
+            _message = builder.temp()
+            builder.emit(
+                "const",
+                f"'{_ctx_type}' object does not support the {_protocol}{_suffix}",
+                result=_message,
+            )
+            builder.emit(
+                "raise_typed", "TypeError", _message, _active_handler(builder),
+            )
+            return
         var = item.optional_vars
         if var is not None and var.kind != HIRKind.LOAD:
             raise MIRLoweringError("native with as-target must be a simple name")
@@ -6480,6 +6595,19 @@ class MIRLowerer:
                 continue
             if cls == current_class:
                 found_current = True
+        current_index = mro.index(current_class)
+        tail_mro = mro[current_index + 1:]
+        unresolved_bases = [
+            cls for cls in tail_mro
+            if cls not in self.classes
+            and cls not in _BUILTIN_BASES
+            and cls not in _BUILTIN_EXCEPTIONS
+        ]
+        if unresolved_bases:
+            raise MIRLoweringError(
+                "native super() cannot resolve dynamically evaluated base "
+                f"'{unresolved_bases[0]}'"
+            )
         if next_class is None:
             # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
             # no los define ninguna clase: es la operación nativa de objeto.
@@ -6534,7 +6662,7 @@ class MIRLowerer:
                 and builder.super_self is not None
                 and any(
                     cls in _BUILTIN_EXCEPTIONS
-                    for cls in mro[mro.index(current_class) + 1:]
+                    for cls in tail_mro
                 )
             ):
                 # Builtin BaseException.__init__ stores its positional args.
@@ -6558,6 +6686,10 @@ class MIRLowerer:
             # En CPython la llamada resuelve contra object/type.__init__
             # o __init_subclass__ -> la llamada es un no-op, no un error de build.
             if attr in {"__init__", "__init_subclass__"}:
+                if user_args:
+                    raise MIRLoweringError(
+                        f"native super().{attr} with arguments requires a modeled base implementation"
+                    )
                 for arg in user_args:
                     self._lower_expr(builder, arg)
                 _none = builder.temp()
@@ -6586,6 +6718,10 @@ class MIRLowerer:
                         result=_created,
                     )
                     return _created
+                if user_args:
+                    raise MIRLoweringError(
+                        "native super().__new__ with arguments requires a modeled base implementation"
+                    )
                 for arg in user_args:
                     self._lower_expr(builder, arg)
                 parent_cls = self.class_parents.get(current_class)
@@ -6593,8 +6729,23 @@ class MIRLowerer:
                 builder.emit("object_new", current_class, parent_cls, result=result)
                 return result
 
-            parent_cls = self.class_parents.get(current_class)
-            next_class = parent_cls or "object"
+            builtin_base = next(
+                (cls for cls in tail_mro if cls in _BUILTIN_BASES | _BUILTIN_EXCEPTIONS),
+                None,
+            )
+            if builtin_base is not None:
+                raise MIRLoweringError(
+                    f"native super().{attr} for builtin base '{builtin_base}' "
+                    "has no modeled native implementation"
+                )
+            if tail_mro:
+                raise MIRLoweringError(
+                    f"native super().{attr} has no base class in MRO of '{current_class}' "
+                    "that defines the attribute"
+                )
+            raise MIRLoweringError(
+                f"native super().{attr} has no base class in MRO of '{current_class}'"
+            )
         if builder.super_self in builder.cell_params:
             receiver = builder.temp()
             builder.emit("cell_load", builder.super_self, result=receiver)
@@ -8938,6 +9089,13 @@ class MIRLowerer:
         (CONSTRUCTOR_KW_BIND_V1) y viajan en el slot kw de method_call cuando
         si la tiene, que es lo unico que el emisor sabe empaquetar.
         """
+        _abstract_methods = self._unimplemented_abstract_methods(cls_name)
+        if _abstract_methods:
+            _names = ", ".join(sorted(_abstract_methods))
+            raise MIRLoweringError(
+                f"native abstract class '{cls_name}' cannot be instantiated "
+                f"(unimplemented abstract methods: {_names})"
+            )
         # A custom metaclass owns calls to the class itself. Bind its __call__
         # with the class object as receiver before the ordinary instance path.
         _meta_name = self.class_metaclasses.get(cls_name, "type")
