@@ -4087,6 +4087,9 @@ static long piton_call_signature_invoke(PitonClosure*,long,PitonSlot*,long);
 static int piton_is_closure(long raw){return raw!=0&&piton_maybe_ptr(raw)&&((long*)raw)[0]==PITON_CLOSURE_MAGIC;}
 static PitonObject*piton_closure_attrs(long raw,int create){PitonClosure*c=(PitonClosure*)raw;if(!c->attrs&&create)c->attrs=piton_object_new("function",0);return c->attrs;}
 static void piton_object_set(PitonObject*o,const char*name,PitonSlot v){if(o&&piton_is_closure((long)o))o=piton_closure_attrs((long)o,1);if(!o||!piton_maybe_ptr((long)o)||((long*)o)[1]!=PK_OBJECT){piton_raise_set("AttributeError","null object");return;}for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0){o->attrs[i].value=v;o->attrs[i].instance_owned=1;if(o->dict_cache)piton_dict_set_raw((PitonDict*)o->dict_cache,piton_slot((long)name,PK_STR),v);return;}if(o->length>=32){piton_raise_set("AttributeError","attribute limit exceeded");return;}o->attrs[o->length].name=name;o->attrs[o->length].value=v;o->attrs[o->length].instance_owned=1;o->length++;if(o->dict_cache)piton_dict_set_raw((PitonDict*)o->dict_cache,piton_slot((long)name,PK_STR),v);}
+static int piton_type_name_is_builtin(const char*name){static const char*names[]={"NoneType","bool","int","float","str","bytes","bytearray","list","tuple","dict","set","frozenset","range","complex","slice","type","object","memoryview","ellipsis","module","BaseException","Exception","ArithmeticError","AssertionError","AttributeError","BufferError","EOFError","ImportError","LookupError","MemoryError","NameError","OSError","ReferenceError","RuntimeError","StopIteration","SyntaxError","SystemError","TypeError","ValueError","Warning"};for(long i=0;i<(long)(sizeof(names)/sizeof(names[0]));++i)if(name&&piton_strcmp(name,names[i])==0)return 1;return 0;}
+static PitonObject*piton_type_class_intern(const char*name,const char*module){static PitonObject*pool[128];static const char*pool_name[128];static const char*pool_module[128];static long count=0;if(!name)name="object";if(!module)module="__main__";for(long i=0;i<count;++i)if(piton_strcmp(pool_name[i],name)==0&&piton_strcmp(pool_module[i],module)==0)return pool[i];PitonObject*cls=piton_object_new(name,0);cls->is_class=1;piton_object_set(cls,"__name__",piton_slot((long)name,PK_STR));piton_object_set(cls,"__qualname__",piton_slot((long)name,PK_STR));piton_object_set(cls,"__module__",piton_slot((long)module,PK_STR));if(count<128){pool[count]=cls;pool_name[count]=name;pool_module[count]=module;++count;}return cls;}
+static long piton_type_class_from_slot(PitonSlot value){const char*name="object";switch(value.kind){case PK_NONE:name="NoneType";break;case PK_BOOL:name="bool";break;case PK_INT:case PK_BIGINT:name="int";break;case PK_FLOAT:name="float";break;case PK_STR:name="str";break;case PK_LIST:name="list";break;case PK_TUPLE:name="tuple";break;case PK_DICT:name="dict";break;case PK_SET:name="set";break;case PK_RANGE:name="range";break;case PK_BYTES:name="bytes";break;case PK_BYTEARRAY:name="bytearray";break;case PK_COMPLEX:name="complex";break;case PK_FROZENSET:name="frozenset";break;case PK_SLICE:name="slice";break;case PK_MEMORYVIEW:name="memoryview";break;case PK_NOTIMPLEMENTED:name="NotImplementedType";break;case PK_OBJECT:{PitonObject*obj=(PitonObject*)value.bits;if(obj&&piton_maybe_ptr(value.bits)&&((long*)value.bits)[1]==PK_OBJECT){name=obj->is_class?"type":(obj->class_name?obj->class_name:"object");}break;}default:break;}const char*module=piton_type_name_is_builtin(name)?"builtins":"__main__";return(long)piton_type_class_intern(name,module);}
 static long piton_type_new(long raw_name,long raw_bases,long raw_namespace){
   const char*name=(const char*)raw_name;const char*parent=0;
   if(raw_bases&&piton_maybe_ptr(raw_bases)&&((long*)raw_bases)[1]==PK_TUPLE){
@@ -4153,6 +4156,8 @@ static PitonSlot piton_object_get(PitonObject*o,const char*name){
   }
   piton_raise_set("AttributeError",name?name:"");return (PitonSlot){0,PK_NONE};
 }
+static long piton_class_object_attr(long raw,const char*name){if(!raw||!piton_maybe_ptr(raw)||((long*)raw)[1]!=PK_OBJECT||!((PitonObject*)raw)->is_class){piton_raise_set("TypeError","type object metadata is unavailable");return 0;}return piton_object_get((PitonObject*)raw,name).bits;}
+static int piton_class_object_name_is(long raw,const char*name,const char*module){if(!raw||!piton_maybe_ptr(raw)||((long*)raw)[1]!=PK_OBJECT)return 0;PitonObject*o=(PitonObject*)raw;if(!o->is_class||!o->class_name||!name||piton_strcmp(o->class_name,name)!=0)return 0;PitonSlot mod=piton_object_get(o,"__module__");return mod.kind==PK_STR&&module&&piton_strcmp((const char*)mod.bits,module)==0;}
 static long piton_object_lookup(PitonObject*o,const char*name,long fallback){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;return ((long(*)(long,long))fallback)((long)o,(long)name);}
 static long piton_hasattr(long raw,const char*name){if(piton_is_closure(raw))raw=(long)piton_closure_attrs(raw,0);if(!raw||!name||!piton_maybe_ptr(raw))return 0;PitonObject*o=(PitonObject*)raw;if(o->kind==PK_OBJECT){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return 1;}return 0;}
 static long piton_getattr(long raw,const char*name,int has_def,long def_val){if(piton_is_closure(raw))raw=(long)piton_closure_attrs(raw,0);if(raw&&name&&piton_maybe_ptr(raw)){PitonObject*o=(PitonObject*)raw;if(o->kind==PK_OBJECT){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;}}if(has_def)return def_val;piton_raise_set("AttributeError","object has no attribute");return 0;}
@@ -4490,6 +4495,7 @@ static void piton_bytes_print(PitonBytes* b);
 static void piton_bytearray_print(PitonByteArray* ba);
 static void piton_print_slot(PitonSlot v);
 static void piton_print_slot_repr(PitonSlot v);
+static void piton_print_class_object(long raw);
 static void piton_print_complex_raw(long bits);
 static long piton_cx_eq(PitonComplexVal x,PitonComplexVal y);
 static int piton_cx_truthy_bits(long bits);
@@ -4517,7 +4523,7 @@ static int piton_dict_eq(PitonDict*a,PitonDict*b){
 static void piton_print_set(PitonSet*s){if(s->kind==PK_SET&&s->length==0){piton_write(piton_print_fd,"set()",5);return;}piton_write(piton_print_fd,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(piton_print_fd,", ",2);piton_print_slot_repr(s->items[i]);}piton_write(piton_print_fd,"}",1);}
 static long piton_object_repr_hook(long obj,const char*cls);
 static long piton_object_str_hook(long obj,const char*cls);
-static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(v.bits==PITON_NOTIMPLEMENTED){piton_write(piton_print_fd,"NotImplemented",14);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_str_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
+static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(v.bits==PITON_NOTIMPLEMENTED){piton_write(piton_print_fd,"NotImplemented",14);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{PitonObject*_o=(PitonObject*)v.bits;if(_o&&piton_maybe_ptr(v.bits)&&((long*)v.bits)[1]==PK_OBJECT&&_o->is_class){piton_print_class_object(v.bits);break;}long _pr=piton_object_str_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
 /* SEQ_ELEM_REPR_V1: los elementos de una coleccion se imprimen con el
    repr completo de CPython (escapes de backslash/comillas); el camino
    viejo escribia el str raw dentro de [ ] y print(["a\\b"]) divergiaba.
@@ -4585,6 +4591,7 @@ static long piton_sum_seq(PitonSeq*s){long r=0;for(long i=0;i<s->length;++i){Pit
 static long piton_sum_dict(PitonDict*d){long r=0;for(long i=0;i<d->length;++i){PitonSlot v=d->items[i].key;if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
 static long piton_sum_set(PitonSet*s){long r=0;for(long i=0;i<s->length;++i){PitonSlot v=s->items[i];if(v.kind==PK_INT||v.kind==PK_BOOL)r+=v.bits;else{piton_raise_set("TypeError","unsupported operand type(s) for +: 'int' and 'list'");return 0;}}return r;}
 static const char*piton_type_repr(int kind){switch(kind){case PK_NONE:return"<class 'NoneType'>";case PK_BOOL:return"<class 'bool'>";case PK_INT:return"<class 'int'>";case PK_FLOAT:return"<class 'float'>";case PK_STR:return"<class 'str'>";case PK_LIST:return"<class 'list'>";case PK_TUPLE:return"<class 'tuple'>";case PK_DICT:return"<class 'dict'>";case PK_SET:return"<class 'set'>";case PK_RANGE:return"<class 'range'>";case PK_BYTES:return"<class 'bytes'>";case PK_BYTEARRAY:return"<class 'bytearray'>";case PK_COMPLEX:return"<class 'complex'>";case PK_SLICE:return"<class 'slice'>";case PK_MEMORYVIEW:return"<class 'memoryview'>";case PK_FROZENSET:return"<class 'frozenset'>";default:return"<class 'object'>";}}
+static void piton_print_class_object(long raw){if(!raw||!piton_maybe_ptr(raw)||((long*)raw)[1]!=PK_OBJECT){piton_write(piton_print_fd,"<class 'object'>",16);return;}PitonObject*cls=(PitonObject*)raw;const char*module="__main__";const char*classname=cls->class_name?cls->class_name:"object";for(long i=0;i<cls->length;++i){PitonAttr*a=&cls->attrs[i];if(piton_strcmp(a->name,"__module__")==0&&a->value.kind==PK_STR)module=(const char*)a->value.bits;else if(piton_strcmp(a->name,"__qualname__")==0&&a->value.kind==PK_STR)classname=(const char*)a->value.bits;}piton_write(piton_print_fd,"<class '",8);if(piton_strcmp(module,"builtins")!=0){piton_write(piton_print_fd,module,piton_strlen(module));piton_write(piton_print_fd,".",1);}piton_write(piton_print_fd,classname,piton_strlen(classname));piton_write(piton_print_fd,"'>",2);}
 /* M14 BUILTINS_CORE_V2 (matriz declarada; ver native_runtime.c) */
 /* OBJ_TRUTH_RT_V1: truthiness de una instancia segun su clase REAL (la que
  * guarda la instancia), no segun la clase estatica con la que se etiqueto el
@@ -9593,7 +9600,12 @@ _STANDARD_BUILTIN_CLASSES = frozenset({
     "bytearray", "arreglo_bytes", "list", "lista", "tuple", "tupla", "dict",
     "diccionario", "set", "conjunto", "range", "rango", "complex", "complejo",
     "object", "objeto", "slice", "rebanada", "frozenset", "conjunto_inmutable",
-    "type", "tipo",
+    "type", "tipo", "NoneType", "ellipsis", "module",
+})
+_BUILTIN_RUNTIME_TYPE_NAMES = frozenset({
+    "NoneType", "bool", "int", "float", "str", "bytes", "bytearray", "list",
+    "tuple", "dict", "set", "frozenset", "range", "complex", "slice", "type",
+    "object", "memoryview", "ellipsis", "module",
 })
 _BUILTIN_C_FNS = {
     "int": "piton_builtin_int",
@@ -12219,6 +12231,13 @@ class LinuxCEmitter:
             f"    piton_object_set((PitonObject*){_cvar},\"__name__\","
             f"piton_slot((long)\"{cls_name}\",PK_STR));"
         )
+        if cls_name in _BUILTIN_RUNTIME_TYPE_NAMES or cls_name in _BUILTIN_EXCEPTIONS:
+            out.append(
+                f'    piton_object_set((PitonObject*){_cvar},"__qualname__",'
+                f'piton_slot((long)"{cls_name}",PK_STR));'
+                f'    piton_object_set((PitonObject*){_cvar},"__module__",'
+                f'piton_slot((long)"builtins",PK_STR));'
+            )
         if hasattr(self, "_class_attrs_map"):
             merged_attrs = {}
             for ancestor in reversed(self.class_mro.get(cls_name, [cls_name])):
@@ -18553,6 +18572,63 @@ class LinuxCEmitter:
                 self._emit_exc_check(out, function, compare_handler)
                 types[result] = "bool"
                 return out
+            if operator in {"es", "no es", "==", "!="} and (
+                types.get(left) == "class:dynamic" or types.get(right) == "class:dynamic"
+            ):
+                _left_dynamic = types.get(left) == "class:dynamic"
+                _right_dynamic = types.get(right) == "class:dynamic"
+                if _left_dynamic and _right_dynamic:
+                    _same_expr = f"({self._value(left)}=={self._value(right)})"
+                else:
+                    _dynamic_value = left if _left_dynamic else right
+                    _other_value = right if _left_dynamic else left
+                    _other_type = types.get(_other_value, "")
+                    _other_name = (
+                        _other_type.split(":", 1)[1]
+                        if _other_type.startswith("class:")
+                        else self._typeobj_names.get(_other_value)
+                    )
+                    if _other_name is None:
+                        _same_expr = "0"
+                    else:
+                        _other_module = (
+                            "builtins"
+                            if _other_name in _BUILTIN_RUNTIME_TYPE_NAMES
+                            or _other_name in _BUILTIN_EXCEPTIONS
+                            else "__main__"
+                        )
+                        _same_expr = (
+                            f"piton_class_object_name_is({self._value(_dynamic_value)},"
+                            f"{json.dumps(_other_name)},{json.dumps(_other_module)})"
+                        )
+                _same_result = f"!({_same_expr})" if operator in {"no es", "!="} else _same_expr
+                out.append(f"    {_name(result)}={_same_result};")
+                types[result] = "bool"
+                return out
+            if operator in {"es", "no es", "==", "!="}:
+                # TYPE_OBJECT_COMPARE_V1: builtin classes loaded as values
+                # still carry a printable string marker for constructor and
+                # descriptor dispatch. A type() result is a real, interned
+                # class object. Compare both forms by their canonical type
+                # name so `type(1) is int` and `type(1) == int` retain class
+                # identity without comparing the class object's address to
+                # the legacy builtin marker string.
+                _left_type_name = (
+                    types.get(left, "").split(":", 1)[1]
+                    if types.get(left, "").startswith("class:")
+                    else self._typeobj_names.get(left)
+                )
+                _right_type_name = (
+                    types.get(right, "").split(":", 1)[1]
+                    if types.get(right, "").startswith("class:")
+                    else self._typeobj_names.get(right)
+                )
+                if _left_type_name is not None and _right_type_name is not None:
+                    _same_type = _left_type_name == _right_type_name
+                    _same_result = _same_type if operator in {"es", "=="} else not _same_type
+                    out.append(f"    {_name(result)}={int(_same_result)};")
+                    types[result] = "bool"
+                    return out
             if operator in {"es", "no es"}:
                 # IS_IDENTITY_V1: `es` is IDENTITY, not equality. The raw C `==`
                 # answered True for `1 es Verdadero` (both are 1) where CPython
@@ -18995,6 +19071,9 @@ class LinuxCEmitter:
                             out.append('    piton_write(piton_print_fd," ",1);')
                         if value_type == "exception-type":
                             out.append(f'    piton_print_str_raw((const char*){self._value(value)});')
+                            continue
+                        if value_type == "class:dynamic":
+                            out.append(f"    piton_print_class_object({self._value(value)});")
                             continue
                         if value_type.startswith("class:") and value_type != "class:object":
                             _class_name = value_type.split(":", 1)[1]
@@ -20645,15 +20724,24 @@ class LinuxCEmitter:
                     # BUILTIN_TYPE_VALUE_V1: tipo(int) es <class 'type'> (no
                     # el <class 'str'> que sugiere la repr); tipo(int | str)
                     # es <class 'types.UnionType'>.
-                    _trepr = (
-                        _TYPE_UNION_REPR
-                        if values[0] in self._union_type_temps
-                        else "<class 'type'>"
-                    )
-                    out.append(f"    {_name(result)}=(long){json.dumps(_trepr)};")
-                    types[result] = "str"
+                    if values[0] in self._union_type_temps:
+                        out.append(f"    {_name(result)}=(long){json.dumps(_TYPE_UNION_REPR)};")
+                        types[result] = "str"
+                    else:
+                        self._emit_class_object(out, result, "type", function)
+                        types[result] = "class:type"
                     return out
                 value_type = types.get(values[0], "int")
+                if value_type == "slot":
+                    # TYPE_SLOT_CLASS_V1: a heterogeneous collection or
+                    # parameter carries its actual runtime kind in PitonSlot.
+                    # Build an interned class object from that tag instead of
+                    # guessing from the static fallback type.
+                    out.append(
+                        f"    {_name(result)}=piton_type_class_from_slot({self._slot(values[0], types)});"
+                    )
+                    types[result] = "class:dynamic"
+                    return out
                 if value_type.startswith("class:"):
                     # METACLASS_INTROSPECT_V1: `type(A)` sobre una CLASE
                     # devuelve su metaclase como objeto de clase (no la
@@ -20689,13 +20777,24 @@ class LinuxCEmitter:
                     )
                     return out
                 else:
-                    if value_type == "ellipsis":
-                        # ELLIPSIS_SINGLETON_V1: tipo(...) imprime
-                        # `<class 'ellipsis'>` como CPython (antes salia
-                        # 'object' por el default — divergencia silenciosa).
-                        out.append(f"    {_name(result)}=(long)" + json.dumps("<class 'ellipsis'>") + ";")
-                    else:
-                        out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
+                    builtin_type_name = {
+                        "none": "NoneType", "bool": "bool", "int": "int",
+                        "bigint": "int", "float": "float", "str": "str",
+                        "bytes": "bytes", "bytearray": "bytearray", "list": "list",
+                        "tuple": "tuple", "dict": "dict", "set": "set",
+                        "set:frozen": "frozenset", "range": "range",
+                        "complex": "complex", "slice": "slice",
+                        "memoryview": "memoryview", "ellipsis": "ellipsis",
+                    }.get(value_type)
+                    if builtin_type_name is not None:
+                        # TYPE_BUILTIN_CLASS_V1: values such as int, str, and
+                        # None have real interned class objects as their type,
+                        # so metadata access, repr, and class identity all use
+                        # the same class representation as user-defined types.
+                        self._emit_class_object(out, result, builtin_type_name, function)
+                        types[result] = f"class:{builtin_type_name}"
+                        return out
+                    out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
                 types[result] = "str"
             elif function_name in {"sorted", "ordenar"}:
                 # SORTED_STR_V1: a str sorts like its list of 1-char strings.
@@ -21430,9 +21529,23 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(long){json.dumps(_builtin_owner)};")
                     types[result] = "str"
                     return out
+                if attr == "__module__":
+                    _builtin_module = "types" if obj in self._union_type_temps else "builtins"
+                    out.append(f"    {_name(result)}=(long){json.dumps(_builtin_module)};")
+                    types[result] = "str"
+                    return out
                 raise NativeBuildError(
                     f"Linux unbound builtin type attribute {_builtin_owner}.{attr} is not supported as a value"
                 )
+            if owner_type == "class:dynamic" and attr in {
+                "__name__", "__qualname__", "__module__"
+            }:
+                out.append(
+                    f"    {_name(result)}=piton_class_object_attr({self._value(obj)},{json.dumps(attr)});"
+                )
+                types[result] = "str"
+                self._emit_exc_check(out, function, handler_label)
+                return out
             if owner_type.startswith("class:") and attr in {"__name__", "__qualname__"}:
                 # CLASS_NAME_ATTR_V1: `A.__name__` y `type(categoria).__name__`
                 # — el nombre de la clase como literal. El objeto de clase lo
@@ -21457,6 +21570,26 @@ class LinuxCEmitter:
                 out.append(
                     f"    {_name(result)}=((PitonObject*){self._value(obj)})->class_name;"
                 )
+                types[result] = "str"
+                return out
+            if owner_type.startswith("class:") and attr == "__module__":
+                # BUILTIN_TYPE_NAME_V1: type(v) returns an interned class
+                # object, so its standard metadata must behave like the real
+                # CPython type object. User classes defined in this module use
+                # __main__; unresolved external classes remain fail-closed.
+                _class_name = owner_type.split(":", 1)[1]
+                if (
+                    _class_name in _BUILTIN_RUNTIME_TYPE_NAMES
+                    or _class_name in _BUILTIN_EXCEPTIONS
+                ):
+                    _class_module = "builtins"
+                elif _class_name in self.classes:
+                    _class_module = "__main__"
+                else:
+                    raise NativeBuildError(
+                        f"Linux class __module__ is not known for '{_class_name}'"
+                    )
+                out.append(f"    {_name(result)}=(long){json.dumps(_class_module)};")
                 types[result] = "str"
                 return out
             if owner_type.startswith("class:") and attr == "__bases__":
@@ -23882,6 +24015,30 @@ class LinuxCEmitter:
                     self._emit_exc_check(out, function, _gi_handler)
                     return out
             if collection_type in {"list", "tuple"}:
+                _mixed_elem_kind = (
+                    self._coll_elems.get(coll)
+                    or self._coll_elems.get(aliases.get(coll, coll))
+                )
+                if (
+                    _mixed_elem_kind
+                    and "|" in _mixed_elem_kind
+                    and not all(
+                        item_kind.startswith("object:")
+                        for item_kind in _mixed_elem_kind.split("|")
+                    )
+                ):
+                    # MIXED_ELEM_SLOT_V1: a heterogeneous list element has no
+                    # single static type. Preserve its runtime tag when read,
+                    # so consumers such as type(value) see the actual kind.
+                    out.append(
+                        f"    {{PitonSlot*_gb=piton_slot_box_new("
+                        f"piton_seq_get((PitonSeq*){self._value(coll)},{self._value(idx)}));"
+                        f" {_name(result)}=(long)_gb;}}"
+                    )
+                    types[result] = "slot"
+                    self._dyn_slot_temps.add((function.name, result))
+                    self._emit_exc_check(out, function, _gi_handler)
+                    return out
                 # SLOT_ELEM_GETITEM_V1: when the element type at this index is
                 # "slot" (e.g. vars().items() values), preserve the full
                 # PitonSlot (with kind tag) instead of extracting raw .bits, so
