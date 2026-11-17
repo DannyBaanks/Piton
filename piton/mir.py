@@ -145,6 +145,9 @@ _NATIVE_MODULE_CONSTS: dict[str, dict[str, Any]] = {
     },
     "sys": {
         "maxsize": 9223372036854775807,
+        # SYS_BYTEORDER_V1: el backend solo genera x86-64 Linux (little-endian),
+        # igual que sys.byteorder de CPython en esa plataforma.
+        "byteorder": "little",
     },
     "stat": {
         "S_IFDIR": 0o040000, "S_IFCHR": 0o020000, "S_IFBLK": 0o060000,

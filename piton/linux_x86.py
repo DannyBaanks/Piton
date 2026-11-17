@@ -3667,6 +3667,15 @@ static PitonSeq*piton_conv_seq(int kind,PitonSlot src){
   if(src.kind==PK_RANGE){PitonRange*g=(PitonRange*)src.bits;long n=piton_range_len(g);
     for(long i=0;i<n;++i)piton_seq_append(r,(PitonSlot){g->start+i*g->step,PK_INT});return r;}
   piton_write(2,"TypeError: cannot convert to a sequence\n",35);piton_exit(1);return r;}
+/* SORTED_DYN_SRC_V1: fuente de sorted() de tipo slot/desconocido. Solo los
+   iterables que piton_conv_seq sabe copiar; el resto es TypeError capturable
+   (CPython: "'int' object is not iterable"). frozenset no se copia aun: falla
+   cerrado en runtime con NotImplementedError en vez de dar basura. */
+static PitonSeq*piton_conv_seq_checked(int kind,PitonSlot src){
+  if(src.kind==PK_STR||src.kind==PK_LIST||src.kind==PK_TUPLE||src.kind==PK_SET||src.kind==PK_DICT||src.kind==PK_RANGE)return piton_conv_seq(kind,src);
+  if(src.kind==PK_FROZENSET){piton_raise_set("NotImplementedError","sorted() of frozenset is not supported natively");return piton_seq_new(kind,0);}
+  PitonStrBuf m;sb_init(&m);sb_putc(&m,'\'');sb_puts(&m,js_type_name(src));sb_puts(&m,"' object is not iterable");
+  piton_raise_set("TypeError",m.d);return piton_seq_new(kind,0);}
 static PitonSet*piton_conv_set(PitonSlot src){
   PitonSet*r=piton_set_new(0);
   if(src.kind==PK_SET){PitonSet*a=(PitonSet*)src.bits;
@@ -3916,6 +3925,19 @@ static long piton_sorted_key_new(void*raw,long keyfn){
   }
   PitonSeq*r=piton_seq_new(PK_LIST,n);
   for(long i=0;i<n;++i)r->items[i]=pairs->items[i*2+1];
+  return(long)r;
+}
+/* SORTED_KEY_REV_V1: sorted(xs, key=f, reverse=r). El flag reverse entra en el
+   ordenado estable (no se invierte el resultado ascendente, que cambia el
+   orden de los empates). */
+static void piton_seq_sort_key_impl(PitonSeq*s,long keyfn,int rev);
+static long piton_sorted_key_rev_new(void*raw,long keyfn,int rev){
+  PitonSeq*s=(PitonSeq*)raw;
+  if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_raise_set("TypeError","sorted() argument is not iterable");return 0;}
+  long n=s->length;
+  PitonSeq*r=piton_seq_new(PK_LIST,n);
+  for(long i=0;i<n;++i)r->items[i]=s->items[i];
+  piton_seq_sort_key_impl(r,keyfn,rev);
   return(long)r;
 }
 /* MINMAX_KEY_V1: min/max con key= — decorar con la clave, tomar el extremo
@@ -5754,7 +5776,12 @@ static PitonSlot piton_sort_key_slot(long bits){
   }
   return (PitonSlot){bits,PK_INT};
 }
-static void piton_seq_sort_key(PitonSeq*s,long keyfn){
+/* SORT_STABLE_REV_V1: orden estable ascendente (rev=0) o descendente (rev=1).
+   Con rev=1 se mueve un elemento delante solo si el anterior es MENOR
+   (prev<kk): los iguales conservan el orden original, igual que CPython
+   (reverse=True no invierte el resultado ascendente). Un fallo de
+   comparacion es TypeError capturable, no salida del proceso. */
+static void piton_seq_sort_key_impl(PitonSeq*s,long keyfn,int rev){
   if(!s||s->length<2)return;
   if(!keyfn){piton_raise_set("TypeError","sort() key must be callable");return;}
   long n=s->length;
@@ -5771,18 +5798,38 @@ static void piton_seq_sort_key(PitonSeq*s,long keyfn){
     PitonSlot kk=pairs->items[i*2],ov=pairs->items[i*2+1];
     long j=i;
     while(j>0){
-      int l=piton_slot_less(kk,pairs->items[(j-1)*2]);
-      if(l<0){piton_write(2,"TypeError: '<' not supported between incompatible types\n",56);piton_exit(1);}
+      PitonSlot prev=pairs->items[(j-1)*2];
+      int l=rev?piton_slot_less(prev,kk):piton_slot_less(kk,prev);
+      if(l<0){
+        PitonSlot first=rev?prev:kk,second=rev?kk:prev;
+        PitonStrBuf m;sb_init(&m);sb_puts(&m,"'<' not supported between instances of '");
+        sb_puts(&m,js_type_name(first));sb_puts(&m,"' and '");sb_puts(&m,js_type_name(second));sb_putc(&m,'\'');
+        piton_raise_set("TypeError",m.d);return;
+      }
       if(l){pairs->items[j*2]=pairs->items[(j-1)*2];pairs->items[j*2+1]=pairs->items[(j-1)*2+1];--j;}else break;
     }
     pairs->items[j*2]=kk;pairs->items[j*2+1]=ov;
   }
   for(long i=0;i<n;++i)s->items[i]=pairs->items[i*2+1];
 }
-static void piton_seq_sort_key_rev(PitonSeq*s,long keyfn){
-  piton_seq_sort_key(s,keyfn);
-  if(!s)return;
-  for(long i=0,j=s->length-1;i<j;++i,--j){PitonSlot t=s->items[i];s->items[i]=s->items[j];s->items[j]=t;}
+/* SORT_RECV_KIND_V1: en CPython solo `list` tiene sort(). El tipo estatico del
+   receptor puede ser una inferencia (un parametro usado con .sort() se asume
+   lista), asi que la comprobacion de kind se hace SIEMPRE en runtime: una
+   tupla o cualquier otro valor -> AttributeError antes de tocar nada. */
+static void piton_sort_attr_error(PitonSlot recv){
+  PitonStrBuf m;sb_init(&m);sb_putc(&m,'\'');sb_puts(&m,js_type_name(recv));sb_puts(&m,"' object has no attribute 'sort'");
+  piton_raise_set("AttributeError",m.d);
+}
+static void piton_seq_sort_raw(long raw,long keyfn,int rev){
+  PitonSeq*s=(PitonSeq*)raw;
+  if(!s){piton_raise_set("AttributeError","'NoneType' object has no attribute 'sort'");return;}
+  if(s->kind!=PK_LIST){piton_sort_attr_error((PitonSlot){raw,s->kind});return;}
+  piton_seq_sort_key_impl(s,keyfn,rev);
+}
+/* SORT_DYN_RECV_V1: lista.sort(key=f) con receptor de tipo slot. */
+static void piton_seq_sort_dyn(PitonSlot recv,long keyfn,int rev){
+  if(recv.kind!=PK_LIST){piton_sort_attr_error(recv);return;}
+  piton_seq_sort_key_impl((PitonSeq*)recv.bits,keyfn,rev);
 }
 /* BUILTIN_BOUND_METHOD_V1: `m = xs.append; m(v)` — el metodo ligado de un
    builtin no existia (AttributeError en runtime). El ABI de bound method pasa
@@ -17080,7 +17127,11 @@ class LinuxCEmitter:
                         break
                     _k = _k2
                 ekind = (self._coll_elems.get(src) if src else None) or _elem
-                self._tuple_elems[result] = (("%idx", "int"), (src or "%src", ekind if ekind and "|" not in ekind else "int"))
+                # ENUM_ITEM_NAME_V1: el segundo elemento es un valor del
+                # iterable, no el iterable. Su nombre no puede ser el de la
+                # fuente: _resolve_etype lo buscaria en `types` y obtendria el
+                # tipo de la coleccion ("list") en vez de ekind (str -> segfault).
+                self._tuple_elems[result] = (("%idx", "int"), ("%enum_item", ekind if ekind and "|" not in ekind else "int"))
             if iterator_type in {"genexpr", "iterator:genexpr", "generator", "iterator:any"}:
                 types[result] = "slot"
                 self._dyn_slot_temps.add((function.name, result))
@@ -18366,10 +18417,23 @@ class LinuxCEmitter:
                         if _map_record is not None and not _map_runtime and any(name not in _map_record for name, *_rest in fields):
                             raise NativeBuildError(f"Linux str % mapping key {next(name for name, *_rest in fields if name not in _map_record)!r} is not present")
 
+                    # PCT_UNKNOWN_SHAPE_V1: una tupla cuya forma no se conoce
+                    # en build (p.ej. `for i, x in enumerate(...)`) o un valor
+                    # de tipo desconocido pueden ser una tupla en runtime. El
+                    # camino estatico los trataria como escalar (segfault) o
+                    # fallaria cerrado; el formateador runtime decide por kind
+                    # y aridad como CPython.
+                    _unknown_shape_tuple = right_type == "tuple" and (
+                        self._tuple_elems.get(right)
+                        if self._tuple_elems.get(right) is not None
+                        else self._tuple_elems.get(aliases.get(right, right))
+                    ) is None
+                    _unknown_scalar = right_type in {"", "any", "unknown"} and bool(fields)
                     _runtime_percent = (
                         has_star
                         or (has_map and _map_runtime)
                         or (not fields and right_type == "dict" and "%%" in template)
+                        or (not has_map and (_unknown_shape_tuple or _unknown_scalar))
                     )
                     if has_star and right_type == "tuple":
                         _star_shape = self._tuple_elems.get(right)
@@ -18497,7 +18561,7 @@ class LinuxCEmitter:
                             etypes.append(raw_etypes[op_idx])
                             op_idx += 1
                         if op_idx != len(raw_operands) or len(operands) != len(fields):
-                            self._runtime_type_error(out, "not all arguments converted during string formatting")
+                            self._runtime_type_error(out, "not all arguments converted during string formatting", function, handler_label)
                             types[result] = "str"
                             return out
                     else:
@@ -21361,10 +21425,22 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=piton_sorted_new((void*){_src});")
                     self._emit_exc_check(out, function, call_handler)
                     return out
+                # SORTED_DYN_SRC_V1: una fuente de tipo slot/desconocido se
+                # convierte en runtime (TypeError capturable si no es iterable).
+                _sorted_dyn = types.get(values[0]) in {"slot", "", "any", "unknown"}
+                _sorted_rev_done = False
                 if _sort_key is not None:
-                    _src = f"piton_conv_seq(PK_LIST,{self._slot(values[0], types)})" if types.get(values[0]) == "range" else self._value(values[0])
-                    out.append(f"    {_name(result)}=piton_sorted_key_new((void*){_src},{self._resolve_callable_val(_sort_key, aliases, types)});")
+                    if _sorted_dyn:
+                        _src = f"piton_conv_seq_checked(PK_LIST,{self._slot(values[0], types)})"
+                    elif types.get(values[0]) == "range":
+                        _src = f"piton_conv_seq(PK_LIST,{self._slot(values[0], types)})"
+                    else:
+                        _src = self._value(values[0])
+                    # SORTED_KEY_REV_V1: values = [fuente, reverse] tras quitar la clave.
+                    _rv_flag = f"piton_slot_truthy({self._slot(values[1], types)})" if len(values) == 2 else "0"
+                    out.append(f"    {_name(result)}=piton_sorted_key_rev_new((void*){_src},{self._resolve_callable_val(_sort_key, aliases, types)},{_rv_flag});")
                     self._emit_exc_check(out, function, call_handler)
+                    _sorted_rev_done = True
                 elif types.get(values[0]) == "range":
                     out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_conv_seq(PK_LIST,{self._slot(values[0], types)}));")
                 elif types.get(values[0]) == "set":
@@ -21377,10 +21453,12 @@ class LinuxCEmitter:
                 elif types.get(values[0]) in {"genexpr", "iterator:genexpr"}:
                     _gl = f"(long)piton_genexpr_to_list({self._value(values[0])})"
                     out.append(f"    {_name(result)}=piton_sorted_new((void*){_gl});")
+                elif _sorted_dyn:
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_conv_seq_checked(PK_LIST,{self._slot(values[0], types)}));")
                 else:
                     out.append(f"    {_name(result)}=piton_sorted_new((void*){self._value(values[0])});")
                 self._emit_exc_check(out, function, call_handler)
-                if len(values) == 2:
+                if len(values) == 2 and not _sorted_rev_done:
                     # SORT_KW_V1: reverse flag (`reversa=`/`reverse=`).
                     out.append(f"    if({self._value(values[1])})piton_seq_reverse((PitonSeq*){_name(result)});")
                 types[result] = "list"
@@ -22687,8 +22765,9 @@ class LinuxCEmitter:
                 # piton_seq_sort_key / _rev.
                 if cls_name is None and method == "sort":
                     _sk_type = types.get(obj, "")
-                    if _sk_type not in {"list", "tuple"}:
-                        raise NativeBuildError(f"Linux sort() requires a list or tuple, not {_sk_type}")
+                    _sk_dynamic = _sk_type in {"slot", "", "any", "unknown"}
+                    if _sk_type not in {"list", "tuple"} and not _sk_dynamic:
+                        raise NativeBuildError(f"Linux sort() requires a list, tuple or dynamic value, not {_sk_type}")
                     if call_args:
                         raise NativeBuildError("Linux sort() takes no positional arguments")
                     _sk_key = None
@@ -22702,18 +22781,24 @@ class LinuxCEmitter:
                             raise NativeBuildError(f"Linux sort() got an unexpected keyword argument '{_kn}'")
                     if _sk_key is None:
                         raise NativeBuildError("Linux sort() requires a key= keyword")
+                    if _sk_type == "tuple":
+                        # SORT_TUPLE_ATTR_V1: CPython no tiene sort() en tuplas:
+                        # AttributeError antes de evaluar argumentos (antes se
+                        # ordenaba en sitio, divergencia silenciosa).
+                        out.append("    piton_raise_set(\"AttributeError\", \"'tuple' object has no attribute 'sort'\");")
+                        self._emit_exc_check(out, function, handler_label)
+                        types[result] = "none"
+                        return out
                     _sk_expr = self._value(_sk_key)
-                    if _sk_rev is not None:
-                        _rv = types.get(_sk_rev, "int")
-                        if _rv not in {"int", "bool"}:
-                            raise NativeBuildError("Linux sort(reverse=) requires a bool")
-                        out.append(
-                            f"    if({self._value(_sk_rev)})"
-                            f"{{piton_seq_sort_key_rev((PitonSeq*){self._value(obj)},{_sk_expr});}}"
-                            f"else{{piton_seq_sort_key((PitonSeq*){self._value(obj)},{_sk_expr});}}"
-                        )
+                    # SORT_RECV_KIND_V1 / SORT_DYN_RECV_V1: la comprobacion de kind
+                    # del receptor y el flag reverse (truthiness, como CPython)
+                    # se resuelven en runtime.
+                    _sk_rv = f"piton_slot_truthy({self._slot(_sk_rev, types)})" if _sk_rev is not None else "0"
+                    if _sk_dynamic:
+                        out.append(f"    piton_seq_sort_dyn({self._slot(obj, types)},{_sk_expr},{_sk_rv});")
                     else:
-                        out.append(f"    piton_seq_sort_key((PitonSeq*){self._value(obj)},{_sk_expr});")
+                        out.append(f"    piton_seq_sort_raw((long){self._value(obj)},{_sk_expr},{_sk_rv});")
+                    self._emit_exc_check(out, function, handler_label)
                     types[result] = "none"
                     return out
                 # KWRG_METHOD_CLASS_V1: metodo de clase con kwargs sobre una
