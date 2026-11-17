@@ -209,19 +209,39 @@ static long piton_object_str_hook(long obj,const char*cls){
 /* CLASS_DUNDER_HOOK_V1: tabla (clase, metodo) -> funcion compilada para
  * dispatch dinamico de __add__/__radd__/__round__ cuando no estan en attrs. */
 #define PITON_DUNDER_HOOK_MAX 256
-typedef struct{const char*cls;const char*meth;long fn;int frame_abi;long n_args;}PitonDunderHook;
+#define PITON_DUNDER_PARAM_MAX 63
+typedef struct{
+  const char*cls;const char*meth;long fn;int frame_abi;
+  long n_args;long positional_n;long vararg_index;long kwarg_index;
+  unsigned long long kwonly_mask;unsigned long long default_mask;
+  const char*param_names[PITON_DUNDER_PARAM_MAX];
+  long defaults[PITON_DUNDER_PARAM_MAX];
+}PitonDunderHook;
 static PitonDunderHook g_dunder_hooks[PITON_DUNDER_HOOK_MAX];
 static long g_dunder_hook_n=0;
-static void piton_object_dunder_hook_set(const char*cls,const char*meth,long fn,int frame_abi,long n_args){
+static void piton_object_dunder_hook_set(const char*cls,const char*meth,long fn,
+                                         int frame_abi,long n_args,long positional_n,
+                                         long vararg_index,long kwarg_index,
+                                         unsigned long long kwonly_mask,
+                                         unsigned long long default_mask,
+                                         const char**param_names,const long*defaults){
+  if(n_args<0||n_args>PITON_DUNDER_PARAM_MAX)return;
   for(long i=0;i<g_dunder_hook_n;++i){
     if(g_dunder_hooks[i].cls&&piton_strcmp(g_dunder_hooks[i].cls,cls)==0&&piton_strcmp(g_dunder_hooks[i].meth,meth)==0){
-      g_dunder_hooks[i].fn=fn;g_dunder_hooks[i].frame_abi=frame_abi;g_dunder_hooks[i].n_args=n_args;return;
+      PitonDunderHook*h=&g_dunder_hooks[i];
+      h->fn=fn;h->frame_abi=frame_abi;h->n_args=n_args;h->positional_n=positional_n;
+      h->vararg_index=vararg_index;h->kwarg_index=kwarg_index;
+      h->kwonly_mask=kwonly_mask;h->default_mask=default_mask;
+      for(long j=0;j<n_args;++j){h->param_names[j]=param_names[j];h->defaults[j]=defaults[j];}
+      return;
     }
   }
   if(g_dunder_hook_n>=PITON_DUNDER_HOOK_MAX)return;
-  g_dunder_hooks[g_dunder_hook_n].cls=cls;g_dunder_hooks[g_dunder_hook_n].meth=meth;
-  g_dunder_hooks[g_dunder_hook_n].fn=fn;g_dunder_hooks[g_dunder_hook_n].frame_abi=frame_abi;
-  g_dunder_hooks[g_dunder_hook_n].n_args=n_args;++g_dunder_hook_n;
+  PitonDunderHook*h=&g_dunder_hooks[g_dunder_hook_n++];
+  h->cls=cls;h->meth=meth;h->fn=fn;h->frame_abi=frame_abi;h->n_args=n_args;
+  h->positional_n=positional_n;h->vararg_index=vararg_index;h->kwarg_index=kwarg_index;
+  h->kwonly_mask=kwonly_mask;h->default_mask=default_mask;
+  for(long j=0;j<n_args;++j){h->param_names[j]=param_names[j];h->defaults[j]=defaults[j];}
 }
 static PitonDunderHook*piton_object_dunder_hook_find(const char*cls,const char*meth){
   if(!cls||!meth)return 0;
@@ -771,10 +791,79 @@ static void dyn_two_types(const char*pre,const char*op,PitonSlot a,PitonSlot b,c
 }
 /* OBJECT_BINOP_ADD_V1: llame a a.__add__(b); si falla (AttributeError/TypeError),
  * intente b.__radd__(a). Si ambos fallan, levante TypeError. */
+static void piton_dunder_sb_long(PitonStrBuf*b,long value){
+  char digits[24];long n=0;
+  do{digits[n++]=(char)('0'+value%10);value/=10;}while(value>0&&n<(long)sizeof(digits));
+  while(n>0)sb_putc(b,digits[--n]);
+}
+static void piton_dunder_error_prefix(PitonStrBuf*b,PitonDunderHook*h){
+  sb_puts(b,h->cls);sb_putc(b,'.');sb_puts(b,h->meth);sb_puts(b,"() ");
+}
+static void piton_dunder_append_arg_names(PitonStrBuf*b,PitonDunderHook*h,
+                                          const long*indices,long count){
+  for(long i=0;i<count;++i){
+    if(i){if(i==count-1)sb_puts(b,count==2?" and ":", and ");else sb_puts(b,", ");}
+    sb_putc(b,'\'');sb_puts(b,h->param_names[indices[i]]);sb_putc(b,'\'');
+  }
+}
+static void piton_dunder_raise_arity(PitonDunderHook*h,long argc){
+  long minimum=0;
+  for(long i=0;i<h->positional_n;++i)
+    if(!(h->default_mask&(1ULL<<i)))++minimum;
+  PitonStrBuf message;sb_init(&message);piton_dunder_error_prefix(&message,h);
+  if(minimum==h->positional_n){
+    sb_puts(&message,"takes ");piton_dunder_sb_long(&message,h->positional_n);
+    sb_puts(&message,h->positional_n==1?" positional argument":" positional arguments");
+  }else{
+    sb_puts(&message,"takes from ");piton_dunder_sb_long(&message,minimum);
+    sb_puts(&message," to ");piton_dunder_sb_long(&message,h->positional_n);
+    sb_puts(&message," positional arguments");
+  }
+  sb_puts(&message," but ");piton_dunder_sb_long(&message,argc);sb_puts(&message," were given");
+  piton_raise_set("TypeError",message.d);
+}
+static void piton_dunder_raise_missing(PitonDunderHook*h,const long*indices,
+                                        long count,int keyword_only){
+  if(count<=0)return;
+  PitonStrBuf message;sb_init(&message);piton_dunder_error_prefix(&message,h);
+  sb_puts(&message,"missing ");piton_dunder_sb_long(&message,count);
+  if(keyword_only)sb_puts(&message,count==1?" required keyword-only argument: ":" required keyword-only arguments: ");
+  else sb_puts(&message,count==1?" required positional argument: ":" required positional arguments: ");
+  piton_dunder_append_arg_names(&message,h,indices,count);
+  piton_raise_set("TypeError",message.d);
+}
 static long piton_dunder_invoke(PitonDunderHook*h,long argc,long*argv){
   if(!h||!h->fn)return 0;
-  if(h->frame_abi)return piton_frame_call(h->fn,argc,argv);
-  long a[4]={0,0,0,0};for(long i=0;i<argc&&i<4;++i)a[i]=argv[i];
+  if(h->n_args<0||h->n_args>PITON_DUNDER_PARAM_MAX){
+    piton_raise_set("RuntimeError","invalid native dunder signature");return 0;
+  }
+  if(argc>h->positional_n&&h->vararg_index<0){piton_dunder_raise_arity(h,argc);return 0;}
+  long bound[PITON_DUNDER_PARAM_MAX]={0};
+  long supplied=argc<h->positional_n?argc:h->positional_n;
+  for(long i=0;i<supplied;++i)bound[i]=argv[i];
+  long missing_pos[PITON_DUNDER_PARAM_MAX];long missing_pos_n=0;
+  for(long i=supplied;i<h->positional_n;++i){
+    if(h->default_mask&(1ULL<<i))bound[i]=h->defaults[i];
+    else missing_pos[missing_pos_n++]=i;
+  }
+  if(missing_pos_n){piton_dunder_raise_missing(h,missing_pos,missing_pos_n,0);return 0;}
+  if(h->vararg_index>=0){
+    long extra=argc>h->positional_n?argc-h->positional_n:0;
+    PitonSeq*args=piton_seq_new(PK_TUPLE,extra);
+    for(long i=0;i<extra;++i)args->items[i]=piton_slot_guess(argv[h->positional_n+i]);
+    bound[h->vararg_index]=(long)args;
+  }
+  if(h->kwarg_index>=0)bound[h->kwarg_index]=(long)piton_dict_new(0);
+  long missing_kw[PITON_DUNDER_PARAM_MAX];long missing_kw_n=0;
+  for(long i=0;i<h->n_args;++i){
+    if(!(h->kwonly_mask&(1ULL<<i)))continue;
+    if(h->default_mask&(1ULL<<i))bound[i]=h->defaults[i];
+    else missing_kw[missing_kw_n++]=i;
+  }
+  if(missing_kw_n){piton_dunder_raise_missing(h,missing_kw,missing_kw_n,1);return 0;}
+  if(h->frame_abi)return piton_frame_call(h->fn,h->n_args,bound);
+  if(h->n_args>4){piton_raise_set("RuntimeError","native dunder frame ABI mismatch");return 0;}
+  long a[4]={0,0,0,0};for(long i=0;i<h->n_args;++i)a[i]=bound[i];
   return((long(*)(long,long,long,long))h->fn)(a[0],a[1],a[2],a[3]);
 }
 static PitonSlot piton_slot_from_dunder_bits(long bits){
@@ -8618,6 +8707,7 @@ class LinuxCEmitter:
         lines = [signature + " {"]
         # OBJECT_REPR_HOOK_V1 / OBJECT_STR_HOOK_V1: registrar hooks de __repr__ y __str__.
         if is_main:
+            _dunder_hook_index = 0
             for _cls in sorted(self.classes):
                 for _cand in self.class_mro.get(_cls, [_cls]):
                     _target = f"{_cand}____repr__"
@@ -8638,11 +8728,79 @@ class LinuxCEmitter:
                     for _cand in self.class_mro.get(_cls, [_cls]):
                         _target = f"{_cand}__{_dmeth}"
                         if _dmeth in self.classes.get(_cand, set()) and _target in self.function_names:
-                            _fa = 1 if self.function_frame_abi.get(_target, False) else 0
-                            _na = len(self.function_params.get(_target, []))
-                            lines.append(
-                                f"    piton_object_dunder_hook_set({json.dumps(_cls)},{json.dumps(_dmeth)},(long)&{_name(_target)},{_fa},{_na});"
+                            _params = self.function_params.get(_target, [])
+                            if len(_params) > 63:
+                                raise NativeBuildError(
+                                    f"Linux runtime dunder '{_target}' supports at most 63 parameters"
+                                )
+                            _vararg = self.function_varargs.get(_target)
+                            _kwarg = self.function_kwargs.get(_target)
+                            _kwonly = set(self.function_kwonly.get(_target, []))
+                            _positional_n = sum(
+                                1 for _param in _params
+                                if _param not in {_vararg, _kwarg} and _param not in _kwonly
                             )
+                            _vararg_index = _params.index(_vararg) if _vararg in _params else -1
+                            _kwarg_index = _params.index(_kwarg) if _kwarg in _params else -1
+                            _kwonly_mask = 0
+                            _default_mask = 0
+                            _defaults = self.function_defaults.get(_target, [])
+                            _default_params = self.function_default_params.get(_target, set())
+                            _default_exprs = []
+                            for _i, _param in enumerate(_params):
+                                if _param in _kwonly:
+                                    _kwonly_mask |= 1 << _i
+                                if _param in _default_params:
+                                    _default_mask |= 1 << _i
+                                    _default = _defaults[_i] if _i < len(_defaults) else None
+                                    if (
+                                        isinstance(_default, tuple)
+                                        and len(_default) == 2
+                                        and _default[0] == "__name__"
+                                    ):
+                                        raise NativeBuildError(
+                                            f"Linux runtime dunder default for '{_target}.{_param}' "
+                                            "references a name and cannot be captured at definition time"
+                                        )
+                                    if (
+                                        isinstance(_default, tuple)
+                                        and len(_default) == 3
+                                        and _default[0] == "__attr__"
+                                        and not (
+                                            _default[1] == "sys"
+                                            and _default[2] in {"version_info", "version", "maxsize", "platform"}
+                                        )
+                                    ):
+                                        raise NativeBuildError(
+                                            f"Linux runtime dunder default for '{_target}.{_param}' "
+                                            "references an unsupported attribute"
+                                        )
+                                    _default = self._default_call_value(
+                                        lines, _target, _param, _default
+                                    )
+                                    _default_exprs.append(self._value(_default))
+                                else:
+                                    _default_exprs.append("0")
+                            _array_size = max(1, len(_params))
+                            _names_c = ",".join(json.dumps(_param) for _param in _params) or '""'
+                            _defaults_c = ",".join(_default_exprs) or "0"
+                            _hook_id = _dunder_hook_index
+                            _dunder_hook_index += 1
+                            lines.append("    {")
+                            lines.append(
+                                f"        const char* piton_dunder_names_{_hook_id}[{_array_size}]={{{_names_c}}};"
+                            )
+                            lines.append(
+                                f"        long piton_dunder_defaults_{_hook_id}[{_array_size}]={{{_defaults_c}}};"
+                            )
+                            lines.append(
+                                f"        piton_object_dunder_hook_set({json.dumps(_cls)},{json.dumps(_dmeth)},"
+                                f"(long)&{_name(_target)},{1 if self.function_frame_abi.get(_target, False) else 0},"
+                                f"{len(_params)},{_positional_n},{_vararg_index},{_kwarg_index},"
+                                f"{_kwonly_mask}ULL,{_default_mask}ULL,piton_dunder_names_{_hook_id},"
+                                f"piton_dunder_defaults_{_hook_id});"
+                            )
+                            lines.append("    }")
                             break
             # MODULE_STR_V1: str(modulo builtin) -> "<module 'NAME' (built-in)>"
             lines.append('    piton_object_str_hook_set("module",(long)&piton_module_str);')

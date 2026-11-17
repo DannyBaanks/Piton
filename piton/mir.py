@@ -2601,6 +2601,11 @@ class MIRLowerer:
                 )
                 builder.closures[node.name] = (qualified_name, tuple(sorted(cell_vars)), nested_n_args)
         defaults_map: dict[str, Any] = {}
+        runtime_operator_dunder = (
+            node.name in {"__floordiv__", "__rfloordiv__", "__pow__", "__rpow__"}
+            and qualified_name is not None
+            and qualified_name.endswith(f"__{node.name}")
+        )
         if args:
             raw_defaults = list(getattr(args, "defaults", []) or [])
             default_params = positional_params[-len(raw_defaults):] if raw_defaults else []
@@ -2610,12 +2615,20 @@ class MIRLowerer:
                 # Attribute / exprs siguen fail-closed (el binding de modulo
                 # no es const en definicion).
                 if not self._static_default_value(default_node, defaults_map, param):
+                    if runtime_operator_dunder:
+                        raise MIRLoweringError(
+                            f"native {node.name} default for '{param}' must be a static value"
+                        )
                     # Permitir defaults no constantes para progresar; se materializa como None
                     defaults_map.setdefault(param, None)
             for param, default_node in zip(kwonly_params, getattr(args, "kw_defaults", []) or []):
                 if default_node is None:
                     continue
                 if not self._static_default_value(default_node, defaults_map, param):
+                    if runtime_operator_dunder:
+                        raise MIRLoweringError(
+                            f"native {node.name} default for '{param}' must be a static value"
+                        )
                     # Permitir defaults no constantes para progresar
                     defaults_map.setdefault(param, None)
         total_params = len(positional_params) + len(kwonly_params) + int(bool(vararg_name)) + int(bool(kwarg_name))
