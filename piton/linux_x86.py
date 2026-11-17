@@ -6465,6 +6465,30 @@ static const unsigned char* piton_bytes_get_data(void* ptr, long* out_len){
     if(kind==PK_BYTEARRAY){PitonByteArray*ba=(PitonByteArray*)ptr;if(out_len)*out_len=ba->length;return ba->data;}
     if(out_len)*out_len=0;return 0;
 }
+static PitonBytes* piton_bytes_strip(void* raw,int mode){
+    long len=0;
+    const unsigned char* data=piton_bytes_get_data(raw,&len);
+    if(!raw||((long*)raw)[1]!=PK_BYTES){
+        piton_raise_set("TypeError","bytes.strip requires a bytes receiver");
+        return 0;
+    }
+    long start=0,end=len;
+    if(mode!=2){
+        while(start<end){
+            unsigned char c=data[start];
+            if(c!=0x20&&(c<0x09||c>0x0D))break;
+            ++start;
+        }
+    }
+    if(mode!=1){
+        while(end>start){
+            unsigned char c=data[end-1];
+            if(c!=0x20&&(c<0x09||c>0x0D))break;
+            --end;
+        }
+    }
+    return piton_bytes_new(end-start,end>start?data+start:0);
+}
 
 /* ZLIB_DEFLATE_V1: RFC 1950 streams without libc/libz. Compression uses
    standards-compliant stored blocks; decompression accepts stored, fixed,
@@ -9330,9 +9354,12 @@ _C_RESERVED_KEYWORDS = {
 
 def _name(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9_]", "_", value)
-    if cleaned in _C_RESERVED_KEYWORDS:
-        return f"p_{cleaned}"
-    return f"piton_{cleaned}" if cleaned and cleaned[0].isdigit() else cleaned
+    # User symbols share one C translation unit with freestanding helpers and
+    # compiler builtins (for example the helper for random.gauss calls the C
+    # builtin `log`). Keep every generated program identifier in its own
+    # namespace so a user function/global named `log`, `sqrt`, `write`, etc.
+    # cannot redeclare or shadow a runtime/libc/libm symbol.
+    return f"piton_usr_{cleaned}"
 
 
 def _float_c_literal(value: float) -> str:
@@ -10320,7 +10347,10 @@ class LinuxCEmitter:
         # VARARG_PACK_V1: pool de temporales para las tuplas de *args (el
         # empaquetado ocurre durante la emision de la llamada, donde el bloque
         # de locals ya esta escrito).
-        lines.append("    long _vapack0=0, _vapack1=0, _vapack2=0, _vapack3=0;")
+        _vapack_decls = ", ".join(
+            f"{_name(f'%vapack{index}')}=0" for index in range(4)
+        )
+        lines.append(f"    long {_vapack_decls};")
         aliases: dict[str, str] = {}
         types: dict[str, str] = {}
         self._fn_consts = {}
@@ -12636,7 +12666,9 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=(long)piton_bytes_join((void*){operand},(void*){self._value(call_args[0])});")
             types[result] = "bytes"
         elif method in {"strip", "lstrip", "rstrip"}:
-            require_count((0,1), "zero or one argument")
+            require_count((0,), "no arguments")
+            if is_bytearray:
+                raise NativeBuildError("Linux bytearray strip methods are not supported")
             mode = {"strip": 0, "lstrip": 1, "rstrip": 2}[method]
             out.append(f"    {_name(result)}=(long)piton_bytes_strip((void*){operand},{mode});")
             types[result] = "bytes"
@@ -20030,6 +20062,7 @@ class LinuxCEmitter:
                         _iter_cls = None
                     if _iter_cls:
                         _iter_fn = _iter_cls + "____iter__"
+                        _iter_fn_c = _name(_iter_fn)
                         _gen_layout = self.generator_layouts.get(_iter_fn)
                         if _gen_layout is not None:
                             _gparams = self.function_params.get(_iter_fn, ["self"])
@@ -20039,7 +20072,7 @@ class LinuxCEmitter:
                             _coll_code = f"(long)piton_collect_gen(_gtmp)"
                             if seq_kind == "PK_TUPLE":
                                 out.append(
-                                    f"    {{long _gtmp=piton_gen_new((long)&{_iter_fn},{len(_gen_layout)});"
+                                    f"    {{long _gtmp=piton_gen_new((long)&{_iter_fn_c},{len(_gen_layout)});"
                                     f" ((PitonGenerator*)_gtmp)->slots[{_self_slot}]={self._value(values[0])};"
                                     f" long _gl={_coll_code};"
                                     f" {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{_gl,PK_LIST}});}}"
@@ -20047,7 +20080,7 @@ class LinuxCEmitter:
                                 types[result] = "tuple"
                             else:
                                 out.append(
-                                    f"    {{long _gtmp=piton_gen_new((long)&{_iter_fn},{len(_gen_layout)});"
+                                    f"    {{long _gtmp=piton_gen_new((long)&{_iter_fn_c},{len(_gen_layout)});"
                                     f" ((PitonGenerator*)_gtmp)->slots[{_self_slot}]={self._value(values[0])};"
                                     f" {_name(result)}={_coll_code};}}"
                                 )
@@ -20060,9 +20093,12 @@ class LinuxCEmitter:
                         )
                         if _has_next:
                             _next_cls = self._resolve_method(_cls, "__next__")
-                            out.append(f'    {{long _ci={_iter_cls}____iter__({self._value(values[0])}); {_name(result)}=piton_collect_via_next_fn(_ci,(long(*)(long)){_next_cls}____next__);}}')
+                            _iter_c = _name(f"{_iter_cls}____iter__")
+                            _next_c = _name(f"{_next_cls}____next__")
+                            out.append(f'    {{long _ci={_iter_c}({self._value(values[0])}); {_name(result)}=piton_collect_via_next_fn(_ci,(long(*)(long)){_next_c});}}')
                         else:
-                            out.append(f'    {{long _ci={_iter_cls}____iter__({self._value(values[0])}); {_name(result)}=piton_collect_any_iter(_ci);}}')
+                            _iter_c = _name(f"{_iter_cls}____iter__")
+                            out.append(f'    {{long _ci={_iter_c}({self._value(values[0])}); {_name(result)}=piton_collect_any_iter(_ci);}}')
                         types[result] = "list"
                         self._coll_elems[result] = "int"
                         return out

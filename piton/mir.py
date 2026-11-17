@@ -722,6 +722,7 @@ class MIRLowerer:
         self.module_aliases: dict[str, str] = {}
         self._identity_decorator_names: set[str] = set()
         self.decorated_symbols: dict[int, str] = {}
+        self.function_aliases: dict[str, str] = {}
         self._bundled_hir_cache: dict[str, Any] = {}
         self._bundled_modules_loaded: set[str] = set()
         self._local_classes: set[str] = set()
@@ -745,6 +746,44 @@ class MIRLowerer:
         if name in builder.local_names or name in builder.nonlocal_names:
             return name
         return builder.module_function_bindings.get(name, name)
+
+    def _mirror_class_import_alias(self, local_name: str, qualified_name: str) -> None:
+        """Mirror a bundled class alias and route its methods to real symbols.
+
+        Class aliases participate in dynamic receiver dispatch under both the
+        qualified name and the imported local name. Without method aliases,
+        the latter branch emitted an undefined C reference such as
+        ``WeakSet__add`` even though ``_weakrefset__WeakSet__add`` existed.
+        """
+        if qualified_name not in self.classes or local_name in self.classes:
+            return
+        methods = set(self.classes[qualified_name])
+        self.classes[local_name] = methods
+        self.class_parents[local_name] = self.class_parents.get(qualified_name)
+        self.class_base_list[local_name] = list(self.class_base_list.get(qualified_name, []))
+        self.class_mro[local_name] = [qualified_name]
+        self._mro_memo[local_name] = [qualified_name]
+
+        defined = {function.name for function in self.functions}
+        for method_name in methods:
+            alias_symbol = f"{local_name}__{method_name}"
+            real_symbol = f"{qualified_name}__{method_name}"
+            if alias_symbol == real_symbol:
+                continue
+            if real_symbol not in defined:
+                raise MIRLoweringError(
+                    f"native imported class method alias '{alias_symbol}' has no lowered implementation '{real_symbol}'"
+                )
+            existing = self.function_aliases.get(alias_symbol)
+            if (
+                alias_symbol in defined
+                or alias_symbol in self._module_function_names
+                or (existing is not None and existing != real_symbol)
+            ):
+                raise MIRLoweringError(
+                    f"native imported class method alias '{alias_symbol}' collides with another function"
+                )
+            self.function_aliases[alias_symbol] = real_symbol
 
     def _name_shadows_builtin(self, name: str, builder: "_Builder") -> bool:
         """ZIP_ALIAS_SHADOW_V1: True si `name` esta ligado por el usuario
@@ -1134,6 +1173,7 @@ class MIRLowerer:
         self._module_function_names = set()
         self._module_function_bindings = {}
         self.decorated_symbols = {}
+        self.function_aliases = {}
         self.from_import_aliases = {}  # {local_name: qualified_name}
         self._module_scope_stack: list[tuple[dict[str, str], dict[str, str]]] = []
         self.module_meta = module_meta or {}
@@ -1450,12 +1490,7 @@ class MIRLowerer:
             # metodos resuelvan por el MRO al simbolo cualificado
             # (string.Template.substitute del tutorial stdlib2).
             for _local, _cqual in list(self.from_import_aliases.items()):
-                if _cqual in self.classes and _local not in self.classes:
-                    self.classes[_local] = self.classes[_cqual]
-                    self.class_parents[_local] = self.class_parents.get(_cqual)
-                    self.class_base_list[_local] = list(self.class_base_list.get(_cqual, []))
-                    self.class_mro[_local] = [_cqual]
-                    self._mro_memo[_local] = [_cqual]
+                self._mirror_class_import_alias(_local, _cqual)
             def _find_classes(nodes):
                 res = []
                 for item in nodes:
@@ -4044,11 +4079,7 @@ class MIRLowerer:
                             continue
                     builder.from_import_aliases[local] = qualified
                     if qualified in self.classes and local not in self.classes:
-                        self.classes[local] = self.classes[qualified]
-                        self.class_parents[local] = self.class_parents.get(qualified)
-                        self.class_base_list[local] = list(self.class_base_list.get(qualified, []))
-                        self.class_mro[local] = [qualified]
-                        self._mro_memo[local] = [qualified]
+                        self._mirror_class_import_alias(local, qualified)
             return
         elif kind == HIRKind.EXPR if hasattr(HIRKind, "EXPR") else False:
             self._lower_expr(builder, node)
