@@ -7438,11 +7438,15 @@ static long piton_str_percent_runtime(PitonSlot fmt,PitonSlot rhs){
     }
     long flags=0;while(ti<tl){char c=t[ti];if(c=='-')flags|=1;else if(c=='0')flags|=2;else if(c=='#')flags|=4;else if(c=='+')flags|=8;else if(c==' ')flags|=16;else break;++ti;}
     long width=-1,precision=-1;int width_star=0,precision_star=0;
-    if(ti<tl&&t[ti]=='*'){width_star=1;++ti;}else while(ti<tl&&t[ti]>='0'&&t[ti]<='9'){int d=t[ti++]-'0';if(width>(0x7FFFFFFFFFFFFFFFL-d)/10){piton_raise_set("OverflowError","width too big");return 0;}width=width*10+d;}
+    if(ti<tl&&t[ti]=='*'){width_star=1;++ti;}else if(ti<tl&&t[ti]>='0'&&t[ti]<='9'){width=0;while(ti<tl&&t[ti]>='0'&&t[ti]<='9'){int d=t[ti++]-'0';if(width>(0x7FFFFFFFFFFFFFFFL-d)/10){piton_raise_set("OverflowError","width too big");return 0;}width=width*10+d;}}
     if(ti<tl&&t[ti]=='.'){++ti;precision=0;if(ti<tl&&t[ti]=='*'){precision_star=1;precision=-1;++ti;}else while(ti<tl&&t[ti]>='0'&&t[ti]<='9'){int d=t[ti++]-'0';if(precision>(0x7FFFFFFFFFFFFFFFL-d)/10){piton_raise_set("OverflowError","precision too big");return 0;}precision=precision*10+d;}}
     if(ti>=tl){piton_raise_set("ValueError","incomplete format");return 0;}
     char spec=t[ti++];
-    if(spec=='h'||spec=='l'||spec=='L'){piton_pct_value_error(spec,ti-1);return 0;}
+    if(spec=='h'||spec=='l'||spec=='L'){
+      if(!mapped){piton_pct_value_error(spec,ti-1);return 0;}
+      if(ti>=tl){piton_raise_set("ValueError","incomplete format");return 0;}
+      spec=t[ti++];
+    }
     if(spec=='%'){
       if(width_star||precision_star){piton_raise_set("TypeError","not enough arguments for format string");return 0;}
       long v=piton_pct_pad_text("%",width,precision,(flags&1)!=0);sb_puts(&out,(const char*)v);continue;
@@ -7452,7 +7456,14 @@ static long piton_str_percent_runtime(PitonSlot fmt,PitonSlot rhs){
     if(width_star){if(mapped){piton_raise_set("TypeError","not enough arguments for format string");return 0;}PitonSlot ws;if(!piton_pct_next_arg(seq,single,argc,&index,&ws))return 0;if(!piton_pct_star_int(ws,&w))return 0;if(w<0){flags|=1;if(w==(-0x7FFFFFFFFFFFFFFFL-1)){piton_raise_set("OverflowError","width too big");return 0;}w=-w;}}
     if(precision_star){if(mapped){piton_raise_set("TypeError","not enough arguments for format string");return 0;}PitonSlot ps;if(!piton_pct_next_arg(seq,single,argc,&index,&ps))return 0;if(!piton_pct_star_int(ps,&pr))return 0;if(pr<0)pr=0;}
     if(mapped){int found=0;PitonSlot k={(long)key,PK_STR};if(map)for(long j=0;j<map->length;++j)if(piton_slot_eq(map->items[j].key,k)){v=map->items[j].value;found=1;break;}
-      if(!found){piton_raise_set("KeyError",(const char*)piton_str_quote(key));return 0;}}
+      if(!found){
+        const char*quoted=(const char*)piton_str_quote(key);
+        PitonSeq*key_args=piton_seq_new(PK_TUPLE,1);key_args->items[0]=k;
+        piton_raise_set("KeyError",quoted);
+        piton_exc_args=(long)key_args;
+        piton_exc_value=piton_exception_make("KeyError",quoted,(long)key_args,0,0,0);
+        return 0;
+      }}
     else if(!piton_pct_next_arg(seq,single,argc,&index,&v))return 0;
     const char*base="";int numeric=0,intconv=(spec=='d'||spec=='i'||spec=='u'||spec=='o'||spec=='x'||spec=='X');
     if(spec=='s'){
@@ -7488,7 +7499,7 @@ static long piton_str_percent_runtime(PitonSlot fmt,PitonSlot rhs){
     if(numeric){long formatted=piton_pct_pad_number(base,w,(intconv?pr:-1),flags);sb_puts(&out,(const char*)formatted);}
     else{long formatted=piton_pct_pad_text(base,w,pr,(flags&1)!=0);sb_puts(&out,(const char*)formatted);}
   }
-  if(!map&&index<argc){piton_raise_set("TypeError","not all arguments converted during string formatting");return 0;}
+  if(rhs.kind!=PK_DICT&&index<argc){piton_raise_set("TypeError","not all arguments converted during string formatting");return 0;}
   return(long)out.d;
 }
 
@@ -9703,7 +9714,9 @@ class LinuxCEmitter:
                         prec = int(template[i:j]) if j > i else 0
                         i = j
                 if i < n and template[i] in "hlL":
-                    raise NativeBuildError("str % length modifiers are not supported")
+                    if name is None:
+                        raise NativeBuildError("str % length modifiers are not supported")
+                    i += 1
                 if i >= n:
                     raise NativeBuildError("str % formatting: trailing %")
                 c2 = template[i]
@@ -15881,7 +15894,11 @@ class LinuxCEmitter:
                         if _map_record is not None and not _map_runtime and any(name not in _map_record for name, *_rest in fields):
                             raise NativeBuildError(f"Linux str % mapping key {next(name for name, *_rest in fields if name not in _map_record)!r} is not present")
 
-                    _runtime_percent = has_star or (has_map and _map_runtime)
+                    _runtime_percent = (
+                        has_star
+                        or (has_map and _map_runtime)
+                        or (not fields and right_type == "dict" and "%%" in template)
+                    )
                     if has_star and right_type == "tuple":
                         _star_shape = self._tuple_elems.get(right)
                         if _star_shape is None:
