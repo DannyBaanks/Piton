@@ -343,6 +343,9 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "json_alias_set": "WRITE",
     "heapq_op": "WRITE",
     "native_call": "OPAQUE",
+    "timeit_clock": "OPAQUE",
+    "timeit_number": "OPAQUE",
+    "timeit_increment": "PURE",
     "json_load_file": "OPAQUE",
     "json_value_used": "WRITE",
     "json_alias_check": "OPAQUE",
@@ -526,6 +529,16 @@ class _Builder:
         self.super_self: str | None = None
         self.is_async = False
         self.awaiting = False
+        # TIMEIT_LITERAL_SOURCE_V1: object identity and source text are kept
+        # only while MIR can prove that a Timer was constructed from literal
+        # strings. Aliases share the identity so mutating stmt/setup invalidates
+        # every known alias instead of timing stale source.
+        self.timeit_object_sources: dict[str, tuple[str, str] | None] = {}
+        self.timeit_dynamic_objects: set[str] = set()
+        self.timeit_object_values: dict[str, str] = {}
+        self.timeit_object_names: dict[str, str] = {}
+        self.timeit_internal_names: set[str] = set()
+        self.timeit_stmt_active = False
 
     def new_block(self, label: Optional[str] = None) -> MIRBlock:
         if label is None:
@@ -738,6 +751,7 @@ class MIRLowerer:
         # funcion del usuario con el mismo nombre.
         self._module_function_names: set[str] = set()
         self._module_function_bindings: dict[str, str] = {}
+        self._timeit_namespace_counter = 0
 
     def _mod_prefix(self, module_name: str) -> str:
         norm = module_name.replace('.', '__')
@@ -835,11 +849,18 @@ class MIRLowerer:
                 builder.name_classes.pop(target.name, None)
             else:
                 builder.name_classes[target.name] = _class_name
+            builder.timeit_object_names.pop(target.name, None)
+            if _class_name == "timeit__Timer":
+                _timeit_object = builder.timeit_object_values.get(value)
+                if _timeit_object is not None:
+                    builder.timeit_object_names[target.name] = _timeit_object
             # MODULE_STATE_V1: una variable de nivel de modulo de un modulo
             # importado se guarda con su nombre CUALIFICADO (el global que
             # comparte con el resto del programa).
             _state_name = (getattr(builder, "module_state_vars", None) or {}).get(target.name)
-            if _state_name:
+            if target.name in builder.timeit_internal_names:
+                builder.emit("store", target.name, value, "internal")
+            elif _state_name:
                 builder.emit("store", _state_name, value)
             elif target.name in builder.cell_params:
                 builder.emit("cell_store", target.name, value)
@@ -848,6 +869,14 @@ class MIRLowerer:
             else:
                 builder.emit("store", target.name, value)
         elif target.kind == HIRKind.ATTR:
+            if (
+                target.attr in {"stmt", "setup"}
+                and getattr(target.value, "kind", None) == HIRKind.LOAD
+            ):
+                _timeit_object = builder.timeit_object_names.get(target.value.name)
+                if _timeit_object is not None:
+                    builder.timeit_object_sources[_timeit_object] = None
+                    builder.timeit_dynamic_objects.add(_timeit_object)
             # ATTR_CHAIN_STORE_V1: el dueño puede ser cualquier expresion, no
             # solo un LOAD (`self._module.filters = x` es ATTR(ATTR(self,
             # _module), filters) y caia al runtime_call set_target, que el
@@ -1536,6 +1565,7 @@ class MIRLowerer:
         self._decorated_method_names = set()
         self._module_function_names = set()
         self._module_function_bindings = {}
+        self._timeit_namespace_counter = 0
         self.decorated_symbols = {}
         self.function_aliases = {}
         self.from_import_aliases = {}  # {local_name: qualified_name}
@@ -4040,6 +4070,39 @@ class MIRLowerer:
         for statement in statements:
             self._lower_statement(builder, statement)
 
+    def _lower_timeit_tuple_assignment(self, builder: _Builder, node: HIRNode) -> bool:
+        """Avoid an uncollectable temporary tuple for flat timed unpacking.
+
+        The Linux runtime uses an arena for transient tuples. Materializing the
+        RHS tuple on every iteration of ``a, b = b, a`` exhausts that arena,
+        while CPython releases each temporary promptly. Evaluate each RHS
+        element into a temporary first, then store left-to-right, which keeps
+        the assignment's evaluation order and values without the container.
+        """
+        if not builder.timeit_stmt_active or len(getattr(node, "targets", ()) or ()) != 1:
+            return False
+        target = node.targets[0]
+        value = getattr(node, "value", None)
+        if (
+            target.kind not in {HIRKind.TUPLE, HIRKind.LIST}
+            or value is None
+            or value.kind not in {HIRKind.TUPLE, HIRKind.LIST}
+        ):
+            return False
+        target_items = tuple(getattr(target, "elts", ()) or ())
+        value_items = tuple(getattr(value, "elts", ()) or ())
+        if len(target_items) != len(value_items):
+            return False
+        if any(
+            item.kind not in {HIRKind.STORE, HIRKind.ATTR, HIRKind.SUBSCR, HIRKind.LOAD}
+            for item in target_items
+        ):
+            return False
+        evaluated = [self._lower_expr(builder, item) for item in value_items]
+        for item, result in zip(target_items, evaluated):
+            self._store(builder, item, result)
+        return True
+
     def _lower_statement(self, builder: _Builder, node: HIRNode) -> None:
         kind = node.kind
         if kind == HIRKind.FUNC_DEF:
@@ -4137,6 +4200,8 @@ class MIRLowerer:
             if id(node) in getattr(self, "_json_alias_assign_ids", ()):
                 # JSON_VALUE_ALIAS_V2: el alias no se evalua; solo marca "ligado" en runtime.
                 builder.emit("json_alias_set", node.targets[0].name)
+                return
+            if self._lower_timeit_tuple_assignment(builder, node):
                 return
             value = self._lower_expr(builder, node.value)
             if (
@@ -6266,6 +6331,284 @@ class MIRLowerer:
         builder.emit("native_call", module, attr, *vals, _active_handler(builder), result=res)
         return res
 
+    @staticmethod
+    def _timeit_argument_values(node: HIRNode, names: Sequence[str]) -> list[HIRNode | None] | None:
+        """Bind the simple positional/named form of a timeit API call.
+
+        Invalid signatures fall back to the bundled implementation so its
+        existing argument validation remains responsible for the exception.
+        """
+        values: list[HIRNode | None] = [None] * len(names)
+        args = list(getattr(node, "args", ()) or ())
+        if len(args) > len(names) or getattr(node, "starred_args", ()):
+            return None
+        for index, arg in enumerate(args):
+            values[index] = arg
+        for keyword in getattr(node, "keywords", ()) or ():
+            if keyword.arg is None or keyword.arg not in names:
+                return None
+            index = names.index(keyword.arg)
+            if values[index] is not None:
+                return None
+            values[index] = keyword.value
+        return values
+
+    @staticmethod
+    def _timeit_source_value(node: HIRNode | None, default: str) -> tuple[str, str | None]:
+        """Return (status, source): literal string/default, invalid literal, or dynamic."""
+        if node is None:
+            return "literal", default
+        if node.kind == HIRKind.CONST:
+            if node.value is None:
+                return "invalid", None
+            if type(node.value) is str:
+                return "literal", node.value
+            return "invalid", None
+        if node.kind == HIRKind.LOAD and node.name in {"Nada", "None"}:
+            return "invalid", None
+        return "dynamic", None
+
+    @classmethod
+    def _timeit_constructor_sources(cls, node: HIRNode) -> tuple[tuple[str, str] | None, bool]:
+        """Get literal Timer sources and whether a failed extraction is dynamic."""
+        values = cls._timeit_argument_values(node, ("stmt", "setup"))
+        if values is None:
+            return None, False
+        stmt_status, stmt = cls._timeit_source_value(values[0], "pass")
+        setup_status, setup = cls._timeit_source_value(values[1], "pass")
+        if "dynamic" in {stmt_status, setup_status}:
+            return None, True
+        if stmt_status != "literal" or setup_status != "literal":
+            return None, True
+        return (stmt or "pass", setup or "pass"), False
+
+    @staticmethod
+    def _timeit_constructor_class(builder: _Builder, node: HIRNode) -> str | None:
+        if node.kind != HIRKind.CALL:
+            return None
+        function = getattr(node, "func", None)
+        if getattr(function, "kind", None) == HIRKind.LOAD:
+            name = function.name
+            return builder.from_import_aliases.get(name, name)
+        if (
+            getattr(function, "kind", None) == HIRKind.ATTR
+            and getattr(function.value, "kind", None) == HIRKind.LOAD
+            and function.value.name in builder.module_aliases
+        ):
+            module = builder.module_aliases[function.value.name]
+            return f"{module.replace('.', '__')}__{function.attr}"
+        return None
+
+    @staticmethod
+    def _mark_timeit_timer(
+        builder: _Builder, result: str, node: HIRNode
+    ) -> None:
+        sources, dynamic = MIRLowerer._timeit_constructor_sources(node)
+        object_id = result
+        builder.value_classes[result] = "timeit__Timer"
+        builder.timeit_object_values[result] = object_id
+        builder.timeit_object_sources[object_id] = sources
+        if dynamic:
+            builder.timeit_dynamic_objects.add(object_id)
+
+    def _lower_timeit_module_call(self, builder: _Builder, node: HIRNode) -> str | None:
+        values = self._timeit_argument_values(node, ("stmt", "setup", "number"))
+        if values is None:
+            raise MIRLoweringError(
+                "native timeit.timeit supports only stmt, setup, and number arguments"
+            )
+        stmt_status, stmt_source = self._timeit_source_value(values[0], "pass")
+        setup_status, setup_source = self._timeit_source_value(values[1], "pass")
+        if "dynamic" in {stmt_status, setup_status}:
+            raise MIRLoweringError(
+                "native timeit.timeit requires literal stmt and setup source strings"
+            )
+        if stmt_status != "literal" or setup_status != "literal":
+            raise MIRLoweringError(
+                "native timeit.timeit requires literal stmt and setup source strings"
+            )
+        return self._lower_timeit_measure(
+            builder, stmt_source or "pass", setup_source or "pass", values[2]
+        )
+
+    def _timeit_parse_source(self, source: str) -> list[HIRNode]:
+        """Parse a literal timeit string as Python-compatible PITON source."""
+        import io
+        import token as py_token
+        import tokenize as py_tokenize
+
+        from piton.parser import ParseError, parse
+        from piton.translator import HARD_KEYWORDS
+        from piton.lower import lower_cst_to_hir
+
+        reverse_keywords = {python: piton for piton, python in HARD_KEYWORDS.items()}
+        try:
+            source_lines = source.splitlines(keepends=True)
+            semicolons: dict[int, list[int]] = {}
+            for item in py_tokenize.generate_tokens(io.StringIO(source).readline):
+                if item.type == py_token.OP and item.string == ";":
+                    semicolons.setdefault(item.start[0], []).append(item.start[1])
+            # PITON does not spell the Python semicolon separator. Preserve
+            # each physical line's indentation while making its simple
+            # statements separate native source lines.
+            for line_number, columns in semicolons.items():
+                original = source_lines[line_number - 1]
+                indentation = original[:len(original) - len(original.lstrip(" \t"))]
+                line = original
+                for column in reversed(columns):
+                    end = column + 1
+                    while end < len(line) and line[end] in " \t":
+                        end += 1
+                    line = line[:column] + "\n" + indentation + line[end:]
+                source_lines[line_number - 1] = line
+            adapted_source = "".join(source_lines)
+            tokens = list(py_tokenize.generate_tokens(io.StringIO(adapted_source).readline))
+            adapted = py_tokenize.untokenize([
+                item._replace(string=reverse_keywords.get(item.string, item.string))
+                if item.type == py_token.NAME else item
+                for item in tokens
+            ])
+            parsed = lower_cst_to_hir(parse(adapted))
+        except (ParseError, IndentationError, SyntaxError, py_tokenize.TokenError) as error:
+            raise MIRLoweringError(
+                f"timeit source string is not valid for the native PITON compiler: {error}"
+            ) from error
+        return list(getattr(parsed, "body", ()) or ())
+
+    def _timeit_isolate_sources(
+        self, builder: _Builder, setup: list[HIRNode], stmt: list[HIRNode]
+    ) -> tuple[list[HIRNode], list[HIRNode]]:
+        """Mangle source-local names and reject names outside timeit's namespace."""
+        import builtins
+        from piton.translator import ALIASES_BUILTIN
+
+        all_nodes = list(_iter_hir((setup, stmt)))
+        unsupported = {
+            HIRKind.FUNC_DEF, HIRKind.CLASS_DEF, HIRKind.IMPORT,
+            HIRKind.IMPORT_FROM, HIRKind.GLOBAL, HIRKind.NONLOCAL,
+            HIRKind.RETURN, HIRKind.YIELD, HIRKind.YIELD_FROM,
+        }
+        bad = next((node for node in all_nodes if node.kind in unsupported), None)
+        if bad is not None:
+            raise MIRLoweringError(
+                f"timeit source contains unsupported native statement '{bad.kind.name.lower()}'"
+            )
+
+        bound: set[str] = set()
+        loaded: set[str] = set()
+        for item in all_nodes:
+            if item.kind == HIRKind.STORE and getattr(item, "name", None):
+                bound.add(item.name)
+            elif item.kind == HIRKind.LOAD and getattr(item, "name", None):
+                loaded.add(item.name)
+            if item.kind == HIRKind.AUG_ASSIGN:
+                target = getattr(item, "target", None)
+                if getattr(target, "kind", None) in {HIRKind.LOAD, HIRKind.STORE}:
+                    bound.add(target.name)
+            if item.kind == HIRKind.TRY:
+                for handler in getattr(item, "handlers", ()) or ():
+                    if getattr(handler, "name", None):
+                        bound.add(handler.name)
+
+        namespace_sensitive = loaded & {"globals", "locals", "vars", "eval", "exec", "compile"}
+        if namespace_sensitive:
+            raise MIRLoweringError(
+                "timeit source uses unsupported dynamic namespace access: "
+                + ", ".join(sorted(namespace_sensitive))
+            )
+
+        builtin_names = set(dir(builtins)) | set(ALIASES_BUILTIN)
+        free = sorted(loaded - bound - builtin_names)
+        if free:
+            raise MIRLoweringError(
+                "timeit source references names outside its isolated namespace: "
+                + ", ".join(repr(name) for name in free)
+            )
+
+        used = set(builder.local_names) | set(builder.name_classes) | set(builder.module_aliases)
+        used |= set(builder.from_import_aliases) | set(builder.module_function_bindings)
+        for block in builder.function.blocks:
+            for instruction in block.instructions:
+                if instruction.op == "store" and instruction.args and isinstance(instruction.args[0], str):
+                    used.add(instruction.args[0])
+                elif instruction.op == "load" and instruction.args and isinstance(instruction.args[0], str):
+                    used.add(instruction.args[0])
+        source_names = bound | loaded
+        while True:
+            prefix = f"__piton_timeit_ns{self._timeit_namespace_counter}_"
+            self._timeit_namespace_counter += 1
+            if not any(name.startswith(prefix) or prefix + name in used for name in used | source_names):
+                break
+        renamed = {name: prefix + name for name in bound}
+        builder.timeit_internal_names.update(renamed.values())
+        for item in all_nodes:
+            if item.kind in {HIRKind.LOAD, HIRKind.STORE} and getattr(item, "name", None) in renamed:
+                item.name = renamed[item.name]
+            if item.kind == HIRKind.TRY:
+                for handler in getattr(item, "handlers", ()) or ():
+                    if getattr(handler, "name", None) in renamed:
+                        handler.name = renamed[handler.name]
+        return setup, stmt
+
+    def _lower_timeit_measure(
+        self, builder: _Builder, stmt_source: str, setup_source: str,
+        number_node: HIRNode | None,
+    ) -> str:
+        """Compile source literals into the caller MIR, then time a real loop."""
+        setup = self._timeit_parse_source(setup_source)
+        stmt = self._timeit_parse_source(stmt_source)
+        setup, stmt = self._timeit_isolate_sources(builder, setup, stmt)
+
+        if number_node is None:
+            number = builder.temp()
+            builder.emit("const", 1_000_000, result=number)
+        else:
+            number = self._lower_expr(builder, number_node)
+        check = builder.temp()
+        builder.emit("timeit_number", number, _active_handler(builder), result=check)
+
+        # Each timeit call has its own source namespace. setup runs before the
+        # timer starts, matching CPython's Timer inner function.
+        saved_loop_stack = builder._loop_stack
+        builder._loop_stack = []
+        try:
+            self._lower_statements(builder, setup)
+        finally:
+            builder._loop_stack = saved_loop_stack
+
+        started = builder.temp()
+        builder.emit("timeit_clock", _active_handler(builder), result=started)
+        index = builder.temp()
+        builder.emit("const", 0, result=index)
+
+        condition_block = builder.new_block()
+        body_block = builder.new_block()
+        end_block = builder.new_block()
+        builder.emit("jump", condition_block.label)
+        builder.current = condition_block
+        condition = self._compare(builder, "<", index, check)
+        builder.emit("branch", condition, body_block.label, end_block.label)
+
+        builder.current = body_block
+        saved_loop_stack = builder._loop_stack
+        saved_timeit_stmt_active = builder.timeit_stmt_active
+        builder._loop_stack = []
+        builder.timeit_stmt_active = True
+        try:
+            self._lower_statements(builder, stmt)
+        finally:
+            builder._loop_stack = saved_loop_stack
+            builder.timeit_stmt_active = saved_timeit_stmt_active
+        builder.emit("timeit_increment", index)
+        builder.emit("jump", condition_block.label)
+
+        builder.current = end_block
+        finished = builder.temp()
+        builder.emit("timeit_clock", _active_handler(builder), result=finished)
+        elapsed = builder.temp()
+        builder.emit("binary", "-", finished, started, result=elapsed)
+        return elapsed
+
     def _lower_heapq_call(self, builder, attr, args, keywords, starred):
         """HEAPQ_NATIVE_V1: heapq.<attr>(heap[, item]) baja a una operacion nativa (algoritmo de CPython)."""
         arity = self._HEAPQ_ARITY[attr]
@@ -6456,6 +6799,9 @@ class MIRLowerer:
                 builder.emit("cell_load", node.name, result=result)
                 if node.name in builder.name_classes:
                     builder.value_classes[result] = builder.name_classes[node.name]
+                _timeit_object = builder.timeit_object_names.get(node.name)
+                if _timeit_object is not None:
+                    builder.timeit_object_values[result] = _timeit_object
                 return result
             alias_target = builder.from_import_aliases.get(node.name)
             if alias_target == "os.name":
@@ -6810,6 +7156,10 @@ class MIRLowerer:
             # Handle from-imported builtins (e.g. `desde math importar sqrt; sqrt(16)`)
             if node.func.kind == HIRKind.LOAD and node.func.name in builder.from_import_aliases:
                 qualified = builder.from_import_aliases[node.func.name]
+                if qualified in {"timeit.timeit", "timeit__timeit"}:
+                    _timeit_result = self._lower_timeit_module_call(builder, node)
+                    if _timeit_result is not None:
+                        return _timeit_result
                 if qualified in {"json.dump", "json.load", "json.loads", "json.dumps"}:
                     return self._lower_json_call(builder, qualified[5:], node.args, node.keywords, node.starred_args)
                 if qualified == "gettext.gettext":
@@ -6882,7 +7232,10 @@ class MIRLowerer:
                 # (misma semantica; la novedad es que un __init__ con kwargs
                 # se empaqueta en el emisor en vez de fallar aqui).
                 _target_cls = _ctor_cls if _ctor_cls in self.classes else node.func.name
-                return self._lower_class_construct(builder, _target_cls, node)
+                _constructed = self._lower_class_construct(builder, _target_cls, node)
+                if self._timeit_constructor_class(builder, node) == "timeit__Timer":
+                    self._mark_timeit_timer(builder, _constructed, node)
+                return _constructed
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.ATTR:
                 chain = self._module_attr_chain(builder, node.func)
                 if chain is not None:
@@ -6967,6 +7320,10 @@ class MIRLowerer:
                 and node.func.value.name in builder.module_aliases
             ):
                 module_name = builder.module_aliases[node.func.value.name]
+                if module_name == "timeit" and node.func.attr == "timeit":
+                    _timeit_result = self._lower_timeit_module_call(builder, node)
+                    if _timeit_result is not None:
+                        return _timeit_result
                 if (module_name, node.func.attr) in self._NATIVE_CALLS:
                     return self._lower_native_call(builder, module_name, node.func.attr, node.args, node.keywords, node.starred_args)
                 if module_name == "heapq" and node.func.attr in self._HEAPQ_ARITY:
@@ -6982,7 +7339,10 @@ class MIRLowerer:
                 # objeto queda tipado int) — aqui no se decide nada nuevo.
                 _ctor_sym = f"{module_name.replace('.', '__')}__{node.func.attr}"
                 if _ctor_sym in self.classes and "__init__" in self.classes[_ctor_sym]:
-                    return self._lower_class_construct(builder, _ctor_sym, node)
+                    _constructed = self._lower_class_construct(builder, _ctor_sym, node)
+                    if _ctor_sym == "timeit__Timer":
+                        self._mark_timeit_timer(builder, _constructed, node)
+                    return _constructed
                 # KWRG_MODULE_V1: kwargs via _lower_variadic_call (match a
                 # parametros nombrados; "unexpected keyword argument" si no hay
                 # **kwargs). asyncio se excluye: sus gates propios rechazan
@@ -7170,6 +7530,45 @@ class MIRLowerer:
                 builder.emit("call", _symbol, args, result=result)
                 return result
             if node.func.kind == HIRKind.ATTR:
+                if node.func.attr == "timeit":
+                    _receiver = node.func.value
+                    _sources = None
+                    _dynamic_sources = False
+                    _is_timer_receiver = False
+                    _number_values = self._timeit_argument_values(node, ("number",))
+                    if (
+                        _receiver.kind == HIRKind.CALL
+                        and self._timeit_constructor_class(builder, _receiver) == "timeit__Timer"
+                    ):
+                        _is_timer_receiver = True
+                        _sources, _dynamic_sources = self._timeit_constructor_sources(_receiver)
+                    elif (
+                        _receiver.kind == HIRKind.LOAD
+                        and _receiver.name in builder.timeit_object_names
+                    ):
+                        _is_timer_receiver = True
+                        _timeit_object = builder.timeit_object_names[_receiver.name]
+                        _sources = builder.timeit_object_sources.get(_timeit_object)
+                        _dynamic_sources = _timeit_object in builder.timeit_dynamic_objects
+                    if _is_timer_receiver and _number_values is None:
+                        raise MIRLoweringError(
+                            "native Timer.timeit supports only the number argument"
+                        )
+                    if _is_timer_receiver and _sources is not None:
+                        # Evaluate the bound receiver before the method's
+                        # arguments, preserving Python's call order.
+                        self._lower_expr(builder, _receiver)
+                        return self._lower_timeit_measure(
+                            builder, _sources[0], _sources[1], _number_values[0]
+                        )
+                    if (
+                        _is_timer_receiver
+                        and _dynamic_sources
+                        and builder.function.name != "timeit__timeit"
+                    ):
+                        raise MIRLoweringError(
+                            "native Timer.timeit requires literal stmt and setup source strings"
+                        )
                 # DICT_UPDATE_KW_V1: solo `d.update(k=v)` baja con keywords;
                 # cualquier otro metodo con kwargs sigue fail-closed (el
                 # backend acepta kw solo en dict.update; receiver distinto:
@@ -7892,6 +8291,9 @@ class MIRLowerer:
             builder.emit("load", _load_name, _active_handler(builder), result=result)
             if node.name in builder.name_classes:
                 builder.value_classes[result] = builder.name_classes[node.name]
+            _timeit_object = builder.timeit_object_names.get(node.name)
+            if _timeit_object is not None:
+                builder.timeit_object_values[result] = _timeit_object
             return result
         if kind == HIRKind.STORE:
             result = builder.temp()
@@ -8423,6 +8825,10 @@ class MIRLowerer:
             # Handle from-imported builtins (e.g. `desde math importar sqrt; sqrt(16)`)
             if node.func.kind == HIRKind.LOAD and node.func.name in builder.from_import_aliases:
                 qualified = builder.from_import_aliases[node.func.name]
+                if qualified in {"timeit.timeit", "timeit__timeit"}:
+                    _timeit_result = self._lower_timeit_module_call(builder, node)
+                    if _timeit_result is not None:
+                        return _timeit_result
                 if qualified in {"json.dump", "json.load", "json.loads", "json.dumps"}:
                     return self._lower_json_call(builder, qualified[5:], node.args, node.keywords, node.starred_args)
                 if qualified == "gettext.gettext":
@@ -8495,7 +8901,10 @@ class MIRLowerer:
                 # (misma semantica; la novedad es que un __init__ con kwargs
                 # se empaqueta en el emisor en vez de fallar aqui).
                 _target_cls = _ctor_cls if _ctor_cls in self.classes else node.func.name
-                return self._lower_class_construct(builder, _target_cls, node)
+                _constructed = self._lower_class_construct(builder, _target_cls, node)
+                if self._timeit_constructor_class(builder, node) == "timeit__Timer":
+                    self._mark_timeit_timer(builder, _constructed, node)
+                return _constructed
             if node.func.kind == HIRKind.ATTR and node.func.value.kind == HIRKind.ATTR:
                 chain = self._module_attr_chain(builder, node.func)
                 if chain is not None:
@@ -8578,6 +8987,10 @@ class MIRLowerer:
                 and node.func.value.name in builder.module_aliases
             ):
                 module_name = builder.module_aliases[node.func.value.name]
+                if module_name == "timeit" and node.func.attr == "timeit":
+                    _timeit_result = self._lower_timeit_module_call(builder, node)
+                    if _timeit_result is not None:
+                        return _timeit_result
                 if (module_name, node.func.attr) in self._NATIVE_CALLS:
                     return self._lower_native_call(builder, module_name, node.func.attr, node.args, node.keywords, node.starred_args)
                 if module_name == "heapq" and node.func.attr in self._HEAPQ_ARITY:
@@ -8593,7 +9006,10 @@ class MIRLowerer:
                 # objeto queda tipado int) — aqui no se decide nada nuevo.
                 _ctor_sym = f"{module_name.replace('.', '__')}__{node.func.attr}"
                 if _ctor_sym in self.classes and "__init__" in self.classes[_ctor_sym]:
-                    return self._lower_class_construct(builder, _ctor_sym, node)
+                    _constructed = self._lower_class_construct(builder, _ctor_sym, node)
+                    if _ctor_sym == "timeit__Timer":
+                        self._mark_timeit_timer(builder, _constructed, node)
+                    return _constructed
                 # KWRG_MODULE_V1: kwargs via _lower_variadic_call (match a
                 # parametros nombrados; "unexpected keyword argument" si no hay
                 # **kwargs). asyncio se excluye: sus gates propios rechazan
@@ -8780,6 +9196,43 @@ class MIRLowerer:
                 builder.emit("call", function, args, _active_handler(builder), result=result)
                 return result
             if node.func.kind == HIRKind.ATTR:
+                if node.func.attr == "timeit":
+                    _receiver = node.func.value
+                    _sources = None
+                    _dynamic_sources = False
+                    _is_timer_receiver = False
+                    _number_values = self._timeit_argument_values(node, ("number",))
+                    if (
+                        _receiver.kind == HIRKind.CALL
+                        and self._timeit_constructor_class(builder, _receiver) == "timeit__Timer"
+                    ):
+                        _is_timer_receiver = True
+                        _sources, _dynamic_sources = self._timeit_constructor_sources(_receiver)
+                    elif (
+                        _receiver.kind == HIRKind.LOAD
+                        and _receiver.name in builder.timeit_object_names
+                    ):
+                        _is_timer_receiver = True
+                        _timeit_object = builder.timeit_object_names[_receiver.name]
+                        _sources = builder.timeit_object_sources.get(_timeit_object)
+                        _dynamic_sources = _timeit_object in builder.timeit_dynamic_objects
+                    if _is_timer_receiver and _number_values is None:
+                        raise MIRLoweringError(
+                            "native Timer.timeit supports only the number argument"
+                        )
+                    if _is_timer_receiver and _sources is not None:
+                        self._lower_expr(builder, _receiver)
+                        return self._lower_timeit_measure(
+                            builder, _sources[0], _sources[1], _number_values[0]
+                        )
+                    if (
+                        _is_timer_receiver
+                        and _dynamic_sources
+                        and builder.function.name != "timeit__timeit"
+                    ):
+                        raise MIRLoweringError(
+                            "native Timer.timeit requires literal stmt and setup source strings"
+                        )
                 # DICT_UPDATE_KW_V1: solo `d.update(k=v)` baja con keywords;
                 # cualquier otro metodo con kwargs sigue fail-closed (el
                 # backend acepta kw solo en dict.update; receiver distinto:

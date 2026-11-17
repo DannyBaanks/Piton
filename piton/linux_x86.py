@@ -16075,6 +16075,7 @@ class LinuxCEmitter:
     ) -> list[str]:
         op, args, result = instruction.op, instruction.args, instruction.result
         self._instr_seq += 1
+        site = self._instr_seq
         out: list[str] = []
         if op == "iter_new":
             source = args[0]
@@ -20895,6 +20896,19 @@ class LinuxCEmitter:
                         return out
                     out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
                 types[result] = "str"
+                _type_names = {
+                    "none": "NoneType", "bool": "bool", "int": "int",
+                    "float": "float", "str": "str", "list": "list",
+                    "tuple": "tuple", "dict": "dict", "set": "set",
+                    "range": "range", "bytes": "bytes", "bytearray": "bytearray",
+                    "complex": "complex", "slice": "slice", "memoryview": "memoryview",
+                    "frozenset": "frozenset", "ellipsis": "ellipsis",
+                }
+                _type_name = _type_names.get(value_type)
+                if _type_name is not None:
+                    # Keep the static type identity for type(value).__name__;
+                    # the printable representation above remains a string.
+                    self._typeobj_names[result] = _type_name
             elif function_name in {"sorted", "ordenar"}:
                 # SORTED_STR_V1: a str sorts like its list of 1-char strings.
                 if len(values) == 1 and types.get(values[0]) == "str":
@@ -23553,6 +23567,44 @@ class LinuxCEmitter:
             self._emit_exc_check(out, function, _lfh)
             types[result] = "slot"
             self._dyn_slot_temps.add((function.name, result))
+        elif op == "timeit_clock":
+            # TIMEIT_LITERAL_SOURCE_V1: CPython's default timer is monotonic.
+            # Linux x86-64 clock_gettime(CLOCK_MONOTONIC) is syscall 228 and
+            # needs no libc in PITON's freestanding executable.
+            _th = args[0] if args else None
+            out.append("    {")
+            out.append(f"        struct{{long sec;long nsec;}} _ti_ts_{site}={{0,0}};")
+            out.append(f"        long _ti_rc_{site};")
+            out.append(
+                f"        __asm__ volatile(\"syscall\":\"=a\"(_ti_rc_{site}):\"a\"(228L),"
+                f"\"D\"(1L),\"S\"(&_ti_ts_{site}):\"rcx\",\"r11\",\"memory\");"
+            )
+            out.append(
+                f"        if(_ti_rc_{site}<0){{piton_raise_set(\"OSError\",\"clock_gettime failed\");"
+                f"{_name(result)}=0;}}else{{"
+                f"{_name(result)}=piton_double_bits((double)_ti_ts_{site}.sec+"
+                f"(double)_ti_ts_{site}.nsec/1000000000.0);}}"
+            )
+            out.append("    }")
+            self._emit_exc_check(out, function, _th)
+            types[result] = "float"
+        elif op == "timeit_number":
+            _number, _nh = args
+            out.append(f"    {{PitonSlot _ti_number_{site}={self._slot(_number, types)};")
+            out.append(
+                f"        if(_ti_number_{site}.kind==PK_INT||_ti_number_{site}.kind==PK_BOOL)"
+                f"{{{_name(result)}=_ti_number_{site}.bits;}}"
+                f"else if(_ti_number_{site}.kind==PK_BIGINT){{piton_raise_set(\"OverflowError\","
+                f"\"cannot fit 'int' into an index-sized integer\");{_name(result)}=0;}}"
+                f"else{{piton_raise_set(\"TypeError\",\"number must be an integer\");{_name(result)}=0;}}"
+            )
+            out.append("    }")
+            self._emit_exc_check(out, function, _nh)
+            types[result] = "int"
+        elif op == "timeit_increment":
+            _counter = args[0]
+            out.append(f"    ++{_name(_counter)};")
+            types[_counter] = "int"
         elif op == "native_call":
             # STDLIB_NATIVE_V1: args = (modulo, nombre, valores..., handler)
             _nmod, _nattr = args[0], args[1]
