@@ -250,6 +250,8 @@ static void piton_slot_repr_into(PitonStrBuf*b,PitonSlot v);
    cuerpo del prelude que define piton_slot_repr) necesitan el prototipo
    (__future__.py: implicit declaration -> ld fallaba). */
 static long piton_slot_repr(long bits,int kind);
+static long piton_slot_repr_ascii(long bits,int kind);
+static long piton_str_of_slot_value(PitonSlot);
 /* OBJ_CALL_FWD_V1: declaraciones adelantadas para helpers de objeto usados
    antes de su definicion (piton_object_get, piton_call_dynamic, piton_catch_clear,
    piton_exc_flag_get, piton_slot_guess, piton_invoke_round, piton_sum_seq_obj,
@@ -2710,6 +2712,9 @@ static long piton_zip_next(long raw){
 }
 typedef struct{long magic,index;PitonSeq*seq;long iterator;long(*callback)(long);}PitonCallbackIterator;
 static long piton_callback_invoke(long,long);
+static long piton_callback_apply(PitonSlot,long);
+static long piton_builtin_ascii(long,long,long,long);
+static long piton_len_of_value(long);
 static int piton_slot_truthy(PitonSlot v);
 static long piton_bool_of_value(long);
 static int piton_exc_flag_get(void);
@@ -2717,22 +2722,22 @@ static long piton_callback_iterator_new(void*raw,long callback,long filter){Pito
 static long piton_callback_iterator_new_iter(long iterator,long callback,long filter){if(!iterator||(!filter&&!callback)){piton_raise_set("TypeError","map/filter requires an iterable and unary callback");return 0;}PitonCallbackIterator*i=piton_alloc(sizeof(*i));i->magic=PITON_CB_MAGIC|(filter?1:0);i->seq=0;i->iterator=iterator;i->index=0;i->callback=(long(*)(long))callback;return(long)i;}
 static PitonSlot piton_callback_source_next(long raw){long magic=*(long*)raw;if((magic&~1L)==PITON_CB_MAGIC){long bits=piton_callback_iterator_next(raw);return piton_slot_guess(bits);}if(magic==0x5049544E53545249LL)return(PitonSlot){piton_str_iterator_next(raw),PK_STR};if(magic==0x5049544E17E2LL){PitonAnyIterator*it=(PitonAnyIterator*)raw;PitonSlot v={0,PK_NONE};long n=0;if(it->kind==PK_LIST||it->kind==PK_TUPLE)n=((PitonSeq*)it->raw)->length;else if(it->kind==PK_DICT)n=((PitonDict*)it->raw)->length;else if(it->kind==PK_SET||it->kind==PK_FROZENSET)n=((PitonSet*)it->raw)->length;else if(it->kind==PK_RANGE)n=piton_range_len((PitonRange*)it->raw);else{piton_raise_set("TypeError","object is not iterable");return v;}if(it->index>=n){piton_raise_set("StopIteration","");return v;}if(it->kind==PK_LIST||it->kind==PK_TUPLE)v=((PitonSeq*)it->raw)->items[it->index++];else if(it->kind==PK_DICT)v=((PitonDict*)it->raw)->items[it->index++].key;else if(it->kind==PK_RANGE){PitonRange*r=(PitonRange*)it->raw;v=(PitonSlot){r->start+(it->index++)*r->step,PK_INT};}else v=((PitonSet*)it->raw)->items[it->index++];return v;}piton_raise_set("TypeError","unsupported iterator source for map/filter");return(PitonSlot){0,PK_NONE};}
 static long piton_callback_iterator_new_dynamic(long bits,long callback,long filter){if(!filter&&!callback){piton_raise_set("TypeError","map requires a callable");return 0;}if(piton_maybe_ptr(bits)){long magic=*(long*)bits;if((magic&~1L)==PITON_CB_MAGIC||magic==0x5049544E53545249LL||magic==0x5049544E17E2LL)return piton_callback_iterator_new_iter(bits,callback,filter);if(piton_is_printable_str((const char*)bits))return piton_callback_iterator_new_iter(piton_str_iterator_new((const char*)bits),callback,filter);long*ptr=(long*)bits;if(ptr[0]>=0&&ptr[0]<1000000L&&ptr[1]>=PK_LIST&&ptr[1]<=PK_MEMORYVIEW){long kind=ptr[1];if(kind==PK_LIST||kind==PK_TUPLE)return piton_callback_iterator_new((void*)bits,callback,filter);if(kind==PK_DICT||kind==PK_SET||kind==PK_FROZENSET||kind==PK_RANGE)return piton_callback_iterator_new_iter(piton_iterator_new_any((void*)bits,kind),callback,filter);}}piton_raise_set("TypeError","map/filter source is not an iterable supported by the native subset");return 0;}
-static long piton_callback_iterator_next(long raw){PitonCallbackIterator*i=(PitonCallbackIterator*)raw;if(!i||((i->magic&~1L)!=PITON_CB_MAGIC)){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}for(;;){PitonSlot slot;long value;if(i->iterator){slot=piton_callback_source_next(i->iterator);if(piton_exc_flag_get())return 0;value=slot.bits;}else{if(i->index>=i->seq->length)break;slot=i->seq->items[i->index++];value=slot.bits;}long mapped;if(!i->callback||i->callback==(long)&piton_bool_of_value){mapped=piton_slot_truthy(slot);}else{mapped=piton_callback_invoke((long)i->callback,value);if(piton_exc_flag_get())return 0;}if((i->magic&1)&&!mapped)continue;return(i->magic&1)?value:mapped;}piton_raise_set("StopIteration","");return 0;}
+static long piton_callback_iterator_next(long raw){PitonCallbackIterator*i=(PitonCallbackIterator*)raw;if(!i||((i->magic&~1L)!=PITON_CB_MAGIC)){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}for(;;){PitonSlot slot;long value;if(i->iterator){slot=piton_callback_source_next(i->iterator);if(piton_exc_flag_get())return 0;value=slot.bits;}else{if(i->index>=i->seq->length)break;slot=i->seq->items[i->index++];value=slot.bits;}long mapped=piton_callback_apply(slot,(long)i->callback);if(piton_exc_flag_get())return 0;if((i->magic&1)&&!mapped)continue;return(i->magic&1)?value:mapped;}piton_raise_set("StopIteration","");return 0;}
 /* REPR_ITER_V1: map(repr, seq) / map(ascii, seq) — aplica piton_slot_repr a
  * cada elemento usando su kind real (no solo bits), que es lo que repr necesita.
  * El resultado es siempre str. */
-typedef struct{long magic,index;PitonSeq*seq;}PitonReprIterator;
-static long piton_repr_iterator_next(long raw){PitonReprIterator*i=(PitonReprIterator*)raw;if(!i||i->magic!=0x5049544E17E3LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];return piton_slot_repr(item.bits,item.kind);}
-static long piton_repr_iterator_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map(repr/ascii) requires a list or tuple\n",53);piton_exit(1);}PitonReprIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E3LL;i->index=0;i->seq=s;return(long)i;}
+typedef struct{long magic,index,ascii;PitonSeq*seq;}PitonReprIterator;
+static long piton_repr_iterator_next(long raw){PitonReprIterator*i=(PitonReprIterator*)raw;if(!i||i->magic!=0x5049544E17E3LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];return i->ascii?piton_slot_repr_ascii(item.bits,item.kind):piton_slot_repr(item.bits,item.kind);}
+static long piton_repr_iterator_new(void*raw,long ascii){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map(repr/ascii) requires a list or tuple\n",53);piton_exit(1);}PitonReprIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E3LL;i->index=0;i->ascii=ascii;i->seq=s;return(long)i;}
 /* LEN_ITER_V1: map(len, seq) — aplica len() a cada elemento usando su kind
  * real. Devuelve ints. */
 typedef struct{long magic,index;PitonSeq*seq;}PitonLenIterator;
-static long piton_len_iterator_next(long raw){PitonLenIterator*i=(PitonLenIterator*)raw;if(!i||i->magic!=0x5049544E17E4LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];long l;if(item.kind==PK_LIST||item.kind==PK_TUPLE)l=((PitonSeq*)item.bits)->length;else if(item.kind==PK_STR)l=piton_strlen((const char*)item.bits);else if(item.kind==PK_DICT)l=((PitonDict*)item.bits)->length;else if(item.kind==PK_SET||item.kind==PK_FROZENSET)l=((PitonSet*)item.bits)->length;else if(item.kind==PK_BYTES||item.kind==PK_BYTEARRAY)l=((PitonBytes*)item.bits)->length;else if(item.kind==PK_RANGE)l=piton_range_len((PitonRange*)item.bits);else{piton_raise_set("TypeError","object of type has no len()");return 0;}return l;}
+static long piton_len_iterator_next(long raw){PitonLenIterator*i=(PitonLenIterator*)raw;if(!i||i->magic!=0x5049544E17E4LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];return piton_callback_apply(item,(long)&piton_len_of_value);}
 static long piton_len_iterator_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map(len) requires a list or tuple\n",45);piton_exit(1);}PitonLenIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E4LL;i->index=0;i->seq=s;return(long)i;}
 /* STR_MAP_ITER_V1: map(str, seq) — aplica piton_str_of_value a cada elemento.
  * Resultado: str. */
 typedef struct{long magic,index;PitonSeq*seq;}PitonStrMapIterator;
-static long piton_str_map_iterator_next(long raw){PitonStrMapIterator*i=(PitonStrMapIterator*)raw;if(!i||i->magic!=0x5049544E17E5LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];return(long)piton_str_of_value(item.bits);}
+static long piton_str_map_iterator_next(long raw){PitonStrMapIterator*i=(PitonStrMapIterator*)raw;if(!i||i->magic!=0x5049544E17E5LL){piton_write(2,"TypeError: object is not an iterator\n",37);piton_exit(1);}if(i->index>=i->seq->length){piton_raise_set("StopIteration","");return 0;}PitonSlot item=i->seq->items[i->index++];return piton_str_of_slot_value(item);}
 static long piton_str_map_iterator_new(void*raw){PitonSeq*s=(PitonSeq*)raw;if(!s||(s->kind!=PK_LIST&&s->kind!=PK_TUPLE)){piton_write(2,"TypeError: map(str) requires a list or tuple\n",45);piton_exit(1);}PitonStrMapIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E17E5LL;i->index=0;i->seq=s;return(long)i;}
 typedef struct{long magic,callback,sentinel;}PitonCallIter;
 static long piton_closure_call_frame(long,long,long*);
@@ -4850,12 +4855,8 @@ static long piton_collect_any_iter(long raw){
     PitonCallbackIterator*ci=(PitonCallbackIterator*)raw;
     while(ci->index < ci->seq->length){
       PitonSlot slot = ci->seq->items[ci->index++];
-      long mapped;
-      if(!ci->callback || ci->callback == (long)&piton_bool_of_value){
-        mapped = piton_slot_truthy(slot);
-      }else{
-        mapped = piton_callback_invoke((long)ci->callback, slot.bits);
-      }
+      long mapped=piton_callback_apply(slot,(long)ci->callback);
+      if(piton_exc_flag_get())return(long)s;
       if((ci->magic & 1)){
         if(!mapped) continue;
         piton_seq_append(s, slot);
@@ -4863,7 +4864,7 @@ static long piton_collect_any_iter(long raw){
         PitonSlot out_slot;
         if(ci->callback == (long)&piton_bool_of_value){
           out_slot = (PitonSlot){mapped, PK_BOOL};
-        }else if(ci->callback == (long)&piton_str_of_value || ci->callback == (long)&piton_repr_of_value){
+        }else if(ci->callback == (long)&piton_str_of_value || ci->callback == (long)&piton_repr_of_value || ci->callback == (long)&piton_builtin_ascii){
           out_slot = (PitonSlot){mapped, PK_STR};
         }else if(ci->callback == (long)&piton_float_of_value){
           out_slot = (PitonSlot){mapped, PK_FLOAT};
@@ -6116,6 +6117,79 @@ static long piton_builtin_hash(long a,long b,long c,long d){
     return (long)h;
   }
   return a;
+}
+static long piton_slot_len(PitonSlot v){
+  if(v.kind==PK_STR){long n=0;const unsigned char*s=(const unsigned char*)v.bits;for(long i=0;s&&s[i];++i)if((s[i]&0xC0)!=0x80)++n;return n;}
+  if(v.kind==PK_LIST||v.kind==PK_TUPLE)return ((PitonSeq*)v.bits)->length;
+  if(v.kind==PK_DICT)return ((PitonDict*)v.bits)->length;
+  if(v.kind==PK_SET||v.kind==PK_FROZENSET)return ((PitonSet*)v.bits)->length;
+  if(v.kind==PK_BYTES||v.kind==PK_BYTEARRAY)return ((PitonBytes*)v.bits)->length;
+  if(v.kind==PK_RANGE)return piton_range_len((PitonRange*)v.bits);
+  piton_raise_set("TypeError","object has no len()");
+  return 0;
+}
+static long piton_int_of_slot(PitonSlot v){
+  if(v.kind==PK_INT||v.kind==PK_BOOL)return v.bits;
+  if(v.kind==PK_FLOAT)return (long)piton_bits_double(v.bits);
+  if(v.kind==PK_STR)return piton_int_from_str((const char*)v.bits);
+  piton_raise_set("TypeError","int() argument must be a string, a bytes-like object or a number");
+  return 0;
+}
+static long piton_float_of_slot(PitonSlot v){
+  if(v.kind==PK_FLOAT)return v.bits;
+  if(v.kind==PK_INT||v.kind==PK_BOOL)return piton_double_bits((double)v.bits);
+  if(v.kind==PK_STR)return piton_float_from_str((const char*)v.bits);
+  piton_raise_set("TypeError","float() argument must be a string or a real number");
+  return 0;
+}
+static long piton_abs_of_slot(PitonSlot v){
+  if(v.kind==PK_FLOAT)return (long)((unsigned long)v.bits&0x7FFFFFFFFFFFFFFFUL);
+  if(v.kind==PK_INT||v.kind==PK_BOOL)return v.bits<0?-v.bits:v.bits;
+  piton_raise_set("TypeError","bad operand type for abs()");
+  return 0;
+}
+static long piton_ord_of_slot(PitonSlot v){
+  if(v.kind!=PK_STR){piton_raise_set("TypeError","ord() expected string of length 1");return 0;}
+  const unsigned char*s=(const unsigned char*)v.bits;
+  if(!s||!s[0]){piton_raise_set("TypeError","ord() expected a character, but string of length 0 found");return 0;}
+  unsigned long c=s[0];long width;
+  if(c<0x80)width=1;
+  else if((c&0xE0)==0xC0){c&=0x1F;width=2;}
+  else if((c&0xF0)==0xE0){c&=0x0F;width=3;}
+  else if((c&0xF8)==0xF0){c&=0x07;width=4;}
+  else{piton_raise_set("TypeError","ord() expected a character, but string of length not 1 found");return 0;}
+  for(long i=1;i<width;++i){if(!s[i]||(s[i]&0xC0)!=0x80){piton_raise_set("TypeError","ord() expected a character, but string of length not 1 found");return 0;}c=(c<<6)|(s[i]&0x3F);}
+  if(s[width]!=0){piton_raise_set("TypeError","ord() expected a character, but string of length not 1 found");return 0;}
+  return (long)c;
+}
+static long piton_chr_of_slot(PitonSlot v){
+  if(v.kind!=PK_INT&&v.kind!=PK_BOOL){piton_raise_set("TypeError","an integer is required");return 0;}
+  long c=v.bits;
+  if(c<0||c>0x10FFFFL){piton_raise_set("ValueError","chr() arg not in range(0x110000)");return 0;}
+  if(c==0|| (c>=0xD800&&c<=0xDFFF)){piton_raise_set("ValueError","chr() result cannot be represented by the native string ABI");return 0;}
+  char*buf=(char*)piton_alloc(5);long n;
+  if(c<0x80){buf[0]=(char)c;n=1;}
+  else if(c<0x800){buf[0]=(char)(0xC0|(c>>6));buf[1]=(char)(0x80|(c&0x3F));n=2;}
+  else if(c<0x10000){buf[0]=(char)(0xE0|(c>>12));buf[1]=(char)(0x80|((c>>6)&0x3F));buf[2]=(char)(0x80|(c&0x3F));n=3;}
+  else{buf[0]=(char)(0xF0|(c>>18));buf[1]=(char)(0x80|((c>>12)&0x3F));buf[2]=(char)(0x80|((c>>6)&0x3F));buf[3]=(char)(0x80|(c&0x3F));n=4;}
+  buf[n]=0;return (long)buf;
+}
+static long piton_callback_apply(PitonSlot v,long callback){
+  if(!callback||callback==(long)&piton_bool_of_value)return piton_slot_truthy(v);
+  if(callback==(long)&piton_str_of_value)return piton_str_of_slot_value(v);
+  if(callback==(long)&piton_repr_of_value)return piton_slot_repr(v.bits,v.kind);
+  if(callback==(long)&piton_builtin_ascii)return piton_slot_repr_ascii(v.bits,v.kind);
+  if(callback==(long)&piton_len_of_value)return piton_slot_len(v);
+  if(callback==(long)&piton_int_of_value)return piton_int_of_slot(v);
+  if(callback==(long)&piton_float_of_value)return piton_float_of_slot(v);
+  if(callback==(long)&piton_abs_of_value)return piton_abs_of_slot(v);
+  if(callback==(long)&piton_builtin_ord)return piton_ord_of_slot(v);
+  if(callback==(long)&piton_builtin_chr)return piton_chr_of_slot(v);
+  if(callback==(long)&piton_iter_dynamic){
+    if(v.kind==PK_LIST||v.kind==PK_TUPLE||v.kind==PK_DICT||v.kind==PK_SET||v.kind==PK_FROZENSET||v.kind==PK_RANGE||v.kind==PK_STR)return piton_iter_dynamic(v.bits);
+    piton_raise_set("TypeError","object is not iterable");return 0;
+  }
+  return piton_callback_invoke(callback,v.bits);
 }
 static long piton_builtin_globals(long a,long b,long c,long d){
   (void)a;(void)b;(void)c;(void)d;
@@ -13755,7 +13829,7 @@ class LinuxCEmitter:
                     }.get(self._builtin_loads.get(start) or "", self._builtin_loads.get(start) or _bname)
                     if builtin == "map" and types.get(source) in {"list", "tuple"} and _builtin_cb in {"repr", "ascii"}:
                         out.append(
-                            f"    {_name(result)}=piton_repr_iterator_new((void*){self._value(source)});"
+                            f"    {_name(result)}=piton_repr_iterator_new((void*){self._value(source)},{1 if _builtin_cb == 'ascii' else 0});"
                         )
                         types[result] = "iterator:repr"
                         return out
@@ -13771,22 +13845,9 @@ class LinuxCEmitter:
                         )
                         types[result] = "iterator:mapstr"
                         return out
-                    if types.get(start) != "builtin" and not (
-                        builtin == "map" and start in self._typeobj_names
-                        and _builtin_cb in {"int", "str"}
-                    ):
-                        # BUILTIN_TYPE_VALUE_V1: solo se admiten como
-                        # callbacks de map los tipos int y str, que tienen
-                        # funciones nativas de conversion. Los demas objetos
-                        # tipo siguen fallando cerrado.
-                        raise NativeBuildError(
-                            f"native {builtin} requires a user function callback, not a builtin name"
-                        )
-
-                if types.get(start) == "builtin" or (
-                    builtin == "map" and start in self._typeobj_names
-                ):
-                    _builtin_name = _builtin_cb if builtin == "map" else _bname
+                _is_builtin_callback = types.get(start) == "builtin" or start in self._typeobj_names
+                if _is_builtin_callback:
+                    _builtin_name = _builtin_cb
                     _bmap = {
                         "abs": "(long)&piton_abs_of_value",
                         "int": "(long)&piton_int_of_value",
@@ -13798,14 +13859,17 @@ class LinuxCEmitter:
                         "ord": "(long)&piton_builtin_ord",
                         "chr": "(long)&piton_builtin_chr",
                         "ascii": "(long)&piton_builtin_ascii",
-                        "hash": "(long)&piton_builtin_hash",
                         "iter": "(long)&piton_iter_dynamic",
                     }
                     if _builtin_name in _bmap:
                         callback = _bmap[_builtin_name]
                     else:
+                        if _builtin_name == "hash":
+                            raise NativeBuildError(
+                                f"native {builtin} builtin callback 'hash' is not supported because CPython hash randomization cannot be matched"
+                            )
                         raise NativeBuildError(
-                            f"native {builtin} requires a user function callback, not a builtin name"
+                            f"native {builtin} builtin callback '{_builtin_name}' is not supported"
                         )
                 elif types.get(start) == "none" or start is None or aliases.get(start) in {"None", "none"}:
                     callback = "0"
@@ -13852,7 +13916,6 @@ class LinuxCEmitter:
                         "ord": "int",
                         "chr": "str",
                         "ascii": "str",
-                        "hash": "int",
                     }.get(_bname)
                     if _bname == "iter":
                         _b_elem = "iterator:any"
