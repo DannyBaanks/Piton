@@ -34,7 +34,7 @@ _FLOAT_REPR_C = Path(__file__).with_name("float_repr.h").read_text(encoding="utf
 
 _RICH_FREESTANDING_C = r"""
 #include <stdint.h>
-enum{PK_NONE,PK_BOOL,PK_INT,PK_FLOAT,PK_STR,PK_LIST,PK_TUPLE,PK_DICT,PK_SET,PK_OBJECT,PK_BIGINT,PK_RANGE,PK_BYTES,PK_BYTEARRAY,PK_COMPLEX,PK_FROZENSET,PK_SLICE,PK_MEMORYVIEW};
+enum{PK_NONE,PK_BOOL,PK_INT,PK_FLOAT,PK_STR,PK_LIST,PK_TUPLE,PK_DICT,PK_SET,PK_OBJECT,PK_BIGINT,PK_RANGE,PK_BYTES,PK_BYTEARRAY,PK_COMPLEX,PK_FROZENSET,PK_SLICE,PK_MEMORYVIEW,PK_NOTIMPLEMENTED};
 typedef struct{long bits;int kind;}PitonSlot;
 /* COMPLEX_V1: número complejo (re + im j). Vive en la arena (bump allocator,
  * sin refcount): los escalares que ocupan puntero se tratan como inmutables y
@@ -350,6 +350,7 @@ static const char*js_type_name(PitonSlot v){
     case PK_BYTEARRAY:return"bytearray";case PK_COMPLEX:return"complex";case PK_RANGE:return"range";
     case PK_STR:return"str";case PK_INT:case PK_BIGINT:return"int";case PK_FLOAT:return"float";
     case PK_BOOL:return"bool";case PK_NONE:return"NoneType";
+    case PK_NOTIMPLEMENTED:return"NotImplementedType";
     case PK_OBJECT:return((PitonObject*)v.bits)->class_name;
     default:return"object";
   }
@@ -778,8 +779,69 @@ static long piton_dunder_invoke(PitonDunderHook*h,long argc,long*argv){
 }
 static PitonSlot piton_slot_from_dunder_bits(long bits){
   if(bits==PITON_NONE)return (PitonSlot){0,PK_NONE};
+  if(bits==PITON_NOTIMPLEMENTED)return (PitonSlot){bits,PK_NOTIMPLEMENTED};
   if(piton_is_double_bits(bits))return (PitonSlot){bits,PK_FLOAT};
   return piton_dyn_unbox(bits);
+}
+static int piton_slot_is_notimplemented(PitonSlot value){
+  return value.kind==PK_NOTIMPLEMENTED||value.bits==PITON_NOTIMPLEMENTED;
+}
+static PitonSlot piton_call_object_dunder(PitonSlot self,const char*meth,
+                                           PitonSlot arg1,PitonSlot arg2,
+                                           long argc){
+  if(self.kind!=PK_OBJECT)return (PitonSlot){PITON_NOTIMPLEMENTED,PK_NOTIMPLEMENTED};
+  PitonObject*obj=(PitonObject*)self.bits;
+  PitonDunderHook*hook=piton_object_dunder_hook_find(obj->class_name,meth);
+  if(!hook)return (PitonSlot){PITON_NOTIMPLEMENTED,PK_NOTIMPLEMENTED};
+  long argv[3]={self.bits,arg1.bits,arg2.bits};
+  long raw=piton_dunder_invoke(hook,argc,argv);
+  if(piton_exc_flag_get())return (PitonSlot){0,PK_NONE};
+  return piton_slot_from_dunder_bits(raw);
+}
+static void piton_raise_unsupported_power(PitonSlot base,PitonSlot exponent,
+                                           PitonSlot modulo,int ternary){
+  PitonStrBuf message;sb_init(&message);
+  sb_puts(&message,"unsupported operand type(s) for ** or pow(): '");
+  sb_puts(&message,js_type_name(base));
+  if(ternary){
+    sb_puts(&message,"', '");sb_puts(&message,js_type_name(exponent));
+    sb_puts(&message,"', '");sb_puts(&message,js_type_name(modulo));
+    sb_putc(&message,'\'');
+  }else{
+    sb_puts(&message,"' and '");sb_puts(&message,js_type_name(exponent));
+    sb_putc(&message,'\'');
+  }
+  piton_raise_set("TypeError",message.d);
+}
+static PitonSlot piton_object_binary_dunder(long opcode,PitonSlot left,
+                                             PitonSlot right,PitonSlot modulo,
+                                             int ternary,int right_first){
+  if(ternary){
+    PitonSlot result=piton_call_object_dunder(left,"__pow__",right,modulo,3);
+    if(piton_exc_flag_get())return (PitonSlot){0,PK_NONE};
+    if(!piton_slot_is_notimplemented(result))return result;
+    piton_raise_unsupported_power(left,right,modulo,1);
+    return (PitonSlot){0,PK_NONE};
+  }
+  const char*primary=opcode==4?"__floordiv__":"__pow__";
+  const char*reflected=opcode==4?"__rfloordiv__":"__rpow__";
+  PitonSlot result;
+  if(right_first){
+    result=piton_call_object_dunder(right,reflected,left,(PitonSlot){0,PK_NONE},2);
+    if(piton_exc_flag_get())return (PitonSlot){0,PK_NONE};
+    if(!piton_slot_is_notimplemented(result))return result;
+  }
+  result=piton_call_object_dunder(left,primary,right,(PitonSlot){0,PK_NONE},2);
+  if(piton_exc_flag_get())return (PitonSlot){0,PK_NONE};
+  if(!piton_slot_is_notimplemented(result))return result;
+  if(!right_first){
+    result=piton_call_object_dunder(right,reflected,left,(PitonSlot){0,PK_NONE},2);
+    if(piton_exc_flag_get())return (PitonSlot){0,PK_NONE};
+    if(!piton_slot_is_notimplemented(result))return result;
+  }
+  if(opcode==4)dyn_two_types("unsupported operand type(s) for ","//",left,right,"");
+  else piton_raise_unsupported_power(left,right,(PitonSlot){0,PK_NONE},0);
+  return (PitonSlot){0,PK_NONE};
 }
 static PitonSlot piton_binop_object_add(PitonSlot a,PitonSlot b){
   static PitonSlot none={0,PK_NONE};
@@ -827,6 +889,8 @@ static PitonSlot piton_binop_object_add(PitonSlot a,PitonSlot b){
 static PitonSlot piton_dyn_binop(long opc,PitonSlot a,PitonSlot b){
   static const char*names[]={"+","-","*","/","//","%","**","<<",">>","&","|","^"};
   PitonSlot r={0,PK_NONE};
+  if((opc==4||opc==6)&&(a.kind==PK_OBJECT||b.kind==PK_OBJECT))
+    return piton_object_binary_dunder(opc,a,b,(PitonSlot){0,PK_NONE},0,0);
   int ai=(a.kind==PK_INT||a.kind==PK_BOOL),bi=(b.kind==PK_INT||b.kind==PK_BOOL);
   int an=ai||a.kind==PK_FLOAT,bn=bi||b.kind==PK_FLOAT;
   /* DYN_SLOT_BITWISE_V1: bitwise operators accept dynamic int/bool slots.
@@ -3296,7 +3360,7 @@ static int piton_dict_eq(PitonDict*a,PitonDict*b){
 static void piton_print_set(PitonSet*s){if(s->kind==PK_SET&&s->length==0){piton_write(piton_print_fd,"set()",5);return;}piton_write(piton_print_fd,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(piton_print_fd,", ",2);piton_print_slot_repr(s->items[i]);}piton_write(piton_print_fd,"}",1);}
 static long piton_object_repr_hook(long obj,const char*cls);
 static long piton_object_str_hook(long obj,const char*cls);
-static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_str_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
+static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(v.bits==PITON_NOTIMPLEMENTED){piton_write(piton_print_fd,"NotImplemented",14);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{long _pr=piton_object_str_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
 /* SEQ_ELEM_REPR_V1: los elementos de una coleccion se imprimen con el
    repr completo de CPython (escapes de backslash/comillas); el camino
    viejo escribia el str raw dentro de [ ] y print(["a\\b"]) divergiaba.
@@ -3738,6 +3802,7 @@ static long piton_abs_of_value(long bits){
 }
 static long piton_bool_of_value(long bits){
   if(bits==(long)&piton_none_singleton||!bits)return 0;
+  if(bits==PITON_NOTIMPLEMENTED)return 1;
   if(bits==(long)&piton_ellipsis_singleton)return 1;
   if(piton_is_double_bits(bits))return piton_bits_double(bits)!=0.0?1:0;
   if(piton_maybe_ptr(bits)){
@@ -3811,7 +3876,7 @@ static int piton_maybe_ptr(long bits){
 /* OS_FSPATH_V1: nombre del tipo dinamico de un valor `bits` (misma politica
    que piton_isinstance_dynamic: puntero con cabecera -> secuencia/dict/
    set/objeto; puntero imprimible -> str; doble -> float; resto -> int). */
-static const char* piton_dynamic_type_name(long bits){if(bits==(long)&piton_none_singleton)return "NoneType";if(bits==(long)&piton_ellipsis_singleton)return "ellipsis";
+static const char* piton_dynamic_type_name(long bits){if(bits==(long)&piton_none_singleton)return "NoneType";if(bits==(long)&piton_ellipsis_singleton)return "ellipsis";if(bits==PITON_NOTIMPLEMENTED)return "NotImplementedType";
   if(!bits)return "NoneType";
   if(piton_is_double_bits(bits))return "float";
   if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
@@ -3854,7 +3919,7 @@ static long piton_exception_str(long raw){
   if(o&&o->class_name&&!piton_strcmp(o->class_name,"KeyError"))return piton_slot_repr(args->items[0].bits,args->items[0].kind);
   return piton_str_of_slot_value(args->items[0]);
 }
-static const char* piton_str_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";if(bits==(long)&piton_ellipsis_singleton)return "Ellipsis";
+static const char* piton_str_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";if(bits==(long)&piton_ellipsis_singleton)return "Ellipsis";if(bits==PITON_NOTIMPLEMENTED)return "NotImplemented";
   if(piton_is_double_bits(bits))return (const char*)piton_str_from_float(bits);
   if(piton_maybe_ptr(bits)){
     long*ptr=(long*)bits;
@@ -3880,7 +3945,7 @@ static const char* piton_str_of_value(long bits){if(bits==(long)&piton_none_sing
    como long es indistinguible de 0/1 y sale "1"/"0" — la misma
    representacion de bools que usa el resto del backend. dict/set/bytes
    dinamicos fallan cerrado (exit 2) en vez de divergir. */
-static const char* piton_repr_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";if(bits==(long)&piton_ellipsis_singleton)return "Ellipsis";
+static const char* piton_repr_of_value(long bits){if(bits==(long)&piton_none_singleton)return "None";if(bits==(long)&piton_ellipsis_singleton)return "Ellipsis";if(bits==PITON_NOTIMPLEMENTED)return "NotImplemented";
   if(!bits)return "None";
   if(piton_is_double_bits(bits))return (const char*)piton_str_from_float(bits);
   /* el str va ANTES de la cabecera: un literal de rodata no siempre pasa
@@ -4069,7 +4134,7 @@ static long piton_len_of_value(long bits){
 #ifdef PITON_EXC_RICH_PRINT
 extern unsigned long piton_bump_buf[];
 #endif
-static void piton_print_int_safe(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(bits==(long)&piton_ellipsis_singleton){piton_write(piton_print_fd,"Ellipsis",8);return;}
+static void piton_print_int_safe(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(bits==(long)&piton_ellipsis_singleton){piton_write(piton_print_fd,"Ellipsis",8);return;}if(bits==PITON_NOTIMPLEMENTED){piton_write(piton_print_fd,"NotImplemented",14);return;}
   /* PRINT_INT_V1: un entero cuyo tipo estático es int pero que en runtime es
    * un puntero (huecos de inferencia) se imprime como string; si no, como int.
    * PRINT_DYNAMIC_KIND_V1: si el puntero lleva cabecera de coleccion (el valor
@@ -4091,12 +4156,13 @@ static void piton_print_int_safe(long bits){if(bits==(long)&piton_none_singleton
   }
   piton_write_int(bits);
 }
-static void piton_print_auto(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(bits==(long)&piton_ellipsis_singleton){piton_write(piton_print_fd,"Ellipsis",8);return;}if(bits==0){piton_write(piton_print_fd,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
+static void piton_print_auto(long bits){if(bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(bits==(long)&piton_ellipsis_singleton){piton_write(piton_print_fd,"Ellipsis",8);return;}if(bits==PITON_NOTIMPLEMENTED){piton_write(piton_print_fd,"NotImplemented",14);return;}if(bits==0){piton_write(piton_print_fd,"0",1);return;}if(piton_is_double_bits(bits)){piton_print_float_bits_raw(bits);return;}if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){PitonSlot sl={bits,(int)k};piton_print_slot(sl);return;}if(piton_is_printable_str((const char*)bits)){piton_print_str_raw((const char*)bits);return;}}piton_print_int_raw(bits);}
 /* SLOT_GUESS_V1: la kind de un valor que cruza un ABI sin slot (un metodo
    ligado builtin recibe `long`). Se deriva de la cabecera con la misma
    politica que piton_dynamic_type_name; el resto es int. NO inventa un tipo:
    un valor que no es puntero con cabecera ni str imprimible es un entero. */
 static PitonSlot piton_slot_guess(long bits){
+  if(bits==PITON_NOTIMPLEMENTED)return (PitonSlot){bits,PK_NOTIMPLEMENTED};
   if(bits&&piton_maybe_ptr(bits)&&*(long*)bits==PITON_GENEXPR_MAGIC)return (PitonSlot){bits,PK_OBJECT};
   /* SLOT_GUESS_STR_FIRST_V1: el kind de un str se decide PRIMERO. Un literal
      corto en .rodata ("a") tiene ptr[0] = 'a' (0x61) —que entra en el
@@ -7133,6 +7199,7 @@ static int piton_double_isinf(long bits){unsigned long long u=(unsigned long lon
 static int piton_double_isfinite(long bits){unsigned long long u=(unsigned long long)bits;return ((u&0x7FF0000000000000ULL)!=0x7FF0000000000000ULL);}
 
 static void piton_slot_repr_into(PitonStrBuf*b,PitonSlot v){
+  if(v.bits==PITON_NOTIMPLEMENTED){sb_puts(b,"NotImplemented");return;}
   switch(v.kind){
     case PK_STR:piton_str_repr_into(b,(const char*)v.bits);break;
     case PK_BOOL:sb_puts(b,v.bits?"True":"False");break;
@@ -8307,6 +8374,8 @@ class LinuxCEmitter:
             "/* ELLIPSIS_SINGLETON_V1: `...` (Ellipsis) es otro singleton con identidad propia: antes el emisor no podia codificarlo y cualquier archivo que lo usara (types.py, _types.py) era fail-closed en build. Misma politica que None: la identidad es la direccion y la impresion da 'Ellipsis'. A diferencia de None, Ellipsis ES truthy en CPython — la verdad de unknown ya lo trata como verdadero (puntero no nulo). */",
             "static const char piton_ellipsis_singleton[16]={'E','L','L','I','P','S','I','S',0,0,0,0,0,0,0,0};",
             "#define PITON_ELLIPSIS ((long)&piton_ellipsis_singleton)",
+            "static const char piton_notimplemented_singleton[16]={'N','O','T','I','M','P','L','E','M','E','N','T','E','D',0,0};",
+            "#define PITON_NOTIMPLEMENTED ((long)&piton_notimplemented_singleton)",
             "#define PITON_NONE ((long)&piton_none_singleton)",
 
             "static long piton_write(long fd,const void*buf,usize n){long r;__asm__ volatile(\"syscall\":\"=a\"(r):\"a\"(1L),\"D\"(fd),\"S\"(buf),\"d\"(n):\"rcx\",\"r11\",\"memory\");return r;}",
@@ -8565,7 +8634,7 @@ class LinuxCEmitter:
                     if "__init__" in self.classes.get(_cand, set()) and _target in self.function_names:
                         lines.append(f"    piton_object_init_hook_set({json.dumps(_cls)},(long)&{_name(_target)},0);")
                         break
-                for _dmeth in ("__add__", "__radd__", "__round__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__"):
+                for _dmeth in ("__add__", "__radd__", "__floordiv__", "__rfloordiv__", "__pow__", "__rpow__", "__round__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__"):
                     for _cand in self.class_mro.get(_cls, [_cls]):
                         _target = f"{_cand}__{_dmeth}"
                         if _dmeth in self.classes.get(_cand, set()) and _target in self.function_names:
@@ -9147,6 +9216,7 @@ class LinuxCEmitter:
             "bigint": "PK_BIGINT", "range": "PK_RANGE",
             "bytes": "PK_BYTES", "bytearray": "PK_BYTEARRAY", "complex": "PK_COMPLEX",
             "set:frozen": "PK_FROZENSET", "slice": "PK_SLICE", "memoryview": "PK_MEMORYVIEW",
+            "notimplemented": "PK_NOTIMPLEMENTED",
         }.get(value_type or "int", "PK_OBJECT")
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
@@ -9159,6 +9229,26 @@ class LinuxCEmitter:
         if not vtype or vtype in {"any", "unknown"}:
             return f"piton_slot_guess({self._value(value)})"
         return f"piton_slot({self._value(value)},{self._kind(vtype)})"
+
+    def _dunder_owner(self, class_name: str, method: str) -> str | None:
+        for candidate in self.class_mro.get(class_name, [class_name]):
+            if method in self.classes.get(candidate, set()):
+                return candidate
+        if method in self.classes.get(class_name, set()):
+            return class_name
+        return None
+
+    def _right_reflected_method_first(
+        self, left_type: str, right_type: str, reflected_method: str
+    ) -> bool:
+        if not left_type.startswith("object:") or not right_type.startswith("object:"):
+            return False
+        left_cls = left_type.split(":", 1)[1]
+        right_cls = right_type.split(":", 1)[1]
+        if left_cls == right_cls or left_cls not in self.class_mro.get(right_cls, []):
+            return False
+        right_owner = self._dunder_owner(right_cls, reflected_method)
+        return right_owner is not None and right_owner != self._dunder_owner(left_cls, reflected_method)
 
     def _plain(self, value: Any, types: dict[str, str]) -> str:
         """SLOT_PLAIN_V1: el valor PLANO de una expresion (sin caja).
@@ -14482,6 +14572,10 @@ class LinuxCEmitter:
                 raise NativeBuildError(f"Linux backend cannot encode constant {value!r}")
         elif op == "load":
             source = args[0]
+            if source == "NotImplemented" and not self._shadowed_name(source, function):
+                out.append(f"    {_name(result)}=PITON_NOTIMPLEMENTED;")
+                types[result] = "notimplemented"
+                return out
             if result and source in getattr(self, "_param_dict_names", ()):
                 self._param_load_temps.add(result)
             # DEL_FN_SCOPE_V1: el NameError estatico de `borrar` aplica al
@@ -15838,6 +15932,24 @@ class LinuxCEmitter:
                 types[result] = "complex"
                 return out
             if "none" in {left_type, right_type} or "object" in {left_type, right_type} or any(str(t).startswith("object:") for t in (left_type, right_type)):
+                if operator in {"//", "**"} and any(
+                    str(t).startswith("object:") for t in (left_type, right_type)
+                ):
+                    _opcode = 4 if operator == "//" else 6
+                    _reflected = "__rfloordiv__" if operator == "//" else "__rpow__"
+                    _right_first = int(
+                        self._right_reflected_method_first(left_type, right_type, _reflected)
+                    )
+                    out.append(
+                        f"    {{PitonSlot*_ob=piton_slot_box_new(piton_object_binary_dunder({_opcode},"
+                        f"{self._slot(left, types)},{self._slot(right, types)},"
+                        f"(PitonSlot){{0,PK_NONE}},0,{_right_first}));"
+                        f"{_name(result)}=(long)_ob;}}"
+                    )
+                    self._emit_exc_check(out, function, handler_label)
+                    types[result] = "slot"
+                    self._dyn_slot_temps.add((function.name, result))
+                    return out
                 _has_obj_dunder = False
                 _obj_is_right = False
                 _obj_cls = None
@@ -16751,6 +16863,8 @@ class LinuxCEmitter:
                             out.append(f'    piton_print_str_raw({self._value(value)}?"True":"False");')
                         elif value_type == "none":
                             out.append('    piton_print_str_raw("None");')
+                        elif value_type == "notimplemented":
+                            out.append('    piton_print_str_raw("NotImplemented");')
                         elif value_type == "bigint":
                             out.append(f'    piton_bigint_print_raw((void*){_name(value)});')
                         elif value_type == "float":
@@ -17279,6 +17393,34 @@ class LinuxCEmitter:
                 types[result] = "tuple"
                 self._coll_elems[result] = "int"
             elif function_name == "pow":
+                if len(values) in {2, 3} and any(
+                    str(types.get(value, "")).startswith("object:") for value in values
+                ):
+                    if len(values) == 2:
+                        _right_first = int(
+                            self._right_reflected_method_first(
+                                types.get(values[0], "int"),
+                                types.get(values[1], "int"),
+                                "__rpow__",
+                            )
+                        )
+                        _pow_expr = (
+                            f"piton_object_binary_dunder(6,{self._slot(values[0], types)},"
+                            f"{self._slot(values[1], types)},(PitonSlot){{0,PK_NONE}},0,{_right_first})"
+                        )
+                    else:
+                        _pow_expr = (
+                            f"piton_object_binary_dunder(6,{self._slot(values[0], types)},"
+                            f"{self._slot(values[1], types)},{self._slot(values[2], types)},1,0)"
+                        )
+                    out.append(
+                        f"    {{PitonSlot*_pw=piton_slot_box_new({_pow_expr});"
+                        f"{_name(result)}=(long)_pw;}}"
+                    )
+                    self._emit_exc_check(out, function, call_handler)
+                    types[result] = "slot"
+                    self._dyn_slot_temps.add((function.name, result))
+                    return out
                 if len(values) == 3:
                     # POW_MOD_V1: pow(base, exp, mod) — los tres deben ser int.
                     if any(types.get(v) in {"str", "float", "list", "dict", "tuple", "set"} for v in values):
