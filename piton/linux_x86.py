@@ -2844,6 +2844,36 @@ static long piton_len_iterator_next(long raw);
 static long piton_str_map_iterator_next(long raw);
 static long piton_iter_dynamic(long bits);
 static long piton_iterator_next_any(long raw){if(!raw){piton_raise_set("TypeError","object is not an iterator");return 0;}if(*(long*)raw==PITON_GEN_MAGIC)return piton_gen_next(raw);if(*(long*)raw==PITON_GENEXPR_MAGIC)return piton_genexpr_next((PitonGenExpr*)raw);if((*(long*)raw&~1L)==PITON_CB_MAGIC)return piton_callback_iterator_next(raw);if(*(long*)raw==0x5049544E53545249LL)return piton_str_iterator_next(raw);if(*(long*)raw==0x5049544E5A495049LL)return piton_zip_next(raw);if(*(long*)raw==0x5049544E52455649LL)return piton_reversed_next(raw);if(*(long*)raw==0x5049544E454E554DLL)return piton_enumerate_next(raw);if(*(long*)raw==0x5049544E17E3LL)return piton_repr_iterator_next(raw);if(*(long*)raw==0x5049544E17E4LL)return piton_len_iterator_next(raw);if(*(long*)raw==0x5049544E17E5LL)return piton_str_map_iterator_next(raw);PitonAnyIterator*i=(PitonAnyIterator*)raw;if(i->magic!=0x5049544E17E2LL){piton_raise_set("TypeError","object is not an iterator");return 0;}long n=0;if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;else if(i->kind==PK_RANGE)n=piton_range_len((PitonRange*)i->raw);else if(i->kind==PK_SET||i->kind==PK_FROZENSET)n=((PitonSet*)i->raw)->length;else{piton_raise_set("TypeError","object is not iterable");return 0;}if(i->index>=n){piton_raise_set("StopIteration","");return 0;}PitonSlot v;if(i->kind==PK_LIST||i->kind==PK_TUPLE)v=((PitonSeq*)i->raw)->items[i->index++];else if(i->kind==PK_DICT)v=((PitonDict*)i->raw)->items[i->index++].key;else if(i->kind==PK_RANGE){PitonRange*rr=(PitonRange*)i->raw;v.bits=rr->start+(i->index++)*rr->step;v.kind=PK_INT;}else v=((PitonSet*)i->raw)->items[i->index++];return v.bits;}
+/* ITER_ANY_SLOT_V1: the raw iterator ABI intentionally returns only bits.
+ * Generator bodies that pass an unknown loop value to `*args` need the
+ * original PitonSlot kind (a tuple pointer is not an int). Keep the generic
+ * iterator path tagged without changing the legacy raw-value helper. */
+static PitonSlot piton_iterator_next_slot_any(long raw){
+  if(!raw){piton_raise_set("TypeError","object is not an iterator");return(PitonSlot){0,PK_NONE};}
+  if(piton_maybe_ptr(raw)){
+    long magic=*(long*)raw;
+    if(magic==PITON_GEN_MAGIC)return piton_gen_next_slot(raw);
+    if(magic==PITON_GENEXPR_MAGIC)return piton_genexpr_next_slot((PitonGenExpr*)raw);
+    if(magic==0x5049544E4459LL)return piton_dyn_iter_next(raw);
+    if(magic==0x5049544E17E2LL){
+      PitonAnyIterator*i=(PitonAnyIterator*)raw;
+      long n=0;
+      if(i->kind==PK_LIST||i->kind==PK_TUPLE)n=((PitonSeq*)i->raw)->length;
+      else if(i->kind==PK_DICT)n=((PitonDict*)i->raw)->length;
+      else if(i->kind==PK_RANGE)n=piton_range_len((PitonRange*)i->raw);
+      else if(i->kind==PK_SET||i->kind==PK_FROZENSET)n=((PitonSet*)i->raw)->length;
+      else{piton_raise_set("TypeError","object is not iterable");return(PitonSlot){0,PK_NONE};}
+      if(i->index>=n){piton_raise_set("StopIteration","");return(PitonSlot){0,PK_NONE};}
+      if(i->kind==PK_LIST||i->kind==PK_TUPLE)return((PitonSeq*)i->raw)->items[i->index++];
+      if(i->kind==PK_DICT)return((PitonDict*)i->raw)->items[i->index++].key;
+      if(i->kind==PK_RANGE){PitonRange*r=(PitonRange*)i->raw;return(PitonSlot){r->start+(i->index++)*r->step,PK_INT};}
+      return((PitonSet*)i->raw)->items[i->index++];
+    }
+  }
+  long bits=piton_iterator_next_any(raw);
+  if(piton_exc_flag_get())return(PitonSlot){0,PK_NONE};
+  return piton_slot_guess(bits);
+}
 typedef struct{long magic;const char*str;long index;long length;}PitonStrIterator;
 static long piton_str_iterator_new(const char*str){if(!str){piton_raise_set("TypeError","'NoneType' object is not iterable");return 0;}PitonStrIterator*i=piton_alloc(sizeof(*i));i->magic=0x5049544E53545249LL;i->str=str;i->index=0;i->length=piton_strlen(str);return(long)i;}
 static long piton_str_iterator_next(long raw){PitonStrIterator*i=(PitonStrIterator*)raw;if(!i||i->magic!=0x5049544E53545249LL){piton_raise_set("TypeError","object is not an iterator");return 0;}if(i->index>=i->length){piton_raise_set("StopIteration","");return 0;}unsigned char c=i->str[i->index++];char*p=piton_alloc(2);p[0]=(char)c;p[1]=0;return(long)p;}
@@ -10177,8 +10207,8 @@ class LinuxCEmitter:
             else:
                 slot_expr = self._slot(part[1], types)
                 out.append(f"    {{PitonSlot r_{site}={slot_expr};")
-                out.append(f"     if(r_{site}.kind!=PK_LIST&&r_{site}.kind!=PK_TUPLE){{piton_raise_set(\"TypeError\",\"argument after * must be a list or tuple\");goto {site}_runtime_err;}}")
-                out.append(f"     PitonSeq*s_{site}=(PitonSeq*)r_{site}.bits;for(long j_{site}=0;j_{site}<s_{site}->length;++j_{site}){{PitonSlot v_{site}=s_{site}->items[j_{site}];")
+                out.append(f"     PitonSeq*s_{site}=0;if(r_{site}.kind==PK_LIST||r_{site}.kind==PK_TUPLE)s_{site}=(PitonSeq*)r_{site}.bits;else if(r_{site}.kind==PK_RANGE)s_{site}=piton_conv_seq(PK_LIST,r_{site});else{{piton_raise_set(\"TypeError\",\"argument after * must be a list or tuple\");goto {site}_runtime_err;}}")
+                out.append(f"     for(long j_{site}=0;j_{site}<s_{site}->length;++j_{site}){{PitonSlot v_{site}=s_{site}->items[j_{site}];")
                 emit_positional_value(f"v_{site}")
                 out.append("     }}")
 
@@ -10301,7 +10331,24 @@ class LinuxCEmitter:
         _too_many = _max_args is not None and len(values) > _max_args
         if _too_few or _too_many:
             _max_text = str(_max_args) if _max_args is not None else "ilimitados"
-            self._runtime_type_error(out, f"{function_name}() takes " + (_max_text if _min_args == _max_args else (str(_min_args) + " to " + _max_text)) + " positional arguments but " + str(len(values)) + " were given")
+            _range_text = (
+                _max_text
+                if _min_args == _max_args
+                else f"from {_min_args} to {_max_text}"
+            )
+            _position_word = (
+                "positional argument"
+                if _min_args == _max_args == 1
+                else "positional arguments"
+            )
+            _given_word = "was" if len(values) == 1 else "were"
+            self._runtime_type_error(
+                out,
+                f"{function_name}() takes {_range_text} {_position_word} "
+                f"but {len(values)} {_given_word} given",
+                function,
+                call_handler,
+            )
             types[result] = "int"
             return out
         values = self._complete_call_args(function_name, list(values), out)
@@ -14703,7 +14750,12 @@ class LinuxCEmitter:
             elif iterator_type == "iterator:memoryview":
                 out.append(f"    {_name(result)}=piton_memoryview_iter_next({self._value(iterator)});")
             elif iterator_type == "iterator:any":
-                out.append(f"    {_name(result)}=piton_iterator_next_any({self._value(iterator)});")
+                out.append(
+                    f"    {{PitonSlot _gn=piton_iterator_next_slot_any({self._value(iterator)});"
+                    f" if(!piton_exc_flag){{PitonSlot*_gb=piton_slot_box_new(_gn); {_name(result)}=(long)_gb;}}}}"
+                )
+                types[result] = "slot"
+                self._dyn_slot_temps.add((function.name, result))
             elif iterator_type.startswith("iterator:object:") or iterator_type.startswith("object:"):
                 class_name = iterator_type.split(":", 2)[2] if iterator_type.startswith("iterator:") else iterator_type.split(":", 1)[1]
                 try:
@@ -14740,7 +14792,7 @@ class LinuxCEmitter:
                     _k = _k2
                 ekind = (self._coll_elems.get(src) if src else None) or _elem
                 self._tuple_elems[result] = (("%idx", "int"), (src or "%src", ekind if ekind and "|" not in ekind else "int"))
-            if iterator_type in {"genexpr", "iterator:genexpr", "generator"}:
+            if iterator_type in {"genexpr", "iterator:genexpr", "generator", "iterator:any"}:
                 types[result] = "slot"
                 self._dyn_slot_temps.add((function.name, result))
             elif iterator_type == "iterator:dict":
@@ -15233,6 +15285,15 @@ class LinuxCEmitter:
                 types[result] = "int"
                 return out
             out.append(f"    {_name(result)}={_name(source)};")
+            if (
+                source in (self._dyn_slot_vars.get(function.name) or ())
+                or types.get(source) == "slot"
+            ):
+                # DYN_SLOT_VAR_LOAD_V1: loop targets fed by a tagged iterator
+                # remain boxed on later loads. The bits can be a tuple/list
+                # pointer whose runtime kind must reach `f(*value)` intact.
+                types[result] = "slot"
+                self._dyn_slot_temps.add((function.name, result))
             if source in getattr(self, "_dyn_attr_temps", ()):
                 self._dyn_attr_temps.add(result)
             elif result:
@@ -18566,13 +18627,15 @@ class LinuxCEmitter:
                     # CONV_GEN_V1: lista(generador) materializa en el runtime.
                     # TUPLE_OF_ITER_V1: tupla(g()) — se materializa igual y se
                     # convierte a la kind de destino (CPython: tuple(g())).
-                    _gen_tmp = f"(long)piton_collect_gen({self._value(values[0])})"
+                    out.append("    {long _gc=piton_collect_gen(" + self._value(values[0]) + ");")
+                    self._emit_exc_check(out, function, call_handler)
                     if seq_kind == "PK_TUPLE":
-                        out.append(f"    {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{{_gen_tmp},PK_LIST}});")
+                        out.append(f"    {_name(result)}=(long)piton_conv_seq(PK_TUPLE,(PitonSlot){{(long)_gc,PK_LIST}});")
                         types[result] = "tuple"
                     else:
-                        out.append(f"    {_name(result)}={_gen_tmp};")
+                        out.append(f"    {_name(result)}=(long)_gc;")
                         types[result] = "list"
+                    out.append("    }")
                     self._coll_elems[result] = "int"
                     return out
                 if source_type == "iterator:calliter" and seq_kind in {"PK_LIST", "PK_TUPLE"}:
