@@ -57,6 +57,27 @@ class MethodDecoratorParity(unittest.TestCase):
             "imprimir(Handler().process(4))\n",
         )
 
+    def test_factory_captured_side_effect_value_fails_closed(self):
+        source = (
+            "funcion etiquetar(etiqueta):\n"
+            "    funcion decorar(fn):\n"
+            "        imprimir(\"apply\", etiqueta)\n"
+            "        funcion envoltura(este, valor):\n"
+            "            devolver fn(este, valor)\n"
+            "        devolver envoltura\n"
+            "    devolver decorar\n"
+            "clase Handler:\n"
+            "    @etiquetar(\"outer\")\n"
+            "    funcion process(este, valor):\n"
+            "        devolver valor\n"
+            "imprimir(Handler().process(5))\n"
+        )
+        with pytest.raises(
+            NativeBuildError,
+            match="method decorator factories that read captured values while applying the decorator",
+        ):
+            compare_native_to_cpython(source)
+
     def test_method_decorator_on_typed_instance_name(self):
         _assert_matches(
             self,

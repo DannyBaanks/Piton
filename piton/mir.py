@@ -915,6 +915,119 @@ class MIRLowerer:
         visit(getattr(node, "body", None))
         return found
 
+    def _direct_function_free_loads(self, node: HIRNode) -> set[str]:
+        """Names a function reads from an enclosing scope in its own body."""
+        loaded: set[str] = set()
+        bound: set[str] = set()
+        global_names: set[str] = set()
+
+        def visit(value: Any) -> None:
+            if isinstance(value, (list, tuple)):
+                for item in value:
+                    visit(item)
+                return
+            kind = getattr(value, "kind", None)
+            if kind == HIRKind.LOAD:
+                name = getattr(value, "name", None)
+                if isinstance(name, str):
+                    loaded.add(name)
+                return
+            if kind == HIRKind.STORE:
+                name = getattr(value, "name", None)
+                if isinstance(name, str):
+                    bound.add(name)
+                return
+            if kind == HIRKind.GLOBAL:
+                global_names.update(getattr(value, "names", []) or [])
+                return
+            if kind in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
+                name = getattr(value, "name", None)
+                if isinstance(name, str):
+                    bound.add(name)
+                # Decorators, bases, annotations, and defaults execute while
+                # this function is defining the nested object. Its body does
+                # not execute until later, so do not treat those loads as
+                # current-scope closure reads.
+                for field_name in ("decorators", "bases", "keywords", "returns", "args"):
+                    visit(getattr(value, field_name, None))
+                return
+            if kind == HIRKind.LAMBDA:
+                return
+            try:
+                descriptors = fields(value)
+            except (TypeError, AttributeError):
+                return
+            for descriptor in descriptors:
+                if descriptor.name in {"kind", "line", "col", "annotations"}:
+                    continue
+                visit(getattr(value, descriptor.name, None))
+
+        visit(getattr(node, "body", None))
+        args = getattr(node, "args", None)
+        if args is not None:
+            for arg in (
+                *list(getattr(args, "posonlyargs", []) or []),
+                *list(getattr(args, "args", []) or []),
+                *list(getattr(args, "kwonlyargs", []) or []),
+            ):
+                name = getattr(arg, "name", arg if isinstance(arg, str) else None)
+                if isinstance(name, str):
+                    bound.add(name)
+            for arg in (getattr(args, "vararg", None), getattr(args, "kwarg", None)):
+                name = getattr(arg, "name", arg if isinstance(arg, str) else None)
+                if isinstance(name, str):
+                    bound.add(name)
+        return loaded - bound - global_names
+
+    def _factory_decorator_uses_captured_values(
+        self, factory: HIRNode, expression: HIRNode,
+    ) -> bool:
+        """Detect factory parameters used while applying its returned decorator."""
+        parameter_nodes = [
+            *list(getattr(getattr(factory, "args", None), "posonlyargs", []) or []),
+            *list(getattr(getattr(factory, "args", None), "args", []) or []),
+            *list(getattr(getattr(factory, "args", None), "kwonlyargs", []) or []),
+        ]
+        parameter_names = [getattr(arg, "name", arg if isinstance(arg, str) else None) for arg in parameter_nodes]
+        parameters = {name for name in parameter_names if isinstance(name, str)}
+        args = getattr(factory, "args", None)
+        for arg in (getattr(args, "vararg", None), getattr(args, "kwarg", None)):
+            name = getattr(arg, "name", arg if isinstance(arg, str) else None)
+            if isinstance(name, str):
+                parameters.add(name)
+        if not parameters:
+            return False
+        values: dict[str, HIRNode] = {}
+        positional_values = list(getattr(expression, "args", []) or [])
+        has_dynamic_positional = bool(getattr(expression, "starred_args", ()) or ())
+        has_dynamic_keywords = False
+        for index, value in enumerate(positional_values):
+            if index < len(parameter_names) and isinstance(parameter_names[index], str):
+                values[parameter_names[index]] = value
+        for keyword in getattr(expression, "keywords", []) or []:
+            name = getattr(keyword, "arg", None)
+            if isinstance(name, str):
+                values[name] = getattr(keyword, "value", None)
+            else:
+                has_dynamic_keywords = True
+        nested = {
+            getattr(item, "name", None): item
+            for item in getattr(factory, "body", []) or []
+            if getattr(item, "kind", None) == HIRKind.FUNC_DEF
+        }
+        for value in self._direct_function_returns(factory):
+            target = nested.get(getattr(value, "name", None))
+            if target is None:
+                continue
+            for captured in self._direct_function_free_loads(target) & parameters:
+                if has_dynamic_positional or has_dynamic_keywords:
+                    return True
+                argument = values.get(captured)
+                if (getattr(argument, "kind", None) != HIRKind.CONST
+                        or type(getattr(argument, "value", None)) not in {int, float, bool, type(None)}):
+                    return True
+        return False
+
     def _function_returns_callable(self, node: HIRNode) -> bool:
         """Prove a decorator returns its input function or a native closure."""
         if (getattr(node, "kind", None) != HIRKind.FUNC_DEF
@@ -1080,7 +1193,10 @@ class MIRLowerer:
                 return False
 
         if is_factory:
-            return self._factory_returns_callable_decorator(function_node)
+            return (
+                self._factory_returns_callable_decorator(function_node)
+                and not self._factory_decorator_uses_captured_values(function_node, expression)
+            )
         return self._function_returns_callable(function_node)
 
     def _class_method_symbol(
@@ -1155,6 +1271,15 @@ class MIRLowerer:
                 raise MIRLoweringError(
                     f"native class method decorator '@{name}' result cannot be represented natively"
                 )
+            if getattr(dec, "kind", None) == HIRKind.CALL:
+                callee = getattr(dec, "func", None)
+                factory = self._module_func_nodes.get(getattr(callee, "name", None))
+                if (factory is not None
+                        and self._factory_decorator_uses_captured_values(factory, dec)):
+                    raise MIRLoweringError(
+                        "native method decorator factories that read captured values while "
+                        "applying the decorator are not supported"
+                    )
 
         if all(self._supported_method_decorator(dec, class_local_names) for dec in decorators):
             if method.name.startswith("__") and method.name.endswith("__"):
