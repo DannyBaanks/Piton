@@ -90,9 +90,9 @@ class IntPowV1(unittest.TestCase):
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("imprimir(0 ** -1)\n")
 
-    def test_bigint_base_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir((10 ** 30) ** 2)\n")
+    def test_bigint_base_pow_matches_cpython(self):
+        _assert_matches(self, "imprimir((10 ** 30) ** 2)\n")
+        _assert_matches(self, "x = 10 ** 30\nimprimir(x ** 2)\n")
 
 
 class BigintZeroPrintV1(unittest.TestCase):

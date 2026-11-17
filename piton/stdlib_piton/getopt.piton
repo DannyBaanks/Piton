@@ -1,5 +1,17 @@
 clase GetoptError (Exception ) :
-    pasar
+    msg = ''
+    opt = ''
+
+    funcion __init__ (self ,msg ,opt ='' ):
+        self .msg = msg
+        self .opt = opt
+        self .args = (msg ,opt )
+
+    funcion __str__ (self ):
+        devolver self .msg
+
+    funcion __repr__ (self ):
+        devolver "GetoptError(" + repr (self .msg ) + ", " + repr (self .opt ) + ")"
 
 error = GetoptError
 

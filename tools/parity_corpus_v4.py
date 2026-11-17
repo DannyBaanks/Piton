@@ -787,6 +787,19 @@ def _git_status() -> tuple[bool, list[str]]:
     except Exception:
         return False, ["unknown"]
 
+def bundled_untracked() -> list[str]:
+    """PROVENANCE_GATE_V1: modulos de piton/stdlib_piton/ que NO estan en git.
+    Un modulo sin trackear puede cambiar el resultado de tier B sin que el
+    commit lo diga (el stub json.piton hacia pasar ejemplos por accidente)."""
+    try:
+        out = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "--",
+                              "piton/stdlib_piton"], capture_output=True, text=True,
+                             cwd=REPO, timeout=10)
+        return sorted(l.strip() for l in out.stdout.splitlines() if l.strip())
+    except Exception:
+        return ["unknown"]
+
+
 def _hash_file(path: Path) -> str:
     try:
         h = hashlib.sha256()
@@ -978,19 +991,36 @@ def render_markdown(meta: dict, tier_a: dict, tier_b_funnel: dict,
 
 def cmd_run(tier: str, out: str | None, markdown: str | None, workers: int,
             recursive: bool = False, exclude: tuple[str, ...] = (),
-            isolate: bool = False) -> int:
+            isolate: bool = False, allow_dirty: bool = False) -> int:
     git_clean, git_dirty = _git_status()
+    untracked_bundled = bundled_untracked()
+    if tier in {"b", "all"} and untracked_bundled and not allow_dirty:
+        # PROVENANCE_GATE_V1: no se certifica tier B sobre modulos sin commit.
+        print("NO CERTIFICABLE: tier B medido con modulos bundled sin trackear:")
+        for line in untracked_bundled:
+            print(f"  ?? {line}")
+        print("Haz commit de esos archivos o repite con --allow-dirty (solo exploracion).")
+        return 3
     tool_path = REPO / "tools" / "parity_corpus_v4.py"
     instrument_hash = _hash_file(tool_path)
     # hash of core piton lowering files for reproducibility
     mir_hash = _hash_file(REPO / "piton" / "mir.py")
     linux_hash = _hash_file(REPO / "piton" / "linux_x86.py")
-    verified = git_clean
+    # PROVENANCE_VERIFIED_V2: "verificado" = sin cambios en archivos trackeados y
+    # sin archivos sin trackear DENTRO de lo que se mide (piton/, tools/, tests/,
+    # corpus_v4/). Un archivo suelto fuera de esas carpetas no altera la medicion.
+    _measured_untracked = [
+        l for l in git_dirty
+        if l.startswith("?? ") and l[3:].split("/")[0] in {"piton", "tools", "tests", "corpus_v4"}
+    ]
+    _measured_modified = [l for l in git_dirty if not l.startswith("?? ")]
+    verified = not _measured_untracked and not _measured_modified
     meta = {"date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "oracle": f"CPython {platform.python_version()}",
             "platform": platform.platform(), "git_sha": _git_sha(),
             "git_clean": git_clean,
             "git_dirty_files": git_dirty,
+            "untracked_bundled": untracked_bundled,
             "verified": verified,
             "instrument_hash": instrument_hash,
             "piton_mir_hash": mir_hash,
@@ -1078,11 +1108,13 @@ def main(argv: list[str]) -> int:
                      help="descarta rutas que contengan SUBSTR (repetible)")
     run.add_argument("--isolate", action="store_true",
                      help="tier A: compila cada archivo en un proceso hijo")
+    run.add_argument("--allow-dirty", action="store_true",
+                     help="permite medir tier B con modulos bundled sin trackear (exploracion; no certificable)")
     args = parser.parse_args(argv)
     if args.cmd == "fetch":
         return cmd_fetch()
     return cmd_run(args.tier, args.out, args.markdown, args.workers,
-                   args.recursive, tuple(args.exclude), args.isolate)
+                   args.recursive, tuple(args.exclude), args.isolate, args.allow_dirty)
 
 
 if __name__ == "__main__":

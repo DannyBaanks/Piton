@@ -1,3 +1,7 @@
+funcion mkdtemp (suffix =Nada ,prefix =Nada ,dir =Nada ):
+    devolver __piton_mkdtemp (suffix ,prefix ,dir )
+
+
 funcion TemporaryFile (*args, **kwargs):
     lanzar NotImplementedError ('tempfile.TemporaryFile no esta implementado en el backend nativo')
 

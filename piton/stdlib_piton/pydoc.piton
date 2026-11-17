@@ -2,13 +2,13 @@ funcion help (obj):
     devolver
 
 funcion cli ():
-    pasar
+    lanzar NotImplementedError ('pydoc.cli no esta implementado en el backend nativo')
 
 funcion render_doc (obj,title='',maxlen=0):
-    devolver ""
+    lanzar NotImplementedError ('pydoc.render_doc no esta implementado en el backend nativo')
 
 funcion describe (obj):
-    devolver ""
+    lanzar NotImplementedError ('pydoc.describe no esta implementado en el backend nativo')
 
 clase ModuleScanner :
     funcion __init__ (self):

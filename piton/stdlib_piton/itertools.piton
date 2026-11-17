@@ -1,8 +1,20 @@
-funcion chain (*iterables ):
-    out = []
-    para it en iterables :
-        out = out + list (it )
-    devolver out
+clase chain :
+    # Mantiene la forma callable de itertools.chain y conserva los tipos de
+    # cada elemento al aplanar generadores y expresiones generadoras.
+    funcion __init__ (self ,*iterables ):
+        self._items = []
+        para it en iterables :
+            para item en it :
+                self._items.append (item )
+    funcion __iter__ (self ):
+        devolver iter (self._items )
+    @staticmethod
+    funcion from_iterable (iterables ):
+        out = []
+        para it en iterables :
+            para item en it :
+                out.append (item )
+        devolver out
 
 
 funcion repeat (obj ,veces =Nada ):
@@ -16,13 +28,65 @@ funcion repeat (obj ,veces =Nada ):
     devolver out
 
 
-funcion islice (it ,inicio =0 ,fin =Nada ,paso =1 ):
-    items = list (it )
-    si fin es Nada :
-        si inicio == 0 :
-            devolver items
-        devolver items [inicio :]
-    devolver items [inicio :fin :paso ]
+clase _CountIter :
+    # ITERADOR PEREZOSO real: genera inicio, inicio+paso, ... sin materializar.
+    funcion __init__ (self ,inicio =0 ,paso =1 ):
+        self._actual = inicio
+        self._paso = paso
+    funcion __iter__ (self ):
+        devolver self
+    funcion __next__ (self ):
+        actual = self._actual
+        self._actual = actual + self._paso
+        devolver actual
+
+funcion count (inicio =0 ,paso =1 ):
+    devolver _CountIter (inicio ,paso )
+
+
+funcion islice (it ,a =Nada ,b =Nada ,paso =1 ):
+    # ISLAZE_V1: islice perezoso real sobre cualquier iterable (incluidos los
+    # infinitos como itertools.count). Consume con iter() + next() capturando
+    # StopIteration y deteniendose al alcanzar `stop` sin materializar el resto
+    # si es infinito. Devuelve una lista (acotada por stop). Firma de CPython:
+    # islice(it, stop) o islice(it, start, stop[, step]).
+    si paso <= 0 :
+        lanzar ValueError ('Step for islice() must be a positive integer or None.')
+    si a es Nada y b es Nada :
+        lanzar TypeError ('islice() requires at least one argument (stop)')
+    si b es Nada :
+        inicio = 0
+        fin = a
+    sino :
+        inicio = a
+        fin = b
+    si fin <= inicio :
+        devolver []
+    itr = iter (it )
+    out = []
+    pos = inicio
+    saltados = 0
+    mientras saltados < inicio :
+        intentar :
+            next (itr )
+        excepto StopIteration :
+            devolver out
+        saltados = saltados + 1
+    mientras pos < fin :
+        intentar :
+            valor = next (itr )
+        excepto StopIteration :
+            devolver out
+        out.append (valor )
+        pos = pos + paso
+        skip = 1
+        mientras skip < paso :
+            intentar :
+                next (itr )
+            excepto StopIteration :
+                devolver out
+            skip = skip + 1
+    devolver out
 
 
 funcion filterfalse (pred ,items ):
@@ -66,25 +130,156 @@ funcion tee (it ,n =2 ):
     lanzar NotImplementedError ('itertools.tee no esta implementado en el backend nativo: el materializado compartiria estado')
 
 
-funcion count (inicio =0 ,paso =1 ):
-    lanzar NotImplementedError ('itertools.count es infinito: el subset materializa y colgaria')
-
-
 funcion cycle (it ):
     lanzar NotImplementedError ('itertools.cycle es infinito: el subset materializa y colgaria')
 
 
 funcion groupby (it ,clave =Nada ):
-    lanzar NotImplementedError ('itertools.groupby no esta implementado en el backend nativo')
+    # GROUPBY_V1: materializa el iterable y agrupa consecutivos iguales como
+    # (clave, lista). CPython devuelve (clave, iterador): el subset materializa,
+    # asi que el segundo elemento ya es una lista (list(par[1]) sigue valiendo).
+    si clave no es Nada :
+        lanzar NotImplementedError ('itertools.groupby con funcion clave no esta implementado en el backend nativo')
+    items = []
+    para x en it :
+        items.append (x )
+    n = longitud (items )
+    out = []
+    i = 0
+    mientras i < n :
+        actual = items [i ]
+        grupo = []
+        mientras i < n y items [i ] == actual :
+            grupo.append (items [i ])
+            i = i + 1
+        out.append ((actual ,grupo ))
+    devolver out
 
 
 funcion permutations (it ,r =Nada ):
-    lanzar NotImplementedError ('itertools.permutations no esta implementado en el backend nativo')
+    # PERMUTATIONS_V1: permutaciones en orden lexicografico idéntico a CPython
+    # 3.12, sobre posiciones (no sobre igualdad de valores). r=None -> n,
+    # r<0 -> ValueError('r must be non-negative'), r>n -> [], r==0 -> [()].
+    pool = []
+    para x en it :
+        pool.append (x )
+    n = longitud (pool )
+    si r es Nada :
+        r = n
+    si r < 0 :
+        lanzar ValueError ('r must be non-negative')
+    si r > n :
+        devolver []
+    indices = []
+    i = 0
+    mientras i < n :
+        indices.append (i )
+        i = i + 1
+    cycles = []
+    i = 0
+    mientras i < r :
+        cycles.append (n - i )
+        i = i + 1
+    out = []
+    fila = []
+    i = 0
+    mientras i < r :
+        fila.append (pool [indices [i ]])
+        i = i + 1
+    out.append (tuple (fila ))
+    mientras Verdadero :
+        i = r - 1
+        salio = Falso
+        mientras i >= 0 :
+            cycles [i ] = cycles [i ] - 1
+            si cycles [i ] == 0 :
+                temp = indices [i ]
+                k = i
+                mientras k < n - 1 :
+                    indices [k ] = indices [k + 1 ]
+                    k = k + 1
+                indices [n - 1 ] = temp
+                cycles [i ] = n - i
+            sino :
+                j = cycles [i ]
+                idx2 = n - j
+                temp = indices [i ]
+                indices [i ] = indices [idx2 ]
+                indices [idx2 ] = temp
+                fila = []
+                k = 0
+                mientras k < r :
+                    fila.append (pool [indices [k ]])
+                    k = k + 1
+                out.append (tuple (fila ))
+                salio = Verdadero
+                romper
+            i = i - 1
+        si no salio :
+            romper
+    devolver out
 
 
 funcion combinations (it ,r ):
-    lanzar NotImplementedError ('itertools.combinations no esta implementado en el backend nativo')
+    # COMBINATIONS_V1: subconjuntos de tamano r en orden lexicografico, con
+    # vector de indices (sin recursion). r=0 devuelve una tupla vacia, como
+    # CPython; r<0 es ValueError.
+    si r < 0 :
+        lanzar ValueError ('r must be non-negative')
+    items = []
+    para x en it :
+        items.append (x )
+    n = longitud (items )
+    out = []
+    si r > n :
+        devolver out
+    idx = []
+    i = 0
+    mientras i < r :
+        idx.append (i )
+        i = i + 1
+    seguir = Verdadero
+    mientras seguir :
+        fila = []
+        i = 0
+        mientras i < r :
+            fila.append (items [idx [i ]])
+            i = i + 1
+        out.append (tuple (fila ))
+        j = r - 1
+        tope = n - r + j
+        mientras j >= 0 y idx [j ] == tope :
+            j = j - 1
+            tope = n - r + j
+        si j < 0 :
+            seguir = Falso
+        sino :
+            idx [j ] = idx [j ] + 1
+            k = j + 1
+            mientras k < r :
+                idx [k ] = idx [k - 1 ] + 1
+                k = k + 1
+    devolver out
 
 
-funcion product (*iterables ,**opciones ):
-    lanzar NotImplementedError ('itertools.product no esta implementado en el backend nativo')
+funcion product (a ,b =Nada ,c =Nada ):
+    # PRODUCT_V1: producto cartesiano como lista de tuplas. 2-3 iterables
+    # (varargs en bundled no reciben argumentos). Se itera el PARAMETRO
+    # directamente: `lista(b)` perderia la kind de cada elemento (los params
+    # de bundled no heredan el tipo del call-site) y las tuplas mixtas
+    # saldrian con punteros crudos. Iterar el param rinde slots etiquetados.
+    resultado = []
+    si b es Nada :
+        para x en a :
+            resultado.append ((x ,))
+        devolver resultado
+    si c es Nada :
+        para x en a :
+            para y en b :
+                resultado.append ((x ,y ))
+        devolver resultado
+    para x en a :
+        para y en b :
+            para z en c :
+                resultado.append ((x ,y ,z ))
+    devolver resultado

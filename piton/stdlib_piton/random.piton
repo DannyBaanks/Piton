@@ -1,38 +1,592 @@
-clase Random :
+# random.piton — CPython 3.12 parity random module (MT19937 + sample)
+
+_MT_WORDS = []
+_MT_KEY = []
+_AUTO_SEED = [1357924680]
+
+
+funcion _mt_alloc():
+    base = longitud(_MT_WORDS)
+    i = 0
+    mientras i < 625:
+        _MT_WORDS.append(0)
+        i = i + 1
+    _MT_WORDS[base + 624] = 625
+    devolver base
+
+
+funcion _mt_init_genrand(base, s):
+    _MT_WORDS[base] = s & 4294967295
+    i = 1
+    mientras i < 624:
+        prev = _MT_WORDS[base + i - 1]
+        _MT_WORDS[base + i] = (1812433253 * (prev ^ (prev >> 30)) + i) & 4294967295
+        i = i + 1
+    _MT_WORDS[base + 624] = 624
+
+
+funcion _mt_init_from_keybuf(base):
+    _mt_init_genrand(base, 19650218)
+    key_len = longitud(_MT_KEY)
+    i = 1
+    j = 0
+    k = 624
+    si key_len > 624:
+        k = key_len
+    mientras k > 0:
+        prev = _MT_WORDS[base + i - 1]
+        cur = _MT_WORDS[base + i]
+        _MT_WORDS[base + i] = ((cur ^ ((prev ^ (prev >> 30)) * 1664525)) + _MT_KEY[j] + j) & 4294967295
+        i = i + 1
+        j = j + 1
+        si i >= 624:
+            _MT_WORDS[base] = _MT_WORDS[base + 623]
+            i = 1
+        si j >= key_len:
+            j = 0
+        k = k - 1
+    k = 623
+    mientras k > 0:
+        prev = _MT_WORDS[base + i - 1]
+        cur = _MT_WORDS[base + i]
+        _MT_WORDS[base + i] = ((cur ^ ((prev ^ (prev >> 30)) * 1566083941)) - i) & 4294967295
+        i = i + 1
+        si i >= 624:
+            _MT_WORDS[base] = _MT_WORDS[base + 623]
+            i = 1
+        k = k - 1
+    _MT_WORDS[base] = 2147483648
+
+
+funcion _mt_seed_int(base, a):
+    v = a
+    si v < 0:
+        v = -v
+    _MT_KEY.clear()
+    si v == 0:
+        _MT_KEY.append(0)
+    sino:
+        mientras v > 0:
+            _MT_KEY.append(v & 4294967295)
+            v = v >> 32
+    _mt_init_from_keybuf(base)
+
+
+funcion _mt_twist(base):
+    kk = 0
+    mientras kk < 227:
+        y = (_MT_WORDS[base + kk] & 2147483648) | (_MT_WORDS[base + kk + 1] & 2147483647)
+        mag = 0
+        si (y & 1) != 0:
+            mag = 2567483615
+        _MT_WORDS[base + kk] = _MT_WORDS[base + kk + 397] ^ (y >> 1) ^ mag
+        kk = kk + 1
+    mientras kk < 623:
+        y = (_MT_WORDS[base + kk] & 2147483648) | (_MT_WORDS[base + kk + 1] & 2147483647)
+        mag = 0
+        si (y & 1) != 0:
+            mag = 2567483615
+        _MT_WORDS[base + kk] = _MT_WORDS[base + kk - 227] ^ (y >> 1) ^ mag
+        kk = kk + 1
+    y = (_MT_WORDS[base + 623] & 2147483648) | (_MT_WORDS[base] & 2147483647)
+    mag = 0
+    si (y & 1) != 0:
+        mag = 2567483615
+    _MT_WORDS[base + 623] = _MT_WORDS[base + 396] ^ (y >> 1) ^ mag
+    _MT_WORDS[base + 624] = 0
+
+
+funcion _mt_uint32(base):
+    si _MT_WORDS[base + 624] >= 624:
+        _mt_twist(base)
+    mti = _MT_WORDS[base + 624]
+    y = _MT_WORDS[base + mti]
+    _MT_WORDS[base + 624] = mti + 1
+    y = y ^ (y >> 11)
+    y = y ^ ((y << 7) & 2636928640)
+    y = y ^ ((y << 15) & 4022730752)
+    y = y ^ (y >> 18)
+    devolver y
+
+
+funcion _mt_getrandbits(base, k):
+    si k < 0:
+        lanzar ValueError("number of bits must be non-negative")
+    si k == 0:
+        devolver 0
+    si k <= 32:
+        r = _mt_uint32(base)
+        devolver r >> (32 - k)
+    words = ((k - 1) // 32) + 1
+    acc = 0
+    i = 0
+    mientras i < words:
+        r = _mt_uint32(base)
+        si i == words - 1:
+            rem = k % 32
+            si rem != 0:
+                r = r >> (32 - rem)
+        acc = acc + (r << (i * 32))
+        i = i + 1
+    devolver acc
+
+
+funcion _mt_random(base):
+    a = _mt_uint32(base) >> 5
+    b = _mt_uint32(base) >> 6
+    devolver (decimal(a) * 67108864.0 + decimal(b)) * (1.0 / 9007199254740992.0)
+
+
+funcion _bit_length(n):
+    v = n
+    si v < 0:
+        v = -v
+    bits = 0
+    mientras v > 0:
+        v = v >> 1
+        bits = bits + 1
+    devolver bits
+
+
+funcion _mt_randbelow(base, n):
+    si no n:
+        devolver 0
+    k = _bit_length(n)
+    r = _mt_getrandbits(base, k)
+    mientras r >= n:
+        r = _mt_getrandbits(base, k)
+    devolver r
+
+
+funcion _setsize_for(k):
+    setsize = 21
+    si k > 5:
+        p = 1
+        limit = k * 3
+        mientras p < limit:
+            p = p * 4
+        setsize = setsize + p
+    devolver setsize
+
+
+funcion _bisect_right(arr, x):
+    lo = 0
+    hi = longitud(arr)
+    mientras lo < hi:
+        mid = (lo + hi) // 2
+        si x < arr[mid]:
+            hi = mid
+        sino:
+            lo = mid + 1
+    devolver lo
+
+
+funcion _is_none_val(v):
+    si (v es Nada) o (v == Nada):
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _slot_is_int(box):
+    x = box[0]
+    si es_instancia(x, int):
+        devolver Verdadero
+    devolver Falso
+
+
+clase _Unbox:
+    funcion __init__(este):
+        este.v = Nada
+
+    funcion __setitem__(este, k, v):
+        este.v = v
+
+
+funcion _range_at(rng, i):
+    d = {}
+    d["r"] = rng
+    r = d["r"]
+    devolver r[i]
+
+
+funcion _seq_copy(seq):
+    n = longitud(seq)
+    out = []
+    i = 0
+    mientras i < n:
+        out.append(seq[i])
+        i = i + 1
+    devolver out
+
+
+funcion _str_to_chars(raw):
+    s = texto(raw)
+    out = []
+    i = 0
+    n = longitud(s)
+    mientras i < n:
+        out.append(s[i])
+        i = i + 1
+    devolver out
+
+
+funcion _accum_counts_list(seq):
+    si Falso:
+        _dummy_c = longitud(seq)
+    nc = longitud(seq)
+    cum = []
+    acc = 0
+    i = 0
+    mientras i < nc:
+        c = seq[i]
+        si no _slot_is_int([c]):
+            lanzar TypeError("Counts must be integers")
+        acc = acc + c
+        cum.append(acc)
+        i = i + 1
+    devolver cum
+
+
+funcion _accum_counts_slot(cbox, raw_cnt):
+    cx = cbox[0]
+    si es_instancia(cx, list) o es_instancia(cx, tuple):
+        copied = _seq_copy(raw_cnt)
+        devolver _accum_counts_list(copied)
+    si es_instancia(cx, rango):
+        nr = longitud(raw_cnt)
+        cum = []
+        acc = 0
+        i = 0
+        mientras i < nr:
+            acc = acc + _range_at(raw_cnt, i)
+            cum.append(acc)
+            i = i + 1
+        devolver cum
+    lanzar TypeError("Counts must be an iterable of integers")
+
+
+funcion _accum_counts_raw(raw_cnt):
+    devolver _accum_counts_slot([raw_cnt], raw_cnt)
+
+
+funcion _sample_range_core(base, total, k):
+    si k < 0 o k > total:
+        lanzar ValueError("Sample larger than population or is negative")
+    result = []
+    i = 0
+    mientras i < k:
+        result.append(0)
+        i = i + 1
+    setsize = _setsize_for(k)
+    si total <= setsize:
+        pool = []
+        i = 0
+        mientras i < total:
+            pool.append(i)
+            i = i + 1
+        i = 0
+        mientras i < k:
+            j = _mt_randbelow(base, total - i)
+            result[i] = pool[j]
+            pool[j] = pool[total - i - 1]
+            i = i + 1
+        devolver result
+    selected = set()
+    i = 0
+    mientras i < k:
+        j = _mt_randbelow(base, total)
+        mientras j en selected:
+            j = _mt_randbelow(base, total)
+        selected.add(j)
+        result[i] = j
+        i = i + 1
+    devolver result
+
+
+funcion _sample_seq_with_cum(base, seq_list, n, k, cum_counts):
+    si Falso:
+        _dummy_l = longitud(seq_list)
+    si longitud(cum_counts) != n:
+        lanzar ValueError("The number of counts does not match the population")
+    total = cum_counts.pop()
+    si total <= 0:
+        lanzar ValueError("Total of counts must be greater than zero")
+    selections = _sample_range_core(base, total, k)
+    out = []
+    para s en selections:
+        out.append(seq_list[_bisect_right(cum_counts, s)])
+    devolver out
+
+
+funcion _sample_range_with_cum(base, pop_val, n, k, cum_counts):
+    si longitud(cum_counts) != n:
+        lanzar ValueError("The number of counts does not match the population")
+    total = cum_counts.pop()
+    si total <= 0:
+        lanzar ValueError("Total of counts must be greater than zero")
+    selections = _sample_range_core(base, total, k)
+    out = []
+    para s en selections:
+        out.append(pop_val[_bisect_right(cum_counts, s)])
+    devolver out
+
+
+funcion _sample_seq_plain(base, seq_list, n, k):
+    si Falso:
+        _dummy_l = longitud(seq_list)
+    si k < 0 o k > n:
+        lanzar ValueError("Sample larger than population or is negative")
+    result = []
+    setsize = _setsize_for(k)
+    si n <= setsize:
+        pool = []
+        i = 0
+        mientras i < n:
+            pool.append(i)
+            i = i + 1
+        i = 0
+        mientras i < k:
+            j = _mt_randbelow(base, n - i)
+            idx = pool[j]
+            result.append(seq_list[idx])
+            pool[j] = pool[n - i - 1]
+            i = i + 1
+        devolver result
+    selected = set()
+    i = 0
+    mientras i < k:
+        j = _mt_randbelow(base, n)
+        mientras j en selected:
+            j = _mt_randbelow(base, n)
+        selected.add(j)
+        result.append(seq_list[j])
+        i = i + 1
+    devolver result
+
+
+funcion _sample_range_plain(base, pop_val, n, k):
+    indices = _sample_range_core(base, n, k)
+    out = []
+    para idx en indices:
+        out.append(pop_val[idx])
+    devolver out
+
+
+funcion _slot_seq_kind(box):
+    x = box[0]
+    si es_instancia(x, str):
+        devolver "str"
+    si es_instancia(x, list) o es_instancia(x, tuple):
+        devolver "seq"
+    si es_instancia(x, rango):
+        devolver "range"
+    devolver "other"
+
+
+funcion _raw_seq_kind(raw):
+    si _is_none_val(raw):
+        devolver "other"
+    devolver _slot_seq_kind([raw])
+
+
+funcion _sample_raw_core(base, raw_pop, k, raw_cnt):
+    kind = _raw_seq_kind(raw_pop)
+    si kind == "other":
+        lanzar TypeError("Population must be a sequence.  For dicts or sets, use sorted(d).")
+    has_counts = no _is_none_val(raw_cnt)
+    si kind == "str":
+        chars = _str_to_chars(raw_pop)
+        n = longitud(chars)
+        si has_counts:
+            devolver _sample_seq_with_cum(base, chars, n, k, _accum_counts_raw(raw_cnt))
+        devolver _sample_seq_plain(base, chars, n, k)
+    si kind == "seq":
+        copied = _seq_copy(raw_pop)
+        n = longitud(copied)
+        si has_counts:
+            devolver _sample_seq_with_cum(base, copied, n, k, _accum_counts_raw(raw_cnt))
+        devolver _sample_seq_plain(base, copied, n, k)
+    n = longitud(raw_pop)
+    si has_counts:
+        devolver _sample_range_with_cum(base, raw_pop, n, k, _accum_counts_raw(raw_cnt))
+    devolver _sample_range_plain(base, raw_pop, n, k)
+
+
+funcion _make_raw_sample_fn():
+    funcion _fn(base, raw_pop, k, raw_cnt):
+        devolver _sample_raw_core(base, raw_pop, k, raw_cnt)
+    devolver _fn
+
+
+_RAW_SAMPLE_FN = _make_raw_sample_fn()
+
+
+funcion _head_slot(xs):
+    si Falso:
+        xs.append(0)
+    devolver xs[0]
+
+
+clase Random:
+    funcion __init__(este, x=Nada):
+        este._base = _mt_alloc()
+        este.seed(x)
+
+    funcion seed(este, a=Nada, version=2):
+        si _is_none_val(a):
+            s = _AUTO_SEED[0]
+            _AUTO_SEED[0] = (s * 1664525 + 1013904223) & 4294967295
+            _mt_seed_int(este._base, s)
+            devolver Nada
+        box = [a]
+        si _slot_is_int(box):
+            _mt_seed_int(este._base, a)
+            devolver Nada
+        _mt_seed_int(este._base, 0)
+        devolver Nada
+
+    funcion getrandbits(este, k):
+        devolver _mt_getrandbits(este._base, k)
+
+    funcion random(este):
+        devolver _mt_random(este._base)
+
+    funcion _randbelow(este, n):
+        devolver _mt_randbelow(este._base, n)
+
+    funcion randrange(este, start, stop=Nada, step=1):
+        istart = entero(start)
+        si _is_none_val(stop):
+            si istart > 0:
+                devolver este._randbelow(istart)
+            lanzar ValueError("empty range for randrange()")
+        istop = entero(stop)
+        width = istop - istart
+        istep = entero(step)
+        si istep == 1:
+            si width > 0:
+                devolver istart + este._randbelow(width)
+            lanzar ValueError("empty range for randrange()")
+        si istep > 0:
+            n = (width + istep - 1) // istep
+        sino:
+            si istep < 0:
+                n = (width + istep + 1) // istep
+            sino:
+                lanzar ValueError("zero step for randrange()")
+        si n <= 0:
+            lanzar ValueError("empty range for randrange()")
+        devolver istart + istep * este._randbelow(n)
+
+    funcion randint(este, a, b):
+        devolver este.randrange(a, b + 1)
+
+    funcion uniform(este, a=0.0, b=0.0):
+        fa = decimal(a)
+        fb = decimal(b)
+        devolver fa + (fb - fa) * _mt_random(este._base)
+
+    funcion gauss(este, mu=0.0, sigma=1.0):
+        fmu = decimal(mu)
+        fsigma = decimal(sigma)
+        devolver fmu + fsigma * (_mt_random(este._base) - 0.5)
+
+    funcion choice(este, seq):
+        si longitud(seq) == 0:
+            lanzar IndexError("Cannot choose from an empty sequence")
+        picked = este.sample(seq, 1)
+        devolver _head_slot(picked)
+
+    funcion shuffle(este, x):
+        n = longitud(x)
+        i = n - 1
+        mientras i > 0:
+            j = este._randbelow(i + 1)
+            tmp = x[i]
+            x[i] = x[j]
+            x[j] = tmp
+            i = i - 1
+
+    funcion sample(este, population, k, counts=Nada):
+        u_pop = _Unbox()
+        u_pop[0] = population
+        u_cnt = _Unbox()
+        u_cnt[0] = counts
+        res = _RAW_SAMPLE_FN(este._base, u_pop.v, k, u_cnt.v)
+        si Falso:
+            devolver []
+        devolver res
+
+
+clase SystemRandom(Random):
     pasar
 
 
-clase SystemRandom :
+clase _Random(Random):
     pasar
 
 
-clase _Random :
+clase _SystemRandom(SystemRandom):
     pasar
 
 
-clase _SystemRandom :
-    pasar
+_inst = Random()
 
 
-funcion seed (*resto ):
-    lanzar NotImplementedError ('random.seed no esta implementado en el backend nativo: no hay fuente de entropia')
+clase seed:
+    funcion __init__(este, a=Nada, version=2):
+        _inst.seed(a, version)
 
 
-funcion random ():
-    lanzar NotImplementedError ('random.random no esta implementado en el backend nativo')
+funcion sample(population, k, counts=Nada):
+    u_pop = _Unbox()
+    u_pop[0] = population
+    u_cnt = _Unbox()
+    u_cnt[0] = counts
+    res = _RAW_SAMPLE_FN(_inst._base, u_pop.v, k, u_cnt.v)
+    si Falso:
+        devolver []
+    devolver res
 
 
-funcion randrange (a ,b =Nada ,c =Nada ):
-    lanzar NotImplementedError ('random.randrange no esta implementado en el backend nativo')
+si _AUTO_SEED[0] < 0:
+    _w_sample = sample(rango(0), 0, rango(0))
 
 
-funcion randint (a ,b ):
-    lanzar NotImplementedError ('random.randint no esta implementado en el backend nativo')
+funcion random():
+    devolver _mt_random(_inst._base)
 
 
-funcion getrandbits (k ):
-    lanzar NotImplementedError ('random.getrandbits no esta implementado en el backend nativo')
+funcion getrandbits(k):
+    devolver _mt_getrandbits(_inst._base, k)
 
 
-funcion gauss (mu ,sigma ):
-    lanzar NotImplementedError ('random.gauss no esta implementado en el backend nativo')
+funcion randrange(start, stop=Nada, step=1):
+    devolver _inst.randrange(start, stop, step)
+
+
+funcion randint(a, b):
+    devolver _inst.randint(a, b)
+
+
+funcion uniform(a=0.0, b=0.0):
+    fa = decimal(a)
+    fb = decimal(b)
+    devolver fa + (fb - fa) * _mt_random(_inst._base)
+
+
+funcion gauss(mu=0.0, sigma=1.0):
+    fmu = decimal(mu)
+    fsigma = decimal(sigma)
+    devolver fmu + fsigma * (_mt_random(_inst._base) - 0.5)
+
+
+funcion choice(seq):
+    si longitud(seq) == 0:
+        lanzar IndexError("Cannot choose from an empty sequence")
+    picked = sample(seq, 1)
+    devolver _head_slot(picked)
+
+
+funcion shuffle(x):
+    _inst.shuffle(x)

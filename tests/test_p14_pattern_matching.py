@@ -131,7 +131,9 @@ handle_event({"type": "hover"})
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)
 
-    def test_match_type_patterns(self):
+    def test_match_type_patterns_mixed_fails_closed(self):
+        # PATTERN_TYPE_CONFLICT_V2: el parametro recibe int/str/list/float y se
+        # usa como sujeto de segun/caso con tipos -> el tipo estatico no es fiable.
         source = """
 funcion check_type(v):
     segun v:
@@ -148,6 +150,27 @@ check_type(42)
 check_type("hello")
 check_type([1, 2])
 check_type(3.14)
+"""
+        from piton.x86 import NativeBuildError
+        import tempfile
+        from pathlib import Path
+        from piton.linux_x86 import compile_native_linux
+        with tempfile.TemporaryDirectory(prefix="piton-pm-") as directory:
+            with self.assertRaises(NativeBuildError) as ctx:
+                compile_native_linux(source, Path(directory) / "p")
+        self.assertIn("recibe tipos distintos", str(ctx.exception))
+
+    def test_match_type_patterns_single_type(self):
+        source = """
+funcion check_type(v):
+    segun v:
+        caso int():
+            imprimir("is int", v)
+        caso _:
+            imprimir("other type")
+
+check_type(42)
+check_type(7)
 """
         result = compare_native_to_cpython(source)
         self.assertTrue(result.equivalent, result)

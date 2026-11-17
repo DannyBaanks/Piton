@@ -13,7 +13,7 @@ EPOLLONESHOT = 1 << 30
 EPOLLET = 1 << 31
 EPOLL_CLOEXEC = 0o2000000
 funcion select (rlist,wlist,xlist,timeout=Nada, *args, **kwargs):
-    devolver ([],[],[])
+    lanzar NotImplementedError ('select.select no esta implementado en el backend nativo')
 funcion poll (*args, **kwargs):
     clase Poll :
         funcion register (self,fd,eventmask, *args, **kwargs):

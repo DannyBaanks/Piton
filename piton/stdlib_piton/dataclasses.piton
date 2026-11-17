@@ -17,11 +17,11 @@ clase Field :
 funcion field (default=MISSING,default_factory=MISSING,init=Verdadero,repr=Verdadero,hash=Nada,compare=Verdadero,metadata=Nada,kw_only=Falso):
     devolver Field(default,default_factory,init,repr,hash,compare,metadata,kw_only)
 funcion fields (cls):
-    devolver []
+    lanzar NotImplementedError ('dataclasses.fields no esta implementado en el backend nativo')
 funcion asdict (obj,dict_factory=dict):
-    devolver dict_factory()
+    lanzar NotImplementedError ('dataclasses.asdict no esta implementado en el backend nativo')
 funcion astuple (obj,tuple_factory=tuple):
-    devolver tuple_factory()
+    lanzar NotImplementedError ('dataclasses.astuple no esta implementado en el backend nativo')
 funcion dataclass (cls=None,init=Verdadero,repr=Verdadero,eq=Verdadero,order=Falso,unsafe_hash=Falso,frozen=Falso,match_args=Verdadero,kw_only=Falso,slots=Falso):
     si cls es Nada:
         funcion decorator (c):

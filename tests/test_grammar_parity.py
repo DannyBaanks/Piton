@@ -416,19 +416,11 @@ class LambdaStarV1(unittest.TestCase):
             "imprimir (f (1 ,2 ))\n",
         )
 
-    def test_lambda_vararg_fails_closed_at_mir(self):
-        # LAMBDA_VARARG_FAILCLOSED_V1: sin el guard, el closure se emitia con
-        # has_vararg=0 y el runtime daba TypeError divergente (rc2 vs oracle 0).
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError) as ctx:
-            compare_native_to_cpython("f =lambda *args :args\nimprimir (f (1 ,2 ))\n")
-        self.assertIn("lambda", str(ctx.exception))
+    def test_lambda_vararg_matches_cpython(self):
+        _assert_matches(self, "f =lambda *args :args\nimprimir (f (1 ,2 ))\n")
 
-    def test_lambda_kwargs_fails_closed_at_mir(self):
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError) as ctx:
-            compare_native_to_cpython("f =lambda **kw :kw\nimprimir (f (a =1 ))\n")
-        self.assertIn("lambda", str(ctx.exception))
+    def test_lambda_kwargs_matches_cpython(self):
+        _assert_matches(self, "f =lambda **kw :kw\nimprimir (f (a =1 ))\n")
 
 
 class YieldExprTerminatorV1(unittest.TestCase):
@@ -671,16 +663,13 @@ class MirStdlibGatesV1(unittest.TestCase):
             'imprimir (C () . f () )\n',
         )
 
-    def test_edge_for_nested_target_fails_closed(self):
-        # documentado: el `para` no tiene unpack de runtime en el backend;
-        # el tipo del indice no es seq y el check es fail-closed.
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError):
-            compare_native_to_cpython(
-                'datos = [(1 ,(2 ,3 ))]\n'
-                'para a ,(b ,c ) en datos :\n'
-                '    imprimir (a )\n'
-            )
+    def test_edge_for_nested_target_matches_cpython(self):
+        _assert_matches(
+            self,
+            'datos = [(1 ,(2 ,3 ))]\n'
+            'para a ,(b ,c ) en datos :\n'
+            '    imprimir (a )\n',
+        )
 
 
 class M6SeqDefaultsV1(unittest.TestCase):
@@ -741,10 +730,8 @@ class M6SeqDefaultsV1(unittest.TestCase):
     def test_collection_arg_override(self):
         _assert_matches(self, "funcion f (a =[1 ,2 ]) :\n    devolver a \nimprimir (f ([9 ]))\n")
 
-    def test_scalar_arg_to_collection_default_fails_closed(self):
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError):
-            compare_native_to_cpython("funcion f (a =[1 ]) :\n    devolver 3 \nimprimir (f (7 ))\n")
+    def test_scalar_arg_to_collection_default_matches_cpython(self):
+        _assert_matches(self, "funcion f (a =[1 ]) :\n    devolver 3 \nimprimir (f (7 ))\n")
 
     def test_int_arg_to_str_default_fails_closed(self):
         from piton.x86 import NativeBuildError
@@ -1090,10 +1077,11 @@ class ParamStrGatesV1(unittest.TestCase):
     def test_minmax_varadic_strs(self):
         _assert_matches(self, 'imprimir (max ("a ","c ","b "),min ("b ","a ","c "))\n')
 
-    def test_minmax_varadic_mixed_fails_closed(self):
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError):
-            compare_native_to_cpython("imprimir (min (1 ,2.5 ,3 ))\n")
+    def test_minmax_varadic_mixed_matches_cpython(self):
+        _assert_matches(
+            self,
+            "imprimir (min (1 ,2.5 ,3 ), max (1 ,2.5 ,3 ))\n",
+        )
 
     def test_minmax_two_args_untouched(self):
         _assert_matches(self, "imprimir (min (2 ,5 ),min ([3 ,1 ]))\n")
@@ -1173,14 +1161,22 @@ class MirReachGatesV1(unittest.TestCase):
         )
 
     def test_seq_usage_len_index_str_contradiction(self):
-        # SEQ_USAGE_SEED_V1: str arg conocido a param seq (len+index) →
-        # rechazado. El callee necesita AMBAS operaciones para el seed.
-        from piton.x86 import NativeBuildError
-        with self.assertRaises(NativeBuildError):
-            compare_native_to_cpython(
-                "funcion f (xs ,i ):\n    devolver longitud (xs )+ xs [i ]\n"
-                "imprimir (f ('ab' ,0 ))\n"
-            )
+        # SEQ_USAGE_SEED_V1: str arg conocido a param seq (len+index).
+        # Antes el backend nativo lo rechazaba (NativeBuildError, fail-closed).
+        # Desde la ola 14/15 lo compila y lanza el mismo TypeError que CPython
+        # (int + str), asi que el gate pasa a exigir paridad de excepcion:
+        # mismo exit code no-cero, mismo stdout y misma ultima linea de stderr.
+        result = compare_native_to_cpython(
+            "funcion f (xs ,i ):\n    devolver longitud (xs )+ xs [i ]\n"
+            "imprimir (f ('ab' ,0 ))\n"
+        )
+        self.assertNotEqual(result.oracle.returncode, 0)
+        self.assertEqual(result.native.returncode, result.oracle.returncode)
+        self.assertEqual(result.native.stdout, result.oracle.stdout)
+        self.assertEqual(
+            result.native.stderr.strip().splitlines()[-1:],
+            result.oracle.stderr.strip().splitlines()[-1:],
+        )
 
     @unittest.skipUnless(_linux_gcc_available(), "gcc (o WSL con gcc) no disponible para el backend Linux")
     def test_bisect_real_compiles(self):
@@ -1869,7 +1865,7 @@ class PrintEndGatesV1(unittest.TestCase):
         from piton.linux_x86 import compile_native_linux as _c
 
         _out = _pl.Path("/tmp/opencode/gate_print_end_file.exe")
-        _c("imprimir ('a' ,end =' ' ,file =sys .stdout )\nimprimir ('b' )\n", _out)
+        _c("importar sys\nimprimir ('a' ,end =' ' ,file =sys .stdout )\nimprimir ('b' )\n", _out)
         _run = subprocess.run([str(_out)], capture_output=True, text=True)
         self.assertEqual(_run.returncode, 0)
         self.assertEqual(_run.stdout, "a b\n")
@@ -2870,10 +2866,10 @@ class BundledStdlibGatesV2(unittest.TestCase):
     _NATIVE_MODULE_CONSTS), string (constantes + capwords), re.escape.
 
     Stubs fail-closed (compilan; al EJECUTARSE lanzan NotImplementedError,
-    nunca divergen en silencio): re (motor inexistente), io/time (syscalls de
-    fichero y reloj fuera del subset freestanding) y los stubs de plataforma
+    nunca divergen en silencio): el motor de re, io y las funciones restantes
+    de time fuera del subset freestanding, ademas de los stubs de plataforma
     generados midiendo los simbolos usados (socket, struct, collections,
-    types, builtins...)."""
+    types, builtins...). time.time y re.escape tienen implementacion nativa."""
 
     def test_posixpath_names(self):
         _assert_matches(
@@ -2993,7 +2989,7 @@ class BundledStdlibGatesV2(unittest.TestCase):
             + "imprimir (builtins .repr ([1 ]))" + chr(10)
         )
 
-    def test_stub_fails_closed_at_runtime(self):
+    def test_native_time_time_returns_epoch_float(self):
         import subprocess
         import tempfile
         import pathlib
@@ -3005,8 +3001,9 @@ class BundledStdlibGatesV2(unittest.TestCase):
             out = pathlib.Path(_d) / "prog"
             _cn(fuente, out)
             r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("NotImplementedError", r.stderr)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertRegex(r.stdout.strip(), r"^\d+\.\d+$")
+        self.assertGreater(float(r.stdout.strip()), 0.0)
 
 
 class RecursiveStdlibGatesV2(unittest.TestCase):
@@ -3188,13 +3185,10 @@ class SubmoduleBundledGatesV1(unittest.TestCase):
 
 class SubmoduleChainGatesV1(unittest.TestCase):
     """SUBMODULE_ALIAS_V1: `importar xml.dom` + `xml.dom.X(...)` — el
-    attr-chain de submódulo.
-
-    Antes, el submódulo quedaba cargado pero el import no registraba el
-    alias: `xml.dom.X(...)` baja como get_attr sobre un load('xml') que no
-    existe (NameError en runtime). El chain de llamadas resuelve ahora el
-    symbol (`xml__dom__X`), y el segmento del submódulo del chain se
-    descarta una sola vez (alias 'xml' -> modulo 'xml.dom').
+    attr-chain de submódulo. El import enlaza un objeto del paquete padre
+    cuando este solo se cargo implicitamente; el chain de llamadas resuelve
+    despues el symbol (`xml__dom__X`) y descarta una sola vez el segmento del
+    submódulo duplicado (alias `xml.dom` sobre la raiz `xml`).
 
     MEDIDO Y ABIERTO: la llamada con 2+ argumentos posicionales desde un
     módulo empaquetado cae en el gap del pack variadico (el mismo que

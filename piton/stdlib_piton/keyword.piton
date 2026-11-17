@@ -1,6 +1,13 @@
-kwlist = []
-softkwlist = []
+# keyword: listas y comprobacion de palabras reservadas de CPython 3.12 (keyword.py).
+# Las listas son las de CPython 3.12.3 (copia verificada con keyword.kwlist/softkwlist).
+
+kwlist = ['False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield']
+softkwlist = ['_', 'case', 'match', 'type']
+
+
 funcion iskeyword (s):
-    devolver Falso
+    devolver s en kwlist
+
+
 funcion issoftkeyword (s):
-    devolver Falso
+    devolver s en softkwlist

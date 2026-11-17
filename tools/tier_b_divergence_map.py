@@ -148,8 +148,22 @@ def run_script(name: str, timeout: float = 60.0) -> dict:
     native_chunks = _split_chunks(native.stdout.decode("utf-8", "replace"))
     oracle_chunks = _split_chunks(oracle.stdout.decode("utf-8", "replace"))
     divergent = []
+    # Un ejemplo que el lado nativo nunca alcanzo (no llego a imprimir su marcador @@N)
+    # NO es igual a CPython aunque CPython tampoco imprima nada: el programa se detuvo antes.
+    # Sin esta guarda, un programa nativo que aborta a mitad daba falsa paridad en los
+    # ejemplos posteriores (una expresion sin print produce salida vacia en ambos lados).
     for index in sorted(oracle_chunks):
         cpy = _honest(oracle_chunks.get(index, []))
+        if index not in native_chunks:
+            divergent.append(
+                {
+                    "chunk": index,
+                    "source": _source_of_chunk(diag_src, index),
+                    "cpython": cpy,
+                    "piton": [f"NO_EJECUTADO (programa nativo rc={native.returncode}, se detuvo antes)"],
+                }
+            )
+            continue
         pit = _honest(native_chunks.get(index, []))
         if cpy == pit:
             continue
@@ -210,6 +224,16 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--json", help="escribir el mapa en JSON")
     parser.add_argument("--markdown", help="escribir el mapa en Markdown")
     args = parser.parse_args(argv)
+    # PROVENANCE_GATE_V1: el mapa advierte si mide modulos bundled sin commit.
+    try:
+        import subprocess as _sp
+        _ut = _sp.run(["git", "ls-files", "--others", "--exclude-standard", "--", "piton/stdlib_piton"],
+                      capture_output=True, text=True, cwd=REPO, timeout=10).stdout.split()
+    except Exception:
+        _ut = ["unknown"]
+    if _ut:
+        print("AVISO: medido con modulos bundled SIN TRACKEAR (no certificable): " + ", ".join(_ut))
+        print()
     if args.all:
         names = sorted(p.stem for p in CORPUS.glob("*.py"))
     elif args.script:

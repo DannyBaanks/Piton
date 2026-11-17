@@ -1,0 +1,50 @@
+funcion has_magic (s ):
+    i = 0
+    mientras i < longitud (s ):
+        c = s [i ]
+        si c == '*' o c == '?' o c == '[' :
+            devolver Verdadero
+        i = i + 1
+    devolver Falso
+
+
+funcion iglob (pathname ,root_dir =Nada ,dir_fd =Nada ,recursive =Falso ,include_hidden =Falso ):
+    si dir_fd != Nada:
+        lanzar NotImplementedError ('glob: dir_fd no esta implementado en el backend nativo')
+    raiz = ''
+    si root_dir != Nada:
+        raiz = root_dir
+    rec = 0
+    si recursive:
+        rec = 1
+    hid = 0
+    si include_hidden:
+        hid = 1
+    crudo = __piton_glob (pathname ,raiz ,rec ,hid )
+    salida = []
+    si crudo == '':
+        devolver salida
+    inicio = 0
+    i = 0
+    fin = longitud (crudo )
+    mientras i < fin:
+        si crudo [i ] == '\n':
+            salida.append (crudo [inicio :i ] )
+            inicio = i + 1
+        i = i + 1
+    salida.append (crudo [inicio :fin ] )
+    devolver salida
+
+
+funcion glob (pathname ,root_dir =Nada ,dir_fd =Nada ,recursive =Falso ,include_hidden =Falso ):
+    devolver iglob (pathname ,root_dir ,dir_fd ,recursive ,include_hidden )
+
+
+funcion escape (pathname ):
+    salida = ''
+    para c en pathname:
+        si c == '*' o c == '?' o c == '[':
+            salida = salida + '[' + c + ']'
+        sino:
+            salida = salida + c
+    devolver salida

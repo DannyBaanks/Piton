@@ -1,29 +1,27 @@
-compress = 0
-decompress = 0
+# crc32/adler32 y las llamadas directas a compress/decompress se implementan en
+# el backend nativo Linux x86_64 (STDLIB_NATIVE_V1). compress emite bloques
+# DEFLATE almacenados; decompress lee bloques almacenados y Huffman.
 
-funcion compress (data,level=6, *args, **kwargs):
-    devolver b""
 
-funcion decompress (data,wbits=15,bufsize=0, *args, **kwargs):
-    devolver b""
+funcion crc32 (datos ,valor =0 ):
+    lanzar NotImplementedError ("zlib.crc32 solo se soporta como llamada directa en el backend nativo")
 
-funcion compressobj (level=6,method=8,wbits=15,memLevel=8,strategy=0,zdict=b'', *args, **kwargs):
-    clase CompressObj :
-        funcion compress (self,data, *args, **kwargs):
-            devolver b""
-        funcion flush (self,mode=0, *args, **kwargs):
-            devolver b""
-    devolver CompressObj()
 
-funcion decompressobj (wbits=15,zdict=b'', *args, **kwargs):
-    clase DecompressObj :
-        funcion decompress (self,data, *args, **kwargs):
-            devolver b""
-        funcion flush (self, *args, **kwargs):
-            devolver b""
-    devolver DecompressObj()
+funcion adler32 (datos ,valor =1 ):
+    lanzar NotImplementedError ("zlib.adler32 solo se soporta como llamada directa en el backend nativo")
 
-adler32 = 0
-crc32 = 0
-ZLIB_VERSION = ""
-ZLIB_RUNTIME_VERSION = ""
+
+funcion compress (data ,level =-1 ):
+    lanzar NotImplementedError ("zlib.compress requiere una llamada directa en el backend nativo")
+
+
+funcion decompress (data ):
+    lanzar NotImplementedError ("zlib.decompress requiere una llamada directa en el backend nativo")
+
+
+funcion compressobj (*args ,**kwargs ):
+    lanzar NotImplementedError ("zlib.compressobj no esta implementado en el backend nativo")
+
+
+funcion decompressobj (*args ,**kwargs ):
+    lanzar NotImplementedError ("zlib.decompressobj no esta implementado en el backend nativo")

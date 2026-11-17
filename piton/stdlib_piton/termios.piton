@@ -8,19 +8,19 @@ TCSETAW = 0
 TCSETAF = 0
 
 funcion tcgetattr (fd):
-    devolver [0, 0, 0, 0, 0, 0, b'']
+    lanzar NotImplementedError ('termios.tcgetattr no esta implementado en el backend nativo')
 
 funcion tcsetattr (fd, when, attrs):
-    pasar
+    lanzar NotImplementedError ('termios.tcsetattr no esta implementado en el backend nativo')
 
 funcion tcsendbreak (fd, duration):
-    pasar
+    lanzar NotImplementedError ('termios.tcsendbreak no esta implementado en el backend nativo')
 
 funcion tcdrain (fd):
-    pasar
+    lanzar NotImplementedError ('termios.tcdrain no esta implementado en el backend nativo')
 
 funcion tcflush (fd, queue):
-    pasar
+    lanzar NotImplementedError ('termios.tcflush no esta implementado en el backend nativo')
 
 funcion tcflow (fd, action):
-    pasar
+    lanzar NotImplementedError ('termios.tcflow no esta implementado en el backend nativo')

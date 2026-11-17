@@ -8,16 +8,16 @@ TCSADRAIN = 1
 
 
 funcion setraw (fd, when=TCSAFLUSH):
-    pasar
+    lanzar NotImplementedError ('tty.setraw no esta implementado en el backend nativo')
 
 
 funcion setcbreak (fd, when=TCSAFLUSH):
-    pasar
+    lanzar NotImplementedError ('tty.setcbreak no esta implementado en el backend nativo')
 
 
 funcion tcgetattr (fd):
-    devolver []
+    lanzar NotImplementedError ('tty.tcgetattr no esta implementado en el backend nativo')
 
 
 funcion tcsetattr (fd, when, mode):
-    pasar
+    lanzar NotImplementedError ('tty.tcsetattr no esta implementado en el backend nativo')

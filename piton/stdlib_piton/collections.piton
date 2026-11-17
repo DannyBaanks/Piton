@@ -5,8 +5,65 @@ clase ChainMap :
 abc = 0
 
 
-funcion Counter (*args , **kwargs):
-    lanzar NotImplementedError ('collections.Counter no esta implementado en el backend nativo')
+clase Counter :
+    # COUNTER_V1: dict de cuentas + lista de insercion (most_common estable).
+    # Ya no esta bloqueado: DICT_KEY_SLOT_EXC_V1 arreglo la iteracion de un
+    # dict obtenido de un atributo (el bucle corria una vuelta de mas con la
+    # key basura y el StopIteration escapaba).
+    funcion __init__ (self ,iterable =Nada ):
+        self._d = {}
+        self._orden = []
+        si iterable no es Nada :
+            para x en iterable :
+                self._inc (x )
+
+    funcion _inc (self ,x ):
+        d = self._d
+        si x en d :
+            d [x ] = d [x ] + 1
+        sino :
+            d [x ] = 1
+            self._orden.append (x )
+
+    funcion __getitem__ (self ,k ):
+        d = self._d
+        devolver d [k ]
+
+    funcion most_common (self ,n =Nada ):
+        d = self._d
+        claves = []
+        # DICT_KEY_SLOT_V1: iterar el DICT directamente rinde la clave con su
+        # kind REAL (slot derivado en runtime); recorrer self._orden (lista de
+        # elementos de tipo desconocido) tipaba cada clave como int y el par
+        # salia con la direccion del str. El dict preserva orden de insercion.
+        para k en d :
+            claves.append (k )
+        cuentas = []
+        para k en claves :
+            cuentas.append (d [k ])
+        nk = longitud (claves )
+        # ordenacion por insercion, descendente por cuenta y ESTABLE
+        i = 1
+        mientras i < nk :
+            ck = claves [i ]
+            cc = cuentas [i ]
+            j = i - 1
+            mientras j >= 0 y cuentas [j ] < cc :
+                claves [j + 1 ] = claves [j ]
+                cuentas [j + 1 ] = cuentas [j ]
+                j = j - 1
+            claves [j + 1 ] = ck
+            cuentas [j + 1 ] = cc
+            i = i + 1
+        total = nk
+        si n no es Nada :
+            total = n
+        out = []
+        k = 0
+        mientras k < total y k < nk :
+            out.append ((claves [k ], cuentas [k ]))
+            k = k + 1
+        devolver out
 
 
 funcion OrderedDict (*args , **kwargs):
@@ -21,8 +78,45 @@ funcion _namedtuple (*args , **kwargs):
     lanzar NotImplementedError ('collections._namedtuple no esta implementado en el backend nativo')
 
 
-funcion defaultdict (*args , **kwargs):
-    lanzar NotImplementedError ('collections.defaultdict no esta implementado en el backend nativo')
+clase defaultdict :
+    # DEFAULTDICT_V1: dict + fabrica. La fabrica se guarda y se llama al
+    # pedir una clave ausente (int -> 0, list -> []). dict(obj) sigue
+    # necesitando el camino de mapping del builtin (ver dict_de_abajo).
+    funcion __init__ (self ,fabrica =Nada ):
+        self._d = {}
+        self._fabrica = fabrica
+
+    funcion __getitem__ (self ,k ):
+        d = self._d
+        si k en d :
+            devolver d [k ]
+        f = self._fabrica
+        v = f ()
+        d [k ] = v
+        devolver v
+
+    funcion __setitem__ (self ,k ,v ):
+        d = self._d
+        d [k ] = v
+
+    funcion __contains__ (self ,k ):
+        d = self._d
+        devolver k en d
+
+    funcion __iter__ (self ):
+        devolver iter (self._d )
+
+    funcion keys (self ):
+        devolver self._d.keys ()
+
+    funcion items (self ):
+        devolver self._d.items ()
+
+    funcion get (self ,k ,defecto =Nada ):
+        d = self._d
+        si k en d :
+            devolver d [k ]
+        devolver defecto
 
 
 clase deque :
@@ -31,12 +125,34 @@ clase deque :
             self._items = lista (iterable )
         sino :
             self._items = []
+        # DEQUE_MAXLEN_V1: CPython descarta por la IZQUIERDA los elementos
+        # que sobran al construir con maxlen (deque([1,2,3,4], 2) -> [3, 4]).
+        si maxlen no es Nada :
+            self._ml = [maxlen]
+            mientras len (self._items ) > maxlen :
+                self._items.pop (0 )
+        sino :
+            self._ml = Nada
+
+    funcion __iter__ (self ):
+        # DEQUE_ITER_V1: sin __iter__, `list(q)` moria con "cannot convert to
+        # a sequence": la conversion solo conocia list/tuple/str.
+        devolver iter (self._items )
 
     funcion append (self ,x ):
         self._items.append (x )
+        si self._ml no es Nada :
+            mientras len (self._items ) > self._ml[0] :
+                self._items.pop (0 )
 
     funcion appendleft (self ,x ):
         self._items.insert (0 ,x )
+        si self._ml no es Nada :
+            mientras len (self._items ) > self._ml[0] :
+                self._items.pop ()
+
+    funcion count (self ,x ):
+        devolver self._items.count (x )
 
     funcion pop (self ):
         devolver self._items.pop ()
@@ -50,7 +166,206 @@ clase deque :
     funcion __len__ (self ):
         devolver len (self._items )
 
+    funcion rotate (self ,n =1):
+        # DEQUE_ROTATE_V1: fiel a CPython 3.12. Vacío no hace nada. n > 0
+        # rota a la derecha (pop final, insert principio); n < 0 rota a la
+        # izquierda (k elementos del principio al final). k = n % m.
+        m = len (self._items )
+        si m == 0 :
+            devolver
+        si n > 0 :
+            k = n % m
+            mientras k > 0 :
+                self._items.insert (0 ,self._items.pop ())
+                k = k - 1
+        sino_si n < 0 :
+            k = (-n) % m
+            mientras k > 0 :
+                self._items.append (self._items.pop (0 ))
+                k = k - 1
 
-funcion namedtuple (*args , **kwargs):
-    lanzar NotImplementedError ('collections.namedtuple no esta implementado en el backend nativo')
+    funcion extend (self ,iterable ):
+        para x en iterable :
+            self._items.append (x )
+        si self._ml no es Nada :
+            mientras len (self._items ) > self._ml[0] :
+                self._items.pop (0 )
 
+    funcion extendleft (self ,iterable ):
+        # CPython: añade elemento a elemento por la IZQUIERDA, revirtiendo el
+        # orden de entrada, respetando maxlen (trunca por la derecha).
+        para x en iterable :
+            self._items.insert (0 ,x )
+        si self._ml no es Nada :
+            mientras len (self._items ) > self._ml[0] :
+                self._items.pop ()
+
+    funcion reverse (self ):
+        i = 0
+        j = len (self._items ) - 1
+        mientras i < j :
+            tmp = self._items[i]
+            self._items[i] = self._items[j]
+            self._items[j] = tmp
+            i = i + 1
+            j = j - 1
+
+    funcion remove (self ,value ):
+        i = 0
+        n = len (self._items )
+        mientras i < n :
+            si self._items[i] == value :
+                self._items.pop (i )
+                devolver
+            i = i + 1
+        lanzar ValueError ("deque.remove(x): x not in deque")
+
+    funcion __getitem__ (self ,i ):
+        devolver self._items[i]
+
+    funcion __setitem__ (self ,i ,v ):
+        self._items[i] = v
+
+    funcion __eq__ (self ,otro ):
+        si tiene_atr (otro , '_items' ):
+            si len (self._items ) != len (otro._items ):
+                devolver Falso
+            i = 0
+            n = len (self._items )
+            mientras i < n :
+                si self._items[i] != otro._items[i] :
+                    devolver Falso
+                i = i + 1
+            devolver Verdadero
+        devolver Falso
+
+    funcion __ne__ (self ,otro ):
+        devolver no (self == otro)
+
+    funcion __repr__ (self ):
+        si self._ml no es Nada :
+            devolver "deque(" + texto (self._items ) + ", maxlen=" + texto (self._ml[0] ) + ")"
+        devolver "deque(" + texto (self._items ) + ")"
+
+
+# _NTInst: instancia genérica de un namedtuple. Los nombres de campo y los
+# valores viajan en atributos de instancia; el acceso a un campo se resuelve
+# dinámicamente mediante __getattr__, así una única clase estática sirve para
+# cualquier typename y cualquier conjunto de campos (100% genérico, sin
+# hardcodear nombres de clase ni de campo).
+clase _NTInst :
+    funcion __init__(self ,nombre ,campos ,valores ):
+        self._nombre =nombre
+        self._campos =campos
+        self._valores =valores
+        self._fields =campos
+
+    funcion __getattr__(self ,nombre ):
+        campos = self._campos
+        valores = self._valores
+        i = 0
+        n = len(campos)
+        mientras i < n :
+            si campos[i] == nombre :
+                devolver valores[i]
+            i = i + 1
+        lanzar AttributeError (("'" + self._nombre + "' object has no attribute '" + nombre + "'"))
+
+    funcion __getitem__(self ,indice ):
+        devolver self._valores[indice]
+
+    funcion __len__(self ):
+        devolver len(self._campos)
+
+    funcion __iter__(self ):
+        devolver iter(self._valores)
+
+    funcion __eq__(self ,otro ):
+        n = len(self._valores)
+        si len(otro) != n :
+            devolver Falso
+        i = 0
+        mientras i < n :
+            si self._valores[i] != otro[i] :
+                devolver Falso
+            i = i + 1
+        devolver Verdadero
+
+    funcion __ne__(self ,otro ):
+        devolver no (self == otro)
+
+    funcion _asdict(self ):
+        d = {}
+        i = 0
+        n = len(self._campos)
+        mientras i < n :
+            d[self._campos[i]] = self._valores[i]
+            i = i + 1
+        devolver d
+
+    funcion __repr__(self ):
+        partes = []
+        i = 0
+        n = len(self._campos)
+        mientras i < n :
+            partes.append (self._campos[i] + "=" + str(self._valores[i]))
+            i = i + 1
+        devolver self._nombre + "(" + ", ".join(partes) + ")"
+
+
+# _nt_ctor_str: constructor de namedtuple cuando field_names llega como str
+# ('x y', 'x, y', ...). Se define a NIVEL DE MODULO (fuera de namedtuple) para
+# que `nf = campos_str.replace(...).split()` se asigne directo, fuera de todo
+# si/sino, y el closure ctor_str capture `nf` sin que el valor se corrompa.
+funcion _nt_ctor_str (typename ,campos_str ,defaults =Nada):
+    nf = campos_str.replace (',', ' ').split ()
+    funcion ctor_str(*valores):
+        n = len(nf)
+        nd = 0
+        si defaults no es Nada :
+            nd = len(defaults)
+        nv = len(valores)
+        si nv < n - nd o nv > n :
+            lanzar TypeError (("'" + typename + "' object has wrong number of fields"))
+        valores2 = lista(valores)
+        i = nv
+        mientras i < n :
+            valores2.append(defaults[i - (n - nd)])
+            i = i + 1
+        inst = _NTInst(typename, nf, valores2)
+        # NT_DIRECT_ATTRS_V1: expone cada campo como atributo directo (p.x)
+        # usando fijar_atr.
+        j = 0
+        mientras j < n :
+            fijar_atr (inst ,nf[j] ,valores2[j])
+            j = j + 1
+        devolver inst
+    devolver ctor_str
+
+
+funcion namedtuple(typename, campos, defaults =Nada):
+    # NAMEDTUPLE_STR_FIELDS_V1: cuando field_names es un str (p.ej. 'x y',
+    # 'x, y', '  a,b  c '), reemplaza ',' por ' ' y separa con .split() para
+    # obtener ['x', 'y']. Respeta lista/tupla de nombres tal como estaba.
+    # Se detecta str comparando su tipo con el de un literal vacio.
+    # La rama lista se maneja DIRECTAMENTE dentro de namedtuple con `funcion
+    # ctor(*valores)` original (NUNCA se pasa `campos` a un helper externo,
+    # porque al pasarlo a otra funcion el parametro pierde el tipo lista en el
+    # backend nativo: ['x','y'] -> ['\x01']).
+    si tipo (campos) es tipo ("") :
+        devolver _nt_ctor_str(typename, campos, defaults)
+    funcion ctor(*valores):
+        n = len(campos)
+        nd = 0
+        si defaults no es Nada :
+            nd = len(defaults)
+        nv = len(valores)
+        si nv < n - nd o nv > n :
+            lanzar TypeError (("'" + typename + "' object has wrong number of fields"))
+        valores2 = lista(valores)
+        i = nv
+        mientras i < n :
+            valores2.append(defaults[i - (n - nd)])
+            i = i + 1
+        devolver _NTInst(typename, campos, valores2)
+    devolver ctor

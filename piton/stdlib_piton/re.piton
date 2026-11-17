@@ -1,88 +1,869 @@
-I = 2
 IGNORECASE = 2
-L = 4
+I = IGNORECASE
 LOCALE = 4
-M = 8
+L = LOCALE
 MULTILINE = 8
-S = 16
+M = MULTILINE
 DOTALL = 16
-U = 32
+S = DOTALL
 UNICODE = 32
-X = 64
+U = UNICODE
 VERBOSE = 64
+X = VERBOSE
 DEBUG = 128
-A = 256
 ASCII = 256
-T = 1
+A = ASCII
 TEMPLATE = 1
+NOFLAG = 0
 
-clase error :
-    pasar
 
-funcion escape (s ):
-    salida = s
-    salida = salida.replace ('\\','\\\\')
-    salida = salida.replace ('(','\\(')
-    salida = salida.replace (')','\\)')
-    salida = salida.replace ('[','\\[')
-    salida = salida.replace (']','\\]')
-    salida = salida.replace ('{','\\{')
-    salida = salida.replace ('}','\\}')
-    salida = salida.replace ('?','\\?')
-    salida = salida.replace ('*','\\*')
-    salida = salida.replace ('+','\\+')
-    salida = salida.replace ('-','\\-')
-    salida = salida.replace ('|','\\|')
-    salida = salida.replace ('^','\\^')
-    salida = salida.replace ('$','\\$')
-    salida = salida.replace ('.','\\.')
-    salida = salida.replace ('&','\\&')
-    salida = salida.replace ('~','\\~')
-    salida = salida.replace ('#','\\#')
-    salida = salida.replace (' ','\\ ')
-    salida = salida.replace ('\t','\\\t')
-    salida = salida.replace ('\n','\\\n')
-    salida = salida.replace ('\r','\\\r')
-    salida = salida.replace ('\x0b','\\\x0b')
-    salida = salida.replace ('\x0c','\\\x0c')
+funcion escape (patron):
+    resultado = ''
+    para i en range (longitud (patron )):
+        c = patron [i ]
+        si c == '\\' o c == '.' o c == '^' o c == '$' o c == '*' o c == '+' o c == '?' o c == '{' o c == '}' o c == '[' o c == ']' o c == '|' o c == '(' o c == ')' :
+            resultado = resultado + '\\' + c
+        sino:
+            resultado = resultado + c
+    devolver resultado
+
+
+funcion _es_digito (c ):
+    si c >= '0' y c <= '9' :
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _numero_digito (c ):
+    si c == '0' :
+        devolver 0
+    si c == '1' :
+        devolver 1
+    si c == '2' :
+        devolver 2
+    si c == '3' :
+        devolver 3
+    si c == '4' :
+        devolver 4
+    si c == '5' :
+        devolver 5
+    si c == '6' :
+        devolver 6
+    si c == '7' :
+        devolver 7
+    si c == '8' :
+        devolver 8
+    si c == '9' :
+        devolver 9
+    devolver -1
+
+
+funcion _escapar_literal (c ):
+    si c == 'b' :
+        devolver '\x08'
+    si c == 'n' :
+        devolver '\n'
+    si c == 't' :
+        devolver '\t'
+    si c == 'r' :
+        devolver '\r'
+    si c == 'f' :
+        devolver '\x0c'
+    si c == 'v' :
+        devolver '\x0b'
+    si c == 'a' :
+        devolver '\x07'
+    devolver c
+
+
+funcion _es_letra_ascii (c ):
+    si c >= 'a' y c <= 'z' :
+        devolver Verdadero
+    si c >= 'A' y c <= 'Z' :
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _es_palabra (c ,banderas ):
+    si c == '_' :
+        devolver Verdadero
+    si _es_letra_ascii (c ) o _es_digito (c ) :
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _es_espacio (c ,banderas ):
+    si c == ' ' o c == '\t' o c == '\n' o c == '\r' o c == '\x0b' o c == '\x0c' :
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _es_decimal (c ,banderas ):
+    devolver _es_digito (c )
+
+
+funcion _minuscula_ascii (c ):
+    si c == 'A' :
+        devolver 'a'
+    si c == 'B' :
+        devolver 'b'
+    si c == 'C' :
+        devolver 'c'
+    si c == 'D' :
+        devolver 'd'
+    si c == 'E' :
+        devolver 'e'
+    si c == 'F' :
+        devolver 'f'
+    si c == 'G' :
+        devolver 'g'
+    si c == 'H' :
+        devolver 'h'
+    si c == 'I' :
+        devolver 'i'
+    si c == 'J' :
+        devolver 'j'
+    si c == 'K' :
+        devolver 'k'
+    si c == 'L' :
+        devolver 'l'
+    si c == 'M' :
+        devolver 'm'
+    si c == 'N' :
+        devolver 'n'
+    si c == 'O' :
+        devolver 'o'
+    si c == 'P' :
+        devolver 'p'
+    si c == 'Q' :
+        devolver 'q'
+    si c == 'R' :
+        devolver 'r'
+    si c == 'S' :
+        devolver 's'
+    si c == 'T' :
+        devolver 't'
+    si c == 'U' :
+        devolver 'u'
+    si c == 'V' :
+        devolver 'v'
+    si c == 'W' :
+        devolver 'w'
+    si c == 'X' :
+        devolver 'x'
+    si c == 'Y' :
+        devolver 'y'
+    si c == 'Z' :
+        devolver 'z'
+    devolver c
+
+
+funcion _igual_caracter (a ,b ,banderas ):
+    si banderas & IGNORECASE :
+        devolver _minuscula_ascii (a ) == _minuscula_ascii (b )
+    devolver a == b
+
+
+funcion _en_rango (caracter ,inicio ,fin ):
+    si caracter >= inicio y caracter <= fin :
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _fin_clase (patron ,apertura ,limite ):
+    i = apertura + 1
+    si i < limite y patron[i] == '^' :
+        i = i + 1
+    si i < limite y patron[i] == ']' :
+        i = i + 1
+    mientras i < limite :
+        si patron[i] == '\\' :
+            i = i + 2
+        sino_si patron[i] == ']' :
+            devolver i
+        sino :
+            i = i + 1
+    devolver -1
+
+
+funcion _fin_grupo (patron ,apertura ,limite ):
+    profundidad = 1
+    i = apertura + 1
+    mientras i < limite :
+        c = patron[i]
+        si c == '\\' :
+            i = i + 2
+        sino_si c == '[' :
+            cierre = _fin_clase (patron ,i ,limite )
+            si cierre >= 0 :
+                i = cierre + 1
+            sino :
+                i = i + 1
+        sino_si c == '(' :
+            profundidad = profundidad + 1
+            i = i + 1
+        sino_si c == ')' :
+            profundidad = profundidad - 1
+            si profundidad == 0 :
+                devolver i
+            i = i + 1
+        sino :
+            i = i + 1
+    devolver -1
+
+
+funcion _numero_grupo (patron ,objetivo ):
+    cuenta = 0
+    i = 0
+    limite = len (patron )
+    mientras i < objetivo y i < limite :
+        c = patron[i]
+        si c == '\\' :
+            i = i + 2
+        sino_si c == '[' :
+            cierre = _fin_clase (patron ,i ,limite )
+            si cierre >= 0 :
+                i = cierre + 1
+            sino :
+                i = i + 1
+        sino_si c == '(' :
+            cuenta = cuenta + 1
+            i = i + 1
+        sino :
+            i = i + 1
+    devolver cuenta + 1
+
+
+funcion _cuenta_grupos (patron ):
+    cuenta = 0
+    i = 0
+    limite = len (patron )
+    mientras i < limite :
+        c = patron[i]
+        si c == '\\' :
+            i = i + 2
+        sino_si c == '[' :
+            cierre = _fin_clase (patron ,i ,limite )
+            si cierre >= 0 :
+                i = cierre + 1
+            sino :
+                i = i + 1
+        sino_si c == '(' :
+            cuenta = cuenta + 1
+            i = i + 1
+        sino :
+            i = i + 1
+    devolver cuenta
+
+
+funcion _coincide_escape_clase (codigo_escape ,c ,banderas ):
+    si codigo_escape == 'd' :
+        devolver _es_decimal (c ,banderas )
+    si codigo_escape == 'D' :
+        devolver no _es_decimal (c ,banderas )
+    si codigo_escape == 'w' :
+        devolver _es_palabra (c ,banderas )
+    si codigo_escape == 'W' :
+        devolver no _es_palabra (c ,banderas )
+    si codigo_escape == 's' :
+        devolver _es_espacio (c ,banderas )
+    si codigo_escape == 'S' :
+        devolver no _es_espacio (c ,banderas )
+    devolver Falso
+
+
+funcion _coincide_clase (c ,patron ,apertura ,cierre ,banderas ):
+    i = apertura + 1
+    negar = Falso
+    si i < cierre y patron[i] == '^' :
+        negar = Verdadero
+        i = i + 1
+    encontrado = Falso
+    mientras i < cierre :
+        especial = Falso
+        valor = ''
+        si patron[i] == '\\' y i + 1 < cierre :
+            codigo_escape = patron[i + 1 ]
+            si codigo_escape == 'd' o codigo_escape == 'D' o codigo_escape == 'w' o codigo_escape == 'W' o codigo_escape == 's' o codigo_escape == 'S' :
+                especial = Verdadero
+                si _coincide_escape_clase (codigo_escape ,c ,banderas ):
+                    encontrado = Verdadero
+                i = i + 2
+            sino :
+                valor = _escapar_literal (codigo_escape )
+                i = i + 2
+        sino :
+            valor = patron[i]
+            i = i + 1
+        si no especial :
+            si i + 1 < cierre y patron[i] == '-' :
+                fin_rango = ''
+                si patron[i + 1 ] == '\\' y i + 2 < cierre :
+                    fin_rango = _escapar_literal (patron[i + 2 ])
+                    i = i + 3
+                sino :
+                    fin_rango = patron[i + 1 ]
+                    i = i + 2
+                si banderas & IGNORECASE :
+                    si _en_rango (_minuscula_ascii (c ) ,_minuscula_ascii (valor ) ,_minuscula_ascii (fin_rango )):
+                        encontrado = Verdadero
+                sino :
+                    si _en_rango (c ,valor ,fin_rango ):
+                        encontrado = Verdadero
+            sino :
+                si _igual_caracter (c ,valor ,banderas ):
+                    encontrado = Verdadero
+    si negar :
+        devolver no encontrado
+    devolver encontrado
+
+
+funcion _potencia (base ,exponente ):
+    resultado = 1
+    i = 0
+    mientras i < exponente :
+        resultado = resultado * base
+        i = i + 1
+    devolver resultado
+
+
+funcion _estado_posicion (estado ,base ):
+    devolver (estado % base ) - 1
+
+
+funcion _estado_avanzar (estado ,pos ,base ):
+    devolver estado - (estado % base ) + pos + 1
+
+
+funcion _estado_captura (estado ,numero ,inicio ,fin ,base ):
+    campo_inicio = numero * 2 - 1
+    campo_fin = numero * 2
+    potencia_inicio = _potencia (base ,campo_inicio )
+    potencia_fin = _potencia (base ,campo_fin )
+    valor_inicio = estado // potencia_inicio % base
+    valor_fin = estado // potencia_fin % base
+    nuevo_inicio = inicio + 1
+    nuevo_fin = fin + 1
+    estado = estado + (nuevo_inicio - valor_inicio ) * potencia_inicio
+    estado = estado + (nuevo_fin - valor_fin ) * potencia_fin
+    devolver estado
+
+
+funcion _estado_grupo_inicio (estado ,numero ,base ):
+    potencia = _potencia (base ,numero * 2 - 1 )
+    devolver (estado // potencia % base ) - 1
+
+
+funcion _estado_grupo_fin (estado ,numero ,base ):
+    potencia = _potencia (base ,numero * 2 )
+    devolver (estado // potencia % base ) - 1
+
+
+funcion _atomos_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valor_dos ,inicio_atomo ,inicio_secuencia ,fin_atomo ,estado ,banderas ,n ,base ):
+    salida = []
+    pos = _estado_posicion (estado ,base )
+    si clase_atomo == 'grupo' :
+        cierre = valor_uno
+        numero = valor_dos
+        internos = _coincidir_secuencia (patron ,cadena ,inicio_atomo + 1 ,cierre ,inicio_atomo + 1 ,estado ,banderas ,n ,base )
+        para estado_interno en internos :
+            fin_interno = _estado_posicion (estado_interno ,base )
+            nuevos = _estado_captura (estado_interno ,numero ,pos ,fin_interno ,base )
+            salida.append (nuevos )
+        devolver salida
+    si clase_atomo == 'literal' :
+        si pos < n y _igual_caracter (cadena[pos] ,valor_texto ,banderas ):
+            salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
+        devolver salida
+    si clase_atomo == 'clase' :
+        apertura = valor_uno
+        cierre = valor_dos
+        si pos < n y _coincide_clase (cadena[pos] ,patron ,apertura ,cierre ,banderas ):
+            salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
+        devolver salida
+    si clase_atomo == 'retroceso' :
+        numero = valor_uno
+        si numero > 0 :
+            inicio_grupo = _estado_grupo_inicio (estado ,numero ,base )
+            fin_grupo = _estado_grupo_fin (estado ,numero ,base )
+            si inicio_grupo >= 0 :
+                ancho = fin_grupo - inicio_grupo
+                coincide = Verdadero
+                k = 0
+                mientras k < ancho :
+                    if_pos = pos + k
+                    ref_pos = inicio_grupo + k
+                    si if_pos >= n :
+                        coincide = Falso
+                        romper
+                    si no _igual_caracter (cadena[if_pos] ,cadena[ref_pos] ,banderas ):
+                        coincide = Falso
+                        romper
+                    k = k + 1
+                si coincide :
+                    salida.append (_estado_avanzar (estado ,pos + ancho ,base ))
+        devolver salida
+    si clase_atomo == 'inicio' :
+        si pos == 0 :
+            salida.append (estado )
+        sino_si banderas & MULTILINE y pos > 0 y cadena[pos - 1 ] == '\n' :
+            salida.append (estado )
+        devolver salida
+    si clase_atomo == 'fin' :
+        si pos == n :
+            salida.append (estado )
+        sino_si banderas & MULTILINE y pos < n y cadena[pos] == '\n' :
+            salida.append (estado )
+        sino_si pos == n - 1 y cadena[pos] == '\n' :
+            salida.append (estado )
+        devolver salida
+    si clase_atomo == 'punto' :
+        si pos < n :
+            si banderas & DOTALL o cadena[pos] != '\n' :
+                salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
+        devolver salida
+    si clase_atomo == 'escape' :
+        codigo_escape = valor_texto
+        si codigo_escape == 'b' o codigo_escape == 'B' :
+            palabra_antes = Falso
+            palabra_despues = Falso
+            si pos > 0 :
+                palabra_antes = _es_palabra (cadena[pos - 1 ] ,banderas )
+            si pos < n :
+                palabra_despues = _es_palabra (cadena[pos] ,banderas )
+            limite = palabra_antes != palabra_despues
+            si codigo_escape == 'B' :
+                limite = no limite
+            si codigo_escape == 'B' y n == 0 :
+                limite = Falso
+            si limite :
+                salida.append (estado )
+            devolver salida
+        si codigo_escape == 'd' o codigo_escape == 'D' o codigo_escape == 'w' o codigo_escape == 'W' o codigo_escape == 's' o codigo_escape == 'S' :
+            si pos < n y _coincide_escape_clase (codigo_escape ,cadena[pos] ,banderas ):
+                salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
+            devolver salida
+        literal = _escapar_literal (codigo_escape )
+        si pos < n y _igual_caracter (cadena[pos] ,literal ,banderas ):
+            salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
+        devolver salida
     devolver salida
 
 
-funcion compile (patron, banderas=0, flags=0, *args, **kwargs):
-    lanzar NotImplementedError ('re.compile no esta implementado en el backend nativo: el motor de regex propio no existe todavia')
+funcion _repetir_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valor_dos ,inicio_atomo ,inicio_secuencia ,fin_atomo ,estado ,banderas ,n ,base ,cuenta ,minimo ,maximo ):
+    salida = []
+    si maximo < 0 o cuenta < maximo :
+        siguientes = _atomos_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valor_dos ,inicio_atomo ,inicio_secuencia ,fin_atomo ,estado ,banderas ,n ,base )
+        para nuevo_estado en siguientes :
+            pos = _estado_posicion (estado ,base )
+            nueva_pos = _estado_posicion (nuevo_estado ,base )
+            si nueva_pos > pos :
+                profundas = _repetir_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valor_dos ,inicio_atomo ,inicio_secuencia ,fin_atomo ,nuevo_estado ,banderas ,n ,base ,cuenta + 1 ,minimo ,maximo )
+                para profunda en profundas :
+                    salida.append (profunda )
+            sino_si cuenta < minimo y cuenta + 1 >= minimo :
+                salida.append (nuevo_estado )
+            sino_si cuenta == 0 y minimo == 0 :
+                salida.append (nuevo_estado )
+    si cuenta >= minimo :
+        salida.append (estado )
+    devolver salida
 
 
-funcion search (patron, cadena, banderas=0, flags=0, *args, **kwargs):
-    lanzar NotImplementedError ('re.search no esta implementado en el backend nativo')
+funcion _coincidir_secuencia (patron ,cadena ,pi ,fin_patron ,inicio_secuencia ,estado ,banderas ,n ,base ):
+    si pi >= fin_patron :
+        devolver [estado]
+    clase_atomo = 'literal'
+    valor_texto = patron[pi]
+    valor_uno = -1
+    valor_dos = -1
+    fin_atomo = pi + 1
+    c = patron[pi]
+    si c == '(' :
+        cierre = _fin_grupo (patron ,pi ,fin_patron )
+        si cierre >= 0 :
+            clase_atomo = 'grupo'
+            valor_uno = cierre
+            valor_dos = _numero_grupo (patron ,pi )
+            fin_atomo = cierre + 1
+    sino_si c == '[' :
+        cierre = _fin_clase (patron ,pi ,fin_patron )
+        si cierre >= 0 :
+            clase_atomo = 'clase'
+            valor_uno = pi
+            valor_dos = cierre
+            fin_atomo = cierre + 1
+    sino_si c == '\\' :
+        si pi + 1 < fin_patron :
+            valor_texto = patron[pi + 1 ]
+            fin_atomo = pi + 2
+            si _es_digito (valor_texto ) y valor_texto != '0' :
+                clase_atomo = 'retroceso'
+                valor_uno = _numero_digito (valor_texto )
+            sino :
+                clase_atomo = 'escape'
+    si clase_atomo == 'literal' y valor_texto == '^' y pi == inicio_secuencia :
+        clase_atomo = 'inicio'
+    sino_si clase_atomo == 'literal' y valor_texto == '$' y fin_atomo == fin_patron :
+        clase_atomo = 'fin'
+    sino_si clase_atomo == 'literal' y valor_texto == '.' :
+        clase_atomo = 'punto'
+    siguiente = fin_atomo
+    cuantificador = ''
+    si siguiente < fin_patron :
+        si patron[siguiente] == '*' o patron[siguiente] == '+' o patron[siguiente] == '?' :
+            cuantificador = patron[siguiente]
+            siguiente = siguiente + 1
+    si cuantificador == '*' :
+        opciones = _repetir_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valor_dos ,pi ,inicio_secuencia ,fin_atomo ,estado ,banderas ,n ,base ,0 ,0 ,-1 )
+    sino_si cuantificador == '+' :
+        opciones = _repetir_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valor_dos ,pi ,inicio_secuencia ,fin_atomo ,estado ,banderas ,n ,base ,0 ,1 ,-1 )
+    sino_si cuantificador == '?' :
+        opciones = _repetir_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valor_dos ,pi ,inicio_secuencia ,fin_atomo ,estado ,banderas ,n ,base ,0 ,0 ,1 )
+    sino :
+        opciones = _atomos_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valor_dos ,pi ,inicio_secuencia ,fin_atomo ,estado ,banderas ,n ,base )
+    salida = []
+    para opcion en opciones :
+        resto = _coincidir_secuencia (patron ,cadena ,siguiente ,fin_patron ,inicio_secuencia ,opcion ,banderas ,n ,base )
+        para estado en resto :
+            salida.append (estado )
+    devolver salida
 
 
-funcion match (patron, cadena, banderas=0, flags=0, *args, **kwargs):
-    lanzar NotImplementedError ('re.match no esta implementado en el backend nativo')
+funcion _buscar_datos (patron ,cadena ,inicio_busqueda ,solo_inicio ,banderas ):
+    n = len (cadena )
+    base = n + 2
+    inicio = inicio_busqueda
+    mientras inicio <= n :
+        estado = inicio + 1
+        estados = _coincidir_secuencia (patron ,cadena ,0 ,len (patron ) ,0 ,estado ,banderas ,n ,base )
+        si estados :
+            elegido = estados[0]
+            devolver (inicio ,_estado_posicion (elegido ,base ) ,elegido )
+        si solo_inicio :
+            romper
+        inicio = inicio + 1
+    devolver Nada
 
 
-funcion fullmatch (patron, cadena, banderas=0, flags=0, *args, **kwargs):
-    lanzar NotImplementedError ('re.fullmatch no esta implementado en el backend nativo')
+funcion _span_de (estado ,indice ,inicio ,fin ,n ):
+    si indice == 0 :
+        devolver (inicio ,fin )
+    si indice > 0 :
+        base = n + 2
+        devolver (_estado_grupo_inicio (estado ,indice ,base ) ,_estado_grupo_fin (estado ,indice ,base ))
+    devolver (-1 ,-1 )
 
 
-funcion findall (patron, cadena, banderas=0, flags=0, *args, **kwargs):
-    lanzar NotImplementedError ('re.findall no esta implementado en el backend nativo')
+funcion _texto_rango (cadena ,inicio ,fin ):
+    si inicio < 0 :
+        devolver Nada
+    salida = ''
+    i = inicio
+    mientras i < fin :
+        salida = salida + cadena[i]
+        i = i + 1
+    devolver salida
 
 
-funcion finditer (patron, cadena, banderas=0, flags=0, *args, **kwargs):
-    lanzar NotImplementedError ('re.finditer no esta implementado en el backend nativo')
+funcion _texto_grupo (cadena ,estado ,inicio ,fin ,indice ,n ):
+    if_inicio = inicio
+    if_fin = fin
+    si indice > 0 :
+        if_inicio = _estado_grupo_inicio (estado ,indice ,n + 2 )
+        if_fin = _estado_grupo_fin (estado ,indice ,n + 2 )
+    si if_inicio < 0 :
+        devolver Nada
+    devolver _texto_rango (cadena ,if_inicio ,if_fin )
 
 
-funcion sub (patron, reemplazo, cadena, contador=0, count=0, banderas=0, flags=0, *args, **kwargs):
-    lanzar NotImplementedError ('re.sub no esta implementado en el backend nativo')
+funcion _captura_findall (cadena ,estado ,inicio ,fin ,cuenta ,n ):
+    si cuenta == 0 :
+        devolver _texto_grupo (cadena ,estado ,inicio ,fin ,0 ,n )
+    si cuenta == 1 :
+        texto = _texto_grupo (cadena ,estado ,inicio ,fin ,1 ,n )
+        si texto es Nada :
+            devolver ''
+        devolver texto
+    valores = []
+    i = 1
+    mientras i <= cuenta :
+        texto = _texto_grupo (cadena ,estado ,inicio ,fin ,i ,n )
+        si texto es Nada :
+            texto = ''
+        valores.append (texto )
+        i = i + 1
+    devolver tupla (valores )
 
 
-funcion subn (patron, reemplazo, cadena, contador=0, count=0, banderas=0, flags=0, *args, **kwargs):
-    lanzar NotImplementedError ('re.subn no esta implementado en el backend nativo')
+funcion findall (pattern ,string ,flags =0 ):
+    patron = pattern
+    cadena = string
+    banderas = flags
+    cuenta = _cuenta_grupos (patron )
+    salida = []
+    buscar = 0
+    n = len (cadena )
+    mientras buscar <= n :
+        datos = _buscar_datos (patron ,cadena ,buscar ,Falso ,banderas )
+        si datos es Nada :
+            romper
+        inicio = datos[0]
+        fin = datos[1]
+        salida.append (_captura_findall (cadena ,datos[2] ,inicio ,fin ,cuenta ,n ))
+        si fin == inicio :
+            buscar = inicio + 1
+        sino :
+            buscar = fin
+    devolver salida
 
 
-funcion split (patron, cadena, maximo=0, maxsplit=0, banderas=0, flags=0, *args, **kwargs):
-    lanzar NotImplementedError ('re.split no esta implementado en el backend nativo')
+funcion _expandir_reemplazo (reemplazo ,cadena ,inicio ,fin ,estado ,total_grupos ,n ):
+    reemplazo = reemplazo
+    cadena = cadena
+    salida = ''
+    i = 0
+    n_reemplazo = len (reemplazo )
+    mientras i < n_reemplazo :
+        c = reemplazo[i]
+        si c != '\\' :
+            salida = salida + c
+            i = i + 1
+        sino_si i + 1 >= n_reemplazo :
+            salida = salida + '\\'
+            i = i + 1
+        sino :
+            siguiente = reemplazo[i + 1 ]
+            si _es_digito (siguiente ) :
+                indice = _numero_digito (siguiente )
+                consumidos = 1
+                si i + 2 < n_reemplazo y _es_digito (reemplazo[i + 2 ]) :
+                    doble = indice * 10 + _numero_digito (reemplazo[i + 2 ])
+                    si doble <= total_grupos :
+                        indice = doble
+                        consumidos = 2
+                texto = _texto_grupo (cadena ,estado ,inicio ,fin ,indice ,n )
+                si texto es Nada :
+                    texto = ''
+                salida = salida + texto
+                i = i + consumidos + 1
+            sino_si siguiente == 'g' y i + 2 < n_reemplazo y reemplazo[i + 2 ] == '<' :
+                j = i + 3
+                indice = 0
+                tiene_numero = Falso
+                mientras j < n_reemplazo y _es_digito (reemplazo[j ]) :
+                    indice = indice * 10 + _numero_digito (reemplazo[j ])
+                    tiene_numero = Verdadero
+                    j = j + 1
+                si j < n_reemplazo y reemplazo[j] == '>' y tiene_numero y indice <= total_grupos :
+                    texto = _texto_grupo (cadena ,estado ,inicio ,fin ,indice ,n )
+                    si texto es Nada :
+                        texto = ''
+                    salida = salida + texto
+                    i = j + 1
+                sino :
+                    salida = salida + '\\g<'
+                    i = i + 3
+            sino :
+                salida = salida + _escapar_literal (siguiente )
+                i = i + 2
+    devolver salida
 
 
-funcion purge ():
-    devolver
+funcion sub (pattern ,repl ,string ,count =0 ,flags =0 ):
+    patron = pattern
+    reemplazo = repl
+    cadena = string
+    contador = count
+    banderas = flags
+    salida = ''
+    cursor = 0
+    buscar = 0
+    n = len (cadena )
+    grupos_cuenta = _cuenta_grupos (patron )
+    sustituciones = 0
+    mientras buscar <= n y (contador <= 0 o sustituciones < contador ) :
+        datos = _buscar_datos (patron ,cadena ,buscar ,Falso ,banderas )
+        si datos es Nada :
+            romper
+        inicio = datos[0]
+        fin = datos[1]
+        salida = salida + _texto_rango (cadena ,cursor ,inicio )
+        salida = salida + _expandir_reemplazo (reemplazo ,cadena ,inicio ,fin ,datos[2] ,grupos_cuenta ,n )
+        cursor = fin
+        sustituciones = sustituciones + 1
+        si fin == inicio :
+            buscar = inicio + 1
+        sino :
+            buscar = fin
+    salida = salida + _texto_rango (cadena ,cursor ,n )
+    devolver salida
+
+
+clase _Match :
+    funcion __init__ (self ,patron ,cadena ,inicio ,fin ,estado ,cuenta ,posicion ,fin_cadena ,banderas ,g0 ,g1 ,g2 ,g3 ,g4 ,g5 ,g6 ,g7 ,g8 ,g9 ):
+        self.re = patron
+        self.string = cadena
+        self._inicio = inicio
+        self._fin = fin
+        self._estado = estado
+        self._cuenta = cuenta
+        self._n = len (cadena )
+        self._g0 = ''
+        self._g1 = ''
+        self._g2 = ''
+        self._g3 = ''
+        self._g4 = ''
+        self._g5 = ''
+        self._g6 = ''
+        self._g7 = ''
+        self._g8 = ''
+        self._g9 = ''
+        self._g0 = g0
+        si g1 no es Nada :
+            self._g1 = g1
+        si g2 no es Nada :
+            self._g2 = g2
+        si g3 no es Nada :
+            self._g3 = g3
+        si g4 no es Nada :
+            self._g4 = g4
+        si g5 no es Nada :
+            self._g5 = g5
+        si g6 no es Nada :
+            self._g6 = g6
+        si g7 no es Nada :
+            self._g7 = g7
+        si g8 no es Nada :
+            self._g8 = g8
+        si g9 no es Nada :
+            self._g9 = g9
+        self.pos = posicion
+        self.endpos = fin_cadena
+        self.lastindex = Nada
+        i = 1
+        mientras i <= cuenta :
+            si _estado_grupo_inicio (estado ,i ,self._n + 2 ) >= 0 :
+                self.lastindex = i
+            i = i + 1
+        self.lastgroup = Nada
+        self.flags = banderas
+    funcion _valor_grupo (self ,indice ):
+        si indice == 0 :
+            devolver self._g0
+        si indice == 1 y _estado_grupo_inicio (self._estado ,indice ,self._n + 2 ) >= 0 :
+            devolver self._g1
+        si indice == 2 y _estado_grupo_inicio (self._estado ,indice ,self._n + 2 ) >= 0 :
+            devolver self._g2
+        si indice == 3 y _estado_grupo_inicio (self._estado ,indice ,self._n + 2 ) >= 0 :
+            devolver self._g3
+        si indice == 4 y _estado_grupo_inicio (self._estado ,indice ,self._n + 2 ) >= 0 :
+            devolver self._g4
+        si indice == 5 y _estado_grupo_inicio (self._estado ,indice ,self._n + 2 ) >= 0 :
+            devolver self._g5
+        si indice == 6 y _estado_grupo_inicio (self._estado ,indice ,self._n + 2 ) >= 0 :
+            devolver self._g6
+        si indice == 7 y _estado_grupo_inicio (self._estado ,indice ,self._n + 2 ) >= 0 :
+            devolver self._g7
+        si indice == 8 y _estado_grupo_inicio (self._estado ,indice ,self._n + 2 ) >= 0 :
+            devolver self._g8
+        si indice == 9 y _estado_grupo_inicio (self._estado ,indice ,self._n + 2 ) >= 0 :
+            devolver self._g9
+        devolver Nada
+    funcion _span (self ,indice =0 ):
+        si indice == 0 :
+            devolver (self._inicio ,self._fin )
+        si indice > 0 y indice <= self._cuenta :
+            devolver _span_de (self._estado ,indice ,self._inicio ,self._fin ,self._n )
+        devolver (-1 ,-1 )
+    funcion group (self ,indice =0 ):
+        devolver self._valor_grupo (indice )
+    funcion groups (self ,default =Nada ):
+        si self._cuenta == 0 :
+            devolver ()
+        si self._cuenta == 1 :
+            si _estado_grupo_inicio (self._estado ,1 ,self._n + 2 ) < 0 :
+                devolver (default ,)
+            devolver (self._g1 ,)
+        si self._cuenta == 2 :
+            uno = _estado_grupo_inicio (self._estado ,1 ,self._n + 2 ) >= 0
+            dos = _estado_grupo_inicio (self._estado ,2 ,self._n + 2 ) >= 0
+            si uno y dos :
+                devolver (self._g1 ,self._g2 )
+            si uno :
+                devolver (self._g1 ,default )
+            si dos :
+                devolver (default ,self._g2 )
+            devolver (default ,default )
+        devolver ()
+    funcion start (self ,indice =0 ):
+        si indice == 0 :
+            devolver self._inicio
+        si indice > 0 y indice <= self._cuenta :
+            devolver _estado_grupo_inicio (self._estado ,indice ,self._n + 2 )
+        devolver -1
+    funcion end (self ,indice =0 ):
+        si indice == 0 :
+            devolver self._fin
+        si indice > 0 y indice <= self._cuenta :
+            devolver _estado_grupo_fin (self._estado ,indice ,self._n + 2 )
+        devolver -1
+    funcion span (self ,indice =0 ):
+        devolver self._span (indice )
+    funcion __getitem__ (self ,indice ):
+        devolver self.group (indice )
+    funcion __bool__ (self ):
+        devolver Verdadero
+
+
+funcion _crear_match (patron ,cadena ,datos ,banderas ):
+    cuenta = _cuenta_grupos (patron )
+    g0 = _texto_rango (cadena ,datos[0] ,datos[1] )
+    g1 = Nada
+    g2 = Nada
+    g3 = Nada
+    g4 = Nada
+    g5 = Nada
+    g6 = Nada
+    g7 = Nada
+    g8 = Nada
+    g9 = Nada
+    si cuenta >= 1 :
+        g1 = _texto_grupo (cadena ,datos[2] ,datos[0] ,datos[1] ,1 ,len (cadena ))
+    si cuenta >= 2 :
+        g2 = _texto_grupo (cadena ,datos[2] ,datos[0] ,datos[1] ,2 ,len (cadena ))
+    si cuenta >= 3 :
+        g3 = _texto_grupo (cadena ,datos[2] ,datos[0] ,datos[1] ,3 ,len (cadena ))
+    si cuenta >= 4 :
+        g4 = _texto_grupo (cadena ,datos[2] ,datos[0] ,datos[1] ,4 ,len (cadena ))
+    si cuenta >= 5 :
+        g5 = _texto_grupo (cadena ,datos[2] ,datos[0] ,datos[1] ,5 ,len (cadena ))
+    si cuenta >= 6 :
+        g6 = _texto_grupo (cadena ,datos[2] ,datos[0] ,datos[1] ,6 ,len (cadena ))
+    si cuenta >= 7 :
+        g7 = _texto_grupo (cadena ,datos[2] ,datos[0] ,datos[1] ,7 ,len (cadena ))
+    si cuenta >= 8 :
+        g8 = _texto_grupo (cadena ,datos[2] ,datos[0] ,datos[1] ,8 ,len (cadena ))
+    si cuenta >= 9 :
+        g9 = _texto_grupo (cadena ,datos[2] ,datos[0] ,datos[1] ,9 ,len (cadena ))
+    devolver _Match (patron ,cadena ,datos[0] ,datos[1] ,datos[2] ,cuenta ,0 ,len (cadena ) ,banderas ,g0 ,g1 ,g2 ,g3 ,g4 ,g5 ,g6 ,g7 ,g8 ,g9 )
+
+
+funcion search (pattern ,string ,flags =0 ):
+    patron = pattern
+    cadena = string
+    banderas = flags
+    datos = _buscar_datos (patron ,cadena ,0 ,Falso ,banderas )
+    si datos es Nada :
+        devolver Nada
+    devolver _crear_match (patron ,cadena ,datos ,banderas )
+
+
+funcion match (pattern ,string ,flags =0 ):
+    patron = pattern
+    cadena = string
+    banderas = flags
+    datos = _buscar_datos (patron ,cadena ,0 ,Verdadero ,banderas )
+    si datos es Nada :
+        devolver Nada
+    devolver _crear_match (patron ,cadena ,datos ,banderas )

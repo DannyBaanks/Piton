@@ -1,8 +1,8 @@
 funcion compress (data, format, check, preset, filters):
-    devolver b""
+    lanzar NotImplementedError ('_lzma.compress no esta implementado en el backend nativo')
 
 funcion decompress (data, format, memlimit, filters):
-    devolver b""
+    lanzar NotImplementedError ('_lzma.decompress no esta implementado en el backend nativo')
 
 clase LZMACompressor :
     "stub"

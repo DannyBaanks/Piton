@@ -1,20 +1,20 @@
 funcion lookup (name):
-    devolver ''
+    lanzar NotImplementedError ('unicodedata.lookup no esta implementado en el backend nativo')
 
 funcion name (char):
-    devolver ''
+    lanzar NotImplementedError ('unicodedata.name no esta implementado en el backend nativo')
 
 funcion category (char):
-    devolver ''
+    lanzar NotImplementedError ('unicodedata.category no esta implementado en el backend nativo')
 
 funcion decimal (char):
-    devolver 0
+    lanzar NotImplementedError ('unicodedata.decimal no esta implementado en el backend nativo')
 
 funcion digit (char):
-    devolver 0
+    lanzar NotImplementedError ('unicodedata.digit no esta implementado en el backend nativo')
 
 funcion numeric (char):
-    devolver 0
+    lanzar NotImplementedError ('unicodedata.numeric no esta implementado en el backend nativo')
 
 funcion normalize (form, unistr):
     devolver unistr

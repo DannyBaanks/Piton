@@ -1,8 +1,8 @@
 funcion message_from_string (s,_class=Nada,strict=Verdadero):
-    devolver {}
+    lanzar NotImplementedError ('email.message_from_string no esta implementado en el backend nativo')
 
 funcion message_from_bytes (s,_class=Nada,strict=Verdadero):
-    devolver {}
+    lanzar NotImplementedError ('email.message_from_bytes no esta implementado en el backend nativo')
 
 funcion message_from_file (fp,_class=Nada,strict=Verdadero):
     devolver {}

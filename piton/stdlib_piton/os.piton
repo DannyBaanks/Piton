@@ -1,0 +1,7 @@
+# os.system se baja a una operacion nativa (fork/execve/wait4) en mir.py /
+# linux_x86.py (OS_SYSTEM_V1); este cuerpo solo se usa si se llama sin pasar
+# por el lowering nativo.
+funcion system (comando ):
+    lanzar NotImplementedError ('os.system solo existe como llamada os.system(...) directa en el backend nativo')
+
+

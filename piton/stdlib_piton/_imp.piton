@@ -1,8 +1,8 @@
 funcion create_builtin (spec):
-    devolver None
+    lanzar NotImplementedError ('_imp.create_builtin no esta implementado en el backend nativo')
 
 funcion create_dynamic (name, initfunc=None):
-    devolver None
+    lanzar NotImplementedError ('_imp.create_dynamic no esta implementado en el backend nativo')
 
 funcion reload (module):
     devolver module

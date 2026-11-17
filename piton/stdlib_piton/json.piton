@@ -1,0 +1,28 @@
+# json: superficie del modulo para el backend nativo.
+#
+# Llamada directa o `desde json importar X`: se baja a operaciones nativas
+# (dumps/loads/dump/load). `loads` tambien funciona como VALOR de primera clase
+# (`f = json.loads`): esta funcion llama a la operacion nativa y el programa pasa
+# a tratar los resultados de llamadas por valor de funcion como valores dinamicos.
+# dumps/dump/load como VALOR fallan en COMPILACION: necesitan el tipo estatico
+# del argumento.
+
+
+clase JSONDecodeError (ValueError):
+    pasar
+
+
+funcion dumps (obj ,**otros ):
+    lanzar NotImplementedError ("json.dumps solo se soporta como llamada directa json.dumps(valor) en el backend nativo")
+
+
+funcion dump (obj ,fp ,**otros ):
+    lanzar NotImplementedError ("json.dump no soportado en el backend nativo")
+
+
+funcion loads (s ,**otros ):
+    devolver _json_native_loads (s )
+
+
+funcion load (fp ,**otros ):
+    devolver _json_native_load_file (fp )

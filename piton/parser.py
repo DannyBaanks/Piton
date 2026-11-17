@@ -231,24 +231,23 @@ class Parser:
         test = self._parse_expression(0)
         self._consume(TokenType.COLON)
         body = self._parse_block()
-        orelse = []
+        root = IfStmt(test=test, body=body, orelse=[]).set_pos(tok)
+        tail = root
         while self._check(TokenType.NAME) and self._peek().value in ("sino_si", "sino"):
             if self._peek().value == "sino_si":
-                self._advance()
+                elif_tok = self._advance()
                 elif_test = self._parse_expression(0)
                 self._consume(TokenType.COLON)
                 elif_body = self._parse_block()
-                orelse.append(IfStmt(test=elif_test, body=elif_body, orelse=[]).set_pos(tok))
+                elif_node = IfStmt(test=elif_test, body=elif_body, orelse=[]).set_pos(elif_tok)
+                tail.orelse = [elif_node]
+                tail = elif_node
             else:
                 self._advance()
                 self._consume(TokenType.COLON)
-                else_body = self._parse_block()
-                if orelse:
-                    orelse[-1].orelse = else_body
-                else:
-                    orelse = else_body
+                tail.orelse = self._parse_block()
                 break
-        return IfStmt(test=test, body=body, orelse=orelse).set_pos(tok)
+        return root
 
     def _parse_while(self) -> WhileStmt:
         tok = self._advance()

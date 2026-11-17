@@ -2,29 +2,651 @@ MAX_EMAX = 999999
 MAX_PREC = 999999
 MIN_EMIN = -999999
 
-clase Inexact :
+ROUND_HALF_EVEN = 0
+ROUND_HALF_UP = 1
+ROUND_DOWN = 2
+ROUND_UP = 3
+ROUND_CEILING = 4
+ROUND_FLOOR = 5
+ROUND_HALF_DOWN = 6
+ROUND_05UP = 7
+
+_ctx = Nada
+
+clase Context:
+    funcion __init__(este, prec = 28, rounding = ROUND_HALF_EVEN):
+        este.prec = prec
+        este.rounding = rounding
+        este.Emax = MAX_EMAX
+        este.Emin = MIN_EMIN
+        este.traps = {}
+
+funcion getcontext():
+    global _ctx
+    si _ctx es Nada:
+        _ctx = Context(28, ROUND_HALF_EVEN)
+    devolver _ctx
+
+funcion setcontext(ctx):
+    global _ctx
+    _ctx = ctx
+
+clase Decimal:
+    funcion __init__(este, val = Nada):
+        si val es Nada:
+            _init_val(este, "0")
+        sino:
+            _init_val(este, val)
+
+    funcion __str__(este):
+        devolver _fmt(este._dig, este._sign, este._exp)
+
+    funcion __repr__(este):
+        devolver "Decimal('" + _fmt(este._dig, este._sign, este._exp) + "')"
+
+    funcion __add__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_add(este, otro)
+        devolver _d_add(este, Decimal(otro))
+
+    funcion __radd__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_add(este, otro)
+        devolver _d_add(este, Decimal(otro))
+
+    funcion __sub__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_sub(este, otro)
+        devolver _d_sub(este, Decimal(otro))
+
+    funcion __rsub__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_sub(otro, este)
+        devolver _d_sub(Decimal(otro), este)
+
+    funcion __neg__(este):
+        devolver _mk_dec(este._dig, -este._sign, este._exp)
+
+    funcion __pos__(este):
+        devolver Decimal(este)
+
+    funcion __abs__(este):
+        si este._sign < 0:
+            devolver este.__neg__()
+        devolver Decimal(este)
+
+    funcion __mul__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_mul(este, otro)
+        devolver _d_mul(este, Decimal(otro))
+
+    funcion __rmul__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_mul(este, otro)
+        devolver _d_mul(este, Decimal(otro))
+
+    funcion __truediv__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_div(este, otro)
+        devolver _d_div(este, Decimal(otro))
+
+    funcion __rtruediv__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_div(otro, este)
+        devolver _d_div(Decimal(otro), este)
+
+    funcion __mod__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_mod(este, otro)
+        devolver _d_mod(este, Decimal(otro))
+
+    funcion __rmod__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_mod(otro, este)
+        devolver _d_mod(Decimal(otro), este)
+
+    funcion __floordiv__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_floordiv(este, otro)
+        devolver _d_floordiv(este, Decimal(otro))
+
+    funcion __rfloordiv__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_floordiv(otro, este)
+        devolver _d_floordiv(Decimal(otro), este)
+
+    funcion __eq__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_cmp(este, otro) == 0
+        devolver _d_cmp(este, Decimal(otro)) == 0
+
+    funcion __ne__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_cmp(este, otro) != 0
+        devolver _d_cmp(este, Decimal(otro)) != 0
+
+    funcion __lt__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_cmp(este, otro) < 0
+        devolver _d_cmp(este, Decimal(otro)) < 0
+
+    funcion __le__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_cmp(este, otro) <= 0
+        devolver _d_cmp(este, Decimal(otro)) <= 0
+
+    funcion __gt__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_cmp(este, otro) > 0
+        devolver _d_cmp(este, Decimal(otro)) > 0
+
+    funcion __ge__(este, otro):
+        si tiene_atr(otro, "_dig"):
+            devolver _d_cmp(este, otro) >= 0
+        devolver _d_cmp(este, Decimal(otro)) >= 0
+
+    funcion __round__(este, ndigits = Nada):
+        si ndigits es Nada:
+            devolver _d_round_int(este)
+        devolver _d_round_nd(este, ndigits)
+
+    funcion quantize(este, exp, rounding = Nada):
+        si tiene_atr(exp, "_dig"):
+            devolver _d_quantize(este, exp, rounding)
+        devolver _d_quantize(este, Decimal(exp), rounding)
+
+
+clase Inexact:
     pasar
 
 
-clase Decimal :
-    pasar
+funcion _char_to_int(c = "0"):
+    si c == '0':
+        devolver 0
+    si c == '1':
+        devolver 1
+    si c == '2':
+        devolver 2
+    si c == '3':
+        devolver 3
+    si c == '4':
+        devolver 4
+    si c == '5':
+        devolver 5
+    si c == '6':
+        devolver 6
+    si c == '7':
+        devolver 7
+    si c == '8':
+        devolver 8
+    si c == '9':
+        devolver 9
+    devolver 0
 
 
-clase Context :
-    prec = 999999
-    Emax = 999999
-    Emin = -999999
-    traps = {}
+funcion _str_slice(s = "", lo = 0, hi = 0):
+    _n = longitud(s)
+    _a = lo si lo >= 0 sino 0
+    _b = hi si hi <= _n sino _n
+    _out = ""
+    _k = _a
+    mientras _k < _b:
+        _out = _out + s[_k]
+        _k = _k + 1
+    devolver _out
 
 
-funcion localcontext (*args , **kwargs):
-    lanzar NotImplementedError ('decimal.localcontext no esta implementado en el backend nativo')
+funcion _strip_leading_zeros(s = ""):
+    _n = longitud(s)
+    si _n == 0:
+        devolver "0"
+    _k = 0
+    mientras _k < _n - 1 y s[_k] == '0':
+        _k = _k + 1
+    devolver _str_slice(s, _k, _n)
 
 
-funcion replace (*args , **kwargs):
-    lanzar NotImplementedError ('decimal.replace no esta implementado en el backend nativo')
+funcion _init_val(este, val):
+    este._dig = "0"
+    este._sign = 1
+    este._exp = 0
+    si tiene_atr(val, "_dig"):
+        este._dig = val._dig
+        este._sign = val._sign
+        este._exp = val._exp
+        devolver
+    si es_instancia(val, str):
+        _parse_into(este, val)
+        devolver
+    si es_instancia(val, int):
+        _parse_into(este, texto(val))
+        devolver
+    lanzar TypeError("argument must be int, str, or Decimal")
 
 
-MAX_EMAX = 999999
-MAX_PREC = 999999
-MIN_EMIN = -999999
+funcion _mk_dec(dig = "0", sgn = 1, exp = 0):
+    _r = Decimal()
+    _r._dig = _strip_leading_zeros(dig)
+    _r._sign = sgn
+    _r._exp = exp
+    devolver _r
+
+
+funcion _find_e_idx(s = "", start = 0):
+    _n = longitud(s)
+    _j = start
+    mientras _j < _n:
+        si s[_j] == 'e' o s[_j] == 'E':
+            devolver _j
+        _j = _j + 1
+    devolver -1
+
+
+funcion _find_dot_idx(s = ""):
+    _m = longitud(s)
+    _j = 0
+    mientras _j < _m:
+        si s[_j] == '.':
+            devolver _j
+        _j = _j + 1
+    devolver -1
+
+
+funcion _parse_into(este, s = ""):
+    _s = 1
+    _i = 0
+    _n = longitud(s)
+    mientras _i < _n y (s[_i] == ' ' o s[_i] == '\t'):
+        _i = _i + 1
+    mientras _n > _i y (s[_n - 1] == ' ' o s[_n - 1] == '\t'):
+        _n = _n - 1
+    si _i >= _n:
+        lanzar ValueError("cadena vacia para Decimal")
+    si s[_i] == '+':
+        _i = _i + 1
+    sino_si s[_i] == '-':
+        _s = -1
+        _i = _i + 1
+    _e_idx = _find_e_idx(s, _i)
+    si _e_idx >= _n:
+        _e_idx = -1
+    _sig_end = _e_idx si _e_idx >= 0 sino _n
+    _sig_part = _str_slice(s, _i, _sig_end)
+    _exp_extra = 0
+    si _e_idx >= 0:
+        _exp_extra = entero(_str_slice(s, _e_idx + 1, _n))
+    _dot_idx = _find_dot_idx(_sig_part)
+    _mlen = longitud(_sig_part)
+    _int_part = _str_slice(_sig_part, 0, _dot_idx) si _dot_idx >= 0 sino _sig_part
+    _frac_part = _str_slice(_sig_part, _dot_idx + 1, _mlen) si _dot_idx >= 0 sino ""
+    _coeff_str = _strip_leading_zeros(_int_part + _frac_part)
+    _exp = -longitud(_frac_part) + _exp_extra
+    este._dig = _coeff_str
+    este._sign = _s
+    este._exp = _exp
+
+
+funcion _fmt(digits = "0", sign = 1, exp = 0):
+    _sgn = "-" si sign < 0 sino ""
+    si digits == "0":
+        si exp == 0:
+            devolver _sgn + "0"
+        si exp > 0:
+            devolver _sgn + "0E+" + texto(exp)
+        si -exp <= 6:
+            devolver _sgn + "0." + ("0" * (-exp))
+        devolver _sgn + "0E" + texto(exp)
+    _dlen = longitud(digits)
+    _adj = exp + _dlen - 1
+    si exp <= 0 y _adj >= -6:
+        si exp == 0:
+            devolver _sgn + digits
+        si _dlen + exp > 0:
+            _split = _dlen + exp
+            devolver _sgn + _str_slice(digits, 0, _split) + "." + _str_slice(digits, _split, _dlen)
+        devolver _sgn + "0." + ("0" * (-exp - _dlen)) + digits
+    _lead = _str_slice(digits, 0, 1)
+    _rest = _str_slice(digits, 1, _dlen)
+    _body = _lead si _rest == "" sino (_lead + "." + _rest)
+    _estr = ("+" + texto(_adj)) si _adj >= 0 sino texto(_adj)
+    devolver _sgn + _body + "E" + _estr
+
+
+funcion _digit_from_right(s = "", i = 1):
+    _n = longitud(s)
+    si i < 1 o i > _n:
+        devolver 0
+    devolver _char_to_int(s[_n - i])
+
+
+funcion _pad_zeros(s = "", n = 0):
+    si n <= 0:
+        devolver s
+    devolver s + ("0" * n)
+
+
+funcion _dig_cmp(a = "0", b = "0"):
+    _a = _strip_leading_zeros(a)
+    _b = _strip_leading_zeros(b)
+    _la = longitud(_a)
+    _lb = longitud(_b)
+    si _la < _lb:
+        devolver -1
+    si _la > _lb:
+        devolver 1
+    _i = 0
+    mientras _i < _la:
+        si _a[_i] < _b[_i]:
+            devolver -1
+        sino_si _a[_i] > _b[_i]:
+            devolver 1
+        _i = _i + 1
+    devolver 0
+
+
+funcion _dig_add(a = "0", b = "0"):
+    _la = longitud(a)
+    _lb = longitud(b)
+    _n = _la si _la > _lb sino _lb
+    _carry = 0
+    _out = ""
+    _i = 1
+    mientras _i <= _n:
+        _da = _digit_from_right(a, _i)
+        _db = _digit_from_right(b, _i)
+        _s = _da + _db + _carry
+        _out = chr(48 + _s % 10) + _out
+        _carry = _s // 10
+        _i = _i + 1
+    si _carry > 0:
+        _out = chr(48 + _carry) + _out
+    devolver _strip_leading_zeros(_out)
+
+
+funcion _dig_sub(a = "0", b = "0"):
+    _la = longitud(a)
+    _borrow = 0
+    _out = ""
+    _i = 1
+    mientras _i <= _la:
+        _da = _digit_from_right(a, _i)
+        _db = _digit_from_right(b, _i)
+        _d = _da - _db - _borrow
+        si _d < 0:
+            _d = _d + 10
+            _borrow = 1
+        sino:
+            _borrow = 0
+        _out = chr(48 + _d) + _out
+        _i = _i + 1
+    devolver _strip_leading_zeros(_out)
+
+
+funcion _dig_mul(a = "0", b = "0"):
+    si a == "0" o b == "0":
+        devolver "0"
+    _la = longitud(a)
+    _lb = longitud(b)
+    _res = []
+    _i = 0
+    mientras _i < _la + _lb:
+        _res.append(0)
+        _i = _i + 1
+    _i = _la - 1
+    mientras _i >= 0:
+        _carry = 0
+        _j = _lb - 1
+        mientras _j >= 0:
+            _pos = _i + _j + 1
+            _mul = (_digit_from_right(a, _la - _i)) * (_digit_from_right(b, _lb - _j)) + _carry + _res[_pos]
+            _res[_pos] = _mul % 10
+            _carry = _mul // 10
+            _j = _j - 1
+        _res[_i] = _carry
+        _i = _i - 1
+    _out = ""
+    _k = 0
+    mientras _k < longitud(_res):
+        _out = _out + chr(48 + _res[_k])
+        _k = _k + 1
+    devolver _strip_leading_zeros(_out)
+
+
+funcion _dig_div_q(a = "0", b = "1"):
+    _a = _strip_leading_zeros(a)
+    _b = _strip_leading_zeros(b)
+    si _dig_cmp(_a, _b) < 0:
+        devolver "0"
+    _q = ""
+    _r = "0"
+    _n = longitud(_a)
+    _i = 0
+    mientras _i < _n:
+        si _r == "0":
+            _r = _a[_i]
+        sino:
+            _r = _r + _a[_i]
+        _cnt = 0
+        mientras _dig_cmp(_r, _b) >= 0:
+            _r = _dig_sub(_r, _b)
+            _cnt = _cnt + 1
+        _q = _q + chr(48 + _cnt)
+        _i = _i + 1
+    devolver _strip_leading_zeros(_q)
+
+
+funcion _dig_mod_r(a = "0", b = "1"):
+    _a = _strip_leading_zeros(a)
+    _b = _strip_leading_zeros(b)
+    si _dig_cmp(_a, _b) < 0:
+        devolver _a
+    _r = "0"
+    _n = longitud(_a)
+    _i = 0
+    mientras _i < _n:
+        si _r == "0":
+            _r = _a[_i]
+        sino:
+            _r = _r + _a[_i]
+        mientras _dig_cmp(_r, _b) >= 0:
+            _r = _dig_sub(_r, _b)
+        _i = _i + 1
+    devolver _strip_leading_zeros(_r)
+
+
+funcion _dig_is_zero(s = "0"):
+    devolver _dig_cmp(s, "0") == 0
+
+
+funcion _d_add_aligned(_c_a = "0", _sa = 1, _c_b = "0", _sb = 1, _e = 0):
+    si _sa == _sb:
+        devolver _mk_dec(_dig_add(_c_a, _c_b), _sa, _e)
+    _cmp = _dig_cmp(_c_a, _c_b)
+    si _cmp > 0:
+        devolver _mk_dec(_dig_sub(_c_a, _c_b), _sa, _e)
+    si _cmp < 0:
+        devolver _mk_dec(_dig_sub(_c_b, _c_a), _sb, _e)
+    _zero_sgn = 1 si getcontext().rounding != ROUND_FLOOR sino -1
+    devolver _mk_dec("0", _zero_sgn, _e)
+
+
+funcion _d_add(a, b):
+    _ea = a._exp
+    _eb = b._exp
+    si _ea > _eb:
+        devolver _d_add_aligned(_pad_zeros(a._dig, _ea - _eb), a._sign, b._dig, b._sign, _eb)
+    si _eb > _ea:
+        devolver _d_add_aligned(a._dig, a._sign, _pad_zeros(b._dig, _eb - _ea), b._sign, _ea)
+    devolver _d_add_aligned(a._dig, a._sign, b._dig, b._sign, _ea)
+
+
+funcion _d_sub(a, b):
+    devolver _d_add(a, _mk_dec(b._dig, -b._sign, b._exp))
+
+
+funcion _d_mul(a, b):
+    _sign = a._sign * b._sign
+    _exp = a._exp + b._exp
+    si _dig_is_zero(a._dig) o _dig_is_zero(b._dig):
+        devolver _mk_dec("0", _sign, _exp)
+    devolver _mk_dec(_dig_mul(a._dig, b._dig), _sign, _exp)
+
+
+funcion _should_round_up(q_digits = "0", r = "0", b_digits = "1", sign = 1, rounding = 0):
+    si r == "0":
+        devolver Falso
+    si rounding == ROUND_UP:
+        devolver Verdadero
+    si rounding == ROUND_DOWN:
+        devolver Falso
+    si rounding == ROUND_CEILING:
+        devolver sign > 0
+    si rounding == ROUND_FLOOR:
+        devolver sign < 0
+    _twice_r = _dig_add(r, r)
+    _cmp = _dig_cmp(_twice_r, b_digits)
+    si _cmp > 0:
+        devolver Verdadero
+    si _cmp < 0:
+        devolver Falso
+    si rounding == ROUND_HALF_UP:
+        devolver Verdadero
+    si rounding == ROUND_HALF_DOWN:
+        devolver Falso
+    # ROUND_HALF_EVEN
+    _qlen = longitud(q_digits)
+    si _qlen > 0:
+        _last = _char_to_int(q_digits[_qlen - 1])
+        devolver (_last % 2) == 1
+    devolver Falso
+
+
+funcion _d_div(a, b):
+    si _dig_is_zero(b._dig):
+        lanzar ZeroDivisionError("division by zero")
+    _ctx = getcontext()
+    _prec = _ctx.prec
+    _rounding = _ctx.rounding
+    _sign = a._sign * b._sign
+    _ideal_exp = a._exp - b._exp
+    si _dig_is_zero(a._dig):
+        devolver _mk_dec("0", _sign, _ideal_exp)
+    _num = a._dig
+    _den = b._dig
+    _exp = _ideal_exp
+    mientras _dig_cmp(_num, _den) < 0:
+        _num = _num + "0"
+        _exp = _exp - 1
+    _q = _dig_div_q(_num, _den)
+    _r = _dig_mod_r(_num, _den)
+    # Trim leading integer precision if _q already exceeds _prec digits
+    si longitud(_q) > _prec:
+        _excess = longitud(_q) - _prec
+        _head = _str_slice(_q, 0, _prec)
+        _tail = _str_slice(_q, _prec, longitud(_q))
+        _pow10 = _pad_zeros("1", _excess)
+        _rem_total = _dig_add(_dig_mul(_tail, _den), _r)
+        _den_total = _dig_mul(_pow10, _den)
+        _exp = _exp + _excess
+        si _should_round_up(_head, _rem_total, _den_total, _sign, _rounding):
+            _head = _dig_add(_head, "1")
+            si longitud(_head) > _prec:
+                _head = _str_slice(_head, 0, _prec)
+                _exp = _exp + 1
+        devolver _mk_dec(_head, _sign, _exp)
+    # Expand fractional digits up to _prec significant digits while remainder != 0
+    mientras _r != "0" y longitud(_q) < _prec:
+        _r = _r + "0"
+        _exp = _exp - 1
+        _cnt = 0
+        mientras _dig_cmp(_r, _den) >= 0:
+            _r = _dig_sub(_r, _den)
+            _cnt = _cnt + 1
+        _q = _q + chr(48 + _cnt)
+    si _r != "0":
+        si _should_round_up(_q, _r, _den, _sign, _rounding):
+            _q = _dig_add(_q, "1")
+            si longitud(_q) > _prec:
+                _q = _str_slice(_q, 0, _prec)
+                _exp = _exp + 1
+    devolver _mk_dec(_q, _sign, _exp)
+
+
+funcion _d_floordiv(a, b):
+    si _dig_is_zero(b._dig):
+        lanzar ZeroDivisionError("integer division or modulo by zero")
+    _e = a._exp si a._exp < b._exp sino b._exp
+    _ca = _pad_zeros(a._dig, a._exp - _e)
+    _cb = _pad_zeros(b._dig, b._exp - _e)
+    _q = _dig_div_q(_ca, _cb)
+    devolver _mk_dec(_q, a._sign * b._sign, 0)
+
+
+funcion _d_mod(a, b):
+    si _dig_is_zero(b._dig):
+        lanzar ZeroDivisionError("integer division or modulo by zero")
+    _e = a._exp si a._exp < b._exp sino b._exp
+    _ca = _pad_zeros(a._dig, a._exp - _e)
+    _cb = _pad_zeros(b._dig, b._exp - _e)
+    _r = _dig_mod_r(_ca, _cb)
+    devolver _mk_dec(_r, a._sign, _e)
+
+
+funcion _d_cmp(a, b):
+    si _dig_is_zero(a._dig) y _dig_is_zero(b._dig):
+        devolver 0
+    si a._sign != b._sign:
+        si a._sign < b._sign:
+            devolver -1
+        devolver 1
+    _ea = a._exp
+    _eb = b._exp
+    _ca = _pad_zeros(a._dig, _ea - _eb) si _ea > _eb sino a._dig
+    _cb = _pad_zeros(b._dig, _eb - _ea) si _eb > _ea sino b._dig
+    _cmp = _dig_cmp(_ca, _cb)
+    si a._sign < 0:
+        devolver -_cmp
+    devolver _cmp
+
+
+funcion _d_round_int(d):
+    _qd = _d_quantize(d, _mk_dec("1", 1, 0))
+    _s = _qd._dig
+    si _qd._exp > 0:
+        _s = _s + ("0" * _qd._exp)
+    si _s == "0":
+        devolver 0
+    _v = entero(_s)
+    si _qd._sign < 0:
+        devolver -_v
+    devolver _v
+
+
+funcion _d_round_nd(d, ndigits):
+    devolver _d_quantize(d, _mk_dec("1", 1, -ndigits))
+
+
+funcion _d_quantize(d, exp_q, rounding = Nada):
+    _rmode = rounding
+    si _rmode es Nada:
+        _rmode = getcontext().rounding
+    _target_exp = exp_q._exp
+    _sign = d._sign
+    _dig = d._dig
+    _exp = d._exp
+    si _exp == _target_exp:
+        devolver _mk_dec(_dig, _sign, _exp)
+    si _exp > _target_exp:
+        _shift = _exp - _target_exp
+        si _dig == "0":
+            devolver _mk_dec("0", _sign, _target_exp)
+        devolver _mk_dec(_dig + ("0" * _shift), _sign, _target_exp)
+    _shift2 = _target_exp - _exp
+    si _dig == "0":
+        devolver _mk_dec("0", _sign, _target_exp)
+    _divisor_str = _pad_zeros("1", _shift2)
+    _q = _dig_div_q(_dig, _divisor_str)
+    _r = _dig_mod_r(_dig, _divisor_str)
+    si _should_round_up(_q, _r, _divisor_str, _sign, _rmode):
+        _q = _dig_add(_q, "1")
+    devolver _mk_dec(_q, _sign, _target_exp)

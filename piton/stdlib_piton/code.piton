@@ -1,5 +1,5 @@
 funcion compile_command (source, filename='<input>', symbol='single', *args, **kwargs):
-    devolver Nada
+    lanzar NotImplementedError ('code.compile_command no esta implementado en el backend nativo')
 
 clase InteractiveConsole:
     funcion __init__ (self, locals=Nada, filename='<console>', *args, **kwargs):

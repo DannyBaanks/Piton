@@ -63,6 +63,22 @@ static inline int64_t pv_none(void)  { return pv_encode(PITON_TAG_NONE, 0); }
 static inline int64_t pv_bool(int b) { return pv_encode(PITON_TAG_BOOL, b ? 1 : 0); }
 int64_t pv_int(int64_t i) { return pv_encode(PITON_TAG_INT, i); }
 
+static inline int piton_is_str(int64_t v) {
+    if (pv_tag(v) != PITON_TAG_OBJECT) return 0;
+    void *ptr = (void *)pv_payload(v);
+    if (!ptr) return 0;
+    PitonHeader *h = (PitonHeader *)ptr;
+    return h->sub_tag == SUB_TAG_STR;
+}
+
+static inline int piton_is_int(int64_t v) {
+    return pv_tag(v) == PITON_TAG_INT;
+}
+
+static inline int piton_is_bool(int64_t v) {
+    return pv_tag(v) == PITON_TAG_BOOL;
+}
+
 static inline PitonHeader *pv_header_from_ptr(void *ptr) {
     return (PitonHeader *)ptr;
 }
@@ -5499,3 +5515,576 @@ int64_t piton_terminal_write(int64_t str_val) { (void)str_val; return 0; }
 int64_t piton_terminal_read(int64_t max_bytes) { (void)max_bytes; return 0; }
 int64_t piton_terminal_size(void) { return 0; }
 #endif  /* !_WIN32 */
+
+/* The Linux emitter owns these stdlib implementations in linux_x86.py.
+ * This legacy duplicate expects the emitter's PitonSeq/PitonSlot ABI, which
+ * native_runtime.c does not use; keep it disabled until it is ported to the
+ * tagged PitonValue API. */
+#if 0
+/* RANDOM_V1: random module functions (Mersenne Twister MT19937) */
+
+#include <time.h>
+#include <locale.h>
+#include <limits.h>
+
+/* Mersenne Twister state (mt19937-64 for 64-bit, mt19937 for 32-bit) */
+#define MT_N 624
+#define MT_M 397
+#define MT_MATRIX_A 0x9908b0dfUL
+#define MT_UPPER_MASK 0x80000000UL
+#define MT_LOWER_MASK 0x7fffffffUL
+
+typedef struct {
+    uint32_t mt[MT_N];
+    int mti;
+    uint64_t seed_state[2];  /* for seed sequence */
+    int seed_mti;
+} PitonRandomState;
+
+static PitonRandomState piton_random_state = { .mti = MT_N + 1 };
+
+/* Initialize generator with a seed */
+static void piton_random_init_genrand(uint32_t s) {
+    piton_random_state.mt[0] = s & 0xffffffffUL;
+    for (piton_random_state.mti = 1; piton_random_state.mti < MT_N; piton_random_state.mti++) {
+        piton_random_state.mt[piton_random_state.mti] = 
+            (1812433253UL * (piton_random_state.mt[piton_random_state.mti - 1] ^ (piton_random_state.mt[piton_random_state.mti - 1] >> 30)) + piton_random_state.mti);
+        piton_random_state.mt[piton_random_state.mti] &= 0xffffffffUL;
+    }
+}
+
+/* Initialize by array with seed sequence */
+static void piton_random_init_by_array(uint32_t init_key[], int key_length) {
+    int i, j, k;
+    piton_random_init_genrand(19650218UL);
+    i = 1; j = 0;
+    k = (MT_N > key_length ? MT_N : key_length);
+    for (; k; k--) {
+        uint32_t prev = piton_random_state.mt[(piton_random_state.mti - 1) & (MT_N - 1)];
+        piton_random_state.mt[piton_random_state.mti] = 
+            (piton_random_state.mt[piton_random_state.mti] ^ ((prev ^ (prev >> 30)) * 1664525UL)) + init_key[j] + j;
+        piton_random_state.mt[piton_random_state.mti] &= 0xffffffffUL;
+        piton_random_state.mti++;
+        if (piton_random_state.mti >= MT_N) {
+            piton_random_state.mt[0] = piton_random_state.mt[MT_N - 1];
+            piton_random_state.mti = 1;
+        }
+        if (++j >= key_length) j = 0;
+    }
+    for (k = MT_N - 1; k; k--) {
+        uint32_t prev = piton_random_state.mt[(piton_random_state.mti - 1) & (MT_N - 1)];
+        piton_random_state.mt[piton_random_state.mti] = 
+            (piton_random_state.mt[piton_random_state.mti] ^ ((prev ^ (prev >> 30)) * 1566083941UL)) - piton_random_state.mti;
+        piton_random_state.mt[piton_random_state.mti] &= 0xffffffffUL;
+        piton_random_state.mti++;
+        if (piton_random_state.mti >= MT_N) {
+            piton_random_state.mt[0] = piton_random_state.mt[MT_N - 1];
+            piton_random_state.mti = 1;
+        }
+    }
+    piton_random_state.mt[0] = 0x80000000UL; /* MSB is 1; assuring non-zero initial array */
+}
+
+/* Initialize with system time if no seed provided */
+static void piton_random_default_seed(void) {
+    uint32_t seed = (uint32_t)(time(NULL) ^ (uintptr_t)&piton_random_state);
+    piton_random_init_genrand(seed);
+}
+
+/* Generate 32-bit random number */
+static uint32_t piton_random_genrand_int32(void) {
+    uint32_t y;
+    static const uint32_t mag01[2] = { 0x0UL, MT_MATRIX_A };
+    
+    if (piton_random_state.mti >= MT_N) {
+        int kk;
+        if (piton_random_state.mti == MT_N + 1)
+            piton_random_init_genrand(5489UL);
+        for (int kk = 0; kk < MT_N - MT_M; kk++) {
+            uint32_t y = (piton_random_state.mt[kk] & MT_UPPER_MASK) | (piton_random_state.mt[kk + 1] & MT_LOWER_MASK);
+            piton_random_state.mt[kk] = piton_random_state.mt[kk + MT_M] ^ (y >> 1) ^ mag01[y & 0x1UL];
+        }
+        for (; kk < MT_N - 1; kk++) {
+            uint32_t y = (piton_random_state.mt[kk] & MT_UPPER_MASK) | (piton_random_state.mt[kk + 1] & MT_LOWER_MASK);
+            piton_random_state.mt[kk] = piton_random_state.mt[kk + MT_M] ^ (y >> 1) ^ mag01[y & 0x1UL];
+        }
+        uint32_t y = (piton_random_state.mt[MT_N - 1] & MT_UPPER_MASK) | (piton_random_state.mt[0] & MT_LOWER_MASK);
+        piton_random_state.mt[MT_N - 1] = piton_random_state.mt[MT_M - 1] ^ (y >> 1) ^ mag01[y & 0x1UL];
+        piton_random_state.mti = 0;
+    }
+    y = piton_random_state.mt[piton_random_state.mti++];
+    
+    /* Tempering */
+    y ^= (y >> 11);
+    y ^= (y << 7) & 0x9d2c5680UL;
+    y ^= (y << 15) & 0xefc60000UL;
+    y ^= (y >> 18);
+    
+    return y;
+}
+
+/* Generate 53-bit random double in [0, 1) */
+static double piton_random_genrand_real(void) {
+    uint32_t a = piton_random_genrand_int32() >> 5;
+    uint32_t b = piton_random_genrand_int32() >> 6;
+    return (a * 67108864.0 + b) * (1.0 / 9007199254740992.0);
+}
+
+/* Public API: random.random() */
+int64_t piton_builtin_random_random(long a, long b, long c, long d) {
+    (void)a; (void)b; (void)c; (void)d;
+    double val = piton_random_genrand_real();
+    return piton_double_bits(val);
+}
+
+/* randint(a, b) - returns random integer in [a, b] */
+int64_t piton_builtin_random_randint(long a, long b, long c, long d) {
+    (void)c; (void)d;
+    int64_t ai = a;
+    int64_t bi = b;
+    if (ai > bi) {
+        int64_t tmp = ai; ai = bi; bi = ai;
+    }
+    uint32_t r = piton_random_genrand_int32();
+    int64_t range = bi - ai + 1;
+    int64_t result = ai + (int64_t)((uint64_t)r % (uint64_t)range);
+    return result;
+}
+
+/* choice(seq) - returns random element from sequence */
+int64_t piton_builtin_random_choice(long seq, long b, long c, long d) {
+    (void)b; (void)c; (void)d;
+    if (!seq) { piton_raise("TypeError", "choice() arg must be a sequence"); return 0; }
+    
+    /* Get sequence length and items */
+    if (!piton_maybe_ptr(seq)) { piton_raise("TypeError", "choice() arg must be a sequence"); return 0; }
+    long *p = (long*)seq;
+    int64_t kind = p[1];
+    int64_t len = 0;
+    
+    if (kind == PK_LIST || kind == PK_TUPLE) {
+        PitonSeq *s = (PitonSeq*)seq;
+        len = s->length;
+        if (len == 0) { piton_raise("IndexError", "Cannot choose from empty sequence"); return 0; }
+        uint32_t r = piton_random_genrand_int32();
+        int64_t idx = (int64_t)((uint64_t)r % (uint64_t)len);
+        return s->items[idx].bits;
+    } else if (kind == PK_STR) {
+        const char *s = (const char*)seq;
+        len = strlen(s);
+        if (len == 0) { piton_raise("IndexError", "Cannot choose from empty sequence"); return 0; }
+        uint32_t r = piton_random_genrand_int32();
+        int64_t idx = (int64_t)((uint64_t)r % (uint64_t)len);
+        char *p = malloc(2);
+        p[0] = s[idx]; p[1] = 0;
+        return (int64_t)p;
+    }
+    piton_raise("TypeError", "choice() arg must be a sequence");
+    return 0;
+}
+
+/* randrange(a, b, c) - random integer from range(a, b, c) */
+int64_t piton_builtin_random_randrange(long a, long b, long c, long d) {
+    (void)d;
+    int64_t start = 0;
+    int64_t stop = a;
+    int64_t step = 1;
+    
+    if (b != 0) {
+        start = a;
+        stop = b;
+        if (c != 0) step = c;
+    }
+    
+    if (step == 0) {
+        piton_raise("ValueError", "randrange() arg 3 must not be zero");
+        return 0;
+    }
+    
+    int64_t len = 0;
+    if (step > 0) {
+        if (stop > start) len = (stop - start + step - 1) / step;
+    } else {
+        if (stop < start) len = (start - stop + (-step) - 1) / (-step);
+    }
+    
+    if (len <= 0) {
+        piton_raise("ValueError", "empty range for randrange()");
+        return 0;
+    }
+    
+    uint32_t r = piton_random_genrand_int32();
+    int64_t idx = (int64_t)((uint64_t)r % (uint64_t)len);
+    return start + idx * step;
+}
+
+/* getrandbits(k) - returns int with k random bits */
+int64_t piton_builtin_random_getrandbits(long k, long b, long c, long d) {
+    (void)b; (void)c; (void)d;
+    int64_t kbits = k;
+    if (kbits < 0) { piton_raise("ValueError", "number of bits must be non-negative"); return 0; }
+    if (kbits == 0) return 0;
+    if (kbits > 63) { piton_raise("ValueError", "number of bits too large"); return 0; }
+    
+    uint64_t result = 0;
+    int remaining = kbits;
+    while (remaining > 0) {
+        uint32_t chunk = piton_random_genrand_int32();
+        int take = remaining > 32 ? 32 : remaining;
+        result |= ((uint64_t)chunk & ((1ULL << take) - 1)) << (kbits - remaining);
+        remaining -= take;
+    }
+    return (int64_t)result;
+}
+
+/* seed(a=None, version=2) */
+int64_t piton_builtin_random_seed(long a, long b, long c, long d) {
+    (void)c; (void)d;
+    
+    if (a == 0 || a == 0LL) {  /* None or 0 */
+        piton_random_default_seed();
+    } else if (piton_is_double_bits(a)) {
+        /* Float seed - use bits */
+        uint64_t bits = *((uint64_t*)&a);
+        uint32_t seed[2] = { (uint32_t)(bits & 0xffffffff), (uint32_t)(bits >> 32) };
+        piton_random_init_by_array(seed, 2);
+    } else {
+        int64_t seed = a;
+        piton_random_init_genrand((uint32_t)seed);
+    }
+    return 0;
+}
+
+/* shuffle(x) - shuffle sequence x in place */
+int64_t piton_builtin_random_shuffle(long seq, long b, long c, long d) {
+    (void)b; (void)c; (void)d;
+    
+    if (!seq) { piton_raise("TypeError", "shuffle() arg must be a sequence"); return 0; }
+    if (!piton_maybe_ptr(seq)) { piton_raise("TypeError", "shuffle() arg must be a sequence"); return 0; }
+    
+    long *p = (long*)seq;
+    int64_t kind = p[1];
+    
+    if (kind != PK_LIST) {
+        piton_raise("TypeError", "shuffle() arg must be a list");
+        return 0;
+    }
+    
+    PitonSeq *s = (PitonSeq*)seq;
+    int64_t len = s->length;
+    
+    for (int64_t i = len - 1; i > 0; i--) {
+        uint32_t r = piton_random_genrand_int32();
+        int64_t j = (int64_t)((uint64_t)r % (uint64_t)(i + 1));
+        PitonSlot tmp = s->items[i];
+        s->items[i] = s->items[j];
+        s->items[j] = tmp;
+    }
+    return 0;
+}
+
+/* gauss(mu, sigma) - Gaussian distribution */
+int64_t piton_builtin_random_gauss(long mu, long sigma, long c, long d) {
+    (void)c; (void)d;
+    double mu_d = piton_bits_double(mu);
+    double sigma_d = piton_bits_double(sigma);
+    
+    if (sigma_d <= 0.0) {
+        piton_raise("ValueError", "sigma must be positive");
+        return 0;
+    }
+    
+    /* Box-Muller transform */
+    static int have_spare = 0;
+    static double spare;
+    
+    double u, v, s, mul;
+    do {
+        double u1 = piton_random_genrand_real();
+        double u2 = piton_random_genrand_real();
+        u = 2.0 * u1 - 1.0;
+        v = 2.0 * u2 - 1.0;
+        s = u * u + v * v;
+    } while (s >= 1.0 || s == 0.0);
+    
+    mul = sqrt(-2.0 * log(s) / s);
+    spare = v * mul;
+    have_spare = 1;
+    double z = u * mul;
+    
+    double result = mu_d + z * sigma_d;
+    return piton_double_bits(result);
+}
+
+/* ========================================================================
+ * TIME_V1: time module functions
+ * ======================================================================== */
+
+/* time.time() - returns current time as float seconds since epoch */
+int64_t piton_builtin_time_time(long a, long b, long c, long d) {
+    (void)a; (void)b; (void)c; (void)d;
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    double result = ts.tv_sec + ts.tv_nsec * 1e-9;
+    return piton_double_bits(result);
+}
+
+/* Create a struct_time object with the given time components */
+static int64_t piton_time_make_struct_time(int year, int month, int day,
+                                           int hour, int min, int sec,
+                                           int wday, int yday, int isdst) {
+    void *obj = piton_object_new_with_parent("struct_time", NULL);
+    if (!obj) return 0;
+    
+    piton_object_set(obj, "tm_year", year);
+    piton_object_set(obj, "tm_mon", month);
+    piton_object_set(obj, "tm_mday", day);
+    piton_object_set(obj, "tm_hour", hour);
+    piton_object_set(obj, "tm_min", min);
+    piton_object_set(obj, "tm_sec", sec);
+    piton_object_set(obj, "tm_wday", wday);
+    piton_object_set(obj, "tm_yday", yday);
+    piton_object_set(obj, "tm_isdst", isdst);
+    piton_object_set(obj, "tm_zone", (int64_t)piton_str_box("UTC"));
+    piton_object_set(obj, "tm_gmtoff", 0);
+    
+    return pv_encode(PITON_TAG_OBJECT, (int64_t)obj);
+}
+
+/* time.localtime(seconds=None) - convert timestamp to local time struct_time */
+int64_t piton_builtin_time_localtime(long a, long b, long c, long d) {
+    (void)b; (void)c; (void)d;
+    time_t timer;
+    
+    if (a == 0 || a == 0LL) {  /* None or 0 */
+        timer = time(NULL);
+    } else if (piton_is_double_bits(a)) {
+        timer = (time_t)piton_bits_double(a);
+    } else {
+        timer = (time_t)a;
+    }
+    
+    struct tm *tm = localtime(&timer);
+    if (!tm) {
+        piton_raise("OverflowError", "timestamp out of range for platform time_t");
+        return 0;
+    }
+    
+    return piton_time_make_struct_time(
+        tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+        tm->tm_hour, tm->tm_min, tm->tm_sec,
+        tm->tm_wday, tm->tm_yday + 1, tm->tm_isdst
+    );
+}
+
+/* time.gmtime(seconds=None) - convert timestamp to UTC struct_time */
+int64_t piton_builtin_time_gmtime(long a, long b, long c, long d) {
+    (void)b; (void)c; (void)d;
+    time_t timer;
+    
+    if (a == 0 || a == 0LL) {  /* None or 0 */
+        timer = time(NULL);
+    } else if (piton_is_double_bits(a)) {
+        timer = (time_t)piton_bits_double(a);
+    } else {
+        timer = (time_t)a;
+    }
+    
+    struct tm *tm = gmtime(&timer);
+    if (!tm) {
+        piton_raise("OverflowError", "timestamp out of range for platform time_t");
+        return 0;
+    }
+    
+    return piton_time_make_struct_time(
+        tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+        tm->tm_hour, tm->tm_min, tm->tm_sec,
+        tm->tm_wday, tm->tm_yday + 1, 0  /* isdst = 0 for UTC */
+    );
+}
+
+/* time.strftime(format, t=None) - format time according to format string */
+int64_t piton_builtin_time_strftime(long fmt, long t, long c, long d) {
+    (void)c; (void)d;
+    
+    if (!fmt || !piton_is_str(fmt)) {
+        piton_raise("TypeError", "strftime() argument 1 must be str, not NoneType");
+        return 0;
+    }
+    
+    const char *format = (const char*)fmt;
+    struct tm tm_buf;
+    struct tm *tm_ptr = &tm_buf;
+    time_t timer;
+    
+    if (t == 0 || t == 0LL) {  /* None or 0 */
+        timer = time(NULL);
+        struct tm *local = localtime(&timer);
+        if (local) tm_buf = *local;
+    } else if (piton_is_str(t)) {
+        /* In Python, strftime can take a struct_time or tuple. We only support struct_time object. */
+        piton_raise("TypeError", "strftime() argument 2 must be struct_time or tuple, not str");
+        return 0;
+    } else {
+        /* Assume it's a struct_time object */
+        void *obj = (void*)piton_payload(t);
+        if (!piton_object_class_name(obj) || strcmp(piton_object_class_name(obj), "struct_time") != 0) {
+            piton_raise("TypeError", "strftime() argument 2 must be struct_time or tuple");
+            return 0;
+        }
+        /* Extract fields from struct_time object */
+        tm_buf.tm_year = (int)piton_payload(piton_object_get(obj, "tm_year"));
+        tm_buf.tm_mon = (int)piton_payload(piton_object_get(obj, "tm_mon")) - 1;
+        tm_buf.tm_mday = (int)piton_payload(piton_object_get(obj, "tm_mday"));
+        tm_buf.tm_hour = (int)piton_payload(piton_object_get(obj, "tm_hour"));
+        tm_buf.tm_min = (int)piton_payload(piton_object_get(obj, "tm_min"));
+        tm_buf.tm_sec = (int)piton_payload(piton_object_get(obj, "tm_sec"));
+        tm_buf.tm_wday = (int)piton_payload(piton_object_get(obj, "tm_wday"));
+        tm_buf.tm_yday = (int)piton_payload(piton_object_get(obj, "tm_yday")) - 1;
+        tm_buf.tm_isdst = (int)piton_payload(piton_object_get(obj, "tm_isdst"));
+    }
+    
+    char buf[256];
+    size_t len = strftime(buf, sizeof(buf), format, tm_ptr);
+    if (len == 0) {
+        piton_raise("ValueError", "strftime format error");
+        return 0;
+    }
+    
+    return (int64_t)piton_str_box(buf);
+}
+
+/* ========================================================================
+ * LOCALE_V1: locale module functions
+ * ======================================================================== */
+
+/* locale.localeconv() - return locale conventions as dict */
+int64_t piton_builtin_locale_localeconv(long a, long b, long c, long d) {
+    (void)a; (void)b; (void)c; (void)d;
+    
+    struct lconv *lc = localeconv();
+    if (!lc) {
+        piton_raise("Error", "localeconv failed");
+        return 0;
+    }
+    
+    void *dict = piton_dict_new(0);
+    if (!dict) return 0;
+    
+    #define SET_STR(key, val) do { \
+        if (val && *val) { \
+            piton_dict_put_tagged(dict, piton_box_str_tagged(key), pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_box(val))); \
+        } else { \
+            piton_dict_put_tagged(dict, piton_box_str_tagged(key), pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_box(""))); \
+        } \
+    } while(0)
+    
+    #define SET_INT(key, val) do { \
+        piton_dict_put_tagged(dict, piton_box_str_tagged(key), pv_int(val)); \
+    } while(0)
+    
+    SET_STR("decimal_point", lc->decimal_point);
+    SET_STR("thousands_sep", lc->thousands_sep);
+    SET_STR("int_curr_symbol", lc->int_curr_symbol);
+    SET_STR("currency_symbol", lc->currency_symbol);
+    SET_STR("mon_decimal_point", lc->mon_decimal_point);
+    SET_STR("mon_thousands_sep", lc->mon_thousands_sep);
+    SET_STR("positive_sign", lc->positive_sign);
+    SET_STR("negative_sign", lc->negative_sign);
+    
+    SET_INT("frac_digits", lc->frac_digits);
+    SET_INT("int_frac_digits", lc->int_frac_digits);
+    SET_INT("p_cs_precedes", lc->p_cs_precedes);
+    SET_INT("p_sep_by_space", lc->p_sep_by_space);
+    SET_INT("n_cs_precedes", lc->n_cs_precedes);
+    SET_INT("n_sep_by_space", lc->n_sep_by_space);
+    SET_INT("p_sign_posn", lc->p_sign_posn);
+    SET_INT("n_sign_posn", lc->n_sign_posn);
+    
+    /* grouping and mon_grouping are char* arrays - convert to list of ints */
+    void *grouping_list = piton_collection_new(1, 0);  /* kind=1 for list */
+    if (lc->grouping) {
+        for (int i = 0; lc->grouping[i] && lc->grouping[i] != CHAR_MAX; i++) {
+            piton_list_append_tagged(grouping_list, pv_encode(PITON_TAG_INT, lc->grouping[i]));
+        }
+    }
+    piton_dict_put_tagged(dict, piton_box_str_tagged("grouping"), pv_encode(PITON_TAG_OBJECT, (int64_t)grouping_list));
+    
+    void *mon_grouping_list = piton_collection_new(1, 0);
+    if (lc->mon_grouping) {
+        for (int i = 0; lc->mon_grouping[i] && lc->mon_grouping[i] != CHAR_MAX; i++) {
+            piton_list_append_tagged(mon_grouping_list, pv_encode(PITON_TAG_INT, lc->mon_grouping[i]));
+        }
+    }
+    piton_dict_put_tagged(dict, piton_box_str_tagged("mon_grouping"), pv_encode(PITON_TAG_OBJECT, (int64_t)mon_grouping_list));
+    
+    #undef SET_STR
+    #undef SET_INT
+    
+    return pv_encode(PITON_TAG_OBJECT, (int64_t)dict);
+}
+
+/* locale.format_string(format, val, grouping=False) */
+int64_t piton_builtin_locale_format_string(long fmt, long val, long grouping, long d) {
+    (void)d;
+    
+    if (!fmt || !piton_is_str(fmt)) {
+        piton_raise("TypeError", "format_string() argument 1 must be str");
+        return 0;
+    }
+    
+    const char *format = (const char*)fmt;
+    struct lconv *lc = localeconv();
+    int do_grouping = grouping ? 1 : 0;
+    
+    char buf[256];
+    
+    if (piton_is_int(val)) {
+        int64_t ival = piton_payload_signed(val);
+        if (do_grouping && lc->thousands_sep && *lc->thousands_sep && lc->grouping) {
+            /* Simple grouping implementation for %d */
+            char *p = buf + sizeof(buf) - 1;
+            *p = '\0';
+            int64_t n = ival < 0 ? -ival : ival;
+            int group_idx = 0;
+            int digits_in_group = 0;
+            int first = 1;
+            
+            do {
+                if (!first && digits_in_group == (unsigned char)lc->grouping[group_idx]) {
+                    const char *sep = lc->thousands_sep;
+                    int sep_len = strlen(sep);
+                    p -= sep_len;
+                    memcpy(p, sep, sep_len);
+                    group_idx = lc->grouping[group_idx + 1] ? group_idx + 1 : group_idx;
+                    digits_in_group = 0;
+                }
+                *--p = '0' + (n % 10);
+                n /= 10;
+                digits_in_group++;
+                first = 0;
+            } while (n > 0);
+            
+            if (ival < 0) *--p = '-';
+            return (int64_t)piton_str_box(p);
+        } else {
+            snprintf(buf, sizeof(buf), format, ival);
+            return (int64_t)piton_str_box(buf);
+        }
+    } else if (piton_is_double_bits(val)) {
+        double dval = piton_bits_double(val);
+        if (do_grouping && lc->thousands_sep && *lc->thousands_sep && lc->grouping) {
+            /* For float with grouping - complex, skip for now */
+            snprintf(buf, sizeof(buf), format, dval);
+            return (int64_t)piton_str_box(buf);
+        } else {
+            snprintf(buf, sizeof(buf), format, dval);
+            return (int64_t)piton_str_box(buf);
+        }
+    } else {
+        piton_raise("TypeError", "format_string() argument 2 must be int or float");
+        return 0;
+    }
+}
+
+#endif  /* disabled legacy helpers */

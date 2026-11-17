@@ -7,7 +7,20 @@ clase WeakKeyDictionary :
 
 
 clase WeakValueDictionary :
-    pasar
+    funcion __init__ (self ,*resto ):
+        pasar
+
+    funcion __setitem__ (self ,clave ,valor ):
+        lanzar NotImplementedError ('weakref.WeakValueDictionary no puede almacenar: no hay referencias debiles ni recolector')
+
+    funcion __getitem__ (self ,clave ):
+        lanzar KeyError (clave )
+
+    funcion __len__ (self ):
+        retornar 0
+
+    funcion __contains__ (self ,clave ):
+        retornar Falso
 
 
 clase WeakSet :

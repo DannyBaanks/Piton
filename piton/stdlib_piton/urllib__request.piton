@@ -1,0 +1,5 @@
+importar urllib
+
+
+funcion urlopen(url, datos=None, timeout=None ):
+    lanzar NotImplementedError ('urllib.request.urlopen no es real en el backend nativo PITON (no hay socket)')

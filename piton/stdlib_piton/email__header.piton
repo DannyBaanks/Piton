@@ -1,8 +1,8 @@
 funcion decode_header (header):
-    devolver [(b'', 'utf-8')]
+    lanzar NotImplementedError ('email.header.decode_header no esta implementado en el backend nativo')
 
 funcion make_header (decoded, maxlinelen, charset, continuation_ws):
-    devolver ''
+    lanzar NotImplementedError ('email.header.make_header no esta implementado en el backend nativo')
 
 clase Header :
     "stub"

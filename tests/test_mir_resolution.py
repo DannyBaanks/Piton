@@ -16,11 +16,22 @@ Tests the language features and MIR lowering additions that unlock CPython 3.12 
 from __future__ import annotations
 import unittest
 from piton.native_differential import compare_native_to_cpython
+from piton.mir import MIRLoweringError
+from piton.x86 import NativeBuildError
 
 
 class TestMirResolution(unittest.TestCase):
     def _assert_parity(self, source: str):
         result = compare_native_to_cpython(source)
+        self.assertTrue(result.equivalent, f"Parity mismatch: native={result.native} vs oracle={result.oracle}")
+
+    def _assert_method_decorator_parity_or_fail_closed(self, source: str, oracle_stdout: bytes):
+        try:
+            result = compare_native_to_cpython(source)
+        except (MIRLoweringError, NativeBuildError) as error:
+            self.assertIn("native class method decorators", str(error))
+            return
+        self.assertEqual(result.oracle.stdout, oracle_stdout)
         self.assertTrue(result.equivalent, f"Parity mismatch: native={result.native} vs oracle={result.oracle}")
 
     def test_math_intrinsics(self):
@@ -100,6 +111,39 @@ h = Handler()
 imprimir(h.process(5))
 """
         self._assert_parity(source)
+
+    def test_method_wrapper_decorator_fails_closed_or_matches_cpython(self):
+        source = """
+funcion doble(fn):
+    funcion envoltura(este, val):
+        devolver fn(este, val) * 2
+    devolver envoltura
+
+clase Handler:
+    @doble
+    funcion process(este, val):
+        devolver val + 10
+
+imprimir(Handler().process(5))
+"""
+        self._assert_method_decorator_parity_or_fail_closed(source, b"30\n")
+
+    def test_method_decorator_side_effect_fails_closed_or_matches_cpython(self):
+        source = """
+funcion marker(fn):
+    imprimir("decorator applied")
+    devolver fn
+
+clase Handler:
+    @marker
+    funcion process(este, val):
+        devolver val + 10
+
+imprimir(Handler().process(5))
+"""
+        self._assert_method_decorator_parity_or_fail_closed(
+            source, b"decorator applied\n15\n",
+        )
 
     def test_dynamic_call_kwargs(self):
         source = """

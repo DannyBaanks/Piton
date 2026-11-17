@@ -2,14 +2,14 @@ dispatch_table = {}
 funcion constructor (obj):
     devolver (obj.__class__,obj.__reduce_ex__(2))
 funcion pickle (obj):
-    devolver obj
+    lanzar NotImplementedError ('copyreg.pickle no esta implementado en el backend nativo')
 funcion pickle_complex (obj):
-    devolver obj
+    lanzar NotImplementedError ('copyreg.pickle_complex no esta implementado en el backend nativo')
 funcion pickle_union (obj):
-    devolver obj
+    lanzar NotImplementedError ('copyreg.pickle_union no esta implementado en el backend nativo')
 funcion add_extension (mod,name,code):
-    pasar
+    lanzar NotImplementedError ('copyreg.add_extension no esta implementado en el backend nativo')
 funcion remove_extension (mod,name):
-    pasar
+    lanzar NotImplementedError ('copyreg.remove_extension no esta implementado en el backend nativo')
 funcion clear_extension_cache ():
-    pasar
+    lanzar NotImplementedError ('copyreg.clear_extension_cache no esta implementado en el backend nativo')

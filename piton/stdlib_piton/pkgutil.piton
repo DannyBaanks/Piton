@@ -2,7 +2,7 @@ funcion extend_path (path, name, *args, **kwargs):
     devolver path
 
 funcion get_data (package, resource, *args, **kwargs):
-    devolver b''
+    lanzar NotImplementedError ('pkgutil.get_data no esta implementado en el backend nativo')
 
 clase ImpImporter:
     funcion __init__ (self, path, *args, **kwargs):
@@ -11,7 +11,7 @@ clase ImpImporter:
         devolver Nada
 
 funcion iter_importers (fullname='', *args, **kwargs):
-    devolver []
+    lanzar NotImplementedError ('pkgutil.iter_importers no esta implementado en el backend nativo')
 
 funcion get_importer (path, *args, **kwargs):
-    devolver Nada
+    lanzar NotImplementedError ('pkgutil.get_importer no esta implementado en el backend nativo')

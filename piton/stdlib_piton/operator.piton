@@ -116,13 +116,49 @@ funcion itemgetter (indice ) :
     devolver obtener
 
 
-funcion attrgetter (nombre ) :
+funcion _getattr_chain (obj ,cadena ):
+    # Resuelve atributo (simple o con puntos 'a.b') mediante getattr,
+    # igual que CPython 3.12 attrgetter.
+    partes = cadena.split ('.')
+    actual = obj
+    para parte en partes :
+        actual = getattr (actual ,parte )
+    devolver actual
+
+
+funcion _mk_attr1 (nombre ):
     funcion obtener (obj ) :
-        devolver obj.nombre
+        devolver _getattr_chain (obj ,nombre )
     devolver obtener
 
 
-funcion methodcaller (nombre ,*args ) :
-    funcion llamar (obj ) :
-        devolver obj.nombre (*args )
+funcion _mk_attr_multi (cadenas ):
+    funcion obtener_multi (obj ):
+        vals = []
+        para cad en cadenas :
+            vals.append (_getattr_chain (obj ,cad ))
+        devolver tuple (vals )
+    devolver obtener_multi
+
+
+funcion attrgetter (nombre ,*nombres ):
+    # Soporta un atributo simple ('x'), anidado con puntos ('a.b') y
+    # multiples nombres ('attrgetter("x","y")') que devuelven una TUPLA,
+    # exactamente como CPython 3.12.
+    si longitud (nombres ) == 0 :
+        devolver _mk_attr1 (nombre )
+    cadenas = []
+    cadenas.append (nombre )
+    para nm en nombres :
+        cadenas.append (nm )
+    devolver _mk_attr_multi (cadenas )
+
+
+funcion methodcaller (nombre ,*args ):
+    funcion llamar (obj ):
+        todos = []
+        para a en args :
+            todos.append (a )
+        m = getattr (obj ,nombre )
+        devolver m (*todos )
     devolver llamar

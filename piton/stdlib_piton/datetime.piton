@@ -1,43 +1,251 @@
-clase MAXYEAR :
+# datetime.piton — native implementations for the datetime module
+# date, timedelta, and related classes
+
+MAXYEAR = 9999
+MINYEAR = 1
+
+_DAYS_BEFORE_MONTH = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+
+importar time
+
+funcion _is_leap (year ):
+    devolver (year % 4 == 0 y (year % 100 != 0 o year % 400 == 0))
+
+funcion _days_before_year (year ):
+    y = year - 1
+    devolver y * 365 + y // 4 - y // 100 + y // 400
+
+funcion _days_in_month (year ,month ):
+    si month == 2:
+        si _is_leap(year):
+            devolver 29
+        devolver 28
+    si month en (4, 6, 9, 11):
+        devolver 30
+    devolver 31
+
+funcion _date_from_ordinal (ordinal ):
+    year = 1
+    mientras 1:
+        days_in_year = 366 si _is_leap(year) sino 365
+        si ordinal <= days_in_year:
+            romper
+        ordinal -= days_in_year
+        year += 1
+    
+    month = 1
+    mientras month <= 12:
+        dim = _days_in_month(year, month)
+        si ordinal <= dim:
+            romper
+        ordinal -= dim
+        month += 1
+    
+    day = ordinal
+    devolver (year, month, day)
+
+funcion _ordinal_from_date (year ,month ,day ):
+    days = _days_before_year(year) + _DAYS_BEFORE_MONTH[month - 1] + day
+    si month > 2 y _is_leap(year):
+        days += 1
+    devolver days
+
+clase timedelta :
+    funcion __init__ (este ,dias =0 ,segundos =0 ,microsegundos =0 ,milisegundos =0 ,minutos =0 ,horas =0 ,semanas =0 ,days =0 ,seconds =0 ,microseconds =0 ,milliseconds =0 ,minutes =0 ,hours =0 ,weeks =0 ):
+        # Aliases ingleses (CPython): se suman a los nombres en espanol.
+        dias = dias + days
+        segundos = segundos + seconds
+        microsegundos = microsegundos + microseconds
+        milisegundos = milisegundos + milliseconds
+        minutos = minutos + minutes
+        horas = horas + hours
+        semanas = semanas + weeks
+        total_seconds = ((dias + semanas * 7) * 86400 + horas * 3600 + minutos * 60 + segundos + milisegundos * 1e-3 + microsegundos * 1e-6)
+        este.days = int(total_seconds // 86400)
+        remaining = total_seconds - este.days * 86400
+        si remaining < 0:
+            este.days -= 1
+            remaining += 86400
+        este.seconds = int(remaining)
+        este.microseconds = int((remaining - este.seconds) * 1e6)
+    
+    funcion total_seconds (este):
+        devolver este.days * 86400.0 + este.seconds + este.microseconds / 1e6
+    
+    funcion __repr__ (este):
+        si este.microseconds:
+            devolver "datetime.timedelta(days=" + str(este.days) + ", seconds=" + str(este.seconds) + ", microseconds=" + str(este.microseconds) + ")"
+        sino_si este.seconds:
+            devolver "datetime.timedelta(days=" + str(este.days) + ", seconds=" + str(este.seconds) + ")"
+        sino:
+            devolver "datetime.timedelta(days=" + str(este.days) + ")"
+    
+    funcion __str__ (este):
+        devolver este.__repr__()
+    
+    funcion __add__ (este ,otro ):
+        si no (otro es timedelta):
+            devolver NotImplemented
+        devolver timedelta(dias=este.days + otro.days, segundos=este.seconds + otro.seconds, microsegundos=este.microseconds + otro.microseconds)
+    
+    funcion __sub__ (este ,otro ):
+        si no (otro es timedelta):
+            devolver NotImplemented
+        devolver timedelta(dias=este.days - otro.days, segundos=este.seconds - otro.seconds, microsegundos=este.microseconds - otro.microseconds)
+    
+    funcion __neg__ (este):
+        devolver timedelta(dias=-este.days, segundos=-este.seconds, microsegundos=-este.microseconds)
+    
+    funcion __mul__ (este ,factor ):
+        devolver timedelta(dias=este.days * factor, segundos=este.seconds * factor, microsegundos=este.microseconds * factor)
+    
+    funcion __rmul__ (este ,factor ):
+        devolver este.__mul__(factor)
+    
+    funcion __eq__ (este ,otro ):
+        si no (otro es timedelta):
+            devolver NotImplemented
+        devolver este.days == otro.days y este.seconds == otro.seconds y este.microseconds == otro.microseconds
+    
+    funcion __ne__ (este ,otro ):
+        resultado = este.__eq__(otro)
+        si resultado es NotImplemented:
+            devolver NotImplemented
+        devolver no resultado
+
+clase date :
+    funcion __init__ (este ,year ,month ,day ):
+        si year < MINYEAR o year > MAXYEAR:
+            lanzar ValueError("year " + str(year) + " is out of range")
+        si month < 1 o month > 12:
+            lanzar ValueError("month must be in 1..12")
+        dim = _days_in_month(year, month)
+        si day < 1 o day > dim:
+            lanzar ValueError("day is out of range for month")
+        
+        este.year = year
+        este.month = month
+        este.day = day
+        este._ordinal = _ordinal_from_date(year, month, day)
+    
+    funcion __repr__ (este):
+        devolver "datetime.date(" + str(este.year) + ", " + str(este.month) + ", " + str(este.day) + ")"
+    
+    funcion __str__ (este):
+        m = este.month
+        d = este.day
+        si m < 10:
+            ms = "0" + str(m)
+        sino:
+            ms = str(m)
+        si d < 10:
+            ds = "0" + str(d)
+        sino:
+            ds = str(d)
+        devolver str(este.year) + "-" + ms + "-" + ds
+    
+    funcion weekday (este):
+        devolver (este._ordinal - 1) % 7
+    
+    funcion isoweekday (este):
+        wd = este.weekday()
+        devolver wd + 1
+    
+    funcion __sub__ (este ,otro ):
+        si hasattr(otro, "_ordinal"):
+            dias = este._ordinal - otro._ordinal
+            devolver timedelta(dias)
+        si hasattr(otro, "days"):
+            # Construir date(...) directo (no via classmethod fromordinal) para
+            # que la inferencia nativa tipe el resultado como object:date.
+            y, m, d = _date_from_ordinal(este._ordinal - otro.days)
+            devolver date(y, m, d)
+        devolver NotImplemented
+
+    funcion __add__ (este ,otro ):
+        si hasattr(otro, "days"):
+            y, m, d = _date_from_ordinal(este._ordinal + otro.days)
+            devolver date(y, m, d)
+        devolver NotImplemented
+    
+    funcion __radd__ (este ,otro ):
+        devolver este.__add__(otro)
+    
+    funcion __eq__ (este ,otro ):
+        si no hasattr(otro, "_ordinal"):
+            devolver Falso
+        devolver este._ordinal == otro._ordinal
+    
+    funcion __ne__ (este ,otro ):
+        si no hasattr(otro, "_ordinal"):
+            devolver Verdadero
+        devolver no (este._ordinal == otro._ordinal)
+    
+    funcion __lt__ (este ,otro ):
+        si no hasattr(otro, "_ordinal"):
+            devolver Falso
+        devolver este._ordinal < otro._ordinal
+    
+    funcion __le__ (este ,otro ):
+        si no hasattr(otro, "_ordinal"):
+            devolver Falso
+        devolver este._ordinal <= otro._ordinal
+    
+    funcion __gt__ (este ,otro ):
+        si no hasattr(otro, "_ordinal"):
+            devolver Falso
+        devolver este._ordinal > otro._ordinal
+    
+    funcion __ge__ (este ,otro ):
+        si no hasattr(otro, "_ordinal"):
+            devolver Falso
+        devolver este._ordinal >= otro._ordinal
+    
+    funcion toordinal (este):
+        devolver este._ordinal
+    
+    funcion replace (este ,year =Nada ,month =Nada ,day =Nada ):
+        y = este.year si year es Nada sino year
+        m = este.month si month es Nada sino month
+        d = este.day si day es Nada sino day
+        devolver date(y, m, d)
+    
+    funcion strftime (este ,formato ):
+        st = [este.year, este.month, este.day, 0, 0, 0, este.weekday(), este._ordinal - _days_before_year(este.year), 0]
+        devolver time.strftime(formato, st)
+
+    @classmethod
+    funcion today (clase ):
+        # time.time() is a float; the bundled localtime path currently accepts
+        # integer epoch seconds when an explicit value is supplied. Let the
+        # no-argument path read the current clock directly instead.
+        local = time.localtime()
+        devolver date(local[0], local[1], local[2])
+    
+    @classmethod
+    funcion fromordinal (clase ,ordinal ):
+        y, m, d = _date_from_ordinal(ordinal)
+        devolver date(y, m, d)
+    
+    @classmethod
+    funcion fromtimestamp (clase ,timestamp ):
+        local = time.localtime(timestamp)
+        devolver date(local[0], local[1], local[2])
+
+clase datetime :
     pasar
 
-
-clase MINYEAR :
+clase timezone :
     pasar
-
-
-funcion date (*args , **kwargs):
-    lanzar NotImplementedError ('datetime.date no esta implementado en el backend nativo')
-
 
 funcion datetime (*args , **kwargs):
     lanzar NotImplementedError ('datetime.datetime no esta implementado en el backend nativo')
 
-
-funcion datetime_date (*args , **kwargs):
-    lanzar NotImplementedError ('datetime.datetime_date no esta implementado en el backend nativo')
-
-
-funcion datetime_timedelta (*args , **kwargs):
-    lanzar NotImplementedError ('datetime.datetime_timedelta no esta implementado en el backend nativo')
-
-
-funcion datetime_timezone (*args , **kwargs):
-    lanzar NotImplementedError ('datetime.datetime_timezone no esta implementado en el backend nativo')
-
-
 funcion fromtimestamp (*args , **kwargs):
     lanzar NotImplementedError ('datetime.fromtimestamp no esta implementado en el backend nativo')
-
 
 funcion now (*args , **kwargs):
     lanzar NotImplementedError ('datetime.now no esta implementado en el backend nativo')
 
-
-funcion timedelta (*args , **kwargs):
-    lanzar NotImplementedError ('datetime.timedelta no esta implementado en el backend nativo')
-
-
 funcion timezone (*args , **kwargs):
     lanzar NotImplementedError ('datetime.timezone no esta implementado en el backend nativo')
-
