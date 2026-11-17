@@ -1870,6 +1870,8 @@ static char* piton_str_apply_spec(const char*s,const char*spec){
 static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum){
   int neg=0;
   char sign_ch=0;
+  const char*prefix="";
+  usize prefix_len=0;
   const char*digits=s;
   if(isnum){
     if(s[0]=='-'){
@@ -1879,6 +1881,9 @@ static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum
     } else {
       if(flags&8) sign_ch='+';
       else if(flags&16) sign_ch=' ';
+    }
+    if((digits[0]=='0'&&(digits[1]=='x'||digits[1]=='X'||digits[1]=='o'))){
+      prefix=digits;prefix_len=2;digits+=2;
     }
   }
   usize dl=piton_strlen(digits);
@@ -1908,7 +1913,7 @@ static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum
     }
   }
   int has_sign=(sign_ch!=0);
-  usize totallen=cl+(has_sign?1:0);
+  usize totallen=cl+prefix_len+(has_sign?1:0);
   long pad=(width>0&&totallen<(usize)width)?(width-(long)totallen):0;
   int left=(flags&1)!=0;
   int zero=(flags&2)&&!left&&isnum&&prec<0;
@@ -1917,13 +1922,16 @@ static long piton_str_pad(const char*s,long width,long prec,long flags,int isnum
   if(!left){
     if(zero){
       if(has_sign)out[o++]=sign_ch;
+      piton_memcpy(out+o,prefix,prefix_len);o+=prefix_len;
       for(long i=0;i<pad;++i)out[o++]='0';
     }else{
       for(long i=0;i<pad;++i)out[o++]=' ';
       if(has_sign)out[o++]=sign_ch;
+      piton_memcpy(out+o,prefix,prefix_len);o+=prefix_len;
     }
-  }else if(has_sign){
-    out[o++]=sign_ch;
+  }else{
+    if(has_sign)out[o++]=sign_ch;
+    piton_memcpy(out+o,prefix,prefix_len);o+=prefix_len;
   }
   piton_memcpy(out+o,core,cl);
   o+=cl;
@@ -3889,6 +3897,152 @@ static const char* piton_repr_of_value(long bits){if(bits==(long)&piton_none_sin
    if(piton_maybe_ptr(b2)&&piton_is_printable_str((const char*)b2))return (const char*)piton_str_quote((const char*)b2);
    if(b2>=0x400000L&&b2<0x480000L)return "None";}
   return (const char*)piton_str_from_int(bits);
+}
+/* PCT_SLOT_NUMERIC_V1: tagged values returned by dynamically typed calls are
+   dispatched by their PitonSlot kind at the formatting site. */
+static long piton_percent_bigint_base(void*,int,int);
+static long piton_percent_bigint_decimal(void*);
+static long piton_percent_bigint_float_bits(void*);
+static long piton_percent_bigint_codepoint(void*);
+static int piton_percent_is_bigint_addr(long);
+static int piton_percent_dec_chars(const piton_repr_dec*d,char*out){
+  if(!d->n){out[0]='0';out[1]=0;return 1;}
+  int n=0;unsigned top=d->w[d->n-1];char rev[10];int rn=0;
+  do{rev[rn++]=(char)('0'+top%10);top/=10;}while(top);
+  while(rn)out[n++]=rev[--rn];
+  for(int i=d->n-2;i>=0;--i){unsigned w=d->w[i];char chunk[9];
+    for(int j=8;j>=0;--j){chunk[j]=(char)('0'+w%10);w/=10;}
+    for(int j=0;j<9;++j)out[n++]=chunk[j];}
+  out[n]=0;return n;
+}
+static long piton_percent_dec_string(const piton_repr_dec*d,int zeros,int negative){
+  char digits[PITON_REPR_LIMBS*9+1];int n=piton_percent_dec_chars(d,digits);
+  char*out=(char*)piton_alloc((usize)n+(usize)zeros+(negative?2:1));usize o=0;
+  if(negative)out[o++]='-';piton_memcpy(out+o,digits,(usize)n);o+=(usize)n;
+  for(int i=0;i<zeros;++i)out[o++]='0';out[o]=0;return(long)out;
+}
+static int piton_percent_scale(piton_repr_dec*d,int scale,int nearest){
+  if(scale>=0)return scale;
+  piton_re_drop dropped=piton_re_div_pow10(d,-scale);
+  if(nearest&&(dropped.msd>5||(dropped.msd==5&&(dropped.rest_nz||(d->n&&(d->w[0]&1U)))))){
+    unsigned long long carry=1;
+    if(!d->n){piton_re_set_u64(d,1);return 0;}
+    for(int i=0;i<d->n&&carry;++i){unsigned long long v=(unsigned long long)d->w[i]+carry;
+      if(v>=PITON_REPR_BASE){d->w[i]=(unsigned)(v-PITON_REPR_BASE);carry=1;}else{d->w[i]=(unsigned)v;carry=0;}}
+    if(carry&&d->n<PITON_REPR_LIMBS)d->w[d->n++]=1;
+  }
+  return 0;
+}
+static long piton_percent_fixed_from_dec(const piton_repr_dec*d,int zeros,int prec,int negative,int alt){
+  char digits[PITON_REPR_LIMBS*9+1];int n=piton_percent_dec_chars(d,digits);
+  long all=(long)n+zeros,point=all-prec;int dot=(prec>0||alt);
+  usize cap=(usize)(negative?1:0)+(usize)(point>0?point:1)+(dot?(usize)prec+1:0)+1;
+  char*out=(char*)piton_alloc(cap);usize o=0;if(negative)out[o++]='-';
+  if(point<=0){out[o++]='0';if(dot)out[o++]='.';
+    for(long i=0;i<-point&&i<prec;++i)out[o++]='0';
+    long remain=prec-(point<0?-point:0);
+    for(long i=0;i<remain;++i){long at=all-remain+i;out[o++]=(at>=0&&at<n)?digits[at]:'0';}
+  }else{
+    for(long i=0;i<point;++i)out[o++]=i<n?digits[i]:'0';
+    if(dot){out[o++]='.';for(int i=0;i<prec;++i){long at=point+i;out[o++]=(at>=0&&at<n)?digits[at]:'0';}}
+  }
+  out[o]=0;return(long)out;
+}
+static char*piton_percent_significant(piton_repr_dec*d,int sig_count,int*exp10){
+  int zeros=piton_percent_scale(d,sig_count-piton_re_ndigits(d),1);
+  char raw[PITON_REPR_LIMBS*9+1];int n=piton_percent_dec_chars(d,raw);n+=zeros;
+  char*out=(char*)piton_alloc((usize)sig_count+1);
+  if(n>sig_count){++*exp10;out[0]='1';for(int i=1;i<sig_count;++i)out[i]='0';}
+  else{for(int i=0;i<sig_count;++i)out[i]=i<n?(i<(int)piton_strlen(raw)?raw[i]:'0'):'0';}
+  out[sig_count]=0;return out;
+}
+static long piton_percent_exp_from_sig(const char*sig,int sig_count,int prec,int exp10,int negative,int alt,int upper){
+  char eb[16];int en=piton_re_exp_str(exp10,eb);usize cap=(usize)(negative?1:0)+1+(prec>0||alt?1+(usize)prec:0)+(usize)en+2;
+  char*out=(char*)piton_alloc(cap);usize o=0;if(negative)out[o++]='-';out[o++]=sig[0];
+  if(prec>0||alt){out[o++]='.';for(int i=0;i<prec;++i)out[o++]=sig[i+1];}
+  out[o++]=upper?'E':'e';for(int i=0;i<en;++i)out[o++]=eb[i];out[o]=0;return(long)out;
+}
+static long piton_percent_general_from_sig(const char*sig,int sig_count,int exp10,int negative,int alt,int upper){
+  int scientific=exp10 < -4 || exp10 >= sig_count;
+  if(scientific){long raw=piton_percent_exp_from_sig(sig,sig_count,sig_count-1,exp10,negative,alt,upper);
+    char*s=(char*)raw;if(alt)return raw;
+    char*e=s;while(*e&&*e!='e'&&*e!='E')++e;char*end=e;while(end>s&&end[-1]=='0')--end;if(end>s&&end[-1]=='.')--end;
+    if(end<e){while(*e){*end++=*e++;}*end=0;}return raw;}
+  long point=(long)exp10+1;usize cap=(usize)(negative?1:0)+(usize)(point>sig_count?point:sig_count)+(usize)(point<0?-point:0)+3;
+  char*out=(char*)piton_alloc(cap);usize o=0;if(negative)out[o++]='-';
+  if(point<=0){out[o++]='0';out[o++]='.';for(long i=0;i<-point;++i)out[o++]='0';for(int i=0;i<sig_count;++i)out[o++]=sig[i];}
+  else if(point>=sig_count){for(int i=0;i<sig_count;++i)out[o++]=sig[i];for(long i=sig_count;i<point;++i)out[o++]='0';if(alt)out[o++]='.';}
+  else{for(long i=0;i<point;++i)out[o++]=sig[i];out[o++]='.';for(int i=(int)point;i<sig_count;++i)out[o++]=sig[i];}
+  out[o]=0;if(alt)return(long)out;
+  char*dot=out;while(*dot&&*dot!='.')++dot;if(*dot){char*end=out+piton_strlen(out);while(end>dot+1&&end[-1]=='0')--end;if(end==dot+1)--end;*end=0;}
+  return(long)out;
+}
+static int piton_percent_float_dec(long bits,piton_repr_dec*d,int*k,int*negative){
+  unsigned long long u=(unsigned long long)bits;int be=(int)((u>>52)&0x7FFULL);
+  unsigned long long frac=u&0xFFFFFFFFFFFFFULL;if(be==0x7FF)return 0;
+  unsigned long long m=frac|(be?(1ULL<<52):0ULL);int e=be?be-1075:-1074;
+  piton_re_to_dec(d,m,e,k);*negative=(int)(u>>63);return 1;
+}
+static long piton_percent_float_to_int(long bits){
+  unsigned long long u=(unsigned long long)bits;unsigned long long frac=u&0xFFFFFFFFFFFFFULL;
+  if(((u>>52)&0x7FFULL)==0x7FFULL){if(frac)piton_raise_set("ValueError","cannot convert float NaN to integer");else piton_raise_set("OverflowError","cannot convert float infinity to integer");return 0;}
+  piton_repr_dec d;int k=0,negative=0;piton_percent_float_dec(bits,&d,&k,&negative);
+  int zeros=k>=0?k:piton_percent_scale(&d,k,0);
+  return piton_percent_dec_string(&d,zeros,negative&&d.n!=0);
+}
+static long piton_percent_float_format(long bits,int spec,int precision,int flags){
+  unsigned long long u=(unsigned long long)bits;unsigned long long frac=u&0xFFFFFFFFFFFFFULL;
+  int be=(int)((u>>52)&0x7FFULL),negative=(int)(u>>63),upper=(spec=='F'||spec=='E'||spec=='G');
+  if(be==0x7FF){const char*word=frac?"nan":"inf";char tmp[4];for(int i=0;i<3;++i)tmp[i]=upper?(word[i]>='a'&&word[i]<='z'?word[i]-32:word[i]):word[i];tmp[3]=0;
+    if(!frac&&negative){char*out=(char*)piton_alloc(5);out[0]='-';piton_memcpy(out+1,tmp,4);return(long)out;}return(long)piton_str_concat("",tmp);}
+  int prec=precision>=0?precision:6;if((spec=='g'||spec=='G')&&prec==0)prec=1;
+  piton_repr_dec d;int k=0;piton_percent_float_dec(bits,&d,&k,&negative);
+  if(spec=='f'||spec=='F')return piton_percent_fixed_from_dec(&d,piton_percent_scale(&d,k+prec,1),prec,negative,(flags&4)!=0);
+  int exp10=d.n?piton_re_ndigits(&d)+k-1:0;
+  int sig_count=(spec=='e'||spec=='E')?prec+1:prec;
+  char*sig=piton_percent_significant(&d,sig_count,&exp10);
+  if(spec=='e'||spec=='E')return piton_percent_exp_from_sig(sig,sig_count,prec,exp10,negative,(flags&4)!=0,upper);
+  return piton_percent_general_from_sig(sig,sig_count,exp10,negative,(flags&4)!=0,upper);
+}
+static PitonSlot piton_percent_slot_from_raw(long raw){
+  if(raw==(long)&piton_none_singleton)return(PitonSlot){raw,PK_NONE};
+  if(raw==(long)&piton_ellipsis_singleton)return(PitonSlot){raw,PK_NONE};
+  if(raw&&piton_maybe_ptr(raw)&&((long*)raw)[2]==0x4A534F4E424F5821LL){
+    PitonSlot v=*(PitonSlot*)raw;if(v.kind==PK_INT&&piton_percent_is_bigint_addr(v.bits))v.kind=PK_BIGINT;return v;}
+  if(piton_percent_is_bigint_addr(raw))return(PitonSlot){raw,PK_BIGINT};
+  return piton_slot_guess(raw);
+}
+static long piton_percent_slot_convert(PitonSlot v,int spec,int precision,int flags){
+  const char*type=(v.bits==(long)&piton_ellipsis_singleton)?"ellipsis":js_type_name(v);
+  if(spec=='d'||spec=='i'||spec=='u'){
+    if(v.kind==PK_INT||v.kind==PK_BOOL)return piton_str_from_int(v.bits);
+    if(v.kind==PK_BIGINT)return piton_percent_bigint_decimal((void*)v.bits);
+    if(v.kind==PK_FLOAT)return piton_percent_float_to_int(v.bits);
+    PitonStrBuf m;sb_init(&m);sb_putc(&m,'%');sb_putc(&m,(char)spec);sb_puts(&m," format: a real number is required, not ");sb_puts(&m,type);piton_raise_set("TypeError",m.d);return 0;
+  }
+  if(spec=='x'||spec=='X'||spec=='o'){
+    if(v.kind!=PK_INT&&v.kind!=PK_BOOL&&v.kind!=PK_BIGINT){PitonStrBuf m;sb_init(&m);sb_putc(&m,'%');sb_putc(&m,(char)spec);sb_puts(&m," format: an integer is required, not ");sb_puts(&m,type);piton_raise_set("TypeError",m.d);return 0;}
+    long b=v.kind==PK_BIGINT?piton_percent_bigint_base((void*)v.bits,(spec=='o'?8:16),spec=='X'):piton_str_from_int_base(v.bits,(spec=='o'?8:16),spec=='X');
+    if(!(flags&4))return b;
+    const char*prefix=spec=='o'?"0o":(spec=='X'?"0X":"0x");const char*s=(const char*)b;usize n=piton_strlen(s),pl=2;char*out=(char*)piton_alloc(n+pl+1);usize o=0;
+    if(s[0]=='-'){out[o++]='-';piton_memcpy(out+o,prefix,pl);o+=pl;piton_memcpy(out+o,s+1,n-1);o+=n-1;}
+    else{piton_memcpy(out+o,prefix,pl);o+=pl;piton_memcpy(out+o,s,n);o+=n;}out[o]=0;return(long)out;
+  }
+  if(spec=='c'){
+    if(v.kind==PK_STR)return piton_str_single_char((const char*)v.bits);
+    if(v.kind==PK_INT||v.kind==PK_BOOL)return piton_percent_chr(v.bits);
+    if(v.kind==PK_BIGINT)return piton_percent_bigint_codepoint((void*)v.bits);
+    piton_raise_set("TypeError","%c requires int or char");return 0;
+  }
+  if(spec=='f'||spec=='F'||spec=='e'||spec=='E'||spec=='g'||spec=='G'){
+    long bits=0;
+    if(v.kind==PK_FLOAT)bits=v.bits;
+    else if(v.kind==PK_INT||v.kind==PK_BOOL)bits=piton_double_bits((double)v.bits);
+    else if(v.kind==PK_BIGINT){bits=piton_percent_bigint_float_bits((void*)v.bits);if((((unsigned long long)bits>>52)&0x7FFULL)==0x7FFULL){piton_raise_set("OverflowError","int too large to convert to float");return 0;}}
+    else{PitonStrBuf m;sb_init(&m);sb_puts(&m,"must be real number, not ");sb_puts(&m,type);piton_raise_set("TypeError",m.d);return 0;}
+    return piton_percent_float_format(bits,spec,precision,flags);
+  }
+  piton_raise_set("TypeError","unsupported numeric percent conversion");return 0;
 }
 /* LEN_OF_VALUE_V1: len() de un valor en runtime (para map(len, xs)).
    bits es el campo bits de un PitonSlot. Retorna la longitud como long
@@ -6760,6 +6914,45 @@ unsigned long piton_bump_buf[1024*1024];
 static unsigned long*piton_bump_ptr=piton_bump_buf;
 static void*piton_bump_alloc(unsigned long n){void*r=(void*)piton_bump_ptr;piton_bump_ptr+=n;return r;}
 typedef struct{int sign;long count;unsigned long capacity;unsigned long*limbs;}PitonBigInt;
+static int piton_percent_is_bigint_addr(long raw){
+    unsigned long base=(unsigned long)piton_bump_buf,end=base+sizeof(piton_bump_buf),p=(unsigned long)raw;
+    if(p<base||p+sizeof(PitonBigInt)>end||(p-base)%sizeof(unsigned long))return 0;
+    PitonBigInt*x=(PitonBigInt*)raw;
+    if(x->sign < -1 || x->sign > 1 || x->count < 0 || x->capacity < (unsigned long)x->count)return 0;
+    if(x->capacity>(sizeof(piton_bump_buf)/sizeof(unsigned long)))return 0;
+    if(!x->capacity)return x->count==0&&x->limbs==0&&x->sign==0;
+    unsigned long lp=(unsigned long)x->limbs;
+    if(lp<base||lp+x->capacity*sizeof(unsigned long)>end)return 0;
+    return 1;
+}
+static long piton_percent_bigint_decimal(void*raw){
+    PitonBigInt*x=(PitonBigInt*)raw;long count=x?x->count:0;while(count>0&&x->limbs[count-1]==0)--count;
+    if(!count||!x->sign)return(long)"0";
+    unsigned long*tmp=(unsigned long*)piton_alloc((usize)count*sizeof(unsigned long));
+    for(long i=0;i<count;++i)tmp[i]=x->limbs[i];
+    char*rev=(char*)piton_alloc((usize)count*20+1);long n=0;
+    while(count>0){unsigned long long rem=0;
+        for(long i=count-1;i>=0;--i){u128 cur=((u128)rem<<64)|tmp[i];tmp[i]=(unsigned long)(cur/10);rem=(unsigned long long)(cur%10);}
+        rev[n++]=(char)('0'+rem);while(count>0&&tmp[count-1]==0)--count;}
+    char*out=(char*)piton_alloc((usize)n+(x->sign<0?2:1));long o=0;if(x->sign<0)out[o++]='-';
+    while(n)out[o++]=rev[--n];out[o]=0;return(long)out;
+}
+static long piton_percent_bigint_base(void*raw,int base,int upper){
+    PitonBigInt*x=(PitonBigInt*)raw;long count=x?x->count:0;while(count>0&&x->limbs[count-1]==0)--count;
+    if(!count||!x->sign)return(long)"0";
+    unsigned long top=x->limbs[count-1];int topbits=0;while(top){++topbits;top>>=1;}
+    int group=base==16?4:3;long bits=(count-1)*64+topbits;long nd=(bits+group-1)/group;
+    const char*alphabet=upper?"0123456789ABCDEF":"0123456789abcdef";
+    char*out=(char*)piton_alloc((usize)nd+(x->sign<0?2:1));long o=0;if(x->sign<0)out[o++]='-';
+    for(long i=nd-1;i>=0;--i){long bit=i*group,word=bit/64;int off=(int)(bit%64);unsigned long v=x->limbs[word]>>off;
+        if(off+group>64&&word+1<count)v|=x->limbs[word+1]<<(64-off);
+        out[o++]=alphabet[v&((1U<<group)-1U)];}
+    out[o]=0;return(long)out;
+}
+static long piton_percent_bigint_codepoint(void*raw){PitonBigInt*x=(PitonBigInt*)raw;long count=x?x->count:0;while(count>0&&x->limbs[count-1]==0)--count;
+    if(!x||x->sign<0||count>1||(count==1&&x->limbs[0]>0x10FFFFUL)){piton_raise_set("OverflowError","%c arg not in range(0x110000)");return 0;}
+    return count? (long)x->limbs[0] : 0;
+}
 static long bi_bit_width(unsigned long v){long w=0;while(v){v>>=1;++w;}return w;}
 static void*bi_from_u64(unsigned long v);
 /* BI_CMP_MAG_FIX_V1: the previous version computed a bit width by calling
@@ -6934,6 +7127,7 @@ static void*piton_bigint_shl(void*a,void*b){
 static void*bi_shl_u64(unsigned long v,long k){PitonBigInt*r=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));r->sign=1;r->count=0;r->capacity=0;r->limbs=0;if(!v||k<0)return r;long word=k/64;int bits=(int)(k%64);if(bits==0){bi_ensure(r,word+1);r->limbs[word]=v;r->count=word+1;}else{bi_ensure(r,word+2);r->limbs[word]=(v<<bits);r->limbs[word+1]=(v>>(64-bits));r->count=word+2;}bi_trim(r);return r;}
 static int piton_bi_bit(void*a,long p){PitonBigInt*x=(PitonBigInt*)a;if(p<0)return 0;long i=p/64;int b=(int)(p%64);if(i>=x->count)return 0;return(int)((x->limbs[i]>>b)&1UL);}
 static double piton_bigint_scaled_to_double(void*a,long E,int xsign){PitonBigInt*x=(PitonBigInt*)a;long p=-1;for(long i=x->count-1;i>=0;--i){unsigned long w=x->limbs[i];if(w){p=i*64+63-__builtin_clzll(w);break;}}unsigned long long signbit=((unsigned long long)(xsign?1:0))<<63;if(p<0){double d;__builtin_memcpy(&d,&signbit,8);return d;}unsigned long long t=0;int sticky=0;for(long i=0;i<55;++i){long pos=p-i;t=(t<<1)|(unsigned long long)(pos>=0?piton_bi_bit(a,pos):0);}long lo=p-54;if(lo>0){for(long i=0;i<lo;++i)if(piton_bi_bit(a,i)){sticky=1;break;}}int e2=(int)(p+E);int guard=(int)((t>>1)&1ULL),rnd=(int)(t&1ULL);t>>=2;if(guard&&(rnd||sticky||(t&1ULL))){t+=1;if(t>=(1ULL<<53)){t>>=1;e2+=1;}}if(e2>=-1022){if(e2>1023){unsigned long long b=signbit|0x7FF0000000000000ULL;double d;__builtin_memcpy(&d,&b,8);return d;}unsigned long long b=signbit|((unsigned long long)(e2+1023)<<52)|(t&0xFFFFFFFFFFFFFULL);double d;__builtin_memcpy(&d,&b,8);return d;}int s=-1022-e2;if(s>=64){double d;__builtin_memcpy(&d,&signbit,8);return d;}unsigned long long dropped=t&((s==64)?~0ULL:((1ULL<<s)-1));int g2=(int)((t>>(s-1))&1ULL);int r2=(s>1)&&((dropped&(((1ULL<<(s-1))-1)))!=0);t>>=s;if(g2&&(r2||sticky||(t&1ULL)))t+=1;if(t>=(1ULL<<52)){unsigned long long b=signbit|(1ULL<<52);double d;__builtin_memcpy(&d,&b,8);return d;}unsigned long long b=signbit|t;double d;__builtin_memcpy(&d,&b,8);return d;}
+static long piton_percent_bigint_float_bits(void*raw){PitonBigInt*x=(PitonBigInt*)raw;return piton_double_bits(piton_bigint_scaled_to_double(raw,0,x&&x->sign<0));}
 static double piton_fmod_core(double x,double y){unsigned long long ux,uy;__builtin_memcpy(&ux,&x,8);__builtin_memcpy(&uy,&y,8);int ex=(int)((ux>>52)&0x7FFULL),ey=(int)((uy>>52)&0x7FFULL);unsigned long long mx=ux&0xFFFFFFFFFFFFFULL,my=uy&0xFFFFFFFFFFFFFULL;int sx=(int)(ux>>63);if(ex==0x7FF||(ey==0x7FF&&my!=0)||(uy&0x7FFFFFFFFFFFFFFFULL)==0)return(x*y)/(x*y);if((ux&0x7FFFFFFFFFFFFFFFULL)==0)return x;int uex,uey;if(ex==0){int s=__builtin_clzll(mx)-11;mx<<=(unsigned)s;uex=-1074-s;}else{mx|=0x10000000000000ULL;uex=ex-1075;}if(ey==0){int s=__builtin_clzll(my)-11;my<<=(unsigned)s;uey=-1074-s;}else{my|=0x10000000000000ULL;uey=ey-1075;}if(uex<uey||(uex==uey&&mx<my))return x;long E=uex<uey?uex:uey;void*Mx=bi_shl_u64(mx,(long)(uex-E));void*My=bi_shl_u64(my,(long)(uey-E));void*R=piton_bigint_mod(Mx,My);return piton_bigint_scaled_to_double(R,E,sx);}
 static int piton_double_isinf(long bits){unsigned long long u=(unsigned long long)bits;return ((u&0x7FF0000000000000ULL)==0x7FF0000000000000ULL)&&((u&0xFFFFFFFFFFFFFULL)==0);}
 static int piton_double_isfinite(long bits){unsigned long long u=(unsigned long long)bits;return ((u&0x7FF0000000000000ULL)!=0x7FF0000000000000ULL);}
@@ -9045,7 +9239,7 @@ class LinuxCEmitter:
         one tuple per conversion: (name, conv, flags, width, prec).
 
         name is None for positional fields, the mapping key for %(name)
-        fields. conv is one of s d r c x X o (i/u normalized to d).
+        fields. conv keeps the original conversion character, including i/u.
         flags is a bitmask (1 = '-', 2 = '0'), width/prec are ints or -1.
         Only static widths/precisions are accepted (* needs runtime values).
         '+', ' ', '#' flags, length modifiers and float conversions fail
@@ -9127,7 +9321,7 @@ class LinuxCEmitter:
                     i += 1
                     continue
                 if c2 in "iu":
-                    fields.append((name, "d", flags, width, prec))
+                    fields.append((name, c2, flags, width, prec))
                     out.append("{}")
                     i += 1
                     continue
@@ -15441,16 +15635,19 @@ class LinuxCEmitter:
                                 )
                             else:
                                 base = f"piton_str_of_value({arg_expr})"
-                        elif spec == "d":
+                        elif arg_type in {"", "slot"} and spec in {"d", "i", "u", "x", "X", "o", "c", "f", "F", "e", "E", "g", "G"}:
+                            precv = prec_val if isinstance(prec_val, int) and prec_val >= 0 else 6
+                            base = f"piton_percent_slot_convert(piton_percent_slot_from_raw((long){operand}),'{spec}',{precv},{flags})"
+                        elif spec in {"d", "i", "u"}:
                             if arg_type in {"int", "bool"}:
                                 base = f"piton_str_from_int((long){arg_expr})"
                             elif arg_type == "float":
                                 base = f"piton_str_from_int((long)piton_bits_double({arg_expr}))"
                             else:
-                                raise NativeBuildError(f"Linux %d requires a number, not {arg_type}")
+                                raise NativeBuildError(f"Linux %{spec} requires a number, not {arg_type}")
                         elif spec in {"f", "F", "e", "E", "g", "G"}:
                             precv = prec_val if isinstance(prec_val, int) and prec_val >= 0 else 6
-                            if arg_type not in {"float", "int", "bool", "", "none", "slot"}:
+                            if arg_type not in {"float", "int", "bool"}:
                                 raise NativeBuildError(f"Linux %{spec} requires int or float, not {arg_type}")
                             _foldv = f"({arg_expr})" if arg_type == "float" else f"piton_double_bits((double)(long){arg_expr})"
                             if spec in {"f", "F"}:
@@ -15503,8 +15700,8 @@ class LinuxCEmitter:
                         else:
                             raise NativeBuildError(f"Linux str %{spec} is not supported")
                         bases.append(f"const char*_pb{index}=(const char*){base};")
-                        isnum = 1 if spec in {"d", "x", "X", "o", "f", "F", "e", "E", "g", "G"} else 0
-                        pr_for_pad = prec_val if spec in {"d", "x", "X", "o", "s", "r", "a", "c"} else -1
+                        isnum = 1 if spec in {"d", "i", "u", "x", "X", "o", "f", "F", "e", "E", "g", "G"} else 0
+                        pr_for_pad = prec_val if spec in {"d", "i", "u", "x", "X", "o", "s", "r", "a", "c"} else -1
                         if width_val != -1 or pr_for_pad != -1 or flags:
                             pads.append((width_val, pr_for_pad, flags, isnum))
                         else:
