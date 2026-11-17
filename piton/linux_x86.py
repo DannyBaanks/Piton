@@ -19600,7 +19600,13 @@ class LinuxCEmitter:
                                 target_fn = f"{str_cls}____str__"
                                 target = _name(target_fn)
                                 call_args = self._complete_call_args(target_fn, [operand], out)
-                                args_c = ",".join(self._cval(v) for v in call_args)
+                                # The first argument is already a C expression
+                                # (`operand`), not a MIR value. Re-parsing it
+                                # through _cval would quote the prefixed local
+                                # name as a string literal.
+                                args_c = ",".join(
+                                    [operand] + [self._cval(v) for v in call_args[1:]]
+                                )
                                 if self.function_frame_abi.get(target_fn, False):
                                     out.append(f'    {{long _s_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{target},{len(call_args)},_s_args);}}')
                                 else:
@@ -19612,7 +19618,12 @@ class LinuxCEmitter:
                                     target_fn = f"{repr_cls}____repr__"
                                     target = _name(target_fn)
                                     call_args = self._complete_call_args(target_fn, [operand], out)
-                                    args_c = ",".join(self._cval(v) for v in call_args)
+                                    # As above, the receiver is already lowered
+                                    # to C and must not be reinterpreted as a
+                                    # source string by _cval.
+                                    args_c = ",".join(
+                                        [operand] + [self._cval(v) for v in call_args[1:]]
+                                    )
                                     if self.function_frame_abi.get(target_fn, False):
                                         out.append(f'    {{long _r_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{target},{len(call_args)},_r_args);}}')
                                     else:
