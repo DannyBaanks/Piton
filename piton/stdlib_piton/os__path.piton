@@ -9,26 +9,79 @@ defpath = ':/bin:/usr/bin'
 
 
 funcion basename (p ):
-    partes = p.rsplit ('/' ,1 )
-    devolver partes [longitud (partes ) -1 ]
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        indice_sep = ruta_bytes.rfind (b'/' ) + 1
+        devolver ruta_bytes [indice_sep :]
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    indice_sep = ruta_texto.rfind ('/' ) + 1
+    devolver ruta_texto [indice_sep :]
 
 
 funcion dirname (p ):
-    i = p.rfind ('/' ) + 1
-    cabeza = p[:i ]
-    si cabeza y cabeza != '/' * longitud (cabeza ) :
-        cabeza = cabeza.rstrip ('/' )
-    devolver cabeza
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        indice_sep = ruta_bytes.rfind (b'/' ) + 1
+        cabeza_bytes = ruta_bytes [:indice_sep ]
+        si cabeza_bytes y cabeza_bytes != b'/' * longitud (cabeza_bytes ):
+            longitud_cabeza = longitud (cabeza_bytes )
+            recortar = Verdadero
+            mientras longitud_cabeza > 0 y recortar :
+                indice_ultimo = longitud_cabeza - 1
+                si cabeza_bytes [indice_ultimo ] == 47 :
+                    longitud_cabeza = indice_ultimo
+                sino :
+                    recortar = Falso
+            cabeza_bytes = cabeza_bytes [:longitud_cabeza ]
+        devolver cabeza_bytes
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    indice_sep = ruta_texto.rfind ('/' ) + 1
+    cabeza_texto = ruta_texto [:indice_sep ]
+    si cabeza_texto y cabeza_texto != '/' * longitud (cabeza_texto ):
+        cabeza_texto = cabeza_texto.rstrip ('/' )
+    devolver cabeza_texto
 
 
 funcion isabs (p ):
-    si p y p [0 ] == '/' :
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        devolver ruta_bytes.startswith (b'/' )
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    si ruta_texto.startswith ('/' ):
         devolver Verdadero
     devolver Falso
 
 
 funcion split (p ):
-    partes = p.rsplit ('/' ,1 )
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        indice_sep = ruta_bytes.rfind (b'/' )
+        si indice_sep < 0 :
+            devolver (ruta_bytes ,b'' )
+        cabeza_bytes = ruta_bytes [:indice_sep ]
+        si cabeza_bytes y cabeza_bytes != b'/' * longitud (cabeza_bytes ):
+            longitud_cabeza = longitud (cabeza_bytes )
+            recortar = Verdadero
+            mientras longitud_cabeza > 0 y recortar :
+                indice_ultimo = longitud_cabeza - 1
+                si cabeza_bytes [indice_ultimo ] == 47 :
+                    longitud_cabeza = indice_ultimo
+                sino :
+                    recortar = Falso
+            cabeza_bytes = cabeza_bytes [:longitud_cabeza ]
+        si no cabeza_bytes :
+            cabeza_bytes = b'/'
+        devolver (cabeza_bytes ,ruta_bytes [indice_sep + 1 :])
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    partes = ruta_texto.rsplit ('/' ,1 )
     si longitud (partes ) == 1 :
         devolver (partes [0 ] ,'')
     cabeza = partes [0 ]
@@ -195,6 +248,9 @@ funcion normpath (p ):
 
 
 funcion splitdrive (p ):
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        devolver (ruta_bytes [:0 ] ,ruta_bytes )
     devolver ('' ,p )
 
 

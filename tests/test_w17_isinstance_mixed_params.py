@@ -70,6 +70,28 @@ class IsinstanceMixedParams(unittest.TestCase):
         self.assertIn(b"TypeError:", result.native.stderr)
         self.assertIn(b"TypeError:", result.oracle.stderr)
 
+    def test_split_helpers_preserve_str_and_bytes_path_kinds(self):
+        _assert_matches(
+            self,
+            "importar posixpath\n"
+            "imprimir (posixpath .basename ('alpha' ))\n"
+            "imprimir (posixpath .basename (b'alpha' ))\n"
+            "imprimir (posixpath .dirname ('alpha' ))\n"
+            "imprimir (posixpath .dirname (b'alpha' ))\n"
+            "imprimir (posixpath .isabs ('/alpha/beta' ))\n"
+            "imprimir (posixpath .isabs (b'/alpha/beta' ))\n"
+            "imprimir (posixpath .split ('/alpha/beta' ))\n"
+            "imprimir (posixpath .split (b'/alpha/beta' ))\n"
+            "imprimir (posixpath .splitdrive ('/alpha/beta' ))\n"
+            "imprimir (posixpath .splitdrive (b'/alpha/beta' ))\n"
+            "importar os\n"
+            "imprimir (os .path .basename (b'/alpha/beta' ))\n"
+            "imprimir (os .path .dirname (b'/alpha/beta' ))\n"
+            "imprimir (os .path .isabs (b'/alpha/beta' ))\n"
+            "imprimir (os .path .split (b'/alpha/beta' ))\n"
+            "imprimir (os .path .splitdrive (b'/alpha/beta' ))\n",
+        )
+
     def test_closure_is_not_accepted_as_a_path(self):
         result = compare_native_to_cpython(
             "importar posixpath\n"

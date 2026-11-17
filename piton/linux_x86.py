@@ -9820,9 +9820,9 @@ class LinuxCEmitter:
             "math_sin": "float", "math_sinh": "float", "math_sqrt": "float",
             "math_tan": "float", "math_tanh": "float", "math_tau": "float",
             "math_trunc": "int", "math_ulp": "float",
-            "os__path__dirname": "str", "os__path__basename": "str", "os__path__join": "slot",
+            "os__path__dirname": "slot", "os__path__basename": "slot", "os__path__join": "slot",
             "os__path__exists": "bool", "os__path__isfile": "bool", "os__path__isdir": "bool",
-            "posixpath__dirname": "str", "posixpath__basename": "str", "posixpath__join": "slot",
+            "posixpath__dirname": "slot", "posixpath__basename": "slot", "posixpath__join": "slot",
             "posixpath__exists": "bool", "posixpath__isfile": "bool", "posixpath__isdir": "bool",
             "tempfile__mkdtemp": "str",
             "glob__glob": "list", "glob__iglob": "list", "glob__escape": "str", "glob__has_magic": "bool",
@@ -10102,9 +10102,9 @@ class LinuxCEmitter:
                 if not self.function_return_types.get(_srf, "").startswith(("object:", "class:")):
                     self.function_return_types[_srf] = "slot"
             self.function_return_types.update({
-                "os__path__dirname": "str", "os__path__basename": "str", "os__path__join": "slot",
+                "os__path__dirname": "slot", "os__path__basename": "slot", "os__path__join": "slot",
                 "os__path__exists": "bool", "os__path__isfile": "bool", "os__path__isdir": "bool",
-                "posixpath__dirname": "str", "posixpath__basename": "str", "posixpath__join": "slot",
+                "posixpath__dirname": "slot", "posixpath__basename": "slot", "posixpath__join": "slot",
                 "posixpath__exists": "bool", "posixpath__isfile": "bool", "posixpath__isdir": "bool",
                 "tempfile__mkdtemp": "str",
                 "random__seed": "none",
@@ -20592,13 +20592,16 @@ class LinuxCEmitter:
             # cual y el consumidor lo desempaqueta con piton_dyn_unbox, que
             # reconoce una caja por su palabra magica y, si no lo es, deriva
             # la kind en runtime (SLOT_GUESS_V1): el valor sobrevive igual.
-            # PATH_JOIN_RETURN_KIND_V1: join puede retornar str o bytes y sus
+            # PATH_RETURN_KIND_V1: path helpers pueden retornar str o bytes y sus
             # str vacios no se pueden recuperar con piton_slot_guess (no hay
             # byte imprimible que los distinga de un entero/puntero). Al
             # conocer el tipo estatico de la rama, devolver una caja etiquetada
             # conserva la distincion para el consumidor dinamico.
             if (
-                function.name in {"os__path__join", "posixpath__join"}
+                function.name in {
+                    "os__path__join", "os__path__dirname", "os__path__basename",
+                    "posixpath__join", "posixpath__dirname", "posixpath__basename",
+                }
                 and args
                 and isinstance(args[0], str)
                 and types.get(args[0]) in {"str", "bytes"}
