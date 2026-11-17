@@ -9790,6 +9790,9 @@ class LinuxCEmitter:
         # PARAM_TYPE_CONFLICT_V1: tipos observados por parametro en TODAS las
         # llamadas, y parametros usados como sujeto de isinstance/es_instancia.
         self._call_param_seen: dict[str, dict[str, set[str]]] = {}
+        # Conserva el rechazo legacy de llamadas explícitas como f(3), f("x")
+        # aunque el tipo int se pueda adivinar en runtime para valores opacos.
+        self._call_param_seen_literal_scalar: set[tuple[str, str]] = set()
         self._type_sensitive_params: set[tuple[str, str]] = set()
         self.function_return_types = self._infer_return_types(module)
         # MODULE_NATIVE_FNS_V1: override return types for module-level native functions
@@ -9817,9 +9820,9 @@ class LinuxCEmitter:
             "math_sin": "float", "math_sinh": "float", "math_sqrt": "float",
             "math_tan": "float", "math_tanh": "float", "math_tau": "float",
             "math_trunc": "int", "math_ulp": "float",
-            "os__path__dirname": "str", "os__path__basename": "str", "os__path__join": "str",
+            "os__path__dirname": "str", "os__path__basename": "str", "os__path__join": "slot",
             "os__path__exists": "bool", "os__path__isfile": "bool", "os__path__isdir": "bool",
-            "posixpath__dirname": "str", "posixpath__basename": "str", "posixpath__join": "str",
+            "posixpath__dirname": "str", "posixpath__basename": "str", "posixpath__join": "slot",
             "posixpath__exists": "bool", "posixpath__isfile": "bool", "posixpath__isdir": "bool",
             "tempfile__mkdtemp": "str",
             "glob__glob": "list", "glob__iglob": "list", "glob__escape": "str", "glob__has_magic": "bool",
@@ -10099,9 +10102,9 @@ class LinuxCEmitter:
                 if not self.function_return_types.get(_srf, "").startswith(("object:", "class:")):
                     self.function_return_types[_srf] = "slot"
             self.function_return_types.update({
-                "os__path__dirname": "str", "os__path__basename": "str", "os__path__join": "str",
+                "os__path__dirname": "str", "os__path__basename": "str", "os__path__join": "slot",
                 "os__path__exists": "bool", "os__path__isfile": "bool", "os__path__isdir": "bool",
-                "posixpath__dirname": "str", "posixpath__basename": "str", "posixpath__join": "str",
+                "posixpath__dirname": "str", "posixpath__basename": "str", "posixpath__join": "slot",
                 "posixpath__exists": "bool", "posixpath__isfile": "bool", "posixpath__isdir": "bool",
                 "tempfile__mkdtemp": "str",
                 "random__seed": "none",
@@ -10143,7 +10146,16 @@ class LinuxCEmitter:
         # falso. Fail closed en compilacion.
         for _fn, _p in sorted(self._type_sensitive_params):
             _seen = self._call_param_seen.get(_fn, {}).get(_p, set())
-            if len(_seen) > 1:
+            _runtime_dispatch_safe = (
+                _p in (self._runtime_type_params.get(_fn) or set())
+                and _p in (
+                    (self._multi_type_params.get(_fn) or set())
+                    | (self._slot_param_args.get(_fn) or set())
+                )
+                and _seen <= {"int", "str", "bytes"}
+                and (_fn, _p) not in self._call_param_seen_literal_scalar
+            )
+            if len(_seen) > 1 and not _runtime_dispatch_safe:
                 raise NativeBuildError(
                     f"parametro '{_p}' de '{_fn}' recibe tipos distintos {sorted(_seen)} y se usa en "
                     f"isinstance/es_instancia: el tipo estatico no es fiable (fail closed)"
@@ -10425,6 +10437,13 @@ class LinuxCEmitter:
                 # call-site no debe convertirse en rechazo fail-closed
                 # (glob: re.compile(str) seguido de re.compile(bytes)).
                 self._param_seeds.setdefault(function.name, {})[_cparam] = _ctype
+        # INSTANCE_TYPE_PARAM_SLOT_V1: el tipo de un parámetro usado como
+        # primer argumento de isinstance se decide por el valor de esta
+        # llamada. No se conserva el seed de uso (p. ej. str.rsplit), porque
+        # ocultaría bytes/str en la rama de isinstance.
+        for _rt_param in (self._runtime_type_params.get(function.name) or ()):
+            if _rt_param in function.params:
+                types[_rt_param] = "slot"
         if function.self_class and function.params:
             types[function.params[0]] = f"object:{function.self_class}"
         # WITH_PROTOCOL_V1: __exit__ receives a printable runtime type object
@@ -11619,6 +11638,16 @@ class LinuxCEmitter:
             types[result] = "int"
             return out
         values = self._complete_call_args(function_name, list(values), out)
+        if function_name in {
+            "os__path__join", "os__path__normpath", "os__path__splitext",
+            "posixpath__join", "posixpath__normpath", "posixpath__splitext",
+        }:
+            for _path_arg in values:
+                _path_arg_type = types.get(_path_arg, "") if isinstance(_path_arg, str) else ""
+                if _path_arg_type == "object" or _path_arg_type.startswith(("object:", "class:")):
+                    raise NativeBuildError(
+                        f"Linux {function_name}() does not support {_path_arg_type} path arguments yet (fail closed)"
+                    )
         # IDENTITY_FN_V1: si el callee devuelve su param sin cambios y el
         # argumento es un literal str, el resultado de la llamada ES ese
         # literal — un `%` con ese resultado tiene plantilla conocida
@@ -11671,6 +11700,7 @@ class LinuxCEmitter:
         # tuple/dict/set/float se rechazan; "int" (unknown) pasa.
         _usage_types = self._usage_param_types.get(function_name) or {}
         _weak_types = self._usage_param_weak.get(function_name) or {}
+        _runtime_type_params = self._runtime_type_params.get(function_name) or set()
         for _ival, _iparam in zip(values, _params):
             _iut = _usage_types.get(_iparam)
             # CALL_ARG_TYPE_V1: registrar el tipo conocido del argumento —
@@ -11680,12 +11710,14 @@ class LinuxCEmitter:
             if _ipt_known in {"str", "list", "tuple", "dict", "set", "bool", "float"}:
                 self._call_param_types.setdefault(function_name, {})[_iparam] = _ipt_known
             if _ipt_known is not None and _ipt_known not in {
-                "str", "list", "tuple", "dict", "set", "bool", "float", "int", "none", "bigint",
+                "str", "list", "tuple", "dict", "set", "bool", "float", "int", "none", "bigint", "bytes",
             }:
                 # NO_VALUE_KINDS: un argumento que NO es un valor simple
                 # (un handle de archivo -> "object", un builtin, una clase).
                 # El param que lo recibe no puede envolverse en un slot.
                 self._call_param_seen_obj.setdefault(function_name, {}).setdefault(_iparam, set()).add(_ipt_known)
+            if self._is_literal_scalar_arg(_ival):
+                self._call_param_seen_literal_scalar.add((function_name, _iparam))
             if _ipt_known == "slot" and not (
                 function_name in self.function_self_classes and _params and _iparam == _params[0]
             ):
@@ -11704,7 +11736,7 @@ class LinuxCEmitter:
                 # _closure_origin): describe un PARAM de la funcion que se
                 # esta emitiendo, no un global compartido.
                 self._closure_param_origin.setdefault(function_name, {})[_iparam] = _clo_origin
-            if _ipt_known in {"str", "list", "tuple", "dict", "set", "bool", "float", "int", "none", "bigint"}:
+            if _ipt_known in {"str", "list", "tuple", "dict", "set", "bool", "float", "int", "none", "bigint", "bytes"}:
                 self._call_param_seen.setdefault(function_name, {}).setdefault(_iparam, set()).add(_ipt_known)
                 # SHARED_SPECIALIZATION_V1: un param que recibe argumentos de
                 # TIPOS DISTINTOS en distintos call-sites no puede tener un
@@ -11735,7 +11767,12 @@ class LinuxCEmitter:
                     continue
             if _iut == "str" and isinstance(_ival, str):
                 _ipt = types.get(_ival)
-                if _ipt is not None and _ipt not in {"str", "int", "bool", "none", "builtin", "slot", "list", "bytes", "bytearray", "tuple"} and not _ipt.startswith("object:"):
+                if (
+                    _ipt is not None
+                    and _ipt not in {"str", "int", "bool", "none", "builtin", "slot", "list", "bytes", "bytearray", "tuple"}
+                    and not (_iparam in _runtime_type_params and _ipt == "closure")
+                    and not _ipt.startswith("object:")
+                ):
                     raise NativeBuildError(
                         f"Linux {function_name}() param '{_iparam}' is used as str; a {_ipt} argument is rejected (fail closed)"
                     )
@@ -11763,6 +11800,7 @@ class LinuxCEmitter:
         _multi = (
             (self._multi_type_params.get(function_name) or set())
             | (self._slot_param_args.get(function_name) or set())
+            | _runtime_type_params
         )
         if _multi:
             for _i, (_ival, _iparam) in enumerate(zip(values, _params)):
@@ -11773,8 +11811,12 @@ class LinuxCEmitter:
                     continue
                 _vname = f"%mbox{self._mbox_counter}"
                 self._mbox_counter = getattr(self, "_mbox_counter", 0) + 1
+                if _iparam in _runtime_type_params and _vt in {"int", "closure", "any", "unknown", None}:
+                    _slot_value = f"piton_slot_guess({self._value(_ival)})"
+                else:
+                    _slot_value = self._slot(_ival, types)
                 out.append(
-                    f"    long {_name(_vname)}; {{PitonSlot*_mb=piton_slot_box_new({self._slot(_ival, types)});"
+                    f"    long {_name(_vname)}; {{PitonSlot*_mb=piton_slot_box_new({_slot_value});"
                     f" {_name(_vname)}=(long)_mb;}}"
                 )
                 values[_i] = _vname
@@ -11798,7 +11840,7 @@ class LinuxCEmitter:
                 out.append(f"    {{PitonSeq*_va=piton_seq_new(PK_TUPLE,{len(_extra)});")
                 for _i, _ev in enumerate(_extra):
                     out.append(
-                        f"    piton_seq_put(_va,{_i},piton_slot({self._value(_ev)},PK_INT));"
+                        f"    piton_seq_put(_va,{_i},{self._slot(_ev, types)});"
                     )
                 out.append(f"    {_name(_vname)}=(long)_va;}}")
                 values = list(values)[:_n_named] + [_vname]
@@ -14457,6 +14499,20 @@ class LinuxCEmitter:
                             _runtime_type_params.add(_src)
             if _runtime_type_params:
                 self._runtime_type_params[function.name] = _runtime_type_params
+                # ISINSTANCE_VARARG_ELEMS_V1: when a function dispatches on
+                # runtime kinds and iterates its *args tuple, each tuple item
+                # must keep its call-site kind. Treat those elements as
+                # tagged slots, just like an unknown-element sequence param.
+                _vararg = getattr(function, "vararg", None)
+                _vararg_loads = _loads_of.get(_vararg, set()) if _vararg else set()
+                if _vararg_loads and any(
+                    _ins.op == "iter_new"
+                    and _ins.args
+                    and _ins.args[0] in _vararg_loads
+                    for _block in function.blocks
+                    for _ins in _block.instructions
+                ):
+                    self._list_params_unknown_elem[function.name].add(_vararg)
             for _uparam, _uloads in _loads_of.items():
                 # VARARG_KWARG_SEED_V1: `*args` es una tupla y `**kwargs` un
                 # dict — el seed de secuencia (list) no aplica a esos params.
@@ -18887,10 +18943,21 @@ class LinuxCEmitter:
                     else:
                         mode_expr = '"r"'
                 path_type = types.get(values[0], "int")
-                if path_type == "slot":
+                if path_type in {"slot", "bytes", "closure"}:
+                    if path_type == "slot":
+                        _path_slot = f"piton_dyn_unbox({self._value(values[0])})"
+                    elif path_type == "closure":
+                        # A callback parameter can be statically labelled as
+                        # a closure even though its runtime value is the path
+                        # string/bytes passed by fileinput. Recover the value
+                        # kind from its unboxed ABI bits; a real closure still
+                        # fails as a non-path in piton_file_open_slot.
+                        _path_slot = f"piton_slot_guess({self._value(values[0])})"
+                    else:
+                        _path_slot = self._slot(values[0], types)
                     out.append(
                         f"    {_name(result)}=(long)piton_file_open_slot("
-                        f"piton_dyn_unbox({self._value(values[0])}),{mode_expr});"
+                        f"{_path_slot},{mode_expr});"
                     )
                     types[result] = "file"
                     self._files[result] = True
@@ -20525,6 +20592,21 @@ class LinuxCEmitter:
             # cual y el consumidor lo desempaqueta con piton_dyn_unbox, que
             # reconoce una caja por su palabra magica y, si no lo es, deriva
             # la kind en runtime (SLOT_GUESS_V1): el valor sobrevive igual.
+            # PATH_JOIN_RETURN_KIND_V1: join puede retornar str o bytes y sus
+            # str vacios no se pueden recuperar con piton_slot_guess (no hay
+            # byte imprimible que los distinga de un entero/puntero). Al
+            # conocer el tipo estatico de la rama, devolver una caja etiquetada
+            # conserva la distincion para el consumidor dinamico.
+            if (
+                function.name in {"os__path__join", "posixpath__join"}
+                and args
+                and isinstance(args[0], str)
+                and types.get(args[0]) in {"str", "bytes"}
+            ):
+                out.append(
+                    f"    return (long)piton_slot_box_new({self._slot(args[0], types)});"
+                )
+                return out
             if args and isinstance(args[0], str) and types.get(args[0]) == "slot":
                 if function.name.endswith(("____str__", "____repr__")) or function.name in {
                     "os__path__join", "os__path__dirname", "os__path__basename",
