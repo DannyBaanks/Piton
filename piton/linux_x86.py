@@ -6580,6 +6580,13 @@ static long piton_build_time_list(long epoch,long offset_sec){
   long dd = doy - (153*mp+2)/5 + 1;
   long m = mp + (mp < 10 ? 3 : -9);
   if(m <= 2)y += 1;
+  /* CPython's platform gmtime/localtime stores tm_year in a C int.  Keep
+     large, otherwise representable time_t values from overflowing that
+     field: libc reports EOVERFLOW (OSError) for these. */
+  if(y < -2147481748L || y > 2147485547L){
+    piton_raise_set("OSError","Value too large for defined data type");
+    return 0;
+  }
   long wday = piton_wday_monday(y,m,dd); /* 0=lunes, como CPython tm_wday */
   long yday = piton_yday(y,m,dd);
   long offset_h = offset_sec / 3600;
@@ -6609,12 +6616,46 @@ static long piton_time_time(void){
   double seconds=(double)ts[0]+(double)ts[1]/1000000000.0;
   return piton_double_bits(seconds);
 }
+static int piton_time_seconds_from_slot(PitonSlot timestamp,long*out){
+  if(timestamp.kind==PK_NONE){*out=piton_time_epoch_seconds();return 1;}
+  if(timestamp.kind==PK_INT||timestamp.kind==PK_BOOL){*out=timestamp.bits;return 1;}
+  if(timestamp.kind==PK_BIGINT){
+    piton_raise_set("OverflowError","timestamp out of range for platform time_t");
+    return 0;
+  }
+  if(timestamp.kind==PK_FLOAT){
+    long bits=timestamp.bits;
+    if(piton_math_isnan(bits)){
+      piton_raise_set("ValueError","Invalid value NaN (not a number)");
+      return 0;
+    }
+    if(piton_math_isinf(bits)){
+      piton_raise_set("OverflowError","timestamp out of range for platform time_t");
+      return 0;
+    }
+    double value=piton_bits_double(bits);
+    /* Avoid undefined C casts at the signed time_t boundary. */
+    if(value>=9223372036854775808.0||value< -9223372036854775808.0){
+      piton_raise_set("OverflowError","timestamp out of range for platform time_t");
+      return 0;
+    }
+    long seconds=(long)value;
+    /* CPython rounds timestamps down to whole seconds, including negatives. */
+    if(value<0.0&&(double)seconds>value)--seconds;
+    *out=seconds;
+    return 1;
+  }
+  piton_raise_set("TypeError","timestamp must be an int or float");
+  return 0;
+}
 static long piton_time_localtime(PitonSlot epoch){
-  long e = epoch.kind==PK_NONE ? piton_time_epoch_seconds() : epoch.bits;
+  long e;
+  if(!piton_time_seconds_from_slot(epoch,&e))return 0;
   return piton_build_time_list(e, 0L); /* UTC: sin TZ en backend freestanding */
 }
 static long piton_time_gmtime(PitonSlot epoch){
-  long e = epoch.kind==PK_NONE ? piton_time_epoch_seconds() : epoch.bits;
+  long e;
+  if(!piton_time_seconds_from_slot(epoch,&e))return 0;
   return piton_build_time_list(e, 0L);
 }
 static const char*piton_wday_abbr[]={"Mon","Tue","Wed","Thu","Fri","Sat","Sun"};
@@ -6648,6 +6689,7 @@ static long piton_format_int(char**buf,long*cap,long*len,long v,int width,int pa
 }
 /* strftime subconjunto: %Y %y %m %d %H %M %S %a %A %b %B %j %u %w %U %W %% */
 static long piton_time_strftime(PitonSlot fmt,PitonSlot st){
+  if(fmt.kind!=PK_STR){piton_raise_set("TypeError","strftime() argument 1 must be str");return 0;}
   const char*f=(const char*)(long)fmt.bits;
   if(st.kind==PK_NONE){
     long lst=piton_time_localtime(piton_slot(0,PK_NONE));
@@ -6655,7 +6697,7 @@ static long piton_time_strftime(PitonSlot fmt,PitonSlot st){
     st=piton_slot(lst,PK_LIST);
   }
   PitonSeq*s=(PitonSeq*)(long)st.bits;
-  if(!s||s->kind!=PK_LIST||s->length<9){piton_raise_set("TypeError","strftime requires a struct_time/9-sequence");return 0;}
+  if((st.kind!=PK_LIST&&st.kind!=PK_TUPLE)||!s||s->length<9){piton_raise_set("TypeError","Tuple or struct_time argument required");return 0;}
   long Y=(long)s->items[0].bits,mo=(long)s->items[1].bits,d=(long)s->items[2].bits;
   long H=(long)s->items[3].bits,Mi=(long)s->items[4].bits,Se=(long)s->items[5].bits;
   long wday=(long)s->items[6].bits,yday=(long)s->items[7].bits;
@@ -6698,8 +6740,7 @@ static long piton_time_asctime(PitonSlot st){
   return piton_time_strftime(piton_slot((long)fmt,PK_STR),st);
 }
 static long piton_time_ctime(PitonSlot epoch){
-  long e = epoch.kind==PK_NONE ? piton_time_epoch_seconds() : epoch.bits;
-  long lst=piton_time_localtime(piton_slot(e,PK_INT));
+  long lst=piton_time_localtime(epoch);
   if(piton_exc_flag)return 0;
   long r=piton_time_asctime(piton_slot(lst,PK_LIST));
   return r;
@@ -20014,6 +20055,10 @@ class LinuxCEmitter:
                     resolved_cls = self._find_class_method(unbound_class, method) or unbound_class
                     target = f"{resolved_cls}__{method}"
                     if target not in self.function_names:
+                        if target == "datetime__datetime__fromtimestamp":
+                            raise NativeBuildError(
+                                "datetime.datetime.fromtimestamp is not implemented in the Linux native backend (fail closed)"
+                            )
                         if method == "register":
                             if call_args:
                                 out.append(f"    {_name(result)}={self._value(call_args[0])};")
@@ -20032,6 +20077,47 @@ class LinuxCEmitter:
                         all_values = self._complete_call_args(target, [obj, *call_args], out)
                     else:
                         all_values = self._complete_call_args(target, list(call_args), out)
+                    # Class-qualified classmethods use this dispatch path.
+                    # Preserve the argument kind across their raw-long ABI,
+                    # and specialize mixed scalar call sites through a slot.
+                    _method_start = 0 if target in self.static_methods else 1
+                    for _mi in range(_method_start, len(all_values)):
+                        if _mi >= len(self.function_params.get(target, ())):
+                            break
+                        _mv = all_values[_mi]
+                        _mvt = types.get(_mv)
+                        if _mvt not in {
+                            "str", "list", "tuple", "dict", "set", "bool", "float", "int", "none", "bigint",
+                        }:
+                            continue
+                        _mparam = self.function_params[target][_mi]
+                        if _mvt != "int":
+                            self._call_param_types.setdefault(target, {})[_mparam] = _mvt
+                        _seen = self._call_param_seen.setdefault(target, {}).setdefault(_mparam, set())
+                        _seen.add(_mvt)
+                        _seen_obj = self._call_param_seen_obj.get(target, {}).get(_mparam, set())
+                        if len(_seen) > 1 and not _seen_obj:
+                            self._multi_type_params.setdefault(target, set()).add(_mparam)
+                    _multi_method_params = (
+                        (self._multi_type_params.get(target) or set())
+                        | (self._slot_param_args.get(target) or set())
+                    )
+                    for _mi, (_mv, _mparam) in enumerate(
+                        zip(all_values, self.function_params.get(target, ()))
+                    ):
+                        if _mparam not in _multi_method_params or not isinstance(_mv, str):
+                            continue
+                        _mvt = types.get(_mv)
+                        if _mvt in {"slot", "builtin", None}:
+                            continue
+                        _mbox = f"%mbox{self._mbox_counter}"
+                        self._mbox_counter = getattr(self, "_mbox_counter", 0) + 1
+                        out.append(
+                            f"    long {_name(_mbox)}; {{PitonSlot*_mb=piton_slot_box_new({self._slot(_mv, types)});"
+                            f" {_name(_mbox)}=(long)_mb;}}"
+                        )
+                        all_values[_mi] = _mbox
+                        types[_mbox] = "slot"
                     all_values = self._pack_call_varargs(out, target, all_values, types)
                     if target in self.generator_layouts:
                         _glayout = self.generator_layouts[target]
@@ -20140,16 +20226,46 @@ class LinuxCEmitter:
                     types[result] = "int"
                     return out
             all_values = self._complete_call_args(target, raw_values, out)
-            if target not in self.static_methods and target not in self.class_methods:
-                # CALL_ARG_TYPE_V1: el call-site de un metodo informa el tipo
-                # de sus params (el constructor de una clase: `P([1,2])` deja
-                # el tipo de la lista en el param del __init__).
-                for _mi, _mv in enumerate(all_values[1:], start=1):
-                    if _mi >= len(_mparams):
-                        break
-                    _mvt = types.get(_mv)
-                    if _mvt and _mvt != "int":
-                        self._call_param_types.setdefault(target, {})[_mparams[_mi]] = _mvt
+            # CALL_ARG_TYPE_V1: method call sites supply the receiver/cls as
+            # the first ABI argument, except for static methods. Preserve
+            # known scalar kinds through classmethod calls too (notably
+            # date.fromtimestamp(float)), and use a tagged slot when one
+            # method receives different scalar kinds in this module.
+            _m_start = 0 if target in self.static_methods else 1
+            for _mi in range(_m_start, len(all_values)):
+                if _mi >= len(_mparams):
+                    break
+                _mv = all_values[_mi]
+                _mvt = types.get(_mv)
+                if _mvt not in {
+                    "str", "list", "tuple", "dict", "set", "bool", "float", "int", "none", "bigint",
+                }:
+                    continue
+                if _mvt != "int":
+                    self._call_param_types.setdefault(target, {})[_mparams[_mi]] = _mvt
+                _seen = self._call_param_seen.setdefault(target, {}).setdefault(_mparams[_mi], set())
+                _seen.add(_mvt)
+                _seen_obj = self._call_param_seen_obj.get(target, {}).get(_mparams[_mi], set())
+                if len(_seen) > 1 and not _seen_obj:
+                    self._multi_type_params.setdefault(target, set()).add(_mparams[_mi])
+            _multi_method_params = (
+                (self._multi_type_params.get(target) or set())
+                | (self._slot_param_args.get(target) or set())
+            )
+            for _mi, (_mv, _mparam) in enumerate(zip(all_values, _mparams)):
+                if _mparam not in _multi_method_params or not isinstance(_mv, str):
+                    continue
+                _mvt = types.get(_mv)
+                if _mvt in {"slot", "builtin", None}:
+                    continue
+                _mbox = f"%mbox{self._mbox_counter}"
+                self._mbox_counter = getattr(self, "_mbox_counter", 0) + 1
+                out.append(
+                    f"    long {_name(_mbox)}; {{PitonSlot*_mb=piton_slot_box_new({self._slot(_mv, types)});"
+                    f" {_name(_mbox)}=(long)_mb;}}"
+                )
+                all_values[_mi] = _mbox
+                types[_mbox] = "slot"
             all_values = self._pack_call_varargs(out, target, all_values, types)
             call_value_exprs = [self._value(v) for v in all_values]
             if method in {"__exit__", "__aexit__"} and len(all_values) > 2:

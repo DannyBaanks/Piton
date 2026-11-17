@@ -216,10 +216,7 @@ clase date :
 
     @classmethod
     funcion today (clase ):
-        # time.time() is a float; the bundled localtime path currently accepts
-        # integer epoch seconds when an explicit value is supplied. Let the
-        # no-argument path read the current clock directly instead.
-        local = time.localtime()
+        local = time.localtime(time.time())
         devolver date(local[0], local[1], local[2])
     
     @classmethod
