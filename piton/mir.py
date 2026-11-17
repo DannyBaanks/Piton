@@ -2793,7 +2793,11 @@ class MIRLowerer:
             ] if nested_args else []
             nested_super_context = (
                 (builder.super_class, nested_positional[0])
-                if builder.super_class and nested_positional else None
+                if (
+                    builder.super_class
+                    and nested_positional
+                    and self._contains_zero_arg_super(nested.body)
+                ) else None
             )
             self._lower_function(
                 nested, lifted_name, nested_captures,
@@ -2815,7 +2819,11 @@ class MIRLowerer:
             ] if lambda_args else []
             lambda_super_context = (
                 (builder.super_class, lambda_positional[0])
-                if builder.super_class and lambda_positional else None
+                if (
+                    builder.super_class
+                    and lambda_positional
+                    and self._contains_zero_arg_super(lambda_node.body)
+                ) else None
             )
             self._lower_function(
                 lambda_node, lifted_name, lambda_captures,
@@ -3124,6 +3132,17 @@ class MIRLowerer:
                 stack.extend(reversed(children))
             elif isinstance(current, (list, tuple)):
                 stack.extend(reversed(current))
+
+    def _contains_zero_arg_super(self, value: Any) -> bool:
+        """Whether this scope contains a call to the supported ``super()`` form."""
+        return any(
+            item.kind == HIRKind.CALL
+            and getattr(getattr(item, "func", None), "kind", None) == HIRKind.LOAD
+            and getattr(item.func, "name", None) == "super"
+            and not getattr(item, "args", None)
+            and not getattr(item, "keywords", None)
+            for item in self._walk(value)
+        )
 
     _SCOPE_STOP = {
         HIRKind.FUNC_DEF, HIRKind.CLASS_DEF, HIRKind.LAMBDA,
@@ -7051,6 +7070,27 @@ class MIRLowerer:
             # o __init_subclass__ -> la llamada es un no-op, no un error de build.
             if attr in {"__init__", "__init_subclass__"}:
                 if user_args:
+                    if (
+                        attr == "__init__"
+                        and "classmethod" in tail_mro
+                        and len(user_args) == 2
+                    ):
+                        # classmethod.__init__ accepts one positional argument
+                        # after its bound receiver. Keep the exception at call
+                        # time so an unused method body remains compilable, and
+                        # preserve CPython's message if that path is executed.
+                        _message = builder.temp()
+                        builder.emit(
+                            "const", "classmethod expected 1 argument, got 2",
+                            result=_message,
+                        )
+                        builder.emit(
+                            "raise_typed", "TypeError", _message,
+                            _active_handler(builder),
+                        )
+                        _none = builder.temp()
+                        builder.emit("const", None, result=_none)
+                        return _none
                     raise MIRLoweringError(
                         f"native super().{attr} with arguments requires a modeled base implementation"
                     )
