@@ -7352,6 +7352,146 @@ static void piton_slot_repr_into(PitonStrBuf*b,PitonSlot v){
 static long piton_slot_repr(long bits,int kind){PitonStrBuf b;sb_init(&b);piton_slot_repr_into(&b,(PitonSlot){bits,kind});return(long)b.d;}
 static long piton_slot_repr_ascii(long bits,int kind){PitonStrBuf b;g_piton_ascii_mode=1;sb_init(&b);piton_slot_repr_into(&b,(PitonSlot){bits,kind});g_piton_ascii_mode=0;return(long)b.d;}
 
+/* PCT_RUNTIME_V1: Runtime path for %-formats whose template or operands are
+   not statically inspectable (dynamic templates, * width/precision, and
+   mappings built with runtime keys). The slots retain the runtime kinds, so
+   conversions and error messages use the actual operand types. */
+static const char* piton_complex_str(long bits);
+static int piton_pct_text_chars(const char*s){
+  int n=0;for(usize i=0;s&&s[i];){unsigned char c=(unsigned char)s[i];
+    if(c<0x80)i+=1;else if((c&0xE0)==0xC0&&s[i+1])i+=2;
+    else if((c&0xF0)==0xE0&&s[i+1]&&s[i+2])i+=3;
+    else if((c&0xF8)==0xF0&&s[i+1]&&s[i+2]&&s[i+3])i+=4;
+    else i+=1;++n;
+  }return n;
+}
+static long piton_pct_pad_text(const char*s,long width,long precision,int left){
+  if(!s)s="";usize bytes=piton_strlen(s);usize cut=bytes;
+  if(precision>=0){long chars=0;cut=0;while(cut<bytes&&chars<precision){unsigned char c=(unsigned char)s[cut];
+      if(c<0x80)cut+=1;else if((c&0xE0)==0xC0&&cut+1<bytes)cut+=2;
+      else if((c&0xF0)==0xE0&&cut+2<bytes)cut+=3;
+      else if((c&0xF8)==0xF0&&cut+3<bytes)cut+=4;else cut+=1;++chars;}}
+  long chars=piton_pct_text_chars(s);if(precision>=0&&chars>precision)chars=precision;
+  long pad=width>chars?width-chars:0;char*out=(char*)piton_alloc(cut+(usize)pad+1);usize o=0;
+  if(!left)for(long i=0;i<pad;++i)out[o++]=' ';
+  piton_memcpy(out+o,s,cut);o+=cut;
+  if(left)for(long i=0;i<pad;++i)out[o++]=' ';
+  out[o]=0;return(long)out;
+}
+static long piton_pct_pad_number(const char*s,long width,long precision,long flags){
+  if(!s)s="0";const char*digits=s;char sign=0;const char*prefix="";
+  if(*digits=='-'||*digits=='+'){sign=*digits++;}
+  else if(flags&8)sign='+';else if(flags&16)sign=' ';
+  if(digits[0]=='0'&&(digits[1]=='x'||digits[1]=='X'||digits[1]=='o')){prefix=digits;digits+=2;}
+  usize dl=piton_strlen(digits);usize need=dl;
+  if(precision>=0){need=(usize)precision;if(dl==1&&digits[0]=='0'&&precision==0)need=0;if(need<dl)need=dl;}
+  long total=(long)need+(sign?1:0)+(long)piton_strlen(prefix);
+  long pad=width>total?width-total:0;int left=(flags&1)!=0;
+  int zero=(flags&2)&&!left&&precision<0;
+  char*out=(char*)piton_alloc((usize)total+(usize)pad+1);usize o=0;
+  if(!left){if(zero){if(sign)out[o++]=sign;usize pl=piton_strlen(prefix);piton_memcpy(out+o,prefix,pl);o+=pl;for(long i=0;i<pad;++i)out[o++]='0';}
+    else{for(long i=0;i<pad;++i)out[o++]=' ';if(sign)out[o++]=sign;usize pl=piton_strlen(prefix);piton_memcpy(out+o,prefix,pl);o+=pl;}}
+  else{if(sign)out[o++]=sign;usize pl=piton_strlen(prefix);piton_memcpy(out+o,prefix,pl);o+=pl;}
+  for(usize i=dl;i<need;++i)out[o++]='0';piton_memcpy(out+o,digits,dl);o+=dl;
+  if(left)for(long i=0;i<pad;++i)out[o++]=' ';
+  out[o]=0;return(long)out;
+}
+static long piton_pct_float_general(long bits,int precision,int upper,int alternate){
+  int p=precision<0?6:precision;if(p==0)p=1;double x=piton_bits_double(bits);double ax=x<0?-x:x;int exp=0;
+  if(ax>0.0){while(ax>=10.0){ax/=10.0;++exp;}while(ax<1.0){ax*=10.0;--exp;}}
+  int scientific=(x!=0.0&&(exp < -4 || exp >= p));
+  char*s=(char*)(scientific?piton_float_fmt_exp(bits,p-1,upper):piton_float_fmt_fixed(bits,p-1-exp));
+  if(alternate){int hasdot=0;for(char*q=s;*q&&*q!='e'&&*q!='E';++q)if(*q=='.')hasdot=1;
+    if(!hasdot){char*e=s;while(*e&&*e!='e'&&*e!='E')++e;usize tail=piton_strlen(e);usize head=(usize)(e-s);char*r=(char*)piton_alloc(head+tail+2);piton_memcpy(r,s,head);r[head]='.';piton_memcpy(r+head+1,e,tail+1);s=r;}}
+  else{char*e=s;while(*e&&*e!='e'&&*e!='E')++e;char*dot=0;for(char*q=s;q<e;++q)if(*q=='.')dot=q;
+    if(dot){char*last=e;while(last>dot+1&&last[-1]=='0')--last;if(last==dot+1)--last;usize tail=piton_strlen(e);usize head=(usize)(last-s);char*r=(char*)piton_alloc(head+tail+1);piton_memcpy(r,s,head);piton_memcpy(r+head,e,tail+1);s=r;}}
+  return(long)s;
+}
+static void piton_pct_value_error(char c,long index){
+  PitonStrBuf m;sb_init(&m);sb_puts(&m,"unsupported format character '");sb_putc(&m,c);sb_puts(&m,"' (0x");
+  unsigned int v=(unsigned char)c;char h[8];int n=0;do{unsigned int d=v&15;h[n++]=(char)(d<10?'0'+d:'a'+d-10);v>>=4;}while(v);
+  while(n)sb_putc(&m,h[--n]);sb_puts(&m,") at index ");sb_put_int(&m,index);piton_raise_set("ValueError",m.d);
+}
+static int piton_pct_next_arg(PitonSeq*seq,PitonSlot single,long argc,long*index,PitonSlot*out){
+  if(*index>=argc){piton_raise_set("TypeError","not enough arguments for format string");return 0;}
+  *out=seq?seq->items[(*index)++]:single;return 1;
+}
+static int piton_pct_star_int(PitonSlot v,long*out){
+  if(v.kind==PK_INT||v.kind==PK_BOOL){*out=v.bits;return 1;}
+  if(v.kind==PK_BIGINT){piton_raise_set("OverflowError","Python int too large to convert to C long");return 0;}
+  piton_raise_set("TypeError","* wants int");return 0;
+}
+static long piton_str_percent_runtime(PitonSlot fmt,PitonSlot rhs){
+  if(fmt.kind!=PK_STR){piton_raise_set("TypeError","unsupported operand type(s) for %: format must be a string");return 0;}
+  const char*t=(const char*)fmt.bits;if(!t)t="";
+  PitonSeq*seq=0;PitonSlot single=rhs;long argc=1,index=0;PitonDict*map=0;
+  if(rhs.kind==PK_TUPLE){seq=(PitonSeq*)rhs.bits;argc=seq?seq->length:0;}
+  PitonStrBuf out;sb_init(&out);long ti=0,tl=(long)piton_strlen(t);
+  while(ti<tl){if(t[ti]!='%'){sb_putc(&out,t[ti++]);continue;}
+    long pct=ti++;if(ti>=tl){piton_raise_set("ValueError","incomplete format");return 0;}
+    if(t[ti]=='%'){sb_putc(&out,'%');++ti;continue;}
+    int mapped=0;const char*key=0;long keylen=0;
+    if(t[ti]=='('){long start=++ti;while(ti<tl&&t[ti]!=')')++ti;
+      if(ti>=tl){piton_raise_set("ValueError","incomplete format key");return 0;}
+      mapped=1;keylen=ti-start;char*k=(char*)piton_alloc((usize)keylen+1);piton_memcpy(k,t+start,(usize)keylen);k[keylen]=0;key=k;++ti;
+      if(rhs.kind!=PK_DICT){piton_raise_set("TypeError","format requires a mapping");return 0;}map=(PitonDict*)rhs.bits;
+    }
+    long flags=0;while(ti<tl){char c=t[ti];if(c=='-')flags|=1;else if(c=='0')flags|=2;else if(c=='#')flags|=4;else if(c=='+')flags|=8;else if(c==' ')flags|=16;else break;++ti;}
+    long width=-1,precision=-1;int width_star=0,precision_star=0;
+    if(ti<tl&&t[ti]=='*'){width_star=1;++ti;}else while(ti<tl&&t[ti]>='0'&&t[ti]<='9'){int d=t[ti++]-'0';if(width>(0x7FFFFFFFFFFFFFFFL-d)/10){piton_raise_set("OverflowError","width too big");return 0;}width=width*10+d;}
+    if(ti<tl&&t[ti]=='.'){++ti;precision=0;if(ti<tl&&t[ti]=='*'){precision_star=1;precision=-1;++ti;}else while(ti<tl&&t[ti]>='0'&&t[ti]<='9'){int d=t[ti++]-'0';if(precision>(0x7FFFFFFFFFFFFFFFL-d)/10){piton_raise_set("OverflowError","precision too big");return 0;}precision=precision*10+d;}}
+    if(ti>=tl){piton_raise_set("ValueError","incomplete format");return 0;}
+    char spec=t[ti++];
+    if(spec=='h'||spec=='l'||spec=='L'){piton_pct_value_error(spec,ti-1);return 0;}
+    if(spec=='%'){
+      if(width_star||precision_star){piton_raise_set("TypeError","not enough arguments for format string");return 0;}
+      long v=piton_pct_pad_text("%",width,precision,(flags&1)!=0);sb_puts(&out,(const char*)v);continue;
+    }
+    if(!(spec=='s'||spec=='r'||spec=='a'||spec=='c'||spec=='d'||spec=='i'||spec=='u'||spec=='o'||spec=='x'||spec=='X'||spec=='e'||spec=='E'||spec=='f'||spec=='F'||spec=='g'||spec=='G')){piton_pct_value_error(spec,ti-1);return 0;}
+    PitonSlot v={0,PK_NONE};long w=width,pr=precision;
+    if(width_star){if(mapped){piton_raise_set("TypeError","not enough arguments for format string");return 0;}PitonSlot ws;if(!piton_pct_next_arg(seq,single,argc,&index,&ws))return 0;if(!piton_pct_star_int(ws,&w))return 0;if(w<0){flags|=1;if(w==(-0x7FFFFFFFFFFFFFFFL-1)){piton_raise_set("OverflowError","width too big");return 0;}w=-w;}}
+    if(precision_star){if(mapped){piton_raise_set("TypeError","not enough arguments for format string");return 0;}PitonSlot ps;if(!piton_pct_next_arg(seq,single,argc,&index,&ps))return 0;if(!piton_pct_star_int(ps,&pr))return 0;if(pr<0)pr=0;}
+    if(mapped){int found=0;PitonSlot k={(long)key,PK_STR};if(map)for(long j=0;j<map->length;++j)if(piton_slot_eq(map->items[j].key,k)){v=map->items[j].value;found=1;break;}
+      if(!found){piton_raise_set("KeyError",(const char*)piton_str_quote(key));return 0;}}
+    else if(!piton_pct_next_arg(seq,single,argc,&index,&v))return 0;
+    const char*base="";int numeric=0,intconv=(spec=='d'||spec=='i'||spec=='u'||spec=='o'||spec=='x'||spec=='X');
+    if(spec=='s'){
+      if(v.kind==PK_COMPLEX)base=(const char*)piton_complex_str(v.bits);
+      else if(v.kind==PK_BYTES||v.kind==PK_BYTEARRAY)base=(const char*)piton_slot_repr(v.bits,v.kind);
+      else base=(const char*)piton_str_of_slot_value(v);
+    }else if(spec=='r')base=(const char*)piton_slot_repr(v.bits,v.kind);
+    else if(spec=='a')base=(const char*)piton_slot_repr_ascii(v.bits,v.kind);
+    else if(spec=='c'){
+      if(pr>=0){piton_raise_set("ValueError","precision not allowed in %c format");return 0;}
+      if(v.kind==PK_INT||v.kind==PK_BOOL)base=(const char*)piton_percent_chr(v.bits);
+      else if(v.kind==PK_STR){const char*vs=(const char*)v.bits;usize nb=piton_strlen(vs);usize first=piton_utf8_chars(vs,1);if(nb==0||first!=nb){piton_raise_set("TypeError","%c requires int or char");return 0;}base=vs;}
+      else{piton_raise_set("TypeError","%c requires int or char");return 0;}
+      if(piton_exc_flag)return 0;
+    }else if(intconv){
+      if(v.kind==PK_INT||v.kind==PK_BOOL)base=(const char*)piton_str_from_int_base(v.bits,(spec=='x'||spec=='X')?16:((spec=='o')?8:10),spec=='X');
+      else if(v.kind==PK_BIGINT&&spec=='d')base=(const char*)piton_slot_repr(v.bits,PK_BIGINT);
+      else if(v.kind==PK_FLOAT&&(spec=='d'||spec=='i'||spec=='u')){double x=piton_bits_double(v.bits);base=(const char*)piton_str_from_int((long)x);}
+      else{PitonStrBuf m;sb_init(&m);sb_putc(&m,'%');sb_putc(&m,spec);sb_puts(&m,spec=='d'||spec=='i'||spec=='u'?" format: a real number is required, not ":" format: an integer is required, not ");sb_puts(&m,js_type_name(v));piton_raise_set("TypeError",m.d);return 0;}
+      if((flags&4)&&(spec=='x'||spec=='X'||spec=='o')){const char*prefix=spec=='o'?"0o":(spec=='X'?"0X":"0x");const char*digits=base;if(*digits=='-')++digits;char*r=(char*)piton_alloc(piton_strlen(base)+3);usize off=0;if(base[0]=='-')r[off++]=base[0];piton_memcpy(r+off,prefix,2);off+=2;piton_memcpy(r+off,digits,piton_strlen(digits)+1);base=r;}
+      numeric=1;
+    }else{
+      if(v.kind!=PK_FLOAT&&v.kind!=PK_INT&&v.kind!=PK_BOOL){PitonStrBuf m;sb_init(&m);sb_puts(&m,"must be real number, not ");sb_puts(&m,js_type_name(v));piton_raise_set("TypeError",m.d);return 0;}
+      long bits=v.kind==PK_FLOAT?v.bits:piton_double_bits((double)v.bits);int fp=pr<0?6:(int)pr;
+      if(pr>64){piton_raise_set("OverflowError","precision too big");return 0;}
+      if(spec=='f'||spec=='F')base=(const char*)piton_float_fmt_fixed(bits,fp);
+      else if(spec=='e'||spec=='E')base=(const char*)piton_float_fmt_exp(bits,fp,spec=='E');
+      else base=(const char*)piton_pct_float_general(bits,pr,spec=='G',flags&4);
+      if((flags&4)&&pr==0&&(spec=='f'||spec=='F'||spec=='e'||spec=='E')){const char*e=base;while(*e&&*e!='e'&&*e!='E')++e;if(e==base||e[-1]!='.') {usize head=(usize)(e-base),tail=piton_strlen(e);char*r=(char*)piton_alloc(head+tail+2);piton_memcpy(r,base,head);r[head]='.';piton_memcpy(r+head+1,e,tail+1);base=r;}}
+      numeric=1;pr=-1;
+    }
+    if(piton_exc_flag)return 0;
+    if(numeric){long formatted=piton_pct_pad_number(base,w,(intconv?pr:-1),flags);sb_puts(&out,(const char*)formatted);}
+    else{long formatted=piton_pct_pad_text(base,w,pr,(flags&1)!=0);sb_puts(&out,(const char*)formatted);}
+  }
+  if(!map&&index<argc){piton_raise_set("TypeError","not all arguments converted during string formatting");return 0;}
+  return(long)out.d;
+}
+
 /* ASCII_V1: ascii() = repr() escapando no-ASCII. */
 static void piton_str_repr_ascii_into(PitonStrBuf*b,const char*s){
   int has_sq=0,has_dq=0;
@@ -8135,6 +8275,7 @@ class LinuxCEmitter:
         self._dict_val_types: dict[str, str] = {}
         self._dict_empty: dict[str, bool] = {}
         self._dict_elems: dict[str, dict[str, tuple[str, str]]] = {}
+        self._percent_runtime_dicts: set[str] = set()
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
         self._gen_counter = 0
@@ -8836,6 +8977,7 @@ class LinuxCEmitter:
             self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if k in self._shared_globals}
             self._chr_results = {k for k in getattr(self, '_chr_results', set()) if k in self._shared_globals}
             self._dict_elems = {k: v for k, v in self._dict_elems.items() if k in self._shared_globals}
+            self._percent_runtime_dicts = {k for k in self._percent_runtime_dicts if k in self._shared_globals}
             self._closure_origin = {k: v for k, v in self._closure_origin.items() if k in self._shared_globals}
             self._nested_tuple_lists = {k: v for k, v in self._nested_tuple_lists.items() if k in self._shared_globals}
             self._tuple_list_elems = {k: v for k, v in self._tuple_list_elems.items() if k in self._shared_globals}
@@ -8853,6 +8995,7 @@ class LinuxCEmitter:
             self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if not k.startswith('%')}
             self._chr_results = {k for k in getattr(self, '_chr_results', set()) if not k.startswith('%')}
             self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
+            self._percent_runtime_dicts = {k for k in self._percent_runtime_dicts if not k.startswith('%')}
             self._closure_origin = {k: v for k, v in self._closure_origin.items() if not k.startswith('%')}
             self._nested_tuple_lists = {k: v for k, v in self._nested_tuple_lists.items() if not k.startswith('%')}
             self._tuple_list_elems = {k: v for k, v in self._tuple_list_elems.items() if not k.startswith('%')}
@@ -9057,6 +9200,7 @@ class LinuxCEmitter:
             self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if k in self._shared_globals}
             self._chr_results = {k for k in getattr(self, '_chr_results', set()) if k in self._shared_globals}
             self._dict_elems = {k: v for k, v in self._dict_elems.items() if k in self._shared_globals}
+            self._percent_runtime_dicts = {k for k in self._percent_runtime_dicts if k in self._shared_globals}
             self._closure_origin = {k: v for k, v in self._closure_origin.items() if k in self._shared_globals}
             self._nested_tuple_lists = {k: v for k, v in self._nested_tuple_lists.items() if k in self._shared_globals}
             self._tuple_list_elems = {k: v for k, v in self._tuple_list_elems.items() if k in self._shared_globals}
@@ -9074,6 +9218,7 @@ class LinuxCEmitter:
             self._dict_val_types = {k: v for k, v in self._dict_val_types.items() if not k.startswith('%')}
             self._chr_results = {k for k in getattr(self, '_chr_results', set()) if not k.startswith('%')}
             self._dict_elems = {k: v for k, v in self._dict_elems.items() if not k.startswith('%')}
+            self._percent_runtime_dicts = {k for k in self._percent_runtime_dicts if not k.startswith('%')}
             self._closure_origin = {k: v for k, v in self._closure_origin.items() if not k.startswith('%')}
             self._nested_tuple_lists = {k: v for k, v in self._nested_tuple_lists.items() if not k.startswith('%')}
             self._tuple_list_elems = {k: v for k, v in self._tuple_list_elems.items() if not k.startswith('%')}
@@ -9378,6 +9523,15 @@ class LinuxCEmitter:
         }.get(value_type or "int", "PK_OBJECT")
 
     def _slot(self, value: Any, types: dict[str, str]) -> str:
+        # Literal scalar values have an exact runtime kind. In particular,
+        # float bits are opaque longs and cannot be recovered by the generic
+        # pointer-based guesser when a runtime consumer receives a tuple.
+        if isinstance(value, bool):
+            return f"piton_slot({int(value)},PK_BOOL)"
+        if isinstance(value, float):
+            return f"piton_slot(piton_double_bits({_float_c_literal(value)}),PK_FLOAT)"
+        if value is None:
+            return "piton_slot(PITON_NONE,PK_NONE)"
         vtype = types.get(value)
         if vtype == "slot":
             # SLOT_DEREF_V1: la caja se desreferencia para obtener su etiqueta real.
@@ -9489,10 +9643,8 @@ class LinuxCEmitter:
         name is None for positional fields, the mapping key for %(name)
         fields. conv keeps the original conversion character, including i/u.
         flags is a bitmask (1 = '-', 2 = '0'), width/prec are ints or -1.
-        Only static widths/precisions are accepted (* needs runtime values).
-        '+', ' ', '#' flags, length modifiers and float conversions fail
-        closed at BUILD time — the template is always a literal here, so
-        every rejection is static. Literal braces pass through escaped
+        Static widths/precisions are retained for the compile-time path;
+        '*' fields are marked for the runtime %-formatter. Literal braces pass through escaped
         (CPython %-formatting leaves braces alone; the {} engine would
         otherwise eat them).
         """
@@ -9550,8 +9702,6 @@ class LinuxCEmitter:
                             j += 1
                         prec = int(template[i:j]) if j > i else 0
                         i = j
-                if width == "*" or prec == "*":
-                    raise NativeBuildError("str % dynamic width and precision are not supported")
                 if i < n and template[i] in "hlL":
                     raise NativeBuildError("str % length modifiers are not supported")
                 if i >= n:
@@ -14772,6 +14922,8 @@ class LinuxCEmitter:
                 self._tuple_elems[result] = self._tuple_elems[source]
             if source in self._dict_elems:
                 self._dict_elems[result] = self._dict_elems[source]
+            if source in self._percent_runtime_dicts:
+                self._percent_runtime_dicts.add(result)
             if source in self._identity_templates:
                 self._identity_templates[result] = self._identity_templates[source]
             if source in self._fn_consts and isinstance(self._fn_consts[source], str):
@@ -14924,6 +15076,8 @@ class LinuxCEmitter:
                     self._tuple_elems[result] = self._tuple_elems[source]
                 if source in self._dict_elems:
                     self._dict_elems[result] = self._dict_elems[source]
+                if source in self._percent_runtime_dicts:
+                    self._percent_runtime_dicts.add(result)
                 if source in self._identity_templates:
                     self._identity_templates[result] = self._identity_templates[source]
                 if source in self._fn_consts and isinstance(self._fn_consts[source], str):
@@ -14966,6 +15120,8 @@ class LinuxCEmitter:
                     self._tuple_elems[result] = self._tuple_elems[source]
                 if source in self._dict_elems:
                     self._dict_elems[result] = self._dict_elems[source]
+                if source in self._percent_runtime_dicts:
+                    self._percent_runtime_dicts.add(result)
                 if source in self._identity_templates:
                     self._identity_templates[result] = self._identity_templates[source]
                 if source in self._fn_consts and isinstance(self._fn_consts[source], str):
@@ -15204,6 +15360,8 @@ class LinuxCEmitter:
                 self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
             if args[1] in self._dict_empty:
                 self._dict_empty[args[0]] = True
+            if args[1] in self._percent_runtime_dicts:
+                self._percent_runtime_dicts.add(args[0])
             # DICT_KEY_TYPE_V1: the key type follows the value into the local,
             # so iterating `d` after `d = {1: 'a'}` still knows it yields ints.
             if args[1] in self._dict_key_types:
@@ -15220,6 +15378,8 @@ class LinuxCEmitter:
                 self._dict_val_types[args[0]] = self._dict_val_types[args[1]]
             if args[1] in self._dict_empty:
                 self._dict_empty[args[0]] = True
+            if args[1] in self._percent_runtime_dicts:
+                self._percent_runtime_dicts.add(args[0])
             if isinstance(args[0], str) and args[0].startswith("@boolh_"):
                 # BOOL_SLOT_V1: CPython `y`/`o` return the OPERAND, so both
                 # arms may be different types. Same-typed arms keep the plain
@@ -15689,57 +15849,76 @@ class LinuxCEmitter:
                         # llamada con un literal — la plantilla es ese literal.
                         template = self._identity_templates.get(left) or self._identity_templates.get(aliases.get(left, left))
                     if not isinstance(template, str):
-                        # PCT_DYNAMIC_TEMPLATE_V1: plantilla no literal
-                        # (variable, atributo, etc.). Usar piton_str_percent_dyn
-                        # en runtime: solo valido si la plantilla tiene solo %s
-                        # y el argumento (o primer elemento de tupla) es str;
-                        # si no, TypeError claro en runtime.
-                        _right_val = self._value(right)
-                        _right_type = types.get(right, "")
-                        if _right_type == "tuple":
-                            # PCT_DYNAMIC_N_V1: tupla de N elementos con
-                            # plantilla dinamica -> helper multi-argumento
-                            # (los %s/%d/%r se sustituyen en orden). Los
-                            # elementos deben ser conocidos estaticamente:
-                            # sin ellos no se puede saber cuantos argumentos
-                            # hay, y usar solo el primero divergiria en
-                            # silencio.
-                            _known = self._tuple_elems.get(right)
-                            if _known is None:
-                                _known = self._tuple_elems.get(aliases.get(right, right))
-                            if _known and len(_known) > 1:
-                                _args_c = ",".join(
-                                    f"(long){self._value(item[0])}" for item in _known
-                                )
-                                out.append(
-                                    f"    {{long _pa[]={{{_args_c}}};"
-                                    f" {_name(result)}=(long)piton_str_percent_dyn_n("
-                                    f"(const char*){self._value(left)},{len(_known)},_pa);}}"
-                                )
-                                types[result] = "str"
-                                return out
-                            if not _known:
-                                raise NativeBuildError(
-                                    "Linux str % formatting: tuple args must be statically known "
-                                    "when the template is dynamic"
-                                )
-                            # Tupla de un elemento: extraer el primero en runtime.
-                            _right_val = f"piton_seq_get((PitonSeq*){_right_val},0).bits"
-                            _right_type = "str"
-                        if types.get(left) in {"str", ""}:
-                            out.append(f"    {{const char*_tmpl=(const char*){self._value(left)};")
-                            out.append(f"    const char*_arg=(const char*)piton_str_of_value({_right_val});")
-                            out.append(f"    if(!_tmpl||!_arg){{piton_raise_set(\"TypeError\",\"%s argument must be str\");piton_report_unhandled();piton_exit(1);}}")
-                            out.append(f"    {_name(result)}=(long)piton_str_percent_dyn((long)_tmpl,(long)_arg);")
-                            out.append("    }")
-                            types[result] = "str"
-                            return out
-                        raise NativeBuildError("Linux str % formatting requires a literal template")
+                        # PCT_RUNTIME_V1: el formato y la aridad de los
+                        # argumentos se evalúan en runtime, igual que en
+                        # CPython. Las etiquetas de PitonSlot conservan los
+                        # tipos para %s/%d/%c y para mensajes de error.
+                        out.append(
+                            f"    {_name(result)}=piton_str_percent_runtime("
+                            f"{self._slot(left, types)},{self._slot(right, types)});"
+                        )
+                        self._emit_exc_check(out, function, handler_label)
+                        types[result] = "str"
+                        return out
                     translated, fields = self._parse_percent_template(template)
                     has_map = any(field[0] is not None for field in fields)
                     has_pos = any(field[0] is None for field in fields)
+                    has_star = any(field[3] == "*" or field[4] == "*" for field in fields)
                     if has_map and has_pos:
                         raise NativeBuildError("Linux str % formatting cannot mix positional and mapping conversions")
+
+                    _map_record = None
+                    _map_runtime = False
+                    if has_map:
+                        if types.get(right) != "dict":
+                            raise NativeBuildError("Linux str % mapping requires a literal dict")
+                        _map_record = self._dict_elems.get(right)
+                        if _map_record is None:
+                            _map_record = self._dict_elems.get(aliases.get(right, right))
+                        _map_runtime = right in self._percent_runtime_dicts or aliases.get(right) in self._percent_runtime_dicts
+                        if _map_record is None and not _map_runtime:
+                            raise NativeBuildError("Linux str % mapping requires literal string keys")
+                        if _map_record is not None and not _map_runtime and any(name not in _map_record for name, *_rest in fields):
+                            raise NativeBuildError(f"Linux str % mapping key {next(name for name, *_rest in fields if name not in _map_record)!r} is not present")
+
+                    _runtime_percent = has_star or (has_map and _map_runtime)
+                    if has_star and right_type == "tuple":
+                        _star_shape = self._tuple_elems.get(right)
+                        if _star_shape is None:
+                            _star_shape = self._tuple_elems.get(aliases.get(right, right))
+                        if _star_shape is not None:
+                            _star_positions: list[int] = []
+                            _arg_pos = 0
+                            for _field in fields:
+                                if _field[3] == "*":
+                                    _star_positions.append(_arg_pos)
+                                    _arg_pos += 1
+                                if _field[4] == "*":
+                                    _star_positions.append(_arg_pos)
+                                    _arg_pos += 1
+                                _arg_pos += 1
+                            def _star_is_static_int(pos: int) -> bool:
+                                if pos >= len(_star_shape):
+                                    return False
+                                _star_value = _star_shape[pos][0]
+                                if isinstance(_star_value, str) and _star_value.startswith("%"):
+                                    if _star_value not in self._fn_consts:
+                                        return False
+                                    _star_value = self._fn_consts[_star_value]
+                                return isinstance(_star_value, int) and not isinstance(_star_value, bool)
+
+                            if _star_positions and all(_star_is_static_int(pos) for pos in _star_positions):
+                                raise NativeBuildError("str % dynamic width and precision are not supported")
+                    if _runtime_percent:
+                        # Dynamic * operands and mappings assembled at
+                        # runtime are evaluated by the runtime formatter.
+                        out.append(
+                            f"    {_name(result)}=piton_str_percent_runtime("
+                            f"{self._slot(left, types)},{self._slot(right, types)});"
+                        )
+                        self._emit_exc_check(out, function, handler_label)
+                        types[result] = "str"
+                        return out
 
                     def _resolve_etype(item, recorded):
                         if isinstance(item, str) and item.startswith("%"):
@@ -15762,16 +15941,7 @@ class LinuxCEmitter:
                     raw_operands: list[str] = []
                     raw_etypes: list[str] = []
                     if has_map:
-                        if types.get(right) != "dict":
-                            raise NativeBuildError("Linux str % mapping requires a literal dict")
-                        record = self._dict_elems.get(right)
-                        if record is None:
-                            record = self._dict_elems.get(aliases.get(right, right))
-                        if record is None:
-                            raise NativeBuildError("Linux str % mapping requires literal string keys")
-                        for name, *_rest in fields:
-                            if name not in record:
-                                raise NativeBuildError(f"Linux str % mapping key {name!r} is not present")
+                        record = _map_record
                         dict_val = self._value(right)
                         if types.get(right) == "slot":
                             dict_ptr = f"((PitonDict*)(((PitonSlot*){dict_val})->bits))"
@@ -21421,6 +21591,7 @@ class LinuxCEmitter:
                     # DICT_VAL_TYPE_V1: an empty literal records no value
                     # kind; the flag lets dict.get fallback to the default.
                     self._dict_empty[result] = True
+                    self._percent_runtime_dicts.add(result)
                 out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
                 for index, (key, value) in enumerate(items):
                     key_is_str = isinstance(key, str) and not key.startswith("%")
