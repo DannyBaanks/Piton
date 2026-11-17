@@ -35,6 +35,10 @@ _FLOAT_REPR_C = Path(__file__).with_name("float_repr.h").read_text(encoding="utf
 
 _RICH_FREESTANDING_C = r"""
 #include <stdint.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
+#include <zlib.h>
 enum{PK_NONE,PK_BOOL,PK_INT,PK_FLOAT,PK_STR,PK_LIST,PK_TUPLE,PK_DICT,PK_SET,PK_OBJECT,PK_BIGINT,PK_RANGE,PK_BYTES,PK_BYTEARRAY,PK_COMPLEX,PK_FROZENSET,PK_SLICE,PK_MEMORYVIEW,PK_NOTIMPLEMENTED};
 typedef struct{long bits;int kind;}PitonSlot;
 /* COMPLEX_V1: número complejo (re + im j). Vive en la arena (bump allocator,
@@ -1371,23 +1375,27 @@ static const unsigned char* zl_bytes(PitonSlot d,long*n,const char*fname){
   PitonStrBuf m;sb_init(&m);sb_puts(&m,"a bytes-like object is required, not '");sb_puts(&m,js_type_name(d));sb_putc(&m,'\'');
   piton_raise_set("TypeError",m.d);return 0;
 }
+static long zl_seed(PitonSlot v,unsigned long fallback,const char*name){
+  if(v.kind==PK_NONE)return(long)fallback;
+  if(v.kind!=PK_INT&&v.kind!=PK_BOOL){
+    PitonStrBuf m;sb_init(&m);sb_puts(&m,name);sb_puts(&m,"() argument 2 must be an integer");
+    piton_raise_set("TypeError",m.d);return 0;
+  }
+  return(long)((unsigned long)v.bits&0xFFFFFFFFUL);
+}
 static long piton_zlib_crc32(PitonSlot d,PitonSlot v){
-  static unsigned long tab[256];static int init=0;
   long n=0;const unsigned char*p=zl_bytes(d,&n,"crc32");
-  if(!p&&n==0&&!(d.kind==PK_BYTES||d.kind==PK_BYTEARRAY))return 0;
-  if(!init){for(unsigned long i=0;i<256;++i){unsigned long c=i;for(int k=0;k<8;++k)c=(c&1)?(0xEDB88320UL^(c>>1)):(c>>1);tab[i]=c;}init=1;}
-  unsigned long c=(v.kind==PK_NONE?0UL:(unsigned long)v.bits)&0xFFFFFFFFUL;
-  c^=0xFFFFFFFFUL;
-  for(long i=0;i<n;++i)c=tab[(c^p[i])&0xFFUL]^(c>>8);
-  return (long)(c^0xFFFFFFFFUL);
+  if(piton_exc_flag_get())return 0;
+  unsigned long c=(unsigned long)zl_seed(v,0UL,"crc32");if(piton_exc_flag_get())return 0;
+  long off=0;while(off<n){uInt chunk=(uInt)((n-off)>(long)UINT_MAX?UINT_MAX:(n-off));c=crc32((uLong)c,p+off,chunk);off+=(long)chunk;}
+  return(long)(c&0xFFFFFFFFUL);
 }
 static long piton_zlib_adler32(PitonSlot d,PitonSlot v){
   long n=0;const unsigned char*p=zl_bytes(d,&n,"adler32");
-  if(!p&&n==0&&!(d.kind==PK_BYTES||d.kind==PK_BYTEARRAY))return 0;
-  unsigned long val=v.kind==PK_NONE?1UL:((unsigned long)v.bits&0xFFFFFFFFUL);
-  unsigned long a=val&0xFFFFUL,b=(val>>16)&0xFFFFUL;
-  for(long i=0;i<n;++i){a=(a+p[i])%65521UL;b=(b+a)%65521UL;}
-  return (long)((b<<16)|a);
+  if(piton_exc_flag_get())return 0;
+  unsigned long a=(unsigned long)zl_seed(v,1UL,"adler32");if(piton_exc_flag_get())return 0;
+  long off=0;while(off<n){uInt chunk=(uInt)((n-off)>(long)UINT_MAX?UINT_MAX:(n-off));a=adler32((uLong)a,p+off,chunk);off+=(long)chunk;}
+  return(long)(a&0xFFFFFFFFUL);
 }
 static long piton_os_getcwd(void){
   char*buf=(char*)piton_alloc(4096);long r;
@@ -6859,37 +6867,9 @@ static PitonBytes* piton_bytes_strip(void* raw,int mode){
     return piton_bytes_new(end-start,end>start?data+start:0);
 }
 
-/* ZLIB_DEFLATE_V1: RFC 1950 streams without libc/libz. Compression uses
-   standards-compliant stored blocks; decompression accepts stored, fixed,
-   and dynamic RFC 1951 blocks. */
-typedef struct{const unsigned char*data;long length;long pos;int bit;int bad;}PitonDeflateBits;
-typedef struct{int count[16];int length[288];unsigned short reversed[288];int n;}PitonDeflateHuff;
+/* ZLIB_DEFLATE_V2 uses the system zlib API for public compression,
+   decompression, CRC-32 and Adler-32 operations. */
 typedef struct{unsigned char*data;long length;long capacity;}PitonZlibOutput;
-static int piton_deflate_bits(PitonDeflateBits*b,int n,unsigned long*out){
-  unsigned long v=0;
-  for(int i=0;i<n;++i){if(b->pos>=b->length){b->bad=1;return 0;}
-    v|=(unsigned long)((b->data[b->pos]>>b->bit)&1)<<i;
-    if(++b->bit==8){b->bit=0;++b->pos;}}
-  *out=v;return 1;
-}
-static void piton_deflate_align(PitonDeflateBits*b){if(b->bit){b->bit=0;++b->pos;}}
-static unsigned short piton_deflate_reverse(unsigned int code,int n){unsigned short r=0;for(int i=0;i<n;++i){r=(unsigned short)((r<<1)|(code&1));code>>=1;}return r;}
-static int piton_deflate_huff_build(PitonDeflateHuff*h,const unsigned char*lengths,int n){
-  int next[16]={0},used=0,left=1;unsigned int code=0;
-  for(int i=0;i<16;++i)h->count[i]=0;
-  h->n=n;
-  for(int i=0;i<n;++i){int len=lengths[i];if(len<0||len>15)return 0;h->length[i]=len;if(len){++h->count[len];++used;}}
-  for(int len=1;len<=15;++len){left=(left<<1)-h->count[len];if(left<0)return 0;}
-  for(int len=1;len<=15;++len){code=(code+(unsigned int)h->count[len-1])<<1;next[len]=(int)code;}
-  for(int i=0;i<n;++i){int len=h->length[i];h->reversed[i]=len?piton_deflate_reverse((unsigned int)next[len]++,len):0;}
-  return used>0||n>0;
-}
-static int piton_deflate_huff_symbol(PitonDeflateBits*b,const PitonDeflateHuff*h){
-  unsigned int code=0;
-  for(int len=1;len<=15;++len){unsigned long bit;if(!piton_deflate_bits(b,1,&bit))return -1;code|=(unsigned int)bit<<(len-1);
-    for(int sym=0;sym<h->n;++sym)if(h->length[sym]==len&&h->reversed[sym]==code)return sym;}
-  return -1;
-}
 static int piton_zlib_output_reserve(PitonZlibOutput*o,long extra){
   if(extra<0||extra>0x7fffffffffffffffL-o->length)return 0;
   long need=o->length+extra;if(need<=o->capacity)return 1;
@@ -6897,81 +6877,60 @@ static int piton_zlib_output_reserve(PitonZlibOutput*o,long extra){
   while(cap<need){if(cap>0x3fffffffffffffffL){cap=need;break;}cap*=2;}
   unsigned char*p=(unsigned char*)piton_alloc((usize)cap);if(o->length)piton_memcpy(p,o->data,(usize)o->length);o->data=p;o->capacity=cap;return 1;
 }
-static int piton_zlib_output_byte(PitonZlibOutput*o,unsigned char c){if(!piton_zlib_output_reserve(o,1))return 0;o->data[o->length++]=c;return 1;}
-static unsigned long piton_zlib_adler_bytes(const unsigned char*p,long n){
-  unsigned long a=1,b=0;for(long i=0;i<n;++i){a=(a+p[i])%65521UL;b=(b+a)%65521UL;}return(b<<16)|a;
+/* libz's static archive needs a few libc symbols. The generated executable is
+   freestanding, so back them with PITON's heap and byte helpers. */
+void*malloc(size_t n){return piton_heap_alloc((usize)n);}
+void free(void*p){if(p)piton_heap_free(p);}
+void*calloc(size_t n,size_t size){if(size&&n>SIZE_MAX/size)return 0;return piton_heap_alloc((usize)(n*size));}
+void*memcpy(void*d,const void*s,size_t n){unsigned char*to=d;const unsigned char*from=s;for(size_t i=0;i<n;++i)to[i]=from[i];return d;}
+void*memmove(void*d,const void*s,size_t n){unsigned char*to=d;const unsigned char*from=s;if(to==from||!n)return d;if((uintptr_t)to<(uintptr_t)from){for(size_t i=0;i<n;++i)to[i]=from[i];}else{for(size_t i=n;i>0;--i)to[i-1]=from[i-1];}return d;}
+void*memset(void*d,int c,size_t n){unsigned char*to=d;for(size_t i=0;i<n;++i)to[i]=(unsigned char)c;return d;}
+int memcmp(const void*a,const void*b,size_t n){const unsigned char*x=a,*y=b;for(size_t i=0;i<n;++i)if(x[i]!=y[i])return x[i]<y[i]?-1:1;return 0;}
+void*memchr(const void*s,int c,size_t n){const unsigned char*p=s;for(size_t i=0;i<n;++i)if(p[i]==(unsigned char)c)return(void*)(p+i);return 0;}
+size_t strlen(const char*s){size_t n=0;while(s[n])++n;return n;}
+__attribute__((noreturn)) void __stack_chk_fail(void){piton_write(2,"libz stack check failed\n",24);piton_exit(1);}
+static unsigned long piton_zlib_tls[8] __attribute__((aligned(16)));
+static int piton_zlib_tls_ready=0;
+static int piton_zlib_init_tls(void){
+  if(piton_zlib_tls_ready)return 1;
+  piton_zlib_tls[5]=0xA17E5A1B9C2D3E4FUL;
+  long rc;__asm__ volatile("syscall":"=a"(rc):"a"(158L),"D"(0x1002L),"S"(piton_zlib_tls):"rcx","r11","memory");
+  if(rc<0)return 0;piton_zlib_tls_ready=1;return 1;
 }
-static int piton_deflate_dynamic(PitonDeflateBits*b,PitonDeflateHuff*lit,PitonDeflateHuff*dist){
-  static const unsigned char order[19]={16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15};
-  unsigned long x;int hlit,hdist,hclen;unsigned char cl[19]={0},all[318]={0};PitonDeflateHuff code;
-  if(!piton_deflate_bits(b,5,&x))return 0;hlit=(int)x+257;
-  if(!piton_deflate_bits(b,5,&x))return 0;hdist=(int)x+1;
-  if(!piton_deflate_bits(b,4,&x))return 0;hclen=(int)x+4;
-  if(hlit>286||hdist>32)return 0;
-  for(int i=0;i<hclen;++i){if(!piton_deflate_bits(b,3,&x))return 0;cl[order[i]]=(unsigned char)x;}
-  if(!piton_deflate_huff_build(&code,cl,19))return 0;
-  int total=hlit+hdist,at=0;
-  while(at<total){int s=piton_deflate_huff_symbol(b,&code);if(s<0)return 0;
-    if(s<=15){all[at++]=(unsigned char)s;continue;}
-    int count=0,value=0;if(s==16){if(at==0||!piton_deflate_bits(b,2,&x))return 0;count=(int)x+3;value=all[at-1];}
-    else if(s==17){if(!piton_deflate_bits(b,3,&x))return 0;count=(int)x+3;}
-    else if(s==18){if(!piton_deflate_bits(b,7,&x))return 0;count=(int)x+11;}
-    else return 0;
-    if(count>total-at)return 0;while(count--)all[at++]=(unsigned char)value;
-  }
-  if(all[256]==0)return 0;
-  return piton_deflate_huff_build(lit,all,hlit)&&piton_deflate_huff_build(dist,all+hlit,hdist);
-}
-static int piton_deflate_codes(PitonDeflateBits*b,const PitonDeflateHuff*lit,const PitonDeflateHuff*dist,PitonZlibOutput*out){
-  static const unsigned short lbase[29]={3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258};
-  static const unsigned char lextra[29]={0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0};
-  static const unsigned short dbase[30]={1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577};
-  static const unsigned char dextra[30]={0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13};
-  for(;;){int s=piton_deflate_huff_symbol(b,lit);if(s<0)return 0;if(s<256){if(!piton_zlib_output_byte(out,(unsigned char)s))return 0;continue;}if(s==256)return 1;if(s<257||s>285)return 0;
-    int li=s-257;unsigned long x=0;long count=lbase[li];if(lextra[li]){if(!piton_deflate_bits(b,lextra[li],&x))return 0;count+=(long)x;}
-    int ds=piton_deflate_huff_symbol(b,dist);if(ds<0||ds>=30)return 0;long back=dbase[ds];if(dextra[ds]){if(!piton_deflate_bits(b,dextra[ds],&x))return 0;back+=(long)x;}
-    if(back<=0||back>out->length||!piton_zlib_output_reserve(out,count))return 0;
-    while(count--){out->data[out->length]=out->data[out->length-back];++out->length;}
-  }
-}
-static long piton_zlib_compress(PitonSlot d,PitonSlot level){
+static long piton_zlib_compress(PitonSlot d,PitonSlot level,PitonSlot wbits){
   long n=0;const unsigned char*p=zl_bytes(d,&n,"compress");if(piton_exc_flag_get())return 0;
   long lev=level.kind==PK_BOOL?(level.bits?1:0):level.bits;
   if(level.kind!=PK_INT&&level.kind!=PK_BOOL){piton_raise_set("TypeError","level must be an integer");return 0;}
   if(lev < -1 || lev > 9){piton_raise_set("ValueError","level must be between -1 and 9");return 0;}
-  long blocks=n?((n+65534)/65535):1;
-  if(n>0x7fffffffffffffffL-2-4-blocks*5){piton_raise_set("OverflowError","compressed data is too large");return 0;}
-  long size=2+n+blocks*5+4;unsigned char*out=(unsigned char*)piton_alloc((usize)size);long at=0,off=0;
-  out[at++]=0x78;out[at++]=0x01;
-  do{long left=n-off;unsigned int len=(unsigned int)(left>65535?65535:left);int final=(off+(long)len==n);
-    out[at++]=(unsigned char)(final?1:0);out[at++]=(unsigned char)(len&255);out[at++]=(unsigned char)(len>>8);
-    unsigned int inv=(~len)&0xFFFFU;out[at++]=(unsigned char)(inv&255);out[at++]=(unsigned char)(inv>>8);
-    for(unsigned int i=0;i<len;++i)out[at++]=p[off+i];off+=(long)len;
-  }while(off<n);
-  unsigned long ad=piton_zlib_adler_bytes(p,n);out[at++]=(unsigned char)(ad>>24);out[at++]=(unsigned char)(ad>>16);out[at++]=(unsigned char)(ad>>8);out[at++]=(unsigned char)ad;
-  return(long)piton_bytes_new(at,out);
+  long wb=wbits.kind==PK_NONE?15:(wbits.kind==PK_BOOL?(wbits.bits?1:0):wbits.bits);
+  if(wbits.kind!=PK_NONE&&wbits.kind!=PK_INT&&wbits.kind!=PK_BOOL){piton_raise_set("TypeError","wbits must be an integer");return 0;}
+  if(wb!=15){piton_raise_set("ValueError","native zlib.compress supports only wbits=15");return 0;}
+  if(!piton_zlib_init_tls()){piton_raise_set("RuntimeError","cannot initialize zlib runtime thread state");return 0;}
+  uLongf capacity=compressBound((uLong)n);if(capacity>(uLongf)0x7FFFFFFFFFFFFFFFL){piton_raise_set("OverflowError","compressed data is too large");return 0;}
+  unsigned char*out=(unsigned char*)piton_alloc((usize)capacity);uLongf out_len=capacity;
+  int rc=compress2(out,&out_len,p,(uLong)n,(int)lev);
+  if(rc!=Z_OK){piton_raise_set(rc==Z_MEM_ERROR?"MemoryError":"RuntimeError",rc==Z_BUF_ERROR?"compressed data is too large":"system zlib compression failed");return 0;}
+  return(long)piton_bytes_new((long)out_len,out);
 }
 static long piton_zlib_decompress(PitonSlot d){
   long n=0;const unsigned char*p=zl_bytes(d,&n,"decompress");if(piton_exc_flag_get())return 0;
-  if(!p||n<6){piton_raise_set("ValueError","invalid zlib stream");return 0;}
-  unsigned int cmf=p[0],flg=p[1];if((cmf&15)!=8||(cmf>>4)>7||((cmf<<8)|flg)%31|| (flg&32)){
-    piton_raise_set("ValueError","invalid zlib header");return 0;}
-  PitonDeflateBits b={p+2,n-6,0,0,0};PitonZlibOutput out={0,0,0};int final=0;
-  while(!final&&!b.bad){unsigned long x,kind;if(!piton_deflate_bits(&b,1,&x))break;final=(int)x;if(!piton_deflate_bits(&b,2,&kind))break;
-    if(kind==0){piton_deflate_align(&b);unsigned long len,nlen;if(!piton_deflate_bits(&b,16,&len)||!piton_deflate_bits(&b,16,&nlen)||((len^0xFFFFUL)&0xFFFFUL)!=nlen)break;
-      if(len>(unsigned long)(b.length-b.pos)||!piton_zlib_output_reserve(&out,(long)len))break;
-      if(len)piton_memcpy(out.data+out.length,b.data+b.pos,(usize)len);out.length+=(long)len;b.pos+=(long)len;
-    }else if(kind==1||kind==2){PitonDeflateHuff lit,dist;unsigned char ll[288],dd[32];
-      if(kind==1){for(int i=0;i<=143;++i)ll[i]=8;for(int i=144;i<=255;++i)ll[i]=9;for(int i=256;i<=279;++i)ll[i]=7;for(int i=280;i<288;++i)ll[i]=8;for(int i=0;i<32;++i)dd[i]=5;
-        if(!piton_deflate_huff_build(&lit,ll,288)||!piton_deflate_huff_build(&dist,dd,32))break;
-      }else if(!piton_deflate_dynamic(&b,&lit,&dist))break;
-      if(!piton_deflate_codes(&b,&lit,&dist,&out))break;
-    }else break;
+  if(!piton_zlib_init_tls()){piton_raise_set("RuntimeError","cannot initialize zlib runtime thread state");return 0;}
+  z_stream stream;piton_memzero(&stream,sizeof(stream));
+  int rc=inflateInit2(&stream,15);if(rc!=Z_OK){piton_raise_set("RuntimeError","system zlib initialization failed");return 0;}
+  PitonZlibOutput out={0,0,0};
+  stream.next_in=(Bytef*)p;stream.avail_in=(uInt)(n>(long)UINT_MAX?UINT_MAX:n);
+  for(;;){
+    if(!piton_zlib_output_reserve(&out,16384)){inflateEnd(&stream);piton_raise_set("MemoryError","decompressed data is too large");return 0;}
+    stream.next_out=(Bytef*)(out.data+out.length);long room=out.capacity-out.length;
+    stream.avail_out=(uInt)(room>(long)UINT_MAX?UINT_MAX:room);
+    uLong before_in=stream.total_in,before_out=stream.total_out;
+    rc=inflate(&stream,Z_NO_FLUSH);out.length=(long)stream.total_out;
+    if(rc==Z_STREAM_END)break;
+    if(rc!=Z_OK&&rc!=Z_BUF_ERROR){inflateEnd(&stream);piton_raise_set("ValueError","invalid zlib stream");return 0;}
+    if(stream.avail_in==0&&stream.total_in<(uLong)n){long left=n-(long)stream.total_in;stream.next_in=(Bytef*)(p+stream.total_in);stream.avail_in=(uInt)(left>(long)UINT_MAX?UINT_MAX:left);}
+    if(stream.total_in==before_in&&stream.total_out==before_out){inflateEnd(&stream);piton_raise_set("ValueError","invalid zlib stream");return 0;}
   }
-  if(!final||b.bad){piton_raise_set("ValueError","invalid DEFLATE block");return 0;}
-  unsigned long expected=((unsigned long)p[n-4]<<24)|((unsigned long)p[n-3]<<16)|((unsigned long)p[n-2]<<8)|(unsigned long)p[n-1];
-  if(piton_zlib_adler_bytes(out.data,out.length)!=expected){piton_raise_set("ValueError","invalid zlib checksum");return 0;}
-  return(long)piton_bytes_new(out.length,out.data);
+  inflateEnd(&stream);return(long)piton_bytes_new(out.length,out.data);
 }
 
 static void piton_bytes_print_body(void* raw, int is_bytearray){
@@ -24270,7 +24229,7 @@ class LinuxCEmitter:
             _cfn, _crt, _nmax = {
                 ("zlib", "crc32"): ("piton_zlib_crc32", "int", 2),
                 ("zlib", "adler32"): ("piton_zlib_adler32", "int", 2),
-                ("zlib", "compress"): ("piton_zlib_compress", "bytes", 2),
+                ("zlib", "compress"): ("piton_zlib_compress", "bytes", 3),
                 ("zlib", "decompress"): ("piton_zlib_decompress", "bytes", 1),
                 ("os", "getcwd"): ("piton_os_getcwd", "str", 0),
                 ("os", "system"): ("piton_os_system", "int", 1),
@@ -25744,18 +25703,23 @@ def _gcc_compile(c_path: Path, output_path: Path) -> None:
         cmd = [
             "gcc", "-std=c11", "-w", "-Wno-error", *_GCC_COMPAT_FLAGS, "-O2",
             "-ffreestanding", "-fno-stack-protector", "-fno-pie", "-no-pie",
-            "-nostdlib", "-static", str(c_path), "-o", str(output_path),
+            "-nostdlib", "-static", str(c_path), "-lz", "-o", str(output_path),
         ]
     else:
         cmd = [
             "wsl.exe", "gcc", "-std=c11", "-w", "-Wno-error", *_GCC_COMPAT_FLAGS,
             "-O2", "-ffreestanding", "-fno-stack-protector", "-fno-pie",
             "-no-pie", "-nostdlib", "-static",
-            windows_to_wsl_path(c_path), "-o", windows_to_wsl_path(output_path),
+            windows_to_wsl_path(c_path), "-lz", "-o", windows_to_wsl_path(output_path),
         ]
     completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if completed.returncode:
         detail = (completed.stderr or completed.stdout or "").strip()
+        if "zlib.h" in detail or "cannot find -lz" in detail:
+            raise NativeBuildError(
+                "system zlib development headers and library are required (zlib.h and -lz): "
+                + (detail or f"gcc exited {completed.returncode}")
+            )
         raise NativeBuildError(detail or f"gcc exited {completed.returncode}")
 
 

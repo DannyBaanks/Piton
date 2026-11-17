@@ -6593,8 +6593,12 @@ class MIRLowerer:
             if level is None:
                 level = builder.temp()
                 builder.emit("const", -1, result=level)
+            wbits = self._lower_expr(builder, values[2]) if values[2] is not None else None
+            if wbits is None:
+                wbits = builder.temp()
+                builder.emit("const", 15, result=wbits)
             res = builder.temp()
-            builder.emit("native_call", module, attr, data, level, _active_handler(builder), result=res)
+            builder.emit("native_call", module, attr, data, level, wbits, _active_handler(builder), result=res)
             return res
         if module == "statistics":
             # CPython accepts data= for every supported statistics function.
