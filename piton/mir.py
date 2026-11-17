@@ -1282,10 +1282,30 @@ class MIRLowerer:
                         raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
                     return f"{class_name}__{method.name}__{prop}", prop, method.name
 
-        unsupported_results = {
+        marker_decorators = {
             "abstractmethod", "contextmanager", "_sslcopydoc", "lru_cache",
-            "cache", "overload", "cached_property",
+            "cache", "overload",
         }
+
+        def is_legacy_marker(dec: HIRNode) -> bool:
+            name = getattr(dec, "name", None) or getattr(dec, "attr", None)
+            if name not in marker_decorators:
+                return False
+            if getattr(dec, "kind", None) == HIRKind.LOAD:
+                # A user definition shadows an imported/builtin marker and
+                # must be treated as an ordinary user decorator below.
+                return name not in self._module_func_nodes
+            # Preserve the historical module.attribute marker spellings.
+            return getattr(dec, "kind", None) == HIRKind.ATTR
+
+        # These established marker decorators have native lowering of their
+        # own. Do not route them through the user-wrapper materialization path:
+        # doing so changes how class method markers are represented and can
+        # reject bundled stdlib decorators before their native handling runs.
+        if all(is_legacy_marker(dec) for dec in decorators):
+            return f"{class_name}__{method.name}", None, method.name
+
+        unsupported_results = {*marker_decorators, "cached_property"}
         for dec in decorators:
             name = getattr(dec, "name", None) or getattr(dec, "attr", None)
             if name in unsupported_results and name not in self._module_func_nodes:
