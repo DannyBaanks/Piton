@@ -7754,6 +7754,12 @@ class LinuxCEmitter:
 
     def emit(self, module: MIRModule) -> str:
         self.mir_module = module
+        # CLASS_OBJECT_SLOT_DECL_V1: collect every interned class-object slot
+        # emitted by _emit_class_object. Some runtime object classes (notably
+        # module) are not part of the module's declared classes or exception
+        # handlers, so deriving declarations only from those inventories can
+        # leave a generated C reference undeclared.
+        self._clsobj_references: set[str] = set()
         self.classes = getattr(module, "classes", {})
         # Register module-level classes as object types for cross-module attr access
         for _cls_name in self.classes:
@@ -8159,6 +8165,7 @@ class LinuxCEmitter:
                                 _class_object_names.add(_exception_name)
         for cls_name in sorted(_class_object_names):
             lines.append(f"static long {_name('_clsobj_' + cls_name)};")
+        self._declared_clsobj_names = set(_class_object_names)
         for alias_sym, real_sym in getattr(self, "function_aliases", {}).items():
             _r_params = self.function_params.get(real_sym) or []
             _r_defs = self.function_defaults.get(real_sym) or []
@@ -8240,6 +8247,9 @@ class LinuxCEmitter:
             _cur_snap = _abi_snapshot()
             _converged = _pass >= 2 and _cur_snap == _prev_snap
             if _converged or _pass == 7:
+                for _clsobj_name in sorted(self._clsobj_references - self._declared_clsobj_names):
+                    lines.append(f"static long {_name('_clsobj_' + _clsobj_name)};")
+                self._declared_clsobj_names.update(self._clsobj_references)
                 if hasattr(self, "_extra_forward_decls"):
                     lines.extend(self._extra_forward_decls)
                 lines.extend(_pass_lines)
@@ -9979,6 +9989,7 @@ class LinuxCEmitter:
         if (function.name == "<module>" and cls_name in self._module_stored) or cls_name in getattr(self, "_cur_slots", set()):
             out.append(f"    {_name(result)}={_name(cls_name)};")
             return
+        self._clsobj_references.add(cls_name)
         # CLASS_OBJECT_INTERN_V1: el objeto de clase es UNO por clase
         # (variable a nivel de archivo) — sin interning, cada carga del
         # nombre creaba uno nuevo y la IDENTIDAD fallaba (`A is A` -> False;
@@ -16387,8 +16398,15 @@ class LinuxCEmitter:
                             continue
                         if value_type.startswith("class:") and value_type != "class:object":
                             _class_name = value_type.split(":", 1)[1]
+                            _class_prefix = (
+                                ""
+                                if _class_name in _STANDARD_BUILTIN_CLASSES
+                                or _class_name in _BUILTIN_EXCEPTIONS
+                                or _class_name == "module"
+                                else "__main__."
+                            )
                             out.append(
-                                f'    piton_print_str_raw("<class \'__main__.{_class_name}\'>");'
+                                f'    piton_print_str_raw("<class \'{_class_prefix}{_class_name}\'>");'
                             )
                             continue
                         # PRINT_UNPRINTABLE_V1: iterators, generators, closures,
