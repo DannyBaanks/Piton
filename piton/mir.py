@@ -9263,6 +9263,7 @@ class MIRLowerer:
             tuple(positional_parts),
             tuple(keyword_parts),
             self._find_exception_handler(builder, "TypeError"),
+            _active_handler(builder),
             result=result,
         )
         return result

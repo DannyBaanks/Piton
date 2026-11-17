@@ -8323,6 +8323,7 @@ class LinuxCEmitter:
         self._gen_layout: dict[str, int] = {}
         self._gen_resumes: list[str] = []
         self._gen_counter = 0
+        self._unpack_counter = 0
         # MODULE_NATIVE_FNS_V1: module-level functions that have native C implementations.
         # Maps the MIR function name (e.g., "random__random") to the native C function name.
         # NOTE: random.* now uses piton/stdlib_piton/random.piton (MT19937 CPython 3.12 parity).
@@ -8860,6 +8861,7 @@ class LinuxCEmitter:
         # (_reconstructor: base.__init__).
         self._typeobj_names = {}
         self._union_type_temps = set()
+        self._unpack_counter = 0
         self._literal_str_temps = {
             instruction.result
             for block in function.blocks
@@ -9288,6 +9290,7 @@ class LinuxCEmitter:
         self._gen_resumes = resumes
         self._gen_function_name = function.name
         self._gen_counter = 0
+        self._unpack_counter = 0
         try:
             for _block_index, block in enumerate(function.blocks):
                 self._cur_block = _block_index
@@ -10095,7 +10098,8 @@ class LinuxCEmitter:
         function_name: str,
         pos_parts: tuple,
         kw_parts: tuple,
-        handler_label: Any,
+        unpack_handler: Any,
+        call_handler: Any,
         function: MIRFunction,
         types: dict[str, str],
     ) -> list[str]:
@@ -10122,8 +10126,8 @@ class LinuxCEmitter:
             i for i, param in enumerate(params)
             if param not in {vararg, kwarg} and param not in posonly
         ]
-        site = f"unpack_{self._gen_counter}"
-        self._gen_counter += 1
+        site = f"unpack_{self._unpack_counter}"
+        self._unpack_counter += 1
         sentinel = "0x504954554E424E44LL"
         n_slots = max(len(params), 1)
         defaults = self.function_defaults.get(function_name, [])
@@ -10229,13 +10233,10 @@ class LinuxCEmitter:
         else:
             call_values = ",".join(f"b_{site}[{i}]" for i in range(len(params)))
             out.append(f"    {_name(result)}={_name(function_name)}({call_values});")
-        self._emit_exc_check(out, function, handler_label)
+        self._emit_exc_check(out, function, call_handler)
         out.append(f"    goto {site}_done;")
         out.append(f"    {site}_runtime_err:")
-        if handler_label:
-            out.append(f"    goto {_name(function.name + '_' + handler_label)};")
-        else:
-            out.append("    piton_report_unhandled();piton_exit(1);")
+        self._emit_exc_check(out, function, unpack_handler)
         out.append(f"    {site}_done: ;")
         out.append("    }")
         return out
@@ -15112,6 +15113,10 @@ class LinuxCEmitter:
             if (
                 (source in {"math", "asyncio", "sys"} or module_prefix)
                 and source not in function.params
+                # A local assignment shadows an imported module of the same
+                # name. Check the current scope before tagging the load as a
+                # module; fractions.py uses a local string named `decimal`.
+                and source not in getattr(self, "_cur_slots", set())
                 and types.get(source) != "object:module"
             ):
                 out.append(f"    {_name(result)}=0;")
@@ -22339,14 +22344,15 @@ class LinuxCEmitter:
         elif op == "call_unpack":
             # CALL_UNPACKING_DYNAMIC4_V1: Linux keeps the value kind in
             # PitonSlot, so ** operands can be checked safely at runtime.
-            func_name, pos_parts, kw_parts, handler_label = args
-            if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
-                raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 is not supported inside generator bodies yet")
+            func_name, pos_parts, kw_parts, unpack_handler = args[:4]
+            call_handler = args[4] if len(args) > 4 else unpack_handler
             if func_name not in self.function_names:
                 raise NativeBuildError("native dynamic call unpacking requires a module-level function callee")
             # SLOT_RETURN_PROPAGATE_V1: el resultado tiene el tipo de retorno del
             # callee (un slot sigue siendo slot al cruzar f(**kw)).
             types[result] = self.function_return_types.get(func_name, "int")
+            if types[result] == "slot" and result:
+                self._dyn_slot_temps.add((function.name, result))
             f_params = self.function_params.get(func_name) or []
             if not f_params:
                 raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 supports callees with one to four parameters")
@@ -22361,7 +22367,7 @@ class LinuxCEmitter:
             ):
                 return self._emit_call_unpack_variadic(
                     out, result, func_name, pos_parts, kw_parts,
-                    handler_label, function, types,
+                    unpack_handler, call_handler, function, types,
                 )
             if n_params > 4:
                 raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1 supports plain callees with at most four parameters")
@@ -22371,7 +22377,7 @@ class LinuxCEmitter:
                 kwstars = [part for part in kw_parts if part[0] == "kwstar"]
                 if len(kwstars) == 1 and len(kw_parts) == 1 and not pos_parts:
                     out.append(f"    {_name(result)}={_name(func_name)}((long){self._value(kwstars[0][2])});")
-                    self._emit_exc_check(out, function, handler_label)
+                    self._emit_exc_check(out, function, call_handler)
                     return out
                 raise NativeBuildError("Linux dynamic ** unpacking over a **kwargs callee supports only f(**kw)")
             if f_vararg is not None:
@@ -22382,8 +22388,8 @@ class LinuxCEmitter:
                 named = [p for p in f_params if p != f_vararg]
                 n_named = len(named)
                 slots = max(n_named, 1)
-                site = f"unpack_{self._gen_counter}"
-                self._gen_counter += 1
+                site = f"unpack_{self._unpack_counter}"
+                self._unpack_counter += 1
                 sentinel = "0x504954554E424E44LL"
                 out.append("    {")
                 out.append(f"    long b_{site}[{slots}]; long f_{site}=0;")
@@ -22412,15 +22418,12 @@ class LinuxCEmitter:
                         out.append(f"    if(b_{site}[{idx}]=={sentinel}){{piton_raise_set(\"TypeError\",\"missing required positional argument\");goto {site}_runtime_err;}}")
                 call_args = ",".join(f"b_{site}[{idx}]" for idx in range(n_named)) + (f",(long)x_{site}" if n_named else f"(long)x_{site}")
                 out.append(f"    {_name(result)}={_name(func_name)}({call_args});")
+                self._emit_exc_check(out, function, call_handler)
                 out.append(f"    goto {site}_done;")
                 out.append(f"    {site}_runtime_err:")
-                if handler_label:
-                    out.append(f"    goto {_name(function.name + '_' + handler_label)};")
-                else:
-                    out.append("    piton_report_unhandled();piton_exit(1);")
+                self._emit_exc_check(out, function, unpack_handler)
                 out.append(f"    {site}_done: ;")
                 out.append("    }")
-                types[result] = "int"
                 return out
             # CALL_STAR_DYNAMIC_V1: el `*` que no es list/tuple estatico se
             # decide en runtime. Es al menos tan fiel como el build error: un
@@ -22429,8 +22432,8 @@ class LinuxCEmitter:
             for part in kw_parts:
                 if part[0] == "kwstar" and types.get(part[2]) != "dict":
                     raise NativeBuildError("CALL_UNPACKING_DYNAMIC4_V1: ** operand must be a dict")
-            site = f"unpack_{self._gen_counter}"
-            self._gen_counter += 1
+            site = f"unpack_{self._unpack_counter}"
+            self._unpack_counter += 1
             sentinel = "0x504954554E424E44LL"
             out.append("    {")
             out.append(f"    long b_{site}[4]; long f_{site}=0; long m_{site}=0;")
@@ -22471,15 +22474,12 @@ class LinuxCEmitter:
                 if not (idx < len(f_defaults) and f_defaults[idx] is not None):
                     out.append(f"    if(b_{site}[{idx}]=={sentinel}){{piton_raise_set(\"TypeError\",\"missing required positional argument\");goto {site}_runtime_err;}}")
             out.append(f"    {_name(result)}={_name(func_name)}(" + ",".join(f"b_{site}[{idx}]" for idx in range(n_params)) + ");")
+            self._emit_exc_check(out, function, call_handler)
             out.append(f"    goto {site}_done;")
             out.append(f"    {site}_runtime_err:")
-            if handler_label:
-                out.append(f"    goto {_name(function.name + '_' + handler_label)};")
-            else:
-                out.append("    piton_report_unhandled();piton_exit(1);")
+            self._emit_exc_check(out, function, unpack_handler)
             out.append(f"    {site}_done: ;")
             out.append("    }")
-            types[result] = "int"
         elif op == "task_new":
             out.append(f"    {_name(result)}=piton_task_new({self._value(args[0])});")
             types[result] = "task"
