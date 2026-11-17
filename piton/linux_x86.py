@@ -4032,6 +4032,7 @@ static const char*piton_exc_parent_of(const char*t){
   if(!piton_strcmp(t,"UserWarning")||!piton_strcmp(t,"DeprecationWarning")||!piton_strcmp(t,"PendingDeprecationWarning")||!piton_strcmp(t,"SyntaxWarning")||!piton_strcmp(t,"RuntimeWarning")||!piton_strcmp(t,"FutureWarning")||!piton_strcmp(t,"ImportWarning")||!piton_strcmp(t,"UnicodeWarning")||!piton_strcmp(t,"BytesWarning")||!piton_strcmp(t,"ResourceWarning")||!piton_strcmp(t,"EncodingWarning"))return "Warning";
   if(!piton_strcmp(t,"Warning"))return "Exception";
   if(!piton_strcmp(t,"Exception"))return "BaseException";
+  if(!piton_strcmp(t,"UnboundLocalError"))return "NameError";
   if(!piton_strcmp(t,"LookupError")||!piton_strcmp(t,"ArithmeticError")||!piton_strcmp(t,"ImportError")||!piton_strcmp(t,"SyntaxError")||!piton_strcmp(t,"UnicodeError")||!piton_strcmp(t,"OSError")||!piton_strcmp(t,"ConnectionError"))return "Exception";
   /* builtin no listado (NameError, ValueError, ...): su raiz es Exception */
   return "Exception";

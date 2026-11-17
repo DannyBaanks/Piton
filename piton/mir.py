@@ -6,7 +6,7 @@ import json
 import operator
 from typing import Any, Dict, List, Optional, Sequence
 
-from piton.hir import Attr, BoolOp, Call, ExceptHandler, HIRKind, HIRNode, Keyword, Load, Module, With
+from piton.hir import Assign, Attr, BoolOp, Call, Const, ExceptHandler, HIRKind, HIRNode, If, Keyword, Load, Module, Raise, Store, With
 from piton import call_arity as arity_messages
 
 
@@ -39,7 +39,7 @@ def _zero_arg_super_targets(
     return targets
 
 
-_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError", "KeyError", "IndexError", "AttributeError", "NameError", "ZeroDivisionError", "OverflowError", "NotImplementedError", "ModuleNotFoundError"}
+_BUILTIN_EXCEPTIONS = {"Exception", "BaseException", "ValueError", "TypeError", "RuntimeError", "StopIteration", "AssertionError", "KeyError", "IndexError", "AttributeError", "NameError", "UnboundLocalError", "ZeroDivisionError", "OverflowError", "NotImplementedError", "ModuleNotFoundError"}
 # EXC_HIERARCHY_V1: builtins cuya madre NO es Exception. Se declaran aparte
 # para no aplanar la jerarquia (un `excepto UserWarning` NO debe atrapar un
 # Warning pelado). warnings.py usa Warning como default y los construye.
@@ -56,6 +56,9 @@ _BUILTIN_EXCEPTION_PARENTS = {
     "BytesWarning": "Warning",
     "ResourceWarning": "Warning",
     "EncodingWarning": "Warning",
+    # UnboundLocalError is a NameError subclass (CPython): `excepto NameError`
+    # must catch it, both in the static handler choice and at run time.
+    "UnboundLocalError": "NameError",
 }
 _BUILTIN_EXCEPTIONS |= set(_BUILTIN_EXCEPTION_PARENTS)
 # EXC_OSError_V1: raise/except de la familia OSError — el backend solo ve el
@@ -3264,12 +3267,17 @@ class MIRLowerer:
         builder.local_names = local_names
         builder.global_names = global_names
         builder.nonlocal_names = nonlocal_names
-        self._validate_local_shadow_initialization(
+        shadow_plan = self._validate_local_shadow_initialization(
             body,
             local_names,
             set(builder.function.params),
             set((getattr(builder, "module_state_vars", None) or {}).keys()),
         )
+        if shadow_plan["names"]:
+            body = self._apply_local_shadow_checks(body, shadow_plan)
+            flag_names = {f"__piton_unbound_{name}" for name in shadow_plan["names"]}
+            local_names |= flag_names
+            builder.local_names |= flag_names
 
         all_nested_captures: dict[str, tuple[str, tuple[str, ...]]] = {}
         available = local_names | (set(cell_vars) if cell_vars else set())
@@ -3912,7 +3920,7 @@ class MIRLowerer:
         local_names: set[str],
         initialized: set[str],
         shadowed_state: set[str] = frozenset(),
-    ) -> None:
+    ) -> dict[str, Any]:
         """Fail closed on a local shadow read before its first binding.
 
         The native C backend does not track Python's unbound-local sentinel.
@@ -3927,7 +3935,26 @@ class MIRLowerer:
         """
         candidates = (local_names & (self._module_function_names | set(shadowed_state))) - initialized
         if not candidates:
-            return
+            return {"sites": {}, "names": set()}
+
+        # Reads that CPython can only reach as UnboundLocalError at run time
+        # are recorded per statement and checked by a runtime flag (see
+        # _apply_local_shadow_checks). Straight-line reads with no earlier
+        # binding and no enclosing try keep failing closed at build time.
+        sites: dict[int, tuple[HIRNode, set[str]]] = {}
+        runtime_names: set[str] = set()
+        seen_binds: set[str] = set()
+        ctx: dict[str, Any] = {"site": None, "try": 0}
+
+        def read_unbound(name: str) -> None:
+            site = ctx["site"]
+            if site is not None and (name in seen_binds or ctx["try"] > 0):
+                sites.setdefault(id(site), (site, set()))[1].add(name)
+                runtime_names.add(name)
+                return
+            raise MIRLoweringError(
+                f"native local '{name}' shadowing a module function may be read before assignment"
+            )
 
         def children(node: HIRNode):
             for descriptor in fields(node):
@@ -3949,9 +3976,7 @@ class MIRLowerer:
                 if kind == HIRKind.LOAD:
                     name = getattr(current, "name", None)
                     if name in candidates and name not in bound:
-                        raise MIRLoweringError(
-                            f"native local '{name}' shadowing a module function may be read before assignment"
-                        )
+                        read_unbound(name)
                     continue
                 # A nested scope reads captured cells when called, not when
                 # its definition is evaluated. Its own lowering checks its
@@ -4001,6 +4026,23 @@ class MIRLowerer:
             return bound, falls
 
         def statement_flow(statement: HIRNode, incoming: set[str]) -> tuple[set[str], bool]:
+            prev_site = ctx["site"]
+            ctx["site"] = statement
+            is_try = getattr(statement, "kind", None) == HIRKind.TRY
+            if is_try:
+                ctx["try"] += 1
+            try:
+                result = statement_flow_inner(statement, incoming)
+            finally:
+                ctx["site"] = prev_site
+                if is_try:
+                    ctx["try"] -= 1
+            # Names bound by a finished statement count as "seen" for later
+            # statements; nested suites already recorded their own bindings.
+            seen_binds.update(result[0] - set(incoming))
+            return result
+
+        def statement_flow_inner(statement: HIRNode, incoming: set[str]) -> tuple[set[str], bool]:
             kind = getattr(statement, "kind", None)
             bound = set(incoming)
             if kind == HIRKind.ASSIGN:
@@ -4024,9 +4066,7 @@ class MIRLowerer:
                 if getattr(target, "kind", None) == HIRKind.STORE:
                     name = getattr(target, "name", None)
                     if name in candidates and name not in bound:
-                        raise MIRLoweringError(
-                            f"native local '{name}' shadowing a module function may be read before assignment"
-                        )
+                        read_unbound(name)
                 else:
                     check_target_address(target, bound)
                 check_expr(getattr(statement, "value", None), bound)
@@ -4050,7 +4090,9 @@ class MIRLowerer:
                     check_expr(getattr(statement, "iter", None), bound)
                     target = getattr(statement, "target", None)
                     check_target_address(target, bound)
-                    body_in = set(bound) | target_names(target)
+                    # HIR lowers for-loop targets as LOAD nodes (see
+                    # _for_target_binds), so target_names() sees no binding.
+                    body_in = set(bound) | self._for_target_binds(target)
                 sequence(getattr(statement, "body", ()), body_in)
                 # A loop can execute zero times; only its else suite can add
                 # bindings guaranteed on every normal exit.
@@ -4067,7 +4109,11 @@ class MIRLowerer:
                 body_state = sequence(getattr(statement, "body", ()), bound)
                 paths = [body_state]
                 for handler in getattr(statement, "handlers", ()) or ():
+                    # An except type is evaluated only if the body raises, so
+                    # a read there is never checked at the try statement.
+                    ctx["site"] = None
                     check_expr(getattr(handler, "type_", None), bound)
+                    ctx["site"] = statement
                     handler_in = set(bound)
                     handler_name = getattr(handler, "name", None)
                     if handler_name:
@@ -4096,16 +4142,152 @@ class MIRLowerer:
             # For other statement forms, consume the ordered scope events.
             # The common assignment and control-flow forms above are handled
             # explicitly because HIR lists assignment targets before values.
+            # A compound statement's nested suites select their own paths; a
+            # read here cannot be checked before the whole statement, so
+            # keep those on the build-time fail-closed path.
+            if self._has_statement_lists(statement):
+                ctx["site"] = None
             for event, name in self._scope_events_of(statement):
                 if event == "use" and name in candidates and name not in bound:
-                    raise MIRLoweringError(
-                        f"native local '{name}' shadowing a module function may be read before assignment"
-                    )
+                    read_unbound(name)
                 if event == "bind":
                     bound.add(name)
             return bound, True
 
         sequence(body, initialized)
+        return {"sites": sites, "names": runtime_names}
+
+    _STATEMENT_LIST_FIELDS = ("body", "orelse", "finalbody", "handlers", "cases")
+
+    def _has_statement_lists(self, statement: HIRNode) -> bool:
+        return any(getattr(statement, name, None) for name in self._STATEMENT_LIST_FIELDS)
+
+    def _apply_local_shadow_checks(self, body: list, plan: dict[str, Any]) -> list:
+        """Insert the runtime unbound checks chosen by the shadow validator.
+
+        Each name in ``plan['names']`` gets a bool flag local that starts
+        True and is cleared after every binding statement (and at a for or
+        with body start). A recorded read site gets ``si flag: lanzar
+        UnboundLocalError(msg)`` placed right before the statement. Binding
+        forms that cannot be tracked this way fail closed.
+        """
+        names: set[str] = plan["names"]
+        if not names:
+            return body
+        sites = plan["sites"]
+        flags = {name: f"__piton_unbound_{name}" for name in names}
+        explicit_kinds = {
+            HIRKind.ASSIGN, HIRKind.ANN_ASSIGN, HIRKind.AUG_ASSIGN, HIRKind.IF,
+            HIRKind.WHILE, HIRKind.FOR, HIRKind.WITH, HIRKind.TRY, HIRKind.RETURN,
+            HIRKind.RAISE, HIRKind.IMPORT, HIRKind.IMPORT_FROM, HIRKind.FUNC_DEF,
+            HIRKind.BREAK, HIRKind.CONTINUE,
+        }
+
+        def set_flag(name: str, value: bool) -> HIRNode:
+            return Assign(targets=[Store(name=flags[name])], value=Const(value=value))
+
+        def check(name: str) -> HIRNode:
+            message = f"cannot access local variable '{name}' where it is not associated with a value"
+            raise_node = Raise(exc=Call(func=Load(name="UnboundLocalError"), args=[Const(value=message)]))
+            return If(test=Load(name=flags[name]), body=[raise_node], orelse=[])
+
+        def fail(name: str) -> None:
+            raise MIRLoweringError(
+                f"native local '{name}' shadowing a module function may be read before assignment"
+            )
+
+        def store_nodes(target: Optional[HIRNode]) -> list[HIRNode]:
+            if target is None:
+                return []
+            return [node for node in self._walk(target) if node.kind == HIRKind.STORE]
+
+        def header_nodes(statement: HIRNode):
+            stack: list[Any] = [statement]
+            while stack:
+                current = stack.pop()
+                if isinstance(current, HIRNode):
+                    yield current
+                    if current is not statement and current.kind in self._SCOPE_STOP:
+                        continue
+                    for descriptor in fields(current):
+                        if descriptor.name in {"kind", "line", "col", "annotations"}:
+                            continue
+                        if descriptor.name in self._STATEMENT_LIST_FIELDS:
+                            continue
+                        stack.append(getattr(current, descriptor.name))
+                elif isinstance(current, (list, tuple)):
+                    stack.extend(current)
+
+        def rewrite(statements: list) -> list:
+            result: list[HIRNode] = []
+            for statement in statements:
+                kind = getattr(statement, "kind", None)
+                entry = sites.get(id(statement))
+                if entry is not None:
+                    result.extend(check(name) for name in sorted(entry[1]))
+                allowed: set[int] = set()
+                after: list[str] = []
+                head: list[str] = []
+                if kind == HIRKind.ASSIGN:
+                    for target in statement.targets:
+                        allowed |= {id(node) for node in store_nodes(target)}
+                        after += [node.name for node in store_nodes(target)]
+                elif kind == HIRKind.ANN_ASSIGN:
+                    allowed |= {id(node) for node in store_nodes(statement.target)}
+                    if statement.value is not None:
+                        after += [node.name for node in store_nodes(statement.target)]
+                elif kind == HIRKind.AUG_ASSIGN:
+                    allowed |= {id(node) for node in store_nodes(statement.target)}
+                    after += [node.name for node in store_nodes(statement.target)]
+                elif kind == HIRKind.FOR:
+                    allowed |= {id(node) for node in store_nodes(statement.target)}
+                    head += sorted(self._for_target_binds(statement.target))
+                elif kind == HIRKind.WITH:
+                    for item in statement.items:
+                        allowed |= {id(node) for node in store_nodes(item.optional_vars)}
+                        head += [node.name for node in store_nodes(item.optional_vars)]
+                elif kind in {HIRKind.IMPORT, HIRKind.IMPORT_FROM}:
+                    for alias in getattr(statement, "names", ()) or ():
+                        bound = getattr(alias, "asname", None) or getattr(alias, "name", "")
+                        if kind == HIRKind.IMPORT and not getattr(alias, "asname", None):
+                            bound = bound.split(".")[0]
+                        if bound:
+                            after.append(bound)
+                elif kind in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
+                    after.append(statement.name)
+                if kind not in explicit_kinds and self._has_statement_lists(statement):
+                    # Unlisted compound forms (match, class bodies): their
+                    # suites may bind or read the name on paths this rewrite
+                    # does not model, so any mention fails closed.
+                    for node in self._walk(statement):
+                        if getattr(node, "name", None) in names:
+                            fail(node.name)
+                for node in header_nodes(statement):
+                    if node.kind == HIRKind.STORE and node.name in names and id(node) not in allowed:
+                        fail(node.name)
+                    if kind == HIRKind.DELETE and getattr(node, "name", None) in names:
+                        fail(node.name)
+                if kind == HIRKind.TRY:
+                    for handler in statement.handlers:
+                        if handler.name in names:
+                            fail(handler.name)
+                if kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
+                    for field_name in ("body", "orelse", "finalbody"):
+                        suite = getattr(statement, field_name, None)
+                        if isinstance(suite, list) and suite:
+                            suite[:] = rewrite(suite)
+                    for handler in getattr(statement, "handlers", None) or ():
+                        handler.body[:] = rewrite(handler.body)
+                    for case in getattr(statement, "cases", None) or ():
+                        case.body[:] = rewrite(case.body)
+                head_names = [name for name in head if name in names]
+                if head_names:
+                    statement.body[:0] = [set_flag(name, False) for name in head_names]
+                result.append(statement)
+                result.extend(set_flag(name, False) for name in after if name in names)
+            return result
+
+        return [set_flag(name, True) for name in sorted(names)] + rewrite(body)
 
     def _loaded_names(self, body: Sequence[HIRNode]) -> set[str]:
         return {
