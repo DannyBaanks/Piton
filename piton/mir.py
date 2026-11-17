@@ -1101,6 +1101,27 @@ class MIRLowerer:
                         return True
         return False
 
+    def _decorator_qualified_name(self, expression: HIRNode) -> str | None:
+        target = (
+            getattr(expression, "func", None)
+            if getattr(expression, "kind", None) == HIRKind.CALL
+            else expression
+        )
+        if getattr(target, "kind", None) == HIRKind.LOAD:
+            qualified = self.from_import_aliases.get(
+                getattr(target, "name", ""), getattr(target, "name", "")
+            )
+            return qualified.replace("__", ".") if isinstance(qualified, str) else None
+        if getattr(target, "kind", None) == HIRKind.ATTR:
+            value = getattr(target, "value", None)
+            if getattr(value, "kind", None) == HIRKind.LOAD:
+                module = self.module_aliases.get(
+                    getattr(value, "name", ""), getattr(value, "name", "")
+                )
+                if isinstance(module, str):
+                    return f"{module}.{getattr(target, 'attr', '')}"
+        return None
+
     def _function_preserves_wrapper_metadata(self, node: HIRNode) -> bool:
         """Prove a decorator returns its input or a functools.wraps wrapper."""
         if getattr(node, "kind", None) != HIRKind.FUNC_DEF:
@@ -1908,6 +1929,12 @@ class MIRLowerer:
 
             for node in _find_classes(module_body):
                 self._current_class_position = self._module_statement_positions.get(id(node))
+                for class_decorator in getattr(node, "decorators", None) or []:
+                    if self._decorator_qualified_name(class_decorator) == "functools.total_ordering":
+                        raise MIRLoweringError(
+                            "native @functools.total_ordering is not supported: "
+                            "generated comparison methods cannot be represented natively"
+                        )
                 # Metaclass keywords are recorded in class_metaclasses below;
                 # their runtime hooks are emitted with module class creation.
                 _meta_keywords = [
