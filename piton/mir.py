@@ -713,6 +713,13 @@ class MIRLowerer:
         self.async_generators: set[str] = set()
         self.module_aliases: dict[str, str] = {}
         self._identity_decorator_names: set[str] = set()
+        self._module_func_nodes: dict[str, HIRNode] = {}
+        self._module_statement_positions: dict[int, int] = {}
+        self._module_binding_positions: dict[str, int] = {}
+        self._current_class_position: int | None = None
+        self.decorated_class_methods: dict[tuple[str, str], str] = {}
+        self.decorated_class_method_metadata: dict[str, dict[str, Any]] = {}
+        self._decorated_method_names: set[str] = set()
         self.decorated_symbols: dict[int, str] = {}
         self._bundled_hir_cache: dict[str, Any] = {}
         self._bundled_modules_loaded: set[str] = set()
@@ -816,6 +823,199 @@ class MIRLowerer:
         else:
             builder.emit("runtime_call", "set_target", target.kind.name, value)
 
+    @staticmethod
+    def _direct_function_returns(node: HIRNode) -> list[HIRNode]:
+        """Return expressions owned by a function, excluding nested scopes."""
+        found: list[HIRNode] = []
+
+        def visit(items) -> None:
+            for item in items or ():
+                kind = getattr(item, "kind", None)
+                if kind in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF, HIRKind.LAMBDA}:
+                    continue
+                if kind == HIRKind.RETURN:
+                    value = getattr(item, "value", None)
+                    if value is not None:
+                        found.append(value)
+                    continue
+                for field in ("body", "orelse", "finalbody"):
+                    child = getattr(item, field, None)
+                    if isinstance(child, list):
+                        visit(child)
+                for handler in getattr(item, "handlers", ()) or ():
+                    visit(getattr(handler, "body", None))
+
+        visit(getattr(node, "body", None))
+        return found
+
+    def _function_returns_callable(self, node: HIRNode) -> bool:
+        """Prove a decorator returns its input function or a native closure."""
+        if (getattr(node, "kind", None) != HIRKind.FUNC_DEF
+                or getattr(node, "decorators", None)
+                or getattr(node, "is_async", False)):
+            return False
+        args = getattr(node, "args", None)
+        positional = [
+            *list(getattr(args, "posonlyargs", []) or []),
+            *list(getattr(args, "args", []) or []),
+        ]
+        input_function = getattr(positional[0], "name", None) if positional else None
+        nested = {
+            getattr(item, "name", None): item
+            for item in getattr(node, "body", []) or ()
+            if getattr(item, "kind", None) == HIRKind.FUNC_DEF
+        }
+        returns = self._direct_function_returns(node)
+        if not returns:
+            return False
+        for value in returns:
+            if getattr(value, "kind", None) != HIRKind.LOAD:
+                return False
+            name = getattr(value, "name", None)
+            if name == input_function:
+                continue
+            returned_function = nested.get(name)
+            if returned_function is None:
+                return False
+            if (getattr(returned_function, "decorators", None)
+                    and not self._has_functools_wraps(returned_function)):
+                return False
+        return True
+
+    def _factory_returns_callable_decorator(self, node: HIRNode) -> bool:
+        """Prove a decorator factory returns decorators with native output."""
+        if (getattr(node, "kind", None) != HIRKind.FUNC_DEF
+                or getattr(node, "decorators", None)
+                or getattr(node, "is_async", False)):
+            return False
+        nested = {
+            getattr(item, "name", None): item
+            for item in getattr(node, "body", []) or ()
+            if getattr(item, "kind", None) == HIRKind.FUNC_DEF
+        }
+        returns = self._direct_function_returns(node)
+        if not returns:
+            return False
+        targets = [
+            nested.get(getattr(value, "name", None))
+            for value in returns
+            if getattr(value, "kind", None) == HIRKind.LOAD
+        ]
+        return (
+            len(targets) == len(returns)
+            and all(target is not None and self._function_returns_callable(target) for target in targets)
+        )
+
+    def _has_functools_wraps(self, node: HIRNode) -> bool:
+        for expression in getattr(node, "decorators", []) or ():
+            target = getattr(expression, "func", None) if getattr(expression, "kind", None) == HIRKind.CALL else expression
+            if getattr(target, "kind", None) == HIRKind.LOAD:
+                qualified = self.from_import_aliases.get(getattr(target, "name", ""), "")
+                if qualified.replace(".", "__") == "functools__wraps":
+                    return True
+            elif getattr(target, "kind", None) == HIRKind.ATTR and getattr(target, "attr", None) == "wraps":
+                value = getattr(target, "value", None)
+                if getattr(value, "kind", None) == HIRKind.LOAD:
+                    module = self.module_aliases.get(getattr(value, "name", ""), getattr(value, "name", ""))
+                    if module.replace(".", "__") == "functools":
+                        return True
+        return False
+
+    def _function_preserves_wrapper_metadata(self, node: HIRNode) -> bool:
+        """Prove a decorator returns its input or a functools.wraps wrapper."""
+        if getattr(node, "kind", None) != HIRKind.FUNC_DEF:
+            return False
+        args = getattr(node, "args", None)
+        positional = [
+            *list(getattr(args, "posonlyargs", []) or []),
+            *list(getattr(args, "args", []) or []),
+        ]
+        input_function = getattr(positional[0], "name", None) if positional else None
+        nested = {
+            getattr(item, "name", None): item
+            for item in getattr(node, "body", []) or ()
+            if getattr(item, "kind", None) == HIRKind.FUNC_DEF
+        }
+        returns = self._direct_function_returns(node)
+        if not returns:
+            return False
+        for value in returns:
+            if getattr(value, "kind", None) != HIRKind.LOAD:
+                return False
+            name = getattr(value, "name", None)
+            if name == input_function:
+                continue
+            returned_function = nested.get(name)
+            if returned_function is None or not self._has_functools_wraps(returned_function):
+                return False
+        return True
+
+    def _method_decorators_preserve_metadata(self, expressions: list[HIRNode]) -> bool:
+        for expression in expressions:
+            is_factory = getattr(expression, "kind", None) == HIRKind.CALL
+            callee = getattr(expression, "func", None) if is_factory else expression
+            if getattr(callee, "kind", None) != HIRKind.LOAD:
+                return False
+            function = self._module_func_nodes.get(getattr(callee, "name", None))
+            if function is None:
+                return False
+            if is_factory:
+                nested = {
+                    getattr(item, "name", None): item
+                    for item in getattr(function, "body", []) or ()
+                    if getattr(item, "kind", None) == HIRKind.FUNC_DEF
+                }
+                targets = [
+                    nested.get(getattr(value, "name", None))
+                    for value in self._direct_function_returns(function)
+                    if getattr(value, "kind", None) == HIRKind.LOAD
+                ]
+                if not targets or len(targets) != len(self._direct_function_returns(function)):
+                    return False
+                if not all(target is not None and self._function_preserves_wrapper_metadata(target) for target in targets):
+                    return False
+            elif not self._function_preserves_wrapper_metadata(function):
+                return False
+        return bool(expressions)
+
+    def _supported_method_decorator(
+        self,
+        expression: HIRNode,
+        class_local_names: set[str],
+    ) -> bool:
+        """Prove an earlier module decorator evaluates to a native callable."""
+        if self._current_class_position is None:
+            return False
+        is_factory = getattr(expression, "kind", None) == HIRKind.CALL
+        callee = getattr(expression, "func", None) if is_factory else expression
+        if getattr(callee, "kind", None) != HIRKind.LOAD:
+            return False
+        name = getattr(callee, "name", None)
+        if not isinstance(name, str) or name in class_local_names:
+            return False
+        function_node = self._module_func_nodes.get(name)
+        position = self._module_binding_positions.get(name)
+        if (function_node is None or position is None
+                or position >= self._current_class_position):
+            return False
+
+        # Decorator expressions execute in the class body. A class-local or
+        # forward global reference cannot be replaced with a zero-valued C
+        # global without changing CPython's NameError behavior.
+        for part in self._walk(expression):
+            if getattr(part, "kind", None) != HIRKind.LOAD:
+                continue
+            loaded_name = getattr(part, "name", None)
+            if loaded_name in class_local_names:
+                return False
+            bound_at = self._module_binding_positions.get(loaded_name)
+            if bound_at is None or bound_at >= self._current_class_position:
+                return False
+
+        if is_factory:
+            return self._factory_returns_callable_decorator(function_node)
+        return self._function_returns_callable(function_node)
+
     def _class_method_symbol(
         self,
         class_name: str,
@@ -825,14 +1025,7 @@ class MIRLowerer:
         class_local_names: set[str] | None = None,
         allow_user_identity: bool = True,
     ) -> tuple[str, str | None, str]:
-        """Classifies one class-body method and returns ``(symbol, role, prop)``.
-
-        ``role`` is ``"getter"``/``"setter"``/``"deleter"`` for the supported
-        ``@property`` / ``@<name>.setter`` / ``@<name>.deleter`` decorators,
-        ``None`` for an ordinary method (the only other accepted form). For
-        ordinary methods ``prop`` is the method name (unused). Anything else
-        fails closed.
-        """
+        """Classify a method decorator, returning its native method symbol."""
         decorators = list(getattr(method, "decorators", None) or [])
         if not decorators:
             return f"{class_name}__{method.name}", None, method.name
@@ -840,89 +1033,86 @@ class MIRLowerer:
             "native class method decorators currently support only "
             "@property, @staticmethod, and @classmethod"
         )
-        known_load_decorators = {
-            "property", "propiedad", "staticmethod", "metodo_estatico",
-            "classmethod", "metodo_clase", "abstractmethod", "contextmanager",
-            "_sslcopydoc", "lru_cache", "cache", "overload",
-        }
-        known_attr_decorators = {
-            "property", "cached_property", "abstractmethod", "contextmanager",
-            "_sslcopydoc", "lru_cache", "cache", "overload", "setter", "deleter",
-        }
         class_local_names = class_local_names or set()
-        for dec in decorators:
-            if dec.kind == HIRKind.LOAD:
-                name = getattr(dec, "name", None)
-                if name in getattr(self, "_module_function_names", set()):
-                    if (allow_user_identity
-                            and name in getattr(self, "_identity_decorator_names", set())
-                            and name not in class_local_names):
-                        continue
-                    raise MIRLoweringError(unsupported)
-                if name in known_load_decorators:
-                    continue
-                if (allow_user_identity
-                        and name in getattr(self, "_identity_decorator_names", set())
-                        and name not in class_local_names):
-                    continue
-                raise MIRLoweringError(unsupported)
-            if dec.kind == HIRKind.ATTR and getattr(dec, "attr", None) in known_attr_decorators:
-                continue
-            raise MIRLoweringError(unsupported)
-        primary = None
+
+        # User-defined, provably identity decorators have no observable effect
+        # and remain safe to elide.
+        if (allow_user_identity and len(decorators) == 1
+                and decorators[0].kind == HIRKind.LOAD
+                and getattr(decorators[0], "name", None) in self._module_func_nodes
+                and getattr(decorators[0], "name", None) in self._identity_decorator_names
+                and getattr(decorators[0], "name", None) not in class_local_names):
+            return f"{class_name}__{method.name}", None, method.name
+
+        # Descriptor decorators are special only as a single decorator.
+        # Stacking an ordinary wrapper around one needs descriptor behavior the
+        # native class model does not currently expose.
+        if len(decorators) == 1:
+            decorator = decorators[0]
+            if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"staticmethod", "metodo_estatico"}:
+                self.static_methods.add(f"{class_name}__{method.name}")
+                return f"{class_name}__{method.name}", "staticmethod", method.name
+            if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"classmethod", "metodo_clase"}:
+                self.class_methods.add(f"{class_name}__{method.name}")
+                return f"{class_name}__{method.name}", "classmethod", method.name
+            if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"property", "propiedad"}:
+                if method.name in property_methods:
+                    raise MIRLoweringError(f"native duplicate @property '{method.name}' on '{class_name}'")
+                property_methods[method.name] = {"getter": None, "setter": None, "deleter": None}
+                return f"{class_name}__{method.name}", "getter", method.name
+            if decorator.kind == HIRKind.ATTR:
+                prop = getattr(decorator, "attr", "")
+                if prop == "cached_property":
+                    raise MIRLoweringError(
+                        "native @functools.cached_property is not supported: cached descriptor storage is unavailable"
+                    )
+                if (getattr(getattr(decorator, "value", None), "kind", None) == HIRKind.LOAD
+                        and getattr(decorator.value, "name", None) == method.name
+                        and prop in {"setter", "deleter"}):
+                    existing = property_methods.get(method.name)
+                    if existing is None:
+                        raise MIRLoweringError(
+                            f"native @{method.name}.{prop} requires the property getter '@property def {method.name}' first in class '{class_name}'"
+                        )
+                    if existing[prop] is not None:
+                        raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
+                    return f"{class_name}__{method.name}__{prop}", prop, method.name
+
+        unsupported_results = {
+            "abstractmethod", "contextmanager", "_sslcopydoc", "lru_cache",
+            "cache", "overload", "cached_property",
+        }
         for dec in decorators:
             name = getattr(dec, "name", None) or getattr(dec, "attr", None)
-            if name in {"property", "propiedad", "staticmethod", "metodo_estatico", "classmethod", "metodo_clase", "setter", "deleter"}:
-                primary = dec
-                break
-        decorator = primary if primary is not None else decorators[0]
-        if (allow_user_identity
-                and decorator.kind == HIRKind.LOAD
-                and getattr(decorator, "name", None) in getattr(self, "_module_function_names", set())
-                and getattr(decorator, "name", None) in getattr(self, "_identity_decorator_names", set())
-                and getattr(decorator, "name", None) not in class_local_names):
-            return f"{class_name}__{method.name}", None, method.name
-        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"staticmethod", "metodo_estatico"}:
-            self.static_methods.add(f"{class_name}__{method.name}")
-            return f"{class_name}__{method.name}", "staticmethod", method.name
-        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"classmethod", "metodo_clase"}:
-            self.class_methods.add(f"{class_name}__{method.name}")
-            return f"{class_name}__{method.name}", "classmethod", method.name
-        if (decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"property", "propiedad"}) or (
-            decorator.kind == HIRKind.ATTR and getattr(decorator, "attr", "") in {"property", "cached_property"}
-        ):
-            if method.name in property_methods:
-                raise MIRLoweringError(f"native duplicate @property '{method.name}' on '{class_name}'")
-            property_methods[method.name] = {"getter": None, "setter": None, "deleter": None}
-            return f"{class_name}__{method.name}", "getter", method.name
-        # ABC_DECORATOR_V1: @abstractmethod / @contextmanager (desde abc/contextlib o cualquier modulo)
-        # son marcadores de CPython. El metodo se baja como ordinario.
-        if decorator.kind == HIRKind.LOAD and getattr(decorator, "name", None) in {"abstractmethod", "contextmanager", "_sslcopydoc", "lru_cache", "cache", "overload"}:
-            return f"{class_name}__{method.name}", None, method.name
-        if decorator.kind == HIRKind.ATTR and getattr(decorator, "attr", None) in {"abstractmethod", "contextmanager", "_sslcopydoc", "lru_cache", "cache", "overload"}:
-            return f"{class_name}__{method.name}", None, method.name
-        if (allow_user_identity
-                and decorator.kind == HIRKind.LOAD
-                and getattr(decorator, "name", None) in getattr(self, "_identity_decorator_names", set())
-                and getattr(decorator, "name", None) not in class_local_names):
-            return f"{class_name}__{method.name}", None, method.name
-        if decorator.kind == HIRKind.ATTR:
-            prop = getattr(decorator, "attr", "")
-            if getattr(getattr(decorator, "value", None), "kind", None) != HIRKind.LOAD or getattr(decorator.value, "name", None) != method.name or prop not in {"setter", "deleter"}:
+            if name in unsupported_results and name not in self._module_func_nodes:
                 raise MIRLoweringError(
-                    unsupported
+                    f"native class method decorator '@{name}' result cannot be represented natively"
                 )
-            existing = property_methods.get(method.name)
-            if existing is None:
+
+        if all(self._supported_method_decorator(dec, class_local_names) for dec in decorators):
+            if method.name.startswith("__") and method.name.endswith("__"):
                 raise MIRLoweringError(
-                    f"native @{method.name}.{prop} requires the property getter '@property def {method.name}' first in class '{class_name}'"
+                    f"native decorated special method '{method.name}' is not supported by runtime dispatch"
                 )
-            if existing[prop] is not None:
-                raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
-            return f"{class_name}__{method.name}__{prop}", prop, method.name
-        raise MIRLoweringError(
-            unsupported
-        )
+            original_symbol = f"__piton_original__{class_name}__{method.name}"
+            decorated_value = f"__piton_decorated__{class_name}__{method.name}"
+            self.decorated_class_methods[(class_name, method.name)] = decorated_value
+            if self._method_decorators_preserve_metadata(decorators):
+                body = getattr(method, "body", []) or []
+                doc = (
+                    body[0].value
+                    if body and getattr(body[0], "kind", None) == HIRKind.CONST
+                    and isinstance(getattr(body[0], "value", None), str)
+                    else None
+                )
+                self.decorated_class_method_metadata[decorated_value] = {
+                    "__name__": method.name,
+                    "__doc__": doc,
+                }
+            self._decorated_method_names.add(method.name)
+            return original_symbol, "decorated", method.name
+
+        raise MIRLoweringError(unsupported)
 
     @staticmethod
     def _is_identity_decorator_definition(node: HIRNode) -> bool:
@@ -1102,6 +1292,13 @@ class MIRLowerer:
         self.async_generators = set()
         self.module_aliases = {}
         self._identity_decorator_names = set()
+        self._module_func_nodes = {}
+        self._module_statement_positions = {}
+        self._module_binding_positions = {}
+        self._current_class_position = None
+        self.decorated_class_methods = {}
+        self.decorated_class_method_metadata = {}
+        self._decorated_method_names = set()
         self._module_function_names = set()
         self.decorated_symbols = {}
         self.from_import_aliases = {}  # {local_name: qualified_name}
@@ -1128,6 +1325,32 @@ class MIRLowerer:
         if hir.kind == HIRKind.MODULE:
             module_body = getattr(hir, "body", [])
             self._identity_decorator_names = self._module_identity_decorator_names(module_body)
+            self._module_statement_positions = {
+                id(item): index for index, item in enumerate(module_body)
+            }
+            self._module_func_nodes = {
+                item.name: item for item in module_body
+                if getattr(item, "kind", None) == HIRKind.FUNC_DEF
+            }
+            self._module_binding_positions = {}
+            for index, item in enumerate(module_body):
+                if getattr(item, "kind", None) in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}:
+                    self._module_binding_positions[item.name] = index
+                elif getattr(item, "kind", None) == HIRKind.IMPORT:
+                    for alias in getattr(item, "names", []) or []:
+                        bound_name = alias.asname or alias.name.split(".", 1)[0]
+                        self._module_binding_positions[bound_name] = index
+                elif getattr(item, "kind", None) == HIRKind.IMPORT_FROM:
+                    for alias in getattr(item, "names", []) or []:
+                        self._module_binding_positions[alias.asname or alias.name] = index
+                elif getattr(item, "kind", None) == HIRKind.ASSIGN:
+                    for target in getattr(item, "targets", []) or []:
+                        if getattr(target, "kind", None) in {HIRKind.LOAD, HIRKind.STORE}:
+                            self._module_binding_positions[target.name] = index
+                elif getattr(item, "kind", None) == HIRKind.ANN_ASSIGN:
+                    target = getattr(item, "target", None)
+                    if getattr(target, "kind", None) in {HIRKind.LOAD, HIRKind.STORE}:
+                        self._module_binding_positions[target.name] = index
             # ZIP_ALIAS_SHADOW_V1: `combinar` es el alias dialectal de zip.
             # Si el usuario DEFINE una funcion con ese nombre, el def gana al
             # builtin (CPython). Sin este registro, `def combinar(n, k):
@@ -1433,6 +1656,7 @@ class MIRLowerer:
                 )
 
             for node in _find_classes(module_body):
+                self._current_class_position = self._module_statement_positions.get(id(node))
                 # Metaclass keywords are recorded in class_metaclasses below;
                 # their runtime hooks are emitted with module class creation.
                 _meta_keywords = [
@@ -1561,11 +1785,12 @@ class MIRLowerer:
                         super_context=(node.name, super_self) if super_self else None,
                         is_generator=is_gen_method,
                     )
-                    if role in (None, "staticmethod", "classmethod"):
+                    if role in (None, "staticmethod", "classmethod", "decorated"):
                         self.classes[node.name].add(method.name)
                     else:
                         self.class_properties.setdefault(node.name, {}).setdefault(prop_name, {})[role] = symbol
                     class_local_names.add(method.name)
+            self._current_class_position = None
             if hasattr(self, "class_attrs"):
                 for _cname, _attrs in self.class_attrs.items():
                     for _aname, _aval in _attrs.items():
@@ -1796,7 +2021,15 @@ class MIRLowerer:
                     module.from_import_aliases = _saved_from
             self._lower_statements(module, [
                 node for node in module_body
-                if node.kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF} or getattr(node, "decorators", None)
+                if node.kind not in {HIRKind.FUNC_DEF, HIRKind.CLASS_DEF}
+                or getattr(node, "decorators", None)
+                or (
+                    node.kind == HIRKind.CLASS_DEF
+                    and any(
+                        (node.name, getattr(item, "name", None)) in self.decorated_class_methods
+                        for item in (getattr(node, "body", []) or [])
+                    )
+                )
             ])
             # MODULE_STATE_V1: los modulos empaquetados se bajan DESPUES del
             # cuerpo principal: asi el tipo de sus params llega por el
@@ -3275,6 +3508,30 @@ class MIRLowerer:
                         if getattr(target, "kind", None) in (HIRKind.STORE, HIRKind.LOAD):
                             attr_val = self._lower_expr(builder, item.value)
                             builder.emit("set_attr", cls_obj, target.name, attr_val)
+                elif item.kind == HIRKind.FUNC_DEF:
+                    decorated_value = self.decorated_class_methods.get((cls_name, item.name))
+                    if decorated_value is None:
+                        continue
+                    # CPython evaluates decorator expressions top-to-bottom,
+                    # then applies the resulting callables bottom-to-top.
+                    decorator_values = [
+                        self._lower_expr(builder, decorator)
+                        for decorator in (getattr(item, "decorators", None) or [])
+                    ]
+                    current = builder.temp()
+                    original_symbol = f"__piton_original__{cls_name}__{item.name}"
+                    builder.emit("load", original_symbol, _active_handler(builder), result=current)
+                    for decorator_value in reversed(decorator_values):
+                        applied = builder.temp()
+                        builder.emit(
+                            "call", decorator_value, (current,),
+                            _active_handler(builder), result=applied,
+                        )
+                        current = applied
+                    # The class namespace owns the decorated object in Python;
+                    # this set_attr also lets class decorators observe it.
+                    builder.emit("set_attr", cls_obj, item.name, current)
+                    builder.emit("store", decorated_value, current)
             decorators = list(getattr(node, "decorators", None) or [])
             current = cls_obj
             for decorator in reversed(decorators):
@@ -5142,6 +5399,18 @@ class MIRLowerer:
             receiver = builder.temp()
             builder.emit("load", builder.super_self, result=receiver)
         args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+        decorated_value = self.decorated_class_methods.get((next_class, attr))
+        if decorated_value is not None:
+            callee = builder.temp()
+            builder.emit("load", decorated_value, _active_handler(builder), result=callee)
+            positional = builder.temp()
+            builder.emit("build_collection", "tuple", (receiver, *args), result=positional)
+            result = builder.temp()
+            builder.emit(
+                "dynamic_call", callee, positional, None, None,
+                _active_handler(builder), result=result,
+            )
+            return result
         # Relax: allow more than 3 args for super calls
         # if len(args) > 3:
         #     raise MIRLoweringError("native super() method calls support at most 3 user arguments")
@@ -5580,6 +5849,14 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("build_collection", "dict", items, result=result)
                 return result
+            if node.func.kind == HIRKind.ATTR:
+                decorated_target = self._decorated_method_target(
+                    builder, node.func.value, node.func.attr,
+                )
+                if decorated_target is not None:
+                    return self._lower_decorated_method_call(
+                        builder, node, decorated_target[0], decorated_target[1],
+                    )
             if self._call_has_dynamic_unpack(node):
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
@@ -6994,6 +7271,14 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("build_collection", "dict", items, result=result)
                 return result
+            if node.func.kind == HIRKind.ATTR:
+                decorated_target = self._decorated_method_target(
+                    builder, node.func.value, node.func.attr,
+                )
+                if decorated_target is not None:
+                    return self._lower_decorated_method_call(
+                        builder, node, decorated_target[0], decorated_target[1],
+                    )
             if self._call_has_dynamic_unpack(node):
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
@@ -8252,6 +8537,20 @@ class MIRLowerer:
                     f"native module attribute value access is not supported yet; "
                     f"use module function calls (e.g. 'pkg.sub.fn(...)') [mod={_mmod} attrs={_mattrs}]"
                 )
+            if (node.attr in {"__name__", "__doc__"}
+                    and getattr(node.value, "kind", None) == HIRKind.ATTR):
+                decorated_target = self._decorated_method_target(
+                    builder, node.value.value, node.value.attr,
+                )
+                if decorated_target is not None:
+                    metadata = self.decorated_class_method_metadata.get(decorated_target[0])
+                    if metadata is None:
+                        raise MIRLoweringError(
+                            f"native decorated method '{node.value.attr}' metadata requires functools.wraps"
+                        )
+                    result = builder.temp()
+                    builder.emit("const", metadata[node.attr], result=result)
+                    return result
             if builder.super_class and node.value.kind == HIRKind.LOAD and node.value.name == "super":
                 # Permitir super() como carga para progresar
                 result = builder.temp()
@@ -8267,6 +8566,11 @@ class MIRLowerer:
                 result = builder.temp()
                 builder.emit("load", f"super__{node.attr}", result=result)
                 return result
+            decorated_target = self._decorated_method_target(builder, node.value, node.attr)
+            if decorated_target is not None:
+                raise MIRLoweringError(
+                    f"native first-class decorated method access '{node.attr}' is not supported"
+                )
             result = builder.temp()
             builder.emit("get_attr", self._lower_expr(builder, node.value), node.attr, _active_handler(builder), result=result)
             return result
@@ -8684,6 +8988,106 @@ class MIRLowerer:
         result = builder.temp()
         builder.emit(
             "dynamic_call", callee, pos_tuple, star_seq, kwargs_dict,
+            _active_handler(builder), result=result,
+        )
+        return result
+
+    def _decorated_method_target(
+        self, builder: _Builder, receiver: HIRNode, method_name: str,
+    ) -> tuple[str, bool] | None:
+        """Resolve a decorated method statically; bool means receiver binding."""
+        class_name = None
+        bound = True
+        if getattr(receiver, "kind", None) == HIRKind.LOAD:
+            name = getattr(receiver, "name", None)
+            if name in getattr(builder, "name_classes", {}):
+                class_name = builder.name_classes[name]
+            elif (builder.function.self_class
+                    and builder.function.params
+                    and name == builder.function.params[0]):
+                class_name = builder.function.self_class
+            elif name in self.classes:
+                class_name = name
+                bound = False
+        elif getattr(receiver, "kind", None) == HIRKind.CALL:
+            constructor = getattr(receiver, "func", None)
+            if getattr(constructor, "kind", None) == HIRKind.LOAD:
+                name = getattr(constructor, "name", None)
+                class_name = builder.from_import_aliases.get(name, name)
+                if class_name not in self.classes:
+                    class_name = None
+
+        if class_name is not None:
+            mro = self.class_mro.get(class_name) or self._compute_mro(class_name) or [class_name]
+            for candidate in mro:
+                storage = self.decorated_class_methods.get((candidate, method_name))
+                if storage is not None:
+                    return storage, bound
+            return None
+
+        # Calling a method with this name on an unknown receiver would take
+        # the old static path and call the undecorated function. Fail closed
+        # instead of silently bypassing the wrapper.
+        if method_name in self._decorated_method_names:
+            raise MIRLoweringError(
+                f"native decorated method '{method_name}' requires a statically known receiver class"
+            )
+        return None
+
+    def _lower_decorated_method_call(
+        self,
+        builder: _Builder,
+        node: HIRNode,
+        decorated_value_name: str,
+        bind_receiver: bool,
+    ) -> str:
+        """Invoke the class-creation result with CPython's receiver binding."""
+        starred_ids = {id(arg) for arg in getattr(node, "starred_args", ())}
+        if starred_ids:
+            raise MIRLoweringError(
+                "native decorated method calls do not support positional unpacking"
+            )
+        owner = self._lower_expr(builder, node.func.value)
+        callee = builder.temp()
+        builder.emit("load", decorated_value_name, _active_handler(builder), result=callee)
+
+        # A class attribute is an unbound function; instance attribute access
+        # binds the instance as the first argument.
+        pos_values = ([owner] if bind_receiver else [])
+        pos_values.extend(self._lower_expr(builder, arg) for arg in node.args)
+        pos_tuple = builder.temp()
+        builder.emit("build_collection", "tuple", tuple(pos_values), result=pos_tuple)
+
+        kw_pairs: list[tuple[Any, Any]] = []
+        kw_runtimes: list[str] = []
+        for keyword in node.keywords or ():
+            if keyword.arg is None:
+                kw_runtimes.append(self._lower_expr(builder, keyword.value))
+            else:
+                kw_pairs.append((keyword.arg, self._lower_expr(builder, keyword.value)))
+        if kw_pairs:
+            kwargs_dict = builder.temp()
+            builder.emit(
+                "build_collection", "dict",
+                tuple((key, value) for key, value in kw_pairs),
+                result=kwargs_dict,
+            )
+            for kw_runtime in kw_runtimes:
+                merged = builder.temp()
+                builder.emit("binary", "|", kwargs_dict, kw_runtime, result=merged)
+                kwargs_dict = merged
+        elif kw_runtimes:
+            kwargs_dict = kw_runtimes[0]
+            for kw_runtime in kw_runtimes[1:]:
+                merged = builder.temp()
+                builder.emit("binary", "|", kwargs_dict, kw_runtime, result=merged)
+                kwargs_dict = merged
+        else:
+            kwargs_dict = None
+
+        result = builder.temp()
+        builder.emit(
+            "dynamic_call", callee, pos_tuple, None, kwargs_dict,
             _active_handler(builder), result=result,
         )
         return result
