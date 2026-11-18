@@ -6791,7 +6791,7 @@ class MIRLowerer:
             # SUPER_OBJECT_METHODS_V1: object methods that are always available
             # on any class (including builtin bases). These resolve to object's
             # implementation when no user class in the MRO defines them.
-            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"} and builder.super_self is not None:
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"} and builder.super_self is not None:
                 pass  # handled below
             # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
             # no los define ninguna clase: es la operación nativa de objeto.
@@ -6839,7 +6839,7 @@ class MIRLowerer:
                     builder.emit("del_item", receiver, args[0])
                     return None
             # SUPER_OBJECT_METHODS_V1: handle object methods
-            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
                 if builder.super_self in builder.cell_params:
                     receiver = builder.temp()
                     builder.emit("cell_load", builder.super_self, result=receiver)
@@ -8733,7 +8733,7 @@ class MIRLowerer:
             if _coll_kind is not None and builder.super_self is not None:
                 _can_fallback = True
             # SUPER_OBJECT_METHODS_V1: object methods available on any class
-            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
                 _can_fallback = True
             # SUPER_DUNDER_FALLBACK_V1: __setattr__, __getattr__, etc.
             if attr in {"__setattr__", "__getattr__", "__delattr__", "__setitem__", "__getitem__", "__delitem__"} and builder.super_self is not None:
@@ -8782,7 +8782,7 @@ class MIRLowerer:
             # SUPER_OBJECT_METHODS_V1: object methods that are always available
             # on any class (including builtin bases). These resolve to object's
             # implementation when no user class in the MRO defines them.
-            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"} and builder.super_self is not None:
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"} and builder.super_self is not None:
                 pass  # handled below
             # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
             # no los define ninguna clase: es la operación nativa de objeto.
@@ -8830,7 +8830,7 @@ class MIRLowerer:
                     builder.emit("del_item", receiver, args[0])
                     return None
             # SUPER_OBJECT_METHODS_V1: handle object methods
-            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
                 if builder.super_self in builder.cell_params:
                     receiver = builder.temp()
                     builder.emit("cell_load", builder.super_self, result=receiver)
