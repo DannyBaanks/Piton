@@ -4249,11 +4249,23 @@ class MIRLowerer:
         return names
 
     def _for_target_binds(self, target) -> set[str]:
+        """Names bound by a ``for`` loop target (including tuple-unpack and
+        starred targets).
+
+        PITON's HIR lowers for-loop targets as ``STORE`` nodes (a ``TUPLE`` of
+        ``STORE`` names, possibly nested or starred), so recognize ``STORE`` as
+        a binding form in addition to ``LOAD``. Without this, a loop target that
+        shadows a module function was seen as unbound inside the loop body even
+        though the loop binds it before each body iteration, producing a false
+        ``read before assignment`` failure.
+        """
         if target is None:
             return set()
-        if target.kind == HIRKind.LOAD and getattr(target, "name", None):
-            return {target.name}
-        if target.kind in {HIRKind.TUPLE, HIRKind.LIST}:
+        kind = target.kind
+        if kind in {HIRKind.STORE, HIRKind.LOAD}:
+            name = getattr(target, "name", None)
+            return {name} if name else set()
+        if kind in {HIRKind.TUPLE, HIRKind.LIST}:
             out: set[str] = set()
             for element in getattr(target, "elts", []) or []:
                 out |= self._for_target_binds(element)
@@ -4465,8 +4477,11 @@ class MIRLowerer:
                     check_expr(getattr(statement, "iter", None), bound)
                     target = getattr(statement, "target", None)
                     check_target_address(target, bound)
-                    # HIR lowers for-loop targets as LOAD nodes (see
-                    # _for_target_binds), so target_names() sees no binding.
+                    # For-loop targets bind their names inside the loop body
+                    # (they are lowered as STORE nodes, possibly nested in a
+                    # TUPLE/LIST or Starred). Recognize them so a target that
+                    # shadows a module function is seen as bound before each
+                    # body iteration, not as an unbound read.
                     body_in = set(bound) | self._for_target_binds(target)
                 sequence(getattr(statement, "body", ()), body_in)
                 # A loop can execute zero times; only its else suite can add
