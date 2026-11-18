@@ -1,14 +1,15 @@
 """Platform-aware access to the Linux ELF native backend for tests.
 
 The differential suites that call ``compile_native_linux`` exercise the Linux
-ELF backend, not the Windows PE backend. GitHub's Windows runner has no WSL
-distribution, so attempting that build there measures a missing runner
+ELF backend, not the Windows PE backend. The Windows CI job does not provision
+a WSL Linux toolchain, so attempting that build there measures a missing runner
 capability rather than PITON behaviour.
 
 This helper keeps the test dependency explicit: Linux hosts use the real
 backend unchanged; Windows hosts skip only when the test actually asks for a
 Linux ELF build. Set ``PITON_RUN_LINUX_NATIVE_ON_WINDOWS=1`` to opt in when a
-local WSL distribution is intentionally configured for such a run.
+local WSL distribution with a Linux toolchain is intentionally configured for
+such a run.
 """
 from __future__ import annotations
 
@@ -21,8 +22,9 @@ import pytest
 
 
 SKIP_REASON = (
-    "Linux ELF native backend is not available on this Windows host "
-    "(the GitHub Windows runner has no WSL distribution)"
+    "Linux ELF native backend is skipped on Windows: no WSL Linux toolchain is "
+    "provisioned for this run (opt in with "
+    "PITON_RUN_LINUX_NATIVE_ON_WINDOWS=1 when one is configured)"
 )
 
 

@@ -332,8 +332,9 @@ También se comprobó que `cwd` se traduce al directorio WSL correcto. La otra
 media quedó **NOT_DEMONSTRATED**: la distro WSL disponible en esta máquina es
 `docker-desktop` y no contiene `gcc`, así que no se pudo demostrar el ciclo
 completo *emitir C → compilar ELF con el toolchain WSL → ejecutar el ELF* en
-este host. El job de CI Windows seguirá omitiendo esos tests de forma
-explícita cuando no haya distro.
+este host. El job de CI Windows los omite de forma explícita: no activa
+`PITON_RUN_LINUX_NATIVE_ON_WINDOWS`, así que ninguna ejecución ELF depende de
+que el runner tenga una distro WSL.
 
 ### Tracker honesto de `FUERA_DE_LA_LISTA`
 
