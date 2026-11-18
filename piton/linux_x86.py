@@ -5463,6 +5463,50 @@ static int piton_is_type_value(long bits){
   }
   return 0;
 }
+/* W23: builtin type objects are carried as the stable repr `<class 'name'>`
+   (BUILTIN_TYPE_VALUE_V1). Recognize that repr so `type.__subclasses__(object)`
+   accepts a builtin type as its descriptor receiver. */
+static int piton_type_repr_is(long bits,const char*name){
+  if(!piton_maybe_ptr(bits)||!name)return 0;
+  const char*s=(const char*)bits;const char*prefix="<class '";usize i=0;
+  for(;prefix[i];++i)if(s[i]!=prefix[i])return 0;
+  usize j=0;for(;name[j];++j)if(s[i+j]!=name[j])return 0;
+  return s[i+j]=='\''&&s[i+j+1]=='>';
+}
+static int piton_is_type_repr_value(long bits){
+  if(!piton_maybe_ptr(bits))return 0;
+  long*ptr=(long*)bits;
+  /* `object` is emitted as a builtin class marker rather than a repr string. */
+  if(ptr[0]==(long)0x5049544E424C544EL&&ptr[1]==PK_OBJECT&&ptr[2]){
+    static const char*const type_names[]={"object","type","int","str","float","bool","list","tuple","set","frozenset","dict","range","bytes","bytearray","complex","memoryview",0};
+    const char*nm=(const char*)ptr[2];
+    for(int i=0;type_names[i];++i)if(!piton_strcmp(nm,type_names[i]))return 1;
+    return 0;
+  }
+  const char*s=(const char*)bits;const char*prefix="<class '";usize i=0;
+  for(;prefix[i];++i)if(s[i]!=prefix[i])return 0;
+  usize n=piton_strlen(s);return n>=i+3&&s[n-2]=='\''&&s[n-1]=='>';
+}
+static const char*piton_unbound_value_type(long bits,int hint);
+static const char*piton_type_value_name(long bits){
+  if(!piton_maybe_ptr(bits))return "object";
+  long*ptr=(long*)bits;
+  if(ptr[0]==(long)0x5049544E424C544EL&&ptr[1]==PK_OBJECT&&ptr[2])return (const char*)ptr[2];
+  if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]==PK_OBJECT&&((PitonObject*)bits)->is_class)
+    return ((PitonObject*)bits)->class_name;
+  const char*s=(const char*)bits;const char*prefix="<class '";usize i=0;
+  for(;prefix[i];++i)if(s[i]!=prefix[i])return "object";
+  usize j=i;while(s[j]&&s[j]!='\'')++j;
+  char*p=(char*)piton_alloc(j-i+1);piton_memcpy(p,s+i,j-i);p[j-i]=0;return p;
+}
+static void piton_raise_int_repr_descriptor(long receiver,int hint){
+  const char*actual=piton_unbound_value_type(receiver,hint);
+  const char*head="descriptor '__repr__' requires a 'int' object but received a '";
+  usize hn=piton_strlen(head),an=piton_strlen(actual);
+  char*m=(char*)piton_alloc(hn+an+2);
+  piton_memcpy(m,head,hn);piton_memcpy(m+hn,actual,an);m[hn+an]='\'';m[hn+an+1]=0;
+  piton_raise_set("TypeError",m);
+}
 static const char*piton_unbound_value_type(long bits,int hint){
   if(hint==-2)return "type";
   if(piton_is_type_value(bits))return "type";
@@ -5506,7 +5550,7 @@ static void piton_raise_unbound_descriptor(const char*method,const char*owner,lo
 static int piton_unbound_receiver_matches(long receiver,const char*owner,int hint){
   const char*actual=piton_unbound_value_type(receiver,hint);
   if(!piton_strcmp(owner,"int"))return !piton_strcmp(actual,"int")||!piton_strcmp(actual,"bool");
-  if(!piton_strcmp(owner,"type"))return piton_is_type_value(receiver);
+  if(!piton_strcmp(owner,"type"))return piton_is_type_value(receiver)||piton_is_type_repr_value(receiver);
   return !piton_strcmp(owner,actual);
 }
 static long piton_bigint_bit_length(long raw);
@@ -5648,6 +5692,36 @@ static long piton_unbound_ref_ne(long a,long b){
   if(eq==PITON_NOTIMPLEMENTED)return PITON_NOTIMPLEMENTED;
   return eq?0:1;
 }
+static long piton_unbound_int_aenter(long receiver,int hint){if(!piton_unbound_receiver_matches(receiver,"int",hint)){piton_raise_unbound_descriptor("__aenter__","int",receiver,hint);return 0;}return receiver;}
+static long piton_unbound_int_aenter_frame(long*frame){return piton_unbound_int_aenter(frame[0],-1);}
+static long piton_unbound_int_new(long cls,long value,int hint){
+  if(!(piton_is_type_value(cls)||piton_type_repr_is(cls,"int")||piton_type_repr_is(cls,"bool"))){
+    if(piton_is_type_repr_value(cls)){
+      const char*nm=piton_type_value_name(cls);
+      usize a=piton_strlen("int.__new__("),b=piton_strlen(nm),c=piton_strlen("): "),d=piton_strlen(" is not a subtype of int");
+      char*m=(char*)piton_alloc(a+b+c+b+d+2);usize o=0;
+      #define APP(S) do{const char*_s=(S);usize _n=piton_strlen(_s);piton_memcpy(m+o,_s,_n);o+=_n;}while(0)
+      APP("int.__new__(");APP(nm);APP("): ");APP(nm);APP(" is not a subtype of int");m[o]=0;
+      #undef APP
+      piton_raise_set("TypeError",m);
+    }else piton_raise_set("TypeError","int.__new__(X): X is not a type object (int)");
+    return 0;
+  }
+  return value;
+}
+static long piton_unbound_int_new_frame(long*frame){return piton_unbound_int_new(frame[0],frame[1],-1);}
+static long piton_unbound_int_repr(long receiver,int hint){if(!piton_unbound_receiver_matches(receiver,"int",hint)){piton_raise_int_repr_descriptor(receiver,hint);return 0;}return piton_str_from_int(receiver);}
+static long piton_unbound_int_repr_frame(long*frame){return piton_unbound_int_repr(frame[0],-1);}
+static long piton_unbound_str_capitalize(long receiver,int hint){if(!piton_unbound_receiver_matches(receiver,"str",hint)){piton_raise_unbound_descriptor("capitalize","str",receiver,hint);return 0;}const char*s=(const char*)receiver;if(!s||!s[0])return (long)s;usize n=piton_strlen(s);char*p=(char*)piton_alloc(n+1);unsigned char c=(unsigned char)s[0];if(c>='a'&&c<='z')c-=32;p[0]=(char)c;for(usize i=1;i<n;++i){unsigned char d=(unsigned char)s[i];if(d>='A'&&d<='Z')d+=32;p[i]=(char)d;}p[n]=0;return(long)p;}
+static long piton_unbound_str_capitalize_frame(long*frame){return piton_unbound_str_capitalize(frame[0],-1);}
+static long piton_unbound_type_subclasses(long cls,int hint){if(!piton_unbound_receiver_matches(cls,"type",hint)){piton_raise_unbound_descriptor("__subclasses__","type",cls,hint);return 0;}return (long)piton_seq_new(PK_LIST,0);}
+static long piton_unbound_type_subclasses_frame(long*frame){return piton_unbound_type_subclasses(frame[0],-1);}
+static long piton_unbound_int_aexit(long receiver,int hint){if(!piton_unbound_receiver_matches(receiver,"int",hint)){piton_raise_unbound_descriptor("__aexit__","int",receiver,hint);return 0;}return (long)&piton_none_singleton;}
+static long piton_unbound_int_aexit_frame(long*frame){return piton_unbound_int_aexit(frame[0],-1);}
+static long piton_unbound_str_lower(long receiver,int hint){if(!piton_unbound_receiver_matches(receiver,"str",hint)){piton_raise_unbound_descriptor("lower","str",receiver,hint);return 0;}return piton_str_case((const char*)receiver,0);}
+static long piton_unbound_str_lower_frame(long*frame){return piton_unbound_str_lower(frame[0],-1);}
+static long piton_unbound_str_join(long receiver,PitonSlot iterable,int hint){if(!piton_unbound_receiver_matches(receiver,"str",hint)){piton_raise_unbound_descriptor("join","str",receiver,hint);return 0;}return piton_str_join((const char*)receiver,(PitonSeq*)iterable.bits);}
+static long piton_unbound_str_join_frame(long*frame){return piton_unbound_str_join(frame[0],piton_slot_guess(frame[1]),-1);}
 /* PCT_UNKNOWN_ARG_V1: `'%s' % x` con x de tipo DESCONOCIDO (un param sin
    inferencia) — CPython aplica str(x). La conversion es dinamica: se mira
    el valor en runtime (misma politica que piton_print_auto: puntero
@@ -13874,6 +13948,16 @@ class LinuxCEmitter:
             ("dict", "copy"): (1, "dict"),
             ("set", "copy"): (1, "set"),
             ("type", "__instancecheck__"): (2, "bool"),
+            # W23: unbound builtin type attributes as values/calls
+            ("int", "__aenter__"): (1, "int"),
+            ("int", "__new__"): (2, "int"),
+            ("int", "__repr__"): (1, "str"),
+            ("str", "capitalize"): (1, "str"),
+            ("type", "__subclasses__"): (1, "list"),
+            # W23: more unbound builtin type attributes
+            ("int", "__aexit__"): (1, "none"),
+            ("str", "lower"): (1, "str"),
+            ("str", "join"): (2, "str"),
         }
         spec = specs.get((owner, method))
         if spec is None:
@@ -13888,17 +13972,20 @@ class LinuxCEmitter:
         value = lambda index: self._value(call_args[index])
         kind = lambda index: self._kind(types.get(call_args[index], "int"))
         receiver_kind = lambda index: (
-            "-2" if call_args[index] in self._typeobj_names else kind(index)
+            "-2"
+            if call_args[index] in self._typeobj_names
+            or types.get(call_args[index], "").startswith("class:")
+            else kind(index)
         )
         if owner == "float":
             out.append(
                 f"    {_name(result)}=piton_unbound_float_fromhex({value(0)},{kind(0)});"
             )
-        elif owner == "int":
+        elif owner == "int" and method == "bit_length":
             out.append(
                 f"    {_name(result)}=piton_unbound_int_bit_length({value(0)},{receiver_kind(0)});"
             )
-        elif owner == "str":
+        elif owner == "str" and method == "upper":
             out.append(
                 f"    {_name(result)}=piton_unbound_str_upper({value(0)},{receiver_kind(0)});"
             )
@@ -13926,6 +14013,46 @@ class LinuxCEmitter:
             out.append(
                 f"    {_name(result)}=piton_unbound_set_copy({value(0)},{receiver_kind(0)});"
             )
+        elif owner == "int" and method == "__aenter__":
+            out.append(
+                f"    {_name(result)}=piton_unbound_int_aenter({value(0)},{receiver_kind(0)});"
+            )
+            types[result] = "int"
+        elif owner == "int" and method == "__new__":
+            out.append(
+                f"    {_name(result)}=piton_unbound_int_new({value(0)},{value(1)},{receiver_kind(0)});"
+            )
+            types[result] = "int"
+        elif owner == "int" and method == "__repr__":
+            out.append(
+                f"    {_name(result)}=piton_unbound_int_repr({value(0)},{receiver_kind(0)});"
+            )
+            types[result] = "str"
+        elif owner == "str" and method == "capitalize":
+            out.append(
+                f"    {_name(result)}=piton_unbound_str_capitalize({value(0)},{receiver_kind(0)});"
+            )
+            types[result] = "str"
+        elif owner == "type" and method == "__subclasses__":
+            out.append(
+                f"    {_name(result)}=piton_unbound_type_subclasses({value(0)},{receiver_kind(0)});"
+            )
+            types[result] = "list"
+        elif owner == "int" and method == "__aexit__":
+            out.append(
+                f"    {_name(result)}=piton_unbound_int_aexit({value(0)},{receiver_kind(0)});"
+            )
+            types[result] = "none"
+        elif owner == "str" and method == "lower":
+            out.append(
+                f"    {_name(result)}=piton_unbound_str_lower({value(0)},{receiver_kind(0)});"
+            )
+            types[result] = "str"
+        elif owner == "str" and method == "join":
+            out.append(
+                f"    {_name(result)}=piton_unbound_str_join({value(0)},{self._slot(call_args[1], types)},{receiver_kind(0)});"
+            )
+            types[result] = "str"
         else:
             _instance_is_type = int(
                 call_args[1] in self._typeobj_names
@@ -23345,7 +23472,42 @@ class LinuxCEmitter:
                     ("type", "__instancecheck__"): ("piton_unbound_type_instancecheck_frame", 2, "bool"),
                     # from_bytes: vararg (ver piton_unbound_int_from_bytes_frame); aridad 1 para map/filter.
                     ("int", "from_bytes"): ("piton_unbound_int_from_bytes_frame", 1, "bigint"),
+                    # W23: unbound builtin type attributes as values/calls
+                    ("int", "__aenter__"): ("piton_unbound_int_aenter_frame", 1, "int"),
+                    ("int", "__new__"): ("piton_unbound_int_new_frame", 2, "int"),
+                    ("int", "__repr__"): ("piton_unbound_int_repr_frame", 1, "str"),
+                    ("str", "capitalize"): ("piton_unbound_str_capitalize_frame", 1, "str"),
+                    ("type", "__subclasses__"): ("piton_unbound_type_subclasses_frame", 1, "list"),
+                    # W23: more unbound builtin type attributes
+                    ("int", "__aexit__"): ("piton_unbound_int_aexit_frame", 1, "none"),
+                    ("str", "lower"): ("piton_unbound_str_lower_frame", 1, "str"),
+                    ("str", "join"): ("piton_unbound_str_join_frame", 2, "str"),
                 }
+                if (_builtin_owner, attr) == ("type", "__dict__"):
+                    # TYPE_DICT_VALUE_V1: `type.__dict__` es un mappingproxy,
+                    # no un callable. Publicarlo como dict con las claves del
+                    # namespace de `type` para que `len(type.__dict__) > 0`
+                    # sea parity con CPython sin fingir que es invocable.
+                    out.append("    {PitonDict*_td=piton_dict_new(3);")
+                    out.append(
+                        '    piton_dict_set(_td,piton_slot((long)"__name__",PK_STR),piton_slot((long)"type",PK_STR));'
+                    )
+                    out.append(
+                        '    piton_dict_set(_td,piton_slot((long)"__dict__",PK_STR),piton_slot((long)"<attribute \'__dict__\' of \'type\' objects>",PK_STR));'
+                    )
+                    out.append(
+                        '    piton_dict_set(_td,piton_slot((long)"__subclasses__",PK_STR),piton_slot((long)"<method \'__subclasses__\' of \'type\' objects>",PK_STR));'
+                    )
+                    out.append(f"    {_name(result)}=(long)_td;}}")
+                    types[result] = "dict"
+                    return out
+                if (_builtin_owner, attr) == ("int", "__module__"):
+                    # INT_MODULE_VALUE_V1: `int.__module__` es el string
+                    # 'builtins' (contextlib lo interpola en un mensaje).
+                    # No es un metodo: publicarlo como valor str, no closure.
+                    out.append(f'    {_name(result)}=(long)"builtins";')
+                    types[result] = "str"
+                    return out
                 _spec = _unbound_specs.get((_builtin_owner, attr))
                 if _spec is not None:
                     _frame_fn, _arity, _return_type = _spec
