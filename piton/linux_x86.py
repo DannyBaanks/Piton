@@ -922,6 +922,8 @@ static void piton_raise_unsupported_power(PitonSlot base,PitonSlot exponent,
   }
   piton_raise_set("TypeError",message.d);
 }
+static const char*const piton_binop_text[13]={"+","-","*","/","//","%","**","<<",">>","&","|","^","@"};
+static const char*const piton_aug_op_text[13]={"+=","-=","*=","/=","//=","%=","**=","<<=",">>=","&=","|=","^=","@"};
 static PitonSlot piton_object_binary_dunder(long opcode,PitonSlot left,
                                              PitonSlot right,PitonSlot modulo,
                                              int ternary,int right_first){
@@ -932,8 +934,8 @@ static PitonSlot piton_object_binary_dunder(long opcode,PitonSlot left,
     piton_raise_unsupported_power(left,right,modulo,1);
     return (PitonSlot){0,PK_NONE};
   }
-  const char*primary=opcode==4?"__floordiv__":"__pow__";
-  const char*reflected=opcode==4?"__rfloordiv__":"__rpow__";
+  const char*primary=opcode==0?"__add__":opcode==1?"__sub__":opcode==4?"__floordiv__":opcode==5?"__mod__":"__pow__";
+  const char*reflected=opcode==0?"__radd__":opcode==1?"__rsub__":opcode==4?"__rfloordiv__":opcode==5?"__rmod__":"__rpow__";
   PitonSlot result;
   if(right_first){
     result=piton_call_object_dunder(right,reflected,left,(PitonSlot){0,PK_NONE},2);
@@ -949,7 +951,14 @@ static PitonSlot piton_object_binary_dunder(long opcode,PitonSlot left,
     if(!piton_slot_is_notimplemented(result))return result;
   }
   if(opcode==4)dyn_two_types("unsupported operand type(s) for ","//",left,right,"");
-  else piton_raise_unsupported_power(left,right,(PitonSlot){0,PK_NONE},0);
+  else if(opcode==6)piton_raise_unsupported_power(left,right,(PitonSlot){0,PK_NONE},0);
+  else{
+    PitonStrBuf m;sb_init(&m);sb_puts(&m,"unsupported operand type(s) for ");
+    sb_puts(&m,piton_binop_text[opcode]);sb_puts(&m,": '");
+    sb_puts(&m,js_type_name(left));sb_puts(&m,"' and '");
+    sb_puts(&m,js_type_name(right));sb_putc(&m,'\'');
+    piton_raise_set("TypeError",m.d);
+  }
   return (PitonSlot){0,PK_NONE};
 }
 /* AUG_DUNDER_V1: asignacion aumentada de CPython (PyNumber_InPlace*):
@@ -970,7 +979,6 @@ static int piton_class_is_strict_subclass(const char*sub,const char*sup){
 static const char*const piton_aug_inplace_names[13]={"__iadd__","__isub__","__imul__","__itruediv__","__ifloordiv__","__imod__","__ipow__","__ilshift__","__irshift__","__iand__","__ior__","__ixor__","__imatmul__"};
 static const char*const piton_aug_binary_names[13]={"__add__","__sub__","__mul__","__truediv__","__floordiv__","__mod__","__pow__","__lshift__","__rshift__","__and__","__or__","__xor__","__matmul__"};
 static const char*const piton_aug_reflected_names[13]={"__radd__","__rsub__","__rmul__","__rtruediv__","__rfloordiv__","__rmod__","__rpow__","__rlshift__","__rrshift__","__rand__","__ror__","__rxor__","__rmatmul__"};
-static const char*const piton_aug_op_text[13]={"+=","-=","*=","/=","//=","%=","**=","<<=",">>=","&=","|=","^=","@="};
 static int piton_aug_reflected_first(PitonSlot left,PitonSlot right,const char*reflected){
   if(left.kind!=PK_OBJECT||right.kind!=PK_OBJECT)return 0;
   PitonObject*lo=(PitonObject*)left.bits;PitonObject*ro=(PitonObject*)right.bits;
@@ -1062,8 +1070,11 @@ static PitonSlot piton_binop_object_add(PitonSlot a,PitonSlot b){
 static PitonSlot piton_dyn_binop(long opc,PitonSlot a,PitonSlot b){
   static const char*names[]={"+","-","*","/","//","%","**","<<",">>","&","|","^"};
   PitonSlot r={0,PK_NONE};
-  if((opc==4||opc==6)&&(a.kind==PK_OBJECT||b.kind==PK_OBJECT))
-    return piton_object_binary_dunder(opc,a,b,(PitonSlot){0,PK_NONE},0,0);
+  if((opc==0||opc==1||opc==4||opc==5||opc==6)&&(a.kind==PK_OBJECT||b.kind==PK_OBJECT)){
+    const char*refl=opc==0?"__radd__":opc==1?"__rsub__":opc==4?"__rfloordiv__":opc==5?"__rmod__":"__rpow__";
+    int right_first=piton_aug_reflected_first(a,b,refl);
+    return piton_object_binary_dunder(opc,a,b,(PitonSlot){0,PK_NONE},0,right_first);
+  }
   int ai=(a.kind==PK_INT||a.kind==PK_BOOL),bi=(b.kind==PK_INT||b.kind==PK_BOOL);
   int an=ai||a.kind==PK_FLOAT,bn=bi||b.kind==PK_FLOAT;
   /* DYN_SLOT_BITWISE_V1: bitwise operators accept dynamic int/bool slots.
@@ -19671,11 +19682,33 @@ class LinuxCEmitter:
                 types[result] = "complex"
                 return out
             if "none" in {left_type, right_type} or "object" in {left_type, right_type} or any(str(t).startswith("object:") for t in (left_type, right_type)):
-                if operator in {"//", "**"} and any(
+                if operator in {"+", "-", "//", "%", "**"} and any(
                     str(t).startswith("object:") for t in (left_type, right_type)
                 ):
-                    _opcode = 4 if operator == "//" else 6
-                    _reflected = "__rfloordiv__" if operator == "//" else "__rpow__"
+                    if operator == "%":
+                        _has_mod_dunder = False
+                        for _cls_name in (
+                            left_type.split(":", 1)[1] if left_type.startswith("object:") else None,
+                            right_type.split(":", 1)[1] if right_type.startswith("object:") else None,
+                        ):
+                            if _cls_name:
+                                for candidate in self.class_mro.get(_cls_name, [_cls_name]):
+                                    cand_methods = self.classes.get(candidate, set())
+                                    if "__mod__" in cand_methods or "__rmod__" in cand_methods:
+                                        _has_mod_dunder = True
+                                        break
+                                if "__mod__" in self.classes.get(_cls_name, set()) or "__rmod__" in self.classes.get(_cls_name, set()):
+                                    _has_mod_dunder = True
+                            if _has_mod_dunder:
+                                break
+                        if not _has_mod_dunder:
+                            raise NativeBuildError(
+                                f"Linux % on a native object without a matching dunder is not supported"
+                            )
+                    _opcode_map = {"+": 0, "-": 1, "//": 4, "%": 5, "**": 6}
+                    _opcode = _opcode_map[operator]
+                    _refl_map = {"+": "__radd__", "-": "__rsub__", "//": "__rfloordiv__", "%": "__rmod__", "**": "__rpow__"}
+                    _reflected = _refl_map[operator]
                     _right_first = int(
                         self._right_reflected_method_first(left_type, right_type, _reflected)
                     )
@@ -19741,6 +19774,46 @@ class LinuxCEmitter:
                         return out
                 if not _has_obj_dunder:
                     if any(str(t).startswith("object:") for t in (left_type, right_type)):
+                        # OBJECT_BINOP_RUNTIME_V1: no static dunder found, emit
+                        # runtime dispatch so objects that DO define the dunder
+                        # work at runtime; objects that don't raise TypeError
+                        # exactly like CPython.
+                        if operator == "%":
+                            _has_mod_dunder = False
+                            for _cls_name in (
+                                left_type.split(":", 1)[1] if left_type.startswith("object:") else None,
+                                right_type.split(":", 1)[1] if right_type.startswith("object:") else None,
+                            ):
+                                if _cls_name:
+                                    for candidate in self.class_mro.get(_cls_name, [_cls_name]):
+                                        cand_methods = self.classes.get(candidate, set())
+                                        if "__mod__" in cand_methods or "__rmod__" in cand_methods:
+                                            _has_mod_dunder = True
+                                            break
+                                    if "__mod__" in self.classes.get(_cls_name, set()) or "__rmod__" in self.classes.get(_cls_name, set()):
+                                        _has_mod_dunder = True
+                                if _has_mod_dunder:
+                                    break
+                            if not _has_mod_dunder:
+                                raise NativeBuildError(
+                                    f"Linux % on a native object without a matching dunder is not supported"
+                                )
+                        _opcode = {"+": 0, "-": 1, "%": 5, "//": 4, "**": 6}.get(operator)
+                        if _opcode is not None:
+                            _reflected = {"+": "__radd__", "-": "__rsub__", "%": "__rmod__", "//": "__rfloordiv__", "**": "__rpow__"}[operator]
+                            _right_first = int(
+                                self._right_reflected_method_first(left_type, right_type, _reflected)
+                            )
+                            out.append(
+                                f"    {{PitonSlot*_ob=piton_slot_box_new(piton_object_binary_dunder({_opcode},"
+                                f"{self._slot(left, types)},{self._slot(right, types)},"
+                                f"(PitonSlot){{0,PK_NONE}},0,{_right_first}));"
+                                f"{_name(result)}=(long)_ob;}}"
+                            )
+                            self._emit_exc_check(out, function, handler_label)
+                            types[result] = "slot"
+                            self._dyn_slot_temps.add((function.name, result))
+                            return out
                         raise NativeBuildError(
                             f"Linux {operator} on a native object without a matching dunder is not supported"
                         )
