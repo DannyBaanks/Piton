@@ -2,7 +2,6 @@
 
 Los valores esperados se verificaron contra CPython 3.12 (salida byte a byte).
 """
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path

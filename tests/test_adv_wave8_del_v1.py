@@ -2,7 +2,6 @@
 modulo. Un local homonimo en otra funcion (p.ej. un helper de stdlib como
 locale) no debe marcar el global del modulo como ligado (stdlib2 #32).
 """
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
