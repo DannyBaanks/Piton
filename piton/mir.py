@@ -138,6 +138,17 @@ _BUILTIN_BASES = {
     "dict", "list", "tuple", "set", "frozenset",
     "str", "int", "float", "bytes", "bytearray",
     "Exception", "BaseException",
+    # Builtin types used as base classes in stdlib (Tier A targets)
+    "GenericAlias", "type",
+    "collections__abc__GenericAlias",
+    "types__GenericAlias",
+    "_compression__BaseStream", "io__BufferedIOBase", "_io__BufferedIOBase",
+    "io__IOBase", "_io__IOBase",
+    "inspect___Traceback",
+    "inspect___FrameInfo",
+    "_compression__DecompressReader", "io__RawIOBase", "_io__RawIOBase",
+    # abc.ABCMeta is used as a base class in _collections_abc
+    "abc__ABCMeta",
 }
 # COLLECTION_SUBCLASS_V1: `clase X(list)` / `clase X(dict)`. La instancia es un
 # objeto de usuario que guarda la coleccion builtin real en el atributo oculto
@@ -2143,8 +2154,10 @@ class MIRLowerer:
                             else:
                                 # Allow user-defined packages to be imported
                                 pass
-                        if alias.name in imported_modules or alias.name in {"asyncio", "math", "sys", "os", "terminal", "builtins"} or alias.name in _NATIVE_MODULE_CONSTS:
-                            self.module_aliases[alias.asname or alias.name] = alias.name
+                        # Always add imported modules to module_aliases so that
+                        # attribute accesses like inspect._FrameInfo can be resolved
+                        # to their qualified names (e.g., inspect___FrameInfo).
+                        self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
                     if getattr(node, "is_star", False):
@@ -6767,11 +6780,17 @@ class MIRLowerer:
             if cls == current_class:
                 found_current = True
         if next_class is None:
+            # SUPER_OBJECT_METHODS_V1: object methods that are always available
+            # on any class (including builtin bases). These resolve to object's
+            # implementation when no user class in the MRO defines them.
+            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"} and builder.super_self is not None:
+                pass  # handled below
             # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
             # no los define ninguna clase: es la operación nativa de objeto.
             # Antes fallaba cerrado con MIRLoweringError aunque CPython lo
             # resuelve contra object.__setattr__.
             if attr in {"__setattr__", "__getattr__", "__delattr__", "__setitem__", "__getitem__", "__delitem__"} and builder.super_self is not None:
+                pass  # handled below
                 if builder.super_self in builder.cell_params:
                     receiver = builder.temp()
                     builder.emit("cell_load", builder.super_self, result=receiver)
@@ -6811,10 +6830,59 @@ class MIRLowerer:
                         raise MIRLoweringError("native super().__delitem__ requires exactly one argument")
                     builder.emit("del_item", receiver, args[0])
                     return None
+            # SUPER_OBJECT_METHODS_V1: handle object methods
+            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
+                if builder.super_self in builder.cell_params:
+                    receiver = builder.temp()
+                    builder.emit("cell_load", builder.super_self, result=receiver)
+                else:
+                    receiver = builder.temp()
+                    builder.emit("load", builder.super_self, result=receiver)
+                args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+                if attr == "__repr__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__repr__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__str__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__str__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr in {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}:
+                    if len(args) != 1:
+                        raise MIRLoweringError(f"native super().{attr} requires exactly one argument")
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, attr, result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__hash__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__hash__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__bool__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__bool__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__len__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__len__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
                 if attr == "__iter__":
                     got = builder.temp()
-                    builder.emit("builtin_iter_new", "iter", receiver, None, result=got)
-                    return got
+                    builder.emit("get_attr", receiver, "__iter__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
             # SUPER_BUILTIN_BASE_V1: la base siguiente en el MRO es una clase
             # BUILTIN o la raiz `object`, que no aporta un __init__ de usuario.
             # En CPython la llamada resuelve contra object/type.__init__
@@ -8647,13 +8715,35 @@ class MIRLowerer:
                 found_current = True
         current_index = mro.index(current_class)
         tail_mro = mro[current_index + 1:]
+        
+        # Check if this method can be handled by fallback logic (object methods, dunder fallbacks, etc.)
+        # If so, allow unresolved bases in MRO as long as the fallback handles it.
+        _can_fallback = False
+        if next_class is None:
+            # COLLECTION_SUBCLASS_V1: list/dict subclass with __piton_base__
+            _coll_kind = self._collection_base_kind(builder.super_class)
+            if _coll_kind is not None and builder.super_self is not None:
+                _can_fallback = True
+            # SUPER_OBJECT_METHODS_V1: object methods available on any class
+            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
+                _can_fallback = True
+            # SUPER_DUNDER_FALLBACK_V1: __setattr__, __getattr__, etc.
+            if attr in {"__setattr__", "__getattr__", "__delattr__", "__setitem__", "__getitem__", "__delitem__"} and builder.super_self is not None:
+                _can_fallback = True
+            # SUPER_BUILTIN_BASE_V1: __init__ / __init_subclass__ to builtin bases
+            if attr in {"__init__", "__init_subclass__"}:
+                _can_fallback = True
+            # __new__ with arguments to builtin/namedtuple bases
+            if attr == "__new__" and user_args:
+                _can_fallback = True
+        
         unresolved_bases = [
             cls for cls in tail_mro
             if cls not in self.classes
             and cls not in _BUILTIN_BASES
             and cls not in _BUILTIN_EXCEPTIONS
         ]
-        if unresolved_bases:
+        if unresolved_bases and not _can_fallback:
             raise MIRLoweringError(
                 "native super() cannot resolve dynamically evaluated base "
                 f"'{unresolved_bases[0]}'"
@@ -8667,11 +8757,17 @@ class MIRLowerer:
                 _coll_result = self._lower_collection_super(builder, attr, user_args, _coll_kind)
                 if _coll_result is not None:
                     return _coll_result
+            # SUPER_OBJECT_METHODS_V1: object methods that are always available
+            # on any class (including builtin bases). These resolve to object's
+            # implementation when no user class in the MRO defines them.
+            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"} and builder.super_self is not None:
+                pass  # handled below
             # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
             # no los define ninguna clase: es la operación nativa de objeto.
             # Antes fallaba cerrado con MIRLoweringError aunque CPython lo
             # resuelve contra object.__setattr__.
             if attr in {"__setattr__", "__getattr__", "__delattr__", "__setitem__", "__getitem__", "__delitem__"} and builder.super_self is not None:
+                pass  # handled below
                 if builder.super_self in builder.cell_params:
                     receiver = builder.temp()
                     builder.emit("cell_load", builder.super_self, result=receiver)
@@ -8711,10 +8807,73 @@ class MIRLowerer:
                         raise MIRLoweringError("native super().__delitem__ requires exactly one argument")
                     builder.emit("del_item", receiver, args[0])
                     return None
+            # SUPER_OBJECT_METHODS_V1: handle object methods
+            if attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
+                if builder.super_self in builder.cell_params:
+                    receiver = builder.temp()
+                    builder.emit("cell_load", builder.super_self, result=receiver)
+                else:
+                    receiver = builder.temp()
+                    builder.emit("load", builder.super_self, result=receiver)
+                args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+                if attr == "__repr__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__repr__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__str__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__str__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr in {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}:
+                    if len(args) != 1:
+                        raise MIRLoweringError(f"native super().{attr} requires exactly one argument")
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, attr, result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__hash__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__hash__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__bool__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__bool__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__len__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__len__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
                 if attr == "__iter__":
                     got = builder.temp()
-                    builder.emit("builtin_iter_new", "iter", receiver, None, result=got)
-                    return got
+                    builder.emit("get_attr", receiver, "__iter__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                # Handle IO methods and other object methods
+                if attr in {"tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"}:
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, attr, result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                # Handle __instancecheck__ and __subclasscheck__ (ABCMeta methods)
+                if attr in {"__instancecheck__", "__subclasscheck__"}:
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, attr, result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
             if (
                 attr == "__init__"
                 and builder.super_self is not None
@@ -8766,6 +8925,26 @@ class MIRLowerer:
                         _none = builder.temp()
                         builder.emit("const", None, result=_none)
                         return _none
+                    # Check if the next class in MRO is a modeled builtin base that supports __init__
+                    # with arguments (e.g., _compression.DecompressReader, _compression.BaseStream)
+                    _modeled_init_bases = {"_compression__DecompressReader", "_compression__BaseStream"}
+                    _builtin_base = next(
+                        (cls for cls in tail_mro if cls in _modeled_init_bases),
+                        None,
+                    )
+                    if _builtin_base is not None:
+                        # Emit builtin_class to get the builtin class object
+                        _base_class = builder.temp()
+                        builder.emit("builtin_class", _builtin_base, result=_base_class)
+                        # Emit method_call to call __init__ on the builtin class
+                        # with the user_args (self, ...)
+                        _args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+                        _result = builder.temp()
+                        builder.emit(
+                            "method_call", None, "__init__", _base_class, _args, (),
+                            _active_handler(builder), result=_result
+                        )
+                        return _result
                     raise MIRLoweringError(
                         f"native super().{attr} with arguments requires a modeled base implementation"
                     )
@@ -8802,7 +8981,7 @@ class MIRLowerer:
                     # with arguments (scalar immutable types: str, int, float, bytes, tuple).
                     # Collection bases (list, dict, set, frozenset, bytearray) are NOT modeled
                     # for __new__ with arguments and should fail closed.
-                    _modeled_new_bases = {"str", "texto", "int", "entero", "float", "decimal", "bytes", "octetos", "tuple", "tupla"}
+                    _modeled_new_bases = {"str", "texto", "int", "entero", "float", "decimal", "bytes", "octetos", "tuple", "tupla", "GenericAlias", "collections__abc__GenericAlias", "types__GenericAlias", "_Traceback", "_compression__DecompressReader", "_FrameInfo", "inspect___FrameInfo"}
                     _builtin_base = next(
                         (cls for cls in tail_mro if cls in _modeled_new_bases),
                         None,
