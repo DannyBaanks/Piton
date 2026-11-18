@@ -8316,6 +8316,20 @@ static void piton_zip_raise_not_iterable(long bits,const char*known_type){
   PitonStrBuf msg;sb_init(&msg);sb_putc(&msg,'\'');sb_puts(&msg,name);sb_puts(&msg,"' object is not iterable");
   piton_raise_set("TypeError",msg.d);
 }
+/* ZIP_OBJ_ITER_V1: objeto de usuario con __iter__/__next__ (p.ej. itertools.count()).
+   zip lo envuelve y llama a __next__ en cada paso; StopIteration/excepciones
+   se propagan por piton_exc_flag como en cualquier otra fuente. */
+typedef struct{long magic;long obj;long (*next)(long);}PitonZipObjIter;
+#define PITON_ZIP_OBJ_MAGIC 0x5049544E4F424A31LL
+static long piton_zip_obj_iter_new(long obj,long (*iter_fn)(long),long (*next_fn)(long)){
+  if(piton_exc_flag)return 0;
+  if(iter_fn){
+    long it=iter_fn(obj);
+    if(piton_exc_flag)return 0;
+    if(it!=obj){piton_raise_set("NotImplementedError","zip over an object whose __iter__ returns a different iterator is not supported in the native backend");return 0;}
+  }
+  PitonZipObjIter*w=piton_alloc(sizeof(*w));w->magic=PITON_ZIP_OBJ_MAGIC;w->obj=obj;w->next=next_fn;return (long)w;
+}
 static long piton_zip_iter_new_dynamic(long bits,long arg_index,const char*known_type){
   (void)arg_index;
   if(piton_exc_flag)return 0;
@@ -8331,7 +8345,7 @@ static long piton_zip_iter_new_dynamic(long bits,long arg_index,const char*known
        magic==0x5049544E17E2LL||magic==0x5049544E53545249LL||magic==0x5049544E5A495049LL||
        magic==0x5049544E52455649LL||magic==0x5049544E454E554DLL||magic==0x5049544E17E3LL||
        magic==0x5049544E17E4LL||magic==0x5049544E17E5LL||magic==0x5049544E42595445LL||
-       magic==0x5049544E4D564557LL||magic==0x50495443414C4954LL||
+       magic==0x5049544E4D564557LL||magic==0x50495443414C4954LL||magic==PITON_ZIP_OBJ_MAGIC||
        (magic&~1L)==PITON_CB_MAGIC)return bits;
     if(piton_is_closure(bits)||piton_is_code_addr(bits)){piton_zip_raise_not_iterable(bits,"function");return 0;}
     long*header=(long*)bits;
@@ -8375,6 +8389,7 @@ static PitonSlot piton_zip_source_next(long raw){
   if(magic==0x5049544E17E3LL)return(PitonSlot){piton_repr_iterator_next(raw),PK_STR};
   if(magic==0x5049544E17E4LL)return(PitonSlot){piton_len_iterator_next(raw),PK_INT};
   if(magic==0x5049544E17E5LL)return(PitonSlot){piton_str_map_iterator_next(raw),PK_STR};
+  if(magic==PITON_ZIP_OBJ_MAGIC){PitonZipObjIter*w=(PitonZipObjIter*)raw;long v=w->next(w->obj);if(piton_exc_flag)return(PitonSlot){0,PK_NONE};return piton_slot_guess(v);}
   if(magic==0x50495443414C4954LL)return piton_slot_guess(piton_calliter_next(raw));
   if((magic&~1L)==PITON_CB_MAGIC)return piton_slot_guess(piton_callback_iterator_next(raw));
   return piton_slot_guess(piton_iterator_next_any(raw));
@@ -10613,6 +10628,11 @@ class LinuxCEmitter:
         # metodos (warnings: self._filters[:] — sin el tipo, el slice de un
         # valor sin tipo falla cerrado).
         self._instance_attr_types: dict[str, dict[str, str]] = {}
+        # CLASS_ATTR_MODULE_V1: nombre del modulo guardado en un atributo de
+        # clase/instancia (pathlib: `_flavour = os.path`), para resolver
+        # `cls._flavour.splitroot(...)` estaticamente.
+        self._module_load_names: dict[str, str] = {}
+        self._instance_attr_module_names: dict[tuple[str, str], str] = {}
         # CALLABLE_INSTANCE_ATTR_V1: nombres de atributos que la clase asigna
         # sobre la instancia (`self._call = func`). Un atributo asi puede ser
         # un callable en runtime aunque no sea un metodo de la clase.
@@ -17791,6 +17811,23 @@ class LinuxCEmitter:
 
                 def _zip_iterator(value: Any, idx: int) -> str:
                     vtype = types.get(value, "")
+                    if vtype.startswith("object:"):
+                        # ZIP_OBJ_ITER_V1: objeto con protocolo de iterador.
+                        _zcls = vtype.split(":", 1)[1]
+                        try:
+                            _znext = self._resolve_method(_zcls, "__next__")
+                        except NativeBuildError:
+                            _znext = None
+                        if _znext is not None:
+                            try:
+                                _ziter = self._resolve_method(_zcls, "__iter__")
+                            except NativeBuildError:
+                                _ziter = None
+                            _zi = f"(long(*)(long)){_name(_ziter + '____iter__')}" if _ziter is not None else "(long(*)(long))0"
+                            return (
+                                f"piton_zip_obj_iter_new((long){self._value(value)},{_zi},"
+                                f"(long(*)(long)){_name(_znext + '____next__')})"
+                            )
                     if vtype.startswith(("object:", "class:")) or vtype == "file":
                         raise NativeBuildError(f"native zip source type {vtype!r} is not supported")
                     if vtype not in {
@@ -18568,6 +18605,7 @@ class LinuxCEmitter:
             ):
                 out.append(f"    {_name(result)}=0;")
                 types[result] = "module"
+                self._module_load_names[result] = source
                 return out
             # GLOBAL_DECL_V1: the declaration wins over local stores
             # (`global g` + `g = g + 1` reads the shared cell, like CPython).
@@ -22692,11 +22730,20 @@ class LinuxCEmitter:
                 # convierte en runtime (TypeError capturable si no es iterable).
                 _sorted_dyn = types.get(values[0]) in {"slot", "", "any", "unknown"}
                 _sorted_rev_done = False
+                _sorted_zip_src = None
+                if types.get(values[0]) == "iterator:zip":
+                    # SORTED_ZIP_V1: sorted(zip(...)) materializa el iterador a una
+                    # lista de tuplas (piton_collect) antes de ordenar.
+                    _sorted_zip_src = f"_{_name(result)}_zipl"
+                    out.append(f"    long {_sorted_zip_src}=(long)piton_collect(3,{self._value(values[0])},PK_TUPLE);")
+                    self._emit_exc_check(out, function, call_handler)
                 if _sort_key is not None:
                     if _sorted_dyn:
                         _src = f"piton_conv_seq_checked(PK_LIST,{self._slot(values[0], types)})"
                     elif types.get(values[0]) == "range":
                         _src = f"piton_conv_seq(PK_LIST,{self._slot(values[0], types)})"
+                    elif _sorted_zip_src is not None:
+                        _src = _sorted_zip_src
                     else:
                         _src = self._value(values[0])
                     # SORTED_KEY_REV_V1: values = [fuente, reverse] tras quitar la clave.
@@ -22716,6 +22763,8 @@ class LinuxCEmitter:
                 elif types.get(values[0]) in {"genexpr", "iterator:genexpr"}:
                     _gl = f"(long)piton_genexpr_to_list({self._value(values[0])})"
                     out.append(f"    {_name(result)}=piton_sorted_new((void*){_gl});")
+                elif _sorted_zip_src is not None:
+                    out.append(f"    {_name(result)}=piton_sorted_new((void*){_sorted_zip_src});")
                 elif _sorted_dyn:
                     out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_conv_seq_checked(PK_LIST,{self._slot(values[0], types)}));")
                 else:
@@ -23397,6 +23446,10 @@ class LinuxCEmitter:
                     _vt = types.get(val, "")
                     if _vt and _vt not in {"int", "slot"}:
                         self._instance_attr_types.setdefault(_cls, {}).setdefault(attr, _vt)
+                        if _vt == "module" and val in self._module_load_names:
+                            self._instance_attr_module_names.setdefault(
+                                (_cls, attr), self._module_load_names[val]
+                            )
                     # CALLABLE_INSTANCE_ATTR_V1: un atributo que la clase
                     # asigna sobre la instancia puede ser un callable en
                     # runtime aunque no sea un metodo de la clase
@@ -23862,6 +23915,12 @@ class LinuxCEmitter:
                             _final_type = "object:module"
                 else:
                     _final_type = _it if _it is not None and _it != 'slot' else 'int'
+                    if _it == "module" and result:
+                        for _mcls in self.class_mro.get(_icls, [_icls]):
+                            _mname = self._instance_attr_module_names.get((_mcls, attr))
+                            if _mname:
+                                aliases[result] = _mname
+                                break
                     if owner_type != "object:module" and _it is None and result:
                         self._dyn_attr_temps.add(result)
                     elif result:
