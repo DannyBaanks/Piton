@@ -10912,8 +10912,18 @@ class LinuxCEmitter:
         # SLOT_PARAM_V1: param que recibe un argumento ETIQUETADO (slot) en
         # algun call-site -> el callee lo trata como slot (si no, compararia
         # la DIRECCION del slot en vez de su valor).
+        _unbox_str_slot_params: list[str] = []
         for _sp_param in (self._slot_param_args.get(function.name) or ()):
-            types[_sp_param] = "slot"
+            if (
+                self._usage_param_types.get(function.name, {}).get(_sp_param) == "str"
+                and not self._usage_param_weak.get(function.name, {}).get(_sp_param)
+                and _sp_param not in (self._multi_type_params.get(function.name) or ())
+                and _sp_param not in (self._runtime_type_params.get(function.name) or ())
+            ):
+                types[_sp_param] = "str"
+                _unbox_str_slot_params.append(_sp_param)
+            else:
+                types[_sp_param] = "slot"
         # CALL_ARG_TYPE_V1: si el param no tiene seed local y el call-site
         # conoce el tipo del argumento, usarlo. El tipo del call-site es la
         # verdad del valor en esa llamada; un store posterior con valor
@@ -10965,6 +10975,8 @@ class LinuxCEmitter:
                     types[param] = types[param]
                 else:
                     types[param] = types.get(param, "int")
+        for _usp in _unbox_str_slot_params:
+            lines.append(f"    {_name(_usp)}=piton_dyn_unbox({_name(_usp)}).bits;")
         bigint_slots: list[str] = []
         # MODULE_NATIVE_FNS_V1: if this function has a native implementation,
         # emit a direct call to it instead of compiling the PITON body.
@@ -11268,6 +11280,18 @@ class LinuxCEmitter:
         # C (_14) y no como %14; _value lo tomaria como string literal.
         if isinstance(value, str) and re.match(r"^_[A-Za-z0-9]+$", value):
             return _name(value)
+        return self._value(value)
+
+    def _raw_operand(self, value: Any, types: dict[str, str]) -> str:
+        """Valor crudo (bits) de un operando que puede ser una caja PitonSlot.
+
+        RAW_OPERAND_SLOT_V1: un parametro tipado como "slot" (multi-tipo, ver
+        SHARED_SPECIALIZATION_V1) llega al callee como PitonSlot* boxeado. Las
+        operaciones que leen el valor crudo (getattr/hasattr: objeto y nombre)
+        deben desempaquetarlo; pasar la caja tal cual hacia que el nombre se
+        leyera como cadena desde la direccion de la caja (AttributeError)."""
+        if isinstance(value, str) and types.get(value) == "slot":
+            return f"piton_dyn_unbox({self._value(value)}).bits"
         return self._value(value)
 
     def _value(self, value: Any) -> str:
@@ -14583,7 +14607,15 @@ class LinuxCEmitter:
                     return "1"
                 else:
                     return "0"
-            return f'piton_isinstance_class({self._value(obj_val)},"{target_clean}")'
+            # CLASS_PATTERN_SLOT_V1: un sujeto de tipo "slot" (p. ej. parametro
+            # de `segun` que llega como caja PitonSlot*) debe desempaquetarse
+            # antes de leer class_name; pasar la caja cruda a
+            # piton_isinstance_class leia un PitonObject falso (SIGSEGV en
+            # `segun p: caso Point(x=..)`).
+            _subj_value = self._value(obj_val)
+            if obj_t_str == "slot":
+                _subj_value = f"piton_dyn_unbox({_subj_value}).bits"
+            return f'piton_isinstance_class({_subj_value},"{target_clean}")'
         return "0"
 
     def _print_end_expr(self, print_end: Any, types: dict) -> str:
@@ -21384,7 +21416,7 @@ class LinuxCEmitter:
                         out.append(f"    {_name(result)}=1;")
                         types[result] = "bool"
                         return out
-                out.append(f"    {_name(result)}=piton_hasattr({self._value(obj_val)},(const char*){self._value(name_val)});")
+                out.append(f"    {_name(result)}=piton_hasattr({self._raw_operand(obj_val, types)},(const char*){self._raw_operand(name_val, types)});")
                 types[result] = "bool"
             elif function_name in {"getattr", "obtener_atr"}:
                 if len(values) not in {2, 3}:
@@ -21393,7 +21425,7 @@ class LinuxCEmitter:
                 name_val = values[1]
                 has_def = 1 if len(values) == 3 else 0
                 def_val = self._value(values[2]) if has_def else "0"
-                out.append(f"    {_name(result)}=piton_getattr({self._value(obj_val)},(const char*){self._value(name_val)},{has_def},{def_val});")
+                out.append(f"    {_name(result)}=piton_getattr({self._raw_operand(obj_val, types)},(const char*){self._raw_operand(name_val, types)},{has_def},{def_val});")
                 self._emit_exc_check(out, function, call_handler)
                 # GETATTR_DEFAULT_TYPE_V1: con default, el resultado es el
                 # default cuando el atributo no existe — el tipo del default
@@ -23645,6 +23677,15 @@ class LinuxCEmitter:
                     break
                 _mv = all_values[_mi]
                 _mvt = types.get(_mv)
+                if _mvt == "slot":
+                    # METHOD_SLOT_PARAM_V1: un argumento etiquetado (caja
+                    # PitonSlot*, p. ej. un valor leido de un dict con valores
+                    # dinamicos) llega al metodo/constructor sin desempaquetar.
+                    # Marcar el param como slot (como SLOT_PARAM_V1 en las
+                    # funciones libres): si no, el callee lo trata como entero
+                    # crudo y `Info(d['a'])` imprime la direccion de la caja.
+                    self._slot_param_args.setdefault(target, set()).add(_mparams[_mi])
+                    continue
                 if _mvt not in {
                     "str", "list", "tuple", "dict", "set", "bool", "float", "int", "none", "bigint",
                 }:

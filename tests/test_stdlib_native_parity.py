@@ -178,7 +178,7 @@ class SilentStubsFailClosedV1(StdlibParityCase):
 
     CALLS = [
         "pickle .dumps (1 )",
-        "timeit .timeit ('x' )",
+        # timeit.timeit fue implementado en 26898e8 (feat(stdlib): run literal timeit sources natively)
         "filecmp .cmp ('a' ,'b' )",
         "unicodedata .name ('a' )",
         "unicodedata .digit ('1' )",
