@@ -8744,12 +8744,26 @@ class MIRLowerer:
             # __new__ with arguments to builtin/namedtuple bases
             if attr == "__new__" and user_args:
                 _can_fallback = True
-        
+
+        def _is_imported_fallback_class(name: str) -> bool:
+            """A bundled import may expose a native class absent from its stub.
+
+            Keep that qualified base in the symbolic super call and let the
+            backend reject it if no native implementation is available. Plain
+            unresolved names (including dynamic base aliases) still fail here.
+            """
+            module_prefix, separator, class_name = name.rpartition("__")
+            if not separator or not module_prefix or not class_name:
+                return False
+            module_name = module_prefix.replace("__", ".")
+            return _is_bundled_module(module_name)
+
         unresolved_bases = [
             cls for cls in tail_mro
             if cls not in self.classes
             and cls not in _BUILTIN_BASES
             and cls not in _BUILTIN_EXCEPTIONS
+            and not _is_imported_fallback_class(cls)
         ]
         if unresolved_bases and not _can_fallback:
             raise MIRLoweringError(
@@ -8911,7 +8925,7 @@ class MIRLowerer:
             # En CPython la llamada resuelve contra object/type.__init__
             # o __init_subclass__ -> la llamada es un no-op, no un error de build.
             if attr in {"__init__", "__init_subclass__"}:
-                if user_args:
+                if user_args and attr == "__init__":
                     if (
                         attr == "__init__"
                         and "classmethod" in tail_mro
@@ -8953,14 +8967,29 @@ class MIRLowerer:
                             _active_handler(builder), result=_result
                         )
                         return _result
+                    # Imported and fallback classes can have a real native
+                    # initializer without a Python body in ``self.classes``.
+                    # Keep the lexical super call in MIR so the backend can
+                    # resolve it against the complete runtime MRO (which may
+                    # include a class defined later in the module). The Linux
+                    # emitter fails closed if it has no implementation.
+                    if not any(cls in self.classes for cls in tail_mro) and not any(
+                        cls in {"classmethod", "staticmethod", "property"}
+                        for cls in tail_mro
+                    ):
+                        raise MIRLoweringError(
+                            f"native super().{attr} with arguments requires a modeled base implementation"
+                        )
+                elif user_args:
                     raise MIRLoweringError(
                         f"native super().{attr} with arguments requires a modeled base implementation"
                     )
-                for arg in user_args:
-                    self._lower_expr(builder, arg)
-                _none = builder.temp()
-                builder.emit("const", None, result=_none)
-                return _none
+                else:
+                    for arg in user_args:
+                        self._lower_expr(builder, arg)
+                    _none = builder.temp()
+                    builder.emit("const", None, result=_none)
+                    return _none
             if (
                 attr == "__call__"
                 and builder.super_self is not None
@@ -9021,19 +9050,14 @@ class MIRLowerer:
                 (cls for cls in tail_mro if cls in _BUILTIN_BASES | _BUILTIN_EXCEPTIONS),
                 None,
             )
-            if builtin_base is not None:
+            if builtin_base is not None and not (
+                attr == "__init__"
+                and builtin_base in {"classmethod", "staticmethod", "property"}
+            ):
                 raise MIRLoweringError(
                     f"native super().{attr} for builtin base '{builtin_base}' "
                     "has no modeled native implementation"
                 )
-            if tail_mro:
-                raise MIRLoweringError(
-                    f"native super().{attr} has no base class in MRO of '{current_class}' "
-                    "that defines the attribute"
-                )
-            raise MIRLoweringError(
-                f"native super().{attr} has no base class in MRO of '{current_class}'"
-            )
         if builder.super_self in builder.cell_params:
             receiver = builder.temp()
             builder.emit("cell_load", builder.super_self, result=receiver)
@@ -9048,9 +9072,8 @@ class MIRLowerer:
         # Keep the defining class as the lexical anchor. The native backends
         # use the receiver's runtime class to continue through its C3 MRO.
         dispatch_class = (
-            (_ZERO_ARG_SUPER, current_class, next_class)
-            if next_class is not None
-            else next_class
+            (_ZERO_ARG_SUPER, current_class,
+             next_class or (tail_mro[0] if tail_mro else None))
         )
         builder.emit("method_call", dispatch_class, attr, receiver, args, result=result)
         return result

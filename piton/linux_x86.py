@@ -17424,13 +17424,8 @@ class LinuxCEmitter:
             current_mro = self.class_mro.get(current_class, [current_class])
             if len(current_mro) <= 1 and method != "__init__":
                 raise NativeBuildError("super(): no base class in MRO")
-            static_instruction = MIRInstruction(
-                "method_call",
-                (fallback_class, method, obj, *instruction.args[3:]),
-                result=instruction.result,
-            )
-            return self._emit_instruction(
-                static_instruction, function, aliases, types, bigint_slots,
+            raise NativeBuildError(
+                f"native super().{method} has no modeled base implementation"
             )
 
         obj_value = self._value(obj)
