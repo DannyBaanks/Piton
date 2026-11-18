@@ -90,6 +90,33 @@ _BUILTIN_EXCEPTION_PARENTS |= {
     "GeneratorExit": "BaseException",
 }
 _BUILTIN_EXCEPTIONS |= {"ExceptionGroup", "BaseExceptionGroup"}
+# EXC_BUILTIN_HIERARCHY_V1: la jerarquia real de CPython 3.12 para las familias
+# builtin. Sin estas madres, _exception_chain caia a la madre plana `Exception`:
+# `excepto LookupError` no atrapaba KeyError/IndexError, `excepto ArithmeticError`
+# no atrapaba ZeroDivisionError y el subscript no recibia handler. La captura
+# viva la decide piton_exc_match_class con la misma tabla (linux_x86.py).
+_BUILTIN_EXCEPTION_PARENTS |= {
+    "LookupError": "Exception", "KeyError": "LookupError", "IndexError": "LookupError",
+    "ArithmeticError": "Exception", "ZeroDivisionError": "ArithmeticError",
+    "OverflowError": "ArithmeticError", "FloatingPointError": "ArithmeticError",
+    "RuntimeError": "Exception", "NotImplementedError": "RuntimeError",
+    "RecursionError": "RuntimeError",
+    "NameError": "Exception", "UnboundLocalError": "NameError",
+    "ImportError": "Exception", "ModuleNotFoundError": "ImportError",
+    "SyntaxError": "Exception", "IndentationError": "SyntaxError", "TabError": "SyntaxError",
+    "ValueError": "Exception", "UnicodeError": "ValueError",
+    "UnicodeDecodeError": "UnicodeError", "UnicodeEncodeError": "UnicodeError",
+    "UnicodeTranslateError": "UnicodeError",
+    "OSError": "Exception",
+    "FileNotFoundError": "OSError", "FileExistsError": "OSError",
+    "IsADirectoryError": "OSError", "NotADirectoryError": "OSError",
+    "PermissionError": "OSError", "ProcessLookupError": "OSError",
+    "TimeoutError": "OSError", "InterruptedError": "OSError",
+    "BlockingIOError": "OSError", "ChildProcessError": "OSError",
+    "ConnectionError": "OSError", "BrokenPipeError": "ConnectionError",
+    "ConnectionAbortedError": "ConnectionError", "ConnectionRefusedError": "ConnectionError",
+    "ConnectionResetError": "ConnectionError",
+}
 # BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
 # BASE_BUILTIN_V1: bases builtin sin definicion previa (ver uso en class loop).
 # `staticmethod` (abc) y `property` son del mismo tipo: no aportan metodos

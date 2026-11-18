@@ -114,6 +114,7 @@ static void piton_gc_unregister(void*raw){
 }
 /* ── Container struct definitions (needed by GC functions below) ─────── */
 static void piton_raise_set(const char*,const char*);
+static void piton_raise_set_args(const char*,const char*,long);
 static int piton_bigint_is_zero(void*);
 static long piton_str_concat(const char*,const char*);
 typedef struct{long refcount;long kind;long length;long capacity;PitonSlot*items;}PitonSeq;
@@ -3299,7 +3300,9 @@ static void piton_dict_append(PitonDict*d,PitonSlot k,PitonSlot v){if(d->length>
    bidirectional view between the instance attributes and the dict entries. */
 static void piton_dict_set_raw(PitonDict*d,PitonSlot k,PitonSlot v){if(!d)return;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){d->items[i].value=v;return;}piton_dict_append(d,k,v);}
 static void piton_dict_del_raw(PitonDict*d,PitonSlot k){if(!d)return;for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,k)){for(long j=i;j+1<d->length;++j)d->items[j]=d->items[j+1];--d->length;return;}}
-static PitonSlot piton_dict_get(PitonDict*d,PitonSlot key){for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,key))return d->items[i].value;/* GETITEM_RAISE_V1: antes exit(1) directo — ahora se levanta la excepcion para que el caller la rute a su handler o la reporte. */{const char*ks=(key.kind==PK_STR)?(const char*)key.bits:"";piton_raise_set("KeyError",ks);}return (PitonSlot){0,PK_NONE};}
+static PitonSlot piton_dict_get(PitonDict*d,PitonSlot key){for(long i=0;i<d->length;++i)if(piton_slot_eq(d->items[i].key,key))return d->items[i].value;/* GETITEM_RAISE_V1: antes exit(1) directo — ahora se levanta la excepcion para que el caller la rute a su handler o la reporte.
+   KEYERROR_ARGS_V1: CPython: KeyError(k).args == (k,) y str(e) == repr(k) (no k crudo, y "" para claves no-str). */
+{PitonSeq*ka=piton_seq_new(PK_TUPLE,1);ka->items[0]=key;piton_raise_set_args("KeyError",(const char*)piton_slot_repr(key.bits,key.kind),(long)ka);}return (PitonSlot){0,PK_NONE};}
 static int piton_unpack_seq4(PitonSlot obj,long capacity,long*out4){if(obj.kind!=PK_LIST&&obj.kind!=PK_TUPLE){piton_raise_set("TypeError","argument after * must be a list or tuple");return -1;}PitonSeq*s=(PitonSeq*)obj.bits;if(s->length>capacity){piton_raise_set("TypeError","too many positional arguments for call");return -1;}for(long i=0;i<s->length;++i)out4[i]=s->items[i].bits;return s->length;}
 static int piton_dict_unpack4(PitonSlot obj,const char**names,long count,long*out4,long*mask){if(obj.kind!=PK_DICT){piton_raise_set("TypeError","argument after ** must be a dict");return -1;}PitonDict*d=(PitonDict*)obj.bits;for(long i=0;i<d->length;++i){PitonSlot k=d->items[i].key;if(k.kind!=PK_STR){piton_raise_set("TypeError","keywords must be strings");return -1;}const char*key=(const char*)k.bits;long matched=-1;for(long j=0;j<count;++j)if(piton_strcmp(key,names[j])==0){matched=j;break;}if(matched<0){piton_raise_set("TypeError","unexpected keyword argument in ** expansion");return -1;}if(*mask&(1LL<<matched)){piton_raise_set("TypeError","multiple values for argument");return -1;}*mask|=1LL<<matched;out4[matched]=d->items[i].value.bits;}return 0;}
 static PitonSet*piton_set_new(long cap){PitonSet*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=PK_SET;s->capacity=cap;s->items=cap>0?piton_alloc((usize)cap*sizeof(PitonSlot)):0;return s;}
@@ -3953,6 +3956,8 @@ static const char*piton_exc_parent_of(const char*t){
   if(!piton_strcmp(t,"BaseException"))return 0;
   if(!piton_strcmp(t,"SystemExit")||!piton_strcmp(t,"KeyboardInterrupt")||!piton_strcmp(t,"GeneratorExit"))return "BaseException";
   if(!piton_strcmp(t,"KeyError")||!piton_strcmp(t,"IndexError"))return "LookupError";
+  if(!piton_strcmp(t,"NotImplementedError")||!piton_strcmp(t,"RecursionError"))return "RuntimeError";
+  if(!piton_strcmp(t,"UnboundLocalError"))return "NameError";
   if(!piton_strcmp(t,"ZeroDivisionError")||!piton_strcmp(t,"OverflowError")||!piton_strcmp(t,"FloatingPointError"))return "ArithmeticError";
   if(!piton_strcmp(t,"ModuleNotFoundError"))return "ImportError";
   if(!piton_strcmp(t,"IndentationError")||!piton_strcmp(t,"TabError"))return "SyntaxError";
@@ -3967,7 +3972,7 @@ static const char*piton_exc_parent_of(const char*t){
   return "Exception";
 }
 static int piton_builtin_exception_name(const char*t){
-  static const char*names[]={"BaseException","Exception","SystemExit","KeyboardInterrupt","GeneratorExit","StopAsyncIteration","StopIteration","ArithmeticError","FloatingPointError","OverflowError","ZeroDivisionError","AssertionError","AttributeError","BufferError","EOFError","ImportError","ModuleNotFoundError","LookupError","IndexError","KeyError","MemoryError","NameError","OSError","IOError","EnvironmentError","ReferenceError","RuntimeError","NotImplementedError","SyntaxError","IndentationError","TabError","SystemError","TypeError","ValueError","UnicodeError","UnicodeDecodeError","UnicodeEncodeError","UnicodeTranslateError","Warning","UserWarning","DeprecationWarning","PendingDeprecationWarning","SyntaxWarning","RuntimeWarning","FutureWarning","ImportWarning","UnicodeWarning","BytesWarning","ResourceWarning","EncodingWarning","FileNotFoundError","FileExistsError","IsADirectoryError","NotADirectoryError","PermissionError","ProcessLookupError","TimeoutError","ConnectionError","BrokenPipeError","ChildProcessError","BlockingIOError","InterruptedError",0};
+  static const char*names[]={"BaseException","Exception","SystemExit","KeyboardInterrupt","GeneratorExit","StopAsyncIteration","StopIteration","ArithmeticError","FloatingPointError","OverflowError","ZeroDivisionError","AssertionError","AttributeError","BufferError","EOFError","ImportError","ModuleNotFoundError","LookupError","IndexError","KeyError","MemoryError","NameError","UnboundLocalError","OSError","IOError","EnvironmentError","ReferenceError","RuntimeError","NotImplementedError","RecursionError","SyntaxError","IndentationError","TabError","SystemError","TypeError","ValueError","UnicodeError","UnicodeDecodeError","UnicodeEncodeError","UnicodeTranslateError","Warning","UserWarning","DeprecationWarning","PendingDeprecationWarning","SyntaxWarning","RuntimeWarning","FutureWarning","ImportWarning","UnicodeWarning","BytesWarning","ResourceWarning","EncodingWarning","FileNotFoundError","FileExistsError","IsADirectoryError","NotADirectoryError","PermissionError","ProcessLookupError","TimeoutError","ConnectionError","BrokenPipeError","ChildProcessError","BlockingIOError","InterruptedError",0};
   if(!t)return 0;for(long i=0;names[i];++i)if(!piton_strcmp(t,names[i]))return 1;return 0;
 }
 static int piton_is_exception_object(PitonObject*o){
@@ -14075,8 +14080,11 @@ class LinuxCEmitter:
                 else:
                     specific.append((accepted, label))
             for accepted, label in specific:
+                # EXC_MULTI_MATCH_SUBTYPE_V1: strcmp exacto no veia la jerarquia
+                # (`excepto ArithmeticError` no atrapaba ZeroDivisionError en un
+                # try con dos clausulas). piton_exc_match_class recorre la cadena.
                 out.append(
-                    f"        if(!piton_strcmp(piton_exc_type, {json.dumps(accepted)})) "
+                    f"        if(piton_exc_match_class({json.dumps(accepted)})) "
                     f"goto {_name(function.name + '_' + label)};"
                 )
             if catch_all is not None:
@@ -23511,9 +23519,13 @@ class LinuxCEmitter:
             out.append(_code)
             if _cls:
                 types[result] = f"object:{_cls}"
-            elif isinstance(_acc, str) and _acc:
-                types[result] = f"object:{_acc}"
             else:
+                # EXC_BUILTIN_BIND_DYN_V1: un nombre builtin (`excepto
+                # ArithmeticError como e`) NO es el tipo de `e`: la clase viva
+                # es la de la excepcion levantada (ZeroDivisionError). Tipar
+                # `e` como object:<handler> hacia que type(e) plegara al nombre
+                # del handler. object:Exception es el marcador dinamico que
+                # lee piton_exc_type en runtime.
                 types[result] = "object:Exception"
         elif op == "catch_type":
             out.append(f"    {_name(result)}=piton_exception_type_repr();")
@@ -24316,6 +24328,12 @@ class LinuxCEmitter:
                             types[result] = "tuple"
                         self._emit_exc_check(out, function, _gi_handler)
                         return out
+                # GETITEM_UNANNOTATED_CHECK_V1: `[][1]` y cualquier lista/tupla sin
+                # tipo de elemento anotado caian aqui SIN comprobar el flag: el
+                # IndexError de piton_seq_get se tragaba (salida vacia, rc 0)
+                # aunque el try lo capturase. Toda ruta indexada debe rutear.
+                self._emit_exc_check(out, function, _gi_handler)
+                return out
             elif collection_type in {"bytes", "bytearray"}:
                 # BYTES_V1: b[i] is an int 0..255 (negative indices wrap).
                 out.append(f'    {_name(result)}=piton_bytes_get((PitonBytes*){self._value(coll)},{self._value(idx)});')
