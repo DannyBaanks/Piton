@@ -1887,10 +1887,21 @@ static void piton_print_float_bits(long bits){piton_print_float_bits_raw(bits);p
 static int piton_bytes_cmp(PitonBytes* a, PitonBytes* b);
 static long piton_set_issubset(PitonSet*a,PitonSet*b);
 static int piton_dict_eq(PitonDict*a,PitonDict*b);
+/* NUMERIC_KEY_EQ_V1: CPython compara int/float EXACTAMENTE (sin redondear el int
+ * a double): 2**53+1 != float(2**53). Un float no entero o fuera de rango de long
+ * nunca es igual a un int; NaN tampoco. */
+static int piton_int_float_eq(long i,double f){
+  if(f!=f)return 0;
+  if(f<-9223372036854775808.0||f>=9223372036854775808.0)return 0;
+  if(f!=(double)(long)f)return 0;
+  return (long)f==i;
+}
 static int piton_slot_eq(PitonSlot a,PitonSlot b){
+  /* CPython: True == 1 == 1.0 y False == 0 == 0.0 (mismo hash, misma clave de dict/set). */
+  if((a.kind==PK_INT||a.kind==PK_BOOL)&&(b.kind==PK_INT||b.kind==PK_BOOL))return a.bits==b.bits;
   /* CPython: 1 == 1.0 es True (int/float se comparan por valor). */
-  if((a.kind==PK_INT||a.kind==PK_BOOL)&&b.kind==PK_FLOAT)return (double)a.bits==piton_bits_double(b.bits);
-  if(a.kind==PK_FLOAT&&(b.kind==PK_INT||b.kind==PK_BOOL))return piton_bits_double(a.bits)==(double)b.bits;
+  if((a.kind==PK_INT||a.kind==PK_BOOL)&&b.kind==PK_FLOAT)return piton_int_float_eq((long)a.bits,piton_bits_double(b.bits));
+  if(a.kind==PK_FLOAT&&(b.kind==PK_INT||b.kind==PK_BOOL))return piton_int_float_eq((long)b.bits,piton_bits_double(a.bits));
   if(a.kind==PK_FLOAT&&b.kind==PK_FLOAT)return piton_bits_double(a.bits)==piton_bits_double(b.bits);
   if((a.kind==PK_FROZENSET||a.kind==PK_SET)&&(b.kind==PK_FROZENSET||b.kind==PK_SET))return piton_set_issubset((PitonSet*)a.bits,(PitonSet*)b.bits)&&piton_set_issubset((PitonSet*)b.bits,(PitonSet*)a.bits);if(a.kind!=b.kind)return 0;if(a.kind==PK_LIST||a.kind==PK_TUPLE){PitonSeq*x=(PitonSeq*)a.bits,*y=(PitonSeq*)b.bits;if(x->length!=y->length)return 0;for(long i=0;i<x->length;++i)if(!piton_slot_eq(x->items[i],y->items[i]))return 0;return 1;}if(a.kind==PK_DICT)return piton_dict_eq((PitonDict*)a.bits,(PitonDict*)b.bits);if(a.kind==PK_RANGE)return piton_range_eq((PitonRange*)a.bits,(PitonRange*)b.bits);if(a.kind==PK_STR)return piton_strcmp((const char*)a.bits,(const char*)b.bits)==0;if(a.kind==PK_BYTES||a.kind==PK_BYTEARRAY)return piton_bytes_cmp((PitonBytes*)a.bits,(PitonBytes*)b.bits)==0;if(a.kind==PK_COMPLEX){PitonComplex*x=(PitonComplex*)a.bits,*y=(PitonComplex*)b.bits;return x->re==y->re&&x->im==y->im;}return a.bits==b.bits;}
 static PitonSeq*piton_seq_new(int kind,long n){PitonSeq*s=piton_alloc(sizeof(*s));s->refcount=1;s->kind=(long)kind;s->length=n;s->capacity=n;s->items=n>0?piton_alloc((usize)n*sizeof(PitonSlot)):0;return s;}
@@ -16566,6 +16577,40 @@ class LinuxCEmitter:
         )
         return out
 
+    def _assert_literal_keys_hashable(self, keys: list, types: dict[str, str]) -> None:
+        """UNHASHABLE_LITERAL_V1: CPython lanza TypeError para una clave/elemento
+        list/set/dict literal. Si el tipo estatico lo delata, falla cerrado en build
+        (no se acepta en silencio). Un tipo solo conocido en runtime NO se cubre."""
+        for key in keys:
+            _kt = None if (isinstance(key, str) and not key.startswith("%")) else types.get(key)
+            if _kt in {"list", "set"} or (isinstance(_kt, str) and _kt.startswith("dict")):
+                raise NativeBuildError(
+                    f"dict/set literal key of unhashable type '{_kt}' is not supported "
+                    "(CPython raises TypeError: unhashable type); fail closed"
+                )
+
+    def _dict_literal_keys_provably_distinct(self, items: list, types: dict[str, str]) -> bool:
+        """DICT_LITERAL_DEDUP_V1: `piton_dict_put` por indice NO deduplica. Solo es
+        seguro si todas las claves son constantes str con texto conocido y distinto;
+        en otro caso el literal se construye con `piton_dict_set` (igualdad de clave
+        CPython: {1:'a', Verdadero:'b'} tiene 1 entrada, y {'a':1,'a':2} tambien).
+        Tambien valida que las claves sean hashables (antes del atajo de 1 entrada)."""
+        self._assert_literal_keys_hashable([_k for _k, _v in items], types)
+        if len(items) <= 1:
+            return True
+        texts = []
+        for key, _value in items:
+            if isinstance(key, str) and not key.startswith("%"):
+                texts.append(key)
+            elif isinstance(key, str) and key in self._literal_str_temps:
+                text = self._fn_consts.get(key)
+                if not isinstance(text, str):
+                    return False
+                texts.append(text)
+            else:
+                return False
+        return len(set(texts)) == len(texts)
+
     def _emit_instruction(
         self, instruction: MIRInstruction, function: MIRFunction,
         aliases: dict[str, str], types: dict[str, str], bigint_slots: list[str],
@@ -19534,6 +19579,17 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(piton_bigint_cmp_int((void*){_name(left)},{self._value(right)}) {operator} 0);")
                 else:
                     out.append(f"    {_name(result)}=(-piton_bigint_cmp_int((void*){_name(right)},{self._value(left)}) {operator} 0);")
+                types[result] = "bool"
+                return out
+            if "float" in {left_type, right_type} and operator in {"==", "!="} and (
+                {left_type, right_type} == {"float", "int"} or {left_type, right_type} == {"float", "bool"}
+            ):
+                # NUMERIC_KEY_EQ_V1: int == float es EXACTO en CPython (sin redondear
+                # el int a double). Mismo helper que la igualdad de claves de dict/set.
+                _fside = left if left_type == "float" else right
+                _iside = right if left_type == "float" else left
+                _eq = f"piton_int_float_eq((long){self._value(_iside)},piton_bits_double({self._value(_fside)}))"
+                out.append(f"    {_name(result)}={'' if operator == '==' else '!'}{_eq};")
                 types[result] = "bool"
                 return out
             if "float" in {left_type, right_type}:
@@ -24798,11 +24854,18 @@ class LinuxCEmitter:
                     # kind; the flag lets dict.get fallback to the default.
                     self._dict_empty[result] = True
                     self._percent_runtime_dicts.add(result)
-                out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
-                for index, (key, value) in enumerate(items):
-                    key_is_str = isinstance(key, str) and not key.startswith("%")
-                    key_slot = f"piton_slot({self._value(key)},PK_STR)" if key_is_str else self._slot(key, types)
-                    out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},{key_slot},{self._slot(value, types)});')
+                if self._dict_literal_keys_provably_distinct(items, types):
+                    out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
+                    for index, (key, value) in enumerate(items):
+                        key_is_str = isinstance(key, str) and not key.startswith("%")
+                        key_slot = f"piton_slot({self._value(key)},PK_STR)" if key_is_str else self._slot(key, types)
+                        out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},{key_slot},{self._slot(value, types)});')
+                else:
+                    out.append(f'    {_name(result)}=(long)piton_dict_new(0);')
+                    for key, value in items:
+                        key_is_str = isinstance(key, str) and not key.startswith("%")
+                        key_slot = f"piton_slot({self._value(key)},PK_STR)" if key_is_str else self._slot(key, types)
+                        out.append(f'    piton_dict_set((PitonDict*){_name(result)},{key_slot},{self._slot(value, types)});')
             elif kind == "dict:module":
                 # dict:module is a dict whose values are module objects
                 if result and items:
@@ -24810,12 +24873,20 @@ class LinuxCEmitter:
                     self._dict_val_types[result] = "object:module"
                     # Keys are strings
                     self._dict_key_types[result] = "str"
-                out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
-                for index, (key, value) in enumerate(items):
-                    key_is_str = isinstance(key, str) and not key.startswith("%")
-                    key_slot = f"piton_slot({self._value(key)},PK_STR)" if key_is_str else self._slot(key, types)
-                    out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},{key_slot},{self._slot(value, types)});')
+                if self._dict_literal_keys_provably_distinct(items, types):
+                    out.append(f'    {_name(result)}=(long)piton_dict_new({len(items)});')
+                    for index, (key, value) in enumerate(items):
+                        key_is_str = isinstance(key, str) and not key.startswith("%")
+                        key_slot = f"piton_slot({self._value(key)},PK_STR)" if key_is_str else self._slot(key, types)
+                        out.append(f'    piton_dict_put((PitonDict*){_name(result)},{index},{key_slot},{self._slot(value, types)});')
+                else:
+                    out.append(f'    {_name(result)}=(long)piton_dict_new(0);')
+                    for key, value in items:
+                        key_is_str = isinstance(key, str) and not key.startswith("%")
+                        key_slot = f"piton_slot({self._value(key)},PK_STR)" if key_is_str else self._slot(key, types)
+                        out.append(f'    piton_dict_set((PitonDict*){_name(result)},{key_slot},{self._slot(value, types)});')
             elif kind == "set":
+                self._assert_literal_keys_hashable(list(items), types)
                 out.append(f'    {_name(result)}=(long)piton_set_new({len(items)});')
                 for value in items:
                     out.append(f'    piton_set_add((PitonSet*){_name(result)},{self._slot(value, types)});')
