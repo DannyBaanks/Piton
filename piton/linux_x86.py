@@ -20843,8 +20843,12 @@ class LinuxCEmitter:
                     elif at == "str":
                         # COMPLEX_STR_CTOR_V1: complejo('1+2j') / complejo('3') /
                         # complejo('2.5j'). Parser acotado: [signo] real [+-] imag j.
+                        # COMPLEX_STR_RAISE_V1: una cadena malformada levanta
+                        # ValueError via piton_raise_set y se RUTEIA al handler
+                        # `excepto` activo (como hace cualquier otra llamada
+                        # builtin), en lugar de terminar el proceso con exit 1.
                         out.append(f"    {_name(result)}=(long)piton_complex_from_str((const char*){self._value(values[0])});")
-                        out.append(f"    if(piton_exc_flag){{piton_report_unhandled();piton_exit(1);}}")
+                        self._emit_exc_check(out, function, call_handler)
                     else:
                         raise NativeBuildError("Linux complex() from a string or non-numeric is not supported (fail closed)")
                 elif len(values) == 2:
@@ -20862,7 +20866,7 @@ class LinuxCEmitter:
                     )
                     out.append(f"    {_name(result)}=(long)piton_complex_new({re_expr},{im_expr});")
                 else:
-                    self._runtime_type_error(out, "complex() takes at most 2 arguments")
+                    self._runtime_type_error(out, "complex() takes at most 2 arguments", function, call_handler)
                     types[result] = "int"
                     return out
                 types[result] = "complex"
