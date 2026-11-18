@@ -112,9 +112,14 @@ class PercentFormatV1(unittest.TestCase):
         self.assertEqual(result.native.returncode, 0)
         self.assertEqual(result.native.stdout, result.oracle.stdout)
 
-    def test_unknown_length_tuple_fails_closed(self):
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("funcion f(t):\n    devolver '%s' % t\nimprimir(f((1,)))\n")
+    def test_unknown_length_tuple_matches_cpython(self):
+        # Replaces obsolete fail-closed test_unknown_length_tuple_fails_closed:
+        # runtime tuple % formatting matches CPython on both valid and bad arities.
+        _assert_matches(self, "funcion f(t):\n    devolver '%s' % t\nimprimir(f((1,)))\n")
+        _assert_matches(self, "funcion f(t):\n    devolver '%s %s' % t\nimprimir(f((1, 2)))\n")
+        r_extra = compare_native_to_cpython("funcion f(t):\n    devolver '%s' % t\nimprimir(f((1, 2)))\n")
+        self.assertEqual(r_extra.native.returncode, r_extra.oracle.returncode)
+        self.assertIn(b"TypeError", r_extra.native.stderr)
 
     def test_char_multi_char_str_fails_at_runtime(self):
         result = compare_native_to_cpython("imprimir('%c' % 'ab')\n")

@@ -10291,6 +10291,14 @@ class LinuxCEmitter:
         # NOTE: random.* now uses piton/stdlib_piton/random.piton (MT19937 CPython 3.12 parity).
         self._module_native_fns: dict[str, str] = {}
 
+    def _record_slot_param_arg(self, fn_name: str, param_name: str) -> None:
+        self._slot_param_args.setdefault(fn_name, set()).add(param_name)
+        self._next_slot_param_args.setdefault(fn_name, set()).add(param_name)
+
+    def _record_dyn_slot_var(self, fn_name: str, var_name: str) -> None:
+        self._dyn_slot_vars.setdefault(fn_name, set()).add(var_name)
+        self._next_dyn_slot_vars.setdefault(fn_name, set()).add(var_name)
+
     def emit(self, module: MIRModule) -> str:
         self.mir_module = module
         # CLASS_OBJECT_SLOT_DECL_V1: collect every interned class-object slot
@@ -10376,6 +10384,8 @@ class LinuxCEmitter:
         # SLOT_PARAM_V1: params que reciben un argumento ETIQUETADO (slot) en
         # algun call-site -> el callee los trata como slot.
         self._slot_param_args: dict[str, set[str]] = {f.name: set() for f in module.functions}
+        self._next_slot_param_args: dict[str, set[str]] = {f.name: set() for f in module.functions}
+        self._next_dyn_slot_vars: dict[str, set[str]] = {}
         self._slot_return_fns: set[str] = set()
         self.function_self_classes: dict[str, str] = {
             f.name: f.self_class for f in module.functions if f.self_class
@@ -10420,6 +10430,7 @@ class LinuxCEmitter:
         # (la celda) — sin el, la carga de la celda decae a "int" y las
         # operaciones sobre ella (un `+` de tuplas, un slice) fallan.
         self._cell_types: dict[str, str] = {}
+        self._fn_cell_types: dict[tuple[str, str], str] = {}
         # el contador de temporales del empaquetado de varargs
         self._vararg_pack_counter = 0
         # IDENTITY_FN_V1: funciones que devuelven su param sin cambios
@@ -10784,10 +10795,13 @@ class LinuxCEmitter:
                 frozenset(self._none_stored_names),
                 {k: frozenset(v) for k, v in self._nonnone_stored_types.items()},
                 frozenset(self._nonnone_unknown),
+                frozenset(self._fn_cell_types.items()),
             )
         _prev_snap = None
-        for _pass in range(8):
+        for _pass in range(10):
             self._extra_forward_decls = []
+            self._next_slot_param_args = {f.name: set() for f in module.functions}
+            self._next_dyn_slot_vars = {}
             _del_state = (
                 set(self._deleted_names),
                 {k: set(v) for k, v in self._deleted_by_function.items()},
@@ -10796,6 +10810,8 @@ class LinuxCEmitter:
             _pass_lines: list[str] = []
             for function in _order:
                 _pass_lines.extend(self._emit_function(function))
+            self._slot_param_args = self._next_slot_param_args
+            self._dyn_slot_vars = self._next_dyn_slot_vars
             self.function_return_types = self._infer_return_types(module)
             for _srf in self._slot_return_fns:
                 if not self.function_return_types.get(_srf, "").startswith(("object:", "class:")):
@@ -10823,7 +10839,7 @@ class LinuxCEmitter:
             })
             _cur_snap = _abi_snapshot()
             _converged = _pass >= 2 and _cur_snap == _prev_snap
-            if _converged or _pass == 7:
+            if _converged or _pass == 9:
                 for _clsobj_name in sorted(self._clsobj_references - self._declared_clsobj_names):
                     lines.append(f"static long {_name('_clsobj_' + _clsobj_name)};")
                 self._declared_clsobj_names.update(self._clsobj_references)
@@ -12583,7 +12599,7 @@ class LinuxCEmitter:
                 # callee debe tratarlo como slot (no como puntero crudo): si
                 # no, `pred(x)` con `x` etiquetado compararia la DIRECCION
                 # del slot (no su valor) -> resultado falso.
-                self._slot_param_args.setdefault(function_name, set()).add(_iparam)
+                self._record_slot_param_arg(function_name, _iparam)
             _clo_origin = self._closure_origin.get(_ival) if isinstance(_ival, str) else None
             if _clo_origin:
                 # CLOSURE_PARAM_ORIGIN_V1: el argumento es una CLOSURE. El
@@ -16667,7 +16683,10 @@ class LinuxCEmitter:
                                 else:
                                     origins[result] = ("opaque", None)
                             elif op == "cell_load" and result and iargs:
-                                _ct = self._cell_types.get(iargs[0])
+                                _ct = (
+                                    self._fn_cell_types.get((function.name, iargs[0]))
+                                    or self._cell_types.get(iargs[0])
+                                )
                                 origins[result] = ("kind", _ct) if _ct and _ct not in {"int", "none"} else ("opaque", None)
                             elif op == "get_item" and result and iargs and operand_type(iargs[0]) == "slot":
                                 # DYN_SLOT_INFER_V1: indexar un valor dinamico da un valor dinamico.
@@ -18289,7 +18308,7 @@ class LinuxCEmitter:
                     _key in self._nonnone_stored_types or _key in self._nonnone_unknown
                 ):
                     self._none_conflict_names.add(_key)
-                    self._dyn_slot_vars.setdefault(function.name, set()).add(args[0])
+                    self._record_dyn_slot_var(function.name, args[0])
             if (
                 isinstance(args[0], str)
                 and args[0] in function.params
@@ -18314,7 +18333,7 @@ class LinuxCEmitter:
                 and (function.name, args[1]) in self._dyn_slot_temps
                 and args[0] not in function.params
             ):
-                self._dyn_slot_vars.setdefault(function.name, set()).add(args[0])
+                self._record_dyn_slot_var(function.name, args[0])
             if (
                 isinstance(args[0], str)
                 and args[0] in (self._dyn_slot_vars.get(function.name) or ())
@@ -18431,8 +18450,12 @@ class LinuxCEmitter:
             # captura, el tipo del VALOR capturado queda asociado a ese
             # nombre (la carga de la celda lo consulta por nombre).
             if types.get(args[1]) == "cell":
-                _cell_value_type = self._cell_types.get(args[1])
+                _cell_value_type = (
+                    self._fn_cell_types.get((function.name, args[1]))
+                    or self._cell_types.get(args[1])
+                )
                 if _cell_value_type:
+                    self._fn_cell_types[(function.name, args[0])] = _cell_value_type
                     self._cell_types[args[0]] = _cell_value_type
             # STORE_TARGETS_V1: que nombres guardaron este valor — el
             # elem-kind de una lista puede apesare despues del store (la
@@ -20247,7 +20270,7 @@ class LinuxCEmitter:
                     _cb_params = self.function_params.get(_cb_origin) or []
                     for _i, (_ival, _iparam) in enumerate(zip(values, _cb_params)):
                         if isinstance(_ival, str) and types.get(_ival) == "slot":
-                            self._slot_param_args.setdefault(_cb_origin, set()).add(_iparam)
+                            self._record_slot_param_arg(_cb_origin, _iparam)
                 out.append(f"    {{long _frame_args[]={{ {arg_values} }};")
                 out.append(
                     f"    {_name(result)}=piton_closure_call_frame({self._value(args[0])},{argc},_frame_args);"
@@ -22512,10 +22535,13 @@ class LinuxCEmitter:
             out.append("        long*cell=(long*)piton_alloc(16);")
             if value_arg is None:
                 out.append("        cell[0]=0;")
+                self._fn_cell_types[(function.name, result)] = "none"
                 self._cell_types[result] = "none"
             else:
                 out.append(f"        cell[0]={self._value(value_arg)};")
-                self._cell_types[result] = types.get(value_arg, "int")
+                _cvt = types.get(value_arg, "int")
+                self._fn_cell_types[(function.name, result)] = _cvt
+                self._cell_types[result] = _cvt
             out.append("        cell[1]=0;")
             out.append(f"        {_name(result)}=(long)cell;")
             out.append("    }")
@@ -22523,14 +22549,27 @@ class LinuxCEmitter:
         elif op == "cell_load":
             cell_ptr_name = args[0]
             out.append(f"    {_name(result)}=((long*){_name(cell_ptr_name)})[0];")
-            types[result] = self._cell_types.get(cell_ptr_name, "int")
+            types[result] = (
+                self._fn_cell_types.get((function.name, cell_ptr_name))
+                or self._cell_types.get(cell_ptr_name, "int")
+            )
         elif op == "cell_store":
             cell_ptr_name, value_arg = args
             out.append(f"    ((long*){_name(cell_ptr_name)})[0]={self._value(value_arg)};")
-            self._cell_types[cell_ptr_name] = types.get(value_arg, "int")
+            _cst = types.get(value_arg, "int")
+            self._fn_cell_types[(function.name, cell_ptr_name)] = _cst
+            self._cell_types[cell_ptr_name] = _cst
         elif op == "closure_new":
             lifted_name, n_args, capture_ops, has_vararg = args[:4]
             has_kwarg = args[4] if len(args) > 4 else 0
+            for _cap_op, _cap_param in zip(capture_ops, self.function_params.get(lifted_name, ())):
+                _cap_key = aliases.get(_cap_op, _cap_op) if aliases else _cap_op
+                _cap_t = (
+                    self._fn_cell_types.get((function.name, _cap_key))
+                    or self._fn_cell_types.get((function.name, _cap_op))
+                )
+                if _cap_t:
+                    self._fn_cell_types[(lifted_name, _cap_param)] = _cap_t
             cell_values = [self._value(cap) for cap in capture_ops]
             out.append("    {")
             signature, python_name = self._emit_call_signature(
@@ -24599,7 +24638,7 @@ class LinuxCEmitter:
                         if _mi < _method_start or not isinstance(_mv, str):
                             continue
                         if types.get(_mv) == "slot":
-                            self._slot_param_args.setdefault(target, set()).add(_mparam)
+                            self._record_slot_param_arg(target, _mparam)
                     _multi_method_params = (
                         (self._multi_type_params.get(target) or set())
                         | (self._slot_param_args.get(target) or set())
@@ -24607,11 +24646,6 @@ class LinuxCEmitter:
                     for _mi, (_mv, _mparam) in enumerate(
                         zip(all_values, self.function_params.get(target, ()))
                     ):
-                        if isinstance(_mv, str) and types.get(_mv) == "slot" and _mi >= _method_start:
-                            # SLOT_PARAM_METHOD_V1: el callee de un metodo
-                            # (llamada por clase) trata el param como slot,
-                            # igual que la llamada por instancia de abajo.
-                            self._slot_param_args.setdefault(target, set()).add(_mparam)
                         if _mparam not in _multi_method_params or not isinstance(_mv, str):
                             continue
                         _mvt = types.get(_mv)
@@ -24761,21 +24795,12 @@ class LinuxCEmitter:
             # se pasa como caja: el callee debe tratar ese parametro como slot.
             for _mi, (_mv, _mparam) in enumerate(zip(all_values, _mparams)):
                 if _mi >= _m_start and isinstance(_mv, str) and types.get(_mv) == "slot":
-                    self._slot_param_args.setdefault(target, set()).add(_mparam)
+                    self._record_slot_param_arg(target, _mparam)
             _multi_method_params = (
                 (self._multi_type_params.get(target) or set())
                 | (self._slot_param_args.get(target) or set())
             )
             for _mi, (_mv, _mparam) in enumerate(zip(all_values, _mparams)):
-                if isinstance(_mv, str) and types.get(_mv) == "slot" and _mi >= _m_start:
-                    # SLOT_PARAM_METHOD_V1: un argumento ETIQUETADO (caja slot)
-                    # pasado a un metodo debe registrar el param del callee como
-                    # slot, igual que SLOT_PARAM_V1 en _emit_user_function_call.
-                    # Sin esto el callee lo trataba como bits crudos: la key de
-                    # `self._d[x] = 1` (x = caja de str) se etiquetaba con
-                    # piton_slot_guess(direccion_de_la_caja) -> Counter devolvia
-                    # punteros como claves.
-                    self._slot_param_args.setdefault(target, set()).add(_mparam)
                 if _mparam not in _multi_method_params or not isinstance(_mv, str):
                     continue
                 _mvt = types.get(_mv)
