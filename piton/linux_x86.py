@@ -14520,15 +14520,48 @@ class LinuxCEmitter:
         recv = self._value(obj)
         out: list[str] = []
         result_types: set[Any] = set()
+        _object_cands = sorted(
+            _c for _c in self._nonnone_stored_types.get(key, ())
+            if self._kind(_c) == "PK_OBJECT"
+        )
+        for _c in _object_cands:
+            # NONE_CONFLICT_OBJECT_V1: solo instancias de UNA clase de usuario
+            # (`object:C`). Con dos clases el runtime sólo distingue por nombre
+            # de clase, y una instancia de subclase no tiene rama estatica
+            # propia: falla cerrado en build en vez de adivinar.
+            if not (_c.startswith("object:") and _c.split(":", 1)[1] in self.classes):
+                raise NativeBuildError(
+                    f"Linux {op} sobre '{key[1]}': tipo '{_c}' no soportado en despacho dinamico"
+                )
+        if len(_object_cands) > 1:
+            raise NativeBuildError(
+                f"Linux {op} sobre '{key[1]}': varias clases {_object_cands} en despacho dinamico no soportado: fail closed"
+            )
+        if _object_cands and function.name == "<module>":
+            # NONE_CONFLICT_OBJECT_V1 (contrato W20 test_object_receiver_on_
+            # none_conflict_variable_fails_closed): a nivel de modulo el
+            # receptor de clase de usuario sigue fallando cerrado. El despacho
+            # por clase solo se habilita dentro de funciones.
+            raise NativeBuildError(
+                f"Linux {op} sobre '{key[1]}' (variable None o dinamica a nivel de modulo "
+                f"con tipo '{_object_cands[0]}') no soportado: fail closed"
+            )
         for _idx, _cand in enumerate(sorted(self._nonnone_stored_types.get(key, ()))):
             _kind = self._kind(_cand)
-            if _kind == "PK_OBJECT":
-                raise NativeBuildError(
-                    f"Linux {op} sobre '{key[1]}': tipo '{_cand}' no soportado en despacho dinamico"
-                )
             _tmp = f"%dynrecv{self._instr_seq}_{_idx}"
             out.append(f"    if(piton_dyn_unbox({recv}).kind=={_kind}){{long {_name(_tmp)}=piton_dyn_unbox({recv}).bits;")
             types[_tmp] = _cand
+            if _kind == "PK_OBJECT" and op in {"get_attr", "method_call"} and self._object_attr_may_be_missing(_cand, name):
+                # NONE_CONFLICT_OBJECT_V1: el acceso dinamico a un nombre que no es
+                # metodo, propiedad ni hook de la clase debe comprobar la instancia
+                # en runtime: CPython lanza AttributeError si no existe.
+                out.append(f"    if(!piton_hasattr({_name(_tmp)},{json.dumps(name)})){{")
+                self._runtime_type_error_as(
+                    out, "AttributeError",
+                    f"'{_cand.split(':', 1)[1]}' object has no attribute '{name}'",
+                    function, handler_label,
+                )
+                out.append("    }")
             _sub_args = list(args)
             _sub_args[recv_index] = _tmp
             _sub = _dc_replace(instruction, args=tuple(_sub_args) if isinstance(args, tuple) else _sub_args)
@@ -14548,6 +14581,25 @@ class LinuxCEmitter:
         if result_types and None not in result_types:
             types[result] = next(iter(result_types))
         return out
+
+    def _object_attr_may_be_missing(self, owner_type: str, name: Any) -> bool:
+        """NONE_CONFLICT_OBJECT_V1: True si `name` puede faltar en una instancia
+        de `owner_type` (no es metodo, propiedad, dunder ni hay hook de
+        __getattr__/__getattribute__). Solo entonces hace falta la comprobacion
+        de existencia en runtime (`piton_hasattr`)."""
+        if not isinstance(name, str) or not name or name.startswith(("%", "__")):
+            return False
+        class_name = owner_type.split(":", 1)[1]
+        for candidate in [*self.class_mro.get(class_name, [class_name]), class_name]:
+            if name in self.classes.get(candidate, set()):
+                return False
+            if name in self.class_properties.get(candidate, {}):
+                return False
+            if "__getattr__" in self.classes.get(candidate, set()):
+                return False
+            if "__getattribute__" in self.classes.get(candidate, set()):
+                return False
+        return True
 
     def _runtime_type_error_as(self, out: list[str], exc: str, message: str, function: MIRFunction, handler_label: Any) -> None:
         out.append(f"    piton_raise_set(\"{exc}\", {_str_c_literal(message)});")
@@ -24132,6 +24184,17 @@ class LinuxCEmitter:
                         _seen_obj = self._call_param_seen_obj.get(target, {}).get(_mparam, set())
                         if len(_seen) > 1 and not _seen_obj:
                             self._multi_type_params.setdefault(target, set()).add(_mparam)
+                    # SLOT_PARAM_METHOD_V1: un argumento ETIQUETADO (slot) que
+                    # llega por una llamada a metodo / constructor (`Punto(xs[0])`
+                    # -> __init__) se pasa como caja: el callee debe tratar ese
+                    # parametro como slot, igual que en la llamada directa.
+                    for _mi, (_mv, _mparam) in enumerate(
+                        zip(all_values, self.function_params.get(target, ()))
+                    ):
+                        if _mi < _method_start or not isinstance(_mv, str):
+                            continue
+                        if types.get(_mv) == "slot":
+                            self._slot_param_args.setdefault(target, set()).add(_mparam)
                     _multi_method_params = (
                         (self._multi_type_params.get(target) or set())
                         | (self._slot_param_args.get(target) or set())
@@ -24283,6 +24346,12 @@ class LinuxCEmitter:
                 _seen_obj = self._call_param_seen_obj.get(target, {}).get(_mparams[_mi], set())
                 if len(_seen) > 1 and not _seen_obj:
                     self._multi_type_params.setdefault(target, set()).add(_mparams[_mi])
+            # SLOT_PARAM_METHOD_V1: un argumento ETIQUETADO (slot) que llega por
+            # una llamada de metodo o constructor (`Punto(xs[0])` -> __init__)
+            # se pasa como caja: el callee debe tratar ese parametro como slot.
+            for _mi, (_mv, _mparam) in enumerate(zip(all_values, _mparams)):
+                if _mi >= _m_start and isinstance(_mv, str) and types.get(_mv) == "slot":
+                    self._slot_param_args.setdefault(target, set()).add(_mparam)
             _multi_method_params = (
                 (self._multi_type_params.get(target) or set())
                 | (self._slot_param_args.get(target) or set())
