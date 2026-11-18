@@ -11181,6 +11181,36 @@ class LinuxCEmitter:
             lines.append(f"    return {_name('__ret')};")
             lines.append("}")
             return lines
+        # SLOT_PARAM_UNBOX_V1: un parametro que recibe una CAJA slot en algun
+        # call-site (SLOT_PARAM_V1 / SLOT_PARAM_METHOD_V1) pero cuyo uso en el
+        # cuerpo es de un tipo concreto (s.find -> str, lst.append -> list) no
+        # puede quedarse como "slot": el uso emitiria acceso de objeto sobre
+        # la caja (piton_object_get -> 'X' object is not callable). Se
+        # desempaqueta UNA vez al entrar, comprobando que la kind real de la
+        # caja coincide con el uso; si no coincide se lanza TypeError (fail
+        # closed, nunca bits reinterpretados). Multi-tipo, runtime-typed y
+        # usos debiles siguen como slot.
+        _sp_args = self._slot_param_args.get(function.name) or set()
+        _sp_multi = self._multi_type_params.get(function.name) or set()
+        _sp_runtime = self._runtime_type_params.get(function.name) or set()
+        _sp_usage = self._usage_param_types.get(function.name) or {}
+        _sp_weak = self._usage_param_weak.get(function.name) or {}
+        _sp_kinds = {"str": "PK_STR", "list": "PK_LIST", "dict": "PK_DICT", "tuple": "PK_TUPLE", "set": "PK_SET"}
+        _sp_self = function.params[0] if (function.params and function.name in self.function_self_classes) else None
+        for _sp in function.params:
+            _su = _sp_usage.get(_sp)
+            if (
+                _sp in _sp_args and _sp not in _sp_multi and _sp not in _sp_runtime
+                and _sp != _sp_self and _su in _sp_kinds and not _sp_weak.get(_sp)
+            ):
+                _sk = _sp_kinds[_su]
+                lines.append(f"    {{PitonSlot _spv=piton_dyn_unbox({_name(_sp)});")
+                lines.append(
+                    f"    if(_spv.kind!={_sk}){{piton_raise_set(\"TypeError\","
+                    f"\"argument does not match the parameter's use as {_su}\");return 0;}}"
+                )
+                lines.append(f"    {_name(_sp)}=_spv.bits;}}")
+                types[_sp] = _su
         for _block_index, block in enumerate(function.blocks):
             self._cur_block = _block_index
             lines.append(f"{_name(function.name + '_' + block.label)}:")
@@ -21788,6 +21818,16 @@ class LinuxCEmitter:
                         # `<class 'ellipsis'>` como CPython (antes salia
                         # 'object' por el default — divergencia silenciosa).
                         out.append(f"    {_name(result)}=(long)" + json.dumps("<class 'ellipsis'>") + ";")
+                    elif value_type == "slot":
+                        # TYPE_SLOT_RUNTIME_V1: el argumento es una caja slot
+                        # (su tipo real solo existe en runtime). Antes se
+                        # emitia la constante PK_OBJECT: tipo(x) == tipo([])
+                        # era Falso para cualquier x de un parametro (reprlib
+                        # caia siempre al texto() sin truncar). Ahora se lee la
+                        # kind real de la caja.
+                        out.append(
+                            f"    {_name(result)}=(long)piton_type_repr(({self._slot(values[0], types)}).kind);"
+                        )
                     else:
                         out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
                 types[result] = "str"
@@ -24257,6 +24297,11 @@ class LinuxCEmitter:
                     for _mi, (_mv, _mparam) in enumerate(
                         zip(all_values, self.function_params.get(target, ()))
                     ):
+                        if isinstance(_mv, str) and types.get(_mv) == "slot" and _mi >= _method_start:
+                            # SLOT_PARAM_METHOD_V1: el callee de un metodo
+                            # (llamada por clase) trata el param como slot,
+                            # igual que la llamada por instancia de abajo.
+                            self._slot_param_args.setdefault(target, set()).add(_mparam)
                         if _mparam not in _multi_method_params or not isinstance(_mv, str):
                             continue
                         _mvt = types.get(_mv)
@@ -24412,6 +24457,15 @@ class LinuxCEmitter:
                 | (self._slot_param_args.get(target) or set())
             )
             for _mi, (_mv, _mparam) in enumerate(zip(all_values, _mparams)):
+                if isinstance(_mv, str) and types.get(_mv) == "slot" and _mi >= _m_start:
+                    # SLOT_PARAM_METHOD_V1: un argumento ETIQUETADO (caja slot)
+                    # pasado a un metodo debe registrar el param del callee como
+                    # slot, igual que SLOT_PARAM_V1 en _emit_user_function_call.
+                    # Sin esto el callee lo trataba como bits crudos: la key de
+                    # `self._d[x] = 1` (x = caja de str) se etiquetaba con
+                    # piton_slot_guess(direccion_de_la_caja) -> Counter devolvia
+                    # punteros como claves.
+                    self._slot_param_args.setdefault(target, set()).add(_mparam)
                 if _mparam not in _multi_method_params or not isinstance(_mv, str):
                     continue
                 _mvt = types.get(_mv)
