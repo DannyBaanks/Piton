@@ -7,6 +7,7 @@ import operator
 from typing import Any, Dict, List, Optional, Sequence
 
 from piton.hir import Attr, BoolOp, Call, ExceptHandler, HIRKind, HIRNode, Keyword, Load, Module, With
+from piton import call_arity as arity_messages
 
 
 _ZERO_ARG_SUPER = "__piton_zero_arg_super__"
@@ -281,6 +282,9 @@ class MIRFunction:
     is_generator: bool = False
     is_coroutine: bool = False
     is_async_generator: bool = False
+    # ARITY_QUALNAME_V1: __qualname__ de CPython ("fab.<locals>.doble",
+    # "C.m", "<lambda>"). Solo lo usan los mensajes de ligadura de argumentos.
+    qualname: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -1610,6 +1614,8 @@ class MIRLowerer:
         self.function_frame_abi = {}
         self.function_kwonly: dict[str, list[str]] = {}
         self.function_frame_abi: dict[str, bool] = {}
+        # ARITY_QUALNAME_V1: {simbolo lowered: __qualname__ de CPython}.
+        self.function_qualnames: dict[str, str] = {}
         imported_modules = modules or {}
         self.imported_modules = imported_modules
         self._validate_nonlocal_bindings(hir)
@@ -2145,6 +2151,7 @@ class MIRLowerer:
                         method, symbol,
                         super_context=(node.name, super_self) if super_self else None,
                         is_generator=is_gen_method,
+                        py_qualname=f"{node.name}.{method.name}",
                     )
                     if role in (None, "staticmethod", "classmethod", "decorated"):
                         self.classes[node.name].add(method.name)
@@ -2255,6 +2262,7 @@ class MIRLowerer:
                 self._lower_function(
                     lambda_node, lifted_name, lambda_captures,
                     cell_vars=list(lambda_captures), frame_abi=True,
+                    py_qualname="<lambda>",
                 )
 
             module = module_builder
@@ -3133,6 +3141,7 @@ class MIRLowerer:
         captures: tuple[str, ...] = (), cell_vars: list[str] | None = None,
         super_context: tuple[str, str] | None = None,
         frame_abi: bool = False, is_generator: bool = False,
+        py_qualname: str | None = None,
     ) -> None:
         args = getattr(node, "args", None)
         # LAMBDA_STAR_CLOSURE_V1: lambda varargs/kwargs conservan sus slots de
@@ -3146,6 +3155,8 @@ class MIRLowerer:
         kwarg_name = getattr(args, "kwarg", None) if args else None
         body = list(getattr(node, "body", []))
         builder = _Builder(qualified_name or node.name, [*captures, *positional_params])
+        builder.function.qualname = py_qualname or node.name
+        self.function_qualnames[qualified_name or node.name] = builder.function.qualname
         # JSON_SPECIALIZE_V1: en una especializacion, el parametro que recibia json.dumps/dump es un alias.
         builder.json_param_alias = dict(getattr(self, "_json_spec_alias_for", {}).get(qualified_name or node.name, {}))
         builder.function.frame_abi = frame_abi
@@ -3297,6 +3308,7 @@ class MIRLowerer:
                 builder.emit("cell_new", cap_val, result=cell_ptr)
                 builder.emit("store", cap, cell_ptr)
 
+        _parent_qualname = builder.function.qualname or builder.function.name
         for nested in (item for item in body if item.kind == HIRKind.FUNC_DEF):
             nested_captures = tuple(name for name in sorted(self._nested_free_loads(nested)) if name in available)
             lifted_name = f"{builder.function.name}__{nested.name}"
@@ -3318,6 +3330,7 @@ class MIRLowerer:
                 nested, lifted_name, nested_captures,
                 cell_vars=inner_cell_vars, super_context=nested_super_context,
                 frame_abi=True,
+                py_qualname=f"{_parent_qualname}.<locals>.{nested.name}",
             )
 
         lambda_counter = 0
@@ -3344,6 +3357,7 @@ class MIRLowerer:
                 lambda_node, lifted_name, lambda_captures,
                 cell_vars=inner_cell_vars, super_context=lambda_super_context,
                 frame_abi=True,
+                py_qualname=f"{_parent_qualname}.<locals>.<lambda>",
             )
 
         self._lower_statements(
@@ -10878,13 +10892,18 @@ class MIRLowerer:
         # pasa, `positional` NO incluye el receiver: son solo los argumentos
         # del call. Lo usa CONSTRUCTOR_KW_BIND_V1, donde el receiver es el
         # objeto que acaba de crear object_new y no existe como HIRNode.
-        positional_only = self.function_posonly[func_name]
-        keyword_only = self.function_kwonly[func_name]
-        vararg = self.function_varargs[func_name]
-        kwarg = self.function_kwargs[func_name]
+        # ARITY_BIND_V1: tambien liga las llamadas por keyword a funciones sin
+        # *args/**kwargs (antes _resolve_call_args ignoraba en silencio los
+        # keywords desconocidos). Los errores salen con el texto de CPython y
+        # se levantan como TypeError capturable (raise_typed + intentar activo).
+        positional_only = self.function_posonly.get(func_name, [])
+        keyword_only = self.function_kwonly.get(func_name, [])
+        vararg = self.function_varargs.get(func_name)
+        kwarg = self.function_kwargs.get(func_name)
         if any(keyword.arg is None for keyword in keywords):
             raise MIRLoweringError("native keyword unpacking is not supported yet")
         params = self.function_params[func_name]
+        qualname = self.function_qualnames.get(func_name, func_name)
 
         # Evaluate every supplied expression before reporting a binding error,
         # as CPython does. The TypeError is represented in MIR so an enclosing
@@ -10904,54 +10923,81 @@ class MIRLowerer:
         regular_count = len(params) - len(positional_only) - len(keyword_only) - int(bool(vararg)) - int(bool(kwarg))
         regular_params = params[len(positional_only):len(positional_only) + regular_count]
         positional_params = [*positional_only, *regular_params]
-        defaults = self.function_defaults[func_name]
+        defaults = self.function_defaults.get(func_name, {})
         positional_values: list[str | None] = [None] * len(positional_params)
         keyword_values: list[str | None] = [None] * len(keyword_only)
         _recv = 0
         if receiver is not None:
             if not positional_params:
-                return binding_error(f"{func_name}() takes no positional arguments")
+                return binding_error(arity_messages.too_many_positional(
+                    qualname, 0, 0, False, len(positional_values_in) + 1,
+                ))
             positional_values[0] = receiver
             _recv = 1
         max_user_positionals = max(0, len(positional_params) - _recv)
         for index, value in enumerate(positional_values_in[:max_user_positionals]):
             positional_values[index + _recv] = value
+        # Orden de CPython: primero los keywords (en orden de la llamada),
+        # luego demasiados posicionales, luego faltan posicionales y al final
+        # faltan keyword-only.
         extra_keyword_values: list[tuple[str, str]] = []
+        posonly_as_keyword: list[str] = []
         for keyword_name, value in keyword_values_in:
             if keyword_name in regular_params and keyword_name not in positional_only:
                 index = len(positional_only) + regular_params.index(keyword_name)
                 if positional_values[index] is not None:
-                    return binding_error(f"{func_name}() got multiple values for argument '{keyword_name}'")
+                    return binding_error(arity_messages.multiple_values(qualname, keyword_name))
                 positional_values[index] = value
             elif keyword_name in keyword_only:
                 index = keyword_only.index(keyword_name)
                 if keyword_values[index] is not None:
-                    return binding_error(f"{func_name}() got multiple values for keyword argument '{keyword_name}'")
+                    return binding_error(arity_messages.multiple_values(qualname, keyword_name))
                 keyword_values[index] = value
-            else:
-                # A positional-only parameter name is not keyword-bindable;
-                # CPython routes it to **kwargs when present.
+            elif keyword_name in positional_only and not kwarg:
+                posonly_as_keyword.append(keyword_name)
+            elif keyword_name in positional_only:
+                # Un nombre posicional-only no es keyword-bindable: CPython lo
+                # manda a **kwargs cuando existe.
                 extra_keyword_values.append((keyword_name, value))
+            else:
+                if not kwarg:
+                    return binding_error(arity_messages.unexpected_keyword(qualname, keyword_name))
+                extra_keyword_values.append((keyword_name, value))
+        if posonly_as_keyword:
+            return binding_error(arity_messages.positional_only_as_keyword(qualname, posonly_as_keyword))
+        extra_values = tuple(positional_values_in[max_user_positionals:])
+        if extra_values and not vararg:
+            kwonly_given = sum(1 for value in keyword_values if value is not None)
+            return binding_error(arity_messages.too_many_positional(
+                qualname,
+                len(positional_params),
+                len([name for name in positional_params if name not in defaults]),
+                any(name in defaults for name in positional_params),
+                len(positional_values_in) + _recv,
+                kwonly_given,
+            ))
+        missing_positional = [
+            name for index, name in enumerate(positional_params)
+            if positional_values[index] is None and name not in defaults
+        ]
+        if missing_positional:
+            return binding_error(arity_messages.missing_positional(qualname, missing_positional))
+        missing_keyword = [
+            name for index, name in enumerate(keyword_only)
+            if keyword_values[index] is None and name not in defaults
+        ]
+        if missing_keyword:
+            return binding_error(arity_messages.missing_keyword_only(qualname, missing_keyword))
         for index, name in enumerate(positional_params):
             if positional_values[index] is None:
-                if name not in defaults:
-                    return binding_error(f"{func_name}() missing required positional argument: '{name}'")
                 default = builder.temp()
                 builder.emit("const", defaults[name], result=default)
                 positional_values[index] = default
         for index, name in enumerate(keyword_only):
             if keyword_values[index] is None:
-                if name not in defaults:
-                    return binding_error(f"{func_name}() missing required keyword-only argument: '{name}'")
                 default = builder.temp()
                 builder.emit("const", defaults[name], result=default)
                 keyword_values[index] = default
-        extra_values = tuple(positional_values_in[max_user_positionals:])
-        if extra_values and not vararg:
-            return binding_error(f"{func_name}() takes {len(positional_params) - _recv} positional arguments but more were given")
-        if extra_keyword_values and not kwarg:
-            unexpected = extra_keyword_values[0][0]
-            return binding_error(f"{func_name}() got an unexpected keyword argument '{unexpected}'")
         packed: list[str] = []
         if vararg:
             rest = builder.temp()
@@ -11058,36 +11104,11 @@ class MIRLowerer:
             return tuple(values)
         if params is None:
             raise MIRLoweringError(f"native keyword call requires known function: {func_name}")
-        defaults = self.function_defaults.get(func_name, {})
-        n = len(params)
-        if len(positional) > n:
-            raise MIRLoweringError(f"too many positional arguments to {func_name}")
-        values: list[str | None] = [None] * n
-        for i, arg in enumerate(positional):
-            values[i] = self._lower_expr(builder, arg)
-        for kw in keywords:
-            if kw.arg is None:
-                raise MIRLoweringError("native **kwargs is not supported yet")
-            if kw.arg not in params:
-                self._lower_expr(builder, kw.value)
-                continue
-            idx = params.index(kw.arg)
-            if values[idx] is not None:
-                raise MIRLoweringError(f"multiple values for argument: {kw.arg}")
-            values[idx] = self._lower_expr(builder, kw.value)
-        filled = [i for i, v in enumerate(values) if v is not None]
-        max_filled = max(filled) if filled else -1
-        for i in range(max_filled + 1):
-            if values[i] is None:
-                if params[i] not in defaults:
-                    raise MIRLoweringError(f"missing required argument: {params[i]}")
-                result = builder.temp()
-                builder.emit("const", defaults[params[i]], result=result)
-                values[i] = result
-        for i, p in enumerate(params):
-            if p not in defaults and values[i] is None:
-                raise MIRLoweringError(f"missing required argument: {p}")
-        return tuple(v for v in values[:max_filled + 1] if v is not None)
+        # ARITY_BIND_V1: la misma ligadura que las llamadas con *args/**kwargs.
+        # Antes aqui un keyword desconocido se evaluaba y se descartaba en
+        # silencio (`g(1, zz=2)` ejecutaba g sin error) y los errores de
+        # arity eran MIRLoweringError (fail closed, no capturables).
+        return self._lower_variadic_call(builder, func_name, positional, keywords)
 
     def _lower_math_isclose(self, builder: _Builder, node: HIRNode) -> str:
         """Lower math.isclose(a, b, *, rel_tol=1e-9, abs_tol=0.0) into MIR."""

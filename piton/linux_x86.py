@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from . import call_arity as arity_messages
 from .lower import LoweringError, lower_cst_to_hir
 from .mir import (
     _BUILTIN_EXCEPTIONS,
@@ -4151,7 +4152,7 @@ static void piton_finalize_objects(void){PitonObject*o=piton_all_objects;while(o
  * closure se redirigen ahi. Antes `f.attr` sobre un closure leia 0 y la
  * llamada posterior moria con "'X' object is not callable". */
 #define PITON_CLOSURE_MAGIC 0x5049544EC10557LL
-typedef struct{long n_params;long positional_n;long vararg_index;long kwarg_index;unsigned long long kwonly_mask;unsigned long long posonly_mask;unsigned long long default_mask;int frame_abi;const char**param_names;PitonSlot*defaults;}PitonCallSignature;
+typedef struct{long n_params;long positional_n;long vararg_index;long kwarg_index;unsigned long long kwonly_mask;unsigned long long posonly_mask;unsigned long long default_mask;int frame_abi;const char**param_names;PitonSlot*defaults;const char*qualname;}PitonCallSignature;
 typedef struct{long magic;long addr;long n_args;long n_cells;long*cells;long has_vararg;long has_kwarg;PitonObject*attrs;PitonCallSignature*signature;}PitonClosure;
 static long piton_call_signature_invoke(PitonClosure*,long,PitonSlot*,long);
 static int piton_is_closure(long raw){return raw!=0&&piton_maybe_ptr(raw)&&((long*)raw)[0]==PITON_CLOSURE_MAGIC;}
@@ -4288,10 +4289,52 @@ static int piton_type_repr_construct(const char*s,long*out){
 }
 static int piton_callable_value(long callee){return piton_in_arena(callee)||piton_is_code_addr(callee)||(piton_maybe_ptr(callee)&&((long*)callee)[0]==0x5049544E424C544EL);}
 static void piton_raise_not_callable(void){piton_raise_set("TypeError","'X' object is not callable");}
+static void piton_arity_join_names(PitonStrBuf*b,const char**names,long count){
+  for(long i=0;i<count;++i){
+    if(i){if(i==count-1)sb_puts(b,count==2?" and ":", and ");else sb_puts(b,", ");}
+    sb_putc(b,'\'');sb_puts(b,names[i]);sb_putc(b,'\'');
+  }
+}
+/* ARITY_BIND_V1: espejo en C de piton/call_arity.py (mismo texto que CPython). */
+static void piton_arity_missing(const char*qn,const char*kind,const char**names,long count){
+  PitonStrBuf m;sb_init(&m);
+  sb_puts(&m,qn);sb_puts(&m,"() missing ");piton_dunder_sb_long(&m,count);
+  sb_puts(&m," required ");sb_puts(&m,kind);sb_puts(&m,count==1?" argument: ":" arguments: ");
+  piton_arity_join_names(&m,names,count);
+  piton_raise_set("TypeError",m.d);
+}
+static void piton_arity_too_many_n(const char*qn,long positional_n,long required,int has_def,long given,long kwonly_given);
+static void piton_arity_too_many(PitonCallSignature*s,const char*qn,long given,long kwonly_given){
+  long required=0;int has_def=0;
+  for(long i=0;i<s->positional_n;++i){if(s->default_mask&(1ULL<<i))has_def=1;else required++;}
+  piton_arity_too_many_n(qn,s->positional_n,required,has_def,given,kwonly_given);
+}
+static void piton_arity_too_many_n(const char*qn,long positional_n,long required,int has_def,long given,long kwonly_given){
+  PitonStrBuf m;sb_init(&m);
+  sb_puts(&m,qn);sb_puts(&m,"() takes ");
+  int plural;
+  if(has_def){sb_puts(&m,"from ");piton_dunder_sb_long(&m,required);sb_puts(&m," to ");piton_dunder_sb_long(&m,positional_n);plural=1;}
+  else{piton_dunder_sb_long(&m,positional_n);plural=positional_n!=1;}
+  sb_puts(&m,plural?" positional arguments":" positional argument");
+  sb_puts(&m," but ");piton_dunder_sb_long(&m,given);
+  if(kwonly_given){
+    sb_puts(&m,given==1?" positional argument":" positional arguments");
+    sb_puts(&m," (and ");piton_dunder_sb_long(&m,kwonly_given);
+    sb_puts(&m,kwonly_given==1?" keyword-only argument":" keyword-only arguments");
+    sb_puts(&m,") were given");
+  }else sb_puts(&m,given==1?" was given":" were given");
+  piton_raise_set("TypeError",m.d);
+}
+static void piton_arity_keyword_error(const char*qn,const char*what,const char*name){
+  PitonStrBuf m;sb_init(&m);
+  sb_puts(&m,qn);sb_puts(&m,"() ");sb_puts(&m,what);sb_puts(&m,"'");sb_puts(&m,name);sb_putc(&m,'\'');
+  piton_raise_set("TypeError",m.d);
+}
 static long piton_call_signature_invoke(PitonClosure*c,long argc,PitonSlot*args,long kwargs_raw){
   PitonCallSignature*s=c?c->signature:0;
   if(!s){piton_raise_set("TypeError","callable has no signature metadata");return 0;}
   if(argc<0||argc>64){piton_raise_set("TypeError","too many arguments in a dynamic call");return 0;}
+  const char*qn=s->qualname?s->qualname:"function";
   long n=s->n_params;
   PitonSlot bound[63];
   unsigned long long supplied=0;
@@ -4301,6 +4344,7 @@ static long piton_call_signature_invoke(PitonClosure*c,long argc,PitonSlot*args,
   PitonSeq*varargs=s->vararg_index>=0?piton_seq_new(PK_TUPLE,0):0;
   PitonDict*extra_keywords=s->kwarg_index>=0?piton_dict_new(0):0;
   long pos_index=0;
+  long overflow=0;
   for(long i=0;i<argc;++i){
     PitonSlot value=args[i];
     while(pos_index<n&&(pos_index==s->vararg_index||pos_index==s->kwarg_index||(s->kwonly_mask&(1ULL<<pos_index))))pos_index++;
@@ -4309,29 +4353,59 @@ static long piton_call_signature_invoke(PitonClosure*c,long argc,PitonSlot*args,
     }else if(s->vararg_index>=0){
       piton_seq_append(varargs,value);
     }else{
-      piton_raise_set("TypeError","too many positional arguments");return 0;
+      overflow++;
     }
   }
+  /* Orden de CPython: keywords (en orden de la llamada) -> demasiados
+   * posicionales -> faltan posicionales -> faltan keyword-only. */
+  const char*posonly_names[63];long posonly_n=0;
   if(kwargs_raw){
     PitonDict*kwargs=(PitonDict*)kwargs_raw;
     for(long k=0;k<kwargs->length;++k){
       PitonSlot key=kwargs->items[k].key,value=kwargs->items[k].value;
       if(key.kind!=PK_STR||!key.bits){piton_raise_set("TypeError","keywords must be strings");return 0;}
-      long found=-1;
+      long found=-1;long posonly_hit=-1;
       for(long i=0;i<n;++i){
-        if(i==s->vararg_index||i==s->kwarg_index)continue;
-        if((s->posonly_mask&(1ULL<<i))==0&&s->param_names[i]&&piton_strcmp((const char*)key.bits,s->param_names[i])==0){found=i;break;}
+        if(i==s->vararg_index||i==s->kwarg_index||!s->param_names[i])continue;
+        if(piton_strcmp((const char*)key.bits,s->param_names[i])==0){
+          if(s->posonly_mask&(1ULL<<i))posonly_hit=i;
+          else{found=i;break;}
+        }
       }
       if(found>=0){
-        if(supplied&(1ULL<<found)){piton_raise_set("TypeError","multiple values for argument");return 0;}
+        if(supplied&(1ULL<<found))piton_arity_keyword_error(qn,"got multiple values for argument ",(const char*)key.bits);
         bound[found]=value;supplied|=1ULL<<found;
       }else if(extra_keywords){
         piton_dict_set_raw(extra_keywords,key,value);
+      }else if(posonly_hit>=0){
+        posonly_names[posonly_n++]=s->param_names[posonly_hit];
       }else{
-        piton_raise_set("TypeError","unexpected keyword argument");return 0;
+        piton_arity_keyword_error(qn,"got an unexpected keyword argument ",(const char*)key.bits);
       }
     }
   }
+  if(posonly_n){
+    PitonStrBuf m;sb_init(&m);
+    sb_puts(&m,qn);sb_puts(&m,"() got some positional-only arguments passed as keyword arguments: '");
+    for(long i=0;i<posonly_n;++i){if(i)sb_puts(&m,", ");sb_puts(&m,posonly_names[i]);}
+    sb_putc(&m,'\'');
+    piton_raise_set("TypeError",m.d);return 0;
+  }
+  if(overflow){
+    long kwonly_given=0;
+    for(long i=0;i<n;++i)if((s->kwonly_mask&(1ULL<<i))&&(supplied&(1ULL<<i)))kwonly_given++;
+    piton_arity_too_many(s,qn,argc,kwonly_given);return 0;
+  }
+  const char*missing[63];long missing_n=0;
+  for(long i=0;i<s->positional_n&&i<n;++i){
+    if(!(supplied&(1ULL<<i))&&!(s->default_mask&(1ULL<<i)))missing[missing_n++]=s->param_names[i];
+  }
+  if(missing_n){piton_arity_missing(qn,"positional",missing,missing_n);return 0;}
+  for(long i=0;i<n;++i){
+    if(!(s->kwonly_mask&(1ULL<<i)))continue;
+    if(!(supplied&(1ULL<<i))&&!(s->default_mask&(1ULL<<i)))missing[missing_n++]=s->param_names[i];
+  }
+  if(missing_n){piton_arity_missing(qn,"keyword-only",missing,missing_n);return 0;}
   for(long i=0;i<n;++i){
     if(i==s->vararg_index){bound[i]=(PitonSlot){(long)varargs,PK_TUPLE};continue;}
     if(i==s->kwarg_index){bound[i]=(PitonSlot){(long)extra_keywords,PK_DICT};continue;}
@@ -4346,9 +4420,10 @@ static long piton_call_signature_invoke(PitonClosure*c,long argc,PitonSlot*args,
   long a[4]={0,0,0,0};for(long i=0;i<total;++i)a[i]=frame[i];
   return((long(*)(long,long,long,long))c->addr)(a[0],a[1],a[2],a[3]);
 }
-static PitonCallSignature*piton_call_signature_new(long n_params,long positional_n,long vararg_index,long kwarg_index,unsigned long long kwonly_mask,unsigned long long posonly_mask,unsigned long long default_mask,int frame_abi,const char**names,PitonSlot*defaults){
+static PitonCallSignature*piton_call_signature_new(long n_params,long positional_n,long vararg_index,long kwarg_index,unsigned long long kwonly_mask,unsigned long long posonly_mask,unsigned long long default_mask,int frame_abi,const char**names,PitonSlot*defaults,const char*qualname){
   if(n_params<0||n_params>63){piton_raise_set("RuntimeError","invalid native call signature");return 0;}
   PitonCallSignature*s=(PitonCallSignature*)piton_alloc(sizeof(*s));
+  s->qualname=qualname;
   s->n_params=n_params;s->positional_n=positional_n;s->vararg_index=vararg_index;s->kwarg_index=kwarg_index;
   s->kwonly_mask=kwonly_mask;s->posonly_mask=posonly_mask;s->default_mask=default_mask;s->frame_abi=frame_abi;
   s->param_names=(const char**)piton_alloc((usize)(n_params?n_params:1)*sizeof(const char*));
@@ -7684,6 +7759,16 @@ static long piton_unpack_seq4_dynamic(long bits,long capacity,long*out4){
   piton_raise_set("TypeError","argument after * must be a list or tuple");
   return -1;
 }
+/* ARITY_BIND_V1: longitud de un operando `*x` (mismas reglas que
+ * piton_unpack_seq4_dynamic) para conocer el total de posicionales antes de
+ * ligar y dar el mensaje de CPython. */
+static long piton_star_len_dynamic(long bits){
+  bits=piton_dyn_unwrap_bits(bits);
+  if(piton_maybe_ptr(bits)){long*ptr=(long*)bits;long k=ptr[1];
+    if(ptr[0]>=0&&ptr[0]<1000000L&&(k==PK_LIST||k==PK_TUPLE))return ((PitonSeq*)bits)->length;}
+  piton_raise_set("TypeError","argument after * must be a list or tuple");
+  return -1;
+}
 static void piton_bytearray_append(PitonByteArray* ba, long val){
     if(!ba)return;
     if(val<0||val>255){piton_raise_set("ValueError","byte must be in range(0, 256)");piton_report_unhandled();piton_exit(1);return;}
@@ -10099,6 +10184,12 @@ class LinuxCEmitter:
         self.function_varargs = {function.name: function.vararg for function in module.functions}
         self.function_kwargs = {function.name: function.kwarg for function in module.functions}
         self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
+        # ARITY_QUALNAME_V1: __qualname__ de CPython para los mensajes de arity.
+        self.function_qualnames = {
+            function.name: function.qualname
+            for function in module.functions
+            if getattr(function, "qualname", None)
+        }
         for alias_sym, real_sym in getattr(self, "function_aliases", {}).items():
             if alias_sym.endswith(("____str__", "____repr__", "____del__")) and len(self.function_params.get(real_sym, [])) > 1:
                 self.function_params[alias_sym] = ["self"]
@@ -11846,12 +11937,31 @@ class LinuxCEmitter:
         out.append(f"    static const char* kn_{site}[{max(len(keyword_indices), 1)}]={{{kw_name_text}}};")
         out.append(f"    static const long pi_{site}[{max(len(positional_indices), 1)}]={{{pos_index_text}}};")
 
+        # ARITY_BIND_V1: sin *args, el total de posicionales (valores + `*`) se
+        # cuenta antes de ligar para dar "takes N ... but T were given".
+        _pos_n = len(positional_indices)
+        _qk_lit = json.dumps(self.function_qualnames.get(function_name, function_name))
+        _nreq_pos = sum(1 for i in positional_indices if params[i] not in default_params)
+        _hasd_pos = any(params[i] in default_params for i in positional_indices)
+        if vararg_index is None:
+            out.append(f"    long tc_{site}={sum(1 for p in pos_parts if p[0] == 'value')};")
+            for _pi, part in enumerate(pos_parts):
+                if part[0] != "value":
+                    out.append(
+                        f"    {{long lc_{site}_{_pi}=piton_star_len_dynamic(({self._slot(part[1], types)}).bits);"
+                        f"if(lc_{site}_{_pi}<0)goto {site}_runtime_err;tc_{site}+=lc_{site}_{_pi};}}"
+                    )
+            out.append(
+                f"    if(tc_{site}>{_pos_n}){{piton_arity_too_many_n({_qk_lit},{_pos_n},{_nreq_pos},"
+                f"{1 if _hasd_pos else 0},tc_{site},0);goto {site}_runtime_err;}}"
+            )
+
         def emit_positional_value(slot_expr: str) -> None:
             out.append(f"    if(f_{site}<{len(positional_indices)}){{long q_{site}=pi_{site}[f_{site}++];b_{site}[q_{site}]=({slot_expr}).bits;m_{site}|=(1ULL<<q_{site});}}")
             if vararg_index is not None:
                 out.append(f"    else piton_seq_append(x_{site},{slot_expr});")
             else:
-                out.append(f"    else{{piton_raise_set(\"TypeError\",\"too many positional arguments\");goto {site}_runtime_err;}}")
+                out.append(f"    else{{piton_arity_too_many_n({_qk_lit},{_pos_n},{_nreq_pos},{1 if _hasd_pos else 0},tc_{site},0);goto {site}_runtime_err;}}")
 
         for part in pos_parts:
             if part[0] == "value":
@@ -11872,6 +11982,9 @@ class LinuxCEmitter:
             out.append(f"     for(long z_{site}=0;z_{site}<xk_{site}->length;++z_{site})if(piton_slot_eq(xk_{site}->items[z_{site}].key,k_{site}))dup_{site}=1;")
             out.append(f"     if(dup_{site}){{piton_raise_set(\"TypeError\",\"multiple values for keyword argument\");goto {site}_runtime_err;}}piton_dict_set_raw(xk_{site},k_{site},v_{site});}}")
 
+        # ARITY_BIND_V1: qualname y mensajes de CPython para las ligaduras
+        # por keyword de esta ruta (nombres en runtime cuando vienen de **).
+        _kq_lit = json.dumps(self.function_qualnames.get(function_name, function_name))
         for part in kw_parts:
             if part[0] == "keyword":
                 keyword_name, value = part[1], part[2]
@@ -11879,7 +11992,7 @@ class LinuxCEmitter:
                     (i for i in keyword_indices if params[i] == keyword_name), None
                 )
                 if bind_index is not None:
-                    out.append(f"    if(m_{site}&(1ULL<<{bind_index})){{piton_raise_set(\"TypeError\",\"multiple values for argument\");goto {site}_runtime_err;}}")
+                    out.append(f"    if(m_{site}&(1ULL<<{bind_index})){{piton_arity_keyword_error({_kq_lit},\"got multiple values for argument \",{json.dumps(keyword_name)});goto {site}_runtime_err;}}")
                     out.append(f"    m_{site}|=(1ULL<<{bind_index});b_{site}[{bind_index}]=(long)({self._value(value)});")
                 elif kwarg_index is not None:
                     emit_extra_keyword(
@@ -11887,7 +12000,7 @@ class LinuxCEmitter:
                         self._slot(value, types),
                     )
                 else:
-                    out.append(f"    piton_raise_set(\"TypeError\",{json.dumps('unexpected keyword argument ' + repr(keyword_name))});goto {site}_runtime_err;")
+                    out.append(f"    piton_arity_keyword_error({_kq_lit},\"got an unexpected keyword argument \",{json.dumps(keyword_name)});goto {site}_runtime_err;")
                 continue
 
             slot_expr = self._slot(part[2], types)
@@ -11896,18 +12009,33 @@ class LinuxCEmitter:
             out.append(f"     PitonDict*d_{site}=(PitonDict*)r_{site}.bits;for(long j_{site}=0;j_{site}<d_{site}->length;++j_{site}){{PitonSlot k_{site}=d_{site}->items[j_{site}].key;PitonSlot v_{site}=d_{site}->items[j_{site}].value;")
             out.append(f"      if(k_{site}.kind!=PK_STR){{piton_raise_set(\"TypeError\",\"keywords must be strings\");goto {site}_runtime_err;}}long q_{site}=-1;")
             out.append(f"      for(long t_{site}=0;t_{site}<{len(keyword_indices)};++t_{site})if(piton_strcmp((const char*)k_{site}.bits,kn_{site}[t_{site}])==0){{q_{site}=ki_{site}[t_{site}];break;}}")
-            out.append(f"      if(q_{site}>=0){{if(m_{site}&(1ULL<<q_{site})){{piton_raise_set(\"TypeError\",\"multiple values for argument\");goto {site}_runtime_err;}}m_{site}|=(1ULL<<q_{site});b_{site}[q_{site}]=v_{site}.bits;}}")
+            out.append(f"      if(q_{site}>=0){{if(m_{site}&(1ULL<<q_{site})){{piton_arity_keyword_error({_kq_lit},\"got multiple values for argument \",(const char*)k_{site}.bits);goto {site}_runtime_err;}}m_{site}|=(1ULL<<q_{site});b_{site}[q_{site}]=v_{site}.bits;}}")
             if kwarg_index is not None:
                 out.append(f"      else{{long dup_{site}=0;for(long z_{site}=0;z_{site}<xk_{site}->length;++z_{site})if(piton_slot_eq(xk_{site}->items[z_{site}].key,k_{site}))dup_{site}=1;if(dup_{site}){{piton_raise_set(\"TypeError\",\"multiple values for keyword argument\");goto {site}_runtime_err;}}piton_dict_set_raw(xk_{site},k_{site},v_{site});}}")
             else:
-                out.append(f"      else{{piton_raise_set(\"TypeError\",\"unexpected keyword argument in ** expansion\");goto {site}_runtime_err;}}")
+                out.append(f"      else{{piton_arity_keyword_error({_kq_lit},\"got an unexpected keyword argument \",(const char*)k_{site}.bits);goto {site}_runtime_err;}}")
             out.append("     }}")
 
-        for index, param in enumerate(params):
-            if index in {vararg_index, kwarg_index}:
+        # Faltan posicionales (todos sus nombres, en orden) y luego keyword-only.
+        _konly = set(self.function_kwonly.get(function_name, []) or [])
+        for _miss_kind, _miss_pred in (
+            ("positional", lambda p: p not in _konly),
+            ("keyword-only", lambda p: p in _konly),
+        ):
+            _miss = [
+                index for index, param in enumerate(params)
+                if index not in {vararg_index, kwarg_index}
+                and param not in default_params
+                and _miss_pred(param)
+            ]
+            if not _miss:
                 continue
-            if param not in default_params:
-                out.append(f"    if(b_{site}[{index}]=={sentinel}){{piton_raise_set(\"TypeError\",\"missing required argument\");goto {site}_runtime_err;}}")
+            out.append(f"    {{const char* mn_{site}[{len(_miss)}];long mc_{site}=0;")
+            for index in _miss:
+                out.append(f"     if(b_{site}[{index}]=={sentinel})mn_{site}[mc_{site}++]={json.dumps(params[index])};")
+            out.append(
+                f"     if(mc_{site}){{piton_arity_missing({_kq_lit},\"{_miss_kind}\",mn_{site},mc_{site});goto {site}_runtime_err;}}}}"
+            )
 
         if self.function_frame_abi.get(function_name, False):
             call_values = ",".join(f"b_{site}[{i}]" for i in range(len(params)))
@@ -11982,25 +12110,20 @@ class LinuxCEmitter:
         _too_few = len(values) < _min_args
         _too_many = _max_args is not None and len(values) > _max_args
         if _too_few or _too_many:
-            _max_text = str(_max_args) if _max_args is not None else "ilimitados"
-            _range_text = (
-                _max_text
-                if _min_args == _max_args
-                else f"from {_min_args} to {_max_text}"
-            )
-            _position_word = (
-                "positional argument"
-                if _min_args == _max_args == 1
-                else "positional arguments"
-            )
-            _given_word = "was" if len(values) == 1 else "were"
-            self._runtime_type_error(
-                out,
-                f"{function_name}() takes {_range_text} {_position_word} "
-                f"but {len(values)} {_given_word} given",
-                function,
-                call_handler,
-            )
+            # ARITY_BIND_V1: texto de CPython (qualname, "missing N ... : 'a' and
+            # 'b'", "from X to Y", "was/were"). Las llamadas con keyword o con
+            # kwonly/posonly ya llegan ligadas (ver _lower_variadic_call); aqui
+            # solo caen las posicionales puras.
+            _qual = self.function_qualnames.get(function_name, function_name)
+            if _too_few:
+                _arity_msg = arity_messages.missing_positional(
+                    _qual, list(_params[len(values):_min_args])
+                )
+            else:
+                _arity_msg = arity_messages.too_many_positional(
+                    _qual, _n_fixed, _min_args, _n_defaults > 0, len(values),
+                )
+            self._runtime_type_error(out, _arity_msg, function, call_handler)
             types[result] = "int"
             return out
         values = self._complete_call_args(function_name, list(values), out)
@@ -14598,13 +14721,6 @@ class LinuxCEmitter:
         defaults_expr = ",".join(default_exprs) or "piton_slot(0,PK_INT)"
         out.append(f"        const char* {names_name}[{array_size}]={{{names_expr}}};")
         out.append(f"        PitonSlot {defaults_name}[{array_size}]={{{defaults_expr}}};")
-        out.append(
-            f"        PitonCallSignature* {signature_name}=piton_call_signature_new("
-            f"{len(params)},{positional_n},{vararg_index},{kwarg_index},"
-            f"{kwonly_mask}ULL,{posonly_mask}ULL,{default_mask}ULL,"
-            f"{1 if self.function_frame_abi.get(function_name, False) else 0},"
-            f"{names_name},{defaults_name});"
-        )
         python_name = function_name
         if python_name.startswith("__decorated__"):
             python_name = python_name[len("__decorated__"):]
@@ -14612,6 +14728,16 @@ class LinuxCEmitter:
             python_name = "<lambda>"
         elif "__" in python_name:
             python_name = python_name.rsplit("__", 1)[-1]
+        # ARITY_QUALNAME_V1: el qualname viaja con la firma para que el
+        # runtime escriba "fab.<locals>.doble() takes ..." como CPython.
+        qualname = self.function_qualnames.get(function_name, python_name)
+        out.append(
+            f"        PitonCallSignature* {signature_name}=piton_call_signature_new("
+            f"{len(params)},{positional_n},{vararg_index},{kwarg_index},"
+            f"{kwonly_mask}ULL,{posonly_mask}ULL,{default_mask}ULL,"
+            f"{1 if self.function_frame_abi.get(function_name, False) else 0},"
+            f"{names_name},{defaults_name},{json.dumps(qualname)});"
+        )
         return signature_name, python_name
 
     def _complete_call_args(
@@ -22271,6 +22397,10 @@ class LinuxCEmitter:
         elif op == "method_call":
             cls_name, method, obj = args[0], args[1], args[2]
             call_args = args[3] if len(args) > 3 else ()
+            # ARITY_BIND_V1: True cuando la ligadura por keyword ya validó la
+            # aridad (y dejó las kwonly en su slot): la comprobación posicional
+            # no debe volver a contarlas.
+            _mkw_bound = False
             if (
                 isinstance(cls_name, tuple)
                 and len(cls_name) == 3
@@ -22517,56 +22647,71 @@ class LinuxCEmitter:
                         _kp = self.function_params.get(_ksym) or []
                         _kd = self.function_defaults.get(_ksym) or []
                         _kdp = getattr(self, "function_default_params", {}).get(_ksym)
-                        _UNSET = object()
-                        _kb: list[Any] = [_UNSET] * len(_kp)
-                        _pos = [obj, *call_args]
-                        if len(_pos) > len(_kp):
-                            self._runtime_type_error(
-                                out,
-                                f"{_khit}.{method}() takes {len(_kp)} positional arguments but {len(_pos)} were given",
+                        # ARITY_BIND_V1: el ABI va en orden de params (posonly,
+                        # posicionales, *args, kwonly, **kw), asi que las kwonly
+                        # se ligan por nombre en su slot. **kwargs y posonly por
+                        # keyword no se modelan aqui: fail closed.
+                        if self.function_posonly.get(_ksym) or self.function_kwargs.get(_ksym) is not None:
+                            raise NativeBuildError(
+                                f"Linux keyword call to {_khit}.{method}() with positional-only "
+                                "or **kwargs parameters is not supported yet (fail closed)"
                             )
-                            types[result] = "int"
-                            self._emit_exc_check(out, function, handler_label)
-                            return out
-                        for _pi, _pv in enumerate(_pos):
-                            _kb[_pi] = _pv
+                        _kwonly_set = set(self.function_kwonly.get(_ksym) or [])
+                        _kpos_n = len(_kp) - len(_kwonly_set)
+                        _UNSET = object()
+                        _pos = [obj, *call_args]
+                        _qual = self.function_qualnames.get(_ksym, f"{_khit}.{method}")
+
+                        def _has_default(_i: int) -> bool:
+                            return _i < len(_kd) and (_kdp is None or _kp[_i] in _kdp)
+
+                        _kb: list[Any] = [
+                            (_pos[_i] if _i < len(_pos) and _i < _kpos_n else _UNSET)
+                            for _i in range(len(_kp))
+                        ]
+                        _kerr: str | None = None
+                        _kw_kwonly_given = 0
                         for _kn, _kv in kw_args:
                             if _kn not in _kp:
-                                self._runtime_type_error(
-                                    out,
-                                    f"{_khit}.{method}() got an unexpected keyword argument '{_kn}'",
-                                )
-                                types[result] = "int"
-                                self._emit_exc_check(out, function, handler_label)
-                                return out
+                                _kerr = arity_messages.unexpected_keyword(_qual, _kn)
+                                break
                             _kidx = _kp.index(_kn)
                             if _kb[_kidx] is not _UNSET:
-                                self._runtime_type_error(
-                                    out,
-                                    f"{_khit}.{method}() got multiple values for argument '{_kn}'",
-                                )
-                                types[result] = "int"
-                                self._emit_exc_check(out, function, handler_label)
-                                return out
+                                _kerr = arity_messages.multiple_values(_qual, _kn)
+                                break
                             _kb[_kidx] = _kv
-                        _missing_kw = []
-                        for _ki in range(len(_kp)):
-                            if _kb[_ki] is _UNSET:
-                                if _ki < len(_kd) and (_kdp is None or _kp[_ki] in _kdp):
-                                    _kb[_ki] = _kd[_ki]
-                                else:
-                                    _missing_kw.append(_kp[_ki])
-                        if _missing_kw:
-                            self._runtime_type_error(
-                                out,
-                                f"{_khit}.{method}() missing {len(_missing_kw)} required positional argument: '{_missing_kw[0]}'",
+                            if _kn in _kwonly_set:
+                                _kw_kwonly_given += 1
+                        if _kerr is None and len(_pos) > _kpos_n:
+                            _kreq = [_kp[_i] for _i in range(_kpos_n) if not _has_default(_i)]
+                            _kerr = arity_messages.too_many_positional(
+                                _qual, _kpos_n, len(_kreq),
+                                any(_has_default(_i) for _i in range(_kpos_n)),
+                                len(_pos), _kw_kwonly_given,
                             )
+                        if _kerr is None:
+                            _missing_pos: list[str] = []
+                            _missing_kw: list[str] = []
+                            for _ki in range(len(_kp)):
+                                if _kb[_ki] is _UNSET:
+                                    if _has_default(_ki):
+                                        _kb[_ki] = _kd[_ki]
+                                    elif _ki < _kpos_n:
+                                        _missing_pos.append(_kp[_ki])
+                                    else:
+                                        _missing_kw.append(_kp[_ki])
+                            if _missing_pos:
+                                _kerr = arity_messages.missing_positional(_qual, _missing_pos)
+                            elif _missing_kw:
+                                _kerr = arity_messages.missing_keyword_only(_qual, _missing_kw)
+                        if _kerr is not None:
+                            self._runtime_type_error(out, _kerr, function, handler_label)
                             types[result] = "int"
-                            self._emit_exc_check(out, function, handler_label)
                             return out
                         cls_name = _khit
                         call_args = tuple(_kb[1:])
                         kw_args = ()
+                        _mkw_bound = True
                 if kw_args and (cls_name is not None or method != "update" or owner_type not in {"dict", "class:dict", "dict:module"}):
                     # Fallback dinámico para kwargs en métodos no soportados nativamente
                     _dparts = [f"{{PitonSeq*_dpa=piton_seq_new(PK_TUPLE,{len(call_args)});"]
@@ -23330,38 +23475,39 @@ class LinuxCEmitter:
             _mdefaults = self.function_defaults.get(target) or []
             _mvararg = self.function_varargs.get(target)
             _mkwarg = self.function_kwargs.get(target)
-            if _mparams:
-                _m_fixed = len(_mparams) - (1 if _mvararg is not None else 0) - (1 if _mkwarg is not None else 0)
+            if _mparams and not _mkw_bound:
+                # ARITY_BIND_V1: sin keywords, las keyword-only de un metodo no
+                # pueden llegar: faltar una sin default es TypeError de CPython.
+                _m_kwonly = list(self.function_kwonly.get(target) or [])
                 _mdef_params = getattr(self, "function_default_params", {}).get(target)
+                _m_pos_params = [
+                    p for p in _mparams
+                    if p not in _m_kwonly and p != _mvararg and p != _mkwarg
+                ]
                 if _mdef_params is not None:
-                    _m_ndef = len([p for p in _mparams if p in _mdef_params and p != _mvararg and p != _mkwarg])
+                    _m_ndef = len([p for p in _m_pos_params if p in _mdef_params])
+                    _m_kw_required = [p for p in _m_kwonly if p not in _mdef_params]
                 else:
-                    _m_ndef = len(_mdefaults) if isinstance(_mdefaults, dict) else len([d for d in _mdefaults if d is not None])
-                _m_min = max(0, _m_fixed - _m_ndef)
-                _m_max = len(_mparams) if _mvararg is None and _mkwarg is None else None
-                if len(raw_values) < _m_min:
-                    _missing = [p for p in _mparams[:_m_min][len(raw_values):]]
-                    _miss_cnt = len(_missing)
-                    if _miss_cnt == 1:
-                        _mmsg = f"{cls_name}.{method}() missing 1 required positional argument: '{_missing[0]}'"
-                    else:
-                        _mmsg = (
-                            f"{cls_name}.{method}() missing {_miss_cnt} required positional arguments: "
-                            + ", ".join(f"'{p}'" for p in _missing[:-1])
-                            + f" and '{_missing[-1]}'"
+                    if _m_kwonly:
+                        raise NativeBuildError(
+                            f"Linux method {target} with keyword-only parameters needs default metadata (fail closed)"
                         )
-                    self._runtime_type_error(out, _mmsg)
-                    types[result] = "int"
-                    return out
-                if _m_max is not None and len(raw_values) > _m_max:
-                    _mmax_text = str(_m_max)
-                    _mpos_word = "positional argument" if (_m_min == _m_max == 1) else "positional arguments"
-                    self._runtime_type_error(
-                        out,
-                        f"{cls_name}.{method}() takes "
-                        + (_mmax_text if _m_min == _m_max else f"from {_m_min} to {_m_max}")
-                        + f" {_mpos_word} but {len(raw_values)} were given",
+                    _m_ndef = len(_mdefaults) if isinstance(_mdefaults, dict) else len([d for d in _mdefaults if d is not None])
+                    _m_kw_required = []
+                _m_min = max(0, len(_m_pos_params) - _m_ndef)
+                _m_max = len(_m_pos_params) if _mvararg is None and _mkwarg is None else None
+                _mqual = self.function_qualnames.get(target, f"{cls_name}.{method}")
+                _merr: str | None = None
+                if len(raw_values) < _m_min:
+                    _merr = arity_messages.missing_positional(_mqual, _m_pos_params[len(raw_values):_m_min])
+                elif _m_max is not None and len(raw_values) > _m_max:
+                    _merr = arity_messages.too_many_positional(
+                        _mqual, _m_max, _m_min, _m_min < _m_max, len(raw_values),
                     )
+                elif _m_kw_required:
+                    _merr = arity_messages.missing_keyword_only(_mqual, _m_kw_required)
+                if _merr is not None:
+                    self._runtime_type_error(out, _merr, function, handler_label)
                     types[result] = "int"
                     return out
             all_values = self._complete_call_args(target, raw_values, out)
@@ -24900,9 +25046,15 @@ class LinuxCEmitter:
                         out.append(f"     long k_{site}=0;")
                         out.append(f"     while(f_{site}<{n_named}&&k_{site}<s_{site}->length){{b_{site}[(int)f_{site}]=s_{site}->items[k_{site}].bits;f_{site}+=1;k_{site}+=1;}}")
                         out.append(f"     for(;k_{site}<s_{site}->length;++k_{site})piton_seq_append(x_{site},s_{site}->items[k_{site}]);}}")
+                # ARITY_BIND_V1: nombres que faltan, todos a la vez (CPython).
+                _vq_lit = json.dumps(self.function_qualnames.get(func_name, func_name))
+                out.append(f"    {{const char* mn_{site}[{max(n_named, 1)}];long mc_{site}=0;")
                 for idx in range(n_named):
                     if not (idx < len(f_defaults) and f_defaults[idx] is not None):
-                        out.append(f"    if(b_{site}[{idx}]=={sentinel}){{piton_raise_set(\"TypeError\",\"missing required positional argument\");goto {site}_runtime_err;}}")
+                        out.append(f"     if(b_{site}[{idx}]=={sentinel})mn_{site}[mc_{site}++]={json.dumps(named[idx])};")
+                out.append(
+                    f"     if(mc_{site}){{piton_arity_missing({_vq_lit},\"positional\",mn_{site},mc_{site});goto {site}_runtime_err;}}}}"
+                )
                 call_args = ",".join(f"b_{site}[{idx}]" for idx in range(n_named)) + (f",(long)x_{site}" if n_named else f"(long)x_{site}")
                 out.append(f"    {_name(result)}={_name(func_name)}({call_args});")
                 self._emit_exc_check(out, function, call_handler)
@@ -24931,6 +25083,23 @@ class LinuxCEmitter:
                     out.append(f"    b_{site}[{idx}]={self._value(f_defaults[idx])};")
                 else:
                     out.append(f"    b_{site}[{idx}]={sentinel};")
+            # ARITY_BIND_V1: el total de posicionales (valores + longitudes de
+            # los `*`) se conoce ANTES de ligar: asi el TypeError de "takes N
+            # positional arguments but T were given" lleva el T de CPython.
+            _qn_lit = json.dumps(self.function_qualnames.get(func_name, func_name))
+            _has_def = any(i < len(f_defaults) and f_defaults[i] is not None for i in range(n_params))
+            _n_required = sum(1 for i in range(n_params) if not (i < len(f_defaults) and f_defaults[i] is not None))
+            out.append(f"    long t_{site}={sum(1 for part in pos_parts if part[0] == 'value')};")
+            for _pidx, part in enumerate(pos_parts):
+                if part[0] != "value":
+                    out.append(
+                        f"    {{long l_{site}_{_pidx}=piton_star_len_dynamic((long){self._value(part[1])});"
+                        f"if(l_{site}_{_pidx}<0)goto {site}_runtime_err;t_{site}+=l_{site}_{_pidx};}}"
+                    )
+            out.append(
+                f"    if(t_{site}>{n_params}){{piton_arity_too_many_n({_qn_lit},{n_params},{_n_required},"
+                f"{1 if _has_def else 0},t_{site},0);goto {site}_runtime_err;}}"
+            )
             for _pidx, part in enumerate(pos_parts):
                 if part[0] == "value":
                     out.append(f"    if(f_{site}>={n_params}){{piton_raise_set(\"TypeError\",\"too many positional arguments for call\");goto {site}_runtime_err;}}")
@@ -24951,15 +25120,21 @@ class LinuxCEmitter:
                     if name not in f_params:
                         raise NativeBuildError(f"unexpected keyword argument: {name}")
                     idx = f_params.index(name)
-                    out.append(f"    if(m_{site}&(1LL<<{idx})){{piton_raise_set(\"TypeError\",\"multiple values for argument\");goto {site}_runtime_err;}}")
+                    out.append(f"    if(m_{site}&(1LL<<{idx})){{piton_arity_keyword_error({_qn_lit},\"got multiple values for argument \",{json.dumps(name)});goto {site}_runtime_err;}}")
                     out.append(f"    m_{site}|=1LL<<{idx}; b_{site}[{idx}]=(long)({self._value(value)});")
                 else:
                     names = ",".join(json.dumps(param) for param in f_params)
                     out.append(f"    static const char* names_{site}[{n_params}]={{{names}}};")
                     out.append(f"    if(piton_dict_unpack4((PitonSlot){{(long){self._value(part[2])},PK_DICT}},names_{site},{n_params},b_{site},&m_{site})<0)goto {site}_runtime_err;")
+            # ARITY_BIND_V1: los nombres que siguen con centinela se reportan
+            # todos a la vez, como CPython ("... 'b' and 'c'").
+            out.append(f"    {{const char* mn_{site}[{max(n_params, 1)}];long mc_{site}=0;")
             for idx in range(n_params):
                 if not (idx < len(f_defaults) and f_defaults[idx] is not None):
-                    out.append(f"    if(b_{site}[{idx}]=={sentinel}){{piton_raise_set(\"TypeError\",\"missing required positional argument\");goto {site}_runtime_err;}}")
+                    out.append(f"     if(b_{site}[{idx}]=={sentinel})mn_{site}[mc_{site}++]={json.dumps(f_params[idx])};")
+            out.append(
+                f"     if(mc_{site}){{piton_arity_missing({_qn_lit},\"positional\",mn_{site},mc_{site});goto {site}_runtime_err;}}}}"
+            )
             out.append(f"    {_name(result)}={_name(func_name)}(" + ",".join(f"b_{site}[{idx}]" for idx in range(n_params)) + ");")
             self._emit_exc_check(out, function, call_handler)
             out.append(f"    goto {site}_done;")
