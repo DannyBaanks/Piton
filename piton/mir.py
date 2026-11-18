@@ -6295,7 +6295,12 @@ class MIRLowerer:
         )
         if not builder.in_except_handler and not has_exc_param:
             raise MIRLoweringError("native bare re-raise requires an enclosing except handler")
-        if not builder.in_except_handler or builder.reraise_type in (None, "Exception", "BaseException"):
+        # SUBCLASS_RERAISE_V1: el tipo ESTATICO del handler (`excepto Base`) no
+        # es el levantado si la instancia viva es una subclase (Der). Con clase
+        # de usuario el reraise lleva el tipo vivo (piton_reraise_type), no el
+        # nombre del handler.
+        _user_static = builder.reraise_type in self.classes
+        if not builder.in_except_handler or builder.reraise_type in (None, "Exception", "BaseException") or _user_static:
             if not builder.exception_handlers:
                 outer = None
             else:

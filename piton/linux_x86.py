@@ -201,6 +201,8 @@ static long piton_obj_attr_str(long obj,const char*name){
   return 0;
 }
 static int piton_is_exception_object(PitonObject*o);
+static const char*const*piton_user_mro_tab(const char*cls);
+static int piton_cls_isa(const char*cls,const char*target,int depth);
 static long piton_exception_str(long obj);
 static long piton_object_str_hook(long obj,const char*cls){
   if(!cls)return 0;
@@ -4071,40 +4073,54 @@ static int piton_builtin_exception_name(const char*t){
   static const char*names[]={"BaseException","Exception","SystemExit","KeyboardInterrupt","GeneratorExit","StopAsyncIteration","StopIteration","ArithmeticError","FloatingPointError","OverflowError","ZeroDivisionError","AssertionError","AttributeError","BufferError","EOFError","ImportError","ModuleNotFoundError","LookupError","IndexError","KeyError","MemoryError","NameError","UnboundLocalError","OSError","IOError","EnvironmentError","ReferenceError","RuntimeError","NotImplementedError","RecursionError","SyntaxError","IndentationError","TabError","SystemError","TypeError","ValueError","UnicodeError","UnicodeDecodeError","UnicodeEncodeError","UnicodeTranslateError","Warning","UserWarning","DeprecationWarning","PendingDeprecationWarning","SyntaxWarning","RuntimeWarning","FutureWarning","ImportWarning","UnicodeWarning","BytesWarning","ResourceWarning","EncodingWarning","FileNotFoundError","FileExistsError","IsADirectoryError","NotADirectoryError","PermissionError","ProcessLookupError","TimeoutError","ConnectionError","BrokenPipeError","ChildProcessError","BlockingIOError","InterruptedError",0};
   if(!t)return 0;for(long i=0;names[i];++i)if(!piton_strcmp(t,names[i]))return 1;return 0;
 }
+/* CLS_ISA_V1: subtipo por la cadena REAL de clases. Una clase de usuario
+   tiene su MRO completo en la tabla generada por el compilador (incluye las
+   bases builtin hoja, p.ej. Base(Exception)); una clase builtin de excepcion
+   sigue la jerarquia builtin. Antes solo se miraba parent_name (un nivel),
+   asi `excepto ValueError` no veia B(A(ValueError)). */
+static int piton_cls_isa(const char*cls,const char*target,int depth){
+  if(!cls||!*cls||!target||depth>32)return 0;
+  if(!piton_strcmp(cls,target))return 1;
+  const char*const*m=piton_user_mro_tab(cls);
+  if(m){
+    for(long i=1;m[i];++i)if(!piton_strcmp(m[i],target))return 1;
+    for(long i=1;m[i];++i)if(piton_builtin_exception_name(m[i])&&piton_cls_isa(m[i],target,depth+1))return 1;
+    return 0;
+  }
+  if(!piton_builtin_exception_name(cls))return 0;
+  const char*p=piton_exc_parent_of(cls);
+  return p?piton_cls_isa(p,target,depth+1):0;
+}
 static int piton_is_exception_object(PitonObject*o){
-  return o&&(!piton_builtin_exception_name(o->class_name)?piton_builtin_exception_name(o->parent_name):1);
+  return o&&(piton_builtin_exception_name(o->class_name)||piton_cls_isa(o->class_name,"BaseException",0));
 }
 static long piton_isinstance_exception(long raw,const char*target){
   if(!raw||!target||!piton_maybe_ptr(raw))return 0;
   long*ptr=(long*)raw;if(ptr[0]<=0||ptr[0]>=1000000L||ptr[1]!=PK_OBJECT)return 0;
   PitonObject*o=(PitonObject*)raw;if(!piton_is_exception_object(o))return 0;
-  const char*cur=o->class_name;
-  for(int depth=0;cur&&*cur&&depth<12;++depth){
-    if(!piton_strcmp(cur,target))return 1;
-    if(cur==o->class_name&&o->parent_name&&*o->parent_name)cur=o->parent_name;
-    else if(piton_builtin_exception_name(cur))cur=piton_exc_parent_of(cur);
-    else break;
-  }
+  if(piton_cls_isa(o->class_name,target,0))return 1;
+  if(o->parent_name&&*o->parent_name&&piton_cls_isa(o->parent_name,target,0))return 1;
   return !piton_strcmp(target,"BaseException")||!piton_strcmp(target,"Exception")&&piton_is_exception_object(o);
 }
 static int piton_exc_match_class(const char*cls){
   if(!cls||!*cls)return 1;
   const char*t=piton_exc_type?piton_exc_type:"Exception";
-  const char*cur=t;
-  for(int depth=0;cur&&*cur&&depth<10;++depth){
-    if(!piton_strcmp(cur,cls))return 1;
-    const char*next=piton_exc_parent_of(cur);
-    if(cur==t&&piton_exc_value&&piton_maybe_ptr(piton_exc_value)){
-      long*ptr=(long*)piton_exc_value;
-      if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]==PK_OBJECT){
-        PitonObject*o=(PitonObject*)piton_exc_value;
-        if(o->parent_name&&*o->parent_name)next=o->parent_name;
-      }
+  if(!piton_builtin_exception_name(t)&&!piton_user_mro_tab(t))t="Exception";
+  if(piton_cls_isa(t,cls,0))return 1;
+  if(piton_exc_value&&piton_maybe_ptr(piton_exc_value)){
+    long*ptr=(long*)piton_exc_value;
+    if(ptr[0]>0&&ptr[0]<1000000L&&ptr[1]==PK_OBJECT){
+      PitonObject*o=(PitonObject*)piton_exc_value;
+      if(o->parent_name&&*o->parent_name&&piton_cls_isa(o->parent_name,cls,0))return 1;
     }
-    if(!next||!*next)break;
-    cur=next;
   }
   return 0;
+}
+/* LIVE_CLASS_NAME_V1: nombre de clase vivo de una instancia (0 si no lo es). */
+static const char*piton_live_class_name(long raw){
+  if(!raw||!piton_maybe_ptr(raw))return 0;
+  PitonObject*o=(PitonObject*)raw;if(o->kind!=PK_OBJECT)return 0;
+  return o->class_name;
 }
 static int piton_exc_flag_get(void){return piton_exc_flag;}
 static int piton_exc_type_is(const char*type){return piton_exc_flag&&piton_exc_type&&type&&piton_strcmp(piton_exc_type,type)==0;}
@@ -4271,7 +4287,7 @@ static long piton_object_lookup(PitonObject*o,const char*name,long fallback){for
 static long piton_hasattr(long raw,const char*name){if(piton_is_closure(raw))raw=(long)piton_closure_attrs(raw,0);if(!raw||!name||!piton_maybe_ptr(raw))return 0;PitonObject*o=(PitonObject*)raw;if(o->kind==PK_OBJECT){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return 1;}return 0;}
 static long piton_getattr(long raw,const char*name,int has_def,long def_val){if(piton_is_closure(raw))raw=(long)piton_closure_attrs(raw,0);if(raw&&name&&piton_maybe_ptr(raw)){PitonObject*o=(PitonObject*)raw;if(o->kind==PK_OBJECT){for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,name)==0)return o->attrs[i].value.bits;}}if(has_def)return def_val;piton_raise_set("AttributeError","object has no attribute");return 0;}
 static void piton_setattr(long raw,const char*name,PitonSlot val){if(!raw){piton_raise_set("AttributeError","null object");return;}if(piton_is_closure(raw)){piton_object_set(piton_closure_attrs(raw,1),name,val);return;}if(!piton_maybe_ptr(raw)){piton_raise_set("TypeError","can't set attributes of built-in type");return;}PitonObject*o=(PitonObject*)raw;if(o->kind!=PK_OBJECT){piton_raise_set("TypeError","can't set attributes of built-in type");return;}piton_object_set(o,name,val);}
-static long piton_isinstance_class(long raw,const char*target_name){if(!raw||!target_name||!piton_maybe_ptr(raw))return 0;PitonObject*o=(PitonObject*)raw;if(o->kind!=PK_OBJECT)return 0;if(o->class_name&&piton_strcmp(o->class_name,target_name)==0)return 1;if(o->parent_name&&piton_strcmp(o->parent_name,target_name)==0)return 1;return 0;}
+static long piton_isinstance_class(long raw,const char*target_name){if(!raw||!target_name||!piton_maybe_ptr(raw))return 0;PitonObject*o=(PitonObject*)raw;if(o->kind!=PK_OBJECT)return 0;if(piton_cls_isa(o->class_name,target_name,0))return 1;if(o->parent_name&&piton_cls_isa(o->parent_name,target_name,0))return 1;return 0;}
 #define PITON_BOUND_METHOD_MAGIC 0x5049544E424D4554LL
 typedef struct{long magic;long addr;long self;long n_args;}PitonBoundMethod;
 static long piton_bound_method_new(long addr,long n_args,long self){PitonBoundMethod*m=piton_alloc(sizeof(*m));m->magic=PITON_BOUND_METHOD_MAGIC;m->addr=addr;m->self=self;m->n_args=n_args;return(long)m;}
@@ -10477,6 +10493,7 @@ class LinuxCEmitter:
             # llame explicitamente a repr/ascii.
             bigint_code = _BIGINT_FREESTANDING_C
             lines.extend(bigint_code.split("\n"))
+            lines.extend(self._user_mro_table_c())
         for function in module.functions:
             if function.name != "<module>":
                 if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
@@ -12617,6 +12634,30 @@ class LinuxCEmitter:
                 f'    piton_object_set((PitonObject*){_name(result)},"__mro__",piton_slot((long)_mr,PK_TUPLE));}}'
             )
 
+    def _user_subclasses_of(self, cls_name: str) -> list[str]:
+        """Clases de usuario estrictamente derivadas de ``cls_name`` (en su MRO).
+        Una instancia viva de tipo estatico ``object:cls_name`` puede ser
+        cualquiera de ellas: type()/isinstance deben leer la clase viva."""
+        return [
+            c for c in sorted(self.classes)
+            if c != cls_name and cls_name in (self.class_mro.get(c) or [c])
+        ]
+
+    def _user_mro_table_c(self) -> list[str]:
+        """CLS_ISA_V1: tabla C con el MRO de cada clase de usuario (incluye las
+        bases builtin hoja). `piton_user_mro_tab(cls)` devuelve 0 para nombres
+        que no son clases de usuario del programa."""
+        lines = ["static const char*const*piton_user_mro_tab(const char*cls){",
+                 "  if(!cls)return 0;"]
+        for i, cls_name in enumerate(sorted(self.classes)):
+            mro = self.class_mro.get(cls_name) or [cls_name]
+            items = ",".join(json.dumps(c) for c in mro) + ",0"
+            lines.append(f"  static const char*const _mro_{i}[]={{{items}}};")
+            lines.append(f"  if(!piton_strcmp(cls,{json.dumps(cls_name)}))return _mro_{i};")
+        lines.append("  return 0;")
+        lines.append("}")
+        return lines
+
     def _emit_class_object(self, out: list[str], result: Any, cls_name: str,
                            function: Any) -> None:
         """CLASS_OBJECT_LOAD_V1: cargar el nombre de una clase produce un
@@ -14648,8 +14689,10 @@ class LinuxCEmitter:
                 mro = self.class_mro.get(cname, [cname])
                 if target_clean in mro:
                     return "1"
-                else:
-                    return "0"
+                # SUBCLASS_ISINSTANCE_V1: el tipo estatico es un ancestro; la
+                # instancia viva puede ser una subclase que SI deriva del
+                # target. Se decide con la clase viva, nunca con el estatico.
+                return f'piton_isinstance_class({self._value(obj_val)},"{target_clean}")'
             # CLASS_PATTERN_SLOT_V1: un sujeto de tipo "slot" (p. ej. parametro
             # de `segun` que llega como caja PitonSlot*) debe desempaquetarse
             # antes de leer class_name; pasar la caja cruda a
@@ -21415,6 +21458,19 @@ class LinuxCEmitter:
                         out.append(f'    {_name(result)}=(long)piton_object_new(piton_exc_type,0);')
                     else:
                         self._emit_class_object(out, result, class_name, function)
+                        # SUBCLASS_TYPE_V1: el tipo ESTATICO del valor puede ser
+                        # una clase base (`excepto Base como e` liga object:Base)
+                        # y la instancia viva ser una subclase (Der). La clase
+                        # real sale de class_name vivo; cada subclase tiene su
+                        # objeto de clase internado, asi `type(e) is Der` vale.
+                        _subs = self._user_subclasses_of(class_name)
+                        if _subs:
+                            out.append(f"    {{const char*_lcn=piton_live_class_name({self._value(values[0])});")
+                            for _sub in _subs:
+                                out.append(f"    if(_lcn&&!piton_strcmp(_lcn,{json.dumps(_sub)})){{")
+                                self._emit_class_object(out, result, _sub, function)
+                                out.append("    }")
+                            out.append("    }")
                     types[result] = (
                         f"object:{class_name}" if class_name == "Exception"
                         else f"class:{class_name}"
@@ -22203,6 +22259,19 @@ class LinuxCEmitter:
                 raise NativeBuildError(
                     f"Linux unbound builtin type attribute {_builtin_owner}.{attr} is not supported as a value"
                 )
+            if (
+                owner_type.startswith("class:") and attr in {"__name__", "__qualname__"}
+                and owner_type.split(":", 1)[1] in self.classes
+                and self._user_subclasses_of(owner_type.split(":", 1)[1])
+            ):
+                # SUBCLASS_TYPE_V1: `type(e).__name__` sobre un tipo estatico
+                # base puede ser una subclase viva (Der bajo `excepto Base`):
+                # el nombre sale del objeto de clase vivo, no del literal.
+                out.append(
+                    f"    {_name(result)}=(long)((PitonObject*){self._value(obj)})->class_name;"
+                )
+                types[result] = "str"
+                return out
             if owner_type.startswith("class:") and attr in {"__name__", "__qualname__"}:
                 # CLASS_NAME_ATTR_V1: `A.__name__` y `type(categoria).__name__`
                 # — el nombre de la clase como literal. El objeto de clase lo
@@ -24200,7 +24269,11 @@ class LinuxCEmitter:
             _cls = None
             if isinstance(_acc, str) and _acc in self.classes:
                 _cls = _acc
-            elif isinstance(_acc, (list, tuple)):
+            elif isinstance(_acc, (list, tuple)) and len(_acc) == 1:
+                # SUBCLASS_BIND_TUPLE_V1: con varias clases en la tupla
+                # (`excepto (A, B) como e`) la viva puede ser cualquiera: el
+                # tipo estatico de `e` queda en el marcador dinamico (la clase
+                # viva sale de piton_exc_type), no en la primera clase.
                 for _c in _acc:
                     if _c in self.classes:
                         _cls = _c
