@@ -115,16 +115,15 @@ def test_cached_property_without_instance_read_stays_fail_closed() -> None:
         compare_native_to_cpython(source)
 
 
-def test_lru_cache_on_special_method_stays_fail_closed() -> None:
-    source = (
+def test_lru_cache_on_special_method_matches_cpython() -> None:
+    # Replaces obsolete fail-closed test_lru_cache_on_special_method_stays_fail_closed:
+    # W21 decorated_dunder_methods added runtime dispatch forwarders for __repr__.
+    _assert_matches(
         "importar functools\n"
         "clase Handler:\n"
         "    @functools.lru_cache(maxsize=Nada)\n"
         "    funcion __repr__(este):\n"
         "        devolver 'handler'\n"
+        "h = Handler()\n"
+        "imprimir(repr(h), h.__repr__())\n"
     )
-    with pytest.raises(
-        NativeBuildError,
-        match="decorated special method '__repr__' is not supported by runtime dispatch",
-    ):
-        compare_native_to_cpython(source)

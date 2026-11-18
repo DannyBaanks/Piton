@@ -6,11 +6,19 @@ import json
 import operator
 from typing import Any, Dict, List, Optional, Sequence
 
-from piton.hir import Assign, Attr, BoolOp, Call, Const, ExceptHandler, HIRKind, HIRNode, If, Keyword, Load, Module, Raise, Store, With
+from piton.hir import Arguments, Assign, Attr, BoolOp, Call, Const, ExceptHandler, FuncDef, HIRKind, HIRNode, If, Keyword, Load, Module, Raise, Return, Store, With
 from piton import call_arity as arity_messages
 
 
 _ZERO_ARG_SUPER = "__piton_zero_arg_super__"
+
+# Special methods whose decorated class attribute is reachable through the
+# runtime dispatch hooks (repr/str/len/hash/comparisons/truth). Each one gets a
+# forwarder under its dispatch symbol, see _lower_decorated_dunder_forwarder.
+_DECORATED_DUNDER_DISPATCH = frozenset({
+    "__repr__", "__str__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__",
+    "__ge__", "__len__", "__hash__", "__bool__",
+})
 
 
 def _zero_arg_super_targets(
@@ -1486,12 +1494,18 @@ class MIRLowerer:
                     )
 
         if all(self._supported_method_decorator(dec, class_local_names) for dec in decorators):
-            if method.name.startswith("__") and method.name.endswith("__"):
+            if (method.name.startswith("__") and method.name.endswith("__")
+                    and method.name not in _DECORATED_DUNDER_DISPATCH):
                 raise MIRLoweringError(
                     f"native decorated special method '{method.name}' is not supported by runtime dispatch"
                 )
             original_symbol = f"__piton_original__{class_name}__{method.name}"
             decorated_value = f"__piton_decorated__{class_name}__{method.name}"
+            if method.name in _DECORATED_DUNDER_DISPATCH:
+                # Module globals spelled `__x__` are not shared with other
+                # functions (the backend skips them), and the dispatch
+                # forwarder must read this object from its own function.
+                decorated_value += "_slot"
             self.decorated_class_methods[(class_name, method.name)] = decorated_value
             if self._method_decorators_preserve_metadata(decorators):
                 body = getattr(method, "body", []) or []
@@ -2262,6 +2276,8 @@ class MIRLowerer:
                         is_generator=is_gen_method,
                         py_qualname=f"{node.name}.{method.name}",
                     )
+                    if role == "decorated" and method.name in _DECORATED_DUNDER_DISPATCH:
+                        self._lower_decorated_dunder_forwarder(node.name, method, is_gen_method)
                     if role in (None, "staticmethod", "classmethod", "decorated"):
                         self.classes[node.name].add(method.name)
                     else:
@@ -10778,6 +10794,53 @@ class MIRLowerer:
             _active_handler(builder), result=result,
         )
         return result
+
+    def _lower_decorated_dunder_forwarder(
+        self, class_name: str, method: HIRNode, is_generator: bool,
+    ) -> None:
+        """Emit the dispatch symbol of a decorated special method as a forwarder.
+
+        Runtime dispatch (repr/str/len/hash/==/< ...) calls ``Class____dunder__``
+        directly, so the decorated object stored in the class namespace is never
+        consulted there. The forwarder keeps that symbol authoritative: it calls
+        the decorated object with exactly the method's positional parameters, so
+        identity and wrapper decorators both run on every dispatch path. Shapes
+        that cannot be forwarded exactly (defaults, *args, **kwargs, keyword-only,
+        generators, coroutines) fail closed instead.
+        """
+        name = method.name
+        unsupported = (
+            f"native decorated special method '{name}' requires plain positional parameters"
+        )
+        args = getattr(method, "args", None)
+        if (args is None
+                or is_generator
+                or getattr(method, "is_async", False)
+                or getattr(args, "kwonlyargs", None)
+                or getattr(args, "vararg", None)
+                or getattr(args, "kwarg", None)
+                or getattr(args, "defaults", None)
+                or any(value is not None for value in (getattr(args, "kw_defaults", []) or []))):
+            raise MIRLoweringError(unsupported)
+        params = [*list(getattr(args, "posonlyargs", []) or []), *list(getattr(args, "args", []) or [])]
+        if not params:
+            raise MIRLoweringError(unsupported)
+        decorated_value = self.decorated_class_methods[(class_name, name)]
+        forwarder = FuncDef(
+            name=name,
+            args=Arguments(
+                posonlyargs=list(getattr(args, "posonlyargs", []) or []),
+                args=list(getattr(args, "args", []) or []),
+            ),
+            body=[Return(value=Call(
+                func=Load(name=decorated_value),
+                args=[Load(name=param) for param in params],
+            ))],
+        )
+        self._lower_function(
+            forwarder, f"{class_name}__{name}",
+            py_qualname=f"{class_name}.{name}",
+        )
 
     def _decorated_method_target(
         self, builder: _Builder, receiver: HIRNode, method_name: str,

@@ -132,8 +132,12 @@ class MethodDecoratorParity(unittest.TestCase):
             "imprimir(Handler.process.__name__)\n",
         )
 
-    def test_decorated_repr_keeps_failing_closed(self):
-        source = (
+    def test_decorated_repr_matches_cpython(self):
+        # Replaces obsolete fail-closed test_decorated_repr_keeps_failing_closed:
+        # W21 decorated_dunder_methods added runtime dispatch forwarders for
+        # supported decorated dunders (__repr__/__str__/comparisons/__len__/__hash__/__bool__).
+        _assert_matches(
+            self,
             "funcion prefijo(fn):\n"
             "    funcion envoltura(este):\n"
             "        devolver \"wrapped:\" + fn(este)\n"
@@ -142,13 +146,9 @@ class MethodDecoratorParity(unittest.TestCase):
             "    @prefijo\n"
             "    funcion __repr__(este):\n"
             "        devolver \"item\"\n"
-            ""
+            "item = Item()\n"
+            "imprimir(repr(item), item.__repr__())\n",
         )
-        with pytest.raises(
-            NativeBuildError,
-            match="decorated special method '__repr__' is not supported by runtime dispatch",
-        ):
-            compare_native_to_cpython(source)
 
     def test_unknown_receiver_keeps_failing_closed(self):
         source = (
