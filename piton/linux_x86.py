@@ -10356,6 +10356,9 @@ class LinuxCEmitter:
                 {k: frozenset(v) for k, v in self._dyn_slot_vars.items() if v},
                 {k: dict(v) for k, v in self._fn_var_type_seeds.items() if v},
                 dict(self.function_return_types),
+                frozenset(self._none_stored_names),
+                {k: frozenset(v) for k, v in self._nonnone_stored_types.items()},
+                frozenset(self._nonnone_unknown),
             )
         _prev_snap = None
         for _pass in range(8):
@@ -13939,6 +13942,85 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=0;")
             types[result] = "none"
 
+    # NONE_CONFLICT_SLOT_V1: operaciones con receptor en posicion conocida que
+    # se despachan en runtime por el kind de la caja (ver el helper). Valor:
+    # (indice del receptor, indice del handler de excepcion o None, error de
+    # CPython si el receptor es None).
+    _NONE_CONFLICT_RECV_OPS = {
+        "method_call": (2, 5, "AttributeError", "'NoneType' object has no attribute '{name}'"),
+        "subscript_store": (0, 3, "TypeError", "'NoneType' object does not support item assignment"),
+        "set_attr": (0, 3, "AttributeError", "'NoneType' object has no attribute '{name}'"),
+        "get_attr": (0, 2, "AttributeError", "'NoneType' object has no attribute '{name}'"),
+    }
+    # Ops que consumen el receptor y no tienen despacho: fail closed si el
+    # operando es una variable de conflicto None (en vez de emitir C erroneo).
+    _NONE_CONFLICT_FAIL_OPS = {
+        "del_item", "del_attr", "del_slice", "slice_store", "get_slice",
+        "set_add", "list_append", "collection_extend", "dict_put",
+    }
+
+    def _emit_none_conflict_dispatch(
+        self, instruction: MIRInstruction, function: MIRFunction,
+        aliases: dict[str, str], types: dict[str, str], bigint_slots: list[str],
+        key: tuple[str, str],
+    ) -> list[str]:
+        """NONE_CONFLICT_SLOT_V1: operacion sobre `x` dinamico (None en un store,
+        valor no-None en otro). Despacho en runtime por el kind de la caja: una
+        rama por tipo estatico que se le asigno a `x`; cada rama reutiliza el
+        emisor de la instruccion con el receptor desempaquetado en un temporal
+        tipado. Si el valor es None, la excepcion de CPython. Si el conjunto de
+        tipos no es completo, o las ramas no coinciden en el tipo del resultado,
+        falla cerrado en build."""
+        from dataclasses import replace as _dc_replace
+
+        op, args, result = instruction.op, instruction.args, instruction.result
+        recv_index, handler_index, exc_name, exc_msg = self._NONE_CONFLICT_RECV_OPS[op]
+        obj = args[recv_index]
+        name = args[1] if op in {"method_call", "set_attr", "get_attr"} else ""
+        if key in self._nonnone_unknown:
+            raise NativeBuildError(
+                f"Linux {op} sobre '{key[1]}' (None o valor dinamico "
+                "de tipo no determinado) no soportado: fail closed"
+            )
+        handler_label = args[handler_index] if len(args) > handler_index else None
+        if op == "method_call" and len(args) > 4 and isinstance(args[4], str):
+            handler_label = args[4]
+        recv = self._value(obj)
+        out: list[str] = []
+        result_types: set[Any] = set()
+        for _idx, _cand in enumerate(sorted(self._nonnone_stored_types.get(key, ()))):
+            _kind = self._kind(_cand)
+            if _kind == "PK_OBJECT":
+                raise NativeBuildError(
+                    f"Linux {op} sobre '{key[1]}': tipo '{_cand}' no soportado en despacho dinamico"
+                )
+            _tmp = f"%dynrecv{self._instr_seq}_{_idx}"
+            out.append(f"    if(piton_dyn_unbox({recv}).kind=={_kind}){{long {_name(_tmp)}=piton_dyn_unbox({recv}).bits;")
+            types[_tmp] = _cand
+            _sub_args = list(args)
+            _sub_args[recv_index] = _tmp
+            _sub = _dc_replace(instruction, args=tuple(_sub_args) if isinstance(args, tuple) else _sub_args)
+            out.extend(self._emit_instruction(_sub, function, aliases, types, bigint_slots))
+            out.append("    }")
+            if result is not None:
+                result_types.add(types.get(result))
+        out.append(f"    if(piton_dyn_unbox({recv}).kind==PK_NONE){{")
+        self._runtime_type_error_as(
+            out, exc_name, exc_msg.format(name=name), function, handler_label,
+        )
+        out.append("    }")
+        if len(result_types) > 1:
+            raise NativeBuildError(
+                f"Linux {op} sobre '{key[1]}': las ramas dinamicas dan tipos de resultado distintos {sorted(map(str, result_types))}"
+            )
+        if result_types and None not in result_types:
+            types[result] = next(iter(result_types))
+        return out
+
+    def _runtime_type_error_as(self, out: list[str], exc: str, message: str, function: MIRFunction, handler_label: Any) -> None:
+        out.append(f"    piton_raise_set(\"{exc}\", {_str_c_literal(message)});")
+        self._emit_exc_check(out, function, handler_label)
+
     def _runtime_type_error(self, out: list[str], message: str, function: MIRFunction = None, handler_label: Any = None) -> None:
         """ORDER_MIXED_TYPES_V1 & friends: CPython raises TypeError at
         runtime; emit the same unhandled TypeError instead of failing at
@@ -14684,6 +14766,14 @@ class LinuxCEmitter:
         # por las operaciones dinamicas (no por los slots heredados de y/o).
         self._dyn_slot_temps: set[tuple[str, str]] = set()
         self._dyn_slot_vars: dict[str, set[str]] = {}
+        # NONE_CONFLICT_SLOT_V1: (funcion, nombre) que reciben None en algun
+        # store y un valor no-None en otro. Su tipo estatico depende del
+        # orden de emision (un `para` emite el cuerpo antes del store que
+        # rebindea), asi que se fuerzan a "slot" en todo el cuerpo.
+        self._none_stored_names: set[tuple[str, str]] = set()
+        self._nonnone_stored_types: dict[tuple[str, str], set[str]] = {}
+        self._nonnone_unknown: set[tuple[str, str]] = set()
+        self._none_conflict_names: set[tuple[str, str]] = set()
         self._module_types = {}
 
         def literal_type(value: Any) -> str | None:
@@ -16058,6 +16148,32 @@ class LinuxCEmitter:
         self._instr_seq += 1
         site = self._instr_seq
         out: list[str] = []
+        if self._none_conflict_names:
+            # NONE_CONFLICT_SLOT_V1: una variable que recibe None y tipos no-None
+            # es dinamica. Sus usos como receptor se despachan por kind; los
+            # consumidores sin despacho fallan cerrados (nunca C erroneo).
+            def _nc_key_of(v: Any) -> tuple[str, str] | None:
+                if not isinstance(v, str):
+                    return None
+                for _cand in (v, aliases.get(v) if aliases else None):
+                    if isinstance(_cand, str) and (function.name, _cand) in self._none_conflict_names:
+                        return (function.name, _cand)
+                return None
+
+            if op in self._NONE_CONFLICT_RECV_OPS:
+                _nc_hit = _nc_key_of(args[self._NONE_CONFLICT_RECV_OPS[op][0]]) if len(args) > self._NONE_CONFLICT_RECV_OPS[op][0] else None
+                if _nc_hit is not None:
+                    return self._emit_none_conflict_dispatch(
+                        instruction, function, aliases, types, bigint_slots, _nc_hit,
+                    )
+            elif op in self._NONE_CONFLICT_FAIL_OPS:
+                for _arg in args:
+                    _nc_hit = _nc_key_of(_arg)
+                    if _nc_hit is not None:
+                        raise NativeBuildError(
+                            f"Linux {op} sobre '{_nc_hit[1]}' (variable None o dinamica "
+                            "reasignada en bucle/rama) no soportado: fail closed"
+                        )
         if op == "iter_new":
             source = args[0]
             handler_label = args[1] if len(args) > 1 else None
@@ -17195,6 +17311,27 @@ class LinuxCEmitter:
                 # no se reflejan de otro modo.
                 out.append("    if(!piton_globals_ns){piton_globals_ns=(long)piton_dict_new(0);}")
                 out.append(f"    piton_dict_set((PitonDict*)piton_globals_ns,piton_slot((long){json.dumps(args[0])},PK_STR),{self._slot(args[1], types)});")
+            if (
+                isinstance(args[0], str)
+                and args[0] not in function.params
+                and args[0] not in self._shared_globals
+                and args[1] not in self._shared_globals
+            ):
+                # NONE_CONFLICT_SLOT_V1: un nombre que recibe None y un valor
+                # no-None (en cualquier orden, en bucle o rama) es dinamico.
+                _st = types.get(args[1])
+                _key = (function.name, args[0])
+                if _st == "none":
+                    self._none_stored_names.add(_key)
+                elif _st in {None, "", "slot", "builtin"}:
+                    self._nonnone_unknown.add(_key)
+                else:
+                    self._nonnone_stored_types.setdefault(_key, set()).add(_st)
+                if _key in self._none_stored_names and (
+                    _key in self._nonnone_stored_types or _key in self._nonnone_unknown
+                ):
+                    self._none_conflict_names.add(_key)
+                    self._dyn_slot_vars.setdefault(function.name, set()).add(args[0])
             if (
                 isinstance(args[0], str)
                 and types.get(args[1]) == "slot"
@@ -18665,6 +18802,21 @@ class LinuxCEmitter:
                 # PK_NONE a la derecha, falso por construccion. Para cualquier
                 # otro par se mantiene la regla (que distingue `1 es
                 # Verdadero`).
+                # NONE_CONFLICT_SLOT_V1: `x es None` con x dinamico (caja
+                # etiquetada): la identidad con None es el kind PK_NONE del
+                # valor desempaquetado; comparar el puntero a la caja no sirve.
+                if (
+                    types.get(left) == "slot" and self._is_none_side(right, types)
+                ) or (
+                    types.get(right) == "slot" and self._is_none_side(left, types)
+                ):
+                    _slot_side = left if types.get(left) == "slot" else right
+                    out.append(
+                        f"    {_name(result)}={'!' if operator == 'no es' else ''}"
+                        f"(({self._slot(_slot_side, types)}).kind==PK_NONE);"
+                    )
+                    types[result] = "bool"
+                    return out
                 if (
                     self._is_none_side(left, types)
                     or self._is_none_side(right, types)
