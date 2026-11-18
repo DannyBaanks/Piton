@@ -47,7 +47,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from tools.parity_corpus_v4 import python_to_piton  # noqa: E402
-from native_linux import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux, run_native_linux  # noqa: E402
 
 CORPUS = REPO / "corpus_t1" / "objetos"
 
@@ -94,7 +94,7 @@ def run_piton(codigo: str) -> tuple[str, int | None, bytes | None, bytes | None,
             exe = Path(d) / "prog"
             compile_native_linux(piton_src, exe)
             try:
-                proc = subprocess.run([str(exe)], capture_output=True, timeout=60)
+                proc = run_native_linux(exe, capture_output=True, timeout=60)
             except subprocess.TimeoutExpired:
                 return "RUN_TIMEOUT", None, None, None, "ejecucion > 60 s"
         return "OK", proc.returncode, proc.stdout, proc.stderr, ""

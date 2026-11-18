@@ -19,7 +19,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from tools.parity_corpus_v4 import python_to_piton  # noqa: E402
-from native_linux import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux, run_native_linux  # noqa: E402
 
 import tempfile  # noqa: E402
 
@@ -29,7 +29,7 @@ def _assert_parity(codigo_python: str) -> None:
     with tempfile.TemporaryDirectory() as d:
         exe = Path(d) / "prog"
         compile_native_linux(piton_src, exe)
-        nat = subprocess.run([str(exe)], capture_output=True, timeout=120, stdin=subprocess.DEVNULL)
+        nat = run_native_linux(exe, capture_output=True, timeout=120, stdin=subprocess.DEVNULL)
     cp = subprocess.run(
         [sys.executable, "-I", "-c", codigo_python],
         capture_output=True,

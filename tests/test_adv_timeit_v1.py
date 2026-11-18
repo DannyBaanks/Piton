@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from native_linux import compile_native_linux
+from native_linux import compile_native_linux, run_native_linux
 
 
 def _run_ejecutar(piton_code: str) -> str:
@@ -42,8 +42,8 @@ def _run_native(piton_code: str) -> str:
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / "prog_bin"
         compile_native_linux(piton_code, str(exe))
-        proc = subprocess.run(
-            [str(exe)],
+        proc = run_native_linux(
+            exe,
             cwd=ROOT,
             capture_output=True,
             text=True,

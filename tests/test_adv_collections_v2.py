@@ -20,7 +20,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from tools.parity_corpus_v4 import python_to_piton  # noqa: E402
-from native_linux import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux, run_native_linux  # noqa: E402
 
 TIMEOUT = 60
 
@@ -39,7 +39,7 @@ def _run_piton(codigo: str):
         with tempfile.TemporaryDirectory() as d:
             exe = Path(d) / "prog"
             compile_native_linux(piton_src, exe)
-            p = subprocess.run([str(exe)], capture_output=True, timeout=TIMEOUT)
+            p = run_native_linux(exe, capture_output=True, timeout=TIMEOUT)
         return "OK", p.returncode, p.stdout, p.stderr
     except Exception:
         return "BUILD_FAIL", None, None, None

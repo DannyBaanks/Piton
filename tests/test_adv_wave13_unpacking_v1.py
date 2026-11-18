@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from native_linux import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux, run_native_linux  # noqa: E402
 from tools.parity_corpus_sec import python_to_piton  # noqa: E402
 
 
@@ -52,7 +52,11 @@ def _run_native(piton_code: str) -> Result:
             compile_native_linux(piton_code, executable)
         except Exception as exc:
             return Result("compile", None, b"", f"{type(exc).__name__}: {exc}".encode())
-        return _run([str(executable)])
+        try:
+            proc = run_native_linux(executable, capture_output=True, timeout=30)
+        except subprocess.TimeoutExpired as exc:
+            return Result("timeout", None, exc.stdout or b"", exc.stderr or b"")
+        return Result("run", proc.returncode, proc.stdout, proc.stderr)
 
 
 def _assert_parity(py_code: str, case_name: str) -> None:
@@ -64,17 +68,23 @@ def _assert_parity(py_code: str, case_name: str) -> None:
         f"stdout={oracle.stdout!r} stderr={oracle.stderr!r}\nsource:\n{py_code}"
     )
 
-    mismatches = []
-    for target, actual in (
-        ("piton ejecutar", _run_ejecutar(piton_code)),
-        ("compile_native_linux", _run_native(piton_code)),
-    ):
+    mismatches: list[str] = []
+
+    def record_mismatch(target: str, actual: Result) -> None:
         if actual.returncode != oracle.returncode or actual.stdout != oracle.stdout:
             mismatches.append(
                 f"{target}: CPython rc={oracle.returncode} stdout={oracle.stdout!r}; "
                 f"PITON rc={actual.returncode} stdout={actual.stdout!r} "
                 f"stage={actual.stage} stderr={actual.stderr.decode('utf-8', 'replace')}"
             )
+
+    record_mismatch("piton ejecutar", _run_ejecutar(piton_code))
+    assert not mismatches, (
+        f"differential mismatch in {case_name}:\n" + "\n".join(mismatches)
+        + f"\nPITON source:\n{piton_code}"
+    )
+
+    record_mismatch("compile_native_linux", _run_native(piton_code))
     assert not mismatches, (
         f"differential mismatch in {case_name}:\n" + "\n".join(mismatches)
         + f"\nPITON source:\n{piton_code}"
