@@ -8783,6 +8783,28 @@ class MIRLowerer:
                     )
                     return _created
                 if user_args:
+                    # Check if the next class in MRO is a modeled builtin base that supports __new__
+                    # with arguments (scalar immutable types: str, int, float, bytes, tuple).
+                    # Collection bases (list, dict, set, frozenset, bytearray) are NOT modeled
+                    # for __new__ with arguments and should fail closed.
+                    _modeled_new_bases = {"str", "texto", "int", "entero", "float", "decimal", "bytes", "octetos", "tuple", "tupla"}
+                    _builtin_base = next(
+                        (cls for cls in tail_mro if cls in _modeled_new_bases),
+                        None,
+                    )
+                    if _builtin_base is not None:
+                        # Emit builtin_class to get the builtin class object (e.g., str, int)
+                        _base_class = builder.temp()
+                        builder.emit("builtin_class", _builtin_base, result=_base_class)
+                        # Emit method_call to call __new__ on the builtin class
+                        # with the user_args (cls, value, ...)
+                        _args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+                        _result = builder.temp()
+                        builder.emit(
+                            "method_call", None, "__new__", _base_class, _args, (),
+                            _active_handler(builder), result=_result
+                        )
+                        return _result
                     raise MIRLoweringError(
                         "native super().__new__ with arguments requires a modeled base implementation"
                     )
