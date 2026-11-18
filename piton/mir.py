@@ -887,8 +887,13 @@ class MIRLowerer:
                     builder.timeit_object_names[target.name] = _timeit_object
             # MODULE_STATE_V1: una variable de nivel de modulo de un modulo
             # importado se guarda con su nombre CUALIFICADO (el global que
-            # comparte con el resto del programa).
+            # comparte con el resto del programa). Solo si la asignacion NO es
+            # local: una funcion que asigna `_ctx` sin `global` crea un local
+            # (LOCAL_SHADOW_STATE_V1; decimal._d_div: `_ctx = getcontext()`),
+            # y sus lecturas van al nombre local, no al estado del modulo.
             _state_name = (getattr(builder, "module_state_vars", None) or {}).get(target.name)
+            if _state_name and target.name in builder.local_names:
+                _state_name = None
             if target.name in builder.timeit_internal_names:
                 builder.emit("store", target.name, value, "internal")
             elif _state_name:
@@ -3260,7 +3265,10 @@ class MIRLowerer:
         builder.global_names = global_names
         builder.nonlocal_names = nonlocal_names
         self._validate_local_shadow_initialization(
-            body, local_names, set(builder.function.params)
+            body,
+            local_names,
+            set(builder.function.params),
+            set((getattr(builder, "module_state_vars", None) or {}).keys()),
         )
 
         all_nested_captures: dict[str, tuple[str, tuple[str, ...]]] = {}
@@ -3899,7 +3907,11 @@ class MIRLowerer:
         return free
 
     def _validate_local_shadow_initialization(
-        self, body: Sequence[HIRNode], local_names: set[str], initialized: set[str]
+        self,
+        body: Sequence[HIRNode],
+        local_names: set[str],
+        initialized: set[str],
+        shadowed_state: set[str] = frozenset(),
     ) -> None:
         """Fail closed on a local shadow read before its first binding.
 
@@ -3908,8 +3920,12 @@ class MIRLowerer:
         assignment instead of raising UnboundLocalError. Track definite
         bindings across branches so an assignment in every continuing branch
         is recognized, while a branch that returns or raises need not bind.
+
+        `shadowed_state` are module-state names of an imported module
+        (decimal `_ctx`): a function that assigns them without `global` has a
+        local with the same name, with the same unbound-read hazard.
         """
-        candidates = (local_names & self._module_function_names) - initialized
+        candidates = (local_names & (self._module_function_names | set(shadowed_state))) - initialized
         if not candidates:
             return
 

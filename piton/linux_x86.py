@@ -16141,7 +16141,15 @@ class LinuxCEmitter:
                                     or (_rt_op == "str" and _lt in ("int", "bool"))
                                 ):
                                     origins[result] = ("kind", "str")
-                                elif _bop == "/":
+                                elif _bop == "/" and not any(
+                                    str(_ot or "").startswith("object") for _ot in (_lt, _rt_op)
+                                ):
+                                    # TRUEDIV_OBJECT_RET_V1: `a / b` con un operando
+                                    # objeto (user __truediv__, decimal.Decimal) devuelve
+                                    # el objeto del dunder, no un float: tiparlo "float"
+                                    # hacía que el caller leyera el puntero como double
+                                    # (8.6e-317). Los operandos numericos/desconocidos
+                                    # siguen tipando float como antes.
                                     origins[result] = ("kind", "float")
                                 elif _bop in ("+", "-", "*", "//", "%", "**") and (
                                     _lt == "float" or _rt_op == "float"
