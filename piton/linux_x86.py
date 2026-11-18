@@ -6125,6 +6125,73 @@ static long piton_str_prefix_slot_dyn(long self_raw,long v_raw,int end){
   sb_puts(&m," first arg must be str or a tuple of str, not ");sb_puts(&m,js_type_name(prefix));
   piton_raise_set("TypeError",m.d);piton_report_unhandled();piton_exit(1);return 0;
 }
+/* STR_PREFIX_SLOT_AT_V1: startswith/endswith(prefix, start) sobre receiver
+   y prefijo dinamicos (slot). Soporta tupla de prefijos. start se mide sobre
+   el receiver completo (CPython: s[start:].startswith/endswith(prefix)). */
+static long piton_str_prefix_slot_dyn_at(long self_raw,long v_raw,long start,int end){
+  PitonSlot self=piton_dyn_unbox(self_raw);
+  if(self.kind!=PK_STR){
+    PitonStrBuf m;sb_init(&m);sb_putc(&m,'\'');sb_puts(&m,js_type_name(self));
+    sb_puts(&m,"' object has no attribute '");sb_puts(&m,end?"endswith":"startswith");sb_putc(&m,'\'');
+    piton_raise_set("AttributeError",m.d);piton_report_unhandled();piton_exit(1);return 0;
+  }
+  const char*self_data=(const char*)self.bits;
+  long hl=piton_strlen(self_data);
+  if(start<0)start=0;
+  if((usize)start>(usize)hl)return 0;
+  PitonSlot prefix=piton_dyn_unbox(v_raw);
+  if(prefix.kind==PK_STR){
+    const char*p=(const char*)prefix.bits;
+    long nl=piton_strlen(p);
+    if(nl>hl-(usize)start)return 0;
+    if(end){
+      for(usize i=0;i<nl;++i)if(self_data[hl-nl+i]!=p[i])return 0;
+    }else{
+      for(usize i=0;i<nl;++i)if(self_data[(usize)start+i]!=p[i])return 0;
+    }
+    return 1;
+  }
+  if(prefix.kind==PK_TUPLE){
+    PitonSeq*items=(PitonSeq*)prefix.bits;
+    for(long i=0;i<items->length;++i){
+      PitonSlot item=items->items[i];
+      if(item.kind!=PK_STR){
+        PitonStrBuf m;sb_init(&m);sb_puts(&m,"tuple for ");sb_puts(&m,end?"endswith":"startswith");
+        sb_puts(&m," must only contain str, not ");sb_puts(&m,js_type_name(item));
+        piton_raise_set("TypeError",m.d);piton_report_unhandled();piton_exit(1);return 0;
+      }
+      const char*p=(const char*)item.bits;
+      long nl=piton_strlen(p);
+      if(nl>hl-(usize)start)continue;
+      int match=1;
+      if(end){
+        for(usize j=0;j<nl;++j)if(self_data[hl-nl+j]!=p[j]){match=0;break;}
+      }else{
+        for(usize j=0;j<nl;++j)if(self_data[(usize)start+j]!=p[j]){match=0;break;}
+      }
+      if(match)return 1;
+    }
+    return 0;
+  }
+  PitonStrBuf m;sb_init(&m);sb_puts(&m,end?"endswith":"startswith");
+  sb_puts(&m," first arg must be str or a tuple of str, not ");sb_puts(&m,js_type_name(prefix));
+  piton_raise_set("TypeError",m.d);piton_report_unhandled();piton_exit(1);return 0;
+}
+/* STR_PREFIX_TUPLE_AT_V1: startswith/endswith(tuple_of_str[, start]) sobre str. */
+static long piton_str_prefix_tuple_at(const char*s,void*tup_raw,long start,int end){
+  PitonSeq*items=(PitonSeq*)tup_raw;
+  for(long i=0;i<items->length;++i){
+    PitonSlot item=items->items[i];
+    if(item.kind!=PK_STR){
+      PitonStrBuf m;sb_init(&m);sb_puts(&m,"tuple for ");sb_puts(&m,end?"endswith":"startswith");
+      sb_puts(&m," must only contain str, not ");sb_puts(&m,js_type_name(item));
+      piton_raise_set("TypeError",m.d);piton_report_unhandled();piton_exit(1);return 0;
+    }
+    const char*p=(const char*)item.bits;
+    if(end?piton_str_endswith_at(s,p,start):piton_str_startswith_at(s,p,start))return 1;
+  }
+  return 0;
+}
 /* LIST_OF_DYNAMIC_V1: `lista(x)` con x sin tipo estatico (warnings.py:
    `lista(traceback.extract())` con el retorno desconocido). Se decide por la
    cabecera con la misma politica que los del resto de dinamicos: list/tuple/str
@@ -13858,6 +13925,14 @@ class LinuxCEmitter:
             if len(call_args) == 2:
                 if types.get(call_args[1]) not in {"int", "bool"}:
                     raise NativeBuildError(f"Linux str.{method}() requires an int start offset")
+                if types.get(call_args[0]) == "tuple":
+                    out.append(
+                        f"    {_name(result)}=piton_str_prefix_tuple_at((const char*){operand},"
+                        f"(void*){self._value(call_args[0])},{self._value(call_args[1])},"
+                        f"{1 if method == 'endswith' else 0});"
+                    )
+                    types[result] = "bool"
+                    return
                 helper_at = (
                     "piton_str_startswith_at" if method == "startswith" else "piton_str_endswith_at"
                 )
@@ -13871,7 +13946,12 @@ class LinuxCEmitter:
             helper = "piton_str_startswith" if method == "startswith" else "piton_str_endswith"
             _p0 = call_args[0]
             _p0t = types.get(_p0)
-            if _p0t in {"", "int", "none", "bool", "float", "builtin", "bytes", "bytearray"} or (_p0t or "").startswith("object:"):
+            if _p0t == "tuple":
+                out.append(
+                    f"    {_name(result)}=piton_str_prefix_tuple_at((const char*){operand},"
+                    f"(void*){self._value(_p0)},0,{1 if method == 'endswith' else 0});"
+                )
+            elif _p0t in {"", "int", "none", "bool", "float", "builtin", "bytes", "bytearray"} or (_p0t or "").startswith("object:"):
                 # STR_PREFIX_DYNAMIC_V1: el prefijo no tiene tipo estatico str;
                 # el runtime levanta el TypeError de CPython si no es un str.
                 # Aceptamos bool, float, builtin y objetos — el runtime
@@ -24061,6 +24141,19 @@ class LinuxCEmitter:
                     # STR_PREFIX_SLOT_V1: values from dicts and iterators are
                     # tagged PitonSlot boxes; object_get cannot resolve a str
                     # method on the box itself.
+                    if len(call_args) == 2:
+                        if types.get(call_args[1]) not in {"int", "bool"}:
+                            raise NativeBuildError(
+                                f"Linux dynamic str.{method}() requires an int start offset"
+                            )
+                        out.append(
+                            f"    {_name(result)}=piton_str_prefix_slot_dyn_at("
+                            f"{self._value(obj)},{self._value(call_args[0])},"
+                            f"{self._value(call_args[1])},{1 if method == 'endswith' else 0});"
+                        )
+                        types[result] = "bool"
+                        self._emit_exc_check(out, function, handler_label)
+                        return out
                     if len(call_args) != 1:
                         raise NativeBuildError(
                             f"Linux dynamic str.{method}() currently requires exactly one argument"
@@ -26642,14 +26735,21 @@ class LinuxCEmitter:
             # CPython y el handler de excepciones del frame decide.
             owner, mapping, handler_label = args
             _ot = types.get(owner, "")
-            if _ot not in {"str", ""}:
+            if _ot not in {"str", "", "slot"}:
                 raise NativeBuildError(
                     f"Linux str.format(**mapping) requires a str receiver, not {_ot}"
                 )
-            out.append(
-                f"    {_name(result)}=(long)piton_str_format_ns((const char*){self._value(owner)},"
-                f"(PitonDict*){self._value(mapping)});"
-            )
+            if _ot == "slot":
+                out.append(
+                    f"    {_name(result)}=(long)piton_str_format_ns("
+                    f"(const char*)piton_dyn_unbox({self._value(owner)}).bits,"
+                    f"(PitonDict*){self._value(mapping)});"
+                )
+            else:
+                out.append(
+                    f"    {_name(result)}=(long)piton_str_format_ns((const char*){self._value(owner)},"
+                    f"(PitonDict*){self._value(mapping)});"
+                )
             types[result] = "str"
             self._emit_exc_check(out, function, handler_label)
         elif op == "task_cancel":
