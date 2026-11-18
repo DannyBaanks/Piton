@@ -294,6 +294,9 @@ static long piton_call_dynamic(long callee,long pos_seq,long star_seq,long kwarg
 static PitonSlot piton_unbound_int_from_bytes_core(PitonSeq*a,PitonDict*kw);
 static long piton_unbound_int_from_bytes_raw(PitonSlot s);
 static long piton_unbound_int_from_bytes_frame(long*frame);
+static long piton_seq_copy(PitonSeq*s);
+static long piton_dict_copy(PitonDict*d);
+static long piton_set_copy(PitonSet*s);
 static void piton_catch_clear(void);
 static int piton_exc_flag_get(void);
 static PitonSlot piton_slot_guess(long bits);
@@ -5593,6 +5596,27 @@ static long piton_unbound_str_upper_frame(long*frame){return piton_unbound_str_u
 static long piton_unbound_int_bit_length_frame(long*frame){return piton_unbound_int_bit_length(frame[0],-1);}
 static long piton_unbound_float_fromhex_frame(long*frame){return piton_unbound_float_fromhex(frame[0],-1);}
 static long piton_unbound_list_append_frame(long*frame){return piton_unbound_list_append(frame[0],piton_slot_guess(frame[1]),-1);}
+static long piton_unbound_list_copy(long receiver,int hint){
+  if(!piton_unbound_receiver_matches(receiver,"list",hint)){
+    piton_raise_unbound_descriptor("copy","list",receiver,hint);return 0;
+  }
+  return piton_seq_copy((PitonSeq*)receiver);
+}
+static long piton_unbound_dict_copy(long receiver,int hint){
+  if(!piton_unbound_receiver_matches(receiver,"dict",hint)){
+    piton_raise_unbound_descriptor("copy","dict",receiver,hint);return 0;
+  }
+  return piton_dict_copy((PitonDict*)receiver);
+}
+static long piton_unbound_set_copy(long receiver,int hint){
+  if(!piton_unbound_receiver_matches(receiver,"set",hint)){
+    piton_raise_unbound_descriptor("copy","set",receiver,hint);return 0;
+  }
+  return piton_set_copy((PitonSet*)receiver);
+}
+static long piton_unbound_list_copy_frame(long*frame){return piton_unbound_list_copy(frame[0],-1);}
+static long piton_unbound_dict_copy_frame(long*frame){return piton_unbound_dict_copy(frame[0],-1);}
+static long piton_unbound_set_copy_frame(long*frame){return piton_unbound_set_copy(frame[0],-1);}
 static long piton_unbound_type_instancecheck_frame(long*frame){return piton_type_instancecheck(frame[0],frame[1],-1,-1,0);}
 /* PCT_UNKNOWN_ARG_V1: `'%s' % x` con x de tipo DESCONOCIDO (un param sin
    inferencia) — CPython aplica str(x). La conversion es dinamica: se mira
@@ -13693,6 +13717,9 @@ class LinuxCEmitter:
             ("int", "bit_length"): (1, "int"),
             ("float", "fromhex"): (1, "float"),
             ("list", "append"): (2, "none"),
+            ("list", "copy"): (1, "list"),
+            ("dict", "copy"): (1, "dict"),
+            ("set", "copy"): (1, "set"),
             ("type", "__instancecheck__"): (2, "bool"),
         }
         spec = specs.get((owner, method))
@@ -13722,7 +13749,7 @@ class LinuxCEmitter:
             out.append(
                 f"    {_name(result)}=piton_unbound_str_upper({value(0)},{receiver_kind(0)});"
             )
-        elif owner == "list":
+        elif owner == "list" and method == "append":
             out.append(
                 f"    {_name(result)}=piton_unbound_list_append({value(0)},{self._slot(call_args[1], types)},{receiver_kind(0)});"
             )
@@ -13734,6 +13761,18 @@ class LinuxCEmitter:
                     self._coll_elems[list_name] = elem_type
                 elif elem_type and current and elem_type not in current.split("|"):
                     self._coll_elems[list_name] = current + "|" + elem_type
+        elif owner == "list" and method == "copy":
+            out.append(
+                f"    {_name(result)}=piton_unbound_list_copy({value(0)},{receiver_kind(0)});"
+            )
+        elif owner == "dict" and method == "copy":
+            out.append(
+                f"    {_name(result)}=piton_unbound_dict_copy({value(0)},{receiver_kind(0)});"
+            )
+        elif owner == "set" and method == "copy":
+            out.append(
+                f"    {_name(result)}=piton_unbound_set_copy({value(0)},{receiver_kind(0)});"
+            )
         else:
             _instance_is_type = int(
                 call_args[1] in self._typeobj_names
@@ -22958,13 +22997,24 @@ class LinuxCEmitter:
             # MODULE_ATTR_MISSING_V1: nombre real del modulo (4.o argumento, literal).
             module_display = args[3] if len(args) > 3 and isinstance(args[3], str) else None
             owner_type = types.get(obj, "")
-            if obj in self._typeobj_names:
-                _builtin_owner = self._typeobj_names[obj]
+            _builtin_owner = self._typeobj_names.get(obj)
+            # dict se carga por la ruta CLASS_LOAD_V1 (tipo `class:dict`) para
+            # enrutar dict.fromkeys y no queda en _typeobj_names; permitir que
+            # dict.copy/dict.XXX se resuelvan como unbound builtin desde el tipo
+            # de clase sin romper la busqueda generica de fromkeys.
+            if _builtin_owner is None and owner_type.startswith("class:"):
+                _cls = owner_type.split(":", 1)[1]
+                if _cls in {"list", "dict", "set", "str", "int", "float", "type", "tuple"}:
+                    _builtin_owner = _cls
+            if _builtin_owner is not None:
                 _unbound_specs = {
                     ("str", "upper"): ("piton_unbound_str_upper_frame", 1, "str"),
                     ("int", "bit_length"): ("piton_unbound_int_bit_length_frame", 1, "int"),
                     ("float", "fromhex"): ("piton_unbound_float_fromhex_frame", 1, "float"),
                     ("list", "append"): ("piton_unbound_list_append_frame", 2, "none"),
+                    ("list", "copy"): ("piton_unbound_list_copy_frame", 1, "list"),
+                    ("dict", "copy"): ("piton_unbound_dict_copy_frame", 1, "dict"),
+                    ("set", "copy"): ("piton_unbound_set_copy_frame", 1, "set"),
                     ("type", "__instancecheck__"): ("piton_unbound_type_instancecheck_frame", 2, "bool"),
                     # from_bytes: vararg (ver piton_unbound_int_from_bytes_frame); aridad 1 para map/filter.
                     ("int", "from_bytes"): ("piton_unbound_int_from_bytes_frame", 1, "bigint"),
@@ -22989,9 +23039,12 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=(long){json.dumps(_builtin_owner)};")
                     types[result] = "str"
                     return out
-                raise NativeBuildError(
-                    f"Linux unbound builtin type attribute {_builtin_owner}.{attr} is not supported as a value"
-                )
+                if obj in self._typeobj_names:
+                    raise NativeBuildError(
+                        f"Linux unbound builtin type attribute {_builtin_owner}.{attr} is not supported as a value"
+                    )
+                # class:-solo builtin (p.ej. dict) sin espec unbound: seguir con
+                # la busqueda de atributo generica de abajo.
             if (
                 owner_type.startswith("class:") and attr in {"__name__", "__qualname__"}
                 and owner_type.split(":", 1)[1] in self.classes
