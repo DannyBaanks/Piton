@@ -6077,6 +6077,48 @@ class MIRLowerer:
                     )
         return label
 
+    def _lower_zip_builtin(self, builder: _Builder, node: HIRNode) -> str:
+        """zip(...) builtin. Sin `*x` el par de iterables va fijo al backend
+        (builtin_iter_new "zip"). Con `*x` (ZIP_STAR_V1) el numero de
+        iterables solo se conoce en runtime: los argumentos se reunen en una
+        lista en el orden de aparicion (`*x` extiende, lo demas añade) y el
+        backend hace zip sobre esa lista, igual que CPython con zip(*args)."""
+        strict = None
+        seen_strict = False
+        for kw in node.keywords or ():
+            if kw.arg not in {"strict", "estricto"}:
+                raise MIRLoweringError(f"native zip does not support keyword argument '{kw.arg}'")
+            if seen_strict:
+                raise MIRLoweringError("native zip got multiple values for keyword argument 'strict'")
+            seen_strict = True
+            strict = self._lower_expr(builder, kw.value)
+        starred = {id(arg) for arg in getattr(node, "starred_args", ())}
+        if starred:
+            sources_list = builder.temp()
+            builder.emit("build_collection", "list", (), result=sources_list)
+            for arg in node.args:
+                if id(arg) in starred:
+                    builder.emit(
+                        "collection_extend", sources_list, self._lower_expr(builder, arg),
+                        _active_handler(builder),
+                    )
+                else:
+                    builder.emit("list_append", sources_list, self._lower_expr(builder, arg))
+            result = builder.temp()
+            builder.emit(
+                "builtin_iter_new", "zip_star", (sources_list,), strict,
+                _active_handler(builder), result=result,
+            )
+            return result
+        if len(node.args) == 0:
+            result = builder.temp()
+            builder.emit("builtin_iter_new", "zip", (), strict, result=result)
+            return result
+        sources = tuple(self._lower_expr(builder, arg) for arg in node.args)
+        result = builder.temp()
+        builder.emit("builtin_iter_new", "zip", sources, strict, result=result)
+        return result
+
     def _find_exception_handler(
         self, builder: _Builder, exception_type: str
     ) -> str | None:
@@ -7049,6 +7091,16 @@ class MIRLowerer:
                     return self._lower_decorated_method_call(
                         builder, node, decorated_target[0], decorated_target[1],
                     )
+            if (
+                node.func.kind == HIRKind.LOAD
+                and node.func.name in {"zip", "combinar"}
+                and getattr(node, "starred_args", ())
+                and not self._name_shadows_builtin(node.func.name, builder)
+            ):
+                # ZIP_STAR_V1: zip(*x) va por la aridad dinamica de
+                # _lower_zip_builtin, no por el desempacado generico (que
+                # llamaria al builtin zip con la secuencia como un solo arg).
+                return self._lower_zip_builtin(builder, node)
             if self._call_has_dynamic_unpack(node):
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
@@ -7151,23 +7203,7 @@ class MIRLowerer:
                 and node.func.name in {"zip", "combinar"}
                 and not self._name_shadows_builtin(node.func.name, builder)
             ):
-                strict = None
-                seen_strict = False
-                for kw in node.keywords or ():
-                    if kw.arg not in {"strict", "estricto"}:
-                        raise MIRLoweringError(f"native zip does not support keyword argument '{kw.arg}'")
-                    if seen_strict:
-                        raise MIRLoweringError("native zip got multiple values for keyword argument 'strict'")
-                    seen_strict = True
-                    strict = self._lower_expr(builder, kw.value)
-                if len(node.args) == 0:
-                    result = builder.temp()
-                    builder.emit("builtin_iter_new", "zip", (), strict, result=result)
-                    return result
-                sources = tuple(self._lower_expr(builder, arg) for arg in node.args)
-                result = builder.temp()
-                builder.emit("builtin_iter_new", "zip", sources, strict, result=result)
-                return result
+                return self._lower_zip_builtin(builder, node)
             if (
                 node.func.kind == HIRKind.LOAD
                 and node.func.name in {"map", "filtrar", "filter"}
@@ -8628,6 +8664,16 @@ class MIRLowerer:
                     return self._lower_decorated_method_call(
                         builder, node, decorated_target[0], decorated_target[1],
                     )
+            if (
+                node.func.kind == HIRKind.LOAD
+                and node.func.name in {"zip", "combinar"}
+                and getattr(node, "starred_args", ())
+                and not self._name_shadows_builtin(node.func.name, builder)
+            ):
+                # ZIP_STAR_V1: zip(*x) va por la aridad dinamica de
+                # _lower_zip_builtin, no por el desempacado generico (que
+                # llamaria al builtin zip con la secuencia como un solo arg).
+                return self._lower_zip_builtin(builder, node)
             if self._call_has_dynamic_unpack(node):
                 return self._lower_call_unpack(builder, node)
             node.args, node.keywords = self._expand_literal_call(node)
@@ -8820,23 +8866,7 @@ class MIRLowerer:
                 and node.func.name in {"zip", "combinar"}
                 and not self._name_shadows_builtin(node.func.name, builder)
             ):
-                strict = None
-                seen_strict = False
-                for kw in node.keywords or ():
-                    if kw.arg not in {"strict", "estricto"}:
-                        raise MIRLoweringError(f"native zip does not support keyword argument '{kw.arg}'")
-                    if seen_strict:
-                        raise MIRLoweringError("native zip got multiple values for keyword argument 'strict'")
-                    seen_strict = True
-                    strict = self._lower_expr(builder, kw.value)
-                if len(node.args) == 0:
-                    result = builder.temp()
-                    builder.emit("builtin_iter_new", "zip", (), strict, result=result)
-                    return result
-                sources = tuple(self._lower_expr(builder, arg) for arg in node.args)
-                result = builder.temp()
-                builder.emit("builtin_iter_new", "zip", sources, strict, result=result)
-                return result
+                return self._lower_zip_builtin(builder, node)
             if (
                 node.func.kind == HIRKind.LOAD
                 and node.func.name in {"map", "filtrar", "filter"}

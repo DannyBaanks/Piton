@@ -6416,6 +6416,15 @@ static void piton_raise_chain_set(const char*type,const char*message,const char*
 static void piton_seq_extend_any(PitonSeq*dst,long src_bits){
   if(!piton_maybe_ptr(src_bits))return;
   long*ptr=(long*)src_bits;long k=ptr[1];
+  if(*ptr==PITON_GENEXPR_MAGIC||*ptr==PITON_GEN_MAGIC){
+    /* GENEXPR_EXTEND_V1: `[*gen]` / `zip(*gen)`: un generador no tiene
+       kind de coleccion; se materializa con su valor real (kind por item)
+       en vez de caer en el iterador generico (que devolvia vacio). */
+    PitonSeq*items=(PitonSeq*)piton_list_of_dynamic(src_bits);
+    if(piton_exc_flag||!items)return;
+    for(long i=0;i<items->length;++i)piton_seq_append(dst,items->items[i]);
+    return;
+  }
   if(k==PK_LIST||k==PK_TUPLE){
     PitonSeq*s=(PitonSeq*)src_bits;
     long count=s->length;
@@ -16596,7 +16605,10 @@ class LinuxCEmitter:
                         self._dict_key_types[result] = self._dict_key_types[source]
             types[result] = f"iterator:{source_type or 'unknown'}"
         elif op == "builtin_iter_new":
-            builtin, source, start = args
+            builtin, source, start = args[0], args[1], args[2]
+            # ZIP_STAR_V1: el handler activo (args[3]) para que el TypeError de
+            # un iterable no valido llegue al intentar, como CPython.
+            zip_star_handler = args[3] if len(args) > 3 else None
             if builtin == "calliter":
                 callable_src, sentinel_src = source
                 out.append(f"    {_name(result)}=piton_calliter_new({self._value(callable_src)},{self._value(sentinel_src)});")
@@ -16715,6 +16727,30 @@ class LinuxCEmitter:
                     self._iter_source[result] = zip_sources[0]
                     if len(zip_sources) >= 2:
                         self._iter_source_r[result] = zip_sources[1]
+            elif builtin == "zip_star":
+                # ZIP_STAR_V1: zip(*x, ...). La lista `source[0]` ya contiene,
+                # en orden, los iterables (mir._lower_zip_builtin). Cada uno se
+                # convierte con el mismo despacho que zip de aridad fija, usando
+                # el tipo real del elemento (PitonSlot) para el TypeError de
+                # "not iterable". Sin iterables: zip vacio (como zip()).
+                _zs = f"_zstar{self._instr_seq}"
+                _zs_strict = "0" if start is None else f"piton_bool_of_value({self._value(start)})"
+                out.append("    {")
+                out.append(f"    PitonSeq*{_zs}=(PitonSeq*){self._value(source[0])};")
+                out.append(f"    long*{_zs}_it=(long*)piton_alloc(sizeof(long)*({_zs}->length?{_zs}->length:1));")
+                out.append(f"    for(long _zk=0;_zk<{_zs}->length&&!piton_exc_flag;++_zk){{")
+                out.append(
+                    f"        {_zs}_it[_zk]=piton_zip_iter_new_dynamic({_zs}->items[_zk].bits,_zk+1,"
+                    f"js_type_name({_zs}->items[_zk]));"
+                )
+                out.append("    }")
+                out.append(f"    {_name(result)}=piton_exc_flag?0:piton_zip_new_multi({_zs}->length,{_zs}_it,{_zs_strict});")
+                self._emit_exc_check(out, function, zip_star_handler)
+                out.append("    }")
+                # Mismo tipo que zip de aridad fija: los consumidores (list(),
+                # para, next) despachan por "iterator:zip". No hay una fuente
+                # unica, asi que _iter_source no se fija.
+                types[result] = "iterator:zip"
             elif builtin in {"map", "filter"}:
                 if types.get(source) not in {"list", "tuple"}:
                     # Relajar map/filter: permitir iterables genéricos
@@ -24384,6 +24420,9 @@ class LinuxCEmitter:
                 self._emit_exc_check(out, function, handler_label)
             else:
                 out.append(f"    piton_seq_extend_any((PitonSeq*){_name(dst)},{self._value(src)});")
+                # GENEXPR_EXTEND_V1: el extend puede levantar (p. ej. `*5` ->
+                # TypeError); se enruta al intentar activo como cualquier op.
+                self._emit_exc_check(out, function, handler_label)
         elif op == "truth_test":
             # BOOL_SHORT_V1 / TRUTHY_FIX_V1: full truthiness per static kind
             # (CPython bool()): int/bool != 0, float bits != 0.0, str
