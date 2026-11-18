@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from piton.linux_x86 import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux, require_linux_native  # noqa: E402
 from tools.parity_corpus_v4 import _stage_impl  # noqa: E402
 
 
@@ -82,6 +82,7 @@ def _ejecutar_cpython(codigo: str) -> _Ejecucion:
 
 
 def _ejecutar_piton(codigo: str) -> _Ejecucion:
+    require_linux_native()
     try:
         with tempfile.TemporaryDirectory(prefix="piton-parity-formato-") as directorio:
             base = Path(directorio)

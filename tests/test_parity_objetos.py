@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 from tools.parity_corpus_v4 import python_to_piton
-from piton.linux_x86 import compile_native_linux
+from native_linux import compile_native_linux
 
 
 def _run_cpython(codigo: str):

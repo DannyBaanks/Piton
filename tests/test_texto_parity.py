@@ -8,9 +8,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 PITON_SRC = REPO / "piton"
 ORACLE = sys.executable
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Linux ELF native backend is not available on the Windows CI runner",
+)
 
 
 def _run_piton(source: str) -> subprocess.CompletedProcess:

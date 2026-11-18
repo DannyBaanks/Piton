@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,7 +48,7 @@ def _assert_oracle_and_piton(
     piton_source: str,
     expected: str,
 ) -> None:
-    oracle = _run(["python3", "-c", oracle_source])
+    oracle = _run([sys.executable, "-c", oracle_source])
     assert oracle.returncode == 0, (
         f"el propio oráculo falló para {stem}: rc={oracle.returncode}\n"
         f"stdout={oracle.stdout!r}\nstderr={oracle.stderr!r}"
@@ -58,7 +59,7 @@ def _assert_oracle_and_piton(
 
     piton_file = tmp_path / f"{stem}.piton"
     piton_file.write_text(piton_source, encoding="utf-8")
-    piton = _run(["python3", "-m", "piton", "ejecutar", str(piton_file)])
+    piton = _run([sys.executable, "-m", "piton", "ejecutar", str(piton_file)])
     assert piton.returncode == 0, (
         f"PITON no ejecutó {stem}: rc={piton.returncode}\n"
         f"stdout={piton.stdout!r}\nstderr={piton.stderr!r}"

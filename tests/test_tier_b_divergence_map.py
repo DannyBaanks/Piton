@@ -10,6 +10,7 @@ se cae — sin que la metrica global (72.7%) se mueva.
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
@@ -55,6 +56,10 @@ class InputoutputDivergenceV1(unittest.TestCase):
     mapa ejecuta ambos lados en su directorio temporal compartido.
     """
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "Linux ELF native backend is not available on the Windows CI runner",
+    )
     def test_divergent_examples_are_exactly_these(self):
         result = DIVMAP.run_script("inputoutput")
         self.assertNotIn("error", result, result.get("error"))

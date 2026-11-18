@@ -11,7 +11,8 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from piton.native_differential import compare_native_to_cpython
-from piton.linux_x86 import LinuxCEmitter, _gcc_compile
+from native_linux import gcc_compile as _gcc_compile
+from piton.linux_x86 import LinuxCEmitter
 from piton.lower import lower_cst_to_hir
 from piton.mir import lower_hir_to_mir
 from piton.parser import parse

@@ -33,6 +33,7 @@ Bateria nueva (18 casos limite ausentes del corpus): 6 DIVERGENT, 12 EQUIV,
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -46,7 +47,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from tools.parity_corpus_v4 import python_to_piton  # noqa: E402
-from piton.linux_x86 import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux  # noqa: E402
 
 CORPUS = REPO / "corpus_t1" / "objetos"
 
@@ -164,7 +165,8 @@ def exigir_paridad(codigo: str, cmd_cpython: str) -> None:
 
 def test_oraculo_cpython_vivo():
     rc, out, _err = run_cpython("print(1 + 1)")
-    assert rc == 0 and out == b"2\n", f"oraculo roto: rc={rc} out={out!r}"
+    expected = b"2" + os.linesep.encode("ascii")
+    assert rc == 0 and out == expected, f"oraculo roto: rc={rc} out={out!r}"
 
 
 def test_comparador_no_es_vacuo():

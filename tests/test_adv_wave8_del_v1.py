@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from piton.linux_x86 import compile_native_linux
+from native_linux import compile_native_linux
 
 
 def _run(source: str):

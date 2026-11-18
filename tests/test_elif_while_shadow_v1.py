@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from piton.linux_x86 import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux  # noqa: E402
 from piton.lower import lower_cst_to_hir  # noqa: E402
 from piton.mir import lower_hir_to_mir  # noqa: E402
 from piton.parser import IfStmt, parse  # noqa: E402

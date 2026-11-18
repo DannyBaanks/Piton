@@ -22,18 +22,23 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from piton.linux_x86 import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux  # noqa: E402
 from tools.parity_corpus_sec import python_to_piton  # noqa: E402
 
 
 def _build_tree(base: Path) -> None:
     files = [
         "a.py", "b.txt", "c.PY", ".hidden.py", "data1.csv", "data2.csv",
-        "x[1].txt", "star*name.md", "q?.log", "ab.py", "é.txt",
+        "x[1].txt", "ab.py", "é.txt",
         "sub/c.py", "sub/d.txt", "sub/.dot.py",
         "sub/deeper/d.py", "sub/deeper/e.txt", "sub/deeper/.hid/f.py",
         "other/g.py", "emptydir/.keep",
     ]
+    # Windows forbids literal ``*`` and ``?`` in file names. Keep the Linux
+    # fixture exact (the cases below need those literal names); on Windows the
+    # two impossible entries are omitted instead of crashing fixture setup.
+    if os.name != "nt":
+        files.extend(("star*name.md", "q?.log"))
     for rel in files:
         p = base / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -211,6 +216,8 @@ def test_glob_dir_fd_not_supported_fails_closed(tree: Path) -> None:
 
 
 def test_glob_pattern_with_newline_fails_closed(tree: Path) -> None:
+    if os.name == "nt":
+        pytest.skip("Windows filenames cannot contain a newline character")
     (tree / "bad\nname.py").write_text("x", encoding="utf-8")
     pit = python_to_piton("import glob\nprint(glob.glob('*.py'))\n")
     with tempfile.TemporaryDirectory() as td:
