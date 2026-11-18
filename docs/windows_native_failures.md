@@ -263,3 +263,79 @@ eso es trabajo de backend, no de CI, y sigue siendo la deuda que hay que
 saldar para volver a exigir Windows verde sin cuarentena. La reducción de la
 cuarentena no declara resuelto ninguno de esos fallos: solo separa el hueco
 del backend de los problemas de entorno y de los bugs portables del fixture.
+
+## Olas 17-22 (PR #53) - cuarentena ampliada, 2026-11-18
+
+Origen: run `44305188216`, job `test-windows (3.12)`, head `08568df4`
+(merge de `publish/olas-17-22` con `main`; ese merge aporta la lista de 469
+nodeids del 2026-11-17). Ventana de la corrida: 2026-11-18T12:34:16Z a
+2026-11-18T13:55:21Z. Resultado crudo del step de tests:
+
+```
+521 failed, 1001 passed, 669 skipped, 447 xfailed, 1 xpassed, 2 warnings, 170 subtests passed in 4825.04s (1:20:25)
+```
+
+`test-linux` (3.12) y `test-autopiton`: SUCCESS. `verify-oracle`: SKIPPED
+(`needs` con el job Windows en rojo). Tracker de esa corrida:
+`lista=469 aplicados=469 XFAIL=447 XPASS=1 SKIP=21 SIN_REPORTE=0
+FUERA_DE_LA_LISTA=0`.
+
+Evidencia descargada con `gh run view --job 134804797120 --log`; el log
+normalizado a UTF-8 son 1.917.542 bytes, sha256
+`B1759BF19422E6E6418041A37A85FE00ED7FA43BAAB970BDECB28FC394CABDAC`.
+
+### Buckets medidos (521 casos reportados = 503 FAILED + 18 SUBFAIL)
+
+| bucket | casos | lectura |
+|---|---|---|
+| `ValueError: too many values to unpack` lanzado desde `piton/x86.py` | 202 | el MIR de la rama emite formas que `x86.py` no desempaqueta (`method_call` con kw y handler). Es un crash interno, no un fail-closed |
+| `piton.x86.NativeBuildError` | 158 | builtin o forma que `linux_x86.py` implemento y `x86.py` no: from-import multi-fichero, `len` de coleccion, `dict()` con argumentos, `open` con un argumento, `isinstance` sobre parametro sin tipo, `**`, ... |
+| `AssertionError` (stdout/returncode distinto) | 135 | compila y corre, pero el resultado no es el de CPython |
+| otros (`DID NOT RAISE`, `Exception not raised`, `TypeError`) | 26 | el gate de fail-closed esperado no dispara, o dispara con otro tipo |
+
+Por ola: w17 130, w18 39, w19 50, w20 84, w21 132, w22 73. Anteriores a w17:
+13 (`test_phase5.py` 5, `test_p13_delegators.py` 5,
+`test_p5_percent_format.py` 2, `test_mir_resolution.py` 1); esos 13 estaban
+verdes en Windows antes de esta rama y ahora ejercitan los mismos huecos por
+codigo compartido (`mir.py`, `lower.py`).
+
+El unico XPASS de la corrida fue
+`tests/test_phase5.py::Phase5Gates::test_x86_super_undefined_attribute_fails_closed`
+(esta en la lista de `main`; queda como candidato a salir en la siguiente
+pasada, no se borro en este commit).
+
+### Que se hizo
+
+- `tests/quarantine_windows.txt`: **+508 nodeids** (503 fallos de `call` +
+  5 padres de SUBFAIL de `unittest`) sobre los 469 de `main`. Total: **977**
+  nodeids. Ninguno de los 508 estaba ya en la lista.
+- `tests/conftest.py`: se adopta el tracker de PR #52 (cuenta fallos y
+  errores de setup/call/teardown y errores de coleccion, trata
+  `XPASS(strict)` como rojo y fuerza sesion roja). El mismo fichero viaja en
+  ambos PRs para que el merge no vuelva a divergir.
+- Nada se salta ni se borra: los 508 tests se siguen ejecutando como
+  `xfail(strict=False)` y siguen reportando `XPASS` cuando el backend
+  Windows los alcance. El job queda rojo si falla cualquier test fuera de la
+  lista.
+
+### Lo que NO se hizo (y por que)
+
+Portar a `piton/x86.py` el MIR de las olas 17-22 (`method_call` con kw y
+handler, `super()` sobre bases builtin, `yield from`, dispatch de `None`,
+...). Es trabajo de backend Windows; el alcance de #53 es el backend Linux.
+Los 202 `ValueError` son la deuda mas visible: `x86.py:3283` hace
+`explicit_class, method_name, owner, raw_values = args` mientras el MIR puede
+emitir 4, 5 o 6 campos, asi que el fallo aparece como traceback y no como
+`NativeBuildError`.
+
+### Verificacion
+
+- `py -m pytest tests/ --collect-only -q` (Windows 11, py 3.12.10, pytest
+  9.1.1, arbol = rama + `main`): 2620 nodeids recolectados. De los 977 de la
+  lista, 969 coinciden exactamente; los 8 restantes son parametrizaciones de
+  `test_w18_decorator_segfault.py` cuyo ID local es largo
+  (`[plain_deco-funcion registra(fn):...]`) y en CI (pytest 9.2.0) es
+  `[plain_deco-source0]`; su base existe en ambos.
+- `NOT_DEMONSTRATED` en este host: la suite completa con el toolchain del
+  runner (NASM + gcc de GitHub) y con pytest 9.2.0. La verificacion real es
+  la corrida de CI del commit que introduce esta seccion.
