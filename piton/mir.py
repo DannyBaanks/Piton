@@ -139,6 +139,80 @@ _BUILTIN_BASES = {
     "str", "int", "float", "bytes", "bytearray",
     "Exception", "BaseException",
 }
+# COLLECTION_SUBCLASS_V1: `clase X(list)` / `clase X(dict)`. La instancia es un
+# objeto de usuario que guarda la coleccion builtin real en el atributo oculto
+# `__piton_base__`, creado en la instanciacion. `super().m(...)` se resuelve
+# contra ese atributo, y los metodos/dunders que el usuario no define se
+# inyectan en la clase como delegacion explicita (ver _collection_member_defs).
+_COLLECTION_BASE_ATTR = "__piton_base__"
+_COLLECTION_BASE_KINDS = ("list", "dict")
+# Metodos que `super().m(...)` delega a la coleccion builtin.
+_COLLECTION_SUPER_METHODS = {
+    "list": frozenset({
+        "append", "extend", "insert", "remove", "pop", "index", "count",
+        "reverse", "sort", "clear", "copy",
+    }),
+    "dict": frozenset({
+        "keys", "values", "items", "get", "setdefault", "update", "pop",
+        "popitem", "clear", "copy",
+    }),
+}
+# Miembros inyectados (aridad fija; `sort` y `pop(k, d)` de dict quedan solo
+# en la ruta super(), que pasa los argumentos tal cual).
+_COLLECTION_INJECTED_SOURCE = {
+    "list": (
+        "funcion append(self, x):\n    devolver self.__piton_base__.append(x)\n"
+        "funcion extend(self, x):\n    devolver self.__piton_base__.extend(x)\n"
+        "funcion remove(self, x):\n    devolver self.__piton_base__.remove(x)\n"
+        "funcion pop(self):\n    devolver self.__piton_base__.pop()\n"
+        "funcion index(self, x):\n    devolver self.__piton_base__.index(x)\n"
+        "funcion count(self, x):\n    devolver self.__piton_base__.count(x)\n"
+        "funcion reverse(self):\n    devolver self.__piton_base__.reverse()\n"
+        "funcion sort(self, reverse=Falso):\n    devolver self.__piton_base__.sort(reverse=reverse)\n"
+        "funcion clear(self):\n    devolver self.__piton_base__.clear()\n"
+        # list(x) / dict(x) dan un valor de tipo conocido; `x.copy()` dentro de
+        # un metodo no propaga el tipo de retorno (saldria como int).
+        "funcion copy(self):\n    devolver list(self.__piton_base__)\n"
+    ),
+    "dict": (
+        # keys/values/items devuelven list(...) como ya hace dict en Piton: el
+        # valor queda tipado (sorted(d.keys()) funciona) y coincide con dict.
+        "funcion keys(self):\n    devolver list(self.__piton_base__.keys())\n"
+        "funcion values(self):\n    devolver list(self.__piton_base__.values())\n"
+        "funcion items(self):\n    devolver list(self.__piton_base__.items())\n"
+        "funcion get(self, k, d=None):\n    devolver self.__piton_base__.get(k, d)\n"
+        "funcion pop(self, k):\n    devolver self.__piton_base__.pop(k)\n"
+        "funcion popitem(self):\n    devolver self.__piton_base__.popitem()\n"
+        "funcion setdefault(self, k, d=None):\n    devolver self.__piton_base__.setdefault(k, d)\n"
+        "funcion update(self, otro):\n    devolver self.__piton_base__.update(otro)\n"
+        "funcion clear(self):\n    devolver self.__piton_base__.clear()\n"
+        "funcion copy(self):\n    devolver dict(self.__piton_base__)\n"
+    ),
+}
+_COLLECTION_DUNDER_SOURCE = (
+    "funcion __len__(self):\n    devolver len(self.__piton_base__)\n"
+    "funcion __getitem__(self, k):\n    devolver self.__piton_base__[k]\n"
+    "funcion __setitem__(self, k, v):\n    self.__piton_base__[k] = v\n"
+    "funcion __delitem__(self, k):\n    borrar self.__piton_base__[k]\n"
+    "funcion __iter__(self):\n    devolver iter(self.__piton_base__)\n"
+    "funcion __contains__(self, x):\n    devolver x in self.__piton_base__\n"
+    "funcion __repr__(self):\n    devolver repr(self.__piton_base__)\n"
+    "funcion __str__(self):\n    devolver str(self.__piton_base__)\n"
+)
+
+
+def _collection_member_defs(kind: str) -> list:
+    """HIR de los metodos/dunders inyectados en una subclase directa de `kind`."""
+    from piton.lower import lower_cst_to_hir
+    from piton.parser import parse
+
+    body = _COLLECTION_INJECTED_SOURCE[kind] + _COLLECTION_DUNDER_SOURCE
+    indented = "".join("    " + line if line.strip() else line for line in body.splitlines(True))
+    module = lower_cst_to_hir(parse(f"clase _ColeccionBase(object):\n{indented}"))
+    class_def = next(node for node in module.body if getattr(node, "kind", None) == HIRKind.CLASS_DEF)
+    return [node for node in class_def.body if getattr(node, "kind", None) == HIRKind.FUNC_DEF]
+
+
 # NATIVE_MODULE_CONSTS_V1: modulos de la stdlib que el backend provee con
 # sus CONSTANTES (no con codigo): `stat.S_IFDIR`, `__future__.division`...
 # Los valores son los POSIX/estandar, no los del host. OJO: en CPython los
@@ -1677,12 +1751,159 @@ class MIRLowerer:
                 self._json_value_alias[target.name] = attr
                 self._json_alias_assign_ids.add(id(node))
 
+    @staticmethod
+    def _inject_collection_subclass_members(root: Any) -> None:
+        """COLLECTION_SUBCLASS_V1: añade a cada subclase DIRECTA de list/dict
+        los miembros inyectados que el usuario no define (ver
+        _COLLECTION_INJECTED_SOURCE). Las subclases indirectas los heredan."""
+        class_nodes = [
+            node for node in _iter_hir(root)
+            if getattr(node, "kind", None) == HIRKind.CLASS_DEF
+        ]
+        by_name = {node.name: node for node in class_nodes}
+
+        def _base_names(node) -> list:
+            return [
+                base.name for base in (node.bases or ())
+                if getattr(base, "kind", None) == HIRKind.LOAD
+            ]
+
+        def _collection_kind_of(node, seen=()) -> str | None:
+            # Recorre la cadena de bases del modulo (indirectas incluidas).
+            for name in _base_names(node):
+                if name in _COLLECTION_BASE_KINDS:
+                    return name
+                parent = by_name.get(name)
+                if parent is not None and name not in seen:
+                    found = _collection_kind_of(parent, (*seen, name))
+                    if found is not None:
+                        return found
+            return None
+
+        for node in class_nodes:
+            kind = _collection_kind_of(node)
+            if kind is None:
+                continue
+            defined = {
+                item.name for item in node.body
+                if getattr(item, "kind", None) == HIRKind.FUNC_DEF
+            }
+            # Un dunder que el usuario redefine en una subclase de list/dict
+            # no lo puede respetar el camino tipado/inyectado (p.ej. print de
+            # un __repr__ propio, o __missing__): falla cerrado en build.
+            for name in sorted(defined):
+                if name.startswith("__") and name.endswith("__") and name != "__init__":
+                    raise MIRLoweringError(
+                        f"native {kind}-subclass overriding '{name}' is not supported"
+                    )
+            direct_kinds = [name for name in _base_names(node) if name in _COLLECTION_BASE_KINDS]
+            if not direct_kinds:
+                continue
+            for member in _collection_member_defs(direct_kinds[0]):
+                if member.name not in defined:
+                    node.body.append(member)
+
+    def _collection_base_kind(self, cls_name: str | None) -> str | None:
+        """'list' / 'dict' si `cls_name` hereda de esa base builtin."""
+        if not cls_name:
+            return None
+        mro = self._mro_memo.get(cls_name) or self._compute_mro(cls_name) or ()
+        for cls in mro:
+            if cls in _COLLECTION_BASE_KINDS:
+                return cls
+        return None
+
+    def _lower_collection_ctor_args(self, builder: _Builder, kind: str, result: str, node) -> str:
+        """Argumentos de `Clase(...)` cuando la subclase de list/dict no tiene
+        __init__ de usuario: equivale a list(x) / dict(x)."""
+        if node.keywords:
+            raise MIRLoweringError(
+                f"native {kind}-subclass constructor with keyword arguments is not supported"
+            )
+        lowered = [self._lower_expr(builder, arg) for arg in node.args]
+        if len(lowered) > 1:
+            _msg = builder.temp()
+            builder.emit(
+                "const", f"{kind} expected at most 1 argument, got {len(lowered)}", result=_msg,
+            )
+            builder.emit("raise_typed", "TypeError", _msg, _active_handler(builder))
+            return result
+        if lowered:
+            _fn = builder.temp()
+            builder.emit("load", kind, _active_handler(builder), result=_fn)
+            _copy = builder.temp()
+            builder.emit("call", _fn, (lowered[0],), _active_handler(builder), result=_copy)
+            builder.emit("set_attr", result, _COLLECTION_BASE_ATTR, _copy)
+        return result
+
+    def _lower_collection_super(self, builder: _Builder, attr: str, user_args: tuple, kind: str) -> str | None:
+        """`super().attr(...)` dentro de una subclase directa de list/dict.
+        Devuelve None si el atributo no está modelado (el llamador falla cerrado)."""
+        if builder.super_self in builder.cell_params:
+            receiver = builder.temp()
+            builder.emit("cell_load", builder.super_self, result=receiver)
+        else:
+            receiver = builder.temp()
+            builder.emit("load", builder.super_self, result=receiver)
+        if attr == "__init__":
+            if len(user_args) > 1:
+                raise MIRLoweringError(
+                    f"native super().__init__ of {kind} with more than one argument is not supported"
+                )
+            if not user_args:
+                _empty = builder.temp()
+                builder.emit("build_collection", kind, (), result=_empty)
+                builder.emit("set_attr", receiver, _COLLECTION_BASE_ATTR, _empty)
+            else:
+                _arg = self._lower_expr(builder, user_args[0])
+                _fn = builder.temp()
+                builder.emit("load", kind, _active_handler(builder), result=_fn)
+                _copy = builder.temp()
+                builder.emit("call", _fn, (_arg,), _active_handler(builder), result=_copy)
+                builder.emit("set_attr", receiver, _COLLECTION_BASE_ATTR, _copy)
+            _none = builder.temp()
+            builder.emit("const", None, result=_none)
+            return _none
+        backing = builder.temp()
+        builder.emit("get_attr", receiver, _COLLECTION_BASE_ATTR, result=backing)
+        if attr in _COLLECTION_SUPER_METHODS[kind]:
+            args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+            result = builder.temp()
+            builder.emit(
+                "method_call", None, attr, backing, args, (), _active_handler(builder), result=result,
+            )
+            return result
+        if attr == "__getitem__" and len(user_args) == 1:
+            key = self._lower_expr(builder, user_args[0])
+            result = builder.temp()
+            builder.emit("get_item", backing, key, result=result)
+            return result
+        if attr == "__setitem__" and len(user_args) == 2:
+            key = self._lower_expr(builder, user_args[0])
+            val = self._lower_expr(builder, user_args[1])
+            builder.emit("subscript_store", backing, key, val, _active_handler(builder))
+            none_value = builder.temp()
+            builder.emit("const", None, result=none_value)
+            return none_value
+        if attr == "__delitem__" and len(user_args) == 1:
+            key = self._lower_expr(builder, user_args[0])
+            builder.emit("del_item", backing, key)
+            none_value = builder.temp()
+            builder.emit("const", None, result=none_value)
+            return none_value
+        # super().__len__/__iter__/__repr__/__str__ NO se modelan aqui: siguen
+        # fallando cerrado (test_w17_super_mro_with). `len(self)` si funciona
+        # via los miembros inyectados (_COLLECTION_DUNDER_SOURCE).
+        return None
+
     def lower(
         self, hir: HIRNode, modules: dict[str, HIRNode] | None = None,
         from_imports: dict | None = None,
         entry_file: str | None = None,
         module_meta: dict[str, tuple[str, bool]] | None = None,
     ) -> MIRModule:
+        for _root in [hir, *(modules or {}).values()]:
+            self._inject_collection_subclass_members(_root)
         self._json_binding_counts = _json_binding_counts(hir)
         self._json_value_alias = {}
         self._json_alias_assign_ids = set()
@@ -8123,6 +8344,10 @@ class MIRLowerer:
                     and super_call.func.kind == HIRKind.LOAD
                     and super_call.func.name == "super"
                 ):
+                    if node.keywords and self._collection_base_kind(builder.super_class) is not None:
+                        raise MIRLoweringError(
+                            f"native super().{node.func.attr}() with keyword arguments on a list/dict subclass is not supported"
+                        )
                     return self._lower_super_call(builder, node.func.attr, node.args)
                 if node.func.attr == "cancel":
                     # TASK_SCHEDULER_V1: t.cancel() — the runtime dispatches by
@@ -8382,6 +8607,14 @@ class MIRLowerer:
                 f"'{unresolved_bases[0]}'"
             )
         if next_class is None:
+            # COLLECTION_SUBCLASS_V1: la base builtin list/dict es la coleccion
+            # guardada en `__piton_base__`. Debe ir ANTES del fallback de
+            # dunders (get_item sobre self re-entraria en el __getitem__ inyectado).
+            _coll_kind = self._collection_base_kind(builder.super_class)
+            if _coll_kind is not None and builder.super_self is not None:
+                _coll_result = self._lower_collection_super(builder, attr, user_args, _coll_kind)
+                if _coll_result is not None:
+                    return _coll_result
             # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
             # no los define ninguna clase: es la operación nativa de objeto.
             # Antes fallaba cerrado con MIRLoweringError aunque CPython lo
@@ -9789,6 +10022,10 @@ class MIRLowerer:
                     and super_call.func.kind == HIRKind.LOAD
                     and super_call.func.name == "super"
                 ):
+                    if node.keywords and self._collection_base_kind(builder.super_class) is not None:
+                        raise MIRLoweringError(
+                            f"native super().{node.func.attr}() with keyword arguments on a list/dict subclass is not supported"
+                        )
                     return self._lower_super_call(builder, node.func.attr, node.args)
                 if node.func.attr == "cancel":
                     # TASK_SCHEDULER_V1: t.cancel() — the runtime dispatches by
@@ -11314,12 +11551,21 @@ class MIRLowerer:
                     builder.emit("set_attr", result, _attr_name, _val)
                 except Exception:
                     pass
+        # COLLECTION_SUBCLASS_V1: la coleccion builtin de la subclase nace vacia
+        # (como list.__new__); el __init__ de usuario la llena via super().
+        _coll_kind = self._collection_base_kind(cls_name)
+        if _coll_kind is not None:
+            _empty = builder.temp()
+            builder.emit("build_collection", _coll_kind, (), result=_empty)
+            builder.emit("set_attr", result, _COLLECTION_BASE_ATTR, _empty)
         mro = self._mro_memo.get(cls_name) or self._compute_mro(cls_name)
         init_class = None
         for cls in (mro or ()):
             if cls in self.classes and "__init__" in self.classes[cls]:
                 init_class = cls
                 break
+        if init_class is None and _coll_kind is not None:
+            return self._lower_collection_ctor_args(builder, _coll_kind, result, node)
         if init_class is None:
             if node.args or node.keywords:
                 # Evaluate arguments left-to-right to preserve side effects

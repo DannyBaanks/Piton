@@ -15,6 +15,7 @@ from . import call_arity as arity_messages
 from .lower import LoweringError, lower_cst_to_hir
 from .mir import (
     _BUILTIN_EXCEPTIONS,
+    _COLLECTION_BASE_ATTR as _COLLECTION_BASE_ATTR_C,
     MIRFunction,
     MIRInstruction,
     MIRLoweringError,
@@ -5367,7 +5368,11 @@ static long piton_float_of_value(long bits){
   if(piton_maybe_ptr(bits)&&piton_is_printable_str((const char*)bits))return piton_float_from_str((const char*)bits);
   return piton_double_bits((double)bits);
 }
-static long piton_isinstance_dynamic(long bits,int kind){if(bits==(long)&piton_none_singleton)return(kind==PK_NONE);if(piton_is_double_bits(bits))return(kind==PK_FLOAT);if(bits>0x400000L&&bits<0x7FFFFFFFFFFFL){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){return(k==kind);}if(piton_is_printable_str((const char*)bits)){return(kind==PK_STR);}}return(kind==PK_INT);}
+/* COLLECTION_SUBCLASS_V1: una instancia de `clase X(list|dict)` es un PitonObject
+   que guarda la coleccion real en `__piton_base__`. Busqueda sin efectos (no usa
+   piton_object_get, que lanza AttributeError si falta). */
+static long piton_coll_subclass_is(long bits,int kind){PitonObject*o=(PitonObject*)bits;if(!o||((long*)o)[1]!=PK_OBJECT)return 0;for(long i=0;i<o->length;++i)if(piton_strcmp(o->attrs[i].name,"__piton_base__")==0)return o->attrs[i].value.kind==kind;return 0;}
+static long piton_isinstance_dynamic(long bits,int kind){if(bits==(long)&piton_none_singleton)return(kind==PK_NONE);if(piton_is_double_bits(bits))return(kind==PK_FLOAT);if(bits>0x400000L&&bits<0x7FFFFFFFFFFFL){long*ptr=(long*)bits;long k=ptr[1];if(ptr[0]>0&&ptr[0]<1000000L&&k>=PK_LIST&&k<=PK_OBJECT){if(k==kind)return 1;if(k==PK_OBJECT&&(kind==PK_LIST||kind==PK_DICT))return piton_coll_subclass_is(bits,kind);return 0;}if(piton_is_printable_str((const char*)bits)){return(kind==PK_STR);}}return(kind==PK_INT);}
 /* SEQ_CMP_V1: comparación lexicográfica elemento a elemento (CPython). */
 static long piton_seq_cmp(PitonSeq*a,PitonSeq*b){
   long n=a->length<b->length?a->length:b->length;
@@ -14980,11 +14985,11 @@ class LinuxCEmitter:
             elif target_clean in {"bytearray", "arreglo_bytes"}:
                 return f"({slot}.kind==PK_BYTEARRAY)"
             elif target_clean in {"list", "lista"}:
-                return f"({slot}.kind==PK_LIST)"
+                return f"({slot}.kind==PK_LIST||({slot}.kind==PK_OBJECT&&piton_coll_subclass_is({slot}.bits,PK_LIST)))"
             elif target_clean in {"tuple", "tupla"}:
                 return f"({slot}.kind==PK_TUPLE)"
             elif target_clean in {"dict", "diccionario"}:
-                return f"({slot}.kind==PK_DICT)"
+                return f"({slot}.kind==PK_DICT||({slot}.kind==PK_OBJECT&&piton_coll_subclass_is({slot}.bits,PK_DICT)))"
             elif target_clean in {"set", "conjunto"}:
                 return f"({slot}.kind==PK_SET)"
             elif target_clean in {"range", "rango"}:
@@ -16090,6 +16095,94 @@ class LinuxCEmitter:
                             vt = temp_types.get(val_temp)
                             if vt and vt != "int":
                                 self._instance_attr_types.setdefault(cls_name, {})[attr] = vt
+        # COLLECTION_SUBCLASS_V1: `__piton_base__` es la coleccion builtin real
+        # de cada subclase de list/dict (ver mir._COLLECTION_BASE_ATTR). Tiparla
+        # aqui deja que sus metodos se despachen estaticamente, no por slot.
+        for _cls_name, _mro in (module.class_mro or {}).items():
+            for _base in _mro:
+                if _base in ("list", "dict"):
+                    self._instance_attr_types.setdefault(_cls_name, {})["__piton_base__"] = _base
+                    break
+
+    def _collection_subclass_base(self, owner_type: str | None) -> str | None:
+        """COLLECTION_SUBCLASS_V1: 'list'/'dict' si el tipo estatico es una
+        instancia de una subclase de esa base builtin; None en otro caso."""
+        if not owner_type or not owner_type.startswith("object:"):
+            return None
+        cls_name = owner_type.split(":", 1)[1]
+        for candidate in self.class_mro.get(cls_name, [cls_name]):
+            if candidate in ("list", "dict"):
+                return candidate
+        return None
+
+    # COLLECTION_SUBCLASS_V1: aridad posicional de los miembros inyectados
+    # (ver mir._COLLECTION_INJECTED_SOURCE). Una llamada fuera de rango o con
+    # keywords falla cerrada en build: en CPython list/dict la aceptan o la
+    # rechazan con su propia semantica, que el miembro inyectado no replica.
+    _COLLECTION_METHOD_ARITY = {
+        "list": {
+            "append": (1, 1), "extend": (1, 1), "insert": (2, 2), "remove": (1, 1),
+            "pop": (0, 0), "index": (1, 1), "count": (1, 1), "reverse": (0, 0),
+            "sort": (0, 1), "clear": (0, 0), "copy": (0, 0),
+        },
+        "dict": {
+            "keys": (0, 0), "values": (0, 0), "items": (0, 0), "get": (1, 2),
+            "setdefault": (1, 2), "update": (1, 1), "pop": (1, 1),
+            "popitem": (0, 0), "clear": (0, 0), "copy": (0, 0),
+        },
+    }
+
+    # COLLECTION_SUBCLASS_V1: builtins que leen una instancia de subclase de
+    # list/dict como coleccion (su camino tipado). Cualquier otro callee (funcion
+    # de usuario, callback de map/filter...) la recibiria SIN tipo y la leeria
+    # como PitonSeq/PitonDict crudo: falla cerrado en build.
+    _COLLECTION_SAFE_CALLEES = frozenset({
+        "len", "isinstance", "type", "print", "imprimir", "str", "repr",
+        "list", "lista", "sorted", "ordenada", "sum", "suma",
+    })
+    # Metodos que guardan un argumento en otra coleccion: la instancia de la
+    # subclase escaparia a un slot sin tipo (xs.append(l); len(xs[0])).
+    _COLLECTION_STORE_METHODS = frozenset({
+        "append", "insert", "extend", "add", "update", "setdefault", "appendleft",
+    })
+
+    def _coll_sub_escape(self, value: Any, types: dict) -> bool:
+        """COLLECTION_SUBCLASS_V1: `value` es (o contiene) una instancia de
+        subclase de list/dict; su lectura sin tipo no es segura."""
+        if self._collection_subclass_base(types.get(value)):
+            return True
+        elems = str(self._coll_elems.get(value, "") or "")
+        return any(
+            self._collection_subclass_base(part)
+            for part in elems.split("|")
+            if part.startswith("object:")
+        )
+
+    def _check_collection_method_call(
+        self, owner_type: str, kind: str, method: str, n_args: int, has_kwargs: bool,
+    ) -> None:
+        cls_name = owner_type.split(":", 1)[1]
+        defined = any(
+            method in self.classes.get(candidate, set())
+            for candidate in self.class_mro.get(cls_name, [cls_name])
+        )
+        arity = self._COLLECTION_METHOD_ARITY[kind].get(method)
+        if not defined:
+            # Metodo builtin que ninguna clase de la MRO define (p.ej. insert):
+            # sin miembro inyectado no hay implementacion nativa; fallo cerrado.
+            if arity is not None:
+                raise NativeBuildError(
+                    f"native {kind}-subclass method '{method}' is not supported"
+                )
+            return
+        if arity is None:
+            return
+        low, high = arity
+        if has_kwargs or not (low <= n_args <= high):
+            raise NativeBuildError(
+                f"native {kind}-subclass method '{method}' with keyword arguments "
+                f"or {n_args} positional argument(s) is not supported"
+            )
 
     def _is_unknown_elem_list_operand(
         self, function: Any, operand: Any, aliases: dict[str, str]
@@ -17156,6 +17249,10 @@ class LinuxCEmitter:
                 if _cb_rt and _cb_rt not in {"none", "int"}:
                     self._calliter_elem[result] = _cb_rt
             elif builtin == "enumerate":
+                if self._coll_sub_escape(source, types):
+                    raise NativeBuildError(
+                        "enumerate() over list/dict subclass instances is not supported"
+                    )
                 _enum_type = types.get(source)
                 start_value = self._value(start) if start is not None else "0"
                 if _enum_type not in {"list", "tuple", "str"} and isinstance(_enum_type, str) and (_enum_type.startswith("iterator:") or _enum_type == "int"):
@@ -17191,6 +17288,10 @@ class LinuxCEmitter:
                         self._enum_elem[result] = "str"
                     self._iter_source[result] = source
             elif builtin == "reversed":
+                if self._coll_sub_escape(source, types):
+                    raise NativeBuildError(
+                        "reversed() over list/dict subclass instances is not supported"
+                    )
                 _rev_src_type = types.get(source)
                 _rev_src = self._value(source)
                 if _rev_src_type == "range":
@@ -17279,6 +17380,12 @@ class LinuxCEmitter:
                 # unica, asi que _iter_source no se fija.
                 types[result] = "iterator:zip"
             elif builtin in {"map", "filter"}:
+                # COLLECTION_SUBCLASS_V1: el callback recibe los elementos sin
+                # tipo; una instancia de subclase de list/dict no se puede leer.
+                if self._coll_sub_escape(source, types):
+                    raise NativeBuildError(
+                        f"Linux {builtin}() over list/dict subclass instances is not supported"
+                    )
                 if types.get(source) not in {"list", "tuple"}:
                     # Relajar map/filter: permitir iterables genéricos
                     pass
@@ -19211,7 +19318,10 @@ class LinuxCEmitter:
                 out.append(f"    {{PitonDict* _dm=(PitonDict*)piton_dict_copy((PitonDict*){self._value(left)}); if(_dm)piton_dict_update(_dm,(PitonDict*){self._value(right)}); {_name(result)}=(long)_dm;}}")
                 types[result] = "dict"
                 return out
-            if {left_type, right_type} & {"list", "tuple", "dict", "set"}:
+            if {left_type, right_type} & {"list", "tuple", "dict", "set"} and not (
+                self._collection_subclass_base(left_type)
+                or self._collection_subclass_base(right_type)
+            ):
                 # SEQ_CONCAT_V1: list+list / tuple+tuple concatenate; any other
                 # collection arithmetic is a CPython TypeError — fail closed at
                 # build time instead of doing C pointer arithmetic (previously
@@ -19675,6 +19785,28 @@ class LinuxCEmitter:
             # IN_GUARD_V1: 4to arg opcional = handler del intentar activo
             # (solo lo traen las comparaciones de pertenencia).
             compare_handler = args[3] if len(args) > 3 else None
+            # COLLECTION_SUBCLASS_V1: `==`/`!=` con una subclase de list/dict
+            # tipada compara la coleccion guardada, como list.__eq__ en CPython.
+            if operator in {"==", "!="} and (
+                self._collection_subclass_base(types.get(left))
+                or self._collection_subclass_base(types.get(right))
+            ):
+                def _cmp_side(value: Any) -> str:
+                    if self._collection_subclass_base(types.get(value)):
+                        return (
+                            f'piton_object_get((PitonObject*){self._value(value)},'
+                            f'"{_COLLECTION_BASE_ATTR_C}")'
+                        )
+                    return self._slot(value, types)
+
+                _cmp_codes = {"==": 10, "!=": 11}
+                out.append(
+                    f"    {_name(result)}=piton_dyn_cmp({_cmp_codes[operator]},"
+                    f"{_cmp_side(left)},{_cmp_side(right)});"
+                )
+                self._emit_exc_check(out, function, compare_handler)
+                types[result] = "bool"
+                return out
             if operator in {"==", "!=", "<", "<=", ">", ">="} and (
                 types.get(left) == "slot" or types.get(right) == "slot"
             ):
@@ -20037,6 +20169,13 @@ class LinuxCEmitter:
             if function_name == args[0] and self._builtin_loads.get(args[0]) in {"globals", "locals", "vars"}:
                 function_name = self._builtin_loads[args[0]]
             values = list(args[1])
+            # COLLECTION_SUBCLASS_V1: ver _COLLECTION_SAFE_CALLEES.
+            if function_name not in self._COLLECTION_SAFE_CALLEES and any(
+                self._coll_sub_escape(v, types) for v in values
+            ):
+                raise NativeBuildError(
+                    f"passing a list/dict subclass instance to '{function_name}' is not supported"
+                )
             # BUILTIN_BOUND_METHOD_V1: una llamada a un `xs.append` ligado
             # tipa el elemento de la lista igual que el append directo (sin
             # esto, heapq no podia desestructurar `value, order, next = h[0]`).
@@ -21395,6 +21534,23 @@ class LinuxCEmitter:
                     self._emit_exc_check(out, function, call_handler)
                     return out
             elif function_name in {"sum", "suma"}:
+                # COLLECTION_SUBCLASS_V1: sum(sub) suma la coleccion guardada.
+                # Solo la lista sin inicio: el dict/inicio fallan cerrado.
+                _sum_base = self._collection_subclass_base(types.get(values[0])) if values else None
+                if _sum_base is not None:
+                    if _sum_base != "list" or len(values) != 1:
+                        raise NativeBuildError(
+                            f"sum() of a {_sum_base} subclass with a start value or of a dict subclass is not supported"
+                        )
+                    out.append(
+                        f"    {{PitonSlot _sso=piton_sum_seq_obj((PitonSeq*)piton_object_get("
+                        f"(PitonObject*){self._value(values[0])},\"{_COLLECTION_BASE_ATTR_C}\").bits,"
+                        f"(PitonSlot){{0,PK_INT}});"
+                        f" {_name(result)}=(long)piton_slot_box_new(_sso);}}"
+                    )
+                    types[result] = "slot"
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 if len(values) == 2:
                     # SUM_START_V1: sum(iterable, start) — el inicio se suma al
                     # total acumulado (CPython acepta cualquier start numérico).
@@ -21921,6 +22077,28 @@ class LinuxCEmitter:
                     out.append(f"    {_name(result)}=piton_sorted_new((void*)piton_str_explode((const char*){self._value(values[0])}));")
                     types[result] = "list"
                     self._coll_elems[result] = "str"
+                    return out
+                # COLLECTION_SUBCLASS_V1: sorted(sub) ordena el valor guardado
+                # en __piton_base__ (una lista o dict copiados por el helper).
+                if values and self._collection_subclass_base(types.get(values[0])) is not None:
+                    if len(values) not in {1, 3}:
+                        raise NativeBuildError(
+                            "sorted() of a list/dict subclass with only reverse= is not supported"
+                        )
+                    _cs_src = (
+                        "piton_conv_seq(PK_LIST,piton_object_get((PitonObject*)"
+                        f"{self._value(values[0])},\"{_COLLECTION_BASE_ATTR_C}\"))"
+                    )
+                    if len(values) == 1:
+                        out.append(f"    {_name(result)}=piton_sorted_new((void*){_cs_src});")
+                    else:
+                        out.append(
+                            f"    {_name(result)}=piton_sorted_key_rev_new((void*){_cs_src},"
+                            f"{self._resolve_callable_val(values[1], aliases, types)},"
+                            f"piton_slot_truthy({self._slot(values[2], types)}));"
+                        )
+                    self._emit_exc_check(out, function, call_handler)
+                    types[result] = "list"
                     return out
                 # SORT_KEY_V1: con `key=` llegan 3 valores (coleccion, clave,
                 # reversa). La clave ahora SÍ se aplica (helper C que decora,
@@ -22465,6 +22643,10 @@ class LinuxCEmitter:
         elif op == "subscript_store":
             collection, index, value = args[:3]
             handler_label = args[3] if len(args) > 3 else None
+            if self._coll_sub_escape(value, types):
+                raise NativeBuildError(
+                    "storing a list/dict subclass instance into an item is not supported"
+                )
             coll_type = types.get(collection, "")
             if coll_type == "list":
                 # SUBSCRIPT_STORE_DYNAMIC_V1: `environ[k] = v` donde environ
@@ -22605,6 +22787,10 @@ class LinuxCEmitter:
         elif op == "set_attr":
             obj, attr, val = args[:3]
             handler_label = args[3] if len(args) > 3 else None
+            if self._coll_sub_escape(val, types):
+                raise NativeBuildError(
+                    f"storing a list/dict subclass instance into attribute '{attr}' is not supported"
+                )
             owner_type = types.get(obj, "")
             prop_class = self._resolve_property_class(owner_type, attr)
             if prop_class is not None:
@@ -23156,6 +23342,30 @@ class LinuxCEmitter:
                 # subscriptable (un int no es subscriptable, nunca se borra).
                 out.append('    piton_raise_set("TypeError","\'int\' object is not subscriptable");')
                 self._emit_exc_check(out, function, None)
+            elif owner_type.startswith("object:"):
+                # DELITEM_DUNDER_V1: borrar obj[k] despacha a __delitem__ por MRO
+                # (igual que SETITEM_DUNDER_V1). Sin __delitem__ -> fallo cerrado.
+                cls_name = owner_type.split(":", 1)[1]
+                hit = next(
+                    (
+                        candidate for candidate in self.class_mro.get(cls_name, [cls_name])
+                        if "__delitem__" in self.classes.get(candidate, set())
+                    ),
+                    None,
+                )
+                if hit is None:
+                    raise NativeBuildError(f"'{cls_name}' object does not support item deletion")
+                target_fn = hit + "____delitem__"
+                _di_idx = self._plain(index, types)
+                if self.function_frame_abi.get(target_fn, False):
+                    out.append(
+                        f'    {{long _di_args[]={{ {self._value(obj)},{_di_idx} }}; '
+                        f'piton_frame_call((long)&{_name(target_fn)},2,_di_args);}}'
+                    )
+                else:
+                    out.append(f"    {_name(target_fn)}({self._value(obj)},{_di_idx});")
+                self._emit_exc_check(out, function, None)
+                return out
             else:
                 # Relax del item
                 out.append(f"    {_name(result)}=0;")
@@ -23251,6 +23461,23 @@ class LinuxCEmitter:
             if isinstance(kw_args, str):
                 handler_label = kw_args
                 kw_args = ()
+            if method in self._COLLECTION_STORE_METHODS and any(
+                self._collection_subclass_base(types.get(a)) for a in call_args
+            ):
+                raise NativeBuildError(
+                    f"storing a list/dict subclass instance with '{method}' is not supported"
+                )
+            # Un metodo de usuario (o __init__ por instanciacion) recibe el
+            # argumento sin tipo: mismo fallo cerrado que una llamada a funcion.
+            if any(self._collection_subclass_base(types.get(a)) for a in call_args):
+                raise NativeBuildError(
+                    f"passing a list/dict subclass instance to method '{method}' is not supported"
+                )
+            _coll_recv = self._collection_subclass_base(types.get(obj))
+            if _coll_recv is not None:
+                self._check_collection_method_call(
+                    types.get(obj), _coll_recv, method, len(call_args), bool(kw_args),
+                )
             if cls_name == "__piton_lru_cache_wrapper__":
                 if method not in {"cache_info", "cache_clear"}:
                     raise NativeBuildError(
