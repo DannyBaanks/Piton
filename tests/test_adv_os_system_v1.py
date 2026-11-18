@@ -8,14 +8,14 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from native_linux import compile_native_linux
+from native_linux import compile_native_linux, run_native_linux
 
 
 def _native(source: str, cwd: Path) -> subprocess.CompletedProcess:
     with tempfile.TemporaryDirectory(prefix="piton-ossys-") as directory:
         exe = Path(directory) / "prog"
         compile_native_linux(source, exe)
-        return subprocess.run([str(exe)], capture_output=True, text=True, timeout=30, cwd=cwd)
+        return run_native_linux(exe, capture_output=True, text=True, timeout=30, cwd=cwd)
 
 
 def _oracle(py_source: str, cwd: Path) -> subprocess.CompletedProcess:

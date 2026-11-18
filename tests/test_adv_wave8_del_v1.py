@@ -7,14 +7,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from native_linux import compile_native_linux
+from native_linux import compile_native_linux, run_native_linux
 
 
 def _run(source: str):
     with tempfile.TemporaryDirectory(prefix="piton-w8del-") as directory:
         exe = Path(directory) / "prog"
         compile_native_linux(source, exe)
-        return subprocess.run([str(exe)], capture_output=True, text=True, timeout=20)
+        return run_native_linux(exe, capture_output=True, text=True, timeout=20)
 
 
 class DelBoundModuleOnlyV1(unittest.TestCase):

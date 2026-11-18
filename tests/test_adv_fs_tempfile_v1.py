@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from native_linux import compile_native_linux
+from native_linux import compile_native_linux, run_native_linux
 from tools.parity_corpus_sec import python_to_piton
 
 _TMP = re.compile(r"/tmp/tmp[a-z0-9_]{8}")
@@ -24,7 +24,7 @@ def _native(pit):
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / "bin"
         compile_native_linux(pit, str(exe))
-        p = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        p = run_native_linux(exe, cwd=ROOT, capture_output=True, text=True, timeout=30)
     assert p.returncode == 0, p.stderr
     return _TMP.sub("<TMP>", p.stdout)
 
@@ -42,9 +42,9 @@ def _ejecutar(pit):
 def _parity(code, ejecutar=False):
     expected = _cpython(code)
     pit = python_to_piton(code)
-    assert _native(pit) == expected
     if ejecutar:
         assert _ejecutar(pit) == expected
+    assert _native(pit) == expected
 
 
 def test_corpus_style_basename_dirname_exists():

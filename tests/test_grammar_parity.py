@@ -1459,7 +1459,7 @@ class SuperBaseGatesV1(unittest.TestCase):
         # paridad con CPython (que ademas falla con este metaclass).
         import importlib.util as _ilu
         import pathlib as _pl
-        from native_linux import compile_native_linux as _c
+        from native_linux import compile_native_linux as _c, run_native_linux
         import subprocess
         _out = _pl.Path("/tmp/opencode/gate_metaclass.exe")
         _c(
@@ -1470,7 +1470,7 @@ class SuperBaseGatesV1(unittest.TestCase):
             "imprimir ('ok' )\n",
             _out,
         )
-        _run = subprocess.run([str(_out)], capture_output=True, text=True)
+        _run = run_native_linux(_out, capture_output=True, text=True)
         self.assertEqual(_run.returncode, 0)
         self.assertEqual(_run.stdout, "ok\n")
 
@@ -1527,10 +1527,10 @@ class SysSurfaceGatesV1(unittest.TestCase):
         # comportamiento del backend y no la paridad con CPython.
         import pathlib as _pl
         import subprocess
-        from native_linux import compile_native_linux as _c
+        from native_linux import compile_native_linux as _c, run_native_linux
         _out = _pl.Path(f"/tmp/opencode/gate_{name}.exe")
         _c(source, _out)
-        return subprocess.run([str(_out)], capture_output=True, text=True)
+        return run_native_linux(_out, capture_output=True, text=True)
 
     def test_print_to_file(self):
         _run = self._run_backend(
@@ -1715,7 +1715,7 @@ class ModuleStateGatesV1(unittest.TestCase):
         # el estado del modulo importado persiste entre llamadas
         import pathlib as _pl
         import subprocess
-        from native_linux import compile_native_linux as _c
+        from native_linux import compile_native_linux as _c, run_native_linux
         _mod_dir = _pl.Path("piton/stdlib_piton")
         _mod_dir.mkdir(parents=True, exist_ok=True)
         (_mod_dir / "_state_probe.piton").write_text(
@@ -1734,7 +1734,7 @@ class ModuleStateGatesV1(unittest.TestCase):
                 "imprimir (_state_probe .siguiente ())\n",
                 _out,
             )
-            _run = subprocess.run([str(_out)], capture_output=True, text=True)
+            _run = run_native_linux(_out, capture_output=True, text=True)
             self.assertEqual(_run.returncode, 0)
             self.assertEqual(_run.stdout, "1\n2\n")
         finally:
@@ -1745,14 +1745,14 @@ class ModuleStateGatesV1(unittest.TestCase):
         # simplefilter('ignore') suprime el aviso.
         import pathlib as _pl
         import subprocess
-        from native_linux import compile_native_linux as _c
+        from native_linux import compile_native_linux as _c, run_native_linux
         _out = _pl.Path("/tmp/opencode/gate_bundled_warnings.exe")
         _c(
             "importar warnings\n"
             "warnings .warn ('aviso' )\n",
             _out,
         )
-        _run = subprocess.run([str(_out)], capture_output=True, text=True)
+        _run = run_native_linux(_out, capture_output=True, text=True)
         self.assertEqual(_run.returncode, 0)
         self.assertEqual(_run.stdout, "")
         self.assertEqual(_run.stderr, "aviso\n")
@@ -1862,11 +1862,11 @@ class PrintEndGatesV1(unittest.TestCase):
         import pathlib as _pl
         import subprocess
 
-        from native_linux import compile_native_linux as _c
+        from native_linux import compile_native_linux as _c, run_native_linux
 
         _out = _pl.Path("/tmp/opencode/gate_print_end_file.exe")
         _c("importar sys\nimprimir ('a' ,end =' ' ,file =sys .stdout )\nimprimir ('b' )\n", _out)
-        _run = subprocess.run([str(_out)], capture_output=True, text=True)
+        _run = run_native_linux(_out, capture_output=True, text=True)
         self.assertEqual(_run.returncode, 0)
         self.assertEqual(_run.stdout, "a b\n")
 
@@ -2714,11 +2714,11 @@ class PctTupleRepeatAndInputGatesV1(unittest.TestCase):
     def _run_with_stdin(self, source: str, stdin: str):
         import subprocess
         import tempfile
-        from native_linux import compile_native_linux as _c
+        from native_linux import compile_native_linux as _c, run_native_linux
         from piton.translator import traducir_fuente
         with tempfile.TemporaryDirectory() as d:
             exe = _c(source, pathlib.Path(d) / "p")
-            nat = subprocess.run([str(exe)], input=stdin.encode(),
+            nat = run_native_linux(exe, input=stdin.encode(),
                                  capture_output=True, timeout=30)
             ora = subprocess.run(
                 ["python3", "-c", traducir_fuente(source, "<gate>")],
@@ -2995,12 +2995,12 @@ class BundledStdlibGatesV2(unittest.TestCase):
         import pathlib
         import sys as _sys
         _sys.path.insert(0, "tools")
-        from native_linux import compile_native_linux as _cn
+        from native_linux import compile_native_linux as _cn, run_native_linux
         fuente = "importar time" + chr(10) + "t = time .time ()" + chr(10) + "imprimir (t )" + chr(10)
         with tempfile.TemporaryDirectory() as _d:
             out = pathlib.Path(_d) / "prog"
             _cn(fuente, out)
-            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+            r = run_native_linux(out, capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertRegex(r.stdout.strip(), r"^\d+\.\d+$")
         self.assertGreater(float(r.stdout.strip()), 0.0)
@@ -3089,7 +3089,7 @@ class RecursiveStdlibGatesV2(unittest.TestCase):
         import pathlib
         import sys as _sys
         _sys.path.insert(0, "tools")
-        from native_linux import compile_native_linux as _cn
+        from native_linux import compile_native_linux as _cn, run_native_linux
         fuente = (
             "importar subprocess" + chr(10)
             + "s = subprocess .run (['ls' ])" + chr(10)
@@ -3098,7 +3098,7 @@ class RecursiveStdlibGatesV2(unittest.TestCase):
         with tempfile.TemporaryDirectory() as _d:
             out = pathlib.Path(_d) / "prog"
             _cn(fuente, out)
-            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+            r = run_native_linux(out, capture_output=True, text=True, timeout=30)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("NotImplementedError", r.stderr)
 
@@ -3161,7 +3161,7 @@ class SubmoduleBundledGatesV1(unittest.TestCase):
         import pathlib
         import sys as _sys
         _sys.path.insert(0, "tools")
-        from native_linux import compile_native_linux as _cn
+        from native_linux import compile_native_linux as _cn, run_native_linux
         fuente = (
             "desde email .utils importar formatdate" + chr(10)
             + "imprimir (formatdate ())" + chr(10)
@@ -3169,7 +3169,7 @@ class SubmoduleBundledGatesV1(unittest.TestCase):
         with tempfile.TemporaryDirectory() as _d:
             out = pathlib.Path(_d) / "prog"
             _cn(fuente, out)
-            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+            r = run_native_linux(out, capture_output=True, text=True, timeout=30)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("NotImplementedError", r.stderr)
 
@@ -3220,7 +3220,7 @@ class SubmoduleChainGatesV1(unittest.TestCase):
         import pathlib
         import sys as _sys
         _sys.path.insert(0, "tools")
-        from native_linux import compile_native_linux as _cn
+        from native_linux import compile_native_linux as _cn, run_native_linux
         fuente = (
             "importar email .utils" + chr(10)
             + "imprimir (email .utils .getaddresses (['a'] ))" + chr(10)
@@ -3228,7 +3228,7 @@ class SubmoduleChainGatesV1(unittest.TestCase):
         with tempfile.TemporaryDirectory() as _d:
             out = pathlib.Path(_d) / "prog"
             _cn(fuente, out)
-            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+            r = run_native_linux(out, capture_output=True, text=True, timeout=30)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("NotImplementedError", r.stderr)
 
@@ -3281,7 +3281,7 @@ class ModuleVarargGatesV1(unittest.TestCase):
         import pathlib
         import sys as _sys
         _sys.path.insert(0, "tools")
-        from native_linux import compile_native_linux as _cn
+        from native_linux import compile_native_linux as _cn, run_native_linux
         fuente = (
             "importar _vars .mod" + chr(10)
             + "imprimir (_vars .mod .encadenar ('a' ,'b' ,'c' ))" + chr(10)
@@ -3289,7 +3289,7 @@ class ModuleVarargGatesV1(unittest.TestCase):
         with tempfile.TemporaryDirectory() as _d:
             out = pathlib.Path(_d) / "prog"
             _cn(fuente, out)
-            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+            r = run_native_linux(out, capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("a|b|c", r.stdout)
 
@@ -3306,7 +3306,7 @@ class ModuleVarargGatesV1(unittest.TestCase):
         import pathlib
         import sys as _sys
         _sys.path.insert(0, "tools")
-        from native_linux import compile_native_linux as _cn
+        from native_linux import compile_native_linux as _cn, run_native_linux
         fuente = (
             "desde _vars .mod importar encadenar" + chr(10)
             + "imprimir (encadenar ('a' ,'b' ,'c' ))" + chr(10)
@@ -3314,7 +3314,7 @@ class ModuleVarargGatesV1(unittest.TestCase):
         with tempfile.TemporaryDirectory() as _d:
             out = pathlib.Path(_d) / "prog"
             _cn(fuente, out)
-            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+            r = run_native_linux(out, capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("a|b|c", r.stdout)
 
@@ -3329,7 +3329,7 @@ class ModuleVarargGatesV1(unittest.TestCase):
         import pathlib
         import sys as _sys
         _sys.path.insert(0, "tools")
-        from native_linux import compile_native_linux as _cn
+        from native_linux import compile_native_linux as _cn, run_native_linux
         fuente = (
             "desde _vars .mod importar suma" + chr(10)
             + "imprimir (suma (2 ,3 ))" + chr(10)
@@ -3337,7 +3337,7 @@ class ModuleVarargGatesV1(unittest.TestCase):
         with tempfile.TemporaryDirectory() as _d:
             out = pathlib.Path(_d) / "prog"
             _cn(fuente, out)
-            r = subprocess.run([str(out)], capture_output=True, text=True, timeout=30)
+            r = run_native_linux(out, capture_output=True, text=True, timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("5", r.stdout)
 

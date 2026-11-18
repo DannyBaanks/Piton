@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 from tools.parity_corpus_v4 import python_to_piton
-from native_linux import compile_native_linux
+from native_linux import compile_native_linux, run_native_linux
 
 
 def _run_cpython(codigo: str):
@@ -30,7 +30,7 @@ def _run_piton(codigo: str):
         with tempfile.TemporaryDirectory() as d:
             exe = Path(d) / "prog"
             compile_native_linux(piton_src, exe)
-            proc = subprocess.run([str(exe)], capture_output=True)
+            proc = run_native_linux(exe, capture_output=True)
         return proc.returncode, proc.stdout, proc.stderr, "OK"
     except Exception:
         return "BUILD_FAIL", None, None, None

@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from native_linux import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux, run_native_linux  # noqa: E402
 from tools.parity_corpus_sec import python_to_piton  # noqa: E402
 
 
@@ -70,7 +70,7 @@ def _run_native(pit: str, cwd: Path) -> str:
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / "bin"
         compile_native_linux(pit, str(exe))
-        p = subprocess.run([str(exe)], cwd=cwd, capture_output=True, text=True, timeout=120)
+        p = run_native_linux(exe, cwd=cwd, capture_output=True, text=True, timeout=120)
     assert p.returncode == 0, p.stderr
     return p.stdout
 
@@ -84,8 +84,8 @@ def tree(tmp_path: Path) -> Path:
 def _parity(tree: Path, code: str) -> None:
     expected = _run_cpython(code, tree)
     pit = python_to_piton(code)
-    assert _run_native(pit, tree) == expected
     assert _run_ejecutar(pit, tree) == expected
+    assert _run_native(pit, tree) == expected
 
 
 # Los patrones se listan como lineas independientes: cada una imprime su
@@ -210,7 +210,7 @@ def test_glob_dir_fd_not_supported_fails_closed(tree: Path) -> None:
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / "bin"
         compile_native_linux(pit, str(exe))
-        p = subprocess.run([str(exe)], cwd=tree, capture_output=True, text=True, timeout=60)
+        p = run_native_linux(exe, cwd=tree, capture_output=True, text=True, timeout=60)
     assert p.returncode != 0
     assert "dir_fd" in p.stderr
 
@@ -223,7 +223,7 @@ def test_glob_pattern_with_newline_fails_closed(tree: Path) -> None:
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / "bin"
         compile_native_linux(pit, str(exe))
-        p = subprocess.run([str(exe)], cwd=tree, capture_output=True, text=True, timeout=60)
+        p = run_native_linux(exe, cwd=tree, capture_output=True, text=True, timeout=60)
     assert p.returncode != 0
     assert "newline" in p.stderr
     assert not re.search(r"Traceback", p.stdout)

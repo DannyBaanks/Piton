@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from native_linux import compile_native_linux
+from native_linux import compile_native_linux, run_native_linux
 from tools.parity_corpus_sec import python_to_piton
 
 
@@ -53,8 +53,8 @@ def _run_native(piton_code: str) -> str:
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / "prog_bin"
         compile_native_linux(piton_code, str(exe))
-        proc = subprocess.run(
-            [str(exe)],
+        proc = run_native_linux(
+            exe,
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -71,8 +71,8 @@ def _assert_parity(py_code: str) -> None:
     piton_code = python_to_piton(py_code)
     cp_out = _run_cpython(py_code)
     ej_out = _run_ejecutar(piton_code)
-    na_out = _run_native(piton_code)
     assert ej_out == cp_out, f"ejecutar mismatch:\nCPython:\n{cp_out}\nejecutar:\n{ej_out}"
+    na_out = _run_native(piton_code)
     assert na_out == cp_out, f"native mismatch:\nCPython:\n{cp_out}\nnative:\n{na_out}"
 
 

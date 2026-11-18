@@ -263,3 +263,105 @@ eso es trabajo de backend, no de CI, y sigue siendo la deuda que hay que
 saldar para volver a exigir Windows verde sin cuarentena. La reducción de la
 cuarentena no declara resuelto ninguno de esos fallos: solo separa el hueco
 del backend de los problemas de entorno y de los bugs portables del fixture.
+
+## Follow-up post-merge de PR #51 (2026-11-18)
+
+Este follow-up no cambia `.github/workflows/ci.yml`. Corrige tres defectos que
+la merge anterior dejó visibles solo al repetir la medición.
+
+### 1. La cuarentena ya no confunde SKIP con fallo PE
+
+La corrida Windows completa dejó 20 nodeids de la lista en `SKIP`: todos
+compilan un ELF Linux y se omiten por `tests/native_linux.py`; ninguno es un
+fallo del backend PE. Esos 20 IDs se retiraron de
+`tests/quarantine_windows.txt`. La cuenta vigente es:
+
+```text
+233 historicos - 2 NO_RECOLECTADOS - 5 XPASS - 20 SKIP ELF + 243 PE = 449
+```
+
+La lista tiene **449 entradas y 449 nodeids únicos**. La recolección actual
+sigue siendo de 2.034 tests y los 449 nodeids de la lista se recolectan todos
+(`aplicados=449`, `NO_RECOLECTADOS=0`).
+
+### 2. Las comparaciones del intérprete ya no quedan detrás del skip ELF
+
+En diez módulos, la comparación CPython ↔ `piton ejecutar` se evaluaba después
+de compilar el ELF. Como `pytest.skip` es una `BaseException`, el skip de
+Windows abortaba el test antes de que se observara una divergencia real del
+intérprete. Ahora el orden es:
+
+1. ejecutar CPython;
+2. ejecutar `piton ejecutar` y comparar byte a byte + exit code;
+3. solo después invocar el helper Linux-ELF.
+
+La recolección actual de esos módulos contiene **194 nodeids con comprobación
+de paridad del intérprete** (65 en `test_adv_glob_v1.py`, uno en
+`test_adv_fs_tempfile_v1.py` y 128 en los otros ocho). El inventario previo
+estimó 196; la recolección medida es la cuenta canónica. Los dos tests
+nativo-only restantes de `test_adv_glob_v1.py` no tienen una pierna del
+intérprete que reordenar.
+
+Control de orden: al sustituir temporalmente `_run_ejecutar` por una salida
+divergente, `wave10`, `wave5` y `glob` levantaron `AssertionError` antes de
+intentar el ELF, en vez de terminar como `SKIP`.
+
+### 3. El helper ejecuta el ELF dentro de WSL
+
+`tests/native_linux.py::run_native_linux` centraliza la ejecución. En Linux
+ejecuta el ELF directamente. En Windows:
+
+1. mapea la ruta con `wslpath` de la distro seleccionada;
+2. aplica `chmod +x` dentro de WSL;
+3. ejecuta el binario con `wsl.exe /usr/bin/env -i`; nunca entrega el ELF a
+   `CreateProcess`.
+
+Se enrutaron por este helper **55 llamadas en 41 módulos de test**. El único
+módulo con ejecuciones directas que queda es `tests/test_phase10_linux.py`,
+que se omite entero fuera de Linux y ya tenía su rama WSL explícita.
+
+Sonda local de la vía de ejecución, con un ELF de prueba compilado para Linux
+por Zig (sha256
+`1E63190CFF66CC1BC9847F1EE449B86D01A6A073E3065642FAC82B46EB489801`):
+
+```text
+rc=7 stdout='WSL ELF OK\n' stderr=''
+```
+
+También se comprobó que `cwd` se traduce al directorio WSL correcto. La otra
+media quedó **NOT_DEMONSTRATED**: la distro WSL disponible en esta máquina es
+`docker-desktop` y no contiene `gcc`, así que no se pudo demostrar el ciclo
+completo *emitir C → compilar ELF con el toolchain WSL → ejecutar el ELF* en
+este host. El job de CI Windows seguirá omitiendo esos tests de forma
+explícita cuando no haya distro.
+
+### Tracker honesto de `FUERA_DE_LA_LISTA`
+
+`tests/conftest.py` ya no cuenta solo reportes `call` de los tests que están
+en la lista. Ahora:
+
+- cuenta fallos y errores no incluidos en la cuarentena durante `setup`, `call`
+  y `teardown`;
+- cuenta errores de colección;
+- distingue `XPASS(strict)` propio de un fallo real;
+- detecta el error que pytest 9 deja absorber por `xfail` en setup/teardown y
+  hace fallar la sesión aunque pytest haya reportado `XFAIL`.
+
+Sondas con una suite temporal:
+
+```text
+fallo de call + error de setup + error de teardown:
+FUERA_DE_LA_LISTA=3
+  test_failures.py::test_call_failure [call]
+  test_failures.py::test_setup_error [setup]
+  test_failures.py::test_teardown_error [teardown]
+
+error de import:
+FUERA_DE_LA_LISTA=1 COLECCION=1
+  test_collection_error.py [collection] E   RuntimeError: import boom
+
+error de setup en nodeid de cuarentena:
+lista=1 aplicados=1 XFAIL=0 XPASS=0 SKIP=0 ERROR=1 SIN_REPORTE=0
+FUERA_DE_LA_LISTA=2 ERRORES_CUARENTENA=1 COLECCION=0 XPASS_ESTRICTO=0
+PYTEST_EXIT 1
+```
