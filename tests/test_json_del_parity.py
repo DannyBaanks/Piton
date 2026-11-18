@@ -2,19 +2,18 @@
 
 Los valores esperados se verificaron contra CPython 3.12 (salida byte a byte).
 """
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from native_linux import compile_native_linux
+from native_linux import compile_native_linux, run_native_linux
 
 
 def _run(source: str):
     with tempfile.TemporaryDirectory(prefix="piton-jdel-") as directory:
         exe = Path(directory) / "prog"
         compile_native_linux(source, exe)
-        return subprocess.run([str(exe)], capture_output=True, text=True, timeout=20)
+        return run_native_linux(exe, capture_output=True, text=True, timeout=20)
 
 
 class JsonDumpsNativeV1(unittest.TestCase):

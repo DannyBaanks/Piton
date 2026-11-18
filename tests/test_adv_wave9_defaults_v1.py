@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from native_linux import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux, run_native_linux  # noqa: E402
 from piton.x86 import NativeBuildError  # noqa: E402
 
 
@@ -31,8 +31,8 @@ def _build_and_run(piton_code: str) -> subprocess.CompletedProcess:
     with tempfile.TemporaryDirectory() as td:
         exe = Path(td) / "prog_bin"
         compile_native_linux(piton_code, str(exe))
-        return subprocess.run(
-            [str(exe)],
+        return run_native_linux(
+            exe,
             cwd=ROOT,
             capture_output=True,
             text=True,

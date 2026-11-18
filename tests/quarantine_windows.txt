@@ -1,10 +1,10 @@
-# Cuarentena Windows de la suite — HUECO DECLARADO (actualizada 2026-11-17)
+# Cuarentena Windows de la suite — HUECO DECLARADO (actualizada 2026-11-18)
 #
 # QUE ES: nodeids de pytest que FALLAN en el job `test-windows` de CI con el
 # backend nativo Windows (piton/x86.py) y NO fallan en Linux. En win32 los
 # marca xfail(strict=False) `tests/conftest.py`: el test SE EJECUTA igual y
-# aparece como XFAIL en el log; el job solo queda en rojo si falla un test
-# FUERA de esta lista.
+# aparece como XFAIL en el log; el job queda en rojo si falla un test FUERA
+# de esta lista o si una entrada de la lista rompe setup/teardown/coleccion.
 #
 # POR QUE: piton/x86.py (7.250 lineas) va atras del MIR y de piton/linux_x86.py
 # (13.324 lineas) desde la unificacion 2026-10-24 y el sync 2026-10-30.
@@ -25,16 +25,20 @@
 #   Los 463 Linux-ELF NO se ocultan como fallos PE: se omiten explicitamente
 #   en Windows con tests/native_linux.py. Los 67 errores de fixture se
 #   corrigen portablemente sin reducir la cobertura POSIX.
-#   La lista final queda en 469 nodeids unicos:
-#     233 historicos - 2 NO_RECOLECTADOS - 5 XPASS + 243 PE nuevos = 469.
-#   Los 2 NO_RECOLECTADOS y los 5 XPASS se retiraron; ningun test se omite
-#   por esta lista: en Windows se ejecuta y se reporta como XFAIL.
+#   La lista final queda en 449 nodeids unicos:
+#     233 historicos - 2 NO_RECOLECTADOS - 5 XPASS - 20 SKIP ELF + 243 PE
+#     nuevos = 449.
+#   Los 2 NO_RECOLECTADOS y los 5 XPASS se retiraron por dejar de ser fallos.
+#   Los 20 SKIP se retiraron porque compilan un ELF Linux: no son fallos PE y
+#   tests/native_linux.py los omite explicitamente. Los 449 restantes se
+#   ejecutan en Windows y se reportan como XFAIL.
 #
 # COMO SE REDUCE: si un ID pasa en Windows, CI lo imprime como XPASS en el
 # resumen `CUARENTENA WINDOWS:`; borralo de este archivo en el siguiente
-# commit y deja la cuenta de arriba actualizada. Anadir un ID nuevo exige
-# subir esta fecha y las cuentas. Nada aqui se borra "para que quede verde":
-# el test sigue corriendo y sigue reportando.
+# commit y deja la cuenta de arriba actualizada. Un ID que se omite por una
+# precondicion ELF tampoco es un fallo PE y se retira de la lista. Anadir un
+# ID nuevo exige subir esta fecha y las cuentas. Nada aqui se borra "para que
+# quede verde": el test sigue corriendo y sigue reportando.
 #
 # Formato: una linea por nodeid (tests/archivo.py::Clase::test), sin # en la
 # lista.
@@ -79,7 +83,6 @@ tests/test_grammar_parity.py::DownstreamGatesV1::test_split_no_match_keeps_tail
 tests/test_grammar_parity.py::DownstreamGatesV1::test_split_plain_untouched
 tests/test_grammar_parity.py::DynamicCallGatesV1::test_dynamic_call_with_kwargs
 tests/test_grammar_parity.py::DynamicCallGatesV1::test_dynamic_call_with_star_args
-tests/test_grammar_parity.py::DynamicCallGatesV1::test_dynamic_method_call_compiles
 tests/test_grammar_parity.py::DynamicMethodGatesV1::test_class_mro_is_iterable
 tests/test_grammar_parity.py::DynamicMethodGatesV1::test_contains_with_object_needle
 tests/test_grammar_parity.py::DynamicOpsGatesV1::test_bound_append_keeps_value_kinds
@@ -101,7 +104,6 @@ tests/test_grammar_parity.py::FileIoGatesV1::test_unsupported_mode_fails_closed
 tests/test_grammar_parity.py::FileIoGatesV1::test_with_open
 tests/test_grammar_parity.py::FileIoGatesV1::test_write_and_read_back
 tests/test_grammar_parity.py::GetoptGatesV1::test_call_arg_type_reconciles_ambiguous_seed
-tests/test_grammar_parity.py::GetoptGatesV1::test_getopt_real_compiles
 tests/test_grammar_parity.py::GetoptGatesV1::test_seq_slice_seed_and_reconcile
 tests/test_grammar_parity.py::GetoptGatesV1::test_str_arg_evidence_is_str
 tests/test_grammar_parity.py::GetoptGatesV1::test_str_startswith_with_offset
@@ -132,17 +134,11 @@ tests/test_grammar_parity.py::MinmaxAndZipGatesV1::test_min_of_four_scalars_stil
 tests/test_grammar_parity.py::MinmaxAndZipGatesV1::test_min_with_default_over_iterator
 tests/test_grammar_parity.py::MinmaxAndZipGatesV1::test_zip_of_range_and_iterator
 tests/test_grammar_parity.py::MinmaxAndZipGatesV1::test_zip_of_two_lists
-tests/test_grammar_parity.py::MirReachGatesV1::test_bisect_real_compiles
 tests/test_grammar_parity.py::MirReachGatesV1::test_seq_usage_len_index
 tests/test_grammar_parity.py::MirReachGatesV1::test_usage_param_list_append
 tests/test_grammar_parity.py::MirReachGatesV1::test_usage_param_list_insert
 tests/test_grammar_parity.py::ModuleStateGatesV1::test_bundled_fnmatch_module
 tests/test_grammar_parity.py::ModuleStateGatesV1::test_bundled_functools_reduce
-tests/test_grammar_parity.py::ModuleStateGatesV1::test_bundled_warnings_module
-tests/test_grammar_parity.py::ModuleStateGatesV1::test_imported_module_state_persists
-tests/test_grammar_parity.py::ModuleVarargGatesV1::test_module_fixed_arity_still_works
-tests/test_grammar_parity.py::ModuleVarargGatesV1::test_module_vararg_via_chain
-tests/test_grammar_parity.py::ModuleVarargGatesV1::test_module_vararg_via_from_import
 tests/test_grammar_parity.py::NativeModuleGatesV1::test_stat_from_import
 tests/test_grammar_parity.py::NestedAttrAndStarGatesV1::test_nested_attribute_store
 tests/test_grammar_parity.py::NestedAttrAndStarGatesV1::test_star_of_int_raises_type_error
@@ -166,20 +162,15 @@ tests/test_grammar_parity.py::ParamStrGatesV1::test_shared_coll_elems_for_target
 tests/test_grammar_parity.py::ParamStrGatesV1::test_usage_param_list_methods_untouched
 tests/test_grammar_parity.py::ParamStrGatesV1::test_usage_param_str_multi
 tests/test_grammar_parity.py::ParamStrGatesV1::test_usage_param_str_replace
-tests/test_grammar_parity.py::PctTupleRepeatAndInputGatesV1::test_input_eof_is_eof_error
-tests/test_grammar_parity.py::PctTupleRepeatAndInputGatesV1::test_input_with_prompt
-tests/test_grammar_parity.py::PctTupleRepeatAndInputGatesV1::test_input_without_prompt
 tests/test_grammar_parity.py::PctTupleRepeatAndInputGatesV1::test_percent_format_repeated_tuple_empty
 tests/test_grammar_parity.py::PctTupleRepeatAndInputGatesV1::test_percent_format_repeated_tuple_three
 tests/test_grammar_parity.py::PctTupleRepeatAndInputGatesV1::test_percent_format_with_repeated_tuple
 tests/test_grammar_parity.py::PrintEndGatesV1::test_end_custom
 tests/test_grammar_parity.py::PrintEndGatesV1::test_end_space
-tests/test_grammar_parity.py::PrintEndGatesV1::test_end_with_file
 tests/test_grammar_parity.py::RecursiveStdlibGatesV2::test_itertools_chain_materializes
 tests/test_grammar_parity.py::RecursiveStdlibGatesV2::test_itertools_filterfalse
 tests/test_grammar_parity.py::RecursiveStdlibGatesV2::test_itertools_islice_repeat_filterfalse
 tests/test_grammar_parity.py::RecursiveStdlibGatesV2::test_signal_constants
-tests/test_grammar_parity.py::RecursiveStdlibGatesV2::test_stubs_fail_closed_at_runtime
 tests/test_grammar_parity.py::RecursiveStdlibGatesV2::test_typing_cast_is_identity
 tests/test_grammar_parity.py::SliceDynamicGatesV1::test_dynamic_len_of_bytes
 tests/test_grammar_parity.py::SliceDynamicGatesV1::test_dynamic_slice_assign_on_bytearray
@@ -190,7 +181,6 @@ tests/test_grammar_parity.py::SliceDynamicGatesV1::test_dynamic_slice_with_step
 tests/test_grammar_parity.py::StarListV1::test_star_list_fails_closed_at_backend
 tests/test_grammar_parity.py::StarredTupleV1::test_star_led_differential
 tests/test_grammar_parity.py::StarredTupleV1::test_star_on_str_differential
-tests/test_grammar_parity.py::StdlibV2GatesV1::test_compat_pickle_real_compiles
 tests/test_grammar_parity.py::StdlibV2GatesV1::test_dict_from_genexpr
 tests/test_grammar_parity.py::StdlibV2GatesV1::test_minmax_default
 tests/test_grammar_parity.py::StdlibV2GatesV1::test_non_const_default_closure
@@ -198,18 +188,12 @@ tests/test_grammar_parity.py::StdlibV2GatesV1::test_sort_reverse
 tests/test_grammar_parity.py::StdlibV2GatesV1::test_systemexit_is_raisable
 tests/test_grammar_parity.py::SubmoduleBundledGatesV1::test_from_import_submodule_constant
 tests/test_grammar_parity.py::SubmoduleBundledGatesV1::test_submodule_constants
-tests/test_grammar_parity.py::SubmoduleBundledGatesV1::test_submodule_stub_fails_closed
 tests/test_grammar_parity.py::SubmoduleChainGatesV1::test_submodule_chain_call
-tests/test_grammar_parity.py::SubmoduleChainGatesV1::test_submodule_chain_fails_closed
 tests/test_grammar_parity.py::SubmoduleChainGatesV1::test_submodule_chain_os_path
 tests/test_grammar_parity.py::SubscriptTupleV1::test_subscript_single_key_untouched
 tests/test_grammar_parity.py::SubscriptTupleV1::test_subscript_tuple_read
 tests/test_grammar_parity.py::SubscriptTupleV1::test_subscript_tuple_store
-tests/test_grammar_parity.py::SuperBaseGatesV1::test_class_with_metaclass_keyword
 tests/test_grammar_parity.py::SysSurfaceGatesV1::test_format_with_keywords
-tests/test_grammar_parity.py::SysSurfaceGatesV1::test_print_to_file
-tests/test_grammar_parity.py::SysSurfaceGatesV1::test_print_to_sys_stderr
-tests/test_grammar_parity.py::SysSurfaceGatesV1::test_sys_version_info_default
 tests/test_grammar_parity.py::WarningAndReprGatesV1::test_percent_repr_message_with_untyped_parts
 tests/test_grammar_parity.py::WarningAndReprGatesV1::test_percent_repr_of_sequence
 tests/test_grammar_parity.py::WarningAndReprGatesV1::test_percent_repr_of_untyped_int
@@ -266,7 +250,7 @@ tests/test_phase5.py::Phase5Gates::test_x86_variadic_closure_escape
 tests/test_phase5.py::WithProtocolNativeV1::test_with_requires_direct_constructor
 
 # ---------------------------------------------------------------------------
-# ACTUALIZACION PR #51 (2026-11-17): 243 nodeids PE adicionales
+# ACTUALIZACION PR #51 (2026-11-18): 243 nodeids PE adicionales
 #
 # Origen medido: run 44050330427, job Windows 133926234972, head
 # 3110c14881b768990ccaac3f662c2caad0802393. Los 243 tests SIGUEN EJECUTANDOSE
@@ -276,12 +260,17 @@ tests/test_phase5.py::WithProtocolNativeV1::test_with_requires_direct_constructo
 #    25 piton.x86.NativeBuildError: gate/backend PE todavia no soportado.
 #    21 AssertionError: divergencia semantica real PE frente a CPython.
 #
+# Follow-up 2026-11-18: se retiraron 20 nodeids que la corrida Windows
+# completa reportaba como SKIP. Todos compilaban un ELF Linux y por tanto no
+# eran fallos PE; ahora tests/native_linux.py los omite explicitamente.
+#
 # No se anaden aqui los fallos de tests Linux-ELF: se saltan de forma
 # explicita en tests/native_linux.py cuando el host Windows no tiene WSL.
 # Tampoco el fixture glob de Windows: se corrige en test_adv_glob_v1.py.
 #
-# Total de la lista tras esta actualizacion: 469 nodeids (226 + 243; se retiraron
-# 2 nodeids obsoletos y 5 nodeids que ya pasan en Windows: XPASS medidos).
+# Total de la lista tras esta actualizacion: 449 nodeids. Se retiraron
+# 2 nodeids obsoletos, 5 nodeids que ya pasan en Windows (XPASS medidos) y
+# 20 nodeids que hacen SKIP por el prefijo ELF (no son fallos PE).
 # ---------------------------------------------------------------------------
 tests/test_adv_re_v1.py::test_findall_and_sub_corpus_examples
 tests/test_adv_re_v1.py::test_search_match_and_capture_methods

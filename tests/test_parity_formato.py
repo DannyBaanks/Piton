@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from native_linux import compile_native_linux, require_linux_native  # noqa: E402
+from native_linux import compile_native_linux, require_linux_native, run_native_linux  # noqa: E402
 from tools.parity_corpus_v4 import _stage_impl  # noqa: E402
 
 
@@ -110,8 +110,8 @@ def _ejecutar_piton(codigo: str) -> _Ejecucion:
             ejecutable = base / "programa"
             compile_native_linux(fuente_piton, ejecutable)
             try:
-                proceso = subprocess.run(
-                    [str(ejecutable)],
+                proceso = run_native_linux(
+                    ejecutable,
                     capture_output=True,
                     timeout=60,
                     cwd=base,

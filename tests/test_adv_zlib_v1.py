@@ -11,14 +11,14 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from native_linux import compile_native_linux
+from native_linux import compile_native_linux, run_native_linux
 
 
 def _native(source: str) -> subprocess.CompletedProcess:
     with tempfile.TemporaryDirectory(prefix="piton-zlib-") as directory:
         executable = Path(directory) / "prog"
         compile_native_linux(source, executable)
-        return subprocess.run([str(executable)], capture_output=True, text=True, timeout=30)
+        return run_native_linux(executable, capture_output=True, text=True, timeout=30)
 
 
 class ZlibNativeV1(unittest.TestCase):

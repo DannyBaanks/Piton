@@ -4,7 +4,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from native_linux import compile_native_linux
+from native_linux import compile_native_linux, run_native_linux
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -58,8 +58,8 @@ def _run_native(piton_code: str, use_cli_build: bool = False) -> str:
             )
         else:
             compile_native_linux(piton_code, str(exe))
-        proc = subprocess.run(
-            [str(exe)],
+        proc = run_native_linux(
+            exe,
             cwd=ROOT,
             capture_output=True,
             text=True,

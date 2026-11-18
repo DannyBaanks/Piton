@@ -13,6 +13,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from native_linux import run_native_linux
+
 ROOT = Path(__file__).resolve().parents[1]
 HOLA = ROOT / "examples" / "01_hola.piton"
 PROGRAMA_COMPLETO = ROOT / "examples" / "programa_completo.piton"
@@ -44,6 +46,8 @@ def _linux_target_runnable() -> bool:
     """
     if sys.platform != "win32":
         return shutil.which("gcc") is not None
+    if os.environ.get("PITON_RUN_LINUX_NATIVE_ON_WINDOWS") != "1":
+        return False
     wsl = shutil.which("wsl")
     if not wsl:
         return False
@@ -107,6 +111,15 @@ class CliE2E(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("PITON_NATIVE_BUILD = PASS", r.stdout)
             self.assertTrue(out.exists())
+            nativo = run_native_linux(
+                out,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=180,
+            )
+            self.assertEqual(nativo.returncode, 0, nativo.stderr)
+            self.assertEqual(nativo.stdout, "Hola, mundo\n")
 
     def test_build_target_invalido_argparse(self):
         r = correr("build", str(HOLA), "--target", "macos")
