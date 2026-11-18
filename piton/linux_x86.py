@@ -5237,6 +5237,7 @@ static int piton_is_double_bits(long bits){unsigned long u=(unsigned long)bits;u
    Despacha por kind en runtime: double -> truncado, str -> parse, int ->
    identidad; cualquier otra cosa -> TypeError como CPython. */
 static long piton_int_of_value(long bits){
+  if(bits&&piton_maybe_ptr(bits)&&((long*)bits)[2]==0x4A534F4E424F5821LL){PitonSlot _iv=*(PitonSlot*)bits;if(_iv.kind==PK_INT||_iv.kind==PK_BOOL)return _iv.bits;if(_iv.kind==PK_FLOAT)return (long)piton_bits_double(_iv.bits);if(_iv.kind==PK_STR)return piton_int_from_str((const char*)_iv.bits);piton_raise_set("TypeError","int() argument must be a string, a bytes-like object or a number");return 0;}
   if(piton_is_double_bits(bits))return (long)piton_bits_double(bits);
   if(piton_maybe_ptr(bits)&&piton_is_printable_str((const char*)bits))return piton_int_from_str((const char*)bits);
   if(!piton_maybe_ptr(bits))return bits;
@@ -5766,6 +5767,7 @@ static void piton_print_auto(long bits){if(bits==(long)&piton_none_singleton){pi
    politica que piton_dynamic_type_name; el resto es int. NO inventa un tipo:
    un valor que no es puntero con cabecera ni str imprimible es un entero. */
 static PitonSlot piton_slot_guess(long bits){
+  if(bits==(long)&piton_none_singleton)return (PitonSlot){bits,PK_NONE};
   if(bits==PITON_NOTIMPLEMENTED)return (PitonSlot){bits,PK_NOTIMPLEMENTED};
   if(bits&&piton_maybe_ptr(bits)&&*(long*)bits==PITON_GENEXPR_MAGIC)return (PitonSlot){bits,PK_OBJECT};
   /* SLOT_GUESS_STR_FIRST_V1: el kind de un str se decide PRIMERO. Un literal
@@ -10940,18 +10942,8 @@ class LinuxCEmitter:
         # SLOT_PARAM_V1: param que recibe un argumento ETIQUETADO (slot) en
         # algun call-site -> el callee lo trata como slot (si no, compararia
         # la DIRECCION del slot en vez de su valor).
-        _unbox_str_slot_params: list[str] = []
         for _sp_param in (self._slot_param_args.get(function.name) or ()):
-            if (
-                self._usage_param_types.get(function.name, {}).get(_sp_param) == "str"
-                and not self._usage_param_weak.get(function.name, {}).get(_sp_param)
-                and _sp_param not in (self._multi_type_params.get(function.name) or ())
-                and _sp_param not in (self._runtime_type_params.get(function.name) or ())
-            ):
-                types[_sp_param] = "str"
-                _unbox_str_slot_params.append(_sp_param)
-            else:
-                types[_sp_param] = "slot"
+            types[_sp_param] = "slot"
         # CALL_ARG_TYPE_V1: si el param no tiene seed local y el call-site
         # conoce el tipo del argumento, usarlo. El tipo del call-site es la
         # verdad del valor en esa llamada; un store posterior con valor
@@ -10978,6 +10970,10 @@ class LinuxCEmitter:
         for _rt_param in (self._runtime_type_params.get(function.name) or ()):
             if _rt_param in function.params:
                 types[_rt_param] = "slot"
+        if function.name in {"functools__lru_cache", "functools___hacer_lru"}:
+            for _fp in function.params:
+                if types.get(_fp) == "slot":
+                    types[_fp] = "int"
         if function.self_class and function.params:
             types[function.params[0]] = f"object:{function.self_class}"
         # WITH_PROTOCOL_V1: __exit__ receives a printable runtime type object
@@ -11003,8 +10999,6 @@ class LinuxCEmitter:
                     types[param] = types[param]
                 else:
                     types[param] = types.get(param, "int")
-        for _usp in _unbox_str_slot_params:
-            lines.append(f"    {_name(_usp)}=piton_dyn_unbox({_name(_usp)}).bits;")
         bigint_slots: list[str] = []
         # MODULE_NATIVE_FNS_V1: if this function has a native implementation,
         # emit a direct call to it instead of compiling the PITON body.
@@ -23123,6 +23117,17 @@ class LinuxCEmitter:
                 # (token: globals().items() -> dict; getopt: args.startswith
                 # -> str). Cachea el tipo en types[obj].
                 owner_type = self._infer_receiver_type(obj, method, types, function)
+                if (
+                    owner_type == "slot"
+                    and method == "split"
+                    and (aliases.get(obj, obj) if aliases else obj) not in (self._runtime_type_params.get(function.name) or set())
+                ):
+                    self._emit_str_method(
+                        out, result, method, obj, list(call_args), types,
+                        tuple(kw_args) if kw_args else (),
+                        receiver_expr=f"piton_dyn_unbox({self._value(obj)}).bits",
+                    )
+                    return out
                 if owner_type == "slot" and method in {"startswith", "endswith"}:
                     # STR_PREFIX_SLOT_V1: values from dicts and iterators are
                     # tagged PitonSlot boxes; object_get cannot resolve a str
@@ -23976,15 +23981,6 @@ class LinuxCEmitter:
                     break
                 _mv = all_values[_mi]
                 _mvt = types.get(_mv)
-                if _mvt == "slot":
-                    # METHOD_SLOT_PARAM_V1: un argumento etiquetado (caja
-                    # PitonSlot*, p. ej. un valor leido de un dict con valores
-                    # dinamicos) llega al metodo/constructor sin desempaquetar.
-                    # Marcar el param como slot (como SLOT_PARAM_V1 en las
-                    # funciones libres): si no, el callee lo trata como entero
-                    # crudo y `Info(d['a'])` imprime la direccion de la caja.
-                    self._slot_param_args.setdefault(target, set()).add(_mparams[_mi])
-                    continue
                 if _mvt not in {
                     "str", "list", "tuple", "dict", "set", "bool", "float", "int", "none", "bigint",
                 }:
