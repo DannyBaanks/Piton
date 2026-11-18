@@ -7518,6 +7518,7 @@ class MIRLowerer:
                 and node.func.name not in builder.closures
                 and node.func.name not in builder.function.params
                 and node.func.name not in builder.cell_params
+                and not self._name_shadows_builtin(node.func.name, builder)
             ):
                 if len(node.args) != 2 or node.keywords:
                     raise MIRLoweringError("native map/filter require a unary callback and one iterable")
@@ -9181,6 +9182,7 @@ class MIRLowerer:
                 and node.func.name not in builder.closures
                 and node.func.name not in builder.function.params
                 and node.func.name not in builder.cell_params
+                and not self._name_shadows_builtin(node.func.name, builder)
             ):
                 if len(node.args) != 2 or node.keywords:
                     raise MIRLoweringError("native map/filter require a unary callback and one iterable")

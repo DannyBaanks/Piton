@@ -296,6 +296,7 @@ static long piton_unbound_int_from_bytes_frame(long*frame);
 static void piton_catch_clear(void);
 static int piton_exc_flag_get(void);
 static PitonSlot piton_slot_guess(long bits);
+static PitonSlot piton_slot_int_nn(long bits);
 static PitonSlot piton_invoke_round(long obj,long has_nd,long nd);
 static PitonSlot piton_sum_seq_obj(PitonSeq*s,PitonSlot start);
 static PitonSlot piton_binop_object_add(PitonSlot a,PitonSlot b);
@@ -5816,6 +5817,14 @@ static void piton_print_auto(long bits){if(bits==(long)&piton_none_singleton){pi
    ligado builtin recibe `long`). Se deriva de la cabecera con la misma
    politica que piton_dynamic_type_name; el resto es int. NO inventa un tipo:
    un valor que no es puntero con cabecera ni str imprimible es un entero. */
+/* NONE_INT_SLOT_V1: un valor de kind int estatico puede ser el singleton
+   None (un param con default None comparte el slot int). Etiquetarlo como
+   PK_INT lo hace truthy al pasar por una caja de `y`/`o`; CPython lo trata
+   como None (falsy, imprime None). */
+static PitonSlot piton_slot_int_nn(long bits){
+  if(bits==(long)&piton_none_singleton)return (PitonSlot){bits,PK_NONE};
+  return (PitonSlot){bits,PK_INT};
+}
 static PitonSlot piton_slot_guess(long bits){
   if(bits==(long)&piton_none_singleton)return (PitonSlot){bits,PK_NONE};
   if(bits==PITON_NOTIMPLEMENTED)return (PitonSlot){bits,PK_NOTIMPLEMENTED};
@@ -11583,6 +11592,13 @@ class LinuxCEmitter:
             "notimplemented": "PK_NOTIMPLEMENTED",
         }.get(value_type or "int", "PK_OBJECT")
 
+    def _boolh_arm_slot(self, expr: str, arm_type: str) -> str:
+        """NONE_INT_SLOT_V1: caja de un brazo de `y`/`o`. Un brazo int puede
+        ser el singleton None (param con default None): se etiqueta PK_NONE."""
+        if arm_type == "int":
+            return f"piton_slot_int_nn({expr})"
+        return f"piton_slot({expr},{self._kind(arm_type)})"
+
     def _slot(self, value: Any, types: dict[str, str]) -> str:
         # Literal scalar values have an exact runtime kind. In particular,
         # float bits are opaque longs and cannot be recovered by the generic
@@ -16095,6 +16111,13 @@ class LinuxCEmitter:
                 origins: dict[str, tuple[str, Any]] = {}
                 load_src: dict[str, str] = {}
                 returns: list[Any] = []
+                # DYN_CALLABLE_RET_MIX_V1: resultados de llamadas a un callable
+                # dinamico (param/closure) son cajas etiquetadas en runtime.
+                # Si el retorno mezcla esos resultados con otro tipo (p.ej.
+                # `devolver 'x'` y `devolver fn(7)`), el retorno es "slot":
+                # tiparlo por el literal str hacia que el caller imprimiera
+                # el entero como char* (segfault).
+                dyn_call_results: set[str] = set()
                 seeded: set[str] = set()
 
                 def note_var(key: str, kind: str | None) -> bool:
@@ -16342,6 +16365,12 @@ class LinuxCEmitter:
                                     origins[result] = ("kind", "slot")
                                 else:
                                     origins[result] = ("opaque", None)
+                                if (
+                                    isinstance(callee, str)
+                                    and callee not in by_name
+                                    and (callee in function.params or (callee not in _BUILTINS and not callee.startswith("%")))
+                                ):
+                                    dyn_call_results.add(result)
                             elif op == "call_unpack" and result:
                                 # SLOT_RETURN_PROPAGATE_V1: `f(**kw)` / `f(*a)` a una
                                 # funcion conocida tiene el tipo de retorno de f
@@ -16633,8 +16662,13 @@ class LinuxCEmitter:
                 if not returns:
                     inferred: str | None = "none"
                 else:
-                    candidates = {operand_type(operand) for operand in returns}
-                    if len(candidates) == 1:
+                    candidates = {
+                        "slot" if operand in dyn_call_results else operand_type(operand)
+                        for operand in returns
+                    }
+                    if dyn_call_results.intersection(returns):
+                        inferred = "slot"
+                    elif len(candidates) == 1:
                         inferred = next(iter(candidates))
                     elif len(candidates) > 1 and (None in candidates or "none" in candidates):
                         # MUTUAL_RECURSION_V1: un return sin resolver (llamada
@@ -18267,10 +18301,12 @@ class LinuxCEmitter:
                 
                 _holder = args[0]
                 _slot_expr = self._slot(args[1], types)
+                if types.get(args[1]) == "int":
+                    _slot_expr = self._boolh_arm_slot(self._value(args[1]), "int")
                 _tag = f"/*boolh:{_holder}*/"
                 if seen is None:
                     self._boolh_types[_holder] = current
-                    self._boolh_line[_holder] = (self._value(args[1]), seen)
+                    self._boolh_line[_holder] = (self._value(args[1]), current)
                     out.append(f"    {_name(_holder)}={self._value(args[1])};{_tag}")
                 elif current != seen:
                     # mixed arms: BOTH become tagged slots so the printed
@@ -18286,7 +18322,7 @@ class LinuxCEmitter:
                             if _tag in _line:
                                 _repl = (
                                     f"    {{PitonSlot*_bha{_slot_id}=piton_slot_box_new("
-                                    f"piton_slot({_expr},{self._kind(_kind)}));"
+                                    f"{self._boolh_arm_slot(_expr, _kind)});"
                                     f" {_name(_holder)}=(long)_bha{_slot_id};}}"
                                 )
                                 if _i < len(out):
@@ -18342,7 +18378,13 @@ class LinuxCEmitter:
                 if vtype.startswith("class:"):
                     vtype = vtype.split(":", 1)[1]
                 if vtype in {"int", "bool"}:
-                    out.append(f"    {_name(result)}=({self._value(operand)}==0);")
+                    # NONE_NOT_V1: a value of static kind int may be the
+                    # PITON_NONE singleton (a None default/param shares the
+                    # int slot); it is falsy, so `no X` must be True there.
+                    # Mirrors the truthiness test of _truth_expr.
+                    out.append(
+                        f"    {_name(result)}=(({self._value(operand)})==0||({self._value(operand)})==PITON_NONE);"
+                    )
                 elif vtype == "float":
                     out.append(f"    {_name(result)}=(piton_bits_double({self._value(operand)})==0.0);")
                 elif vtype == "none":
@@ -22037,6 +22079,19 @@ class LinuxCEmitter:
                 return out
             if isinstance(args[0], str) and types.get(args[0]) == "builtin":
                 out.append(f"    return {self._value(args[0])};")
+                return out
+            if (
+                isinstance(args[0], str)
+                and self.function_return_types.get(function.name) == "slot"
+                and types.get(args[0]) in {"str", "bytes", "bytearray", "float", "bool", "complex", "bigint"}
+            ):
+                # DYN_CALLABLE_RET_MIX_V1: la funcion es "slot" (mezcla con un
+                # resultado dinamico). Un retorno de kind str/float/bool crudo
+                # no lo recupera piton_slot_guess (un '' o un float-bits o un
+                # bool 1 se leen mal): se etiqueta con su kind real.
+                out.append(
+                    f"    return (long)piton_slot_box_new({self._slot(args[0], types)});"
+                )
                 return out
             # RETURN_BOX_SLOT_V1 (revertido a "no envolver"): la funcion esta
             # tipada como "slot" (su retorno lleva la etiqueta en runtime) pero
