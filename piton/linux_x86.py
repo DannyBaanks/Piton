@@ -10157,6 +10157,10 @@ class LinuxCEmitter:
         # pueden recibir un tipo estatico del call-site, o el dispatch por
         # tipo se resuelve en build y no en runtime.
         self._runtime_type_params: dict[str, set[str]] = {}
+        # MIXED_NONE_PARAMS_V1: params usados como receptor de un method_call
+        # (x.upper()). Un param con dispatch por tipo en runtime es un slot:
+        # un metodo sobre el no tiene ruta de codegen -> fail closed.
+        self._runtime_method_recv_params: dict[str, set[str]] = {}
         # STORE_TARGETS_V1: nombres <- valor (para propagar elem-kinds que
         # aparecen despues del store).
         self._store_targets: dict[str, set[str]] = {}
@@ -10591,15 +10595,31 @@ class LinuxCEmitter:
         # estatico que no es el de todas ellas -> resultado silenciosamente
         # falso. Fail closed en compilacion.
         for _fn, _p in sorted(self._type_sensitive_params):
-            _seen = self._call_param_seen.get(_fn, {}).get(_p, set())
+            _seen = set(self._call_param_seen.get(_fn, {}).get(_p, set()))
+            # MIXED_NONE_PARAMS_V1: un param con default None recibe None en
+            # las llamadas que lo omiten (no pasan por el call-site).
+            _pdefs = self.function_defaults.get(_fn) or []
+            _pparams = self.function_params.get(_fn) or []
+            if (
+                _p in (self.function_default_params.get(_fn) or set())
+                and _p in _pparams
+                and len(_pdefs) == len(_pparams)
+                and _pdefs[_pparams.index(_p)] is None
+            ):
+                _seen.add("none")
+            # El call-site etiqueta TODO argumento de un param runtime-typed
+            # (ver _multi en la emision de llamadas), asi que el callee siempre
+            # lo ve como slot: basta con que sea sujeto de isinstance.
             _runtime_dispatch_safe = (
                 _p in (self._runtime_type_params.get(_fn) or set())
-                and _p in (
-                    (self._multi_type_params.get(_fn) or set())
-                    | (self._slot_param_args.get(_fn) or set())
+                and _seen <= {"int", "str", "bytes", "none", "float", "bool"}
+                # Un literal escalar contra str sigue fail-closed (test w17);
+                # con None en la mezcla (caso nuevo) el literal se dispatcha.
+                and (
+                    (_fn, _p) not in self._call_param_seen_literal_scalar
+                    or "none" in _seen
                 )
-                and _seen <= {"int", "str", "bytes"}
-                and (_fn, _p) not in self._call_param_seen_literal_scalar
+
             )
             if len(_seen) > 1 and not _runtime_dispatch_safe:
                 raise NativeBuildError(
@@ -12305,6 +12325,17 @@ class LinuxCEmitter:
         )
         if _multi:
             for _i, (_ival, _iparam) in enumerate(zip(values, _params)):
+                if _iparam in _runtime_type_params and _ival is None:
+                    # MIXED_NONE_PARAMS_V1: default None (valor omitido) pasado
+                    # como None crudo: el callee lo leeria como caja. Se etiqueta.
+                    _vname = f"%mbox{self._mbox_counter}"
+                    self._mbox_counter = getattr(self, "_mbox_counter", 0) + 1
+                    out.append(
+                        f"    long {_name(_vname)}; {{PitonSlot*_mb=piton_slot_box_new(piton_slot(PITON_NONE,PK_NONE));"
+                        f" {_name(_vname)}=(long)_mb;}}"
+                    )
+                    values[_i] = _vname
+                    continue
                 if _iparam not in _multi or not isinstance(_ival, str):
                     continue
                 _vt = types.get(_ival)
@@ -15156,8 +15187,13 @@ class LinuxCEmitter:
             # RUNTIME_TYPE_PARAMS_V1: el primer argumento de isinstance /
             # issubclass decide el tipo EN RUNTIME.
             _runtime_type_params: set[str] = set()
+            _method_recv_params: set[str] = set()
             for _block in function.blocks:
                 for _ins in _block.instructions:
+                    if _ins.op == "method_call" and len(_ins.args) >= 3:
+                        _rsrc = _all_load_src.get(_ins.args[2])
+                        if _rsrc in _param_set:
+                            _method_recv_params.add(_rsrc)
                     if (
                         _ins.op == "method_call"
                         and len(_ins.args) >= 4
@@ -15181,6 +15217,8 @@ class LinuxCEmitter:
                         _src = _all_load_src.get(_ins.args[1][0])
                         if _src in _param_set:
                             _runtime_type_params.add(_src)
+            if _method_recv_params & _runtime_type_params:
+                self._runtime_method_recv_params[function.name] = _method_recv_params & _runtime_type_params
             if _runtime_type_params:
                 self._runtime_type_params[function.name] = _runtime_type_params
                 # ISINSTANCE_VARARG_ELEMS_V1: when a function dispatches on
@@ -19032,6 +19070,20 @@ class LinuxCEmitter:
                     f"    {_name(result)}=piton_dyn_cmp({_cmp_codes[operator]},{self._slot(left, types)},{self._slot(right, types)});"
                 )
                 self._emit_exc_check(out, function, compare_handler)
+                types[result] = "bool"
+                return out
+            if operator in {"es", "no es"} and (
+                (types.get(left) == "slot" and self._is_none_side(right, types))
+                or (types.get(right) == "slot" and self._is_none_side(left, types))
+            ):
+                # MIXED_NONE_PARAMS_V1: `x es None` con x etiquetado (slot).
+                # La comparacion de bits contra el singleton daba falso para
+                # un None real: el valor vive en la caja, su kind es PK_NONE.
+                _slot_side = left if types.get(left) == "slot" else right
+                out.append(
+                    f"    {_name(result)}={'!' if operator == 'no es' else ''}"
+                    f"(({self._slot(_slot_side, types)}).kind==PK_NONE);"
+                )
                 types[result] = "bool"
                 return out
             if operator in {"es", "no es"}:
