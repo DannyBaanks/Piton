@@ -74,5 +74,39 @@ class NoneDynMethodParity(unittest.TestCase):
                         "imprimir(f({\"k\": \"banana\"}, Verdadero), f({\"k\": \"x\"}, Falso))\n")
 
 
+class NoneDynGetAttrParity(unittest.TestCase):
+    _CAJA = (
+        "clase Caja:\n"
+        "    funcion __init__(self, v):\n"
+        "        self.v = v\n"
+    )
+
+    def _src(self, call: str, uncaught: bool = False) -> str:
+        body = (
+            "funcion f(d, flag):\n"
+            "    st = None\n"
+            "    si flag:\n"
+            "        st = d.get(\"k\")\n"
+        )
+        if uncaught:
+            body += "    devolver st.v\n"
+        else:
+            body += (
+                "    intentar:\n"
+                "        devolver st.v\n"
+                "    excepto AttributeError:\n"
+                "        devolver -1\n"
+            )
+        return self._CAJA + body + call
+
+    def test_get_attr_object_and_none(self):
+        _assert_matches(self, self._src(
+            "imprimir(f({\"k\": Caja(7)}, Verdadero), f({\"k\": Caja(7)}, Falso))\n"))
+
+    def test_get_attr_uncaught_none_same_exception(self):
+        _assert_matches(self, self._src(
+            "imprimir(f({\"k\": Caja(7)}, Falso))\n", uncaught=True))
+
+
 if __name__ == "__main__":
     unittest.main()
