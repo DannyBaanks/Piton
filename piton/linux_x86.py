@@ -10878,7 +10878,7 @@ class LinuxCEmitter:
             _runtime_dispatch_safe = (
                 _p in (self._runtime_type_params.get(_fn) or set())
                 and (
-                    _seen <= {"int", "str", "bytes", "none", "float", "bool"}
+                    _seen <= {"int", "str", "bytes", "none", "float", "bool", "list", "tuple", "dict", "set"}
                     or ("none" in _seen and _seen <= {"int", "str", "bytes", "none", "float", "bool", "list", "tuple", "dict", "set"})
                 )
                 # Un literal escalar contra str sigue fail-closed (test w17);
