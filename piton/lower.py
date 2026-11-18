@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional, Any
 from piton.cst import CSTNode, CSTNodeType
+from piton.namedtuple_bases import desugar_namedtuple_bases
 from piton.hir import (
     HIRNode, Module, FuncDef, ClassDef, Arguments,
     If, While, For, Break, Continue, Return, Yield, YieldFrom, Raise,
@@ -512,5 +513,8 @@ class Lowerer:
 
 def lower_cst_to_hir(cst: CSTNode) -> HIRNode:
     """Función de conveniencia."""
+    # NAMEDTUPLE_BASE_V1: Base = namedtuple(...) usada como base de una clase
+    # se reescribe a una clase tupla antes de lowering (ver namedtuple_bases).
+    cst = desugar_namedtuple_bases(cst)
     lowerer = Lowerer()
     return lowerer.lower(cst)

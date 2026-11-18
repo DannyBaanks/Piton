@@ -21505,8 +21505,10 @@ class LinuxCEmitter:
                 if len(values) != 1:
                     raise NativeBuildError(f"Linux {alias}() takes at most one argument")
                 source_type = types.get(values[0], "int")
-                if source_type.startswith("object:") and seq_kind == "PK_LIST":
+                if source_type.startswith("object:") and seq_kind in {"PK_LIST", "PK_TUPLE"}:
                     # CONV_OBJECT_LIST_V1: lista(obj) cuando obj tiene __iter__.
+                    # OBJECT_TUPLE_V1: tupla(obj) usa el mismo iterador y
+                    # convierte la lista materializada a tupla (CPython: tuple(obj)).
                     _cls = source_type.split(":", 1)[1]
                     try:
                         _iter_cls = self._resolve_method(_cls, "__iter__")
@@ -21551,7 +21553,14 @@ class LinuxCEmitter:
                         else:
                             _iter_c = _name(f"{_iter_cls}____iter__")
                             out.append(f'    {{long _ci={_iter_c}({self._value(values[0])}); {_name(result)}=piton_collect_any_iter(_ci);}}')
-                        types[result] = "list"
+                        if seq_kind == "PK_TUPLE":
+                            out.append(
+                                f"    {_name(result)}=(long)piton_conv_seq(PK_TUPLE,"
+                                f"(PitonSlot){{{_name(result)},PK_LIST}});"
+                            )
+                            types[result] = "tuple"
+                        else:
+                            types[result] = "list"
                         self._coll_elems[result] = "int"
                         return out
                 if source_type == "generator" and seq_kind in {"PK_LIST", "PK_TUPLE"}:
@@ -25267,6 +25276,20 @@ class LinuxCEmitter:
             value, expected = args[0], args[1]
             handler_label = args[2] if len(args) > 2 else None
             vtype = types.get(value)
+            if vtype is not None and vtype.startswith("object:"):
+                # OBJECT_UNPACK_ITER_V1: desempaquetar un objeto con __iter__
+                # no tiene runtime nativo (el camino dinamico solo sabe
+                # listas/tuplas y lanzaria TypeError donde CPython itera).
+                # Fail closed en build en vez de un TypeError falso.
+                _ucls = vtype.split(":", 1)[1]
+                if any(
+                    "__iter__" in self.classes.get(_c, set())
+                    for _c in self.class_mro.get(_ucls, [_ucls])
+                ):
+                    raise NativeBuildError(
+                        f"Linux unpack of user iterable object '{_ucls}' (__iter__) "
+                        "is not supported natively"
+                    )
             if vtype not in {"list", "tuple", "str"}:
                 # UNPACK_DYNAMIC_V1: cualquier valor que no sea una secuencia
                 # estatica decide en runtime. Es seguro tambien para un int
@@ -25661,6 +25684,19 @@ class LinuxCEmitter:
             # unpack); step=None via args[3].
             as_list = len(args) > 4 and args[4] == "as_list"
             collection_type = types.get(coll)
+            if collection_type is not None and collection_type.startswith("object:"):
+                # OBJECT_SLICE_FAIL_CLOSED_V1: obj[a:b] con __getitem__ de
+                # usuario: el slice no llega a __getitem__ (el backend lo
+                # trata como objeto no subscriptable en runtime). Fail closed.
+                _scls = collection_type.split(":", 1)[1]
+                if any(
+                    "__getitem__" in self.classes.get(_c, set())
+                    for _c in self.class_mro.get(_scls, [_scls])
+                ):
+                    raise NativeBuildError(
+                        f"Linux slicing of user object '{_scls}' (__getitem__) "
+                        "is not supported natively"
+                    )
             if step is None:
                 lower_value = self._value(lower) if lower is not None else "0"
                 upper_value = self._value(upper) if upper is not None else "0x7FFFFFFFFFFFFFFFL"
