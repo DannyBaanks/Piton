@@ -1,7 +1,13 @@
 funcion escape (s,quote=Verdadero):
+    s = s.replace ('&' ,'&amp;' )
+    s = s.replace ('<' ,'&lt;' )
+    s = s.replace ('>' ,'&gt;' )
+    si quote:
+        s = s.replace ('"' ,'&quot;' )
+        s = s.replace ("'" ,'&#x27;' )
     devolver s
 
 funcion unescape (s):
-    devolver s
+    lanzar NotImplementedError ('html.unescape no esta implementado en el backend nativo')
 
 entities = {}

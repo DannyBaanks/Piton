@@ -204,15 +204,16 @@ class ContainsV1(unittest.TestCase):
         # del needle lo decide el runtime (piton_str_contains_dynamic) y
         # levanta el MISMO TypeError que CPython, capturable por
         # intentar/excepto; sin handler termina con exit 1 como CPython.
-        # El fail-closed de build sigue donde no hay forma sonora de
-        # comparar (float/objects: ver test_float_needle_fails_closed).
+        # Float slots also compare by value; strings keep their own type rule.
         compare_native_to_cpython("imprimir(2 in 'abc')\n")
 
-    def test_float_needle_fails_closed(self):
-        # slot bit-equality would be silent approximation for floats
-        # (CPython: -0.0 == 0.0); fail closed until the tagged runtime.
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("imprimir(1.5 in [1.5])\n")
+    def test_float_needle_uses_numeric_equality(self):
+        # Float slots carry their type, so containment compares numeric values
+        # (including the CPython rule that -0.0 == 0.0), not representation bits.
+        _assert_matches(
+            self,
+            "imprimir(1.5 in [1.5], -0.0 in [0.0], 0.0 in [-0.0])\n",
+        )
 
 
 class FloatPowV1(unittest.TestCase):

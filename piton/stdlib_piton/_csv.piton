@@ -1,5 +1,5 @@
 funcion reader (f, dialect):
-    devolver []
+    lanzar NotImplementedError ('_csv.reader no esta implementado en el backend nativo')
 
 funcion writer (f, dialect):
     clase Writer :
@@ -9,13 +9,13 @@ funcion writer (f, dialect):
 _Writer_dummy = Writer()
 
 funcion register_dialect (name, dialect):
-    pasar
+    lanzar NotImplementedError ('_csv.register_dialect no esta implementado en el backend nativo')
 
 funcion unregister_dialect (name):
-    pasar
+    lanzar NotImplementedError ('_csv.unregister_dialect no esta implementado en el backend nativo')
 
 funcion get_dialect (name):
-    devolver {}
+    lanzar NotImplementedError ('_csv.get_dialect no esta implementado en el backend nativo')
 
 funcion list_dialects ():
     devolver []

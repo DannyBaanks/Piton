@@ -7,9 +7,8 @@ ITER_PASSTHROUGH_V1 — for-loops over builtin iterators:
   a native collection" because iter_new rebuilt an iterator from an
   iterator. Now iter(x) on an iterator returns x (CPython semantics), which
   unblocks the loops — the iter_next dispatch already existed.
-  map/filter with a BUILTIN-name callback fails closed (a builtin name has
-  no native function address; passing its marker would crash); user-function
-  callbacks work.
+  map/filter supports native callbacks for implemented builtins and user
+  functions; unsupported builtin callbacks still fail closed.
   On Windows this additionally needed the loop-guard: for-loop exhaustion
   raises StopIteration through piton_raise, which prints and exits when no
   handler accepts it. iter_new now pushes a StopIteration-only frame for
@@ -29,10 +28,15 @@ and single-arg get on a missing key exit with the CPython exception name.
 """
 from __future__ import annotations
 
+from pathlib import Path
 import sys
 import unittest
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from piton.native_differential import compare_native_to_cpython
 from piton.x86 import NativeBuildError
@@ -80,14 +84,13 @@ class IterPassthroughV1(unittest.TestCase):
         _assert_matches(self, "para x en map(repr, [1, 'a']):\n    imprimir(x)\n")
 
     def test_for_map_builtin_callback_fails_closed(self):
-        # Un builtin SIN callback nativo (dir) y un TIPO builtin como valor
-        # (int) siguen fallando cerrado:(map(int, xs) es un TypeError en
-        # CPython; pasar la cadena del tipo como puntero de funcion era una
-        # divergencia silenciosa — el bucle no iteraba nada).
+        # Un builtin sin callback nativo sigue fallando cerrado. `int` es un
+        # callback nativo soportado por map y se compara con CPython arriba.
         with pytest.raises(NativeBuildError):
             compare_native_to_cpython("para x en map(dir, [1, 2]):\n    imprimir(x)\n")
-        with pytest.raises(NativeBuildError):
-            compare_native_to_cpython("para x en map(int, [1, 2]):\n    imprimir(x)\n")
+
+    def test_for_map_int_callback_matches_cpython(self):
+        _assert_matches(self, "para x en map(int, ['1', '2']):\n    imprimir(x)\n")
 
     def test_iter_of_iterator_is_itself(self):
         _assert_matches(self, "e = enumerar([7])\npara p en e:\n    imprimir(p)\n")

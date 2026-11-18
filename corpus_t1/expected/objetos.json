@@ -1,0 +1,471 @@
+{
+  "schema": "piton-corpus-t1-expected-v1",
+  "area": "objetos",
+  "oracle": {
+    "executable": "/usr/bin/python3",
+    "version": "3.12.3",
+    "version_full": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "implementation": "CPython"
+  },
+  "captured_before_piton": true,
+  "total": 56,
+  "examples": {
+    "01_str_split.py": {
+      "path": "corpus_t1/objetos/01_str_split.py",
+      "sha256": "c7b23d97d7f6e40d7ffbeebe594a8b4d0d5cd734b90e64c9acd74e5fd0bdcc82",
+      "stdout": "['a', 'b', 'c']\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "02_str_split_maxsplit.py": {
+      "path": "corpus_t1/objetos/02_str_split_maxsplit.py",
+      "sha256": "859efac30a66b87691512541a2c0756ff4032d58e96d77cf70b6a20fa48e9fe0",
+      "stdout": "['a', 'b,c']\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "03_str_rsplit.py": {
+      "path": "corpus_t1/objetos/03_str_rsplit.py",
+      "sha256": "eecfeded1c6e7842e7a74cddf004ee94708aa757b3cd82ebcaf18c2b78c4372e",
+      "stdout": "['a,b', 'c']\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "04_str_strip.py": {
+      "path": "corpus_t1/objetos/04_str_strip.py",
+      "sha256": "030588e334d97b586f78e9fc1d1897ebddf4526d5f18127631bebe76bb5a72b5",
+      "stdout": "'alpha'\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "05_str_replace.py": {
+      "path": "corpus_t1/objetos/05_str_replace.py",
+      "sha256": "54deb3d7bf0a7b3012e45a196f27c5dff77001c322da6517e9cbb9aa5f3d99ab",
+      "stdout": "bonona\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "06_str_find.py": {
+      "path": "corpus_t1/objetos/06_str_find.py",
+      "sha256": "6448b19b92b1ec39cdc8fcbe91f7830076140cce6ee73537b56de243cfe78565",
+      "stdout": "2\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "07_str_join.py": {
+      "path": "corpus_t1/objetos/07_str_join.py",
+      "sha256": "4d7b0cae02ba4e387fff47c07b1d856bbafe99a67c3e1d44a809e1815627d7c0",
+      "stdout": "a-b-c\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "08_str_zfill.py": {
+      "path": "corpus_t1/objetos/08_str_zfill.py",
+      "sha256": "668abb1b7f6456127e2a31bc12fd0c2a540e89c6b483cc09fbd60373a46459f9",
+      "stdout": "00042\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "09_str_casefold.py": {
+      "path": "corpus_t1/objetos/09_str_casefold.py",
+      "sha256": "ed88251df2e73afc31363f67b9aabaaa6d011b4cc22392a18d5adadb59ce08cf",
+      "stdout": "strasse\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "10_str_format_map.py": {
+      "path": "corpus_t1/objetos/10_str_format_map.py",
+      "sha256": "39e0052558f3ba3ba40acfd727a9cab52aabaa44e649884ce5d4ff725a1ca4ff",
+      "stdout": "Ada/3\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "11_str_partition.py": {
+      "path": "corpus_t1/objetos/11_str_partition.py",
+      "sha256": "e1984893e97e35e03c87afec0ed71cca4b4e872cc37c9d1abec3add0b2d42ba3",
+      "stdout": "('key', '=', 'value')\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "12_method_split_return.py": {
+      "path": "corpus_t1/objetos/12_method_split_return.py",
+      "sha256": "949f9fb8847be1921f3b65f88afe42bf990caedf70b14e3702ba97f4946a010d",
+      "stdout": "['x', 'y', 'z']\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "13_object_join_return.py": {
+      "path": "corpus_t1/objetos/13_object_join_return.py",
+      "sha256": "1bc87627ce8f33e7c04c7d5e9ea938276ffdfe3148b63f8aa29ff104266d9469",
+      "stdout": "a|b\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "14_object_str_return.py": {
+      "path": "corpus_t1/objetos/14_object_str_return.py",
+      "sha256": "7f164e9daec19111fb4c27eed77577c3959c71df7607c277f28e7012934c777c",
+      "stdout": "42\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "15_object_slice_return.py": {
+      "path": "corpus_t1/objetos/15_object_slice_return.py",
+      "sha256": "d61cf01a1c8d8b0435f60178cbecd7e3687ec2cb96e3097dee987e42b34f00dd",
+      "stdout": "[1, 2]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "16_list_pop.py": {
+      "path": "corpus_t1/objetos/16_list_pop.py",
+      "sha256": "4875de5ead4c2cc87953d441752b9c008c313149d11bb9ee82748279545b60d4",
+      "stdout": "2\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "17_list_index.py": {
+      "path": "corpus_t1/objetos/17_list_index.py",
+      "sha256": "915a1b8d183710ff40e3882e24b289577d7d7204d2671e712f96aa79aa725eec",
+      "stdout": "0\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "18_list_sort_none.py": {
+      "path": "corpus_t1/objetos/18_list_sort_none.py",
+      "sha256": "3df17b846143cef9da913567073425e8974eee4f53d64516a79f3df7e2633b9d",
+      "stdout": "None\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "19_list_slice_copy.py": {
+      "path": "corpus_t1/objetos/19_list_slice_copy.py",
+      "sha256": "0e0e55253c5e8f2ca6b330aa438e7e9da12b0f5ed49c7acddca629300d66765c",
+      "stdout": "[1, 2, 3] [1, 2, 99]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "20_list_slice_step.py": {
+      "path": "corpus_t1/objetos/20_list_slice_step.py",
+      "sha256": "6d464620fe207ba5d9942fe8849de72744f96464bc1ef04f2bf1e02416688846",
+      "stdout": "[0, 2, 4, 6]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "21_list_slice_negative.py": {
+      "path": "corpus_t1/objetos/21_list_slice_negative.py",
+      "sha256": "54fbdf29c288bde1bf122a35ade0e219ebdb685752cbd1e0cfa496d1a34681be",
+      "stdout": "[3, 2, 1, 0]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "22_list_reverse_none.py": {
+      "path": "corpus_t1/objetos/22_list_reverse_none.py",
+      "sha256": "89296bbe89a010eb932fc32793bb960f70cbe048303de34b521122e3e577ea0e",
+      "stdout": "None\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "23_list_pop_empty_catch.py": {
+      "path": "corpus_t1/objetos/23_list_pop_empty_catch.py",
+      "sha256": "006c4c393d3eb2f7c922aa777947a69cc7f3d9f49a54d2cb79c67cecbc688a3b",
+      "stdout": "IndexError ('pop from empty list',)\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "24_dict_pop.py": {
+      "path": "corpus_t1/objetos/24_dict_pop.py",
+      "sha256": "b15ae45e74200a19c1809489ba0a261068d684cb24d1def284781e66c60b6f52",
+      "stdout": "2\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "25_dict_get.py": {
+      "path": "corpus_t1/objetos/25_dict_get.py",
+      "sha256": "65311c0f735e524855ddf34d93a17c92c6d5e9ee55f09efa51e5d9e561031ebe",
+      "stdout": "1\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "26_dict_get_default.py": {
+      "path": "corpus_t1/objetos/26_dict_get_default.py",
+      "sha256": "828d1231a67fd0058026762881cef758b57d936380e15f5e1cc15e5aa83c6abd",
+      "stdout": "fallback\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "27_dict_setdefault.py": {
+      "path": "corpus_t1/objetos/27_dict_setdefault.py",
+      "sha256": "0e14606b1b673e0fc1423e5d20d495a70f5d2aed09501f87e8e9ebc8c30160a7",
+      "stdout": "7\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "28_dict_update_none.py": {
+      "path": "corpus_t1/objetos/28_dict_update_none.py",
+      "sha256": "975c0e17d96568a469a2924884217e26cab696a54408429a2cf1471fcab6f8ee",
+      "stdout": "None\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "29_dict_setdefault_existing.py": {
+      "path": "corpus_t1/objetos/29_dict_setdefault_existing.py",
+      "sha256": "961be4787bdac17e981246045f08b46d792f19a32b89e1d6f577cda1d697efad",
+      "stdout": "3\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "30_dict_missing_catch.py": {
+      "path": "corpus_t1/objetos/30_dict_missing_catch.py",
+      "sha256": "1aa9aeb0ed0b7558d34b44443c2cb906217458ce083be4f343fe4de4c5158efb",
+      "stdout": "KeyError ('missing',)\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "31_tuple_index.py": {
+      "path": "corpus_t1/objetos/31_tuple_index.py",
+      "sha256": "be6f2cba9d58e53abbf8beaaf9b69d02d74481531164660d389957eebe205b5e",
+      "stdout": "1\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "32_tuple_slice_copy.py": {
+      "path": "corpus_t1/objetos/32_tuple_slice_copy.py",
+      "sha256": "2e6a66ad2027911b6ca268ed5a4cc72b32f67d6f4f5af31d87a7712fc1f3b7f3",
+      "stdout": "(1, 2, 3) (2, 3)\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "33_tuple_count.py": {
+      "path": "corpus_t1/objetos/33_tuple_count.py",
+      "sha256": "593f27aaaccc0a12f2771e9ecba3403010cac30938aa2fb014a33667d7328fec",
+      "stdout": "2\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "34_tuple_unpack.py": {
+      "path": "corpus_t1/objetos/34_tuple_unpack.py",
+      "sha256": "b65a1c922d812ed5143eecb9c3ad37f86f2b995e9c6310322750132106994ce1",
+      "stdout": "1 2 3\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "35_list_unpack_star.py": {
+      "path": "corpus_t1/objetos/35_list_unpack_star.py",
+      "sha256": "f4930adcb1319fc42146e85165ac840a3b721b148b22d2c451c147e5a50d88bd",
+      "stdout": "0 [1, 2, 3, 4]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "36_list_copy_method.py": {
+      "path": "corpus_t1/objetos/36_list_copy_method.py",
+      "sha256": "bcd80ccb1549a087cbd530f14db7d71ad5133da424f1b90b138ccdd379787c3c",
+      "stdout": "[1, 2, 3] [1, 2, 3, 4]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "37_dict_copy_method.py": {
+      "path": "corpus_t1/objetos/37_dict_copy_method.py",
+      "sha256": "9e4df19908da975b74a10413fe0adcb11f9ac65d9b3bd22f384ab4c6533f54d2",
+      "stdout": "{'a': 1} {'a': 1, 'b': 2}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "38_tuple_membership.py": {
+      "path": "corpus_t1/objetos/38_tuple_membership.py",
+      "sha256": "70424c9269cdffcdca4e898f36d4bef17c3959ef5414b66778ea3ebcbd772397",
+      "stdout": "True\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "39_list_membership.py": {
+      "path": "corpus_t1/objetos/39_list_membership.py",
+      "sha256": "d5bec92c8bcb6ce4f921132ecb49140c5df60c060ad2767b9b7570a27bbf338c",
+      "stdout": "True\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "40_dict_membership.py": {
+      "path": "corpus_t1/objetos/40_dict_membership.py",
+      "sha256": "da37fa226ac61c49843a42cf2f181d80cfc7f12416b09f2ab68d7e202f689d92",
+      "stdout": "True\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "41_exc_args_index.py": {
+      "path": "corpus_t1/objetos/41_exc_args_index.py",
+      "sha256": "27b953f8ff33abae8817154d63e765515bc8d1932db223e0f64fc4042492b705",
+      "stdout": "('list index out of range',)\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "42_exc_args_key.py": {
+      "path": "corpus_t1/objetos/42_exc_args_key.py",
+      "sha256": "37db97ea6bee0de038367b486288166f897c9a58f27f4b87718cf6b33e548b7e",
+      "stdout": "('x',)\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "43_exc_custom_args.py": {
+      "path": "corpus_t1/objetos/43_exc_custom_args.py",
+      "sha256": "9c9e5e8be8a7467389063bd467c4ab4cf0b7ee8fe92782e6f03adbe315d9b02d",
+      "stdout": "AppError ('bad', 7)\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "44_exc_capture_value_type.py": {
+      "path": "corpus_t1/objetos/44_exc_capture_value_type.py",
+      "sha256": "54cd6bfeba7d333863ceb58c9bcb8b24d5e1fe9df4b57095dc934ed6919684c9",
+      "stdout": "ValueError list.remove(x): x not in list\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "45_exc_capture_type_error.py": {
+      "path": "corpus_t1/objetos/45_exc_capture_type_error.py",
+      "sha256": "0d81ab35b041853136a8c4e5ca6052b352b73d613bfeb389de12fb215d567986",
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"<PITON_ROOT>/corpus_t1/objetos/45_exc_capture_type_error.py\", line 3, in <module>\n    result = values.remove(\"x\")\n             ^^^^^^^^^^^^^^^^^^\nValueError: list.remove(x): x not in list\n",
+      "exit_code": 1,
+      "exception": {
+        "type": "ValueError",
+        "message": "list.remove(x): x not in list"
+      }
+    },
+    "46_exc_uncaught_index.py": {
+      "path": "corpus_t1/objetos/46_exc_uncaught_index.py",
+      "sha256": "d22d53a27799b94211f4f7fbf2be522e5a7a03f9dd8c271a0be636956f4af5b4",
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"<PITON_ROOT>/corpus_t1/objetos/46_exc_uncaught_index.py\", line 2, in <module>\n    result = values[2]\n             ~~~~~~^^^\nIndexError: list index out of range\n",
+      "exit_code": 1,
+      "exception": {
+        "type": "IndexError",
+        "message": "list index out of range"
+      }
+    },
+    "47_exc_uncaught_custom.py": {
+      "path": "corpus_t1/objetos/47_exc_uncaught_custom.py",
+      "sha256": "f7f76b945e9337048e020d1cc70d47de1d5671f04e6ffe06c78c4d7b188a3821",
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"<PITON_ROOT>/corpus_t1/objetos/47_exc_uncaught_custom.py\", line 3, in <module>\n    raise AppError(\"boom\", 7)\nAppError: ('boom', 7)\n",
+      "exit_code": 1,
+      "exception": {
+        "type": "AppError",
+        "message": "('boom', 7)"
+      }
+    },
+    "48_exc_capture_zero_division.py": {
+      "path": "corpus_t1/objetos/48_exc_capture_zero_division.py",
+      "sha256": "ba46763960bf0452e01d1d8763d468aa941f35c9c97cbfcd61be0aea6b1dc388",
+      "stdout": "ZeroDivisionError ('integer division or modulo by zero',)\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "49_class_init_str.py": {
+      "path": "corpus_t1/objetos/49_class_init_str.py",
+      "sha256": "c10598e4bd7c914968c58eeba9cbfef6efa9e40008d71547b57e38c16bfb8e27",
+      "stdout": "(2,3)\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "50_class_repr.py": {
+      "path": "corpus_t1/objetos/50_class_repr.py",
+      "sha256": "07afba4d018a5e20e4f3e79f3a78c50c013d1e71323df5a65395d69bc24f8425",
+      "stdout": "Item('a')\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "51_class_eq.py": {
+      "path": "corpus_t1/objetos/51_class_eq.py",
+      "sha256": "c441245f2016bcc2cd517856334d9f0cdbc0ca3ce257f1420119e92e37d46ced",
+      "stdout": "True\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "52_class_len.py": {
+      "path": "corpus_t1/objetos/52_class_len.py",
+      "sha256": "607304fc98201d2bc158c9210f086bca04a720d5a193eb346ece911be460d819",
+      "stdout": "3\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "53_class_iter.py": {
+      "path": "corpus_t1/objetos/53_class_iter.py",
+      "sha256": "abb4a40bdd5232da1bd73b8f2be8bf1a9f751d32fb8f776f3d8f689a01fbe3d8",
+      "stdout": "[0, 1, 2, 3]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "54_class_property.py": {
+      "path": "corpus_t1/objetos/54_class_property.py",
+      "sha256": "cd53fdb3e0e688028fd2623b49d2be70162b964c4e29888006bc022426d80a98",
+      "stdout": "68.0\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "55_class_super_init.py": {
+      "path": "corpus_t1/objetos/55_class_super_init.py",
+      "sha256": "50e71277072c60ffe173bde26671b05c906c4fec61b93ef38a0e6506a7d2c435",
+      "stdout": "Rex\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "56_class_super_method.py": {
+      "path": "corpus_t1/objetos/56_class_super_method.py",
+      "sha256": "eadab428b7d875ab1fc0e5fce7784bf2f3258aaad58b3cd403be9a074d8e5bc3",
+      "stdout": "...woof\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    }
+  }
+}

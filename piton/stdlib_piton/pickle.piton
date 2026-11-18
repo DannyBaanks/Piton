@@ -25,7 +25,7 @@ funcion dump (obj,file,protocol=DEFAULT_PROTOCOL,fix_imports=Verdadero):
     p = Pickler(file,protocol)
     p.dump(obj)
 funcion dumps (obj,protocol=DEFAULT_PROTOCOL,fix_imports=Verdadero):
-    devolver b""
+    lanzar NotImplementedError ('pickle.dumps no esta implementado en el backend nativo')
 funcion load (file,fix_imports=Verdadero,encoding="ASCII",errors="strict"):
     u = Unpickler(file)
     devolver u.load()

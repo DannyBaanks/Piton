@@ -1,5 +1,5 @@
 funcion whichmodule (obj,name):
-    devolver "__main__"
+    lanzar NotImplementedError ('_compat_pickle.whichmodule no esta implementado en el backend nativo')
 
 funcion _getattribute (obj,name):
     devolver getattr(obj,name)

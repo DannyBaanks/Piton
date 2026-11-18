@@ -1,27 +1,64 @@
+# _random.piton — native implementations for the random module
+# These functions are implemented in the native runtime (piton/native_runtime.c)
+
 funcion random ():
-    devolver 0
+    # implemented in native runtime: piton_builtin_random_random
+    pasar
 
 funcion randint (a, b):
-    devolver a
+    # implemented in native runtime: piton_builtin_random_randint
+    pasar
 
 funcion choice (seq):
-    devolver seq[0] si seq sino Nada
+    # implemented in native runtime: piton_builtin_random_choice
+    pasar
 
 funcion shuffle (x):
+    # implemented in native runtime: piton_builtin_random_shuffle
     pasar
 
 funcion seed (a=Nada, version=2):
+    # implemented in native runtime: piton_builtin_random_seed
     pasar
 
 funcion getrandbits (k):
-    devolver 0
+    # implemented in native runtime: piton_builtin_random_getrandbits
+    pasar
+
+funcion randrange (a, b=Nada, c=Nada):
+    # implemented in native runtime: piton_builtin_random_randrange
+    pasar
+
+funcion randint (a, b):
+    # implemented in native runtime: piton_builtin_random_randint
+    pasar
+
+funcion gauss (mu, sigma):
+    # implemented in native runtime: piton_builtin_random_gauss
+    pasar
+
 
 clase Random:
     funcion __init__(este, *args, **kwargs):
         pasar
     funcion seed(este, a=Nada, version=2):
+        # implemented in native runtime
         pasar
     funcion random(este):
-        devolver 0.0
+        # implemented in native runtime
+        pasar
     funcion getrandbits(este, k):
-        devolver 0
+        # implemented in native runtime
+        pasar
+
+
+clase SystemRandom :
+    pasar
+
+
+clase _Random :
+    pasar
+
+
+clase _SystemRandom :
+    pasar

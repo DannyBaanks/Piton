@@ -1,16 +1,16 @@
 _bootstrap = 0
 
 funcion _find_spec (name,path=Nada,target=None):
-    devolver Nada
+    lanzar NotImplementedError ('importlib._bootstrap._find_spec no esta implementado en el backend nativo')
 
 funcion _load_unlocked (spec):
-    devolver 0
+    lanzar NotImplementedError ('importlib._bootstrap._load_unlocked no esta implementado en el backend nativo')
 
 funcion _find_and_load (name,import_=None):
-    devolver 0
+    lanzar NotImplementedError ('importlib._bootstrap._find_and_load no esta implementado en el backend nativo')
 
 funcion _find_and_load_unlocked (name,import_=None):
-    devolver 0
+    lanzar NotImplementedError ('importlib._bootstrap._find_and_load_unlocked no esta implementado en el backend nativo')
 
 clase _ModuleLock :
     funcion __init__ (self):

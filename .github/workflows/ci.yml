@@ -8,17 +8,26 @@ on:
 
 jobs:
   test-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: ['3.12']
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+    # El oraculo de paridad es sys.executable. Debe ser el CPython de Ubuntu
+    # 24.04 (/usr/bin/python3, 3.12.3), el mismo del entorno local y del job
+    # de autopiton. El Python de setup-python (3.12.16) es otra build: carga
+    # math como .so (su repr incluye la ruta, cambia vars()) y tiene mensajes
+    # de error de random.sample(counts=...) distintos. Con el, la CI media un
+    # oraculo distinto del que se usa para declarar paridad.
+    - name: CPython oracle = Python del sistema de Ubuntu 24.04
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-venv
+        /usr/bin/python3 -c "import sys; assert sys.version_info[:2] == (3, 12), sys.version; print(sys.version)"
+        /usr/bin/python3 -m venv "$RUNNER_TEMP/oracle-venv"
+        echo "$RUNNER_TEMP/oracle-venv/bin" >> "$GITHUB_PATH"
 
     - name: Install dependencies
       run: |

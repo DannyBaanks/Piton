@@ -1,15 +1,34 @@
-funcion disable (*args , **kwargs):
-    lanzar NotImplementedError ('gc.disable no esta implementado en el backend nativo')
+# gc: interfaz minima del recolector de basura de CPython.
+#
+# Limite declarado: el backend nativo no tiene el recolector de ciclos de CPython, asi que
+# collect() no encuentra ciclos que reportar y devuelve 0 (lo mismo que CPython en un programa
+# sin ciclos sin referencias). enable/disable/isenabled llevan estado como CPython.
+# get_referrers y el resto de la API de introspeccion NO estan implementados (fallan cerrado).
+
+_habilitado = 1
 
 
-funcion enable (*args , **kwargs):
-    lanzar NotImplementedError ('gc.enable no esta implementado en el backend nativo')
+funcion collect (generation =2 ):
+    devolver 0
+
+
+funcion disable ():
+    global _habilitado
+    _habilitado = 0
+
+
+funcion enable ():
+    global _habilitado
+    _habilitado = 1
+
+
+funcion isenabled ():
+    devolver _habilitado == 1
+
+
+funcion get_threshold ():
+    devolver (700 ,10 ,10 )
 
 
 funcion get_referrers (*args , **kwargs):
     lanzar NotImplementedError ('gc.get_referrers no esta implementado en el backend nativo')
-
-
-funcion isenabled (*args , **kwargs):
-    lanzar NotImplementedError ('gc.isenabled no esta implementado en el backend nativo')
-

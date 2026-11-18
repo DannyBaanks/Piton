@@ -1,11 +1,11 @@
 funcion pack (fmt, *args):
-    devolver b""
+    lanzar NotImplementedError ('_struct.pack no esta implementado en el backend nativo')
 
 funcion unpack (fmt, buffer):
-    devolver ()
+    lanzar NotImplementedError ('_struct.unpack no esta implementado en el backend nativo')
 
 funcion calcsize (fmt):
-    devolver 0
+    lanzar NotImplementedError ('_struct.calcsize no esta implementado en el backend nativo')
 
 clase Struct :
     "stub"

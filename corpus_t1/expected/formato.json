@@ -1,0 +1,402 @@
+[
+  {
+    "file": "01.py",
+    "sha256": "bbfb616b7b02c5dc6f016ecb90206a0dfd2426706dd0874ad22fa78e7a822b87",
+    "stdout": "42\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "02.py",
+    "sha256": "16aefa0ea39969c06c6674e148644491330738f52008617b5f6cc9ff07038405",
+    "stdout": "7\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "03.py",
+    "sha256": "e8ca899492cca4ca421d11a9c3696d12b85e323c9798fdb9b8f151afa8223b4f",
+    "stdout": "3.141590\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "04.py",
+    "sha256": "454b1d33d337c35aa42bae3c7488b3e081b7a1c2547e6ec2338315b45ae7b880",
+    "stdout": "3.14\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "05.py",
+    "sha256": "5472676a38585c78a47bccd5d1f79624e0b4153e706819cadc4b113dcc8605f5",
+    "stdout": "hola\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "06.py",
+    "sha256": "2e645051c87aab6b30ca996c0ab38ca9eba27e3c77a7e436ff7021ee5d76227f",
+    "stdout": "'hola'\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "07.py",
+    "sha256": "140a8d89782a72f4de19ddaaef881c7e68f6813c957badcc060677ebec020f4c",
+    "stdout": "ff\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "08.py",
+    "sha256": "2752a3da2428ecbc847c9de905a5344507dde44f71f36c2835a8a95aecaf5ad2",
+    "stdout": "10\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "09.py",
+    "sha256": "7a851091ad1215adcb1426896f431f58b10511f33d0263669b58cc3124342977",
+    "stdout": "1.234500e+03\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "10.py",
+    "sha256": "f63f3dd9f01bf90b8c4534912b04a30e4566d53b9f0971da9f38c5be8d44581a",
+    "stdout": "0.000123\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "11.py",
+    "sha256": "0d33ca3c10e713fda838129532468d5b4bd911238cd0521b99daf8b626e9227f",
+    "stdout": "%%\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "12.py",
+    "sha256": "c0ba52077d47ea44910e05149d467178e614f7c0eb49199023683bf682280b5d",
+    "stdout": "00007\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "13.py",
+    "sha256": "a3c7637379eb54aed8fc7302aec9ef8074cd8b4229581cb2cfeb14a3d2d595cb",
+    "stdout": "izq       \n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "14.py",
+    "sha256": "f1a557bbaa5e0e115b6a7a1a742396e0cbafe5a601c87f91e21bf833864a4ff0",
+    "stdout": "+2.500000\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "15.py",
+    "sha256": "5e7e206c2c0d4dc5869e1f87b7a827740fd2d329c73ceab908d4ffa8e7ae49d8",
+    "stdout": "0xf\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "16.py",
+    "sha256": "ad135c518dbdee9ea1c80ef79db1a2a71e2b9aae430b78e4dc0c90e4ee4ad8b0",
+    "stdout": "00010\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "17.py",
+    "sha256": "4dd05ad6b4f9df933671c56aec014cba047b3d01da2df9fbc9d2295bcea7a292",
+    "stdout": "    x\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "18.py",
+    "sha256": "60c6dd8ae471a4841638fdfb16d06bc86f1ef6dc684f7be21e3c4c43f743f06b",
+    "stdout": "3.142\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "19.py",
+    "sha256": "e69f6f682589660cf90addd40c16576d5b20c99dfc05cda2e3c633f5e1080260",
+    "stdout": "123\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "20.py",
+    "sha256": "7422c390dbbe444f68b76bbd8a6247239ba6e5113c0e91425eeaeeb8e78b7faa",
+    "stdout": "x=5\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "21.py",
+    "sha256": "0dbcf60f6ce7819b64340ad9be832cfb37770b3ce67f2db7a0735a2710a5389b",
+    "stdout": "a   \n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "22.py",
+    "sha256": "0a3ae12e6603830b3b52ec972a753ca59c7849ed3f15ad1c24896ee8e3593e8a",
+    "stdout": "0007\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "23.py",
+    "sha256": "9a1269d4f1cb0eba45d96602f34ad5c4766c22b49230467b736d8d10d1259f4a",
+    "stdout": "2.72\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "24.py",
+    "sha256": "b2f13e801710b896772306b794df2315c332fe06aabd4df6a9746ee9ab7f77ae",
+    "stdout": "      hi\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "25.py",
+    "sha256": "8cfbf6c46d6385b06d02c7b9b302094ce328e5ff3d59aa8ff342a4ab6915d77d",
+    "stdout": "2\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "26.py",
+    "sha256": "d47d14ad5f63c0f49ba05051ce54b330468f360b2694a5652d12d1046a69ce82",
+    "stdout": "3\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "27.py",
+    "sha256": "cb6405381183447e9415a4c54dd2c998e1ff20a088f0031d052366d0beec0928",
+    "stdout": "(3, 2)\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "28.py",
+    "sha256": "89e426d07d4826c11fa452c6532e12b5e72ed0c70ebc568730ef69b35b22fdc7",
+    "stdout": "2\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "29.py",
+    "sha256": "75f00c169d59a673e77c75a5b89b993a876ed661800eb9a027e8a9459ea81c73",
+    "stdout": "2.3333333333333335\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "30.py",
+    "sha256": "7dc421ff383e6206a2b5697521c51755874c5e1f9c59dbacf12b7f6fc63fef45",
+    "stdout": "2\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "31.py",
+    "sha256": "1728662d493c3388099d904b412fa8dfc404e8ffae0db31751b602392c5ff977",
+    "stdout": "1024\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "32.py",
+    "sha256": "e0df4e6b84008e0e318b42a5b847c57c3db53d298dc60a69f1e77442ace24524",
+    "stdout": "True\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "33.py",
+    "sha256": "fd3e803cf506cfa0593a196cd728215a3815c7ce2b0b13819b82dd1d74c83111",
+    "stdout": "True\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "34.py",
+    "sha256": "bb001637c77c0b28d2c7382a4fa285ef1e835388a80a173174ddb55e4818235a",
+    "stdout": "False\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "35.py",
+    "sha256": "d55b7363cd8a041fde090d5d9977dfed37cf67823ff63ab74199b12ee99d880e",
+    "stdout": "False\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "36.py",
+    "sha256": "9b9193867dfe20667ce06e562b0cac7fc232933aa71f4e150ec8ec9a6b69703a",
+    "stdout": "True\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "37.py",
+    "sha256": "01699d5ac606c46e9af71dce97320c0a29c6098a5df9abaa83c14373b08572ec",
+    "stdout": "42\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "38.py",
+    "sha256": "85a83ea3d9dcd440ea3d6ba5e93513ed129a6bb980bf34f096bac9a7d01f44c8",
+    "stdout": "3.14\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "39.py",
+    "sha256": "4410a3eaa11e684b9ac360da7f6edf7a2fd25b7c20fcf5b72a139e6761efe7da",
+    "stdout": "123\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "40.py",
+    "sha256": "54cd08d64a49218e76964758517cb10516ee8929510d855196a821788257b462",
+    "stdout": "3.1\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "41.py",
+    "sha256": "0701d0fa62d41a6b47d4fc66c82e5a72857fd026feae44b17a9e63abdecadedc",
+    "stdout": "-7\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "42.py",
+    "sha256": "5c78eefed554fecda3d364484c0022925f7c72f27cab5eda3b5a90edb4eecb1e",
+    "stdout": "1000.0\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "43.py",
+    "sha256": "8812665eb218f289a6d858ab2beaea5b269741d0edda266ba7a269849af18d99",
+    "stdout": "A\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "44.py",
+    "sha256": "20f742416e12b410fffe27dfb996238db07f9ac0a5f588b2bebf2a0823e3d8f2",
+    "stdout": "65\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "45.py",
+    "sha256": "dd41d14a51cbf70be23c2d97fb3f39ab30e1dfd79c128c3d1488b00e6a8efe2c",
+    "stdout": "-0003\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "46.py",
+    "sha256": "c2c26bf8cd689a8eb9bf57eba09c1aaebbd48772b71c72ede79d9386d00ff127",
+    "stdout": "-7\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "47.py",
+    "sha256": "2db8107fc5b2eb981b439a5e4f78c8f0fde53839888ba747c0f1c60ac6532e41",
+    "stdout": "0xff\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "48.py",
+    "sha256": "110d55f3176b8f3d6a5e97658627d68bb49fbb0091d4356599eac680de9728b5",
+    "stdout": "2.67\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "49.py",
+    "sha256": "a1b0444c4cc48eb184737f98b7c1ba6a2dae9bba52d199127d70d526cf32bfbc",
+    "stdout": "-2\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  },
+  {
+    "file": "50.py",
+    "sha256": "6d9080c0666a057d3f42e3e616b1516bab30060278064c6b45ca546d4c16e910",
+    "stdout": "False\n",
+    "stderr": "",
+    "exit_code": 0,
+    "python_version": "Python 3.12.3"
+  }
+]

@@ -16,7 +16,16 @@ from typing import Any
 
 from piton.lower import LoweringError, lower_cst_to_hir
 from piton.hir import HIRKind
-from piton.mir import MIRBlock, MIRFunction, MIRInstruction, MIRLoweringError, MIRModule, lower_hir_to_mir
+from piton.mir import (
+    MIRBlock,
+    MIRFunction,
+    MIRInstruction,
+    MIRLoweringError,
+    MIRModule,
+    _ZERO_ARG_SUPER,
+    _zero_arg_super_targets,
+    lower_hir_to_mir,
+)
 from piton.parser import parse
 
 
@@ -56,7 +65,7 @@ def _ordering_pair_ok(left_type: str, right_type: str) -> bool:
     return left_type == right_type and left_type not in {"none", ""}
 
 
-_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "format", "formato", "slice", "rebanada", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes", "complex", "complejo", "repr", "hash", "callable", "ascii", "format", "frozenset", "memoryview", "slice", "zip", "reversed", "map", "filter", "iter", "next", "id", "dir"}
+_BUILTINS = {"imprimir", "print", "rango", "range", "longitud", "len", "enumerar", "enumerate", "abs", "max", "min", "sum", "tipo", "type", "texto", "str", "entero", "int", "decimal", "float", "booleano", "bool", "lista", "list", "tupla", "tuple", "conjunto", "set", "diccionario", "dict", "entrada", "input", "abrir", "open", "ordenar", "sorted", "all", "any", "bin", "chr", "ord", "pow", "divmod", "round", "redondear", "format", "formato", "slice", "rebanada", "isinstance", "es_instancia", "issubclass", "es_subclase", "hasattr", "tiene_atr", "getattr", "obtener_atr", "setattr", "fijar_atr", "establecer_atr", "object", "bytes", "octetos", "bytearray", "arreglo_bytes", "complex", "complejo", "repr", "hash", "callable", "ascii", "format", "frozenset", "memoryview", "slice", "zip", "reversed", "map", "filter", "iter", "next", "id", "dir", "vars"}
 
 _math_fn_map = {
     "math_sqrt": "piton_float_sqrt",
@@ -993,6 +1002,86 @@ class Win64NasmEmitter:
         self.lines.append(f"    lea rcx, [{t}]")
         self.lines.append(f"    lea rdx, [{m}]")
         self.lines.append("    call piton_raise_unhandled")
+
+    def _emit_zero_arg_super_call(
+        self, instruction: MIRInstruction, labels: dict[str, str],
+    ) -> None:
+        _, method_name, owner, raw_values = instruction.args[:4]
+        _, current_class, fallback_class = instruction.args[0]
+        targets = _zero_arg_super_targets(
+            self.mir_module_class_mro,
+            self.mir_module_classes,
+            current_class,
+            method_name,
+        )
+        if not targets:
+            fallback = MIRInstruction(
+                "method_call",
+                (fallback_class, method_name, owner, raw_values),
+                result=instruction.result,
+            )
+            self._emit_instruction(fallback, labels)
+            return
+
+        miss = self._internal_label("super_miss")
+        done = self._internal_label("super_done")
+        target_labels = [
+            self._internal_label(f"super_target_{index}")
+            for index in range(len(targets))
+        ]
+        self._load_operand(owner, "rax")
+        self.lines.append("    test rax, rax")
+        self.lines.append(f"    jz {miss}")
+        self.lines.append("    mov rax, qword [rax+16]")
+        self.lines.append("    test rax, rax")
+        self.lines.append(f"    jz {miss}")
+        self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+        for index, (runtime_class, _) in enumerate(targets):
+            self.lines.append(f"    lea rcx, [{self._string(runtime_class)}]")
+            self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+            self.lines.append("    call strcmp")
+            self.lines.append("    test eax, eax")
+            self.lines.append(f"    jz {target_labels[index]}")
+        self.lines.append(f"    jmp {miss}")
+
+        for index, (_, target_class) in enumerate(targets):
+            target = f"{target_class}__{method_name}"
+            values = list(raw_values) if target in self.static_methods else [owner, *raw_values]
+            self.lines.append(f"{target_labels[index]}:")
+            if self.function_frame_abi.get(target, False):
+                frame_size = ((len(values) * 8 + 32 + 15) // 16) * 16
+                self.lines.append(f"    sub rsp, {frame_size}")
+                for slot_index, value in enumerate(values):
+                    self._load_operand(value, "r10")
+                    self.lines.append(f"    mov qword [rsp+32+{slot_index * 8}], r10")
+                self.lines.extend([
+                    f"    lea rcx, [{target}]",
+                    f"    mov edx, {len(values)}",
+                    "    lea r8, [rsp+32]",
+                    "    call piton_frame_call",
+                    f"    add rsp, {frame_size}",
+                ])
+            else:
+                if len(values) > 6:
+                    raise NativeBuildError("native method calls support at most six total arguments")
+                for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
+                    self._load_operand(value, register)
+                self.lines.append(f"    call {target}")
+            self.lines.append(f"    mov {self._address(instruction.result)}, rax")
+            self.lines.append(f"    jmp {done}")
+
+        self.lines.append(f"{miss}:")
+        self.lines.append("    xor eax, eax")
+        self.lines.append(f"    mov {self._address(instruction.result)}, rax")
+        self._runtime_type_error("super(): no next class for the runtime type")
+        self.lines.append(f"{done}:")
+        return_types = {
+            self.function_return_types.get(f"{target_class}__{method_name}", "int")
+            for _, target_class in targets
+        }
+        self.types[instruction.result] = (
+            next(iter(return_types)) if len(return_types) == 1 else "int"
+        )
 
     def _emit_instruction(self, instruction: MIRInstruction, labels: dict[str, str]) -> None:
         op, args, result = instruction.op, instruction.args, instruction.result
@@ -3181,6 +3270,13 @@ class Win64NasmEmitter:
                     )
         elif op == "method_call":
             explicit_class, method_name, owner, raw_values = args
+            if (
+                isinstance(explicit_class, tuple)
+                and len(explicit_class) == 3
+                and explicit_class[0] == _ZERO_ARG_SUPER
+            ):
+                self._emit_zero_arg_super_call(instruction, labels)
+                return
             owner_type = self.types.get(owner, "")
             if owner_type == "str":
                 # STR_METHODS_V1: builtin str methods bind statically here;
@@ -3552,6 +3648,10 @@ class Win64NasmEmitter:
                 self.types[result] = "int"
         elif op == "catch_clear":
             self.lines.append("    call piton_catch_clear")
+        elif op == "reraise_clear":
+            # The Linux runtime tracks an active exception for implicit
+            # __context__; the Windows runtime needs no separate state here.
+            pass
         elif op == "catch_bind":
             self.lines.append("    call piton_catch_message_safe")
             self.lines.append(f"    mov {self._address(result)}, rax")

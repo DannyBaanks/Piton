@@ -11,8 +11,8 @@ clase ProxyType :
 clase CallableProxyType (ProxyType) :
     pasar
 funcion getweakrefcount (obj):
-    devolver 0
+    lanzar NotImplementedError ('_weakref.getweakrefcount no esta implementado en el backend nativo')
 funcion getweakrefs (obj):
-    devolver []
+    lanzar NotImplementedError ('_weakref.getweakrefs no esta implementado en el backend nativo')
 funcion proxy (obj,callback=Nada):
     devolver ProxyType(obj)

@@ -1,4 +1,4 @@
-# Cuarentena Windows de la suite — HUECO DECLARADO (2026-10-31)
+# Cuarentena Windows de la suite — HUECO DECLARADO (actualizada 2026-11-17)
 #
 # QUE ES: nodeids de pytest que FALLAN en el job `test-windows` de CI con el
 # backend nativo Windows (piton/x86.py) y NO fallan en Linux. En win32 los
@@ -8,16 +8,27 @@
 #
 # POR QUE: piton/x86.py (7.250 lineas) va atras del MIR y de piton/linux_x86.py
 # (13.324 lineas) desde la unificacion 2026-10-24 y el sync 2026-10-30.
-# Buckets y evidencia: docs/windows_native_failures.md, seccion
-# "Cuarentena CI 2026-10-31".
+# Buckets y evidencia: docs/windows_native_failures.md, secciones
+# "Cuarentena CI 2026-10-31" y "PR #51: clasificacion del rojo Windows".
 #
-# ORIGEN (union de los IDs fallando en los 4 PR abiertos, 2026-10-31):
+# ORIGEN HISTORICO (union de los IDs fallando en los 4 PR abiertos, 2026-10-31):
 #   PR #45 run 41173086497  232 failed   (feat/synthesize-stdlib)
 #   PR #46 run 41176496891  233 failed   (fix/ci-gcc15)
 #   PR #47 run 41193010921  226 failed   (fix/restore-format)
 #   PR #48 run 41229530568  232 failed   (feat/autopiton-polish)
 #   union = 233 nodeids unicos en 12 archivos; en Linux 0 de ellos fallan
 #   (corrida local main 2026-10-31: 65 failed / 1.235 passed, interseccion 0).
+#
+# ACTUALIZACION PR #51 (run 44050330427, job 133926234972, 2026-11-17):
+#   773 filas rojas = 463 fallos Linux-ELF por falta de WSL + 67 errores del
+#   fixture `glob` + 243 fallos PE reales. Los 243 nodeids PE se anaden aqui.
+#   Los 463 Linux-ELF NO se ocultan como fallos PE: se omiten explicitamente
+#   en Windows con tests/native_linux.py. Los 67 errores de fixture se
+#   corrigen portablemente sin reducir la cobertura POSIX.
+#   La lista final queda en 469 nodeids unicos:
+#     233 historicos - 2 NO_RECOLECTADOS - 5 XPASS + 243 PE nuevos = 469.
+#   Los 2 NO_RECOLECTADOS y los 5 XPASS se retiraron; ningun test se omite
+#   por esta lista: en Windows se ejecuta y se reporta como XFAIL.
 #
 # COMO SE REDUCE: si un ID pasa en Windows, CI lo imprime como XPASS en el
 # resumen `CUARENTENA WINDOWS:`; borralo de este archivo en el siguiente
@@ -46,7 +57,6 @@ tests/test_grammar_parity.py::BundledStdlibGatesV2::test_re_escape
 tests/test_grammar_parity.py::BundledStdlibGatesV2::test_re_flags_are_cpython_values
 tests/test_grammar_parity.py::BundledStdlibGatesV2::test_string_capwords
 tests/test_grammar_parity.py::BundledStdlibGatesV2::test_string_constants
-tests/test_grammar_parity.py::BundledStdlibGatesV2::test_stub_fails_closed_at_runtime
 tests/test_grammar_parity.py::CalliterElemGatesV1::test_iter_callable_element_is_str
 tests/test_grammar_parity.py::ClassBasesGatesV1::test_class_bases_is_iterable
 tests/test_grammar_parity.py::ClassBasesGatesV1::test_getattr_default_type
@@ -114,7 +124,6 @@ tests/test_grammar_parity.py::M6SeqDefaultsV1::test_kwonly_tuple_default
 tests/test_grammar_parity.py::M6SeqDefaultsV1::test_list_default_roundtrip
 tests/test_grammar_parity.py::M6SeqDefaultsV1::test_list_empty_default
 tests/test_grammar_parity.py::M6SeqDefaultsV1::test_mixed_const_list_default
-tests/test_grammar_parity.py::M6SeqDefaultsV1::test_scalar_arg_to_collection_default_fails_closed
 tests/test_grammar_parity.py::M6SeqDefaultsV1::test_str_default_roundtrip
 tests/test_grammar_parity.py::M6SeqDefaultsV1::test_tuple_const_default_roundtrip
 tests/test_grammar_parity.py::M6SeqDefaultsV1::test_tuple_empty_default
@@ -166,7 +175,6 @@ tests/test_grammar_parity.py::PctTupleRepeatAndInputGatesV1::test_percent_format
 tests/test_grammar_parity.py::PrintEndGatesV1::test_end_custom
 tests/test_grammar_parity.py::PrintEndGatesV1::test_end_space
 tests/test_grammar_parity.py::PrintEndGatesV1::test_end_with_file
-tests/test_grammar_parity.py::RaiseValueGatesV1::test_raise_instance_is_caught
 tests/test_grammar_parity.py::RecursiveStdlibGatesV2::test_itertools_chain_materializes
 tests/test_grammar_parity.py::RecursiveStdlibGatesV2::test_itertools_filterfalse
 tests/test_grammar_parity.py::RecursiveStdlibGatesV2::test_itertools_islice_repeat_filterfalse
@@ -209,11 +217,9 @@ tests/test_grammar_parity.py::WarningAndReprGatesV1::test_percent_repr_of_untype
 tests/test_grammar_parity.py::WarningPathGatesV1::test_any_of_genexpr
 tests/test_grammar_parity.py::WarningPathGatesV1::test_startswith_rejects_int_prefix
 tests/test_grammar_parity.py::WarningPathGatesV1::test_startswith_with_untyped_prefix
-tests/test_metaclasses.py::MetaclassesGate::test_metaclass_conflict_fails_closed
 tests/test_metaclasses.py::MetaclassesGate::test_type_of_class_is_metaclass
 tests/test_native_evidence.py::NativeSubsetEvidenceTests::test_cli_writes_passing_native_subset_receipt
 tests/test_p0_parity.py::BuiltinMarkerV1::test_abrir_opens_existing_file
-tests/test_p0_parity.py::BuiltinMarkerV1::test_store_builtin_fail_closed
 tests/test_p15_decorators.py::TestAdvancedDecorators::test_class_decorator_wrapper
 tests/test_p15_decorators.py::TestAdvancedDecorators::test_decorator_on_nested_function
 tests/test_p15_decorators.py::TestAdvancedDecorators::test_parameterized_decorator_prefix
@@ -235,7 +241,6 @@ tests/test_p7_fstrings.py::FStringsV1::test_r_conversion_supported
 tests/test_p9_global.py::GlobalDeclV1::test_read_without_declaration
 tests/test_p9_global.py::NonlocalBindingP15::test_escaping_counter
 tests/test_p9_global.py::NonlocalBindingP15::test_independent_counters
-tests/test_phase5.py::Phase5Gates::test_descriptors_unknown_class_decorator_fails_closed
 tests/test_phase5.py::Phase5Gates::test_x86_callback_plain_function_and_closure
 tests/test_phase5.py::Phase5Gates::test_x86_chained_closure_factories
 tests/test_phase5.py::Phase5Gates::test_x86_closure_arity_fail_closed
@@ -253,10 +258,271 @@ tests/test_phase5.py::Phase5Gates::test_x86_map_accepts_closure_callback
 tests/test_phase5.py::Phase5Gates::test_x86_map_accepts_lambda_callback
 tests/test_phase5.py::Phase5Gates::test_x86_map_lambda_with_capture
 tests/test_phase5.py::Phase5Gates::test_x86_module_attr_chain_keyword_args_fails_closed
-tests/test_phase5.py::Phase5Gates::test_x86_module_attribute_value_access_fails_closed
 tests/test_phase5.py::Phase5Gates::test_x86_nonlocal_counter_mutation
 tests/test_phase5.py::Phase5Gates::test_x86_nonlocal_mutual_swap_of_cells
 tests/test_phase5.py::Phase5Gates::test_x86_starargs_pure_empty_and_many
 tests/test_phase5.py::Phase5Gates::test_x86_super_bare_value_fails_closed
 tests/test_phase5.py::Phase5Gates::test_x86_variadic_closure_escape
 tests/test_phase5.py::WithProtocolNativeV1::test_with_requires_direct_constructor
+
+# ---------------------------------------------------------------------------
+# ACTUALIZACION PR #51 (2026-11-17): 243 nodeids PE adicionales
+#
+# Origen medido: run 44050330427, job Windows 133926234972, head
+# 3110c14881b768990ccaac3f662c2caad0802393. Los 243 tests SIGUEN EJECUTANDOSE
+# en Windows y salen XFAIL; no se ocultan con un skip. Clasificacion:
+#   197 ValueError: el emitter PE x86.py no acepta la forma actual de una
+#        instruccion MIR (arity/shape desfasado; por ejemplo method_call).
+#    25 piton.x86.NativeBuildError: gate/backend PE todavia no soportado.
+#    21 AssertionError: divergencia semantica real PE frente a CPython.
+#
+# No se anaden aqui los fallos de tests Linux-ELF: se saltan de forma
+# explicita en tests/native_linux.py cuando el host Windows no tiene WSL.
+# Tampoco el fixture glob de Windows: se corrige en test_adv_glob_v1.py.
+#
+# Total de la lista tras esta actualizacion: 469 nodeids (226 + 243; se retiraron
+# 2 nodeids obsoletos y 5 nodeids que ya pasan en Windows: XPASS medidos).
+# ---------------------------------------------------------------------------
+tests/test_adv_re_v1.py::test_findall_and_sub_corpus_examples
+tests/test_adv_re_v1.py::test_search_match_and_capture_methods
+tests/test_adv_re_v1.py::test_greedy_backtracking_classes_and_quantifiers
+tests/test_adv_re_v1.py::test_anchors_character_classes_and_flags
+tests/test_adv_re_v1.py::test_sub_backreferences_and_count
+tests/test_adv_re_v1.py::test_empty_matches_advance_like_cpython
+tests/test_adv_wave8_tier_a_v1.py::test_vars_object_dict_is_live_and_mutable
+tests/test_adv_wave8_tier_a_v1.py::test_vars_clear_keeps_class_attributes
+tests/test_adv_wave8_tier_a_v1.py::test_int_from_bytes_unbound_classmethod_byteorder_and_signedness
+tests/test_adv_wave8_tier_a_v1.py::test_map_native_callbacks_over_strings_and_iterators
+tests/test_adv_wave9_tier_a_v1.py::test_dynamic_slot_bitwise_operators_match_int_and_bool_semantics
+tests/test_adv_wave9_tier_a_v1.py::test_open_accepts_string_paths_carried_by_dynamic_slots
+tests/test_adv_wave9_tier_a_v1.py::test_getopt_error_str_repr_and_exception_fields
+tests/test_filter_map_builtin_callbacks.py::FilterMapBuiltinCallbacks::test_filter_bool_none_and_len_preserve_mixed_truthiness
+tests/test_filter_map_builtin_callbacks.py::FilterMapBuiltinCallbacks::test_map_ord_chr_and_iter_callbacks
+tests/test_filter_map_builtin_callbacks.py::FilterMapBuiltinCallbacks::test_map_string_int_float_abs_len_repr_and_ascii
+tests/test_filter_map_builtin_callbacks.py::FilterMapBuiltinCallbacks::test_unsupported_builtin_callback_fails_closed
+tests/test_grammar_parity.py::FstringConversionV1::test_no_conversion_still_works
+tests/test_grammar_parity.py::FstringConversionV1::test_s_conversion_still_works
+tests/test_grammar_parity.py::DictMergeV1::test_merge_fails_closed_at_mir
+tests/test_grammar_parity.py::LambdaStarV1::test_lambda_kwargs_matches_cpython
+tests/test_grammar_parity.py::LambdaStarV1::test_lambda_vararg_matches_cpython
+tests/test_grammar_parity.py::FstringSpecBracketV1::test_slice_interpolation_differential
+tests/test_grammar_parity.py::TypeParamsV1::test_generic_class_differential
+tests/test_grammar_parity.py::MirStdlibGatesV1::test_edge_for_nested_target_matches_cpython
+tests/test_grammar_parity.py::MirStdlibGatesV1::test_m1_class_docstring_with_method
+tests/test_grammar_parity.py::MirStdlibGatesV1::test_m5_object_base
+tests/test_grammar_parity.py::CorpusFinishParseV1::test_fstring_plain_and_escapes_untouched
+tests/test_grammar_parity.py::CorpusFinishParseV1::test_fstring_quote_reuse_args
+tests/test_grammar_parity.py::CorpusFinishParseV1::test_fstring_quote_reuse_join
+tests/test_grammar_parity.py::CorpusFinishParseV1::test_pydoc_no_variable
+tests/test_grammar_parity.py::BuildFailGatesV1::test_func_import_slice_argv
+tests/test_grammar_parity.py::BuildFailGatesV1::test_func_import_sys_argv
+tests/test_grammar_parity.py::ParamStrGatesV1::test_minmax_varadic_mixed_matches_cpython
+tests/test_grammar_parity.py::ParamStrGatesV1::test_usage_param_contradiction_fails_closed
+tests/test_grammar_parity.py::MirReachGatesV1::test_seq_usage_len_index_str_contradiction
+tests/test_grammar_parity.py::MirReachGatesV1::test_usage_param_list_contradiction_fails_closed
+tests/test_grammar_parity.py::StdlibV2GatesV1::test_class_method_calls_later_module_function
+tests/test_grammar_parity.py::DynamicMethodGatesV1::test_dynamic_method_call_on_runtime_attribute
+tests/test_grammar_parity.py::TwoPassGatesV1::test_instance_attribute_type_from_constructor
+tests/test_grammar_parity.py::OsPathGatesV1::test_pathlike_is_a_class_object
+tests/test_grammar_parity.py::OsPathGatesV1::test_pathlike_str_is_not_pathlike
+tests/test_grammar_parity.py::WarningPathGatesV1::test_format_spec_s
+tests/test_grammar_parity.py::NoneSingletonGatesV2::test_with_exit_none_not_suppressing
+tests/test_metaclasses.py::MetaclassesGate::test_metaclass_new_injects_attribute
+tests/test_mir_resolution.py::TestMirResolution::test_dynamic_call_kwargs
+tests/test_mir_resolution.py::TestMirResolution::test_enumerate_with_start
+tests/test_mir_resolution.py::TestMirResolution::test_math_intrinsics
+tests/test_mir_resolution.py::TestMirResolution::test_math_modf_frexp
+tests/test_mir_resolution.py::TestMirResolution::test_method_pass_through_decorators
+tests/test_mir_resolution.py::TestMirResolution::test_raise_from_chaining
+tests/test_mir_resolution.py::TestMirResolution::test_super_base_init
+tests/test_mir_resolution.py::TestMirResolution::test_super_inheritance_dunders
+tests/test_mir_resolution.py::TestMirResolution::test_zip_with_strict
+tests/test_p0_parity.py::PrintArgsV1::test_object_str_args
+tests/test_p0_parity.py::ReturnTypeV1::test_method_returning_self_prints_via_str
+tests/test_p0_parity.py::WindowsReturnTypeV1::test_method_call_propagates
+tests/test_p0_parity.py::CollReturnV1::test_mutate_received_collection
+tests/test_p0_parity.py::MinMaxTypesV1::test_bool_int_min_max
+tests/test_p0_parity.py::MinMaxTypesV1::test_mixed_types_fail_closed
+tests/test_p0_parity.py::MinMaxTypesV1::test_mixed_types_valid
+tests/test_p0_parity.py::FileAttrV1::test_closed_attribute_is_false_on_open_file
+tests/test_p0_parity.py::FileAttrV1::test_closed_attribute_is_true_after_close
+tests/test_p0_parity.py::FileAttrV1::test_name_and_mode_attributes
+tests/test_p0_parity.py::BuiltinMarkerV1::test_list_reversed_range_zero_element_preserved
+tests/test_p0_parity.py::BuiltinMarkerV1::test_return_builtin_fail_closed
+tests/test_p0_parity.py::BuiltinMarkerV1::test_return_builtin_type_value_matches_cpython
+tests/test_p0_parity.py::BuiltinMarkerV1::test_store_builtin_type_value_matches_cpython
+tests/test_p0_parity.py::DivergentCluster29V1::test_dict_subscript_and_get_carry_value_type
+tests/test_p0_parity.py::SuperAndDunderV1::test_super_dispatch
+tests/test_p10_introspection.py::TestIntrospectionV1::test_getattr_and_setattr
+tests/test_p10_introspection.py::TestIntrospectionV1::test_hasattr_fields_and_methods
+tests/test_p10_introspection.py::TestIntrospectionV1::test_spanish_aliases
+tests/test_p11_native_methods.py::TestNativeMethodsV1::test_dict_clear_and_copy
+tests/test_p11_native_methods.py::TestNativeMethodsV1::test_dict_pop_and_setdefault
+tests/test_p11_native_methods.py::TestNativeMethodsV1::test_list_and_tuple_index
+tests/test_p11_native_methods.py::TestNativeMethodsV1::test_set_algebra_methods
+tests/test_p11_native_methods.py::TestNativeMethodsV1::test_set_predicates_and_mutators
+tests/test_p11_native_methods.py::TestNativeMethodsV1::test_str_removeprefix_and_suffix
+tests/test_p12_context_managers.py::TestContextManagersParity::test_async_with_basic
+tests/test_p12_context_managers.py::TestContextManagersParity::test_async_with_multiple
+tests/test_p12_context_managers.py::TestContextManagersParity::test_basic_with_as
+tests/test_p12_context_managers.py::TestContextManagersParity::test_basic_with_no_as
+tests/test_p12_context_managers.py::TestContextManagersParity::test_multiple_context_managers_success
+tests/test_p12_context_managers.py::TestContextManagersParity::test_multiple_with_inner_suppression
+tests/test_p12_context_managers.py::TestContextManagersParity::test_multiple_with_propagation_both_exits
+tests/test_p12_context_managers.py::TestContextManagersParity::test_nested_with_custom_context_managers
+tests/test_p12_context_managers.py::TestContextManagersParity::test_three_context_managers_order
+tests/test_p12_context_managers.py::TestContextManagersParity::test_with_enter_returns_self
+tests/test_p12_context_managers.py::TestContextManagersParity::test_with_exception_propagation_and_catch
+tests/test_p12_context_managers.py::TestContextManagersParity::test_with_exception_suppression
+tests/test_p12_context_managers.py::TestContextManagersParity::test_with_in_loop
+tests/test_p14_pattern_matching.py::TestPatternMatchingParity::test_match_class_patterns
+tests/test_p14_pattern_matching.py::TestPatternMatchingParity::test_match_type_patterns_single_type
+tests/test_p15_decorators.py::TestAdvancedDecorators::test_class_decorator_attribute_injection
+tests/test_p15_decorators.py::TestAdvancedDecorators::test_classmethod_and_metodo_clase
+tests/test_p15_decorators.py::TestAdvancedDecorators::test_method_tearoff_and_bound_methods
+tests/test_p15_decorators.py::TestAdvancedDecorators::test_staticmethod_and_metodo_estatico
+tests/test_p1_division_in.py::ContainsV1::test_float_needle_uses_numeric_equality
+tests/test_p3_str_methods.py::CaseV1::test_non_ascii_case_fails_closed_at_runtime
+tests/test_p3_str_methods.py::CaseV1::test_upper_lower
+tests/test_p3_str_methods.py::CaseV1::test_upper_on_variable
+tests/test_p3_str_methods.py::CaseV1::test_upper_with_wrong_arity_fails_closed
+tests/test_p3_str_methods.py::FindV1::test_find_empty_needle
+tests/test_p3_str_methods.py::FindV1::test_find_found_and_missing
+tests/test_p3_str_methods.py::FindV1::test_startswith_endswith
+tests/test_p3_str_methods.py::ReplaceV1::test_replace
+tests/test_p3_str_methods.py::ReplaceV1::test_replace_empty_old
+tests/test_p3_str_methods.py::ReplaceV1::test_replace_wrong_arity_fails_closed
+tests/test_p3_str_methods.py::SplitV1::test_split_lengths_both_platforms
+tests/test_p3_str_methods.py::StripV1::test_strip_lstrip_rstrip
+tests/test_p3_str_methods.py::StripV1::test_strip_with_chars
+tests/test_p3_str_methods.py::JoinV1::test_join_list
+tests/test_p3_str_methods.py::JoinV1::test_join_non_str_element_fails_at_runtime
+tests/test_p3_str_methods.py::JoinV1::test_join_tuple
+tests/test_p3_str_methods.py::FormatV1::test_format_auto
+tests/test_p3_str_methods.py::FormatV1::test_format_bad_field_fails_at_build
+tests/test_p3_str_methods.py::FormatV1::test_format_bad_index_fails_at_build
+tests/test_p3_str_methods.py::FormatV1::test_format_escaped_braces
+tests/test_p3_str_methods.py::FormatV1::test_format_indexed
+tests/test_p3_str_methods.py::FormatV1::test_format_mixed_types
+tests/test_p3_str_methods.py::FormatV1::test_format_no_args
+tests/test_p3_str_methods.py::FormatV1::test_unknown_method_fails_closed
+tests/test_p3_str_methods.py::FormatNamedSlotV1::test_named_and_positional_do_not_collide
+tests/test_p3_str_methods.py::FormatNamedSlotV1::test_named_only
+tests/test_p3_str_methods.py::FormatNamedSlotV1::test_named_repeated_keeps_one_slot
+tests/test_p3_str_methods.py::FormatNamedSlotV1::test_named_with_spaces_around_positional
+tests/test_p3_str_methods.py::FormatRuntimeMappingV1::test_runtime_mapping_escaped_braces
+tests/test_p3_str_methods.py::FormatRuntimeMappingV1::test_runtime_mapping_is_catchable
+tests/test_p3_str_methods.py::FormatRuntimeMappingV1::test_runtime_mapping_literal_receiver
+tests/test_p3_str_methods.py::FormatRuntimeMappingV1::test_runtime_mapping_missing_key_is_keyerror
+tests/test_p3_str_methods.py::FormatRuntimeMappingV1::test_runtime_mapping_variable_receiver
+tests/test_p3_str_methods.py::FormatRuntimeMappingV1::test_runtime_mapping_with_spec
+tests/test_p3_str_methods.py::StrMethodsChainedV1::test_chained_str_calls
+tests/test_p3_str_methods.py::FormatSpecV1::test_align_and_fill
+tests/test_p3_str_methods.py::FormatSpecV1::test_custom_fill_percent
+tests/test_p3_str_methods.py::FormatSpecV1::test_escaped_braces
+tests/test_p3_str_methods.py::FormatSpecV1::test_explicit_indices
+tests/test_p3_str_methods.py::FormatSpecV1::test_float_presentations
+tests/test_p3_str_methods.py::FormatSpecV1::test_integer_types
+tests/test_p3_str_methods.py::FormatSpecV1::test_mixing_numbering_fails_closed
+tests/test_p3_str_methods.py::FormatSpecV1::test_numeric_pads
+tests/test_p3_str_methods.py::FormatSpecV1::test_runtime_template_keeps_old_path
+tests/test_p3_str_methods.py::FormatSpecV1::test_string_truncation_and_width
+tests/test_p3_str_methods.py::FormatSpecV1::test_thousands_separator
+tests/test_p3_str_methods.py::FormatSpecV1::test_unknown_spec_fails_closed
+tests/test_p3_str_methods.py::StrMethodsP23::test_bad_arity_fails_closed
+tests/test_p3_str_methods.py::StrMethodsP23::test_case_transforms
+tests/test_p3_str_methods.py::StrMethodsP23::test_cased_predicates
+tests/test_p3_str_methods.py::StrMethodsP23::test_index_missing_raises
+tests/test_p3_str_methods.py::StrMethodsP23::test_just
+tests/test_p3_str_methods.py::StrMethodsP23::test_predicates
+tests/test_p3_str_methods.py::StrMethodsP23::test_search
+tests/test_p3_str_methods.py::StrMethodsP23::test_zfill
+tests/test_p4_iter_collections.py::IterPassthroughV1::test_for_map_builtin_callback_matches_cpython
+tests/test_p4_iter_collections.py::IterPassthroughV1::test_for_map_int_callback_matches_cpython
+tests/test_p4_iter_collections.py::CollMethodsV1::test_dict_get
+tests/test_p4_iter_collections.py::CollMethodsV1::test_dict_get_default
+tests/test_p4_iter_collections.py::CollMethodsV1::test_dict_get_missing_key_prints_none
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_append
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_append_returns_none
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_append_wrong_arity_fails_closed
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_count
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_insert
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_insert_clamps
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_pop
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_pop_empty_fails_at_runtime
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_pop_index
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_reverse
+tests/test_p4_iter_collections.py::CollMethodsV1::test_list_sort_ints
+tests/test_p4_iter_collections.py::CollMethodsV1::test_set_add
+tests/test_p4_iter_collections.py::CollMethodsV1::test_tuple_append_fails_closed
+tests/test_p4_iter_collections.py::CollMethodsV1::test_tuple_count
+tests/test_p5_percent_format.py::PercentSpecsP14::test_sign_flags
+tests/test_p6_int_pow.py::IntPowV1::test_bigint_base_pow_matches_cpython
+tests/test_p7_fstrings.py::FStringsV1::test_basic
+tests/test_p7_fstrings.py::FStringsV1::test_empty
+tests/test_p7_fstrings.py::FStringsV1::test_escaped_braces
+tests/test_p7_fstrings.py::FStringsV1::test_expressions
+tests/test_p7_fstrings.py::FStringsV1::test_format_spec
+tests/test_p7_fstrings.py::FStringsV1::test_method_call_inside
+tests/test_p7_fstrings.py::FStringsV1::test_mixed_types
+tests/test_p7_fstrings.py::FStringsV1::test_nested
+tests/test_p9_global.py::GlobalDeclV1::test_method_on_global_collection
+tests/test_phase5.py::Phase5Gates::test_corpus_17_class_basic
+tests/test_phase5.py::Phase5Gates::test_corpus_18_class_method
+tests/test_phase5.py::Phase5Gates::test_corpus_19_class_inheritance
+tests/test_phase5.py::Phase5Gates::test_descriptors_del_non_property_fails_closed
+tests/test_phase5.py::Phase5Gates::test_descriptors_property_call_fails_closed
+tests/test_phase5.py::Phase5Gates::test_descriptors_property_get_set
+tests/test_phase5.py::Phase5Gates::test_descriptors_property_get_set_del
+tests/test_phase5.py::Phase5Gates::test_descriptors_property_getter
+tests/test_phase5.py::Phase5Gates::test_descriptors_property_inheritance_mro
+tests/test_phase5.py::Phase5Gates::test_descriptors_property_set_on_getter_only_fails_closed
+tests/test_phase5.py::Phase5Gates::test_descriptors_property_shadow_in_subclass
+tests/test_phase5.py::Phase5Gates::test_x86_bare_reraise_custom_to_base
+tests/test_phase5.py::Phase5Gates::test_x86_bound_method_frame_abi
+tests/test_phase5.py::Phase5Gates::test_x86_bound_method_retrieval_and_later_call
+tests/test_phase5.py::Phase5Gates::test_x86_custom_exception_caught_by_Exception_base
+tests/test_phase5.py::Phase5Gates::test_x86_custom_exception_caught_by_exact_type
+tests/test_phase5.py::Phase5Gates::test_x86_custom_exception_subclass_caught_by_base
+tests/test_phase5.py::Phase5Gates::test_x86_custom_exception_subclass_of_valueerror
+tests/test_phase5.py::Phase5Gates::test_x86_custom_exception_uncaught_exits_with_message
+tests/test_phase5.py::Phase5Gates::test_x86_kw_unexpected_rejected
+tests/test_phase5.py::Phase5Gates::test_x86_module_metadata_files_mode_cpython_equiv
+tests/test_phase5.py::Phase5Gates::test_x86_module_metadata_source_mode_cpython_equiv
+tests/test_phase5.py::Phase5Gates::test_x86_multi_inheritance_diamond
+tests/test_phase5.py::Phase5Gates::test_x86_multi_inheritance_method_resolution
+tests/test_phase5.py::Phase5Gates::test_x86_multilevel_inheritance
+tests/test_phase5.py::Phase5Gates::test_x86_next_with_default
+tests/test_phase5.py::Phase5Gates::test_x86_positional_only_keyword_rejected
+tests/test_phase5.py::Phase5Gates::test_x86_recursive_closure_with_capture
+tests/test_phase5.py::Phase5Gates::test_x86_rejects_escaping_coroutine
+tests/test_phase5.py::Phase5Gates::test_x86_relative_from_import_in_package_equiv
+tests/test_phase5.py::Phase5Gates::test_x86_self_method_call_in_plain_class
+tests/test_phase5.py::Phase5Gates::test_x86_simple_class_fields_and_method
+tests/test_phase5.py::Phase5Gates::test_x86_simple_inheritance
+tests/test_phase5.py::Phase5Gates::test_x86_starargs_unexpected_keyword_rejected
+tests/test_phase5.py::Phase5Gates::test_x86_super_chain_method_override
+tests/test_phase5.py::Phase5Gates::test_x86_super_in_constructor_chain
+tests/test_phase5.py::Phase5Gates::test_x86_super_undefined_attribute_fails_closed
+tests/test_phase5.py::Phase5Gates::test_x86_super_with_user_arguments
+tests/test_phase5.py::Phase5Gates::test_x86_user_defined_stop_iteration_propagates
+tests/test_phase5.py::WithProtocolNativeV1::test_async_raise_with_cause_chain_caught
+tests/test_phase5.py::WithProtocolNativeV1::test_async_with_awaits_enter_and_exit
+tests/test_phase5.py::WithProtocolNativeV1::test_m13_self_cycle_reclaimed_at_module_teardown
+tests/test_phase5.py::WithProtocolNativeV1::test_raise_from_chain_visible_unhandled
+tests/test_phase5.py::WithProtocolNativeV1::test_with_exception_propagates_to_handler
+tests/test_phase5.py::WithProtocolNativeV1::test_with_multiple_items_fails_closed
+tests/test_phase5.py::WithProtocolNativeV1::test_with_multiple_suppress_and_propagate
+tests/test_phase5.py::WithProtocolNativeV1::test_with_normal_path
+tests/test_phase5.py::WithProtocolNativeV1::test_with_suppression
+tests/test_phase5.py::WithProtocolNativeV1::test_with_unhandled_exception
+tests/test_phase5.py::WithProtocolNativeV1::test_x86_class_call_routes_to_call
+tests/test_phase5.py::WithProtocolNativeV1::test_x86_class_delattr_hook
+tests/test_phase5.py::WithProtocolNativeV1::test_x86_class_eq_custom_dispatch
+tests/test_phase5.py::WithProtocolNativeV1::test_x86_class_getattr_field_wins_over_hook
+tests/test_phase5.py::WithProtocolNativeV1::test_x86_class_getattr_hook_missing
+tests/test_phase5.py::WithProtocolNativeV1::test_x86_class_is_identity
+tests/test_phase5.py::WithProtocolNativeV1::test_x86_class_len_dispatch
+tests/test_phase5.py::WithProtocolNativeV1::test_x86_class_setattr_hook
+tests/test_phase5.py::WithProtocolNativeV1::test_x86_class_str_dispatch
+tests/test_phase5.py::FinalizersNativeV1::test_finalizer_runs_once_for_self_cycle

@@ -93,15 +93,21 @@ funcion splitdrive (p ):
 
 
 funcion isfile (p ):
-    lanzar NotImplementedError ('posixpath.isfile no esta implementado en el backend nativo: no hay syscall de stat')
+    si __piton_stat_kind (p ,1 ) :
+        devolver Verdadero
+    devolver Falso
 
 
 funcion isdir (p ):
-    lanzar NotImplementedError ('posixpath.isdir no esta implementado en el backend nativo: no hay syscall de stat')
+    si __piton_stat_kind (p ,2 ) :
+        devolver Verdadero
+    devolver Falso
 
 
 funcion exists (p ):
-    lanzar NotImplementedError ('posixpath.exists no esta implementado en el backend nativo: no hay syscall de stat')
+    si __piton_stat_kind (p ,0 ) :
+        devolver Verdadero
+    devolver Falso
 
 
 funcion getsize (p ):

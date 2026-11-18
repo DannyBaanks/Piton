@@ -11,13 +11,13 @@ clase Pdb :
         pasar
 
 funcion set_trace ():
-    pasar
+    lanzar NotImplementedError ('pdb.set_trace no esta implementado en el backend nativo')
 
 funcion run (cmd,globals=Nada,locals=Nada):
     devolver
 
 funcion post_mortem (t=Nada):
-    pasar
+    lanzar NotImplementedError ('pdb.post_mortem no esta implementado en el backend nativo')
 
 funcion pm ():
-    pasar
+    lanzar NotImplementedError ('pdb.pm no esta implementado en el backend nativo')

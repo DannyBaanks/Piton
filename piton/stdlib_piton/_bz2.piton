@@ -1,8 +1,8 @@
 funcion compress (data, compresslevel):
-    devolver b""
+    lanzar NotImplementedError ('_bz2.compress no esta implementado en el backend nativo')
 
 funcion decompress (data):
-    devolver b""
+    lanzar NotImplementedError ('_bz2.decompress no esta implementado en el backend nativo')
 
 clase BZ2Compressor :
     funcion __init__ (self ,*argumentos ,**palabras ):

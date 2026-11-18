@@ -14,10 +14,11 @@ funcion basename (p ):
 
 
 funcion dirname (p ):
-    partes = p.rsplit ('/' ,1 )
-    si longitud (partes ) == 2 :
-        devolver partes [0 ]
-    devolver ''
+    i = p.rfind ('/' ) + 1
+    cabeza = p[:i ]
+    si cabeza y cabeza != '/' * longitud (cabeza ) :
+        cabeza = cabeza.rstrip ('/' )
+    devolver cabeza
 
 
 funcion isabs (p ):
@@ -46,15 +47,16 @@ funcion splitext (p ):
     devolver (p ,'')
 
 
-funcion join (a ,b ):
+funcion join (a ,*resto ):
     ruta = a
-    si b.startswith ('/' ) :
-        ruta = b
-    sino :
-        si no ruta o ruta.endswith ('/' ) :
-            ruta = ruta + b
+    para b en resto :
+        si b.startswith ('/' ) :
+            ruta = b
         sino :
-            ruta = ruta + '/' + b
+            si no ruta o ruta.endswith ('/' ) :
+                ruta = ruta + b
+            sino :
+                ruta = ruta + '/' + b
     devolver ruta
 
 
@@ -113,15 +115,21 @@ funcion splitdrive (p ):
 
 
 funcion isfile (p ):
-    lanzar NotImplementedError ('os.path.isfile no esta implementado en el backend nativo: no hay syscall de stat')
+    si __piton_stat_kind (p ,1 ) :
+        devolver Verdadero
+    devolver Falso
 
 
 funcion isdir (p ):
-    lanzar NotImplementedError ('os.path.isdir no esta implementado en el backend nativo: no hay syscall de stat')
+    si __piton_stat_kind (p ,2 ) :
+        devolver Verdadero
+    devolver Falso
 
 
 funcion exists (p ):
-    lanzar NotImplementedError ('os.path.exists no esta implementado en el backend nativo: no hay syscall de stat')
+    si __piton_stat_kind (p ,0 ) :
+        devolver Verdadero
+    devolver Falso
 
 
 funcion getsize (p ):

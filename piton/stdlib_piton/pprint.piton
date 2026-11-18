@@ -1,2 +1,49 @@
-funcion pprint (objeto ,*resto ,**opciones ):
-    lanzar NotImplementedError ('pprint no esta implementado en el backend nativo: el formateador multi-linea no existe todavia')
+# pprint.piton — pretty print (paridad con CPython 3.12)
+# Formatea listas anidadas respetando `width`, indentando 4 espacios por nivel.
+# Nota de alcance: el backend nativo no ofrece despacho de tipo en tiempo de
+# ejecucion sobre parametros mixtos, asi que se reconoce una lista porque
+# str(lista) empieza con '[' (cierto para cualquier lista, incluso vacía).
+
+funcion _pprint_list (x ,stream ,indent ,allowance ,width ):
+    stream.append("[")
+    _format_items(x ,stream ,indent ,allowance + 1 ,width )
+    stream.append("]")
+
+
+funcion _format_items (items ,stream ,indent ,allowance ,width ):
+    indent = indent + 1
+    delimnl = ",\n" + " " * indent
+    n = longitud(items )
+    i = 0
+    mientras i < n :
+        ent = items [i]
+        es_ultimo = (i == n - 1 )
+        si i > 0 :
+            stream.append(delimnl )
+        si es_ultimo :
+            a = allowance
+        sino :
+            a = 1
+        _format(ent ,stream ,indent ,a ,width )
+        i = i + 1
+
+
+funcion _format (x ,stream ,indent ,allowance ,width ):
+    si x == "" :
+        # cadena vacia: str("") es "" que no empieza por '['
+        stream.append("''")
+    sino_si texto(x )[0] == '[' :
+        rep = texto(x )
+        max_width = width - indent - allowance
+        si longitud(rep) <= max_width :
+            stream.append(rep)
+        sino :
+            _pprint_list(x ,stream ,indent ,allowance ,width )
+    sino :
+        stream.append("'" + x + "'")
+
+
+funcion pprint (obj ,width =80 ):
+    stream = []
+    _format(obj ,stream ,0 ,0 ,width )
+    imprimir("".join(stream ))

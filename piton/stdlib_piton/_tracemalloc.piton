@@ -1,11 +1,11 @@
 funcion start (nframe):
-    pasar
+    lanzar NotImplementedError ('_tracemalloc.start no esta implementado en el backend nativo')
 
 funcion stop ():
-    pasar
+    lanzar NotImplementedError ('_tracemalloc.stop no esta implementado en el backend nativo')
 
 funcion is_tracing ():
-    devolver Falso
+    lanzar NotImplementedError ('_tracemalloc.is_tracing no esta implementado en el backend nativo')
 
 funcion take_snapshot ():
     clase Snapshot :
@@ -15,7 +15,7 @@ funcion take_snapshot ():
 _Snapshot_dummy = Snapshot()
 
 funcion get_traces ():
-    devolver []
+    lanzar NotImplementedError ('_tracemalloc.get_traces no esta implementado en el backend nativo')
 
 funcion get_tracemalloc_memory ():
-    devolver 0
+    lanzar NotImplementedError ('_tracemalloc.get_tracemalloc_memory no esta implementado en el backend nativo')

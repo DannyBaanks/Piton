@@ -17,7 +17,9 @@ funcion capwords (s ,sep =Nada ):
     partes = []
     para pieza en piezas :
         si pieza :
-            partes.append (pieza [0 ].upper () + pieza [1 :] )
+            # CAPWORDS_CAPITALIZE_V1: CPython usa capitalize(), que ademas
+            # pasa a minusculas el resto de la palabra ('ABC' -> 'Abc').
+            partes.append (pieza [0 ].upper () + pieza [1 :].lower () )
         sino :
             partes.append ('')
     si sep es Nada :
@@ -25,12 +27,210 @@ funcion capwords (s ,sep =Nada ):
     devolver sep.join (partes )
 
 
+# Template real (semantica CPython 3.12), escaner propio sin `re`.
+#
+# REGLAS DEL RUNTIME que este modulo obeyedece:
+#  - subindice/slice de un string solo funciona si el string es PARAMETRO de
+#    funcion: self.plantilla[i] devolveria un int. Por eso el escaneo vive en
+#    funciones de modulo que reciben `texto` como argumento.
+#  - los metodos no retornan listas (se tipan mal): retornan solo str.
+#  - no hay slices con cotas variables ni `in` sobre valor dinamico.
+#  - chequeo de identificador por comparaciones puras (sin .upper()).
+funcion _es_ini (c ):
+    si c == '_' :
+        devolver Verdadero
+    si c >= 'a' y c <= 'z' :
+        devolver Verdadero
+    si c >= 'A' y c <= 'Z' :
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _es_parte (c ):
+    si c == '_' :
+        devolver Verdadero
+    si c >= 'a' y c <= 'z' :
+        devolver Verdadero
+    si c >= 'A' y c <= 'Z' :
+        devolver Verdadero
+    si c >= '0' y c <= '9' :
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _tokens_de (texto ):
+    partes = []
+    n = len (texto )
+    i = 0
+    lit = ''
+    mientras i < n :
+        c = texto[i]
+        si c != '$' :
+            lit = lit + c
+            i = i + 1
+        sino :
+            si lit != '' :
+                partes.append (('lit' ,lit ,lit ))
+                lit = ''
+            sig = i + 1
+            si sig < n y texto[sig] == '$' :
+                partes.append (('esc' ,'$' ,'$$' ))
+                i = i + 2
+            sino_si sig < n y texto[sig] == '{' :
+                j = i + 2
+                si j < n y _es_ini (texto[j]) :
+                    nombre = texto[j]
+                    j = j + 1
+                    mientras j < n :
+                        cj = texto[j]
+                        si _es_parte (cj ) :
+                            nombre = nombre + cj
+                            j = j + 1
+                        sino :
+                            romper
+                    si j < n y texto[j] == '}' :
+                        partes.append (('nombre' ,nombre ,'${' + nombre + '}' ))
+                        i = j + 1
+                    sino :
+                        partes.append (('malo' ,i ,'$' ))
+                        i = i + 1
+                sino :
+                    partes.append (('malo' ,i ,'$' ))
+                    i = i + 1
+            sino_si sig < n y _es_ini (texto[sig]) :
+                j = i + 1
+                nombre = ''
+                mientras j < n :
+                    cj = texto[j]
+                    si _es_parte (cj ) :
+                        nombre = nombre + cj
+                        j = j + 1
+                    sino :
+                        romper
+                partes.append (('nombre' ,nombre ,'$' + nombre ))
+                i = j
+            sino :
+                partes.append (('malo' ,i ,'$' ))
+                i = i + 1
+    si lit != '' :
+        partes.append (('lit' ,lit ,lit ))
+    devolver partes
+
+
+funcion _linea_col_de (texto ,d ):
+    lin = 1
+    ultimo = -1
+    k = 0
+    mientras k < d :
+        si texto[k] == '\n' :
+            lin = lin + 1
+            ultimo = k
+        k = k + 1
+    devolver (lin ,(d - ultimo ))
+
+
+funcion _a_str (v ):
+    devolver '%s' % v
+
+
+funcion _buscar_de (nombre ,mapa ,palabras ):
+    intentar :
+        devolver _a_str (palabras[nombre] )
+    excepto KeyError :
+        si (mapa es Nada) o (mapa == Nada) :
+            devolver _a_str (palabras[nombre] )
+        devolver _a_str (mapa[nombre] )
+
+
+funcion _sustituir_de (texto ,mapa ,palabras ,seguro ):
+    partes = []
+    n = len (texto )
+    i = 0
+    lit = ''
+    mientras i < n :
+        c = texto[i]
+        si c != '$' :
+            lit = lit + c
+            i = i + 1
+        sino :
+            si lit != '' :
+                partes.append (lit )
+                lit = ''
+            sig = i + 1
+            si sig < n y texto[sig] == '$' :
+                partes.append ('$' )
+                i = i + 2
+            sino_si sig < n y texto[sig] == '{' :
+                j = i + 2
+                si j < n y _es_ini (texto[j]) :
+                    nombre = texto[j]
+                    j = j + 1
+                    mientras j < n :
+                        cj = texto[j]
+                        si _es_parte (cj ) :
+                            nombre = nombre + cj
+                            j = j + 1
+                        sino :
+                            romper
+                    si j < n y texto[j] == '}' :
+                        si seguro :
+                            intentar :
+                                partes.append (_buscar_de (nombre ,mapa ,palabras ))
+                            excepto KeyError :
+                                partes.append ('${' + nombre + '}' )
+                        sino :
+                            partes.append (_buscar_de (nombre ,mapa ,palabras ))
+                        i = j + 1
+                    sino :
+                        si seguro :
+                            partes.append ('$' )
+                        sino :
+                            lc = _linea_col_de (texto ,i )
+                            lanzar ValueError ('Invalid placeholder in string: line %d, col %d' % (lc[0] ,lc[1] ))
+                        i = i + 1
+                sino :
+                    si seguro :
+                        partes.append ('$' )
+                    sino :
+                        lc = _linea_col_de (texto ,i )
+                        lanzar ValueError ('Invalid placeholder in string: line %d, col %d' % (lc[0] ,lc[1] ))
+                    i = i + 1
+            sino_si sig < n y _es_ini (texto[sig]) :
+                j = i + 1
+                nombre = ''
+                mientras j < n :
+                    cj = texto[j]
+                    si _es_parte (cj ) :
+                        nombre = nombre + cj
+                        j = j + 1
+                    sino :
+                        romper
+                si seguro :
+                    intentar :
+                        partes.append (_buscar_de (nombre ,mapa ,palabras ))
+                    excepto KeyError :
+                        partes.append ('$' + nombre )
+                sino :
+                    partes.append (_buscar_de (nombre ,mapa ,palabras ))
+                i = j
+            sino :
+                si seguro :
+                    partes.append ('$' )
+                sino :
+                    lc = _linea_col_de (texto ,i )
+                    lanzar ValueError ('Invalid placeholder in string: line %d, col %d' % (lc[0] ,lc[1] ))
+                i = i + 1
+    si lit != '' :
+        partes.append (lit )
+    devolver ''.join (partes )
+
+
 clase Template :
     funcion __init__ (self ,plantilla ):
         self.plantilla = plantilla
 
-    funcion substitute (self ,*mapas ,**palabras ):
-        lanzar NotImplementedError ('string.Template.substitute no esta implementado en el backend nativo')
+    funcion substitute (self ,_mapa_pos =Nada ,**palabras ):
+        devolver _sustituir_de (self.plantilla ,_mapa_pos ,palabras ,Falso )
 
-    funcion safe_substitute (self ,*mapas ,**palabras ):
-        lanzar NotImplementedError ('string.Template.safe_substitute no esta implementado en el backend nativo')
+    funcion safe_substitute (self ,_mapa_pos =Nada ,**palabras ):
+        devolver _sustituir_de (self.plantilla ,_mapa_pos ,palabras ,Verdadero )

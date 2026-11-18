@@ -1,8 +1,72 @@
+# timeit.piton — API de timeit.Timer y timeit.timeit (fase de validacion).
+#
+# Limitacion honesta del backend nativo: PITON no tiene eval()/exec() en tiempo de
+# ejecucion, asi que no puede ejecutar el texto de stmt/setup, y time.perf_counter /
+# time.monotonic lanzan NotImplementedError (no hay reloj de alta resolucion expuesto).
+# Por eso Timer valida sus argumentos como CPython y timeit()/Timer.timeit() fallan
+# cerrado con NotImplementedError en lugar de devolver tiempos inventados.
+#
+# Nota de compilacion: los parametros usan Nada como defecto y los valores por defecto
+# reales ('pass', 1000000) se aplican dentro. Con un defecto str/int el compilador nativo
+# fija el tipo estatico del parametro y puede saltarse la validacion o segfaultear
+# cuando reciben otro tipo. Consecuencia: Timer(None) / timeit(number=None) se tratan
+# como el valor por defecto (CPython lanza ValueError / TypeError).
+
 default_timer = 0
 timer = default_timer
 
-funcion timeit (stmt,setup='pass',timer=default_timer,number=1000000,globals=0,file=0):
-    devolver 0.0
+
+funcion _valor_o_defecto (valor ,defecto ):
+    si valor es Nada:
+        devolver defecto
+    devolver valor
+
+
+# Los argumentos se pasan dentro de una caja (lista de un elemento): el compilador
+# nativo rechaza es_instancia() sobre un parametro que recibe tipos distintos
+# (p. ej. str y float), igual que random.piton con _slot_is_int.
+funcion _caja_es_str (caja ):
+    x = caja[0]
+    si es_instancia (x ,str ):
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _caja_es_int (caja ):
+    x = caja[0]
+    si es_instancia (x ,int ):
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _validar_fuente (valor ,nombre ):
+    caja = [valor]
+    si _caja_es_str (caja ):
+        devolver valor
+    lanzar ValueError (nombre +' is neither a string nor callable')
+
+
+funcion _validar_numero (number ):
+    caja = [number]
+    si no _caja_es_int (caja ):
+        lanzar TypeError ('number debe ser int')
+    devolver number
+
+
+clase Timer :
+    funcion __init__ (este ,stmt =Nada ,setup =Nada ):
+        este.stmt = _validar_fuente (_valor_o_defecto (stmt ,'pass') ,'stmt')
+        este.setup = _validar_fuente (_valor_o_defecto (setup ,'pass') ,'setup')
+
+    funcion timeit (este ,number =Nada ):
+        _validar_numero (_valor_o_defecto (number ,1000000 ))
+        lanzar NotImplementedError ('timeit.Timer.timeit no esta implementado en el backend nativo')
+
+
+funcion timeit (stmt =Nada ,setup =Nada ,number =Nada ):
+    t = Timer (stmt ,setup )
+    devolver t.timeit (number )
+
 
 funcion repeat (stmt,setup='pass',timer=default_timer,number=1000000,repeat=5,globals=0,file=0):
-    devolver [0.0] * repeat
+    lanzar NotImplementedError ('timeit.repeat no esta implementado en el backend nativo')

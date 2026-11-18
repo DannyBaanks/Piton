@@ -10,6 +10,7 @@ se cae — sin que la metrica global (72.7%) se mueva.
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
@@ -47,20 +48,24 @@ class InstrumentV1(unittest.TestCase):
 
 
 class InputoutputDivergenceV1(unittest.TestCase):
-    """Los tres ejemplos que quedan divergentes en inputoutput.py.
+    """inputoutput.py actualmente equivale en los 68 ejemplos.
 
-    - 39: `vars()` — PITON no tiene reflejo de los globales del modulo.
-    - 41: el volcado de globales que imprime ese `vars()` (consecuencia
-      del 39: la tabla sale del ejemplo 37, no del reflejo real).
-    - 61: `f.write(b'...')` sobre un fichero abierto en 'rb+' — el modelo
-      de ficheros carga el buffer entero y no tiene escritura binaria.
+    Medido (2026-11-16, backend linux_x86): el ejemplo 41, que imprimia
+    valores internos incorrectos al formatear el resultado de `vars()`, ya
+    coincide con CPython. Los ejemplos 39 y 61 tambien coinciden cuando el
+    mapa ejecuta ambos lados en su directorio temporal compartido.
     """
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "Linux ELF native backend is not available on the Windows CI runner",
+    )
     def test_divergent_examples_are_exactly_these(self):
         result = DIVMAP.run_script("inputoutput")
         self.assertNotIn("error", result, result.get("error"))
         divergent = {chunk["chunk"] for chunk in result["chunks"]}
-        self.assertEqual(divergent, {39, 41, 61})
+        self.assertEqual(result["chunks_total"], 68)
+        self.assertEqual(divergent, set(), f"divergencias en inputoutput: {divergent}")
 
 
 if __name__ == "__main__":

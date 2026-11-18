@@ -1,5 +1,5 @@
 funcion compile (file,cfile=Nada,dfile=Nada,doraise=Falso,optimize=-1,invalidation_mode=None):
-    devolver 0
+    lanzar NotImplementedError ('py_compile.compile no esta implementado en el backend nativo')
 
 funcion main (args=Nada):
-    devolver 0
+    lanzar NotImplementedError ('py_compile.main no esta implementado en el backend nativo')

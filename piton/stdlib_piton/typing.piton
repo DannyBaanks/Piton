@@ -135,8 +135,8 @@ funcion get_type_hints (obj ):
 
 
 funcion get_args (tp ):
-    devolver ()
+    lanzar NotImplementedError ('typing.get_args no esta implementado en el backend nativo')
 
 
 funcion get_origin (tp ):
-    devolver Nada
+    lanzar NotImplementedError ('typing.get_origin no esta implementado en el backend nativo')

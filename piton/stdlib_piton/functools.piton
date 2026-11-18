@@ -14,10 +14,90 @@ funcion reduce (funcion ,iterable ,*inicial ) :
 
 
 funcion wraps (envuelta ) :
-    funcion envoltorio (f ) :
-        devolver f
+    funcion envoltorio (_fn_objetivo ) :
+        devolver _fn_objetivo
     devolver envoltorio
 
 
 funcion total_ordering (clase ) :
-    devolver clase
+    lanzar NotImplementedError ('functools.total_ordering no esta implementado en el backend nativo')
+
+
+funcion partial (_fn_objetivo ,*args ) :
+    # PARTIAL_V1: liga los argumentos iniciales y devuelve un callable que
+    # los antepone a los que reciba.
+    funcion envoltorio (x ,*rest ) :
+        todos = []
+        para a en args :
+            todos.append (a )
+        todos.append (x )
+        para a en rest :
+            todos.append (a )
+        devolver _fn_objetivo (*todos )
+    devolver envoltorio
+
+
+clase _CacheInfo :
+    funcion __init__ (self ,hits ,misses ,maxsize ,currsize ):
+        self.hits = hits
+        self.misses = misses
+        self.maxsize = maxsize
+        self.currsize = currsize
+
+
+funcion _hacer_lru (_fn_objetivo ,maxsize ,typed ):
+    # LRU_STATS_V1: contadores hits/misses en un dict (el backend nativo no
+    # tiene `nonlocal`) y los atributos cache_info()/cache_clear() colgados
+    # del propio envoltorio, como en CPython.
+    cache = {}
+    orden = []
+    estado = {"hits": 0, "misses": 0}
+    funcion envoltorio (*args ) :
+        clave = args
+        si clave en cache :
+            estado ["hits"] = estado ["hits"] + 1
+            devolver cache [clave ]
+        estado ["misses"] = estado ["misses"] + 1
+        todos = []
+        para a en args :
+            todos.append (a )
+        r = _fn_objetivo (*todos )
+        si maxsize != 0 :
+            si maxsize no es Nada y maxsize > 0 y longitud (orden ) >= maxsize :
+                viejo = tupla (orden.pop (0 ))
+                si viejo en cache :
+                    borrar cache [viejo ]
+            cache [clave ] = r
+            orden.append (clave )
+        devolver r
+    funcion cache_info ():
+        devolver _CacheInfo (estado ["hits"] ,estado ["misses"] ,maxsize ,longitud (cache ))
+    funcion cache_clear ():
+        cache.clear ()
+        orden.clear ()
+        estado ["hits"] = 0
+        estado ["misses"] = 0
+    devolver _adjuntar_lru (envoltorio ,cache_info ,cache_clear )
+
+
+funcion _adjuntar_lru (envoltorio ,info ,limpiar ):
+    # Un nombre de funcion anidada se materializa en cada carga, asi que los
+    # atributos se fijan sobre el valor que llega como parametro: la misma
+    # instancia es la que se devuelve.
+    envoltorio.cache_info = info
+    envoltorio.cache_clear = limpiar
+    devolver envoltorio
+
+
+funcion lru_cache (maxsize =128 ,typed =Falso ):
+    # Soporta @lru_cache(maxsize=None)/@lru_cache(maxsize=32) y @lru_cache
+    # directo sobre funcion (maxsize callable -> defaults). Cache real:
+    # dict clave=tupla(args); eviccion FIFO/LRU si maxsize es int > 0;
+    # maxsize=0 no cachea; maxsize=None crece sin limite.
+    si tiene_atr (maxsize ,'__call__') :
+        _fn_objetivo = maxsize
+        maxsize = 128
+        devolver _hacer_lru (_fn_objetivo ,maxsize ,typed )
+    funcion decorador (_fn_objetivo ) :
+        devolver _hacer_lru (_fn_objetivo ,maxsize ,typed )
+    devolver decorador

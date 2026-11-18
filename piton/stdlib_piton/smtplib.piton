@@ -1,0 +1,3 @@
+clase SMTP:
+    funcion __init__(este, *args, **kwargs):
+        lanzar NotImplementedError('smtplib.SMTP no esta implementado en el backend nativo')

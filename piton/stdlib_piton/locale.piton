@@ -1,19 +1,535 @@
-clase LC_TIME :
+# locale.piton — modulo locale con paridad CPython 3.12 para el locale "C"/"POSIX".
+#
+# Alcance (backend nativo Linux, sin libc):
+#   * setlocale(categoria, nombre=None): solo los nombres del locale C
+#     ("C", "POSIX", "", "C.UTF-8", "C.utf8"). Cualquier otro nombre lanza
+#     locale.Error('unsupported locale setting'), igual que glibc/CPython.
+#     Los locales instalados en el host (p. ej. es_ES.UTF-8) tambien lanzan
+#     aqui, aunque CPython los acepte: PITON no consulta el sistema.
+#   * localeconv(): dict con las 18 convenciones del locale C, en el mismo
+#     orden de claves que CPython 3.12.
+#   * format_string(formato, valor, grouping=False, monetary=False): en el
+#     locale C el separador de miles es '' y no hay agrupacion, asi que
+#     grouping/monetary no cambian el resultado. El formato se expande con
+#     un printf propio. Conversiones: %d %i %u %s %f %F %x %X %o y %%, con
+#     banderas, ancho y precision (incluidos '*'). %f/%F son exactos para
+#     cualquier precision (p. ej. el %.*f con frac_digits=127).
+#     Claves de mapping ('%(nombre)s') soportadas con un diccionario.
+#     No implementadas: %e %E %g %G %c %r %a; lanzan NotImplementedError. Los enteros (%d %i %u
+#     %x %X %o) solo son exactos hasta 2^53: por encima lanzan
+#     NotImplementedError en vez de dar un resultado erroneo.
+#
+# Notas de backend nativo (verificadas con prueba contra CPython):
+#   * no usar ** con exponente dinamico ni enteros de varios limbos (//, >>):
+#     se calculan mal. Las potencias se hacen por multiplicacion.
+#   * no usar int()/ord() sobre un caracter de un str: falla. Los digitos
+#     se leen con _VALOR_DIGITO, y los trozos de texto con s[i:i+1].
+#   * no meter valores de tipos mixtos en list(...): el valor vuelve mal.
+#     Las tuplas se pasan tal cual y se indexan.
+#   * no componer el formato con % dinamico: cada conversion usa su helper.
+#   * floats dinamicos (valores de una tupla): solo + - * / comparaciones y
+#     str(). Nada de //, %, int(), ** ni unario -: el nativo lo rechaza o da
+#     basura. Ver _partes_float.
+#   * localeconv(): los valores mixtos (str e int) se leen con su kind real
+#     (d['k'] de un dict sin tipo de valor conocido va etiquetado, ver
+#     DICT_GET_SLOT_V1 en linux_x86.py).
+
+
+clase Error (Exception):
     pasar
 
 
-clase This :
-    pasar
+# Valores de glibc (Linux); category tags de setlocale.
+LC_CTYPE = 0
+LC_NUMERIC = 1
+LC_TIME = 2
+LC_COLLATE = 3
+LC_MONETARY = 4
+LC_MESSAGES = 5
+LC_ALL = 6
+CHAR_MAX = 127
+
+# Nombre activo por categoria (LC_CTYPE..LC_MESSAGES = 0..5). LC_ALL (6)
+# escribe las seis. Estado inicial: "C" para todas.
+_LOCALE_CATEGORIAS = [ "C" , "C" , "C" , "C" , "C" , "C" ]
+
+_VALOR_DIGITO = { '0' : 0 , '1' : 1 , '2' : 2 , '3' : 3 , '4' : 4 , '5' : 5 , '6' : 6 , '7' : 7 , '8' : 8 , '9' : 9 }
+
+_SIGUIENTE_DIGITO = { '0' : '1' , '1' : '2' , '2' : '3' , '3' : '4' , '4' : '5' , '5' : '6' , '6' : '7' , '7' : '8' , '8' : '9' , '9' : '0' }
+
+_DIGITOS_BASE = '0123456789abcdef'
 
 
 funcion getencoding (*args , **kwargs):
     lanzar NotImplementedError ('locale.getencoding no esta implementado en el backend nativo')
 
-
 funcion getlocale (*args , **kwargs):
     lanzar NotImplementedError ('locale.getlocale no esta implementado en el backend nativo')
-
 
 funcion getpreferredencoding (*args , **kwargs):
     lanzar NotImplementedError ('locale.getpreferredencoding no esta implementado en el backend nativo')
 
+
+funcion localeconv ():
+    conv = {}
+    conv ['decimal_point'] = '.'
+    conv ['grouping'] = []
+    conv ['thousands_sep'] = ''
+    conv ['int_curr_symbol'] = ''
+    conv ['currency_symbol'] = ''
+    conv ['mon_decimal_point'] = ''
+    conv ['mon_thousands_sep'] = ''
+    conv ['mon_grouping'] = []
+    conv ['positive_sign'] = ''
+    conv ['negative_sign'] = ''
+    conv ['int_frac_digits'] = 127
+    conv ['frac_digits'] = 127
+    conv ['p_cs_precedes'] = 127
+    conv ['p_sep_by_space'] = 127
+    conv ['n_cs_precedes'] = 127
+    conv ['n_sep_by_space'] = 127
+    conv ['p_sign_posn'] = 127
+    conv ['n_sign_posn'] = 127
+    devolver conv
+
+
+funcion setlocale (categoria , configuracion =Nada ):
+    si no es_instancia (categoria , int ) :
+        lanzar TypeError ("'" + str (tipo (categoria ) ) + "' object cannot be interpreted as an integer" )
+    si categoria < 0 o categoria > 6 :
+        lanzar Error ('unsupported locale setting')
+    si configuracion == Nada :
+        si categoria == 6 :
+            i = 1
+            mientras i < 6 :
+                si _LOCALE_CATEGORIAS [i ] != _LOCALE_CATEGORIAS [0 ] :
+                    lanzar NotImplementedError ('setlocale(LC_ALL) con categorias distintas no esta implementado en el backend nativo')
+                i = i + 1
+            devolver _LOCALE_CATEGORIAS [0 ]
+        devolver _LOCALE_CATEGORIAS [categoria ]
+    si no es_instancia (configuracion , str ) :
+        lanzar TypeError ("setlocale() argument 2 must be str or None")
+    si configuracion no en ["C" , "POSIX" , "" , "C.UTF-8" , "C.utf8" ] :
+        lanzar Error ('unsupported locale setting')
+    nombre = configuracion
+    si configuracion == "" o configuracion == "POSIX" :
+        nombre = "C"
+    si categoria == 6 :
+        i = 0
+        mientras i < 6 :
+            _LOCALE_CATEGORIAS [i ] = nombre
+            i = i + 1
+    sino :
+        _LOCALE_CATEGORIAS [categoria ] = nombre
+    devolver nombre
+
+
+funcion format_string (formato , valor , grouping =Falso , monetary =Falso ):
+    # agrupacion y monetario: sin efecto en el locale C (separador vacio).
+    # Igual que CPython: un valor suelto equivale a (valor,); los elementos
+    # sobrantes se ignoran; faltar elementos da IndexError.
+    si _es_tupla (valor ) :
+        devolver _printf_locale (formato , valor , Falso , 0 )
+    devolver _printf_locale (formato , (), Verdadero , valor )
+
+
+funcion _es_tupla (valor ):
+    # Una tupla tiene len y es distinta de str(...) y de list(...). Sin
+    # isinstance/type (el nativo los rechaza con tipos mixtos).
+    intentar :
+        longitud (valor )
+        devolver valor != str (valor ) y valor != list (valor )
+    excepto TypeError :
+        devolver Falso
+
+
+funcion _printf_locale (fmt , args , es_escalar , escalar ):
+    # args: tupla de valores (si es_escalar es Falso). Si es_escalar, el
+    # unico valor es `escalar`. Un parametro de lista nunca recibe un float:
+    # el backend nativo rechaza esa combinacion.
+    partes = []
+    n = len (fmt )
+    i = 0
+    k = 0
+    mientras i < n :
+        si fmt [i :i + 1 ] != '%' :
+            j = i
+            mientras j < n y fmt [j :j + 1 ] != '%' :
+                j = j + 1
+            partes.append (fmt [i :j ] )
+            i = j
+        sino :
+            si i + 1 < n y fmt [i + 1 :i + 2 ] == '%' :
+                partes.append ('%' )
+                i = i + 2
+            sino :
+                i = i + 1
+                clave = None
+                si i < n y fmt [i :i + 1 ] == '(' :
+                    j = fmt.find (')' , i )
+                    si j < 0 :
+                        lanzar ValueError ('incomplete format key')
+                    clave = fmt [i + 1 :j ]
+                    i = j + 1
+                banderas = ''
+                mientras i < n y fmt [i :i + 1 ] en '-+ #0' :
+                    banderas = banderas + fmt [i :i + 1 ]
+                    i = i + 1
+                ancho = -1
+                si i < n y fmt [i :i + 1 ] == '*' :
+                    ancho = _siguiente_entero (args , k , es_escalar , 0 )
+                    k = k + 1
+                    i = i + 1
+                    si ancho < 0 :
+                        banderas = banderas + '-'
+                        ancho = -ancho
+                mientras i < n y fmt [i :i + 1 ] en '0123456789' :
+                    si ancho < 0 :
+                        ancho = 0
+                    ancho = ancho * 10 + _VALOR_DIGITO [fmt [i :i + 1 ] ]
+                    i = i + 1
+                prec = -1
+                si i < n y fmt [i :i + 1 ] == '.' :
+                    prec = 0
+                    i = i + 1
+                    si i < n y fmt [i :i + 1 ] == '*' :
+                        prec = _siguiente_entero (args , k , es_escalar , 0 )
+                        k = k + 1
+                        i = i + 1
+                    mientras i < n y fmt [i :i + 1 ] en '0123456789' :
+                        prec = prec * 10 + _VALOR_DIGITO [fmt [i :i + 1 ] ]
+                        i = i + 1
+                mientras i < n y fmt [i :i + 1 ] en 'hlLqjzt' :
+                    i = i + 1
+                si i >= n :
+                    lanzar ValueError ('incomplete format')
+                conv = fmt [i :i + 1 ]
+                i = i + 1
+                si conv en 'fF' :
+                    partes.append (_formatear_f (_siguiente_valor (args , k , es_escalar , escalar , clave ) , prec , banderas , ancho , conv ) )
+                    k = k + 1
+                sino :
+                    si conv en 'diuxXoseEgGcra' :
+                        si conv en 'diuxXo' :
+                            partes.append (_formatear_entero (_siguiente_valor (args , k , es_escalar , escalar , clave ) , prec , banderas , ancho , conv ) )
+                        sino :
+                            si conv == 's' :
+                                partes.append (_formatear_texto (_siguiente_valor (args , k , es_escalar , escalar , clave ) , prec , banderas , ancho ) )
+                            sino :
+                                lanzar NotImplementedError ('format_string: la conversion %' + conv + ' no esta implementada en el backend nativo')
+                        k = k + 1
+                    sino :
+                        lanzar ValueError ("unsupported format character '" + conv + "'")
+    devolver ''.join (partes )
+
+
+funcion _siguiente_valor (args , k , es_escalar , escalar , clave ):
+    si clave != None :
+        # Clave de mapping: args es el diccionario; no consume posicion.
+        devolver args [clave ]
+    si es_escalar :
+        si k >= 1 :
+            lanzar IndexError ('tuple index out of range')
+        devolver escalar
+    si k >= longitud (args ) :
+        lanzar IndexError ('tuple index out of range')
+    devolver args [k ]
+
+
+funcion _siguiente_entero (args , k , es_escalar , relleno ):
+    # Valor de '*' (ancho o precision) como entero estatico.
+    si es_escalar :
+        lanzar TypeError ('not enough arguments for format string')
+    si k >= longitud (args ) :
+        lanzar IndexError ('tuple index out of range')
+    devolver _como_entero (args [k ] )
+
+
+funcion _como_entero (x ):
+    # Entero desde su texto (int() sobre valores dinamicos falla en nativo).
+    devolver _digitos_a_entero (str (x ) , Verdadero )
+
+
+funcion _formatear_f (v , prec , banderas , ancho , conv ):
+    si v == str (v ) :
+        lanzar TypeError ('must be real number, not str')
+    # Un float solo cruza una funcion: _partes_float lo descompone en enteros
+    # (el nativo corrompe floats que pasan por varias funciones).
+    partes = _partes_float (v )
+    tipo_valor = partes [0 ]
+    negativo = partes [1 ]
+    mayus = conv == 'F'
+    si prec < 0 :
+        prec = 6
+    signo = _signo_de (negativo , banderas )
+    si tipo_valor == 2 :
+        cuerpo = 'nan'
+        si mayus :
+            cuerpo = 'NAN'
+        devolver _rellenar_numero (cuerpo , '' , banderas , ancho , Falso )
+    si tipo_valor == 1 :
+        cuerpo = 'inf'
+        si mayus :
+            cuerpo = 'INF'
+        devolver _rellenar_numero (cuerpo , signo , banderas , ancho , Falso )
+    digitos = _decimal_fijo_partes (partes [2 ] , partes [3 ] , prec )
+    si '#' en banderas y prec == 0 :
+        digitos = digitos + '.'
+    devolver _rellenar_numero (digitos , signo , banderas , ancho , Verdadero )
+
+
+funcion _partes_float (v ):
+    # (tipo, negativo, mantisa, exponente): tipo 0 finito, 1 inf, 2 nan.
+    # El valor es mantisa * 2^exponente con mantisa < 2^53 (entero exacto).
+    x = v * 1.0
+    si x != x :
+        devolver (2 , 0 , 0 , 0 )
+    neg = 0
+    si x < 0 o (x == 0 y str (x ) [0 :1 ] == '-' ) :
+        neg = 1
+    si x == x * 2 y x != 0 :
+        devolver (1 , neg , 0 , 0 )
+    m = x
+    si neg == 1 :
+        m = x * -1.0
+    e = 0
+    mientras m < 9007199254740992.0 y no _es_entero_flotante (m ) :
+        m = m * 2
+        e = e - 1
+    mientras m >= 9007199254740992.0 :
+        m = m / 2
+        e = e + 1
+    devolver (0 , neg , _entero_de_flotante (m ) , e )
+
+
+funcion _es_entero_flotante (f ):
+    # f (float no negativo, < 2^53) es entero si su texto acaba en '.0'.
+    s = str (f )
+    devolver s [longitud (s ) - 2 :] == '.0'
+
+
+funcion _entero_de_flotante (f ):
+    # f entero no negativo y < 1e16, leido del texto de str(f). No se usa
+    # int() ni // o % sobre floats dinamicos: el backend nativo los rechaza.
+    devolver _digitos_a_entero (str (f ) , Falso )
+
+
+funcion _truncar_a_entero (f ):
+    # Truncado hacia cero, como int(f), leyendo la parte entera del texto.
+    s = str (f )
+    devolver _digitos_a_entero (s , Verdadero )
+
+
+funcion _digitos_a_entero (s , con_signo ):
+    neg = Falso
+    n = 0
+    i = 0
+    si con_signo y s [0 :1 ] == '-' :
+        neg = Verdadero
+        i = 1
+    mientras i < longitud (s ) y s [i :i + 1 ] != '.' :
+        c = s [i :i + 1 ]
+        si c == 'e' :
+            si s [i :i + 2 ] == 'e-' :
+                devolver 0
+            lanzar NotImplementedError ('format_string: valor fuera de rango (>= 1e16) no soportado en el backend nativo')
+        n = n * 10 + _VALOR_DIGITO [c ]
+        i = i + 1
+    si neg :
+        devolver -n
+    devolver n
+
+
+funcion _formatear_entero (v , prec , banderas , ancho , conv ):
+    si v == str (v ) :
+        lanzar TypeError ('%' + conv + ' format: a real number is required, not str')
+    base = 10
+    si conv == 'o' :
+        base = 8
+    si conv en 'xX' :
+        base = 16
+    f = v * 1.0
+    si f >= 9007199254740992.0 o f <= -9007199254740992.0 :
+        lanzar NotImplementedError ('format_string: %' + conv + ' de valores >= 2^53 no soportado en el backend nativo')
+    n = _truncar_a_entero (f )
+    neg = n < 0
+    a = n
+    si neg :
+        a = -n
+    digitos = ''
+    si a == 0 :
+        digitos = '0'
+    mientras a > 0 :
+        r = a % base
+        digitos = _DIGITOS_BASE [r :r + 1 ] + digitos
+        a = a // base
+    si conv == 'X' :
+        digitos = digitos.upper ( )
+    si prec >= 0 :
+        mientras longitud (digitos ) < prec :
+            digitos = '0' + digitos
+    prefijo = ''
+    si '#' en banderas :
+        si conv == 'x' :
+            prefijo = '0x'
+        si conv == 'X' :
+            prefijo = '0X'
+        si conv == 'o' y digitos [0 :1 ] != '0' :
+            prefijo = '0'
+    devolver _rellenar_numero (digitos , _signo_de (neg , banderas ) + prefijo , banderas , ancho , prec < 0 )
+
+
+funcion _formatear_texto (v , prec , banderas , ancho ):
+    texto = str (v )
+    si prec >= 0 :
+        texto = texto [:prec ]
+    devolver _rellenar_numero (texto , '' , banderas , ancho , Falso )
+
+
+funcion _signo_de (neg , banderas ):
+    si neg == 1 o neg == Verdadero :
+        devolver '-'
+    si '+' en banderas :
+        devolver '+'
+    si ' ' en banderas :
+        devolver ' '
+    devolver ''
+
+
+funcion _rellenar_numero (cuerpo , signo , banderas , ancho , admite_cero ):
+    total = longitud (signo ) + longitud (cuerpo )
+    si ancho <= total :
+        devolver signo + cuerpo
+    huecos = ancho - total
+    si '-' en banderas :
+        devolver signo + cuerpo + ' ' * huecos
+    si '0' en banderas y admite_cero :
+        devolver signo + '0' * huecos + cuerpo
+    devolver ' ' * huecos + signo + cuerpo
+
+
+funcion _decimal_fijo_partes (mant , e , prec ):
+    # mant * 2^e con redondeo half-even sobre el valor binario EXACTO (como
+    # glibc printf), a `prec` decimales. Solo enteros.
+    # Si e >= 0 es un entero: se multiplica por 2^e. Si e < 0,
+    # valor = (mant * 5^k) / 10^k con k = -e: se multiplica por 5^k y la coma
+    # va k posiciones desde la derecha.
+    limbos = _limbos_de (mant )
+    si e >= 0 :
+        limbos = _escalar_limbos (limbos , 2 , e )
+        k = 0
+    sino :
+        limbos = _escalar_limbos (limbos , 5 , -e )
+        k = -e
+    d = _digitos_de (limbos )
+    mientras longitud (d ) < k + 1 :
+        d = '0' + d
+    si prec >= k :
+        digitos = d + '0' * (prec - k )
+    sino :
+        conservar = longitud (d ) - (k - prec )
+        resto = d [conservar :]
+        digitos = d [:conservar ]
+        primero = resto [0 :1 ]
+        cola_no_cero = Falso
+        i = 1
+        mientras i < longitud (resto ) :
+            si resto [i :i + 1 ] != '0' :
+                cola_no_cero = Verdadero
+            i = i + 1
+        ultimo = digitos [longitud (digitos ) - 1 :longitud (digitos ) ]
+        ultimo_impar = ultimo en '13579'
+        si primero > '5' o (primero == '5' y (cola_no_cero o ultimo_impar ) ) :
+            digitos = _sumar_uno (digitos )
+    corte = longitud (digitos ) - prec
+    entera = digitos [:corte ]
+    mientras longitud (entera ) > 1 y entera [0 :1 ] == '0' :
+        entera = entera [1 :]
+    si prec == 0 :
+        devolver entera
+    devolver entera + '.' + digitos [corte :]
+
+
+funcion _escalar_limbos (limbos , base , n ):
+    # limbos * base^n, con cada factor base^paso < 1e9 (int64 seguro).
+    tope = 12
+    si base == 2 :
+        tope = 29
+    restante = n
+    mientras restante > 0 :
+        paso = restante
+        si paso > tope :
+            paso = tope
+        factor = _potencia_entera (base , paso )
+        limbos = _limbos_por (limbos , factor )
+        restante = restante - paso
+    devolver limbos
+
+
+funcion _potencia_entera (base , n ):
+    r = 1
+    i = 0
+    mientras i < n :
+        r = r * base
+        i = i + 1
+    devolver r
+
+
+funcion _limbos_de (n ):
+    # Entero no negativo n (< 2^53) en limbos base 1e9, menos significativo primero.
+    limbos = []
+    mientras n >= 1000000000 :
+        limbos.append (n % 1000000000 )
+        n = n // 1000000000
+    limbos.append (n )
+    devolver limbos
+
+
+funcion _limbos_por (limbos , factor ):
+    # limbos * factor con factor < 1e9: cada producto cabe en int64.
+    salida = []
+    acarreo = 0
+    i = 0
+    mientras i < longitud (limbos ) :
+        t = limbos [i ] * factor + acarreo
+        salida.append (t % 1000000000 )
+        acarreo = t // 1000000000
+        i = i + 1
+    mientras acarreo > 0 :
+        salida.append (acarreo % 1000000000 )
+        acarreo = acarreo // 1000000000
+    devolver salida
+
+
+funcion _digitos_de (limbos ):
+    # Decimal de los limbos (base 1e9, menos significativo primero).
+    i = longitud (limbos ) - 1
+    mientras i > 0 y limbos [i ] == 0 :
+        i = i - 1
+    s = str (limbos [i ] )
+    i = i - 1
+    mientras i >= 0 :
+        p = str (limbos [i ] )
+        mientras longitud (p ) < 9 :
+            p = '0' + p
+        s = s + p
+        i = i - 1
+    devolver s
+
+
+funcion _sumar_uno (digitos ):
+    # Suma 1 a una cadena de digitos decimales.
+    r = ''
+    i = longitud (digitos ) - 1
+    acarreo = Verdadero
+    mientras i >= 0 :
+        c = digitos [i :i + 1 ]
+        si acarreo :
+            r = _SIGUIENTE_DIGITO [c ] + r
+            acarreo = c == '9'
+        sino :
+            r = c + r
+        i = i - 1
+    si acarreo :
+        r = '1' + r
+    devolver r

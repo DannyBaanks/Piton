@@ -1,0 +1,168 @@
+{
+  "meta": {
+    "date": "2026-11-13T13:57:08+00:00",
+    "oracle": "CPython 3.12.3",
+    "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.39",
+    "git_sha": "eb26494",
+    "git_clean": false,
+    "git_dirty_files": [
+      "M piton/linux_x86.py",
+      "M piton/native_runtime.c",
+      "M piton/stdlib_piton/datetime.piton",
+      "M piton/stdlib_piton/locale.piton",
+      "M piton/stdlib_piton/time.piton",
+      "?? docs/parity_corpus_v4_report_2026-11-13.json",
+      "?? docs/parity_corpus_v4_report_2026-11-13.md",
+      "?? re",
+      "?? tests/test_datetime_parity.py",
+      "?? tests/test_falsify_decimal.py",
+      "?? tests/test_falsify_lenguaje.py",
+      "?? tests/test_falsify_random.py",
+      "?? tests/test_falsify_texto.py",
+      "?? workfile"
+    ],
+    "untracked_bundled": [],
+    "verified": false,
+    "instrument_hash": "1a6e205deac10ce255669215154c231e461a6841cb992cf43e055c47df88e84a",
+    "piton_mir_hash": "f096c82cef2c8d9e130b4f4a351d78afa2e8930215ef354eb74a2fdf27459653",
+    "piton_linux_hash": "8d5171f8a105fb1142dc8775ea16e02db846e52720568d187c65de2a15ab6d26",
+    "tool": "tools/parity_corpus_v4.py",
+    "tiers": "b",
+    "recursive": false,
+    "exclude": [],
+    "isolate": false
+  },
+  "results": {
+    "tier_b": {
+      "funnel": {
+        "total": 11,
+        "passed": {
+          "adapt": 11,
+          "parse": 11,
+          "mir": 11,
+          "build": 0
+        },
+        "pct": {
+          "adapt": 100.0,
+          "parse": 100.0,
+          "mir": 100.0,
+          "build": 0.0
+        },
+        "fail_classes": {
+          "BUILD_FAIL": 11
+        },
+        "read_failed": 0
+      },
+      "run": {
+        "total": 11,
+        "by_bucket": {
+          "BUILD_FAIL": 11
+        },
+        "pct_equiv": 0.0,
+        "pct_honest_native": 0.0,
+        "pct_divergent": 0.0
+      },
+      "records": [
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/classes.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-gpotv843/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-gpotv843/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": "PitonSyntaxError: PITON_SYNTAX_ERROR\narchivo: <corpus-v4-roundtrip>\nlinea: 12\ncolumna: 1\n\nPython rechazó la traducción:\nexpected an indented block after 'try' statement on line 11\n\n(    x .r ,x .i )",
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/controlflow.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-mfmi94il/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-mfmi94il/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/datastructures.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-prykj880/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-prykj880/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/errors.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-i1z8aqjg/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-i1z8aqjg/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/inputoutput.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-0rwyjfl2/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-0rwyjfl2/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/interpreter.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-ov4lha3y/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-ov4lha3y/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/introduction.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-_fmkh879/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-_fmkh879/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/modules.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-po42iayf/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-po42iayf/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/stdlib.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-9fojyqj_/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-9fojyqj_/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/stdlib2.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-1_c1xv8v/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-1_c1xv8v/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        },
+        {
+          "path": "<PITON_ROOT>/corpus_v4/tutorial/venv.py",
+          "reached": "mir",
+          "stage_fail": "BUILD_FAIL",
+          "detail": "NativeBuildError: /tmp/piton-v4-2nc25jri/program.c:5687:19: error: redefinition of ‘piton_is_double_bits’\n 5687 | static inline int piton_is_double_bits(int64_t bits) {\n      |                   ^~~~~~~~~~~~~~~~~~~~\n/tmp/piton-v4-2nc25jri/program.c:3499:12: note: previous definition of ‘piton_is_dou",
+          "build_seconds": null,
+          "roundtrip": true,
+          "bucket": "BUILD_FAIL"
+        }
+      ]
+    }
+  }
+}

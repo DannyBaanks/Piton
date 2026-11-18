@@ -1,0 +1,465 @@
+{
+  "schema": "piton-corpus-t1-funciones-expected-v1",
+  "area": "funciones",
+  "oracle": "CPython 3.12.3",
+  "captured_before_piton": true,
+  "capture_method": "subprocess [sys.executable, <file>], stdout+stderr+exit code crudos",
+  "total": 56,
+  "git_sha": "1eb91bc6310d4e7991bffed7e4c75f32df315703",
+  "examples": {
+    "01_string_capwords.py": {
+      "path": "corpus_t1/funciones/01_string_capwords.py",
+      "sha256": "a059c33dff1fbfd484e847455341b013df16b5f6f569dfd9b81cd997f03bf6a7",
+      "stdout": "Hola Mundo\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "02_string_capwords_espacios.py": {
+      "path": "corpus_t1/funciones/02_string_capwords_espacios.py",
+      "sha256": "590d3cf77010f50ff520a96786fe701608d5f28778f06e6a43ce07911dc25372",
+      "stdout": "Hola Mundo\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "03_string_capwords_sep.py": {
+      "path": "corpus_t1/funciones/03_string_capwords_sep.py",
+      "sha256": "18be8ca1902cdc445eea61b8044902665dd1cf6c900ba8e471c9a52d5179bde5",
+      "stdout": "Hola-Mundo\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "04_string_capwords_vacio.py": {
+      "path": "corpus_t1/funciones/04_string_capwords_vacio.py",
+      "sha256": "4c1ca2a31d26361bfb828cc2fcd113fee3ab68ff7bba2c918b7a514f76b67952",
+      "stdout": "\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "05_string_capwords_mixto.py": {
+      "path": "corpus_t1/funciones/05_string_capwords_mixto.py",
+      "sha256": "b7e3eb20e74733465c2ed93c42b2aa57e9ead169c58a39cf587bb075c5d1efc8",
+      "stdout": "Abc Def Ghi\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "06_textwrap_fill.py": {
+      "path": "corpus_t1/funciones/06_textwrap_fill.py",
+      "sha256": "0907a0f66e48550efe05234e1e80fe01a3af11912b2bae53df0b4b6ef7e8bc48",
+      "stdout": "hola\nmundo\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "07_textwrap_wrap.py": {
+      "path": "corpus_t1/funciones/07_textwrap_wrap.py",
+      "sha256": "7118fa92b84f7f4ca8af1e7b63ea3a5a90bbc11f1013cb183cd910d088da2bfa",
+      "stdout": "['hola', 'mundo']\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "08_textwrap_dedent.py": {
+      "path": "corpus_t1/funciones/08_textwrap_dedent.py",
+      "sha256": "65582164761301ff2fd840fd38a628d05ca140dc4dbd3caa2839f3c9c4914aa2",
+      "stdout": "hola\nmundo\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "09_textwrap_shorten.py": {
+      "path": "corpus_t1/funciones/09_textwrap_shorten.py",
+      "sha256": "417e996ad4a886d51bca0dfc44e64dd0f1eb2e7ede3de1ecea06f8df881e52e6",
+      "stdout": "[...]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "10_textwrap_fill_largo.py": {
+      "path": "corpus_t1/funciones/10_textwrap_fill_largo.py",
+      "sha256": "778c94c2113bf86e647bd14ed3f08a14c917129acbcae3119222f8d05651c50c",
+      "stdout": "el zorro\nmarron\nrapido salta\nsobre el\nperro\nperezoso\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "11_textwrap_shorten_placeholder.py": {
+      "path": "corpus_t1/funciones/11_textwrap_shorten_placeholder.py",
+      "sha256": "b50feb133649fb51a7c10a01bb9c33d4bdaa08d964954632c72aa16c44524632",
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"<PITON_ROOT>/corpus_t1/funciones/11_textwrap_shorten_placeholder.py\", line 4, in <module>\n    print(recortar(\"hola mundo entero\", 5, \"...\"))\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<PITON_ROOT>/corpus_t1/funciones/11_textwrap_shorten_placeholder.py\", line 3, in recortar\n    return textwrap.shorten(texto, ancho, marca)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: shorten() takes 2 positional arguments but 3 were given\n",
+      "exit_code": 1,
+      "exception": {
+        "type": "TypeError",
+        "message": "shorten() takes 2 positional arguments but 3 were given"
+      }
+    },
+    "12_textwrap_dedent_salto.py": {
+      "path": "corpus_t1/funciones/12_textwrap_dedent_salto.py",
+      "sha256": "81412512025a50c2f8a604dbfbf2cdc383820f63924276dd546e105abe28f47a",
+      "stdout": "hola\n  mundo\n\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "13_textwrap_wrap_ancho.py": {
+      "path": "corpus_t1/funciones/13_textwrap_wrap_ancho.py",
+      "sha256": "84df9b2e5a6210241a65e76916e900c38c4e228c06b6f49b7c7c8ea4139a475a",
+      "stdout": "['aaa', 'a', 'bb ', 'ccc', 'c']\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "14_reprlib_repr_lista.py": {
+      "path": "corpus_t1/funciones/14_reprlib_repr_lista.py",
+      "sha256": "cd38636e84829be1532f01616eb781fc8fbde904b399c0d88c99aa7be44b279d",
+      "stdout": "[1, 2, 3]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "15_reprlib_repr_truncada.py": {
+      "path": "corpus_t1/funciones/15_reprlib_repr_truncada.py",
+      "sha256": "14d6df530dd63e74d20c237aeccf9194da715d3f3bcebc6b73557226ef4bfa48",
+      "stdout": "[0, 1, 2, 3, 4, 5, ...]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "16_reprlib_repr_dict.py": {
+      "path": "corpus_t1/funciones/16_reprlib_repr_dict.py",
+      "sha256": "41b4e1d37b74d379bcb6aaa88d8aa4b295e94e8c430531d5e635b3344ace8ca4",
+      "stdout": "{'a': 1, 'b': 2}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "17_reprlib_repr_str.py": {
+      "path": "corpus_t1/funciones/17_reprlib_repr_str.py",
+      "sha256": "1386a2fbf22c2c608d9ad6348b6c82149c2cdf092ad887746e3890907038d174",
+      "stdout": "'abcdefghijklmnopqrstuvwxyz'\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "18_itertools_chain.py": {
+      "path": "corpus_t1/funciones/18_itertools_chain.py",
+      "sha256": "35d1c801f8c14eead9fb42ae7150ae0f7d5028ebd79a1ecb6704767fa0189a46",
+      "stdout": "[1, 2, 3, 4]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "19_itertools_chain_tres.py": {
+      "path": "corpus_t1/funciones/19_itertools_chain_tres.py",
+      "sha256": "3f9cf09e2468668e298461a5ec72cc9b8bb5e96a462f3c81365096e92c3d3aff",
+      "stdout": "[1, 2, 3, 4, 5]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "20_itertools_islice.py": {
+      "path": "corpus_t1/funciones/20_itertools_islice.py",
+      "sha256": "b9c0eebc35ec908a6317e8ed44f6ea75a3616516575c0fa02179f912fea1463f",
+      "stdout": "[3, 4, 5]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "21_itertools_groupby_claves.py": {
+      "path": "corpus_t1/funciones/21_itertools_groupby_claves.py",
+      "sha256": "96e69210b6054ab079ad81ba981681d73e41d40217736b2422e84e4d1b842932",
+      "stdout": "[1, 2, 3]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "22_itertools_groupby_conteo.py": {
+      "path": "corpus_t1/funciones/22_itertools_groupby_conteo.py",
+      "sha256": "5363fd030ca1c78f2cc3a5c50af3a70881aa653359bd8c81473be490f869a189",
+      "stdout": "[1, 2, 2, 1, 3, 2]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "23_itertools_product.py": {
+      "path": "corpus_t1/funciones/23_itertools_product.py",
+      "sha256": "79fb4435cb01403ce02e21951121db8af44c6b7e1dab509d9c14fa0d584be849",
+      "stdout": "[(1, 'a'), (1, 'b'), (2, 'a'), (2, 'b')]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "24_itertools_combinations.py": {
+      "path": "corpus_t1/funciones/24_itertools_combinations.py",
+      "sha256": "d0d685fea7eaef7544a3231ce8fa36eb310f35dd30414cc4060da281b11afbb4",
+      "stdout": "[(1, 2), (1, 3), (2, 3)]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "25_itertools_islice_n.py": {
+      "path": "corpus_t1/funciones/25_itertools_islice_n.py",
+      "sha256": "30e736c0222e33648281eeb775a4470bd59ef789ad7e4e7571a6ddcf710dd3c3",
+      "stdout": "['a', 'b', 'c']\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "26_functools_reduce.py": {
+      "path": "corpus_t1/funciones/26_functools_reduce.py",
+      "sha256": "c799a2f0f96f4308134038e0a2186cc72a9de1168ade9f5e72cd6126b052c68c",
+      "stdout": "10\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "27_functools_reduce_mul.py": {
+      "path": "corpus_t1/funciones/27_functools_reduce_mul.py",
+      "sha256": "972aef1774a4e549c05089bafc4429977fc026b58b14c82e9659cd500d01ba70",
+      "stdout": "24\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "28_functools_partial.py": {
+      "path": "corpus_t1/funciones/28_functools_partial.py",
+      "sha256": "e931cf5528237afefe746b2c42dd3fa59269f7baee560f5cf77ded830b4517c6",
+      "stdout": "hola mundo\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "29_functools_reduce_str.py": {
+      "path": "corpus_t1/funciones/29_functools_reduce_str.py",
+      "sha256": "20f38d29cee15d59280ee6ddaf9a798d60f2802376476d1b6ec27bb69dc682f8",
+      "stdout": "abc\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "30_functools_partial_num.py": {
+      "path": "corpus_t1/funciones/30_functools_partial_num.py",
+      "sha256": "d059e54f07a372de6ead5a2f1e1186d2828a3a3973388c50f392a6d9720fe68c",
+      "stdout": "81\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "31_math_gcd.py": {
+      "path": "corpus_t1/funciones/31_math_gcd.py",
+      "sha256": "9a194562518006fe37c1c7abeed0a2ca7b5fdea62ef6f64e45d8e9fed998e9fe",
+      "stdout": "6\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "32_math_factorial.py": {
+      "path": "corpus_t1/funciones/32_math_factorial.py",
+      "sha256": "8a2f21a706fb32723b194b4ccc0c2a9e474225ecfea71869245a7cdcdb52ce5a",
+      "stdout": "120\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "33_math_isqrt.py": {
+      "path": "corpus_t1/funciones/33_math_isqrt.py",
+      "sha256": "cf901616568ccb640fd365d6ef2beade80d81177c7443c3f0f1cec55bf0aaf41",
+      "stdout": "3\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "34_math_comb.py": {
+      "path": "corpus_t1/funciones/34_math_comb.py",
+      "sha256": "ea95ed40dda8cd9a7ed554dbc929b7ff5b34b709af3d1ebfd4e64d57bfc6d20e",
+      "stdout": "10\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "35_math_perm.py": {
+      "path": "corpus_t1/funciones/35_math_perm.py",
+      "sha256": "0c33e27bd9a3df8656bbb968aeccc2ddd9f518d4e40f6e30e527c8c19fd6b22f",
+      "stdout": "20\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "36_math_gcd_cero.py": {
+      "path": "corpus_t1/funciones/36_math_gcd_cero.py",
+      "sha256": "9beb3fe3ef1e85557ab2fb636c19e5c6f3045ff6188b3794bfa3651f10c83336",
+      "stdout": "5\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "37_math_sqrt.py": {
+      "path": "corpus_t1/funciones/37_math_sqrt.py",
+      "sha256": "09d60a4234a4ab57cbaa1adf187c2dd6004b6b5d939e612c69c3b13762e6ba55",
+      "stdout": "4.0\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "38_math_isqrt_negativo.py": {
+      "path": "corpus_t1/funciones/38_math_isqrt_negativo.py",
+      "sha256": "a33765876de309a95ff409ecd03ebc89fa48a8defb93919ad97a8c62f11776d8",
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"<PITON_ROOT>/corpus_t1/funciones/38_math_isqrt_negativo.py\", line 4, in <module>\n    print(raiz(-1))\n          ^^^^^^^^\n  File \"<PITON_ROOT>/corpus_t1/funciones/38_math_isqrt_negativo.py\", line 3, in raiz\n    return math.isqrt(n)\n           ^^^^^^^^^^^^^\nValueError: isqrt() argument must be nonnegative\n",
+      "exit_code": 1,
+      "exception": {
+        "type": "ValueError",
+        "message": "isqrt() argument must be nonnegative"
+      }
+    },
+    "39_json_dumps_dict.py": {
+      "path": "corpus_t1/funciones/39_json_dumps_dict.py",
+      "sha256": "b368cb33443bd14408dcde9063b1714f86ffede12b5b2e44fc3ed8660e24e7cb",
+      "stdout": "{\"b\": 2, \"a\": 1}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "40_json_dumps_ordenado.py": {
+      "path": "corpus_t1/funciones/40_json_dumps_ordenado.py",
+      "sha256": "88fa3c07ecd4c77d31b65d3d4568898584b991308f530da6a2abb9b4454875c1",
+      "stdout": "{\"a\": 1, \"b\": 2}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "41_json_loads_dict.py": {
+      "path": "corpus_t1/funciones/41_json_loads_dict.py",
+      "sha256": "c2669ef645093c80a234fe8e28477943237e26bce03c911125a88644a0b768ec",
+      "stdout": "{'a': 1, 'b': 2}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "42_json_dumps_lista.py": {
+      "path": "corpus_t1/funciones/42_json_dumps_lista.py",
+      "sha256": "32f7eb94bb693872fdaa1024735345ce7f0ed3eb87e7e216ec6ce5eb89e80295",
+      "stdout": "[1, 2, 3]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "43_json_loads_lista.py": {
+      "path": "corpus_t1/funciones/43_json_loads_lista.py",
+      "sha256": "939b99d5929f386647f1e7a5aa1d3c94fb1a1b517f123b1f8808d084d5315298",
+      "stdout": "[1, 2, 3]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "44_json_dumps_anidado.py": {
+      "path": "corpus_t1/funciones/44_json_dumps_anidado.py",
+      "sha256": "751ede786a19911aa019177719bf358b813a92011e36d0541128cc0a158dba66",
+      "stdout": "{\"x\": {\"y\": [1, 2]}}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "45_json_roundtrip.py": {
+      "path": "corpus_t1/funciones/45_json_roundtrip.py",
+      "sha256": "35a5ae6fc7248d7b1539d16b586bddffadd489b68304777f0399f6deedb3a52b",
+      "stdout": "{'k': [1, 2]}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "46_collections_counter_mostcommon.py": {
+      "path": "corpus_t1/funciones/46_collections_counter_mostcommon.py",
+      "sha256": "adc7d2678e43f44cbbe1ff1858f668324519efc8bed13eef90c246d5e62385a9",
+      "stdout": "[('a', 3), ('b', 1)]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "47_collections_counter_todos.py": {
+      "path": "corpus_t1/funciones/47_collections_counter_todos.py",
+      "sha256": "6e3caef23e5b1aa66bc8e7bb449d6d56312ebcb3591abba3db8b7eebdcf8f319",
+      "stdout": "[('a', 2), ('b', 1), ('c', 1)]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "48_collections_deque_extremos.py": {
+      "path": "corpus_t1/funciones/48_collections_deque_extremos.py",
+      "sha256": "b71ca3faba0d9c41ad42a770924de7a7b6b5988582c07edf75883b4ac8795fbe",
+      "stdout": "[0, 1, 2, 3, 4]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "49_collections_deque_pops.py": {
+      "path": "corpus_t1/funciones/49_collections_deque_pops.py",
+      "sha256": "abcd9841ff1cfd6947a86489a3e55508c00c64a6470eaece575e5a649d85794b",
+      "stdout": "[2, 3]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "50_collections_deque_maxlen.py": {
+      "path": "corpus_t1/funciones/50_collections_deque_maxlen.py",
+      "sha256": "c28e9a6900e00e9532825ff0d0ccce5291cff835ee80d4db79af6fae0328ba9b",
+      "stdout": "[3, 4]\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "51_collections_deque_count.py": {
+      "path": "corpus_t1/funciones/51_collections_deque_count.py",
+      "sha256": "8d17206e02299a47d70974f058338db101f55d73ff2173fe88d753ff5ea19d65",
+      "stdout": "3\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "52_collections_defaultdict_int.py": {
+      "path": "corpus_t1/funciones/52_collections_defaultdict_int.py",
+      "sha256": "1265cce27c371b1a9d7b6bc0fbe8a98ed998184095f702eac5c97781d4b6093e",
+      "stdout": "{'a': 3, 'b': 1}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "53_collections_defaultdict_list.py": {
+      "path": "corpus_t1/funciones/53_collections_defaultdict_list.py",
+      "sha256": "4c99fe5da1bc9ed0c3bfe9a681d1e0a2235433005a8d9d25838dcbe8244d5f96",
+      "stdout": "{'a': [1, 3], 'b': [2]}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "54_collections_namedtupleCampos.py": {
+      "path": "corpus_t1/funciones/54_collections_namedtupleCampos.py",
+      "sha256": "b0d41993f1101e390dc447f1dc9493d2389ed2f0884c9aeb44963feb6240a2a6",
+      "stdout": "7\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "55_collections_namedtuple_asdict.py": {
+      "path": "corpus_t1/funciones/55_collections_namedtuple_asdict.py",
+      "sha256": "a714fba78e91c605c8b428f5ed205ab8abeb0748c794d10d1a0b0f63b6c80ce8",
+      "stdout": "{'x': 1, 'y': 2}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    },
+    "56_collections_namedtuple_repr.py": {
+      "path": "corpus_t1/funciones/56_collections_namedtuple_repr.py",
+      "sha256": "50e6a734fd4e916dfe33bbbe8769f483e0607b4018e0f2f4c44e81c31634526c",
+      "stdout": "Punto(x=1, y=2)\n",
+      "stderr": "",
+      "exit_code": 0,
+      "exception": null
+    }
+  }
+}

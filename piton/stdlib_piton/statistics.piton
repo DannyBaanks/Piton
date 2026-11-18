@@ -1,0 +1,17 @@
+# statistics: mean, median, median_low, median_high, variance, pvariance, stdev y pstdev son
+# NATIVOS (STATISTICS_NATIVE_V1 en piton/linux_x86.py): aritmetica exacta de 128 bits con
+# conversion correctamente redondeada, como las fracciones exactas de CPython. Solo como
+# llamada directa (statistics.mean(x) o `desde statistics importar mean`).
+#
+# Diferencia declarada: los errores de datos insuficientes son ValueError (CPython lanza
+# statistics.StatisticsError, subclase de ValueError). Datos fuera del rango exacto de 128
+# bits, nan/inf y entradas que no son list/tuple lanzan NotImplementedError/TypeError.
+# mode, fmean, geometric_mean, harmonic_mean, quantiles, etc. NO estan implementados.
+
+
+clase StatisticsError (ValueError):
+    pasar
+
+
+funcion mean (datos ):
+    lanzar NotImplementedError ("statistics.mean solo se soporta como llamada directa en el backend nativo")

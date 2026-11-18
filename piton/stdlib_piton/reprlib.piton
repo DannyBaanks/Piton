@@ -1,13 +1,127 @@
-funcion recursive_repr (relleno ='...'):
+funcion repr (x ):
+    t = tipo (x )
+    si t == tipo (conjunto ()) :
+        devolver repr_set_inline (x )
+    sino_si t == tipo ([]) :
+        devolver repr_lista_inline (x ,'[' ,']' )
+    sino_si t == tipo ('') :
+        devolver _repr_cadena_inline ('' + x )
+    sino :
+        devolver texto (x )
+
+
+funcion recursive_repr (relleno ='...' ):
     funcion decorador (funcion_objetivo ):
         devolver funcion_objetivo
     devolver decorador
 
 
-funcion repr (x ):
-    lanzar NotImplementedError ('reprlib.recursive_repr con fillvalue por llamada no esta implementado')
+funcion repr_lista_inline (x ,izq ,der ):
+    si longitud (x ) == 0 :
+        devolver izq + der
+    n = longitud (x )
+    partes = []
+    k = 0
+    mientras k < n y k < 6 :
+        e = x [k ]
+        si tipo (e ) == tipo ('') :
+            partes.append (_repr_cadena_inline (texto (e )))
+        sino :
+            partes.append (texto (e ))
+        k = k + 1
+    r = izq + ", ".join (partes )
+    si n > 6 :
+        r = r + ", ..."
+    devolver r + der
 
 
-clase Repr :
-    pasar
+funcion repr_set_inline (x ):
+    si longitud (x ) == 0 :
+        devolver "set()"
+    sl = ordenar (lista (x ))
+    n = longitud (sl )
+    si n > 6 :
+        parte = "', '".join (sl [ :6])
+        devolver "{" + "'" + parte + "', ...}"
+    sino :
+        parte = "', '".join (sl )
+        devolver "{" + "'" + parte + "'" + "}"
 
+
+funcion _repr_cadena_inline (s ):
+    maxstring = 30
+    fillvalue = '...'
+    n = longitud (s )
+    si n <= maxstring :
+        tiene_simple = s.find ("'") >= 0
+        tiene_doble = s.find ('"') >= 0
+        si tiene_simple y no tiene_doble :
+            q = '"'
+        sino :
+            q = "'"
+        out = q
+        k = 0
+        mientras k < n :
+            c = s[k]
+            si c == '\\' :
+                out = out + '\\\\'
+            sino_si c == q :
+                out = out + '\\' + q
+            sino_si c == '\n' :
+                out = out + '\\n'
+            sino_si c == '\t' :
+                out = out + '\\t'
+            sino_si c == '\r' :
+                out = out + '\\r'
+            sino :
+                out = out + c
+            k = k + 1
+        devolver out + q
+    i = (maxstring - 3 ) // 2
+    j = maxstring - 3 - i
+    s2 = ''
+    k = 0
+    mientras k < i :
+        s2 = s2 + s[k]
+        k = k + 1
+    k = n - j
+    mientras k < n :
+        s2 = s2 + s[k]
+        k = k + 1
+    n2 = longitud (s2 )
+    tiene_simple = s2.find ("'") >= 0
+    tiene_doble = s2.find ('"') >= 0
+    si tiene_simple y no tiene_doble :
+        q = '"'
+    sino :
+        q = "'"
+    r2 = q
+    k = 0
+    mientras k < n2 :
+        c = s2[k]
+        si c == '\\' :
+            r2 = r2 + '\\\\'
+        sino_si c == q :
+            r2 = r2 + '\\' + q
+        sino_si c == '\n' :
+            r2 = r2 + '\\n'
+        sino_si c == '\t' :
+            r2 = r2 + '\\t'
+        sino_si c == '\r' :
+            r2 = r2 + '\\r'
+        sino :
+            r2 = r2 + c
+        k = k + 1
+    r2 = r2 + q
+    m = longitud (r2 )
+    t = ''
+    k = 0
+    mientras k < i :
+        t = t + r2[k]
+        k = k + 1
+    t = t + fillvalue
+    k = m - j
+    mientras k < m :
+        t = t + r2[k]
+        k = k + 1
+    devolver t

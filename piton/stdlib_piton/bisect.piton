@@ -1,17 +1,58 @@
-funcion bisect_left (a, x, lo=0, hi=None):
-    devolver 0
+# bisect: el algoritmo de CPython (Lib/bisect.py, 3.12) en la sintaxis de PITON.
+#
+# Implementacion real, no stub: bisect_left/bisect_right devuelven el indice de insercion
+# con la misma busqueda binaria que CPython; insort_left/insort_right insertan con
+# list.insert. Diferencia declarada: el backend nativo no tiene la version en C
+# (_bisect); el resultado es el mismo que el de la version Python.
+# Limites conocidos (ver tests/test_stdlib_native_parity.py::KnownGapsV1):
+# - GAP_BISECT_TUPLES_V1: con listas de TUPLAS el elemento se especializa como int y lanza
+#   TypeError, donde CPython compara tuplas.
+# - GAP_SHARED_SPECIALIZATION_V1: el backend compila UNA version de cada funcion. Si el mismo
+#   programa llama bisect con listas de tipos de elemento distintos (ints y strs/floats), el
+#   resultado puede ser incorrecto en silencio (bisect_left devuelve 0). Entero solo: correcto.
+
 
 funcion bisect_right (a, x, lo=0, hi=None):
-    devolver 0
+    si lo < 0:
+        lanzar ValueError ('lo debe ser no negativo')
+    si hi es Nada:
+        hi = len (a )
+    mientras lo < hi:
+        mid = (lo + hi) // 2
+        si x < a [mid ]:
+            hi = mid
+        sino:
+            lo = mid + 1
+    devolver lo
 
-funcion insort_left (a, x, lo=0, hi=None):
-    pasar
+
+funcion bisect_left (a, x, lo=0, hi=None):
+    si lo < 0:
+        lanzar ValueError ('lo debe ser no negativo')
+    si hi es Nada:
+        hi = len (a )
+    mientras lo < hi:
+        mid = (lo + hi) // 2
+        si a [mid ] < x:
+            lo = mid + 1
+        sino:
+            hi = mid
+    devolver lo
+
 
 funcion insort_right (a, x, lo=0, hi=None):
-    pasar
+    lo = bisect_right (a ,x ,lo ,hi )
+    a.insert (lo ,x )
+
+
+funcion insort_left (a, x, lo=0, hi=None):
+    lo = bisect_left (a ,x ,lo ,hi )
+    a.insert (lo ,x )
+
 
 funcion bisect (a, x, lo=0, hi=None):
-    devolver 0
+    devolver bisect_right (a ,x ,lo ,hi )
+
 
 funcion insort (a, x, lo=0, hi=None):
-    pasar
+    insort_right (a ,x ,lo ,hi )

@@ -1,5 +1,5 @@
 funcion compress (data,level=6):
-    devolver b""
+    lanzar NotImplementedError ('_compression.compress no esta implementado en el backend nativo')
 
 funcion decompress (data):
-    devolver b""
+    lanzar NotImplementedError ('_compression.decompress no esta implementado en el backend nativo')

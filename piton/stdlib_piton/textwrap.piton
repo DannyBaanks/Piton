@@ -1,10 +1,443 @@
-funcion fill (texto ,*resto ,**opciones ):
-    lanzar NotImplementedError ('textwrap.fill no esta implementado en el backend nativo')
+# textwrap.piton — wrap/fill (paridad CPython 3.12)
+# WRAP_CHUNKS_V1: algoritmo de CPython 3.12 para TextWrapper.wrap/fill:
+#  - _munge_whitespace: expandtabs y sustitucion de whitespace ASCII.
+#  - _split: chunks de whitespace y palabras, con las reglas de guion de
+#    CPython (guion simple y raya em).
+#  - _wrap_chunks/_handle_long_word: conserva chunks de whitespace interno,
+#    descarta whitespace inicial/final y parte palabras largas por width.
+# RESTRICCIONES del backend que este modulo obeyedece:
+#  - los indices de strings locales requieren `str(...)` antes de metodos.
+#  - no hay slices de cotas variables: los trozos se reconstruyen con bucles.
+#  - las condiciones aritmeticas se precalculan cuando el backend lo exige.
+
+funcion wrap (text ,width =70 ):
+    si width <= 0 :
+        si width == 0 :
+            lanzar ValueError ('invalid width 0 (must be > 0)')
+        mensaje = 'invalid width '
+        mensaje = mensaje + str (width )
+        mensaje = mensaje + ' (must be > 0)'
+        lanzar ValueError (mensaje )
+
+    n0 = longitud (text )
+    m = ''
+    columna = 0
+    i = 0
+    mientras i < n0 :
+        c = text [i ]
+        si c == '\t' :
+            espacios = 8 - (columna % 8)
+            j = 0
+            mientras j < espacios :
+                m = m + ' '
+                j = j + 1
+            columna = columna + espacios
+        sino :
+            si c == '\n' o c == '\r' :
+                m = m + ' '
+                columna = 0
+            sino :
+                si c == '\v' o c == '\f' :
+                    m = m + ' '
+                    columna = columna + 1
+                sino :
+                    m = m + str (c )
+                    columna = columna + 1
+        i = i + 1
+
+    trozos = []
+    pos = 0
+    n = longitud (m )
+    mientras pos < n :
+        si m [pos ] == ' ' :
+            fin = pos
+            mientras fin < n y m [fin ] == ' ' :
+                fin = fin + 1
+            segmento = ''
+            j = pos
+            mientras j < fin :
+                segmento = segmento + m [j ]
+                j = j + 1
+            trozos.append (segmento )
+            pos = fin
+        sino :
+            fin_palabra = pos
+            mientras fin_palabra < n y m [fin_palabra ] != ' ' :
+                fin_palabra = fin_palabra + 1
+            ini_palabra = pos
+            mientras ini_palabra < fin_palabra :
+                p = ini_palabra
+                clase_corte = 0
+                corte = 0
+                mientras p < fin_palabra :
+                    cc = str (m [p ] )
+                    si cc == '-' :
+                        q = p + 1
+                        mientras q < fin_palabra y m [q ] == '-' :
+                            q = q + 1
+                        guiones = q - p
+                        antes = 0
+                        si p > 0 :
+                            previo = str (m [p - 1 ] )
+                            si previo.isalnum ( ) o previo == '_' o previo == '!' o previo == '"' o previo == "'" o previo == '&' o previo == '.' o previo == ',' o previo == '?' :
+                                antes = 1
+                        despues = 0
+                        si q < fin_palabra :
+                            siguiente = str (m [q ] )
+                            si siguiente.isalnum ( ) o siguiente == '_' :
+                                despues = 1
+                        si guiones >= 2 y antes == 1 y despues == 1 :
+                            clase_corte = 1
+                            corte = q
+                            romper
+                        antes_dos = 0
+                        si p >= 2 :
+                            b1 = str (m [p - 1 ] )
+                            b2 = str (m [p - 2 ] )
+                            si b1.isalpha ( ) y b2.isalpha ( ) :
+                                antes_dos = 1
+                        si antes_dos == 0 y p >= 3 :
+                            b1 = str (m [p - 1 ] )
+                            b2 = str (m [p - 2 ] )
+                            b3 = str (m [p - 3 ] )
+                            si b1.isalpha ( ) y b2 == '-' y b3.isalpha ( ) :
+                                antes_dos = 1
+                        despues_dos = 0
+                        p2 = p + 2
+                        p3 = p + 3
+                        si p2 < fin_palabra :
+                            a1 = str (m [p + 1 ] )
+                            a2 = str (m [p2 ] )
+                            si a1.isalpha ( ) :
+                                si a2.isalpha ( ) :
+                                    despues_dos = 1
+                                sino :
+                                    si a2 == '-' y p3 < fin_palabra :
+                                        a3 = str (m [p3 ] )
+                                        si a3.isalpha ( ) :
+                                            despues_dos = 1
+                        si guiones == 1 y antes_dos == 1 y despues_dos == 1 :
+                            clase_corte = 2
+                            corte = p + 1
+                            romper
+                    p = p + 1
+                si clase_corte == 0 :
+                    segmento = ''
+                    j = ini_palabra
+                    mientras j < fin_palabra :
+                        segmento = segmento + m [j ]
+                        j = j + 1
+                    trozos.append (segmento )
+                    ini_palabra = fin_palabra
+                sino :
+                    si clase_corte == 1 :
+                        si ini_palabra < p :
+                            segmento = ''
+                            j = ini_palabra
+                            mientras j < p :
+                                segmento = segmento + m [j ]
+                                j = j + 1
+                            trozos.append (segmento )
+                        segmento = ''
+                        j = p
+                        mientras j < corte :
+                            segmento = segmento + m [j ]
+                            j = j + 1
+                        trozos.append (segmento )
+                        ini_palabra = corte
+                    sino :
+                        segmento = ''
+                        j = ini_palabra
+                        mientras j < corte :
+                            segmento = segmento + m [j ]
+                            j = j + 1
+                        trozos.append (segmento )
+                        ini_palabra = corte
+            pos = fin_palabra
+
+    trozos_texto = '\n'.join (trozos )
+    n_trozos = longitud (trozos_texto )
+    lineas = []
+    cp = 0
+    hay = 0
+    trozo = ''
+    largo_trozo = 0
+    trozo_espacio = 0
+    fin_trozo = 0
+    linea_activa = 0
+    linea = ''
+    antes_ultimo = ''
+    largo_linea = 0
+    largo_ultimo = 0
+    ultimo_espacio = 0
+    numero_lineas = 0
+
+    mientras cp < n_trozos o hay == 1 :
+        si hay == 0 :
+            nl = cp
+            mientras nl < n_trozos y trozos_texto [nl ] != '\n' :
+                nl = nl + 1
+            trozo = ''
+            j = cp
+            mientras j < nl :
+                trozo = trozo + trozos_texto [j ]
+                j = j + 1
+            largo_trozo = nl - cp
+            si trozo [0 ] == ' ' :
+                trozo_espacio = 1
+            sino :
+                trozo_espacio = 0
+            fin_trozo = nl
+            hay = 1
+
+        si linea_activa == 0 :
+            si numero_lineas > 0 y trozo_espacio == 1 :
+                cp = fin_trozo + 1
+                hay = 0
+                continuar
+            linea = ''
+            antes_ultimo = ''
+            largo_linea = 0
+            largo_ultimo = 0
+            ultimo_espacio = 0
+            linea_activa = 1
+
+        cabe = largo_linea + largo_trozo
+        si cabe <= width :
+            antes_ultimo = linea
+            linea = linea + trozo
+            largo_linea = largo_linea + largo_trozo
+            largo_ultimo = largo_trozo
+            si trozo_espacio == 1 :
+                ultimo_espacio = 1
+            sino :
+                ultimo_espacio = 0
+            cp = fin_trozo + 1
+            hay = 0
+            continuar
+
+        si largo_trozo > width :
+            si width < 1 :
+                espacio = 1
+            sino :
+                espacio = width - largo_linea
+            limite = espacio
+            candidato = -1
+            visto = 0
+            off = 0
+            mientras off < limite :
+                cc = str (trozo [off ] )
+                si cc == '-' :
+                    si visto == 1 :
+                        candidato = off
+                sino :
+                    visto = 1
+                off = off + 1
+            si candidato > 0 :
+                largo_prefijo = candidato + 1
+            sino :
+                largo_prefijo = limite
+            prefijo = ''
+            j = 0
+            mientras j < largo_prefijo :
+                prefijo = prefijo + trozo [j ]
+                j = j + 1
+            resto = ''
+            j = largo_prefijo
+            mientras j < largo_trozo :
+                resto = resto + trozo [j ]
+                j = j + 1
+            antes_ultimo = linea
+            linea = linea + prefijo
+            largo_linea = largo_linea + largo_prefijo
+            largo_ultimo = largo_prefijo
+            si trozo_espacio == 1 o largo_prefijo == 0 :
+                ultimo_espacio = 1
+            sino :
+                ultimo_espacio = 0
+            trozo = resto
+            largo_trozo = largo_trozo - largo_prefijo
+
+        si ultimo_espacio == 1 :
+            largo_linea = largo_linea - largo_ultimo
+            linea = antes_ultimo
+        si linea != '' :
+            lineas.append (linea )
+            numero_lineas = numero_lineas + 1
+        linea_activa = 0
+
+    si linea_activa == 1 :
+        si ultimo_espacio == 1 :
+            largo_linea = largo_linea - largo_ultimo
+            linea = antes_ultimo
+        si linea != '' :
+            lineas.append (linea )
+    devolver lineas
 
 
-funcion indent (texto ,prefijo ,*resto ,**opciones ):
-    lanzar NotImplementedError ('textwrap.indent no esta implementado en el backend nativo')
+funcion fill (text ,width =70 ):
+    lineas = wrap (text ,width )
+    devolver '\n'.join (lineas )
 
 
-funcion wrap (texto ,*resto ,**opciones ):
-    lanzar NotImplementedError ('textwrap.wrap no esta implementado en el backend nativo')
+funcion indent (texto ,prefijo ):
+    n = longitud (texto )
+    out = prefijo
+    i = 0
+    mientras i < n :
+        out = out + texto[i]
+        si texto[i] == '\n' :
+            out = out + prefijo
+        i = i + 1
+    devolver out
+
+
+funcion _prefijo (a ,b ):
+    # prefijo comun mas largo de dos strings (params: el subindice de un str
+    # solo es fiable si el str es parametro de funcion).
+    na = longitud (a )
+    nb = longitud (b )
+    k = 0
+    out = ''
+    fin = Falso
+    mientras k < na y k < nb y no fin :
+        ca = a [k ]
+        cb = b [k ]
+        si ca == cb :
+            out = out + ca
+            k = k + 1
+        sino :
+            fin = Verdadero
+    devolver out
+
+
+funcion dedent (texto ):
+    # DEDENT_V1: semantica de CPython 3.12 sin re.
+    #  1) margen = prefijo comun de la sangria de las lineas CON texto;
+    #     solo se necesita su LONGITUD (toda linea con texto empieza por el).
+    #  2) las lineas solo-blanco quedan vacias; a las demas se les quita el
+    #     margen.
+    # Reglas del backend que esta version respeta:
+    #  - un str local asignado en RAMAS HERMANAS de un mismo si/elif se lee
+    #    viejo (phi roto): aqui el estado de la 1a pasada es solo int.
+    #  - `texto + '\n'` da un str local indexable y uniformiza la ultima linea.
+    t2 = texto + '\n'
+    n2 = longitud (t2 )
+    nm = -1
+    ref_ini = 0
+    ini = 0
+    i = 0
+    mientras i < n2 :
+        si t2 [i ] == '\n' :
+            kk = ini
+            mientras kk < i y (t2 [kk ] == ' ' o t2 [kk ] == '\t' ) :
+                kk = kk + 1
+            sangria = kk - ini
+            si kk < i :
+                si nm < 0 :
+                    nm = sangria
+                    ref_ini = ini
+                sino :
+                    k = 0
+                    mientras k < nm y k < sangria y t2 [ref_ini + k ] == t2 [ini + k ] :
+                        k = k + 1
+                    nm = k
+            ini = i + 1
+        i = i + 1
+    si nm < 0 :
+        nm = 0
+    res = ''
+    ini = 0
+    i = 0
+    mientras i < n2 :
+        si t2 [i ] == '\n' :
+            kk = ini
+            mientras kk < i y (t2 [kk ] == ' ' o t2 [kk ] == '\t' ) :
+                kk = kk + 1
+            trozo = ''
+            si kk < i :
+                t = ini + nm
+                mientras t < i :
+                    trozo = trozo + t2 [t ]
+                    t = t + 1
+            res = res + '\n' + trozo
+            ini = i + 1
+        i = i + 1
+    nr = longitud (res )
+    out = ''
+    t = 1
+    mientras t < nr :
+        out = out + res [t ]
+        t = t + 1
+    devolver out
+
+
+funcion shorten (texto ,ancho ,marca =Nada ):
+    # SHORTEN_V1: semantica de CPython 3.12 (max_lines=1, placeholder
+    # ' [...]'): colapsa espacios; si todo cabe, lo devuelve tal cual; si no,
+    # deja las palabras que caben con el marcador; si no cabe ninguna, solo el
+    # marcador ('[...]', sin el espacio inicial).
+    # El tercer posicional NO existe en CPython (shorten(text, width, **kw)):
+    # se reproduce el TypeError exacto en vez de aceptarlo en silencio.
+    si marca no es Nada :
+        lanzar TypeError ('shorten() takes 2 positional arguments but 3 were given')
+    n = longitud (texto )
+    colapsado = ''
+    pendiente = Falso
+    i = 0
+    mientras i < n :
+        c = texto [i ]
+        si c == ' ' o c == '\t' o c == '\n' o c == '\r' :
+            si longitud (colapsado ) > 0 :
+                pendiente = Verdadero
+        sino :
+            si pendiente :
+                colapsado = colapsado + ' '
+                pendiente = Falso
+            colapsado = colapsado + c
+        i = i + 1
+    nc = longitud (colapsado )
+    # cabe = nc <= ancho ; k/corte = palabras que caben con el marcador
+    cabe = 1
+    si nc > ancho :
+        cabe = 0
+    k = 0
+    largo = 0
+    corte = 0
+    j = 0
+    mientras j < nc :
+        ini = j
+        mientras j < nc y colapsado [j ] != ' ' :
+            j = j + 1
+        lp = j - ini
+        cand = largo + lp
+        si k > 0 :
+            cand = cand + 1
+        si cand + 6 <= ancho :
+            k = k + 1
+            largo = cand
+            corte = j
+        j = j + 1
+    limite = corte
+    usa = 1
+    ini_marca = 1
+    si cabe == 1 :
+        limite = nc
+        usa = 0
+    si k > 0 :
+        ini_marca = 0
+    out = ''
+    t = 0
+    mientras t < limite :
+        out = out + colapsado [t ]
+        t = t + 1
+    marca_txt = ' [...]'
+    nm = longitud (marca_txt )
+    u = 0
+    mientras u < usa :
+        t = ini_marca
+        mientras t < nm :
+            out = out + marca_txt [t ]
+            t = t + 1
+        u = u + 1
+    devolver out
