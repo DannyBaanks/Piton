@@ -189,6 +189,9 @@ _COLLECTION_INJECTED_SOURCE = {
         "funcion copy(self):\n    devolver dict(self.__piton_base__)\n"
     ),
 }
+# Dunder methods injected for BOTH list and dict subclasses.
+# Note: __getitem__ for dict is handled specially in _collection_member_defs
+# to support __missing__.
 _COLLECTION_DUNDER_SOURCE = (
     "funcion __len__(self):\n    devolver len(self.__piton_base__)\n"
     "funcion __getitem__(self, k):\n    devolver self.__piton_base__[k]\n"
@@ -200,13 +203,42 @@ _COLLECTION_DUNDER_SOURCE = (
     "funcion __str__(self):\n    devolver str(self.__piton_base__)\n"
 )
 
+# Dict-specific __getitem__ that calls __missing__ when key not found.
+# This mimics CPython's dict.__getitem__ behavior.
+_DICT_DUNDER_GETITEM_WITH_MISSING = (
+    "funcion __getitem__(self, k):\n"
+    "    si k en self.__piton_base__:\n"
+    "        devolver self.__piton_base__[k]\n"
+    "    sino:\n"
+    "        devolver self.__missing__(k)\n"
+)
 
-def _collection_member_defs(kind: str) -> list:
-    """HIR de los metodos/dunders inyectados en una subclase directa de `kind`."""
+
+def _collection_member_defs(kind: str, defined: set[str] | None = None) -> list:
+    """HIR de los metodos/dunders inyectados en una subclase directa de `kind`.
+
+    Args:
+        kind: 'list' or 'dict'
+        defined: Set of method names the user has defined. Used to conditionally
+            inject a special __getitem__ for dict that calls __missing__.
+    """
     from piton.lower import lower_cst_to_hir
     from piton.parser import parse
 
-    body = _COLLECTION_INJECTED_SOURCE[kind] + _COLLECTION_DUNDER_SOURCE
+    # For dict, if user defines __missing__ but not __getitem__, inject a
+    # __getitem__ that calls __missing__ when key not found (CPython parity).
+    if kind == "dict" and defined is not None:
+        has_missing = "__missing__" in defined
+        has_getitem = "__getitem__" in defined
+        if has_missing and not has_getitem:
+            # Use special dict __getitem__ that supports __missing__
+            dunder_source = _DICT_DUNDER_GETITEM_WITH_MISSING
+        else:
+            dunder_source = _COLLECTION_DUNDER_SOURCE
+    else:
+        dunder_source = _COLLECTION_DUNDER_SOURCE
+
+    body = _COLLECTION_INJECTED_SOURCE[kind] + dunder_source
     indented = "".join("    " + line if line.strip() else line for line in body.splitlines(True))
     module = lower_cst_to_hir(parse(f"clase _ColeccionBase(object):\n{indented}"))
     class_def = next(node for node in module.body if getattr(node, "kind", None) == HIRKind.CLASS_DEF)
@@ -1790,16 +1822,21 @@ class MIRLowerer:
             }
             # Un dunder que el usuario redefine en una subclase de list/dict
             # no lo puede respetar el camino tipado/inyectado (p.ej. print de
-            # un __repr__ propio, o __missing__): falla cerrado en build.
+            # un __repr__ propio): falla cerrado en build.
+            # EXCEPCION: dict subclases pueden sobreescribir __setitem__,
+            # __getitem__ y __missing__ con paridad CPython.
+            allowed_dict_dunders = frozenset({"__setitem__", "__getitem__", "__missing__"})
             for name in sorted(defined):
                 if name.startswith("__") and name.endswith("__") and name != "__init__":
+                    if kind == "dict" and name in allowed_dict_dunders:
+                        continue
                     raise MIRLoweringError(
                         f"native {kind}-subclass overriding '{name}' is not supported"
                     )
             direct_kinds = [name for name in _base_names(node) if name in _COLLECTION_BASE_KINDS]
             if not direct_kinds:
                 continue
-            for member in _collection_member_defs(direct_kinds[0]):
+            for member in _collection_member_defs(direct_kinds[0], defined):
                 if member.name not in defined:
                     node.body.append(member)
 
