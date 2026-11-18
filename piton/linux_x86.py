@@ -55,7 +55,7 @@ typedef struct{long magic;void*bytes_obj;long index;}PitonBytesIterator;
 typedef struct{long refcount;long kind;long length;int is_bytearray;void*buf;long offset;long stride;}PitonMemoryView;
 static long piton_range_len(PitonRange*r);
 static long piton_range_eq(PitonRange*a,PitonRange*b);
-static unsigned char piton_arena[8*1024*1024];
+static unsigned char piton_arena[32*1024*1024];
 static usize piton_arena_used=0;
 static void piton_memzero(void*p,usize n){unsigned char*b=p;for(usize i=0;i<n;++i)b[i]=0;}
 static void piton_memcpy(void*d,const void*s,usize n){unsigned char*dd=d;const unsigned char*ss=s;for(usize i=0;i<n;++i)dd[i]=ss[i];}
@@ -6006,7 +6006,8 @@ static long piton_stat_kind(long pbits,long kind){
   return (mode&0170000)==0040000;
 }
 static long piton_os_makedirs(long nbits,long mode,long exist_ok){
-  if(!nbits||nbits==(long)&piton_none_singleton||!piton_maybe_ptr(nbits)||!piton_is_printable_str((const char*)nbits)){piton_raise_set("TypeError","makedirs: name should be string, bytes or os.PathLike");return 0;}
+  nbits=piton_fs_path_arg(nbits);
+  if(!piton_fs_path_ok(nbits)){piton_raise_set("TypeError","makedirs: name should be string, bytes or os.PathLike");return 0;}
   const char*name=(const char*)nbits;usize n=piton_strlen(name);
   char*buf=(char*)piton_alloc(n+2);piton_memcpy(buf,name,n);buf[n]=0;
   while(n>1&&buf[n-1]=='/'){buf[--n]=0;}
@@ -21850,7 +21851,8 @@ class LinuxCEmitter:
                     # parametro) se mantiene el seq_set de main: el
                     # subscript store sobre un parametro es lo que PRUEBA que
                     # la coleccion es una lista (SUBSCRIPT_STORE_SEED_V1).
-                    out.append(f"    piton_seq_set((PitonSeq*){self._value(collection)},{self._value(index)},{self._slot(value, types)});")
+                    _idx_expr = f"piton_dyn_unbox({self._value(index)}).bits" if types.get(index) == "slot" else self._value(index)
+                    out.append(f"    piton_seq_set((PitonSeq*){self._value(collection)},{_idx_expr},{self._slot(value, types)});")
                 self._emit_exc_check(out, function, handler_label)
             elif coll_type in {"dict", "dict:module"}:
                 out.append(f"    piton_dict_set((PitonDict*){self._value(collection)},{self._dict_key_slot(collection, index, types)},{self._slot(value, types)});")
