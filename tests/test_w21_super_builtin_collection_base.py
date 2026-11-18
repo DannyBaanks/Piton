@@ -277,13 +277,17 @@ class SuperBuiltinCollectionFailClosed(unittest.TestCase):
             )
 
     def test_user_dunder_override_on_collection_subclass_fails_closed(self):
-        with pytest.raises(NativeBuildError, match="overriding '__missing__'"):
-            compare_native_to_cpython(
-                "clase D(dict):\n"
-                "    funcion __missing__(self, k):\n"
-                "        devolver 0\n"
-                "d = D()\nimprimir(d['q'])\n"
-            )
+        # W22 dict_subclass_dunder_overrides added CPython-parity __missing__,
+        # __getitem__, and __setitem__ overrides on dict subclasses; other
+        # dunders such as __repr__ on list/dict subclasses still fail closed.
+        missing_res = compare_native_to_cpython(
+            "clase D(dict):\n"
+            "    funcion __missing__(self, k):\n"
+            "        devolver 0\n"
+            "d = D()\nimprimir(d['q'])\n"
+        )
+        self.assertEqual(missing_res.native.returncode, missing_res.oracle.returncode)
+        self.assertEqual(missing_res.native.stdout, missing_res.oracle.stdout)
         with pytest.raises(NativeBuildError, match="overriding '__repr__'"):
             compare_native_to_cpython(
                 "clase L(list):\n"

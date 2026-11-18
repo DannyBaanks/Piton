@@ -231,6 +231,12 @@ class PercentSpecsP14(unittest.TestCase):
         _assert_matches(self, "imprimir('% d' % -5)\n")
 
     def test_still_closed(self):
+        # W22 str_percent_dynamic_dict lifted literal-key mapping restrictions:
+        # dynamic dicts and non-str key KeyError are now verified for parity.
+        _assert_matches(self, "k = 'a'\nd = {k: 1}\nimprimir('%(a)s' % d)\n")
+        r_keyerr = compare_native_to_cpython("imprimir('%(a)s' % {1: 'x'})\n")
+        self.assertEqual(r_keyerr.native.returncode, r_keyerr.oracle.returncode)
+        self.assertIn(b"KeyError", r_keyerr.native.stderr)
         for source in (
             # '%+d' and '% d' now supported (PCT_SIGN_FLAGS_V1)
             # '%#x' now supported (PCT_ALT_FLAG_V1):
@@ -240,12 +246,10 @@ class PercentSpecsP14(unittest.TestCase):
             "imprimir('%s %(a)s' % (1,))\n",
             "imprimir('%(z)s' % {'a': 1})\n",
             "imprimir('%(a)s' % [1])\n",
-            "imprimir('%(a)s' % {1: 'x'})\n",
             "imprimir('%5%' % ())\n",
             "imprimir('%.3c' % 65)\n",
             "imprimir('%x' % 3.5)\n",
             "imprimir('%d' % 'a')\n",
-            "k = 'a'\nd = {k: 1}\nimprimir('%(a)s' % d)\n",
         ):
             try:
                 compare_native_to_cpython(source)
