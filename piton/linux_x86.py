@@ -14702,9 +14702,14 @@ class LinuxCEmitter:
         )
         for _c in _object_cands:
             # NONE_CONFLICT_OBJECT_V1: solo instancias de UNA clase de usuario
-            # (`object:C`). Con dos clases el runtime sólo distingue por nombre
-            # de clase, y una instancia de subclase no tiene rama estatica
-            # propia: falla cerrado en build en vez de adivinar.
+            # (`object:C`) o un handle de fichero (`file`) son los unicos
+            # candidatos no-objeto que admiten despacho dinamico por kind.
+            if _c == "file":
+                # FILE_NONE_CONFLICT_V1: un handle de fichero se empaqueta como
+                # PK_OBJECT cuyos bits son un PitonFile*; las ramas de metodo
+                # y atributo se resuelven por _emit_file_method / los handlers
+                # de atributo de fichero (ver _emit_file_method).
+                continue
             if not (_c.startswith("object:") and _c.split(":", 1)[1] in self.classes):
                 raise NativeBuildError(
                     f"Linux {op} sobre '{key[1]}': tipo '{_c}' no soportado en despacho dinamico"
@@ -14716,8 +14721,8 @@ class LinuxCEmitter:
         if _object_cands and function.name == "<module>":
             # NONE_CONFLICT_OBJECT_V1 (contrato W20 test_object_receiver_on_
             # none_conflict_variable_fails_closed): a nivel de modulo el
-            # receptor de clase de usuario sigue fallando cerrado. El despacho
-            # por clase solo se habilita dentro de funciones.
+            # receptor sigue fallando cerrado. El despacho dinamico solo se
+            # habilita dentro de funciones.
             raise NativeBuildError(
                 f"Linux {op} sobre '{key[1]}' (variable None o dinamica a nivel de modulo "
                 f"con tipo '{_object_cands[0]}') no soportado: fail closed"
@@ -14728,10 +14733,12 @@ class LinuxCEmitter:
             _tmp = f"%dynrecv{self._instr_seq}_{_idx}"
             out.append(f"    if(piton_dyn_unbox({recv}).kind=={_kind}){{long {_name(_tmp)}=piton_dyn_unbox({recv}).bits;")
             types[_tmp] = _cand
-            if _kind == "PK_OBJECT" and op in {"get_attr", "method_call"} and self._object_attr_may_be_missing(_cand, name):
+            if _kind == "PK_OBJECT" and _cand != "file" and op in {"get_attr", "method_call"} and self._object_attr_may_be_missing(_cand, name):
                 # NONE_CONFLICT_OBJECT_V1: el acceso dinamico a un nombre que no es
                 # metodo, propiedad ni hook de la clase debe comprobar la instancia
                 # en runtime: CPython lanza AttributeError si no existe.
+                # Un PitonFile no es un PitonObject, así que nunca se comprueba
+                # con piton_hasattr sobre él.
                 out.append(f"    if(!piton_hasattr({_name(_tmp)},{json.dumps(name)})){{")
                 self._runtime_type_error_as(
                     out, "AttributeError",
@@ -15585,6 +15592,11 @@ class LinuxCEmitter:
         self._nonnone_stored_types: dict[tuple[str, str], set[str]] = {}
         self._nonnone_unknown: set[tuple[str, str]] = set()
         self._none_conflict_names: set[tuple[str, str]] = set()
+        # LOAD_HANDLER_V1: el handler (etiqueta de excepto) que lleva cada
+        # carga (`load (nombre, handler) -> temp`), necesario para enrutar
+        # excepciones de ops que no reciben el handler en sus argumentos
+        # (por ejemplo `gen_close`, que el lowerer deriva de `.close()`).
+        self._load_handler: dict[tuple[str, str], str | None] = {}
         self._module_types = {}
 
         def literal_type(value: Any) -> str | None:
@@ -18029,6 +18041,11 @@ class LinuxCEmitter:
             )
             if not (_user_bound_name and source in _SHADOWABLE_BUILTIN_NAMES):
                 aliases[result] = source
+            if result is not None:
+                # LOAD_HANDLER_V1: recordar el handler de la carga para que
+                # ops como gen_close puedan enrutar excepciones al excepto
+                # que la envuelve.
+                self._load_handler[(function.name, result)] = args[1] if len(args) > 1 else None
             _unbound_value = self._unbound_builtin_values.get(source) or self._module_unbound_builtin_values.get(source)
             if _unbound_value is not None:
                 self._unbound_builtin_values[result] = _unbound_value
@@ -26412,6 +26429,32 @@ class LinuxCEmitter:
             _gc_type = types.get(args[0], "")
             if _gc_type == "file" or aliases.get(args[0], "") in self._files:
                 out.append(f"    piton_file_close((PitonFile*){self._value(args[0])});{_name(result)}=0;")
+                types[result] = "int"
+                return out
+            _gc_src = aliases.get(args[0], args[0]) if isinstance(args[0], str) else args[0]
+            _gc_key = (function.name, _gc_src) if isinstance(_gc_src, str) else None
+            _gc_is_none_conflict_file = (
+                _gc_key is not None
+                and _gc_key in self._none_conflict_names
+                and "file" in self._nonnone_stored_types.get(_gc_key, ())
+            )
+            if _gc_is_none_conflict_file:
+                # FILE_NONE_CONFLICT_CLOSE_V1: `fp.close()` donde fp puede ser
+                # None o un fichero. CPython lanza AttributeError si fp es None
+                # y cierra el descriptor si fp es un fichero. `args[0]` es una
+                # caja ranurada (slot), hay que desempaquetarla antes de
+                # castear a PitonFile*.
+                _recv = self._value(args[0])
+                _recv_bits = f"piton_dyn_unbox({_recv}).bits"
+                _handler = self._load_handler.get((function.name, args[0])) if isinstance(args[0], str) else None
+                out.append(f"    if(piton_dyn_unbox({_recv}).kind==PK_NONE){{")
+                self._runtime_type_error_as(
+                    out, "AttributeError",
+                    "'NoneType' object has no attribute 'close'",
+                    function, _handler,
+                )
+                out.append("    }")
+                out.append(f"    piton_file_close((PitonFile*){_recv_bits});{_name(result)}=0;")
                 types[result] = "int"
                 return out
             out.append(f"    {_name(result)}=piton_gen_close({self._value(args[0])});")
