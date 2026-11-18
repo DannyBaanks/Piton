@@ -154,7 +154,7 @@ check_type(3.14)
         from piton.x86 import NativeBuildError
         import tempfile
         from pathlib import Path
-        from piton.linux_x86 import compile_native_linux
+        from native_linux import compile_native_linux
         with tempfile.TemporaryDirectory(prefix="piton-pm-") as directory:
             with self.assertRaises(NativeBuildError) as ctx:
                 compile_native_linux(source, Path(directory) / "p")

@@ -156,7 +156,110 @@ PITON_QUARANTINE_DISABLE=1 python -m pytest tests/ -q   # sin cuarentena
 manda `linux_x86.py`. El numero util para reducir la lista es el de Windows;
 aqui solo demuestra que la maquinaria no rompe nada donde el codigo si anda.
 
+## PR #51: clasificación del rojo Windows (2026-11-17)
+
+La corrida que abrió el trabajo fue `44050330427`, job `test-windows (3.12)`
+`133926234972`, sobre `3110c14881b768990ccaac3f662c2caad0802393`. Su salida
+real terminó en:
+
+```text
+706 failed, 953 passed, 80 skipped, 224 xfailed, 5 xpassed,
+67 errors, 170 subtests passed in 3113.21s (0:51:53)
+```
+
+Las **773 filas rojas** (706 `failed` + 67 `errors`) se separaron por causa;
+no se ocultaron por comodidad ni se metieron todas en la cuarentena:
+
+| causa | filas | tratamiento en este branch |
+|---|---:|---|
+| backend Linux-ELF sin WSL en el runner Windows | 463 | `pytest.skip` explícito solo en Windows; el backend ELF real sigue ejecutándose en Linux |
+| fixture `glob` con nombres Windows inválidos | 67 | fixture portable; conserva la cobertura de wildcards y newline en POSIX |
+| deuda real del backend PE `piton/x86.py` | 243 | `xfail(strict=False)` con nodeid exacto; el test se ejecuta y sigue reportando |
+
+La partición se reconstruyó desde el log guardado del job: los 243 nodeids PE
+coinciden uno a uno con las filas `FAILED`, y las 463 restantes corresponden al
+mismo camino de prueba Linux-ELF (`compile_native_linux`); los 67 `ERROR` son
+todos `OSError: [Errno 22] Invalid argument` al crear `star*name.md` en Windows.
+
+### Cómo se divide la parte PE
+
+Los 243 fallos PE reales se clasifican así:
+
+| excepción observada | nodeids | naturaleza |
+|---|---:|---|
+| `ValueError` de aridad/MIR (`closure_new` con 6 campos frente a unpacking de 4) | 197 | el emitter Windows no acompaña el IR actual |
+| `piton.x86.NativeBuildError` | 25 | gates PE fail-closed todavía no portados |
+| `AssertionError` de divergencia semántica | 21 | resultado PE distinto de CPython |
+
+La lista final de `tests/quarantine_windows.txt` queda en **469 nodeids
+únicos**. La reducción desde la lista histórica es auditable:
+
+```text
+233 historicos - 2 NO_RECOLECTADOS - 5 XPASS + 243 PE nuevos = 469
+```
+
+Los dos IDs históricos que ya no se recolectaban se retiraron:
+
+- `tests/test_grammar_parity.py::BundledStdlibGatesV2::test_stub_fails_closed_at_runtime`
+- `tests/test_grammar_parity.py::M6SeqDefaultsV1::test_scalar_arg_to_collection_default_fails_closed`
+
+Los cinco XPASS medidos también se retiraron (un XPASS es evidencia de que el
+backend ya no falla y debe quedar fuera de la cuarentena):
+
+- `tests/test_grammar_parity.py::RaiseValueGatesV1::test_raise_instance_is_caught`
+- `tests/test_metaclasses.py::MetaclassesGate::test_metaclass_conflict_fails_closed`
+- `tests/test_p0_parity.py::BuiltinMarkerV1::test_store_builtin_fail_closed`
+- `tests/test_phase5.py::Phase5Gates::test_descriptors_unknown_class_decorator_fails_closed`
+- `tests/test_phase5.py::Phase5Gates::test_x86_module_attribute_value_access_fails_closed`
+
+### Correcciones portables, no reservadas a PE
+
+- `tests/native_linux.py` centraliza el acceso al backend ELF. En Linux llama
+  al backend real sin cambiar su comportamiento; en Windows omite solo las
+  pruebas que compilan un ELF. `PITON_RUN_LINUX_NATIVE_ON_WINDOWS=1` permite
+  activar esa vía cuando WSL y su toolchain están configurados.
+- La detección de WSL del CLI E2E comprueba además que exista `gcc`; tener
+  una distro no basta para compilar el ELF.
+- El fixture `glob` conserva `star*name.md` y `q?.log` en POSIX y los omite en
+  Windows, donde el sistema de ficheros prohibe esos nombres. El caso con
+  newline se omite solo en Windows. La matriz POSIX no pierde cobertura.
+- El oráculo CPython vivo usa `os.linesep`; los cuatro módulos `test_falsify_*`
+  usan `sys.executable`; `test_parity_formato.py` hace el skip antes de que
+  `_stage_impl` intente invocar el toolchain Linux.
+- No se modificó `.github/workflows/ci.yml`: el job conserva los mismos
+  comandos y cobertura; solo cambia cómo la suite distingue su entorno.
+
+### Evidencia local
+
+- Corrida completa Windows (mismos argumentos que el job CI):
+
+  ```text
+  py -m pytest tests/ -v --tb=short --ignore=tests/test_windows_validate.py
+
+  lista=469 aplicados=469 XFAIL=449 XPASS=0 SKIP=20 SIN_REPORTE=0
+  FUERA_DE_LA_LISTA=0
+  947 passed, 639 skipped, 449 xfailed, 170 subtests passed in 7809.25s
+  (2:10:09)
+  ```
+
+  Los 243 nodeids PE nuevos se ejecutaron y quedaron `XFAIL`; ninguno fue
+  `XPASS`. Los 20 `SKIP` restantes son IDs históricos que hoy se omiten por
+  el toolchain Linux-ELF o por una precondición interna: también siguen
+  visibles en el resumen, no se presentan como fallos PE resueltos.
+- Focales Windows: `test_adv_objetos.py` = 2 passed / 30 skipped;
+  `test_cli_e2e.py` = 25 passed / 3 skipped; los cuatro `test_falsify_*` =
+  21 passed; `test_parity_formato.py` = 4 passed / 1 skipped.
+- Tranches locales: P0-P9 = 341 passed / 56 skipped / 152 xfailed;
+  `test_phase5.py` = 223 passed / 1 skipped / 82 xfailed; translator = 63
+  passed. No hubo fallos fuera de la cuarentena.
+- `py -m compileall -q tests` terminó con exit 0 y `git diff --check` no
+  encontró errores.
+- La lista tiene 469 entradas, 469 únicas; contra la recolección actual de
+  2.034 tests quedaron 0 nodeids ausentes.
+
 Not evaluated here / **NOT_DEMONSTRATED**: portar `closure_new` de 6 campos y
-los 121 gates al backend Windows, y los 6 ACCESS_VIOLATION — eso es trabajo de
-backend, no de CI, y sigue siendo la deuda que hay que saldar para volver a
-exigir Windows verde sin cuarentena.
+los gates PE al backend Windows, y corregir las divergencias semánticas PE —
+eso es trabajo de backend, no de CI, y sigue siendo la deuda que hay que
+saldar para volver a exigir Windows verde sin cuarentena. La reducción de la
+cuarentena no declara resuelto ninguno de esos fallos: solo separa el hueco
+del backend de los problemas de entorno y de los bugs portables del fixture.

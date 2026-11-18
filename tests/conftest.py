@@ -1,4 +1,4 @@
-"""Cuarentena Windows de la suite (hueco declarado, 2026-10-31).
+"""Cuarentena Windows de la suite (hueco declarado, actualizada 2026-11-17).
 
 El backend nativo Windows ``piton/x86.py`` va atras del MIR y de
 ``piton/linux_x86.py`` desde la unificacion 2026-10-24 / sync 2026-10-30: hay
@@ -36,7 +36,7 @@ import pytest
 
 QUARANTINE_FILE = Path(__file__).with_name("quarantine_windows.txt")
 REASON = (
-    "HUECO DECLARADO Windows x86.py (cuarentena 2026-10-31): ver "
+    "HUECO DECLARADO Windows x86.py (cuarentena 2026-11-17): ver "
     "docs/windows_native_failures.md y tests/quarantine_windows.txt"
 )
 
@@ -122,7 +122,7 @@ def pytest_terminal_summary(
     xpassed = sorted(n for n, r in _results.items() if r == "xpassed")
     failed = sorted(n for n, r in _results.items() if r == "failed")
     stale = list(_stats["stale"])
-    terminalreporter.write_sep("=", "CUARENTENA WINDOWS 2026-10-31 (hueco declarado)")
+    terminalreporter.write_sep("=", "CUARENTENA WINDOWS 2026-11-17 (hueco declarado)")
     terminalreporter.write_line(
         f"lista={_stats['listed']} aplicados={_stats['matched']} "
         f"XFAIL={counts['xfailed']} XPASS={counts['xpassed']} "

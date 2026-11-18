@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from piton.linux_x86 import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux  # noqa: E402
 from piton.x86 import NativeBuildError  # noqa: E402
 
 

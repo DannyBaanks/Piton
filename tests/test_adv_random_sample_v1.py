@@ -4,7 +4,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from piton.linux_x86 import compile_native_linux
+from native_linux import compile_native_linux
 
 ROOT = Path(__file__).resolve().parent.parent
 

@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from piton.linux_x86 import compile_native_linux
+from native_linux import compile_native_linux
 from tools.parity_corpus_sec import python_to_piton
 
 

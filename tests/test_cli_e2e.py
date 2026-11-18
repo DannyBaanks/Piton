@@ -39,8 +39,8 @@ def _linux_target_runnable() -> bool:
     """True si este host puede construir --target linux-x86_64.
 
     En host Linux: requiere gcc. En Windows: requiere WSL *con al menos una
-    distro instalada* (el CLI Windows solo puede delegar la cadena freestanding
-    a `wsl.exe`; si no hay distros, el build falla con mensaje accionable).
+    distro instalada y gcc dentro de ella* (el CLI Windows solo puede delegar
+    la cadena freestanding a `wsl.exe`; una distro sin toolchain no basta).
     """
     if sys.platform != "win32":
         return shutil.which("gcc") is not None
@@ -52,7 +52,15 @@ def _linux_target_runnable() -> bool:
         if r.returncode != 0:
             return False
         texto = r.stdout.decode("utf-16-le", errors="replace") if b"\x00" in r.stdout[:64] else r.stdout.decode("utf-8", errors="replace")
-        return texto.strip().strip("\x00").strip() != ""
+        if texto.strip().strip("\x00").strip() == "":
+            return False
+        toolchain = subprocess.run(
+            [wsl, "--exec", "sh", "-lc", "command -v gcc"],
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+        return toolchain.returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
 

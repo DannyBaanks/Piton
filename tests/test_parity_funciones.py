@@ -22,7 +22,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from tools.parity_corpus_v4 import python_to_piton  # noqa: E402
-from piton.linux_x86 import compile_native_linux  # noqa: E402
+from native_linux import compile_native_linux  # noqa: E402
 
 TIMEOUT = 60
 
