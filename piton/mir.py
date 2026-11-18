@@ -10231,6 +10231,10 @@ class MIRLowerer:
                 builder.emit("binary", op, left, right, _active_handler(builder), "aug", result=result)
             else:
                 builder.emit("binary", op, left, right, _active_handler(builder), result=result)
+        elif aug and op in {"&", "|", "^", "@"}:
+            # AUG_DUNDER_V1: `&=`, `|=`, `^=`, `@=` llevan la marca 'aug' para que el
+            # backend aplique el protocolo __iop__ -> __op__/__rop__ sobre objetos.
+            builder.emit("binary", op, left, right, _active_handler(builder), "aug", result=result)
         else:
             builder.emit("binary", op, left, right, result=result)
         return result

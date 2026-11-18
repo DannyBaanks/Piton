@@ -934,6 +934,70 @@ static PitonSlot piton_object_binary_dunder(long opcode,PitonSlot left,
   else piton_raise_unsupported_power(left,right,(PitonSlot){0,PK_NONE},0);
   return (PitonSlot){0,PK_NONE};
 }
+/* AUG_DUNDER_V1: asignacion aumentada de CPython (PyNumber_InPlace*):
+ * 1) left.__iop__(right); si falta o devuelve NotImplemented, sigue al binario;
+ * 2) binario: right.__rop__(left) primero solo si right es subclase estricta
+ *    de left y sobreescribe __rop__; luego left.__op__(right) y right.__rop__(left);
+ * 3) todo NotImplemented: TypeError "unsupported operand type(s) for op=: 'A' and 'B'". */
+static PitonSlot piton_dyn_binop(long opc,PitonSlot a,PitonSlot b);
+static const char*g_class_anc_sub[256];static const char*g_class_anc_sup[256];static long g_class_anc_n=0;
+static void piton_class_ancestor_add(const char*sub,const char*sup){
+  if(g_class_anc_n<256){g_class_anc_sub[g_class_anc_n]=sub;g_class_anc_sup[g_class_anc_n]=sup;++g_class_anc_n;}
+}
+static int piton_class_is_strict_subclass(const char*sub,const char*sup){
+  for(long i=0;i<g_class_anc_n;++i)
+    if(!piton_strcmp(g_class_anc_sub[i],sub)&&!piton_strcmp(g_class_anc_sup[i],sup))return 1;
+  return 0;
+}
+static const char*const piton_aug_inplace_names[13]={"__iadd__","__isub__","__imul__","__itruediv__","__ifloordiv__","__imod__","__ipow__","__ilshift__","__irshift__","__iand__","__ior__","__ixor__","__imatmul__"};
+static const char*const piton_aug_binary_names[13]={"__add__","__sub__","__mul__","__truediv__","__floordiv__","__mod__","__pow__","__lshift__","__rshift__","__and__","__or__","__xor__","__matmul__"};
+static const char*const piton_aug_reflected_names[13]={"__radd__","__rsub__","__rmul__","__rtruediv__","__rfloordiv__","__rmod__","__rpow__","__rlshift__","__rrshift__","__rand__","__ror__","__rxor__","__rmatmul__"};
+static const char*const piton_aug_op_text[13]={"+=","-=","*=","/=","//=","%=","**=","<<=",">>=","&=","|=","^=","@="};
+static int piton_aug_reflected_first(PitonSlot left,PitonSlot right,const char*reflected){
+  if(left.kind!=PK_OBJECT||right.kind!=PK_OBJECT)return 0;
+  PitonObject*lo=(PitonObject*)left.bits;PitonObject*ro=(PitonObject*)right.bits;
+  if(!lo->class_name||!ro->class_name)return 0;
+  if(!piton_class_is_strict_subclass(ro->class_name,lo->class_name))return 0;
+  PitonDunderHook*rh=piton_object_dunder_hook_find(ro->class_name,reflected);
+  if(!rh)return 0;
+  PitonDunderHook*lh=piton_object_dunder_hook_find(lo->class_name,reflected);
+  return !lh||lh->fn!=rh->fn;
+}
+static PitonSlot piton_object_aug_binop(long opcode,PitonSlot left,PitonSlot right){
+  PitonSlot r;
+  if(left.kind==PK_OBJECT){
+    r=piton_call_object_dunder(left,piton_aug_inplace_names[opcode],right,(PitonSlot){0,PK_NONE},2);
+    if(piton_exc_flag_get())return (PitonSlot){0,PK_NONE};
+    if(!piton_slot_is_notimplemented(r))return r;
+  }
+  const char*refl=piton_aug_reflected_names[opcode];
+  int right_first=piton_aug_reflected_first(left,right,refl);
+  if(right_first){
+    r=piton_call_object_dunder(right,refl,left,(PitonSlot){0,PK_NONE},2);
+    if(piton_exc_flag_get())return (PitonSlot){0,PK_NONE};
+    if(!piton_slot_is_notimplemented(r))return r;
+  }
+  r=piton_call_object_dunder(left,piton_aug_binary_names[opcode],right,(PitonSlot){0,PK_NONE},2);
+  if(piton_exc_flag_get())return (PitonSlot){0,PK_NONE};
+  if(!piton_slot_is_notimplemented(r))return r;
+  if(!right_first){
+    r=piton_call_object_dunder(right,refl,left,(PitonSlot){0,PK_NONE},2);
+    if(piton_exc_flag_get())return (PitonSlot){0,PK_NONE};
+    if(!piton_slot_is_notimplemented(r))return r;
+  }
+  PitonStrBuf message;sb_init(&message);
+  sb_puts(&message,"unsupported operand type(s) for ");sb_puts(&message,piton_aug_op_text[opcode]);
+  sb_puts(&message,": '");sb_puts(&message,js_type_name(left));
+  sb_puts(&message,"' and '");sb_puts(&message,js_type_name(right));sb_putc(&message,'\'');
+  piton_raise_set("TypeError",message.d);
+  return (PitonSlot){0,PK_NONE};
+}
+static PitonSlot piton_dyn_aug_binop(long opc,PitonSlot a,PitonSlot b){
+  /* Los tipos builtin no definen __matmul__: `@=` sobre ellos es TypeError en CPython,
+   * y piton_object_aug_binop produce ese mismo mensaje al no encontrar dunders. */
+  if(opc==12||a.kind==PK_OBJECT||b.kind==PK_OBJECT)return piton_object_aug_binop(opc,a,b);
+  return piton_dyn_binop(opc,a,b);
+}
 static PitonSlot piton_binop_object_add(PitonSlot a,PitonSlot b){
   static PitonSlot none={0,PK_NONE};
   if(a.kind==PK_OBJECT){
@@ -10499,7 +10563,20 @@ class LinuxCEmitter:
                     if "__init__" in self.classes.get(_cand, set()) and _target in self.function_names:
                         lines.append(f"    piton_object_init_hook_set({json.dumps(_cls)},(long)&{_name(_target)},0);")
                         break
-                for _dmeth in ("__add__", "__radd__", "__floordiv__", "__rfloordiv__", "__pow__", "__rpow__", "__round__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__"):
+                # AUG_DUNDER_V1: relaciones de herencia completas para el
+                # despacho reflejo en runtime (piton_aug_reflected_first).
+                for _anc in self.class_mro.get(_cls, [_cls]):
+                    if _anc != _cls:
+                        lines.append(f"    piton_class_ancestor_add({json.dumps(_cls)},{json.dumps(_anc)});")
+                for _dmeth in ("__add__", "__radd__", "__floordiv__", "__rfloordiv__", "__pow__", "__rpow__", "__round__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__",
+                               # AUG_DUNDER_V1: protocolo binario/in-place completo (piton_object_aug_binop).
+                               "__sub__", "__rsub__", "__mul__", "__rmul__", "__truediv__", "__rtruediv__",
+                               "__mod__", "__rmod__", "__lshift__", "__rlshift__", "__rshift__", "__rrshift__",
+                               "__and__", "__rand__", "__or__", "__ror__", "__xor__", "__rxor__",
+                               "__matmul__", "__rmatmul__",
+                               "__iadd__", "__isub__", "__imul__", "__itruediv__", "__ifloordiv__", "__imod__",
+                               "__ipow__", "__ilshift__", "__irshift__", "__iand__", "__ior__", "__ixor__",
+                               "__imatmul__"):
                     for _cand in self.class_mro.get(_cls, [_cls]):
                         _target = f"{_cand}__{_dmeth}"
                         if _dmeth in self.classes.get(_cand, set()) and _target in self.function_names:
@@ -17742,6 +17819,29 @@ class LinuxCEmitter:
                 self._emit_exc_check(out, function, handler_label)
                 types[result] = "int"
                 return out
+            # AUG_DUNDER_V1: `x op= y` con un operando objeto nativo sigue el
+            # protocolo de CPython (__iop__ -> __op__/__rop__ -> TypeError '-=').
+            # El resultado es una caja dinamica: __iop__ puede devolver cualquier
+            # valor (o NotImplemented, que cae al binario), no el tipo del objeto.
+            _aug_opcode = {"+": 0, "-": 1, "*": 2, "/": 3, "//": 4, "%": 5, "**": 6,
+                           "<<": 7, ">>": 8, "&": 9, "|": 10, "^": 11, "@": 12}.get(operator) if is_aug else None
+            if _aug_opcode is not None and (
+                left_type.startswith("object:")
+                or (right_type.startswith("object:") and left_type in {"int", "bool", "float", "complex"})
+            ):
+                out.append(
+                    f"    {{PitonSlot*_ag=piton_slot_box_new(piton_object_aug_binop({_aug_opcode},"
+                    f"{self._slot(left, types)},{self._slot(right, types)}));"
+                    f"{_name(result)}=(long)_ag;}}"
+                )
+                self._emit_exc_check(out, function, handler_label)
+                types[result] = "slot"
+                self._dyn_slot_temps.add((function.name, result))
+                return out
+            if _aug_opcode == 12 and "slot" not in {left_type, right_type}:
+                # `@=` entre builtins estaticos: CPython lanza TypeError, pero el
+                # camino generico de '@' devuelve 0 en silencio. Fail closed.
+                raise NativeBuildError("Linux @= between builtin operands is not supported (fail closed)")
             # DICT_GET_SLOT_V1: `'%s' % caja` con plantilla str literal lo
             # resuelve el camino de formato (que conoce el kind de la caja);
             # el despacho dinamico no formatea str % bool.
@@ -17752,11 +17852,14 @@ class LinuxCEmitter:
                     "+": 0, "-": 1, "*": 2, "/": 3, "//": 4, "%": 5, "**": 6,
                     "<<": 7, ">>": 8, "&": 9, "|": 10, "^": 11,
                 }
+                if is_aug:
+                    _dyn_ops["@"] = 12  # AUG_DUNDER_V1: solo el camino aumentado conoce '@' (opcode 12)
                 if operator not in _dyn_ops:
                     raise NativeBuildError(f"binary '{operator}' sobre un valor dinamico (slot) no soportado (fail closed)")
+                _dyn_fn = "piton_dyn_aug_binop" if is_aug else "piton_dyn_binop"
                 out.append(
                     f"    {{PitonSlot*_db=piton_slot_box_new("
-                    f"piton_dyn_binop({_dyn_ops[operator]},{self._slot(left, types)},{self._slot(right, types)}));"
+                    f"{_dyn_fn}({_dyn_ops[operator]},{self._slot(left, types)},{self._slot(right, types)}));"
                     f" {_name(result)}=(long)_db;}}"
                 )
                 self._emit_exc_check(out, function, handler_label)
@@ -17797,26 +17900,6 @@ class LinuxCEmitter:
                 self._typeobj_names[result] = _uname
                 self._union_type_temps.add(result)
                 return out
-            if operator == "+" and is_aug and left_type.startswith("object:"):
-                # CPython prueba __iadd__ ANTES de __add__/__radd__ en
-                # augmented assignment; sin __iadd__ cae al flujo normal.
-                _ia_cls = left_type.split(":", 1)[1]
-                _ia_hit = None
-                for _cand in self.class_mro.get(_ia_cls, []):
-                    if "__iadd__" in self.classes.get(_cand, set()):
-                        _ia_hit = _cand
-                        break
-                if _ia_hit is None and "__iadd__" in self.classes.get(_ia_cls, set()):
-                    _ia_hit = _ia_cls
-                if _ia_hit is not None:
-                    _ia_target = _name(_ia_hit + "__" + "__iadd__")
-                    _ia_args = ",".join(self._value(v) for v in (left, right))
-                    if self.function_frame_abi.get(_ia_hit + "__" + "__iadd__", False):
-                        out.append(f'    {{long _ia[]={{ {_ia_args} }}; {_name(result)}=piton_frame_call((long)&{_ia_target},2,_ia);}}')
-                    else:
-                        out.append(f"    {_name(result)}={_ia_target}({_ia_args});")
-                    types[result] = self.function_return_types.get(_ia_target, "int")
-                    return out
             if operator == "+" and is_aug and left_type == "list":
                 if right_type in {"int", "bool", "float", "none"}:
                     out.append(
