@@ -299,10 +299,20 @@ Por ola: w17 130, w18 39, w19 50, w20 84, w21 132, w22 73. Anteriores a w17:
 verdes en Windows antes de esta rama y ahora ejercitan los mismos huecos por
 codigo compartido (`mir.py`, `lower.py`).
 
-El unico XPASS de la corrida fue
+La corrida reporto 18 SUBFAIL de `unittest` en 5 tests parametrizados
+(`test_w17_pct_d_slot.py` 2, `test_w18_timeit_timer.py` 1,
+`test_w20_mixed_none_params.py` 1, `test_w20_objeto_alias.py` 1). Se
+declararon esos 5 padres, y con el marker `xfail` puesto el subtest deja de
+imprimirse como `SUBFAIL` y el padre sale como **XPASS**, no como XFAIL: los
+18 casos siguen ejecutandose y fallando por dentro, pero no suman al rojo.
+Por eso esos 5 no se pueden sacar de la lista "porque hacen XPASS": hay que
+revisar los subtest antes. Es la unica parte de esta cuarentena donde el
+XPASS no significa "ya funciona".
+
+El sexto XPASS de la corrida verde (y el unico que ya venia de la lista de
+`main`) es
 `tests/test_phase5.py::Phase5Gates::test_x86_super_undefined_attribute_fails_closed`
-(esta en la lista de `main`; queda como candidato a salir en la siguiente
-pasada, no se borro en este commit).
+(candidato real a salir en la siguiente pasada; no se borro en este commit).
 
 ### Que se hizo
 
@@ -330,6 +340,14 @@ emitir 4, 5 o 6 campos, asi que el fallo aparece como traceback y no como
 
 ### Verificacion
 
+- Run `44367139094` (head `6b5dd55`, job `test-windows` 135023817253):
+  **SUCCESS**. Tracker:
+  `lista=977 aplicados=977 XFAIL=950 XPASS=6 SKIP=21 ERROR=0 SIN_REPORTE=0
+  FUERA_DE_LA_LISTA=0 ERRORES_CUARENTENA=0 COLECCION=0 XPASS_ESTRICTO=0`.
+  Pytest: `996 passed, 669 skipped, 968 xfailed, 6 xpassed, 2 warnings, 170
+  subtests passed in 4998.15s (1:23:18)`. `test-linux`, `test-autopiton` y
+  `verify-oracle`: SUCCESS. Log normalizado UTF-8: 525.039 bytes, sha256
+  `7023A377D859D821314654F9785AFF69FD9CA8EF93765325737F470D15080982`.
 - `py -m pytest tests/ --collect-only -q` (Windows 11, py 3.12.10, pytest
   9.1.1, arbol = rama + `main`): 2620 nodeids recolectados. De los 977 de la
   lista, 969 coinciden exactamente; los 8 restantes son parametrizaciones de
