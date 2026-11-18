@@ -16477,6 +16477,11 @@ class LinuxCEmitter:
     _COLLECTION_SAFE_CALLEES = frozenset({
         "len", "isinstance", "type", "print", "imprimir", "str", "repr",
         "list", "lista", "sorted", "ordenada", "sum", "suma",
+        # LIST_HASH_DUNDER_V1: hash() sobre una subclase de list/dict no lee la
+        # coleccion cruda: HASH_DUNDER_V1 despacha __hash__ por MRO (o el error
+        # TypeError de "unhashable" del propio builtin). Necesario para
+        # functools._HashedSeq.
+        "hash",
     })
     # Metodos que guardan un argumento en otra coleccion: la instancia de la
     # subclase escaparia a un slot sin tipo (xs.append(l); len(xs[0])).
@@ -19557,7 +19562,16 @@ class LinuxCEmitter:
                                 )
                             else:
                                 base = f"piton_str_of_value({arg_expr})"
-                        elif arg_type in {"", "slot"} and spec in {"d", "i", "u", "x", "X", "o", "c", "f", "F", "e", "E", "g", "G"}:
+                        elif arg_type in {"", "slot", "none"} and spec in {"d", "i", "u", "x", "X", "o", "c", "f", "F", "e", "E", "g", "G"}:
+                            # PCT_NONE_DYN_V1: un operando tipado "none" NO falla
+                            # cerrado en build: CPython compila la cadena de
+                            # formato y solo lanza TypeError si se ejecuta
+                            # (p.e. "%f" % None -> must be real number, not
+                            # NoneType). piton_percent_slot_convert ya emite ese
+                            # TypeError en runtime y el chequeo de piton_exc_flag
+                            # de abajo lo enruta al intentar activo (o lo propaga).
+                            # Asi las ramas muertas con esa conversion de none
+                            # tambien compilan, como hace CPython.
                             precv = prec_val if isinstance(prec_val, int) and prec_val >= 0 else 6
                             base = f"piton_percent_slot_convert(piton_percent_slot_from_raw((long){operand}),'{spec}',{precv},{flags})"
                         elif spec in {"d", "i", "u"}:

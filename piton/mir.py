@@ -1835,11 +1835,19 @@ class MIRLowerer:
             # no lo puede respetar el camino tipado/inyectado (p.ej. print de
             # un __repr__ propio): falla cerrado en build.
             # EXCEPCION: dict subclases pueden sobreescribir __setitem__,
-            # __getitem__ y __missing__ con paridad CPython.
-            allowed_dict_dunders = frozenset({"__setitem__", "__getitem__", "__missing__"})
+            # __getitem__ y __missing__ con paridad CPython. __hash__ se
+            # permite en ambas bases (HASH_DUNDER_V1 lo despacha por MRO).
+            allowed_dict_dunders = frozenset({"__setitem__", "__getitem__", "__missing__", "__hash__"})
+            # LIST_HASH_DUNDER_V1: una subclase de list puede sobreescribir
+            # __hash__. CPython la vuelve hashable y `hash(obj)` despacha al
+            # metodo por MRO (HASH_DUNDER_V1 en linux_x86). Es el caso real de
+            # functools._HashedSeq (guarda hash(tup) en __init__ y lo devuelve).
+            allowed_list_dunders = frozenset({"__hash__"})
             for name in sorted(defined):
                 if name.startswith("__") and name.endswith("__") and name != "__init__":
                     if kind == "dict" and name in allowed_dict_dunders:
+                        continue
+                    if kind == "list" and name in allowed_list_dunders:
                         continue
                     raise MIRLoweringError(
                         f"native {kind}-subclass overriding '{name}' is not supported"
