@@ -78,8 +78,10 @@ class MethodDecoratorParity(unittest.TestCase):
         ):
             compare_native_to_cpython(source)
 
-    def test_functools_total_ordering_fails_closed(self):
-        source = (
+    def test_functools_total_ordering_supported(self):
+        # W23 lifted the former fail-closed: total_ordering is now synthesized.
+        _assert_matches(
+            self,
             "importar functools\n"
             "@functools.total_ordering\n"
             "clase Item:\n"
@@ -87,13 +89,8 @@ class MethodDecoratorParity(unittest.TestCase):
             "        devolver verdadero\n"
             "    funcion __lt__(este, otro):\n"
             "        devolver falso\n"
-            ""
+            "imprimir(Item() < Item(), Item() <= Item(), Item() > Item(), Item() >= Item())\n",
         )
-        with pytest.raises(
-            NativeBuildError,
-            match="@functools.total_ordering is not supported",
-        ):
-            compare_native_to_cpython(source)
 
     def test_method_decorator_on_typed_instance_name(self):
         _assert_matches(

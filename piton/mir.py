@@ -1441,6 +1441,27 @@ class MIRLowerer:
         name = getattr(callee, "name", None)
         if not isinstance(name, str) or name in class_local_names:
             return False
+        
+        # Marker decorators like _sslcopydoc and abstractmethod are always supported
+        # even when user-defined, because they are transparent markers
+        if name in {"_sslcopydoc", "abstractmethod"}:
+            position = self._module_binding_positions.get(name)
+            if position is None or position >= self._current_class_position:
+                return False
+            # Decorator expressions execute in the class body. A class-local or
+            # forward global reference cannot be replaced with a zero-valued C
+            # global without changing CPython's NameError behavior.
+            for part in self._walk(expression):
+                if getattr(part, "kind", None) != HIRKind.LOAD:
+                    continue
+                loaded_name = getattr(part, "name", None)
+                if loaded_name in class_local_names:
+                    return False
+                bound_at = self._module_binding_positions.get(loaded_name)
+                if bound_at is None or bound_at >= self._current_class_position:
+                    return False
+            return True
+        
         function_node = self._module_func_nodes.get(name)
         position = self._module_binding_positions.get(name)
         if (function_node is None or position is None
@@ -1568,10 +1589,63 @@ class MIRLowerer:
                         raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
                     return f"{class_name}__{method.name}__{prop}", prop, method.name
 
+        # Handle stacked descriptor + marker decorators (e.g., @property + @abstractmethod)
+        # The marker decorators are transparent and don't change the descriptor behavior.
+        descriptor_decorators = {"staticmethod", "metodo_estatico", "classmethod", "metodo_clase", "property", "propiedad"}
         marker_decorators = {
             "abstractmethod", "contextmanager", "_sslcopydoc", "lru_cache",
             "cache", "overload",
         }
+        
+        # Check if all decorators are either descriptor or marker decorators
+        all_known = True
+        descriptor_role = None
+        descriptor_name = None
+        for dec in decorators:
+            name = getattr(dec, "name", None) or getattr(dec, "attr", None)
+            if name in descriptor_decorators:
+                if descriptor_role is not None:
+                    all_known = False
+                    break
+                if name in {"staticmethod", "metodo_estatico"}:
+                    descriptor_role = "staticmethod"
+                elif name in {"classmethod", "metodo_clase"}:
+                    descriptor_role = "classmethod"
+                elif name in {"property", "propiedad"}:
+                    descriptor_role = "getter"
+                descriptor_name = name
+            elif name not in marker_decorators:
+                all_known = False
+                break
+        
+        if all_known and descriptor_role == "getter":
+            # `@abstractmethod` applied on top of a property object fails in
+            # CPython (property.__isabstractmethod__ is read-only).
+            prop_index = next(
+                i for i, d in enumerate(decorators)
+                if (getattr(d, "name", None) or getattr(d, "attr", None)) in {"property", "propiedad"}
+            )
+            for outer in decorators[:prop_index]:
+                if (getattr(outer, "name", None) or getattr(outer, "attr", None)) == "abstractmethod" \
+                        and not (getattr(outer, "kind", None) == HIRKind.LOAD
+                                 and "abstractmethod" in self._module_func_nodes):
+                    raise MIRLoweringError(
+                        "attribute '__isabstractmethod__' of 'property' objects is not writable"
+                    )
+        if all_known and descriptor_role is not None:
+            # All decorators are known: one descriptor + zero or more markers
+            # The markers are transparent, so we just apply the descriptor
+            if descriptor_role == "staticmethod":
+                self.static_methods.add(f"{class_name}__{method.name}")
+                return f"{class_name}__{method.name}", "staticmethod", method.name
+            if descriptor_role == "classmethod":
+                self.class_methods.add(f"{class_name}__{method.name}")
+                return f"{class_name}__{method.name}", "classmethod", method.name
+            if descriptor_role == "getter":
+                if method.name in property_methods:
+                    raise MIRLoweringError(f"native duplicate @property '{method.name}' on '{class_name}'")
+                property_methods[method.name] = {"getter": None, "setter": None, "deleter": None}
+                return f"{class_name}__{method.name}", "getter", method.name
 
         def is_legacy_marker(dec: HIRNode) -> bool:
             name = getattr(dec, "name", None) or getattr(dec, "attr", None)
@@ -1586,11 +1660,8 @@ class MIRLowerer:
             # Preserve the historical module.attribute marker spellings.
             return getattr(dec, "kind", None) == HIRKind.ATTR
 
-        # These established marker decorators have native lowering of their
-        # own. Do not route them through the user-wrapper materialization path:
-        # doing so changes how class method markers are represented and can
-        # reject bundled stdlib decorators before their native handling runs.
-        if all(is_legacy_marker(dec) for dec in decorators):
+        # Marker-only stacks keep their established native lowering.
+        if descriptor_role is None and all(is_legacy_marker(dec) for dec in decorators):
             return f"{class_name}__{method.name}", None, method.name
 
         unsupported_results = {*marker_decorators - {"lru_cache"}, "cached_property"}
@@ -1977,6 +2048,7 @@ class MIRLowerer:
         self.static_methods = set()
         self.class_methods = set()
         self.decorated_classes = set()
+        self.total_ordering_classes = set()
         self.async_functions = set()
         self.async_generators = set()
         self.module_aliases = {}
@@ -2418,10 +2490,7 @@ class MIRLowerer:
                 self._current_class_position = self._module_statement_positions.get(id(node))
                 for class_decorator in getattr(node, "decorators", None) or []:
                     if self._decorator_qualified_name(class_decorator) == "functools.total_ordering":
-                        raise MIRLoweringError(
-                            "native @functools.total_ordering is not supported: "
-                            "generated comparison methods cannot be represented natively"
-                        )
+                        self.total_ordering_classes.add(node.name)
                 # Metaclass keywords are recorded in class_metaclasses below;
                 # their runtime hooks are emitted with module class creation.
                 _meta_keywords = [
@@ -2573,6 +2642,9 @@ class MIRLowerer:
                                 self.function_aliases = {}
                             self.function_aliases[f"{_cname}__{_aname}"] = f"{_cname}__{_vname}"
             self._finalize_mro()
+            # Process @functools.total_ordering: synthesize missing comparison methods
+            for cls_name in self.total_ordering_classes:
+                self._synthesize_total_ordering(cls_name)
             for node in module_body:
                 # YIELD_SCAN_V1: a `producir` nested inside a loop/if counts —
                 # the old top-level-only scan missed `para x en xs: producir x`
@@ -2995,6 +3067,140 @@ class MIRLowerer:
                     "cannot construct a linearization for multiple inheritance"
                 )
             self.class_mro[name] = mro
+
+    def _synthesize_total_ordering(self, cls_name: str) -> None:
+        """Synthesize missing comparison methods for @functools.total_ordering.
+        
+        CPython's total_ordering finds the 'root' ordering method (__lt__, __le__, __gt__, or __ge__)
+        that is defined and synthesizes the others from it and __eq__.
+        """
+        # Find which ordering methods are defined in this class or its MRO
+        mro = self.class_mro.get(cls_name, [cls_name])
+        
+        # Check which ordering methods are defined (not inherited from object)
+        ordering_methods = {'__lt__', '__le__', '__gt__', '__ge__'}
+        defined_ordering = set()
+        
+        for method_name in ordering_methods:
+            for cls in mro:
+                if method_name in self.classes.get(cls, set()):
+                    # Check if it's defined in this class (not inherited from object)
+                    # For simplicity, we consider it defined if it's in any class in MRO
+                    # that's not 'object' (which isn't in our classes dict)
+                    defined_ordering.add(method_name)
+                    break
+        
+        if not defined_ordering:
+            raise MIRLoweringError(
+                "must define at least one ordering operation: < > <= >="
+            )
+        
+        # CPython prefers __lt__ > __le__ > __gt__ > __ge__
+        root = None
+        for preferred in ['__lt__', '__le__', '__gt__', '__ge__']:
+            if preferred in defined_ordering:
+                root = preferred
+                break
+        
+        # Define the conversion functions (matching CPython's functools._convert)
+        # We need to create synthetic function definitions for each missing method
+        # The conversions are:
+        # __lt__ -> __gt__, __le__, __ge__
+        # __le__ -> __ge__, __lt__, __gt__
+        # __gt__ -> __lt__, __ge__, __le__
+        # __ge__ -> __le__, __gt__, __lt__
+        
+        def _c(op):
+            return ('compare', op, 'self', 'other')
+
+        conversions = {
+            '__lt__': {
+                '__gt__': ('and', ('not', _c('<')), _c('!=')),
+                '__le__': ('or', _c('<'), _c('==')),
+                '__ge__': ('not', _c('<')),
+            },
+            '__le__': {
+                '__ge__': ('or', ('not', _c('<=')), _c('==')),
+                '__lt__': ('and', _c('<='), _c('!=')),
+                '__gt__': ('not', _c('<=')),
+            },
+            '__gt__': {
+                '__lt__': ('and', ('not', _c('>')), _c('!=')),
+                '__ge__': ('or', _c('>'), _c('==')),
+                '__le__': ('not', _c('>')),
+            },
+            '__ge__': {
+                '__le__': ('or', ('not', _c('>=')), _c('==')),
+                '__gt__': ('and', _c('>='), _c('!=')),
+                '__lt__': ('not', _c('>=')),
+            },
+        }
+
+        # For each missing ordering method, create a synthetic function
+        for target_method, expr_tree in conversions.get(root, {}).items():
+            if target_method not in defined_ordering:
+                # Add the method to the class
+                self.classes[cls_name].add(target_method)
+                
+                # Create a synthetic function definition
+                from piton.hir import FuncDef, Arguments, Return, BoolOp, Compare, Load, UnOp
+                
+                # Create the function arguments (self, other)
+                args = Arguments(
+                    posonlyargs=[],
+                    args=['self', 'other'],
+                    kwonlyargs=[],
+                    vararg=None,
+                    kwarg=None,
+                    defaults=[],
+                    kw_defaults=[],
+                )
+                
+                # Build the expression tree
+                def build_expr(tree):
+                    if isinstance(tree, tuple):
+                        op = tree[0]
+                        if op == 'not':
+                            return UnOp(op='no', operand=build_expr(tree[1]))
+                        elif op == 'and':
+                            return BoolOp(op='y', values=[build_expr(tree[1]), build_expr(tree[2])])
+                        elif op == 'or':
+                            return BoolOp(op='o', values=[build_expr(tree[1]), build_expr(tree[2])])
+                        elif op == 'compare':
+                            # Compare uses ops (list) and comparators (list)
+                            return Compare(
+                                left=build_expr(tree[2]),
+                                ops=[tree[1]],
+                                comparators=[build_expr(tree[3])]
+                            )
+                    elif isinstance(tree, str):
+                        if tree == 'self':
+                            return Load(name='self')
+                        elif tree == 'other':
+                            return Load(name='other')
+                    return None
+                
+                expr = build_expr(expr_tree)
+                body = [Return(value=expr)]
+                
+                # Create the synthetic function
+                synthetic_func = FuncDef(
+                    name=target_method,
+                    args=args,
+                    body=body,
+                    decorators=[],
+                    returns=None,
+                    type_params=None,
+                    is_async=False,
+                )
+                
+                # Lower the synthetic function
+                symbol = f"{cls_name}__{target_method}"
+                self._lower_function(
+                    synthetic_func, symbol,
+                    super_context=(cls_name, 'self'),
+                    py_qualname=f"{cls_name}.{target_method}",
+                )
 
     def _lower_imported_class(self, module_name: str, node) -> None:
         """BUNDLED_CLASS_V1: levanta una clase de un modulo empaquetado con
@@ -5965,7 +6171,9 @@ class MIRLowerer:
         missing: set[str] = set()
         for method in declared:
             owner = next(
-                (cls for cls in mro if method in self.classes.get(cls, set())),
+                (cls for cls in mro 
+                 if method in self.classes.get(cls, set()) 
+                 or method in self.class_properties.get(cls, {})),
                 None,
             )
             if owner is not None and method in self.abstract_methods.get(owner, set()):
