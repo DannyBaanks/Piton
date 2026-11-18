@@ -9986,6 +9986,11 @@ _USAGE_STR_METHODS = frozenset({
     "isdigit", "isalpha", "isspace", "expandtabs", "partition", "rpartition",
     "format",
 })
+# STR_BYTES_SLOT_METHODS_V1: runtime-typed parameters whose actual value is a
+# str or bytes need builtin method dispatch by the slot's real kind. Keep this
+# deliberately narrow: methods outside this set must fail closed until both
+# their value semantics and their dynamic return kind are modeled.
+_STR_BYTES_SLOT_METHODS = frozenset({"decode", "encode", "join"})
 # metodos que demuestran que el receiver NO es str (collections/objects).
 _USAGE_NONSTR_METHODS = frozenset({
     "append", "extend", "insert", "remove", "sort", "reverse", "clear",
@@ -13205,8 +13210,9 @@ class LinuxCEmitter:
             types[result] = "none"
 
     def _emit_bytes_method(self, out: list[str], result: Any, method: str, obj: Any,
-                           call_args: list[Any], is_bytearray: bool, types: dict[str, str]) -> None:
-        operand = self._value(obj)
+                           call_args: list[Any], is_bytearray: bool, types: dict[str, str],
+                           *, receiver_expr: str | None = None) -> None:
+        operand = receiver_expr if receiver_expr is not None else self._value(obj)
         target_type = "bytearray" if is_bytearray else "bytes"
 
         def require_count(counts: tuple[int, ...], what: str) -> None:
@@ -13437,7 +13443,7 @@ class LinuxCEmitter:
 
     def _emit_str_method(self, out: list[str], result: Any, method: str, obj: Any,
                          call_args: list[Any], types: dict[str, str],
-                         _fmt_kw: tuple = ()) -> None:
+                         _fmt_kw: tuple = (), *, receiver_expr: str | None = None) -> None:
         """STR_METHODS_V1: builtin str methods bound by static dispatch.
 
         Arity AND argument static types are validated at build time; the
@@ -13447,7 +13453,7 @@ class LinuxCEmitter:
         format fields) — the same uncatchable-error convention as the other
         runtime helpers (IndexError, TypeError in seq_get and friends).
         """
-        operand = self._value(obj)
+        operand = receiver_expr if receiver_expr is not None else self._value(obj)
 
         def require_str(index: int, what: str) -> str:
             if len(call_args) <= index or types.get(call_args[index]) != "str":
@@ -16125,6 +16131,19 @@ class LinuxCEmitter:
                                     # caller no debe tratar el char* retornado como
                                     # un entero.
                                     origins[result] = ("kind", "str")
+                                elif method == "join" and operand_type(iargs[2]) == "slot":
+                                    # STR_BYTES_SLOT_METHODS_V1: un separador
+                                    # str|bytes retorna el mismo tipo dinámico;
+                                    # el emisor lo devuelve como PitonSlot box.
+                                    _join_source = load_src.get(iargs[2], iargs[2])
+                                    _join_kinds = self._call_param_seen.get(
+                                        function.name, {}
+                                    ).get(_join_source, set())
+                                    origins[result] = (
+                                        ("kind", "slot")
+                                        if _join_kinds and _join_kinds <= {"str", "bytes"}
+                                        else ("opaque", None)
+                                    )
                                 else:
                                     target = None
                                     if isinstance(cls_name, str):
@@ -17749,6 +17768,24 @@ class LinuxCEmitter:
                 ):
                     self._none_conflict_names.add(_key)
                     self._dyn_slot_vars.setdefault(function.name, set()).add(args[0])
+            if (
+                isinstance(args[0], str)
+                and args[0] in function.params
+                and types.get(args[0]) == "slot"
+                and types.get(args[1]) not in {"slot", "builtin", None}
+                and args[0] not in self._shared_globals
+            ):
+                # SLOT_PARAM_STORE_V1: a parameter whose value is selected at
+                # runtime stays boxed after branch-local assignments. Without
+                # this, a store in one isinstance branch changes the static
+                # type of the parameter for every later branch, so an untouched
+                # bytes value is read as the address of its PitonSlot box.
+                out.append(
+                    f"    {{PitonSlot*_sp=piton_slot_box_new({self._slot(args[1], types)});"
+                    f" {_name(args[0])}=(long)_sp;}}"
+                )
+                types[args[0]] = "slot"
+                return out
             if (
                 isinstance(args[0], str)
                 and types.get(args[1]) == "slot"
@@ -23036,6 +23073,93 @@ class LinuxCEmitter:
                     types[result] = "bool"
                     self._emit_exc_check(out, function, handler_label)
                     return out
+                _slot_origin = aliases.get(obj, obj)
+                _slot_kinds = (
+                    self._call_param_seen.get(function.name, {}).get(_slot_origin, set())
+                    if isinstance(_slot_origin, str) else set()
+                )
+                _is_str_bytes_slot = bool(_slot_kinds) and _slot_kinds <= {"str", "bytes"}
+                if owner_type == "slot" and _is_str_bytes_slot:
+                    if method not in _STR_BYTES_SLOT_METHODS:
+                        raise NativeBuildError(
+                            f"Linux dynamic str/bytes method '{method}' is not supported (fail closed)"
+                        )
+                    if kw_args:
+                        raise NativeBuildError(
+                            f"Linux dynamic str/bytes.{method}() keyword arguments are not supported"
+                        )
+
+                    _sb_self = _name(result) + "_str_bytes_self"
+                    _sb_operand = f"(long){_sb_self}.bits"
+                    out.append(
+                        f"    {{PitonSlot {_sb_self}=piton_dyn_unbox({self._value(obj)});"
+                    )
+                    if method == "decode":
+                        out.append(f"    if({_sb_self}.kind==PK_BYTES){{")
+                        self._emit_bytes_method(
+                            out, result, method, obj, list(call_args), False, types,
+                            receiver_expr=_sb_operand,
+                        )
+                        out.append(f"    }}else if({_sb_self}.kind==PK_STR){{")
+                        out.append(
+                            '        piton_raise_set("AttributeError", '
+                            '"\'str\' object has no attribute \'decode\'");'
+                        )
+                        out.append("    }else{")
+                        out.append(
+                            '        piton_raise_set("AttributeError", '
+                            '"value has no bytes.decode method");'
+                        )
+                        out.append("    }")
+                        types[result] = "str"
+                    elif method == "encode":
+                        out.append(f"    if({_sb_self}.kind==PK_STR){{")
+                        self._emit_str_method(
+                            out, result, method, obj, list(call_args), types,
+                            receiver_expr=_sb_operand,
+                        )
+                        out.append(f"    }}else if({_sb_self}.kind==PK_BYTES){{")
+                        out.append(
+                            '        piton_raise_set("AttributeError", '
+                            '"\'bytes\' object has no attribute \'encode\'");'
+                        )
+                        out.append("    }else{")
+                        out.append(
+                            '        piton_raise_set("AttributeError", '
+                            '"value has no str.encode method");'
+                        )
+                        out.append("    }")
+                        types[result] = "bytes"
+                    else:  # join: result kind follows the separator kind.
+                        out.append(f"    if({_sb_self}.kind==PK_STR){{")
+                        self._emit_str_method(
+                            out, result, method, obj, list(call_args), types,
+                            receiver_expr=_sb_operand,
+                        )
+                        out.append(
+                            f"        {_name(result)}=(long)piton_slot_box_new("
+                            f"(PitonSlot){{{_name(result)},PK_STR}});"
+                        )
+                        out.append(f"    }}else if({_sb_self}.kind==PK_BYTES){{")
+                        self._emit_bytes_method(
+                            out, result, method, obj, list(call_args), False, types,
+                            receiver_expr=_sb_operand,
+                        )
+                        out.append(
+                            f"        {_name(result)}=(long)piton_slot_box_new("
+                            f"(PitonSlot){{{_name(result)},PK_BYTES}});"
+                        )
+                        out.append("    }else{")
+                        out.append(
+                            '        piton_raise_set("AttributeError", '
+                            '"value has no str or bytes join method");'
+                        )
+                        out.append("    }")
+                        types[result] = "slot"
+                        self._dyn_slot_temps.add((function.name, result))
+                    out.append("    }")
+                    self._emit_exc_check(out, function, handler_label)
+                    return out
                 # MODULE_METHOD_CALL_V1: si el receiver es un modulo (tipo
                 # "module" / "object:module"), resolver la funcion compilada
                 # "mod__method" (el camino que from_imports ya usa). nturl2path:
@@ -25046,7 +25170,14 @@ class LinuxCEmitter:
                     self._emit_exc_check(out, function, None)
                     # tipo DINAMICO: la forma la decide el header; imprimir
                     # pasa por el despacho por cabecera de print_int_safe.
-                    types[result] = "int"
+                    if collection_type == "slot":
+                        # El resultado puede ser bytes y entra en colecciones
+                        # etiquetadas (p. ej. una tupla). No tratar el puntero
+                        # a PitonBytes como PK_INT al guardar sus elementos.
+                        types[result] = "slot"
+                        self._dyn_slot_temps.add((function.name, result))
+                    else:
+                        types[result] = "int"
                 return out
             lower_value = self._value(lower) if lower is not None else "(-0x7FFFFFFFFFFFFFFFL-1)"
             upper_value = self._value(upper) if upper is not None else "0x7FFFFFFFFFFFFFFFL"
@@ -25081,7 +25212,11 @@ class LinuxCEmitter:
                     f"{lower_value},{upper_value},1,{step_value});"
                 )
                 self._emit_exc_check(out, function, None)
-                types[result] = "int"
+                if collection_type == "slot":
+                    types[result] = "slot"
+                    self._dyn_slot_temps.add((function.name, result))
+                else:
+                    types[result] = "int"
         elif op == "collection_len":
             coll = args[0]
             collection_type = types.get(coll)
