@@ -1,10 +1,15 @@
 name: CI
 
 on:
+  # Solo main en push: una rama fix/** con PR abierto disparaba DOS corridas
+  # del mismo SHA (evento push + evento pull_request). La que perdia quedaba
+  # CANCELLED y ese check cancelado dejaba el PR en UNSTABLE aunque la otra
+  # corrida terminase verde. Para lanzar CI en una rama sin PR: workflow_dispatch.
   push:
-    branches: [ main, 'fix/**' ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test-linux:
