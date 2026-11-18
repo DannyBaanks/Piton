@@ -19007,17 +19007,29 @@ class LinuxCEmitter:
 
                     _map_record = None
                     _map_runtime = False
+                    right_type_for_check = types.get(right)
+                    # Check if RHS is a function parameter (which are slot-typed by default)
+                    # Resolve aliases because the instruction uses temporaries like %1
+                    right_resolved = aliases.get(right, right)
+                    right_is_param = right_resolved in function.params
                     if has_map:
-                        if types.get(right) != "dict":
-                            raise NativeBuildError("Linux str % mapping requires a literal dict")
+                        if right_type_for_check not in ("dict", "slot"):
+                            raise NativeBuildError("Linux str % mapping requires a dict or dict-like argument")
                         _map_record = self._dict_elems.get(right)
                         if _map_record is None:
                             _map_record = self._dict_elems.get(aliases.get(right, right))
-                        _map_runtime = right in self._percent_runtime_dicts or aliases.get(right) in self._percent_runtime_dicts
-                        if _map_record is None and not _map_runtime:
-                            raise NativeBuildError("Linux str % mapping requires literal string keys")
+                        # Track runtime dicts: slots (function params), known runtime dicts,
+                        # and function parameters used as mappings (which receive boxed slots)
+                        _map_runtime = (
+                            right in self._percent_runtime_dicts
+                            or aliases.get(right) in self._percent_runtime_dicts
+                            or right_type_for_check == "slot"
+                            or right_is_param
+                        )
+                        # For literal dicts with known keys, validate all keys are present
                         if _map_record is not None and not _map_runtime and any(name not in _map_record for name, *_rest in fields):
                             raise NativeBuildError(f"Linux str % mapping key {next(name for name, *_rest in fields if name not in _map_record)!r} is not present")
+                        # For slots, function params, or unknown dicts, we defer to runtime (which raises KeyError if missing)
 
                     # PCT_UNKNOWN_SHAPE_V1: una tupla cuya forma no se conoce
                     # en build (p.ej. `for i, x in enumerate(...)`) o un valor
