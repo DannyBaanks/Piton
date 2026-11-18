@@ -344,7 +344,8 @@ en la lista. Ahora:
 - cuenta fallos y errores no incluidos en la cuarentena durante `setup`, `call`
   y `teardown`;
 - cuenta errores de colección;
-- distingue `XPASS(strict)` propio de un fallo real;
+- distingue `XPASS(strict)` propio de un fallo real y fuerza la sesión roja si
+  aparece;
 - detecta el error que pytest 9 deja absorber por `xfail` en setup/teardown y
   hace fallar la sesión aunque pytest haya reportado `XFAIL`.
 
@@ -364,5 +365,9 @@ FUERA_DE_LA_LISTA=1 COLECCION=1
 error de setup en nodeid de cuarentena:
 lista=1 aplicados=1 XFAIL=0 XPASS=0 SKIP=0 ERROR=1 SIN_REPORTE=0
 FUERA_DE_LA_LISTA=2 ERRORES_CUARENTENA=1 COLECCION=0 XPASS_ESTRICTO=0
+PYTEST_EXIT 1
+
+xfail(strict=True) que pasa, aunque la lista este vacia:
+FUERA_DE_LA_LISTA=0 ERRORES_CUARENTENA=0 XPASS_ESTRICTO=1
 PYTEST_EXIT 1
 ```

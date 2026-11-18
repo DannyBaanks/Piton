@@ -105,6 +105,9 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if not _active():
         return
+    for item in items:
+        if _is_strict_xfail(item.get_closest_marker("xfail")):
+            _own_strict_xfail.add(_norm(item.nodeid))
     listed = load_ids()
     if not listed:
         return
@@ -113,9 +116,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     matched_norm: set[str] = set()
     for item in items:
         key = _norm(item.nodeid)
-        own_xfail = item.get_closest_marker("xfail")
-        if _is_strict_xfail(own_xfail):
-            _own_strict_xfail.add(key)
         if key in wanted:
             matched.add(item.nodeid)
             matched_norm.add(key)
@@ -179,7 +179,12 @@ def pytest_collectreport(report: pytest.CollectReport) -> None:
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int | pytest.ExitCode) -> None:
-    if _outside_failures or _collection_errors or _quarantine_errors:
+    if (
+        _outside_failures
+        or _collection_errors
+        or _quarantine_errors
+        or _strict_xpasses
+    ):
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
@@ -192,6 +197,7 @@ def pytest_terminal_summary(
         or _outside_failures
         or _collection_errors
         or _quarantine_errors
+        or _strict_xpasses
     ):
         return
     counts = {"xfailed": 0, "xpassed": 0, "skipped": 0, "failed": 0, "error": 0, "sin_reporte": 0}
