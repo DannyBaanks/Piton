@@ -287,6 +287,12 @@ static long piton_str_of_slot_value(PitonSlot);
    piton_binop_object_add). */
 static PitonSlot piton_object_get(PitonObject*o,const char*name);
 static long piton_call_dynamic(long callee,long pos_seq,long star_seq,long kwargs_dict);
+/* UNBOUND_INT_FROM_BYTES_VALUE_V1: `int.from_bytes` como valor. Definido en el
+ * bloque bigint (necesita PitonBigInt). core = semantica CPython con slots
+ * tipados; raw = canal de long (falla cerrado si el resultado no cabe en 64 bits). */
+static PitonSlot piton_unbound_int_from_bytes_core(PitonSeq*a,PitonDict*kw);
+static long piton_unbound_int_from_bytes_raw(PitonSlot s);
+static long piton_unbound_int_from_bytes_frame(long*frame);
 static void piton_catch_clear(void);
 static int piton_exc_flag_get(void);
 static PitonSlot piton_slot_guess(long bits);
@@ -4519,6 +4525,12 @@ static long piton_closure_call6(long callee,long argc,long a0,long a1,long a2,lo
   if(piton_maybe_ptr(callee)&&((long*)callee)[0]==PITON_CLOSURE_MAGIC){
     PitonClosure*c=(PitonClosure*)callee;
     if(c->signature){PitonSlot args[4]={piton_slot_guess(a0),piton_slot_guess(a1),piton_slot_guess(a2),piton_slot_guess(a3)};return piton_call_signature_invoke(c,argc,args,0);}
+    if(c->n_args==0&&c->has_vararg&&c->addr==(long)&piton_unbound_int_from_bytes_frame){
+      PitonSeq*t=piton_seq_new(PK_TUPLE,argc);
+      long xa[4]={a0,a1,a2,a3};
+      for(long i=0;i<argc&&i<4;++i)t->items[i]=piton_slot_guess(xa[i]);
+      return piton_unbound_int_from_bytes_raw(piton_unbound_int_from_bytes_core(t,0));
+    }
     if(argc!=c->n_args){piton_raise_set("TypeError","closure called with wrong number of arguments");return 0;}
     long total=c->n_cells+argc;if(total>4){piton_raise_set("TypeError","closure cell count plus arguments exceeds four");return 0;}
     long x[4]={a0,a1,a2,a3};for(long i=0;i<c->n_cells&&i<4;++i){for(long j=3;j>i;--j)x[j]=x[j-1];x[i]=c->cells[i];}
@@ -4659,6 +4671,18 @@ static long piton_call_dynamic(long callee,long pos_seq,long star_seq,long kwarg
   if(callee&&((long*)callee)[0]==PITON_CLOSURE_MAGIC){
     PitonClosure*c=(PitonClosure*)callee;
     if(c->signature)return piton_call_signature_invoke(c,total,arg_slots,kwargs_dict);
+    if(c->n_args==0&&c->has_vararg&&c->addr==(long)&piton_unbound_int_from_bytes_frame){
+      /* UNBOUND_INT_FROM_BYTES_VALUE_V1: aqui llegan los keywords (signed=,
+         byteorder=, bytes=) que la closure generica descartaria. Un resultado
+         mayor que 64 bits viaja como caja de slot para conservar PK_BIGINT. */
+      PitonSeq*t=piton_seq_new(PK_TUPLE,total);
+      for(long i=0;i<total;++i)t->items[i]=arg_slots[i];
+      PitonSlot r=piton_unbound_int_from_bytes_core(t,(PitonDict*)kwargs_dict);
+      if(piton_exc_flag)return 0;
+      /* El resultado de una llamada dinamica va tipado "slot": la caja conserva
+         el kind exacto (un entero pequeno no se adivina como puntero). */
+      return(long)piton_slot_box_new(r);
+    }
     long n_pos=c->n_args;
     if(!c->has_vararg&&total<n_pos){piton_write(2,"TypeError: missing positional arguments in a dynamic call\n",52);piton_exit(2);}
     long extra=(c->has_vararg&&total>n_pos)?total-n_pos:0;
@@ -4926,8 +4950,7 @@ static long piton_int_from_bytes(PitonSlot source,const char*order,int is_signed
     for(long i=0;i<n;++i)b[i]=base[mv->offset+i*mv->stride];
   }
   else if(source.kind==PK_LIST||source.kind==PK_TUPLE||source.kind==PK_DICT||
-          source.kind==PK_SET||source.kind==PK_FROZENSET||source.kind==PK_RANGE||
-          source.kind==PK_STR){
+          source.kind==PK_SET||source.kind==PK_FROZENSET||source.kind==PK_RANGE){
     long items=piton_list_of_dynamic(source.bits);if(piton_exc_flag)return 0;
     seq=(PitonSeq*)items;n=seq->length;b=(unsigned char*)piton_alloc((usize)(n?n:1));
   }
@@ -6743,6 +6766,19 @@ static long piton_collect_any_iter(long raw){
     PitonCallbackIterator*ci=(PitonCallbackIterator*)raw;
     while(ci->index < ci->seq->length){
       PitonSlot slot = ci->seq->items[ci->index++];
+      if(piton_is_closure((long)ci->callback)&&((PitonClosure*)ci->callback)->n_args==0&&
+         ((PitonClosure*)ci->callback)->has_vararg&&
+         ((PitonClosure*)ci->callback)->addr==(long)&piton_unbound_int_from_bytes_frame){
+        /* UNBOUND_INT_FROM_BYTES_VALUE_V1: map/filter(int.from_bytes, xs). El
+           resultado conserva PK_BIGINT (el canal long no lo lleva); filter
+           decide por la verdad del slot, no por el puntero. */
+        PitonSeq*one=piton_seq_new(PK_TUPLE,1);one->items[0]=slot;
+        PitonSlot r=piton_unbound_int_from_bytes_core(one,0);
+        if(piton_exc_flag_get())return(long)s;
+        if(ci->magic&1){if(piton_slot_truthy(r))piton_seq_append(s,slot);}
+        else piton_seq_append(s,r);
+        continue;
+      }
       long mapped=piton_callback_apply(slot,(long)ci->callback);
       if(piton_exc_flag_get())return(long)s;
       if((ci->magic & 1)){
@@ -8214,6 +8250,12 @@ static long piton_callback_apply(PitonSlot v,long callback){
     if(c->n_args==1&&c->addr==(long)&piton_unbound_str_upper_frame)return piton_unbound_str_upper(v.bits,v.kind);
     if(c->n_args==1&&c->addr==(long)&piton_unbound_int_bit_length_frame)return piton_unbound_int_bit_length(v.bits,v.kind);
     if(c->n_args==1&&c->addr==(long)&piton_unbound_float_fromhex_frame)return piton_unbound_float_fromhex(v.bits,v.kind);
+    /* callback unario: from_bytes(x) con byteorder por defecto 'big'; el slot
+       conserva el kind real (bytes/list/int), sin heuristica de frame. */
+    if(c->n_args==0&&c->has_vararg&&c->addr==(long)&piton_unbound_int_from_bytes_frame){
+      PitonSeq*t=piton_seq_new(PK_TUPLE,1);t->items[0]=v;
+      return piton_unbound_int_from_bytes_raw(piton_unbound_int_from_bytes_core(t,0));
+    }
   }
   return piton_callback_invoke(callback,v.bits);
 }
@@ -8921,6 +8963,78 @@ static long piton_int_to_bytes(PitonSlot value,long length,const char*order,int 
   return(long)result;
 }
 static long piton_bigint_to_i64(void*a){PitonBigInt*x=(PitonBigInt*)a;if(!x||x->count==0||x->sign==0)return 0;unsigned long v=x->limbs[0];return x->sign<0?-(long)v:(long)v;}
+/* UNBOUND_INT_FROM_BYTES_VALUE_V1: int.from_bytes como valor (bloque bigint).
+ * core: argumentos posicionales (tuple de slots) + keywords (dict o 0), con los
+ * mensajes de CPython 3.12 para aridad, keyword invalido/duplicado, byteorder
+ * no str y bytes no convertibles. Resultado: PK_INT crudo si cabe en 64 bits;
+ * PK_BIGINT (puntero) si no. */
+static int piton_bigint_low_i64(long bits,long*out){
+  PitonBigInt*x=(PitonBigInt*)bits;
+  long top=x->count-1;
+  while(top>=0&&x->limbs[top]==0)--top;
+  if(top<0||x->sign==0){*out=0;return 1;}
+  if(top>0)return 0;
+  unsigned long v=x->limbs[0];
+  if(x->sign>0){if(v>0x7fffffffffffffffUL)return 0;*out=(long)v;return 1;}
+  if(v>0x8000000000000000UL)return 0;
+  *out=(v==0x8000000000000000UL)?(-0x7fffffffffffffffL-1L):-(long)v;
+  return 1;
+}
+static PitonSlot piton_unbound_int_from_bytes_core(PitonSeq*a,PitonDict*kw){
+  PitonSlot none={0,PK_NONE},src={0,PK_NONE},ord={0,PK_NONE};
+  long n=a->length,nkw=kw?kw->length:0;
+  int have_src=0,have_ord=0,is_signed=0;
+  if(n>2&&nkw==0){
+    PitonStrBuf m;sb_init(&m);sb_puts(&m,"from_bytes() takes at most 2 positional arguments (");
+    sb_put_int(&m,n);sb_puts(&m," given)");piton_raise_set("TypeError",m.d);return none;}
+  if(n+nkw>3){
+    PitonStrBuf m;sb_init(&m);sb_puts(&m,"from_bytes() takes at most 3 arguments (");
+    sb_put_int(&m,n+nkw);sb_puts(&m," given)");piton_raise_set("TypeError",m.d);return none;}
+  if(n>=1){src=a->items[0];have_src=1;}
+  if(n>=2){ord=a->items[1];have_ord=1;}
+  for(long i=0;kw&&i<kw->length;++i){
+    PitonSlot key=kw->items[i].key,val=kw->items[i].value;
+    if(key.kind!=PK_STR){piton_raise_set("TypeError","keywords must be strings");return none;}
+    const char*name=(const char*)key.bits;
+    if(!piton_strcmp(name,"bytes")){
+      if(have_src){piton_raise_set("TypeError","argument for from_bytes() given by name ('bytes') and position (1)");return none;}
+      src=val;have_src=1;
+    }else if(!piton_strcmp(name,"byteorder")){
+      if(have_ord){piton_raise_set("TypeError","argument for from_bytes() given by name ('byteorder') and position (2)");return none;}
+      ord=val;have_ord=1;
+    }else if(!piton_strcmp(name,"signed")){
+      is_signed=piton_slot_truthy(val);
+    }else{
+      PitonStrBuf m;sb_init(&m);sb_putc(&m,'\'');sb_puts(&m,name);
+      sb_puts(&m,"' is an invalid keyword argument for from_bytes()");piton_raise_set("TypeError",m.d);return none;
+    }
+  }
+  if(!have_src){piton_raise_set("TypeError","from_bytes() missing required argument 'bytes' (pos 1)");return none;}
+  const char*order="big";
+  if(have_ord){
+    if(ord.kind!=PK_STR){
+      PitonStrBuf m;sb_init(&m);sb_puts(&m,"from_bytes() argument 'byteorder' must be str, not ");
+      sb_puts(&m,ord.kind==PK_NONE?"None":js_type_name(ord));piton_raise_set("TypeError",m.d);return none;}
+    order=(const char*)ord.bits;
+  }
+  long raw=piton_int_from_bytes(src,order,is_signed);
+  if(piton_exc_flag)return none;
+  long v;
+  if(piton_bigint_low_i64(raw,&v))return (PitonSlot){v,PK_INT};
+  return (PitonSlot){raw,PK_BIGINT};
+}
+/* Canal long (callbacks/frames sin kind): un resultado de 64+ bits no cabe en
+ * el long; se falla cerrado en runtime (no se imprime un puntero). */
+static long piton_unbound_int_from_bytes_raw(PitonSlot s){
+  if(s.kind==PK_BIGINT){
+    static const char msg[]="NotImplementedError: int.from_bytes() result beyond 64 bits is not supported through an unboxed callable value\n";
+    piton_write(2,msg,sizeof(msg)-1);piton_exit(1);
+  }
+  return s.bits;
+}
+static long piton_unbound_int_from_bytes_frame(long*frame){
+  return piton_unbound_int_from_bytes_raw(piton_unbound_int_from_bytes_core((PitonSeq*)frame[0],0));
+}
 static void*piton_bigint_from_str(const char*s){PitonBigInt*a=(PitonBigInt*)piton_bump_alloc(sizeof(PitonBigInt));a->sign=1;a->count=0;a->capacity=0;a->limbs=0;while(*s==' '||*s=='\t')++s;if(*s=='-'){a->sign=-1;++s;}else if(*s=='+'){++s;}while(*s>='0'&&*s<='9'){int digit=*s++-'0';u128 carry=0;for(long i=0;i<a->count;++i){carry+=(u128)a->limbs[i]*10;a->limbs[i]=(unsigned long)carry;carry>>=64;}if(carry){bi_ensure(a,a->count+1);a->limbs[a->count++]=(unsigned long)carry;}carry=digit;for(long i=0;i<a->count&&carry;++i){carry+=a->limbs[i];a->limbs[i]=(unsigned long)carry;carry>>=64;}if(carry){bi_ensure(a,a->count+1);a->limbs[a->count++]=(unsigned long)carry;}}bi_trim(a);return a;}
 static int piton_bigint_is_zero(void*a){PitonBigInt*x=(PitonBigInt*)a;if(!x)return 1;for(long i=0;i<x->count;++i)if(x->limbs[i])return 0;return 1;}
 static void piton_bigint_print_raw(void*a){if(piton_bigint_is_zero(a)){piton_write(piton_print_fd,"0",1);return;}PitonBigInt*x=(PitonBigInt*)a;char buf[64];int pos=sizeof(buf);buf[--pos]=0;unsigned long tmp[64];int tc=0;for(long i=0;i<x->count;++i)tmp[i]=x->limbs[i];tc=(int)x->count;while(tc>0){unsigned long carry=0;for(int i=tc-1;i>=0;--i){unsigned long cur=(carry<<32)|(tmp[i]>>32);unsigned long q1=cur/10;unsigned long r1=cur-q1*10;unsigned long mid=(r1<<32)|(tmp[i]&0xFFFFFFFF);unsigned long q2=mid/10;unsigned long r2=mid-q2*10;tmp[i]=(q1<<32)|q2;carry=r2;}buf[--pos]=(char)('0'+carry);while(tc>0&&tmp[tc-1]==0)--tc;}if(x->sign<0)buf[--pos]='-';piton_write(piton_print_fd,buf+pos,piton_strlen(buf+pos));}
@@ -10423,9 +10537,18 @@ class LinuxCEmitter:
             for instruction in block.instructions
         )
         _uses_int_byte_methods = any(
-            instruction.op == "method_call"
-            and len(instruction.args) > 1
-            and instruction.args[1] in {"from_bytes", "to_bytes"}
+            (
+                instruction.op == "method_call"
+                and len(instruction.args) > 1
+                and instruction.args[1] in {"from_bytes", "to_bytes"}
+            )
+            # UNBOUND_INT_FROM_BYTES_VALUE_V1: `int.from_bytes` como valor
+            # (get_attr sobre el tipo) tambien necesita el runtime bigint.
+            or (
+                instruction.op == "get_attr"
+                and len(instruction.args) > 1
+                and instruction.args[1] == "from_bytes"
+            )
             for function in module.functions
             for block in function.blocks
             for instruction in block.instructions
@@ -13403,6 +13526,39 @@ class LinuxCEmitter:
         kw_args: tuple = (),
     ) -> bool:
         """Emit the explicitly supported unbound builtin descriptors."""
+        if owner == "int" and method == "from_bytes":
+            # UNBOUND_INT_FROM_BYTES_STATIC_V1: `f = int.from_bytes; f(b, order)`
+            # con tipos estaticos conocidos. Misma semantica que la llamada
+            # directa int.from_bytes(...) (1-2 posicionales, signed= keyword).
+            if len(call_args) < 1 or len(call_args) > 2:
+                raise NativeBuildError("Linux int.from_bytes() takes 1-2 positional arguments")
+            if types.get(call_args[0], "").startswith(("object:", "class:")):
+                raise NativeBuildError("Linux int.from_bytes() does not support custom iterables")
+            _order_arg = call_args[1] if len(call_args) == 2 else None
+            _signed_arg = None
+            for _kw_name, _kw_value in kw_args:
+                if _kw_name == "byteorder":
+                    if _order_arg is not None:
+                        raise NativeBuildError("Linux int.from_bytes() got multiple byteorder values")
+                    _order_arg = _kw_value
+                elif _kw_name == "signed":
+                    _signed_arg = _kw_value
+                else:
+                    raise NativeBuildError(f"Linux int.from_bytes() got unexpected keyword '{_kw_name}'")
+            _order = '"big"'
+            if _order_arg is not None:
+                if types.get(_order_arg, "") != "str":
+                    raise NativeBuildError("Linux int.from_bytes() byteorder must be a string")
+                _order = f"(const char*){self._value(_order_arg)}"
+            _signed = "0"
+            if _signed_arg is not None:
+                _signed = f"piton_slot_truthy({self._slot(_signed_arg, types)})"
+            out.append(
+                f"    {_name(result)}=piton_int_from_bytes({self._slot(call_args[0], types)},{_order},{_signed});"
+            )
+            types[result] = "bigint"
+            self._emit_exc_check(out, function, handler_label)
+            return True
         specs = {
             ("str", "upper"): (1, "str"),
             ("int", "bit_length"): (1, "int"),
@@ -22296,13 +22452,20 @@ class LinuxCEmitter:
                     ("float", "fromhex"): ("piton_unbound_float_fromhex_frame", 1, "float"),
                     ("list", "append"): ("piton_unbound_list_append_frame", 2, "none"),
                     ("type", "__instancecheck__"): ("piton_unbound_type_instancecheck_frame", 2, "bool"),
+                    # from_bytes: vararg (ver piton_unbound_int_from_bytes_frame); aridad 1 para map/filter.
+                    ("int", "from_bytes"): ("piton_unbound_int_from_bytes_frame", 1, "bigint"),
                 }
                 _spec = _unbound_specs.get((_builtin_owner, attr))
                 if _spec is not None:
                     _frame_fn, _arity, _return_type = _spec
-                    out.append(
-                        f"    {_name(result)}=piton_closure_new_frame((long)&{_frame_fn},{_arity},0,(long*)0,0,0);"
-                    )
+                    if _frame_fn == "piton_unbound_int_from_bytes_frame":
+                        out.append(
+                            f"    {_name(result)}=piton_closure_new_frame((long)&{_frame_fn},0,0,(long*)0,1,0);"
+                        )
+                    else:
+                        out.append(
+                            f"    {_name(result)}=piton_closure_new_frame((long)&{_frame_fn},{_arity},0,(long*)0,0,0);"
+                        )
                     types[result] = "closure"
                     self._unbound_builtin_values[result] = (
                         _builtin_owner, attr, _arity, _return_type
