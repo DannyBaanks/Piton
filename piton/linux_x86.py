@@ -10651,7 +10651,10 @@ class LinuxCEmitter:
             # lo ve como slot: basta con que sea sujeto de isinstance.
             _runtime_dispatch_safe = (
                 _p in (self._runtime_type_params.get(_fn) or set())
-                and _seen <= {"int", "str", "bytes", "none", "float", "bool"}
+                and (
+                    _seen <= {"int", "str", "bytes", "none", "float", "bool"}
+                    or ("none" in _seen and _seen <= {"int", "str", "bytes", "none", "float", "bool", "list", "tuple", "dict", "set"})
+                )
                 # Un literal escalar contra str sigue fail-closed (test w17);
                 # con None en la mezcla (caso nuevo) el literal se dispatcha.
                 and (
@@ -15291,7 +15294,7 @@ class LinuxCEmitter:
                         and _ins.args[1]
                         and (
                             _all_load_src.get(_ins.args[0], _ins.args[0])
-                            in {"isinstance", "es_instancia", "isinstance_match", "issubclass", "es_subclase", "hasattr", "tiene_atr"}
+                            in {"isinstance", "es_instancia", "isinstance_match", "issubclass", "es_subclase", "hasattr", "tiene_atr", "type", "tipo"}
                             if isinstance(_ins.args[0], str) else False
                         )
                     ):
@@ -23149,7 +23152,7 @@ class LinuxCEmitter:
                     self._call_param_seen.get(function.name, {}).get(_slot_origin, set())
                     if isinstance(_slot_origin, str) else set()
                 )
-                _is_str_bytes_slot = bool(_slot_kinds) and _slot_kinds <= {"str", "bytes"}
+                _is_str_bytes_slot = "bytes" in _slot_kinds and _slot_kinds <= {"str", "bytes"}
                 if owner_type == "slot" and _is_str_bytes_slot:
                     if method not in _STR_BYTES_SLOT_METHODS:
                         raise NativeBuildError(
