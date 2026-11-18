@@ -14612,11 +14612,13 @@ class LinuxCEmitter:
         "subscript_store": (0, 3, "TypeError", "'NoneType' object does not support item assignment"),
         "set_attr": (0, 3, "AttributeError", "'NoneType' object has no attribute '{name}'"),
         "get_attr": (0, 2, "AttributeError", "'NoneType' object has no attribute '{name}'"),
+        "del_slice": (0, None, "TypeError", "'NoneType' object does not support item deletion"),
+        "get_slice": (0, None, "TypeError", "'NoneType' object is not subscriptable"),
     }
     # Ops que consumen el receptor y no tienen despacho: fail closed si el
     # operando es una variable de conflicto None (en vez de emitir C erroneo).
     _NONE_CONFLICT_FAIL_OPS = {
-        "del_item", "del_attr", "del_slice", "slice_store", "get_slice",
+        "del_item", "del_attr", "slice_store",
         "set_add", "list_append", "collection_extend", "dict_put",
     }
 
@@ -14638,12 +14640,18 @@ class LinuxCEmitter:
         recv_index, handler_index, exc_name, exc_msg = self._NONE_CONFLICT_RECV_OPS[op]
         obj = args[recv_index]
         name = args[1] if op in {"method_call", "set_attr", "get_attr"} else ""
-        if key in self._nonnone_unknown:
+        # For get_slice and del_slice, allow unknown types by using the
+        # dynamic helper which checks runtime kind (like the main codegen does
+        # for empty/unknown types).
+        if key in self._nonnone_unknown and op not in {"get_slice", "del_slice"}:
             raise NativeBuildError(
                 f"Linux {op} sobre '{key[1]}' (None o valor dinamico "
                 "de tipo no determinado) no soportado: fail closed"
             )
-        handler_label = args[handler_index] if len(args) > handler_index else None
+        if handler_index is not None:
+            handler_label = args[handler_index] if len(args) > handler_index else None
+        else:
+            handler_label = None
         if op == "method_call" and len(args) > 4 and isinstance(args[4], str):
             handler_label = args[4]
         recv = self._value(obj)
@@ -14675,6 +14683,7 @@ class LinuxCEmitter:
                 f"Linux {op} sobre '{key[1]}' (variable None o dinamica a nivel de modulo "
                 f"con tipo '{_object_cands[0]}') no soportado: fail closed"
             )
+        known_kinds = {self._kind(_cand) for _cand in self._nonnone_stored_types.get(key, ())}
         for _idx, _cand in enumerate(sorted(self._nonnone_stored_types.get(key, ()))):
             _kind = self._kind(_cand)
             _tmp = f"%dynrecv{self._instr_seq}_{_idx}"
@@ -14698,6 +14707,32 @@ class LinuxCEmitter:
             out.append("    }")
             if result is not None:
                 result_types.add(types.get(result))
+        # Handle unknown non-None types for get_slice/del_slice using dynamic helper
+        if key in self._nonnone_unknown and op in {"get_slice", "del_slice"}:
+            # Emit branch for non-None values not covered by known types
+            _known_check = " && ".join(f"piton_dyn_unbox({recv}).kind!={k}" for k in sorted(known_kinds))
+            if _known_check:
+                out.append(f"    if(piton_dyn_unbox({recv}).kind!=PK_NONE && {_known_check}){{")
+            else:
+                out.append(f"    if(piton_dyn_unbox({recv}).kind!=PK_NONE){{")
+            if op == "del_slice":
+                _lo = self._value(args[1]) if args[1] is not None else "(-0x7FFFFFFFFFFFFFFFL-1)"
+                _hi = self._value(args[2]) if args[2] is not None else "0x7FFFFFFFFFFFFFFFL"
+                _step = self._value(args[3]) if len(args) > 3 and args[3] is not None else "1"
+                out.append(f"        piton_del_slice_dynamic(piton_dyn_unbox({recv}).bits,{_lo},{_hi},{_step});")
+            else:  # get_slice
+                _lower = self._value(args[1]) if args[1] is not None else "0"
+                _upper = self._value(args[2]) if args[2] is not None else "0x7FFFFFFFFFFFFFFFL"
+                _has_step = "0"
+                _step = "0"
+                if len(args) > 3 and args[3] is not None:
+                    _has_step = "1"
+                    _step = self._value(args[3])
+                out.append(f"        {_name(result)}=piton_slice_dynamic(piton_dyn_unbox({recv}).bits,{_lower},{_upper},{_has_step},{_step});")
+            self._emit_exc_check(out, function, handler_label)
+            out.append("    }")
+            if result is not None:
+                result_types.add("int" if op == "get_slice" else "none")
         out.append(f"    if(piton_dyn_unbox({recv}).kind==PK_NONE){{")
         self._runtime_type_error_as(
             out, exc_name, exc_msg.format(name=name), function, handler_label,
@@ -23362,7 +23397,20 @@ class LinuxCEmitter:
                 out.append(f"    piton_raise_set(\"TypeError\",{json.dumps(_message)});")
                 self._emit_exc_check(out, function, None)
                 return out
-            if owner_type == "":
+            if owner_type in {"", "none"}:
+                # DEL_SLICE_DYNAMIC_V1: unknown or None type; use dynamic helper
+                # which checks runtime kind and raises TypeError if not a
+                # list/bytearray (matching CPython).
+                _lo = self._value(lower) if lower is not None else "(-0x7FFFFFFFFFFFFFFFL-1)"
+                _hi = self._value(upper) if upper is not None else "0x7FFFFFFFFFFFFFFFL"
+                _step = self._value(step) if step is not None else "1"
+                out.append(f"    piton_del_slice_dynamic((long){self._value(obj)},{_lo},{_hi},{_step});")
+                self._emit_exc_check(out, function, None)
+                return out
+            if owner_type.startswith("object:"):
+                # DEL_SLICE_DYNAMIC_V1: user class instance without __delitem__;
+                # use the dynamic helper which checks runtime kind and raises
+                # TypeError if not a list/bytearray (matching CPython).
                 _lo = self._value(lower) if lower is not None else "(-0x7FFFFFFFFFFFFFFFL-1)"
                 _hi = self._value(upper) if upper is not None else "0x7FFFFFFFFFFFFFFFL"
                 _step = self._value(step) if step is not None else "1"
