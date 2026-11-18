@@ -4148,12 +4148,57 @@ static void piton_catch_clear(void){piton_exc_flag=0;piton_exc_cause_type=0;pito
 }
 #define PITON_GEN_MAGIC 0x5049544E47654ELL
 #define PITON_GEN_MAX_SLOTS 256
-typedef struct{long magic;long state;long finished;long started;long sent_value;long sent_kind;long yield_kind;long(*func)(void*);long slots[PITON_GEN_MAX_SLOTS];long n_slots;}PitonGenerator;
-static long piton_gen_new(long func,long n){PitonGenerator*g=piton_alloc(sizeof(*g));g->magic=PITON_GEN_MAGIC;g->state=0;g->finished=0;g->started=0;g->sent_value=(long)(PITON_NONE);g->sent_kind=PK_NONE;g->yield_kind=PK_INT;g->func=(long(*)(void*))func;g->n_slots=n<0?0:(n>PITON_GEN_MAX_SLOTS?PITON_GEN_MAX_SLOTS:n);return(long)g;}
+typedef struct{long magic;long state;long finished;long started;long sent_value;long sent_kind;long yield_kind;long(*func)(void*);long slots[PITON_GEN_MAX_SLOTS];long n_slots;long ret_kind;}PitonGenerator;
+static long piton_gen_new(long func,long n){PitonGenerator*g=piton_alloc(sizeof(*g));g->magic=PITON_GEN_MAGIC;g->state=0;g->finished=0;g->started=0;g->sent_value=(long)(PITON_NONE);g->sent_kind=PK_NONE;g->yield_kind=PK_INT;g->func=(long(*)(void*))func;g->n_slots=n<0?0:(n>PITON_GEN_MAX_SLOTS?PITON_GEN_MAX_SLOTS:n);g->ret_kind=PK_NONE;g->slots[62]=(long)(PITON_NONE);return(long)g;}
 static long piton_gen_next(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished){piton_raise_set("StopIteration","");return 0;}g->sent_value=(long)(PITON_NONE);g->sent_kind=PK_NONE;g->started=1;long r=g->func(g);if(piton_exc_flag)return 0;if(g->finished){piton_raise_set("StopIteration","");return 0;}return r;}
 static PitonSlot piton_gen_next_slot(long raw){long value=piton_gen_next(raw);if(piton_exc_flag)return (PitonSlot){0,PK_NONE};PitonGenerator*g=(PitonGenerator*)raw;return (PitonSlot){value,(int)g->yield_kind};}
+/* GEN_RETVAL_TAKE_V1: valor de `devolver` de un generador terminado, con su
+   etiqueta. Se consume una vez (como StopIteration.value): un `producir desde`
+   posterior sobre el mismo generador agotado ve None. Un objeto que no es
+   generador (lista, iterador de str...) no tiene valor de retorno: None. */
+static PitonSlot* piton_gen_retval_take(long raw){
+  PitonSlot v={(long)(PITON_NONE),PK_NONE};
+  if(raw&&piton_maybe_ptr(raw)&&*(long*)raw==PITON_GEN_MAGIC){
+    PitonGenerator*g=(PitonGenerator*)raw;
+    v.bits=g->slots[62];v.kind=(int)g->ret_kind;
+    g->slots[62]=(long)(PITON_NONE);g->ret_kind=PK_NONE;
+  }
+  return piton_slot_box_new(v);
+}
 static long piton_gen_send(long raw,long value,int kind){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished){piton_raise_set("StopIteration","");return 0;}if(!g->started&&kind!=PK_NONE){piton_raise_set("TypeError","can't send non-None value to a just-started generator");return 0;}g->sent_value=value;g->sent_kind=kind;g->started=1;long r=g->func(g);if(piton_exc_flag)return 0;if(g->finished){piton_raise_set("StopIteration","");return 0;}return r;}
 static long piton_gen_free(long raw){(void)raw;return 0;}
+/* YF_STEP_V1: un paso de `producir desde <delegado>`. Si el delegado es un
+   generador se reenvia el valor enviado (send) a su maquina de estados; si no,
+   es un iterador nativo: el primer paso (send None) es next(), y enviar un
+   valor no-None lanza AttributeError como en CPython. */
+static const char*piton_yf_send_msg(long it){
+  if(it&&piton_maybe_ptr(it)){
+    long mg=*(long*)it;
+    if(mg==0x5049544E53545249LL)return "'str_ascii_iterator' object has no attribute 'send'";
+    if(mg==0x5049544E17E2LL){
+      PitonAnyIterator*ai=(PitonAnyIterator*)it;
+      if(ai->kind==PK_LIST)return "'list_iterator' object has no attribute 'send'";
+      if(ai->kind==PK_TUPLE)return "'tuple_iterator' object has no attribute 'send'";
+      if(ai->kind==PK_RANGE)return "'range_iterator' object has no attribute 'send'";
+      if(ai->kind==PK_DICT)return "'dict_keyiterator' object has no attribute 'send'";
+      if(ai->kind==PK_SET||ai->kind==PK_FROZENSET)return "'set_iterator' object has no attribute 'send'";
+    }
+  }
+  return "'iterator' object has no attribute 'send'";
+}
+static PitonSlot* piton_yf_step(long it,long sent,int sent_kind){
+  PitonSlot r={0,PK_NONE};
+  if(it&&piton_maybe_ptr(it)&&*(long*)it==PITON_GEN_MAGIC){
+    long v=piton_gen_send(it,sent,sent_kind);
+    if(!piton_exc_flag){r.bits=v;r.kind=(int)((PitonGenerator*)it)->yield_kind;}
+  }else if(sent_kind!=PK_NONE&&!(it&&piton_maybe_ptr(it)&&*(long*)it==PITON_GENEXPR_MAGIC)){
+    /* una expresion generadora no recibe valores (send se descarta, como CPython) */
+    piton_raise_set("AttributeError",piton_yf_send_msg(it));
+  }else{
+    r=piton_iterator_next_slot_any(it);
+  }
+  return piton_slot_box_new(r);
+}
 static long piton_gen_throw(long raw,const char*t){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished){piton_raise_set("StopIteration","");return 0;}piton_raise_set(t,"");long r=g->func(g);if(piton_exc_flag)return 0;if(g->finished){piton_raise_set("StopIteration","");return 0;}return r;}
 static long piton_gen_close(long raw){PitonGenerator*g=(PitonGenerator*)raw;if(!g||g->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a generator\n",37);piton_exit(2);}if(g->finished)return 0;if(!g->started){g->finished=1;return 0;}piton_raise_set("GeneratorExit","");g->func(g);if(piton_exc_flag&&piton_exc_type&&piton_strcmp(piton_exc_type,"GeneratorExit")==0){piton_catch_clear();}g->finished=1;return 0;}
 static long piton_coro_run(long raw){PitonGenerator*c=(PitonGenerator*)raw;if((usize)raw<0x100000||!c||c->magic!=PITON_GEN_MAGIC){piton_write(2,"TypeError: object is not a coroutine\n",35);piton_exit(2);}while(!c->finished){c->started=1;long y=c->func(c);if(c->finished)return y;long inner=piton_coro_run(y);c->sent_value=inner;c->sent_kind=((PitonGenerator*)y)->yield_kind;}return 0;}
@@ -11277,6 +11322,14 @@ class LinuxCEmitter:
         if function.kwarg:
             types[function.kwarg] = "dict"
             self._dict_val_types[function.kwarg] = "slot"
+        # GEN_PARAM_USAGE_SEED_V1: el cuerpo de una funcion normal recibe el
+        # seed de uso del param (USAGE_PARAM_TYPE_V1: `out.append(x)` -> list).
+        # Sin el mismo seed aqui, `out` queda sin tipo dentro del generador y
+        # el metodo cae al dispatch dinamico (`piton_object_get(...,"append")`
+        # sobre un PitonSeq crudo -> "TypeError: 'X' object is not callable").
+        for _uparam, _uutype in (self._usage_param_types.get(function.name) or {}).items():
+            if _uparam in function.params:
+                types[_uparam] = _uutype
         self._fn_consts = {}
         self._boolh_types: dict[str, str] = {}
         _is_main_gen = False
@@ -11350,6 +11403,15 @@ class LinuxCEmitter:
             lines.append(f"    {_name(slot)}=0;")
         lines.append(f"{_name(function.name + '___exit')}:")
         lines.append("    piton_gen->finished=1;")
+        # PEP479_EXIT_V1: un StopIteration que SALE del cuerpo del generador se
+        # convierte en RuntimeError (CPython 3.7+). Se decide aqui, en la salida
+        # del cuerpo, y no al lanzarlo: un `excepto StopIteration` local debe
+        # seguir capturandolo. Un `producir desde` que recibe el RuntimeError lo
+        # propaga (no es el fin normal del delegado).
+        lines.append(
+            "    if(piton_exc_flag&&piton_exc_type&&piton_strcmp(piton_exc_type,\"StopIteration\")==0)"
+            " piton_raise_set(\"RuntimeError\",\"generator raised StopIteration\");"
+        )
         lines.append("    return 0;")
         lines.append("}")
         return lines
@@ -22121,8 +22183,20 @@ class LinuxCEmitter:
                     out.append("    return 0;")
                 return out
             if getattr(function, "is_generator", False):
-                if args[0] is not None and args[0] != "None":
+                # GEN_RETVAL_TAKE_V1: el valor de `devolver` (y None) se guarda
+                # con su etiqueta para que `producir desde` lo recupere como
+                # StopIteration.value. Antes se guardaba crudo (sin kind) y
+                # `devolver None` no guardaba nada (salia como 0).
+                if args[0] is None or args[0] == "None":
+                    out.append("    piton_gen->slots[62]=(long)(PITON_NONE);piton_gen->ret_kind=PK_NONE;")
+                elif types.get(args[0]) == "slot":
+                    out.append(
+                        f"    {{PitonSlot _rv=piton_dyn_unbox({self._value(args[0])});"
+                        " piton_gen->slots[62]=_rv.bits;piton_gen->ret_kind=_rv.kind;}"
+                    )
+                else:
                     out.append(f"    piton_gen->slots[62]={self._value(args[0])};")
+                    out.append(f"    piton_gen->ret_kind={self._kind(types.get(args[0]))};")
                 out.append("    piton_gen->finished=1;")
                 out.append("    return 0;")
                 return out
@@ -26172,9 +26246,12 @@ class LinuxCEmitter:
             out.append(f"    {_name(result)}=piton_gather_add({self._value(gather_ref)},{int(index)},{self._value(task_ref)});")
             types[result] = "int"
         elif op == "gen_retval":
+            # GEN_RETVAL_TAKE_V1: caja etiquetada (None si el delegado no es un
+            # generador). Ver piton_gen_retval_take.
             gen_ref = args[0]
-            out.append(f"    {_name(result)}=((PitonGenerator*){self._value(gen_ref)})->slots[62];")
-            types[result] = "int"
+            out.append(f"    {_name(result)}=(long)piton_gen_retval_take({self._value(gen_ref)});")
+            types[result] = "slot"
+            self._dyn_slot_temps.add((function.name, result))
         elif op == "gen_send":
             gen_ref, send_value, handler_label = args
             _sent_slot = self._slot(send_value, types)
@@ -26192,6 +26269,32 @@ class LinuxCEmitter:
             else:
                 out.append("        piton_report_unhandled();piton_exit(1);")
             out.append("    }")
+        elif op == "yf_close":
+            # YF_CLOSE_V1: close() del delegador: el sub-generador se cierra
+            # (su finally corre) y GeneratorExit se vuelve a levantar en el
+            # delegador. Solo actua con GeneratorExit en vuelo y un generador.
+            delegate = args[0]
+            out.append(
+                f"    {{long _yc={self._value(delegate)};"
+                " if(piton_exc_flag&&piton_exc_type&&piton_strcmp(piton_exc_type,\"GeneratorExit\")==0"
+                " &&_yc&&piton_maybe_ptr(_yc)&&*(long*)_yc==PITON_GEN_MAGIC){"
+                " piton_gen_close(_yc);"
+                " if(!piton_exc_flag) piton_raise_set(\"GeneratorExit\",\"\");}}"
+            )
+        elif op == "yf_step":
+            # YF_STEP_V1: paso de `producir desde` sobre un delegado no
+            # tipado (generador o iterador): el send se reenvia si es generador.
+            iter_ref, sent_ref, handler_label = args
+            _ys_slot = self._slot(sent_ref, types)
+            out.append(
+                f"    {{PitonSlot _ys={_ys_slot}; "
+                f"{_name(result)}=(long)piton_yf_step({self._value(iter_ref)},_ys.bits,_ys.kind);}}"
+            )
+            types[result] = "slot"
+            self._dyn_slot_temps.add((function.name, result))
+            # GEN_SEND_EXC_V2: el handler puede ser una etiqueta, una lista
+            # (despacho por clase) o None (propagar): mismo contrato que el resto.
+            self._emit_exc_check(out, function, handler_label)
         elif op == "gen_collect":
             out.append(f"    {_name(result)}=piton_gen_collect({self._value(args[0])});")
             types[result] = "list"

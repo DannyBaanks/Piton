@@ -444,7 +444,7 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "closure_call": "OPAQUE", "runtime_call": "OPAQUE",
     "get_attr": "OPAQUE", "set_attr": "OPAQUE", "del_attr": "OPAQUE",
     "iter_new": "OPAQUE", "builtin_iter_new": "OPAQUE", "iter_next": "OPAQUE",
-    "gen_yield": "OPAQUE", "gen_send": "OPAQUE", "gen_throw": "OPAQUE",
+    "gen_yield": "OPAQUE", "gen_send": "OPAQUE", "gen_throw": "OPAQUE", "yf_step": "OPAQUE", "yf_close": "OPAQUE",
     "gen_close": "OPAQUE", "gen_next": "OPAQUE", "gen_collect": "OPAQUE",
     "gen_retval": "READ",
     "agen_emit": "OPAQUE", "agen_next": "OPAQUE", "agen_done": "OPAQUE",
@@ -7481,7 +7481,10 @@ class MIRLowerer:
                         raise MIRLoweringError("native generator send requires one argument")
                     value = self._lower_expr(builder, node.args[0])
                     result = builder.temp()
-                    builder.emit("gen_send", owner, value, self._find_exception_handler(builder, "TypeError"), result=result)
+                    # GEN_SEND_EXC_V2: una excepcion del cuerpo del generador
+                    # (no solo TypeError) debe llegar al handler activo de quien
+                    # llama a send(); se rutea por el despacho de clases vivo.
+                    builder.emit("gen_send", owner, value, _active_handler(builder), result=result)
                     return result
             if node.func.kind == HIRKind.LOAD and node.func.name in {"enumerate", "enumerar"}:
                 start = None
@@ -9145,7 +9148,10 @@ class MIRLowerer:
                         raise MIRLoweringError("native generator send requires one argument")
                     value = self._lower_expr(builder, node.args[0])
                     result = builder.temp()
-                    builder.emit("gen_send", owner, value, self._find_exception_handler(builder, "TypeError"), result=result)
+                    # GEN_SEND_EXC_V2: una excepcion del cuerpo del generador
+                    # (no solo TypeError) debe llegar al handler activo de quien
+                    # llama a send(); se rutea por el despacho de clases vivo.
+                    builder.emit("gen_send", owner, value, _active_handler(builder), result=result)
                     return result
             if node.func.kind == HIRKind.LOAD and node.func.name in {"enumerate", "enumerar"}:
                 start = None
@@ -10434,12 +10440,18 @@ class MIRLowerer:
             builder.emit("jump", loop.label)
             builder.current = loop
             sent = builder.temp()
-            builder.emit("gen_yield", v0, result=sent)
+            # YF_RESUME_EXC_V1: al reanudar con excepcion viva (close() ->
+            # GeneratorExit) el delegado se cierra primero y luego el
+            # `finalmente`/`excepto` que envuelve el `producir desde` corre.
+            close_block = builder.new_block()
+            builder.emit("gen_yield", v0, close_block.label, result=sent)
             nxt = builder.temp()
             builder.emit("gen_send", sub, sent, done.label, result=nxt)
             builder.emit("store", v0, nxt)
             builder.emit("jump", loop.label)
+            self._yf_close_on_resume(builder, sub, close_block, done)
             builder.current = done
+            self._yf_route_non_stop(builder)
             builder.emit("catch_clear")
             builder.emit("try_pop")
             retv = builder.temp()
@@ -10457,21 +10469,65 @@ class MIRLowerer:
             done = builder.new_block()
             builder.emit("jump", condition_block.label)
             builder.current = condition_block
+            # YF_STEP_V1: cada paso (incluido el primero, con send None) pasa
+            # por yf_step: si el delegado resulta ser un generador en runtime,
+            # el valor enviado llega a su maquina de estados (como CPython);
+            # un iterador nativo sigue igual que antes.
+            none_sent = builder.temp()
+            builder.emit("const", None, result=none_sent)
             item = builder.temp()
-            builder.emit("iter_next", iterator, done.label, result=item)
+            builder.emit("yf_step", iterator, none_sent, done.label, result=item)
             builder.emit("jump", loop.label)
             builder.current = loop
             sent = builder.temp()
-            builder.emit("gen_yield", item, result=sent)
-            builder.emit("jump", condition_block.label)
+            close_block = builder.new_block()
+            builder.emit("gen_yield", item, close_block.label, result=sent)
+            nxt = builder.temp()
+            builder.emit("yf_step", iterator, sent, done.label, result=nxt)
+            builder.emit("store", item, nxt)
+            builder.emit("jump", loop.label)
+            self._yf_close_on_resume(builder, iterator, close_block, done)
             builder.current = done
+            self._yf_route_non_stop(builder)
             builder.emit("catch_clear")
+            # YIELD_FROM_RETVAL_V2: un delegado que es generador (p. ej.
+            # `s = sub(); producir desde s`) entrega su `devolver`; cualquier
+            # otro iterable no tiene valor de retorno -> None.
             retv = builder.temp()
-            builder.emit("const", None, result=retv)
+            builder.emit("gen_retval", iterator, result=retv)
             after = builder.new_block()
             builder.emit("jump", after.label)
             builder.current = after
             return retv
+
+    def _yf_close_on_resume(self, builder: _Builder, delegate: str, close_block, unreachable_next) -> None:
+        """YF_CLOSE_V1: el bloque al que salta la reanudacion con excepcion viva.
+        Si la excepcion es GeneratorExit (close() sobre el generador delegador),
+        CPython cierra antes el sub-generador (su `finalmente` corre) y luego
+        propaga GeneratorExit al `finalmente`/`excepto` del `producir desde`.
+        Cualquier otra excepcion en vuelo se rutea igual que antes."""
+        saved = builder.current
+        builder.current = close_block
+        builder.emit("yf_close", delegate)
+        builder.emit("branch_exc", unreachable_next.label, _active_handler(builder))
+        builder.current = saved
+
+    def _yf_route_non_stop(self, builder: _Builder) -> None:
+        """YIELD_FROM_EXC_V1: al agotarse el delegado solo StopIteration es el
+        fin normal. Cualquier otra excepcion del sub-generador (o del propio
+        iterable) debe propagarse al `intentar`/`finalmente` que envuelve el
+        `producir desde` (y, si no casa, a los exteriores), no tragarse como si
+        el delegado hubiera terminado. Deja ``builder.current`` en el bloque de
+        fin normal, donde el llamador hace catch_clear."""
+        route = builder.new_block()
+        normal = builder.new_block()
+        builder.emit("catch_class_check", ["StopIteration"], route.label)
+        builder.emit("jump", normal.label)
+        builder.current = route
+        # branch_exc: la excepcion sigue viva -> rutea por el handler activo
+        # (con su despacho por clase y propagacion si nadie la captura).
+        builder.emit("branch_exc", normal.label, _active_handler(builder))
+        builder.current = normal
 
     def _gen_call_args(self, builder: _Builder, func_name: str, node: HIRNode) -> tuple[str, ...]:
         """GEN_KW_V1: argumentos de una llamada a generador, con keywords
