@@ -297,6 +297,8 @@ static long piton_unbound_int_from_bytes_frame(long*frame);
 static long piton_seq_copy(PitonSeq*s);
 static long piton_dict_copy(PitonDict*d);
 static long piton_set_copy(PitonSet*s);
+static long piton_unbound_ref_eq(long a,long b);
+static long piton_unbound_ref_ne(long a,long b);
 static void piton_catch_clear(void);
 static int piton_exc_flag_get(void);
 static PitonSlot piton_slot_guess(long bits);
@@ -5629,6 +5631,23 @@ static long piton_unbound_list_copy_frame(long*frame){return piton_unbound_list_
 static long piton_unbound_dict_copy_frame(long*frame){return piton_unbound_dict_copy(frame[0],-1);}
 static long piton_unbound_set_copy_frame(long*frame){return piton_unbound_set_copy(frame[0],-1);}
 static long piton_unbound_type_instancecheck_frame(long*frame){return piton_type_instancecheck(frame[0],frame[1],-1,-1,0);}
+static long piton_unbound_ref_eq(long a,long b){
+  if(!a||!b||!piton_maybe_ptr(a)||!piton_maybe_ptr(b))return PITON_NOTIMPLEMENTED;
+  if(((long*)a)[1]!=PK_OBJECT||((long*)b)[1]!=PK_OBJECT)return PITON_NOTIMPLEMENTED;
+  if(a==b)return 1;
+  PitonObject*oa=(PitonObject*)a;
+  PitonObject*ob=(PitonObject*)b;
+  PitonSlot sa=piton_object_get(oa,"obj");
+  if(piton_exc_flag_get()){piton_catch_clear();return PITON_NOTIMPLEMENTED;}
+  PitonSlot sb=piton_object_get(ob,"obj");
+  if(piton_exc_flag_get()){piton_catch_clear();return PITON_NOTIMPLEMENTED;}
+  return piton_dyn_cmp(10,sa,sb);
+}
+static long piton_unbound_ref_ne(long a,long b){
+  long eq=piton_unbound_ref_eq(a,b);
+  if(eq==PITON_NOTIMPLEMENTED)return PITON_NOTIMPLEMENTED;
+  return eq?0:1;
+}
 /* PCT_UNKNOWN_ARG_V1: `'%s' % x` con x de tipo DESCONOCIDO (un param sin
    inferencia) — CPython aplica str(x). La conversion es dinamica: se mira
    el valor en runtime (misma politica que piton_print_auto: puntero
@@ -10558,10 +10577,45 @@ class LinuxCEmitter:
             for function in module.functions
             if getattr(function, "qualname", None)
         }
+        self.function_names.add("_weakref__ref____eq__")
+        self.function_names.add("_weakref__ref____ne__")
+        self.function_params["_weakref__ref____eq__"] = ["self", "other"]
+        self.function_params["_weakref__ref____ne__"] = ["self", "other"]
+        self.function_defaults["_weakref__ref____eq__"] = [None, None]
+        self.function_defaults["_weakref__ref____ne__"] = [None, None]
+        self.function_return_types["_weakref__ref____eq__"] = "bool"
+        self.function_return_types["_weakref__ref____ne__"] = "bool"
+        _METHOD_ARITIES = {
+            "____str__": 1, "____repr__": 1, "____del__": 1, "____len__": 1, "____iter__": 1,
+            "____bool__": 1, "____hash__": 1, "____reversed__": 1, "____abs__": 1, "____neg__": 1,
+            "____pos__": 1, "____invert__": 1, "____index__": 1, "____trunc__": 1, "____floor__": 1,
+            "____ceil__": 1, "____int__": 1, "____float__": 1, "____complex__": 1, "____bytes__": 1,
+            "____enter__": 1, "__keys": 1, "__values": 1, "__items": 1, "__copy": 1, "__clear": 1, "__close": 1,
+            "____getitem__": 2, "____delitem__": 2, "____contains__": 2,
+            "____eq__": 2, "____ne__": 2, "____lt__": 2, "____le__": 2, "____gt__": 2, "____ge__": 2,
+            "____add__": 2, "____sub__": 2, "____mul__": 2, "____truediv__": 2, "____floordiv__": 2,
+            "____mod__": 2, "____pow__": 2, "____lshift__": 2, "____rshift__": 2,
+            "____and__": 2, "____xor__": 2, "____or__": 2,
+            "____radd__": 2, "____rsub__": 2, "____rmul__": 2, "____rtruediv__": 2, "____rfloordiv__": 2,
+            "____rmod__": 2, "____rpow__": 2, "____rlshift__": 2, "____rrshift__": 2,
+            "____rand__": 2, "____rxor__": 2, "____ror__": 2,
+            "____iadd__": 2, "____isub__": 2, "____imul__": 2, "____itruediv__": 2, "____ifloordiv__": 2,
+            "____imod__": 2, "____ipow__": 2, "____ilshift__": 2, "____irshift__": 2,
+            "____iand__": 2, "____ixor__": 2, "____ior__": 2,
+            "____setitem__": 3,
+            "____exit__": 4, "____aexit__": 4,
+        }
         for alias_sym, real_sym in getattr(self, "function_aliases", {}).items():
-            if alias_sym.endswith(("____str__", "____repr__", "____del__")) and len(self.function_params.get(real_sym, [])) > 1:
-                self.function_params[alias_sym] = ["self"]
-                self.function_defaults[alias_sym] = [None]
+            _target_arity = None
+            for _suff, _arity in _METHOD_ARITIES.items():
+                if alias_sym.endswith(_suff):
+                    _target_arity = _arity
+                    break
+            _r_params = self.function_params.get(real_sym) or []
+            if _target_arity is not None and len(_r_params) != _target_arity:
+                _param_names = ["self"] + [f"arg{i}" for i in range(1, _target_arity)]
+                self.function_params[alias_sym] = _param_names
+                self.function_defaults[alias_sym] = [None] * _target_arity
                 self.function_names.add(alias_sym)
             elif real_sym in self.function_params:
                 self.function_params[alias_sym] = list(self.function_params[real_sym])
@@ -10856,16 +10910,35 @@ class LinuxCEmitter:
         for alias_sym, real_sym in getattr(self, "function_aliases", {}).items():
             _r_params = self.function_params.get(real_sym) or []
             _r_defs = self.function_defaults.get(real_sym) or []
-            if alias_sym.endswith(("____str__", "____repr__", "____del__")) and len(_r_params) > 1:
-                _def_args = []
-                for _di in range(1, len(_r_params)):
-                    if _di < len(_r_defs) and _r_defs[_di] is not None:
-                        _def_args.append(str(self._value(_r_defs[_di])))
+            _target_arity = None
+            for _suff, _arity in _METHOD_ARITIES.items():
+                if alias_sym.endswith(_suff):
+                    _target_arity = _arity
+                    break
+            if _target_arity is not None and len(_r_params) != _target_arity:
+                _w_params = ["long _self"] + [f"long _a{i}" for i in range(1, _target_arity)]
+                _w_args = ["_self"] + [f"_a{i}" for i in range(1, _target_arity)]
+                if _target_arity < len(_r_params):
+                    _def_args = []
+                    for _di in range(_target_arity, len(_r_params)):
+                        if _di < len(_r_defs) and _r_defs[_di] is not None:
+                            _def_args.append(str(self._value(_r_defs[_di])))
+                        elif self.function_varargs.get(real_sym) or _r_params[_di] in ("args", "star_args"):
+                            _def_args.append("(long)piton_seq_new(PK_TUPLE,0)")
+                        else:
+                            _def_args.append("0")
+                    lines.append(f"static long {_name(alias_sym)}({', '.join(_w_params)}) {{ return {_name(real_sym)}({', '.join(_w_args + _def_args)}); }}")
+                else:
+                    if len(_r_params) == 2 and (self.function_varargs.get(real_sym) or _r_params[1] in ("args", "star_args")):
+                        _extra_cnt = _target_arity - 1
+                        _extra_assigns = "; ".join(f"_va->items[{i}]=piton_slot_guess({_w_args[i+1]})" for i in range(_extra_cnt))
+                        lines.append(f"static long {_name(alias_sym)}({', '.join(_w_params)}) {{ PitonSeq*_va=piton_seq_new(PK_TUPLE,{_extra_cnt}); {_extra_assigns}; return {_name(real_sym)}(_self, (long)_va); }}")
                     else:
-                        _def_args.append("0")
-                lines.append(f"static long {_name(alias_sym)}(long _self) {{ return {_name(real_sym)}({', '.join(['_self'] + _def_args)}); }}")
+                        lines.append(f"static long {_name(alias_sym)}({', '.join(_w_params)}) {{ return {_name(real_sym)}({', '.join(_w_args[:len(_r_params)])}); }}")
             else:
                 lines.append(f"#define {_name(alias_sym)} {_name(real_sym)}")
+        lines.append(f"#define {_name('_weakref__ref____eq__')} piton_unbound_ref_eq")
+        lines.append(f"#define {_name('_weakref__ref____ne__')} piton_unbound_ref_ne")
         if self._has_rich_runtime:
             # Forward declarations for runtime helpers used in <module>
             lines.append("static long piton_argv_new(void);")
@@ -10938,6 +11011,8 @@ class LinuxCEmitter:
                 "string___sustituir_de": "str",
                 "string___buscar_de": "str",
                 "string___a_str": "str",
+                "_weakref__ref____eq__": "bool",
+                "_weakref__ref____ne__": "bool",
             })
             _cur_snap = _abi_snapshot()
             _converged = _pass >= 2 and _cur_snap == _prev_snap
@@ -18467,6 +18542,12 @@ class LinuxCEmitter:
                 types[result] = "builtin"
                 aliases[result] = source
                 return out
+            if function.name == "<module>" and source not in self._stored_so_far and any(
+                f"{c}__{source}" in self.function_names for c in self.classes
+            ):
+                out.append(f"    {_name(result)}=0;")
+                types[result] = "int"
+                return out
             if (
                 ((function.name == "<module>" and source not in self._stored_so_far)
                  or (function.name != "<module>" and source not in getattr(self, "_cur_slots", set())))
@@ -20771,7 +20852,7 @@ class LinuxCEmitter:
                         elif value_type == "str":
                             out.append(f'    piton_print_str_raw((char*){self._value(value)});')
                         elif value_type == "bool":
-                            out.append(f'    piton_print_str_raw({self._value(value)}?"True":"False");')
+                            out.append(f'    if({self._value(value)}==PITON_NOTIMPLEMENTED){{piton_print_str_raw("NotImplemented");}}else{{piton_print_str_raw({self._value(value)}?"True":"False");}}')
                         elif value_type == "none":
                             out.append('    piton_print_str_raw("None");')
                         elif value_type == "notimplemented":
@@ -24970,6 +25051,22 @@ class LinuxCEmitter:
                         if method == "__init__":
                             out.append(f"    {_name(result)}=0;")
                             types[result] = "none"
+                            return out
+                        if method == "__eq__":
+                            if len(call_args) >= 2:
+                                out.append(f"    {_name(result)}=({self._value(call_args[0])}=={self._value(call_args[1])})?1:PITON_NOTIMPLEMENTED;")
+                            else:
+                                out.append(f"    {_name(result)}=PITON_NOTIMPLEMENTED;")
+                            types[result] = "bool"
+                            self._emit_exc_check(out, function, handler_label)
+                            return out
+                        if method == "__ne__":
+                            if len(call_args) >= 2:
+                                out.append(f"    {_name(result)}=({self._value(call_args[0])}=={self._value(call_args[1])})?0:PITON_NOTIMPLEMENTED;")
+                            else:
+                                out.append(f"    {_name(result)}=PITON_NOTIMPLEMENTED;")
+                            types[result] = "bool"
+                            self._emit_exc_check(out, function, handler_label)
                             return out
                     if target in self.static_methods:
                         all_values = self._complete_call_args(target, list(call_args), out)
