@@ -15260,7 +15260,15 @@ class LinuxCEmitter:
                 default_mask |= 1 << index
                 default = all_defaults[full_index] if full_index < len(all_defaults) else None
                 default = self._default_call_value(out, function_name, param, default)
-                default_exprs.append(self._slot(default, types))
+                _mutable_symbol = self._mutable_default_symbols.get((function_name, param))
+                if isinstance(default, str) and default != _mutable_symbol:
+                    # STRING_DEFAULT_V1: un default literal de cadena se emite como
+                    # slot PK_STR con el literal C escapado, nunca como _name()
+                    # (un identificador C no declarado para defaults que empiezan
+                    # por '%', como el formato de strptime "%a %b %d ...").
+                    default_exprs.append(f"piton_slot((long){_str_c_literal(default)},PK_STR)")
+                else:
+                    default_exprs.append(self._slot(default, types))
             else:
                 default_exprs.append("piton_slot(0,PK_INT)")
 
