@@ -14736,6 +14736,18 @@ class LinuxCEmitter:
     }
     # Ops que consumen el receptor y no tienen despacho: fail closed si el
     # operando es una variable de conflicto None (en vez de emitir C erroneo).
+    _UNKNOWN_RECV_METHODS = {
+        "str": frozenset({
+            "upper", "lower", "strip", "lstrip", "rstrip", "startswith", "endswith",
+            "split", "rsplit", "join", "replace", "find", "rfind", "format", "encode",
+            "isdigit", "isalpha", "isspace", "isalnum", "title", "capitalize",
+            "splitlines", "partition", "rpartition", "count", "index", "zfill",
+        }),
+        "list": frozenset({"append", "extend", "pop", "insert", "remove", "reverse", "sort", "count", "index", "copy"}),
+        "dict": frozenset({"items", "keys", "values", "get", "update", "setdefault", "pop", "copy"}),
+        "tuple": frozenset({"count", "index"}),
+        "set": frozenset({"add", "discard", "remove", "update", "union", "intersection", "difference", "pop", "copy"}),
+    }
     _NONE_CONFLICT_FAIL_OPS = {
         "del_item", "del_attr", "slice_store",
         "set_add", "list_append", "collection_extend", "dict_put",
@@ -14762,7 +14774,7 @@ class LinuxCEmitter:
         # For get_slice and del_slice, allow unknown types by using the
         # dynamic helper which checks runtime kind (like the main codegen does
         # for empty/unknown types).
-        if key in self._nonnone_unknown and op not in {"get_slice", "del_slice"}:
+        if key in self._nonnone_unknown and op not in {"get_slice", "del_slice", "method_call", "get_attr"}:
             raise NativeBuildError(
                 f"Linux {op} sobre '{key[1]}' (None o valor dinamico "
                 "de tipo no determinado) no soportado: fail closed"
@@ -14776,6 +14788,7 @@ class LinuxCEmitter:
         recv = self._value(obj)
         out: list[str] = []
         result_types: set[Any] = set()
+        known_kinds_pre = {self._kind(_cand) for _cand in self._nonnone_stored_types.get(key, ())}
         _object_cands = sorted(
             _c for _c in self._nonnone_stored_types.get(key, ())
             if self._kind(_c) == "PK_OBJECT"
@@ -14859,6 +14872,55 @@ class LinuxCEmitter:
             out.append("    }")
             if result is not None:
                 result_types.add("int" if op == "get_slice" else "none")
+        if key in self._nonnone_unknown and op in {"method_call", "get_attr"}:
+            # NONE_DYN_UNKNOWN_V1: valor no-None de tipo estatico desconocido
+            # (caja etiquetada). method_call: una rama por kind de coleccion
+            # que soporta el metodo (candidatos que el emisor rechaza se
+            # omiten); get_attr: solo objetos (piton_object_get). Cualquier
+            # otro kind en runtime lanza un error explicito (nunca silencio).
+            if op == "method_call":
+                _ucands = [
+                    (_t, self._kind(_t)) for _t in ("str", "list", "dict", "tuple", "set")
+                    if name in self._UNKNOWN_RECV_METHODS[_t]
+                    and self._kind(_t) not in known_kinds_pre
+                ]
+            else:
+                _ucands = [("slot", "PK_OBJECT")] if "PK_OBJECT" not in known_kinds_pre else []
+            _covered: list[str] = []
+            for _ui, (_ut, _uk) in enumerate(_ucands):
+                _utmp = f"%dynunk{self._instr_seq}_{_ui}"
+                _saved_types = dict(types)
+                _usub_args = list(args)
+                _usub_args[recv_index] = _utmp
+                _usub = _dc_replace(instruction, args=tuple(_usub_args) if isinstance(args, tuple) else _usub_args)
+                types[_utmp] = _ut
+                _bits = recv if _ut == "slot" else f"piton_dyn_unbox({recv}).bits"
+                try:
+                    _ubody = self._emit_instruction(_usub, function, aliases, types, bigint_slots)
+                except NativeBuildError:
+                    types.clear()
+                    types.update(_saved_types)
+                    continue
+                out.append(f"    if(piton_dyn_unbox({recv}).kind=={_uk}){{long {_name(_utmp)}={_bits};")
+                out.extend(_ubody)
+                out.append("    }")
+                _covered.append(_uk)
+                if result is not None:
+                    result_types.add(types.get(result))
+            if not _covered and not known_kinds_pre:
+                raise NativeBuildError(
+                    f"Linux {op} sobre '{key[1]}' (None o valor dinamico de tipo no determinado): "
+                    f"'{name}' no tiene despacho dinamico soportado: fail closed"
+                )
+            _all_k = set(known_kinds_pre) | set(_covered)
+            _cond = " && ".join(f"piton_dyn_unbox({recv}).kind!={_k}" for _k in sorted(_all_k | {"PK_NONE"}))
+            out.append(f"    if({_cond}){{")
+            self._runtime_type_error_as(
+                out, "RuntimeError",
+                f"dynamic {op} '{name}' on an undetermined receiver kind is not supported",
+                function, handler_label,
+            )
+            out.append("    }")
         out.append(f"    if(piton_dyn_unbox({recv}).kind==PK_NONE){{")
         self._runtime_type_error_as(
             out, exc_name, exc_msg.format(name=name), function, handler_label,
