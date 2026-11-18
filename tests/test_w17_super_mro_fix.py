@@ -47,8 +47,10 @@ class SuperMroFixParity(unittest.TestCase):
         )
 
     def test_unmodeled_builtin_init_arguments_remain_fail_closed(self):
+        # Unmodeled builtin bases (e.g. tuple) still fail closed; list/dict bases
+        # are modeled since W21 super_builtin_collection_base.
         source = (
-            "clase Values(list):\n"
+            "clase Values(tuple):\n"
             "    funcion __init__(self, values):\n"
             "        super().__init__(values)\n"
             "Values([1, 2])\n"
@@ -58,6 +60,15 @@ class SuperMroFixParity(unittest.TestCase):
             match=r"super\(\)\.__init__ with arguments requires a modeled base implementation",
         ):
             compare_native_to_cpython(source)
+
+    def test_list_base_super_init_with_arguments_matches_cpython(self):
+        _assert_matches(
+            self,
+            "clase Values(list):\n"
+            "    funcion __init__(self, values):\n"
+            "        super().__init__(values)\n"
+            "imprimir(Values([1, 2]))\n",
+        )
 
     def test_plain_closure_inside_method_does_not_inherit_super_receiver(self):
         _assert_matches(
