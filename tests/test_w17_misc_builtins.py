@@ -159,14 +159,18 @@ class W17DeleteSlices(unittest.TestCase):
             b"TypeError: 'bytes' object does not support item deletion",
         )
 
-    def test_custom_slice_target_remains_fail_closed(self):
-        with pytest.raises(NativeBuildError, match="native del slice target of type 'object:CustomTarget' is not supported"):
-            compare_native_to_cpython(
-                "clase CustomTarget:\n"
-                "    pasar\n"
-                "target = CustomTarget()\n"
-                "borrar target[:]\n"
-            )
+    def test_custom_slice_target_raises_type_error(self):
+        # Replaces obsolete fail-closed test_custom_slice_target_remains_fail_closed:
+        # W22 del_and_get_slice_none_dyn routes object slice deletion through
+        # piton_del_slice_dynamic, raising TypeError at runtime like CPython.
+        _assert_same_exception(
+            self,
+            "clase CustomTarget:\n"
+            "    pasar\n"
+            "target = CustomTarget()\n"
+            "borrar target[:]\n",
+            b"TypeError",
+        )
 
 
 if __name__ == "__main__":

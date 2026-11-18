@@ -153,19 +153,17 @@ class W21T1FuncionesParity(unittest.TestCase):
             "imprimir(es_lista([]))\n",
         )
 
-    def test_tipo_param_mixed_argument_kinds_fail_closed(self):
-        # Negative: un mismo parametro que recibe list y str y se usa en un
-        # dispatch por tipo sigue fallando cerrado (fail closed, no se emite).
-        from piton.native_differential import compare_native_to_cpython
-        from piton.x86 import NativeBuildError
-
-        with self.assertRaises(NativeBuildError):
-            compare_native_to_cpython(
-                "funcion es_lista(x):\n"
-                "    devolver tipo(x) == tipo([])\n"
-                "imprimir(es_lista([1, 2]))\n"
-                "imprimir(es_lista('ab'))\n"
-            )
+    def test_tipo_param_mixed_argument_kinds_matches_cpython(self):
+        # Replaces obsolete fail-closed test_tipo_param_mixed_argument_kinds_fail_closed:
+        # W22 isinstance_mixed_param_dispatch (4d7a56c) enabled runtime dispatch
+        # for mixed list + str arguments, matching CPython.
+        _assert_matches(
+            self,
+            "funcion es_lista(x):\n"
+            "    devolver tipo(x) == tipo([])\n"
+            "imprimir(es_lista([1, 2]))\n"
+            "imprimir(es_lista('ab'))\n",
+        )
 
     def test_slot_tagged_str_argument_used_as_str_method(self):
         # SLOT_PARAM_UNBOX_V1: el argumento llega como caja slot (elemento de
