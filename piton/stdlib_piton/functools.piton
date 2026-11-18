@@ -39,12 +39,9 @@ funcion partial (_fn_objetivo ,*args ) :
     devolver envoltorio
 
 
-clase _CacheInfo :
-    funcion __init__ (self ,hits ,misses ,maxsize ,currsize ):
-        self.hits = hits
-        self.misses = misses
-        self.maxsize = maxsize
-        self.currsize = currsize
+desde collections importar namedtuple
+
+_CacheInfo = namedtuple("CacheInfo", ("hits", "misses", "maxsize", "currsize"))
 
 
 funcion _hacer_lru (_fn_objetivo ,maxsize ,typed ):
@@ -53,19 +50,30 @@ funcion _hacer_lru (_fn_objetivo ,maxsize ,typed ):
     # del propio envoltorio, como en CPython.
     cache = {}
     orden = []
-    estado = {"hits": 0, "misses": 0}
+    estado = [0, 0, maxsize]
     funcion envoltorio (*args ) :
         clave = args
         si clave en cache :
-            estado ["hits"] = estado ["hits"] + 1
+            estado [0] = estado [0] + 1
+            # LRU_ORDER_V1: un hit mueve la clave al final (mas reciente),
+            # de modo que al llenar el cache sale la clave menos reciente,
+            # igual que functools.lru_cache de CPython.
+            si estado [2] no es Nada y estado [2] > 0 :
+                anteriores = lista(orden)
+                orden.clear()
+                para anterior en anteriores:
+                    anterior = tupla(anterior)
+                    si anterior != clave :
+                        orden.append(anterior)
+                orden.append(clave)
             devolver cache [clave ]
-        estado ["misses"] = estado ["misses"] + 1
+        estado [1] = estado [1] + 1
         todos = []
         para a en args :
             todos.append (a )
         r = _fn_objetivo (*todos )
-        si maxsize != 0 :
-            si maxsize no es Nada y maxsize > 0 y longitud (orden ) >= maxsize :
+        si estado [2] != 0 :
+            si estado [2] no es Nada y estado [2] > 0 y longitud (orden ) >= estado [2] :
                 viejo = tupla (orden.pop (0 ))
                 si viejo en cache :
                     borrar cache [viejo ]
@@ -73,12 +81,14 @@ funcion _hacer_lru (_fn_objetivo ,maxsize ,typed ):
             orden.append (clave )
         devolver r
     funcion cache_info ():
-        devolver _CacheInfo (estado ["hits"] ,estado ["misses"] ,maxsize ,longitud (cache ))
+        si estado [2] es Nada :
+            devolver _CacheInfo (estado [0] ,estado [1] ,estado [2] ,longitud (cache ))
+        devolver _CacheInfo (estado [0] ,estado [1] ,estado [2] ,longitud (cache ))
     funcion cache_clear ():
         cache.clear ()
         orden.clear ()
-        estado ["hits"] = 0
-        estado ["misses"] = 0
+        estado [0] = 0
+        estado [1] = 0
     devolver _adjuntar_lru (envoltorio ,cache_info ,cache_clear )
 
 
@@ -100,6 +110,8 @@ funcion lru_cache (maxsize =128 ,typed =Falso ):
         _fn_objetivo = maxsize
         maxsize = 128
         devolver _hacer_lru (_fn_objetivo ,maxsize ,typed )
+    si maxsize no es Nada y maxsize < 0 :
+        maxsize = 0
     funcion decorador (_fn_objetivo ) :
         devolver _hacer_lru (_fn_objetivo ,maxsize ,typed )
     devolver decorador

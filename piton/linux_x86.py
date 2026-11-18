@@ -4567,6 +4567,9 @@ static long piton_list_of_dynamic(long bits);
 static const char* piton_str_of_value(long bits);
 static long piton_collect_any_iter(long raw);
 static long piton_call_dynamic(long callee,long pos_seq,long star_seq,long kwargs_dict){
+  /* A callable can cross a closure cell as a tagged slot box. Unwrap that
+     representation before checking whether the value is callable. */
+  callee=piton_dyn_unbox(callee).bits;
   PitonSeq*pos=(PitonSeq*)pos_seq,*star=(PitonSeq*)star_seq;
   long np=pos?pos->length:0,ns=star?star->length:0,total=np+ns;
   if(total>64){piton_write(2,"TypeError: too many arguments in a dynamic call\n",48);piton_exit(2);}
@@ -12217,6 +12220,21 @@ class LinuxCEmitter:
             types[result] = "int"
             return out
         values = self._complete_call_args(function_name, list(values), out)
+        # functools keeps its cache parameters across decorator closures. The
+        # dynamic call-site analysis can box maxsize (or the wrapped function)
+        # because the same helper is called with both integer and None
+        # maxsizes. These two helpers consume raw values internally, so unwrap
+        # slot boxes at the boundary instead of letting their closures capture
+        # the box address as the maxsize or callback.
+        if function_name in {"functools__lru_cache", "functools___hacer_lru"}:
+            for _i, _value_arg in enumerate(values):
+                _tmp = f"%functools_unbox{self._mbox_counter}"
+                self._mbox_counter = getattr(self, "_mbox_counter", 0) + 1
+                out.append(
+                    f"    long {_name(_tmp)}=piton_dyn_unbox({self._value(_value_arg)}).bits;"
+                )
+                types[_tmp] = types.get(_value_arg, "int") if isinstance(_value_arg, str) else "int"
+                values[_i] = _tmp
         if function_name in {
             "os__path__join", "os__path__normpath", "os__path__splitext",
             "posixpath__join", "posixpath__normpath", "posixpath__splitext",
@@ -12381,6 +12399,8 @@ class LinuxCEmitter:
             | (self._slot_param_args.get(function_name) or set())
             | _runtime_type_params
         )
+        if function_name in {"functools__lru_cache", "functools___hacer_lru"}:
+            _multi = set()
         if _multi:
             for _i, (_ival, _iparam) in enumerate(zip(values, _params)):
                 if _iparam in _runtime_type_params and _ival is None:
@@ -16080,7 +16100,24 @@ class LinuxCEmitter:
                                 # int, and the string result printed as an
                                 # address. Unresolvable receivers stay opaque.
                                 cls_name, method = iargs[0], iargs[1]
-                                if method in ("encode", "tobytes"):
+                                if (
+                                    cls_name == "__piton_lru_cache_wrapper__"
+                                    and method == "cache_info"
+                                ):
+                                    # LRU_CACHE_INFO_TYPE_V1: functools wrappers
+                                    # expose a CacheInfo named tuple backed by
+                                    # the bundled collections._NTInst type.
+                                    # Carry that type through `f.cache_info()`
+                                    # so field reads use the named-tuple
+                                    # attribute implementation instead of an
+                                    # untyped integer fallback.
+                                    origins[result] = ("kind", "object:collections___NTInst")
+                                elif (
+                                    cls_name == "__piton_lru_cache_wrapper__"
+                                    and method == "cache_clear"
+                                ):
+                                    origins[result] = ("kind", "none")
+                                elif method in ("encode", "tobytes"):
                                     origins[result] = ("kind", "bytes")
                                 elif method in ("decode", "hex"):
                                     origins[result] = ("kind", "str")
@@ -21844,8 +21881,16 @@ class LinuxCEmitter:
             # usa 0 como centinela de ausencia; un singleton aqui seria
             # desreferenciado como seq/dict.
             _dyn = lambda v: "0" if v is None else self._value(v)
+            _dynamic_callee = self._value(callee)
+            if types.get(callee) == "slot":
+                # A callable forwarded through a dynamically typed slot must
+                # reach the runtime as its underlying bits. Leaving the slot
+                # box itself here makes callback wrappers (such as lru_cache)
+                # look non-callable after a second decorated function is
+                # compiled into the same module.
+                _dynamic_callee = f"piton_dyn_unbox({_dynamic_callee}).bits"
             out.append(
-                f"    {_name(result)}=piton_call_dynamic({self._value(callee)},"
+                f"    {_name(result)}=piton_call_dynamic({_dynamic_callee},"
                 f"{_dyn(pos_seq)},{_dyn(star_seq)},{_dyn(kwargs_dict)});"
             )
             # The callee is unknown here and may return a PitonSlot box (for
@@ -22317,9 +22362,33 @@ class LinuxCEmitter:
                 return out
             prop_class = self._resolve_property_class(owner_type, attr)
             if prop_class is not None:
-                getter = self.class_properties[prop_class][attr]["getter"]
-                out.append(f'    {_name(result)}={_name(getter)}({self._value(obj)});')
-                types[result] = self.function_return_types.get(getter, "int")
+                prop_info = self.class_properties[prop_class][attr]
+                getter = prop_info["getter"]
+                if prop_info.get("cached"):
+                    property_type = self.function_return_types.get(getter)
+                    if property_type is None:
+                        raise NativeBuildError(
+                            f"native cached_property '{attr}' needs a statically known return type"
+                        )
+                    types[result] = property_type
+                    _obj = self._value(obj)
+                    _attr = json.dumps(attr)
+                    out.append(f"    if(piton_hasattr({_obj},{_attr})){{")
+                    out.append(
+                        f"        {_name(result)}=piton_getattr({_obj},{_attr},0,0);"
+                    )
+                    out.append("    }else{")
+                    out.append(
+                        f"        {_name(result)}={_name(getter)}({_obj});"
+                    )
+                    out.append(
+                        f"        piton_setattr({_obj},{_attr},{self._slot(result, types)});"
+                    )
+                    out.append("    }")
+                    self._emit_exc_check(out, function, handler_label)
+                else:
+                    out.append(f'    {_name(result)}={_name(getter)}({self._value(obj)});')
+                    types[result] = self.function_return_types.get(getter, "int")
             else:
                 if owner_type == "closure" and attr == "__self__":
                     out.append(f'    {_name(result)}=piton_bound_method_self({self._value(obj)});')
@@ -22667,6 +22736,44 @@ class LinuxCEmitter:
             if isinstance(kw_args, str):
                 handler_label = kw_args
                 kw_args = ()
+            if cls_name == "__piton_lru_cache_wrapper__":
+                if method not in {"cache_info", "cache_clear"}:
+                    raise NativeBuildError(
+                        f"unsupported functools.lru_cache wrapper method '{method}'"
+                    )
+                _pos_parts = [
+                    f"{{PitonSeq*_lci=piton_seq_new(PK_TUPLE,{len(call_args)});"
+                ]
+                for _i, _value in enumerate(call_args):
+                    _pos_parts.append(
+                        f"_lci->items[{_i}]={self._slot(_value, types)};"
+                    )
+                _pos_parts.append("_lci;}")
+                _positional = f"(long)({''.join(_pos_parts)})"
+                _kwargs = "0"
+                if kw_args:
+                    _kw_parts = ["{PitonDict*_lck=piton_dict_new(0);"]
+                    for _key, _value in kw_args:
+                        if _key is None:
+                            raise NativeBuildError(
+                                "functools.lru_cache wrapper methods do not accept **kwargs unpacking"
+                            )
+                        _kw_parts.append(
+                            f"piton_dict_append(_lck,piton_slot((long){json.dumps(_key)},PK_STR),"
+                            f"{self._slot(_value, types)});"
+                        )
+                    _kw_parts.append("_lck;}")
+                    _kwargs = f"(long)({''.join(_kw_parts)})"
+                out.append(
+                    f"    {_name(result)}=piton_call_dynamic("
+                    f"piton_object_get((PitonObject*){self._value(obj)},{json.dumps(method)}).bits,"
+                    f"{_positional},0,{_kwargs});"
+                )
+                types[result] = (
+                    "object:collections___NTInst" if method == "cache_info" else "none"
+                )
+                self._emit_exc_check(out, function, handler_label)
+                return out
             if obj in self._typeobj_names and self._emit_unbound_builtin_call(
                 out, result, self._typeobj_names[obj], method, list(call_args),
                 types, aliases, function, handler_label, tuple(kw_args) if kw_args else (),

@@ -783,7 +783,8 @@ class MIRLowerer:
         self.class_metaclasses: dict[str, str] = {}
         self.class_mro: dict[str, list[str]] = {}
         self._mro_memo: dict[str, list[str]] = {}
-        self.class_properties: dict[str, dict[str, dict[str, str | None]]] = {}
+        self.class_properties: dict[str, dict[str, dict[str, Any]]] = {}
+        self._cached_property_names_used: set[str] = set()
         self.async_functions: set[str] = set()
         self.async_generators: set[str] = set()
         self.module_aliases: dict[str, str] = {}
@@ -1289,6 +1290,27 @@ class MIRLowerer:
             return False
         is_factory = getattr(expression, "kind", None) == HIRKind.CALL
         callee = getattr(expression, "func", None) if is_factory else expression
+        if self._decorator_qualified_name(expression) == "functools.lru_cache":
+            if getattr(callee, "kind", None) == HIRKind.ATTR:
+                root = getattr(callee, "value", None)
+                root_name = getattr(root, "name", None)
+                if (getattr(root, "kind", None) != HIRKind.LOAD
+                        or root_name in class_local_names
+                        or self.module_aliases.get(root_name) != "functools"):
+                    return False
+                position = self._module_binding_positions.get(root_name)
+            elif getattr(callee, "kind", None) == HIRKind.LOAD:
+                name = getattr(callee, "name", None)
+                if (name in class_local_names
+                        or self.from_import_aliases.get(name) not in {
+                            "functools__lru_cache", "functools.lru_cache",
+                        }
+                        or name in self._module_func_nodes):
+                    return False
+                position = self._module_binding_positions.get(name)
+            else:
+                return False
+            return position is not None and position < self._current_class_position
         if getattr(callee, "kind", None) != HIRKind.LOAD:
             return False
         name = getattr(callee, "name", None)
@@ -1324,7 +1346,7 @@ class MIRLowerer:
         self,
         class_name: str,
         method: HIRNode,
-        property_methods: dict[str, dict[str, str | None]],
+        property_methods: dict[str, dict[str, Any]],
         *,
         class_local_names: set[str] | None = None,
         allow_user_identity: bool = True,
@@ -1367,9 +1389,48 @@ class MIRLowerer:
             if decorator.kind == HIRKind.ATTR:
                 prop = getattr(decorator, "attr", "")
                 if prop == "cached_property":
-                    raise MIRLoweringError(
-                        "native @functools.cached_property is not supported: cached descriptor storage is unavailable"
-                    )
+                    if self._decorator_qualified_name(decorator) != "functools.cached_property":
+                        raise MIRLoweringError(
+                            "native @functools.cached_property is not supported: cached descriptor storage is unavailable"
+                        )
+                    module_expr = getattr(decorator, "value", None)
+                    module_name = getattr(module_expr, "name", None)
+                    module_position = self._module_binding_positions.get(module_name)
+                    if (getattr(module_expr, "kind", None) != HIRKind.LOAD
+                            or module_name in class_local_names
+                            or self.module_aliases.get(module_name) != "functools"
+                            or module_position is None
+                            or module_position >= (self._current_class_position or 0)):
+                        raise MIRLoweringError(
+                            "native @functools.cached_property is not supported: cached descriptor storage is unavailable"
+                        )
+                    if method.name not in self._cached_property_names_used:
+                        raise MIRLoweringError(
+                            "native @functools.cached_property is not supported: cached descriptor storage is unavailable"
+                        )
+                    method_args = getattr(method, "args", None)
+                    method_positional = [
+                        *list(getattr(method_args, "posonlyargs", []) or []),
+                        *list(getattr(method_args, "args", []) or []),
+                    ]
+                    if (len(method_positional) != 1
+                            or getattr(method_args, "kwonlyargs", None)
+                            or getattr(method_args, "vararg", None)
+                            or getattr(method_args, "kwarg", None)):
+                        raise MIRLoweringError(
+                            "native @functools.cached_property requires a getter with only self"
+                        )
+                    if method.name in property_methods:
+                        raise MIRLoweringError(
+                            f"native duplicate @cached_property '{method.name}' on '{class_name}'"
+                        )
+                    property_methods[method.name] = {
+                        "getter": None, "setter": None, "deleter": None,
+                    }
+                    self.class_properties.setdefault(class_name, {}).setdefault(
+                        method.name, {}
+                    )["cached"] = True
+                    return f"{class_name}__{method.name}", "getter", method.name
                 if (getattr(getattr(decorator, "value", None), "kind", None) == HIRKind.LOAD
                         and getattr(decorator.value, "name", None) == method.name
                         and prop in {"setter", "deleter"}):
@@ -1391,6 +1452,8 @@ class MIRLowerer:
             name = getattr(dec, "name", None) or getattr(dec, "attr", None)
             if name not in marker_decorators:
                 return False
+            if name == "lru_cache" and self._decorator_qualified_name(dec) == "functools.lru_cache":
+                return False
             if getattr(dec, "kind", None) == HIRKind.LOAD:
                 # A user definition shadows an imported/builtin marker and
                 # must be treated as an ordinary user decorator below.
@@ -1405,7 +1468,7 @@ class MIRLowerer:
         if all(is_legacy_marker(dec) for dec in decorators):
             return f"{class_name}__{method.name}", None, method.name
 
-        unsupported_results = {*marker_decorators, "cached_property"}
+        unsupported_results = {*marker_decorators - {"lru_cache"}, "cached_property"}
         for dec in decorators:
             name = getattr(dec, "name", None) or getattr(dec, "attr", None)
             if name in unsupported_results and name not in self._module_func_nodes:
@@ -1619,6 +1682,7 @@ class MIRLowerer:
         self._mro_memo = {}
         self.abstract_methods: dict[str, set[str]] = {}
         self.class_properties = {}
+        self._cached_property_names_used = set()
         self.static_methods = set()
         self.class_methods = set()
         self.decorated_classes = set()
@@ -1664,6 +1728,12 @@ class MIRLowerer:
         if hir.kind == HIRKind.MODULE:
             module_body = getattr(hir, "body", [])
             self._module_body_nodes = module_body
+            self._cached_property_names_used = {
+                getattr(_node, "attr", None)
+                for _node in _iter_hir(hir)
+                if getattr(_node, "kind", None) == HIRKind.ATTR
+                and isinstance(getattr(_node, "attr", None), str)
+            }
             self._identity_decorator_names = self._module_identity_decorator_names(module_body)
             self._module_statement_positions = {
                 id(item): index for index, item in enumerate(module_body)
@@ -2137,7 +2207,7 @@ class MIRLowerer:
                 self.classes[node.name] = set()
                 self.class_base_list[node.name] = bases
                 self.class_parents[node.name] = bases[0] if bases else None
-                property_methods: dict[str, dict[str, str | None]] = {}
+                property_methods: dict[str, dict[str, Any]] = {}
                 used_symbols: set[str] = set()
                 class_local_names: set[str] = set()
                 for method in node.body:
@@ -9705,6 +9775,37 @@ class MIRLowerer:
                     result = builder.temp()
                     builder.emit("task_cancel", owner, result=result)
                     return result
+                if (
+                    node.func.attr in {"cache_info", "cache_clear"}
+                    and getattr(node.func.value, "kind", None) == HIRKind.LOAD
+                ):
+                    _cached_function = self._module_func_nodes.get(
+                        getattr(node.func.value, "name", None)
+                    )
+                    _is_lru_wrapper = bool(
+                        _cached_function is not None
+                        and any(
+                            self._decorator_qualified_name(_decorator)
+                            == "functools.lru_cache"
+                            for _decorator in (
+                                getattr(_cached_function, "decorators", None) or ()
+                            )
+                        )
+                    )
+                    if _is_lru_wrapper:
+                        owner = self._lower_expr(builder, node.func.value)
+                        args = tuple(self._lower_expr(builder, arg) for arg in node.args)
+                        kw = tuple(
+                            (k.arg, self._lower_expr(builder, k.value))
+                            for k in (node.keywords or ())
+                        )
+                        result = builder.temp()
+                        builder.emit(
+                            "method_call", "__piton_lru_cache_wrapper__",
+                            node.func.attr, owner, args, kw, _active_handler(builder),
+                            result=result,
+                        )
+                        return result
                 owner = self._lower_expr(builder, node.func.value)
                 args = tuple(self._lower_expr(builder, arg) for arg in node.args)
                 if node.keywords and any(k.arg is None for k in node.keywords):
