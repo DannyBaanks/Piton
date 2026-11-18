@@ -305,6 +305,11 @@ def _es_llamada_builtin(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
     )
 
 
+def _siguiente_es_nombre(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
+    siguiente = _siguiente_significativo(tokens, indice)
+    return siguiente is not None and siguiente.type == token.NAME
+
+
 def _es_contexto_tipo(tokens: list[tokenize.TokenInfo], indice: int) -> bool:
     """True when `tipo` spells `type` rather than being a plain name.
 
@@ -449,7 +454,159 @@ def _nombre_asignado_en_scope(tokens: list[tokenize.TokenInfo]) -> set[str]:
                     k += 1
                     continue
                 break
-    return asignados
+    return asignados | _nombres_ligados_por_binding(tokens)
+
+
+_OPS_ASIGNACION_AUMENTADA = frozenset({
+    "+=", "-=", "*=", "/=", "//=", "%=", "**=", "@=", "&=", "|=", "^=",
+    ">>=", "<<=", ":=",
+})
+_OPS_ABRE = frozenset({"(", "[", "{"})
+_OPS_CIERRA = frozenset({")", "]", "}"})
+
+
+def _nombres_ligados_por_binding(tokens: list[tokenize.TokenInfo]) -> set[str]:
+    """SHADOW_BINDING_V1: nombres que el programa liga por OTRAS vias que el
+    `nombre = valor` simple: parametros de `funcion`/`lambda`, variable de
+    `para`, `como` (con/excepto/importar), asignacion aumentada y walrus, y
+    objetivos de desempaquetado (`a, objeto = ...`). Un alias de builtin con
+    uno de esos nombres no debe reescribirse: `funcion f(lista): lista(1)`
+    llama al parametro, no al tipo `list`. Los atributos (`x.nombre`) no ligan
+    ningun nombre y se excluyen.
+    """
+    ligados: set[str] = set()
+    n = len(tokens)
+
+    def es_atributo(indice: int) -> bool:
+        anterior = _anterior_significativo(tokens, indice)
+        return anterior is not None and anterior.type == token.OP and anterior.string == "."
+
+    for i, actual in enumerate(tokens):
+        if actual.type == token.NAME and actual.string in {"para", "for"}:
+            # Targets: todo NAME hasta `en`/`in` a profundidad 0.
+            profundidad = 0
+            for k in range(i + 1, n):
+                tok = tokens[k]
+                if tok.type == token.OP and tok.string in _OPS_ABRE:
+                    profundidad += 1
+                elif tok.type == token.OP and tok.string in _OPS_CIERRA:
+                    profundidad -= 1
+                elif tok.type in (token.NEWLINE, token.ENDMARKER) or (
+                    tok.type == token.OP and tok.string == ":" and profundidad == 0
+                ):
+                    break
+                elif tok.type == token.NAME and tok.string in {"en", "in"} and profundidad == 0:
+                    for m in range(i + 1, k):
+                        cand = tokens[m]
+                        if cand.type != token.NAME or es_atributo(m):
+                            continue
+                        sig = _siguiente_significativo(tokens, m)
+                        if sig is not None and sig.type == token.OP and sig.string in {"(", "[", "."}:
+                            continue
+                        ligados.add(cand.string)
+                    break
+        elif actual.type == token.NAME and actual.string in {"como", "as"}:
+            siguiente = _siguiente_significativo(tokens, i)
+            if siguiente is not None and siguiente.type == token.NAME:
+                ligados.add(siguiente.string)
+        elif actual.type == token.NAME and actual.string in {"funcion", "def"}:
+            # Parametros: NAME directamente tras `(`, `,`, `*` o `**` a
+            # profundidad 1 de la cabecera. Defaults/anotaciones no ligan.
+            k = i + 1
+            while k < n and not (tokens[k].type == token.OP and tokens[k].string == "("):
+                if tokens[k].type in (token.NEWLINE, token.ENDMARKER):
+                    break
+                k += 1
+            if k >= n or not (tokens[k].type == token.OP and tokens[k].string == "("):
+                continue
+            profundidad = 0
+            for m in range(k, n):
+                tok = tokens[m]
+                if tok.type == token.OP and tok.string in _OPS_ABRE:
+                    profundidad += 1
+                elif tok.type == token.OP and tok.string in _OPS_CIERRA:
+                    profundidad -= 1
+                    if profundidad == 0:
+                        break
+                elif tok.type == token.NAME and profundidad == 1:
+                    ant = _anterior_significativo(tokens, m)
+                    if ant is not None and (
+                        (ant.type == token.OP and ant.string in {"(", ",", "*", "**"})
+                    ):
+                        ligados.add(tok.string)
+        elif actual.type == token.NAME and actual.string == "lambda":
+            profundidad = 0
+            for m in range(i + 1, n):
+                tok = tokens[m]
+                if tok.type == token.OP and tok.string in _OPS_ABRE:
+                    profundidad += 1
+                elif tok.type == token.OP and tok.string in _OPS_CIERRA:
+                    profundidad -= 1
+                elif tok.type == token.OP and tok.string == ":" and profundidad == 0:
+                    break
+                elif tok.type == token.NAME and profundidad == 0:
+                    ant = _anterior_significativo(tokens, m)
+                    if ant is not None and (
+                        (ant.type == token.NAME and ant.string == "lambda")
+                        or (ant.type == token.OP and ant.string in {",", "*", "**"})
+                    ):
+                        ligados.add(tok.string)
+        elif actual.type == token.OP and actual.string in _OPS_ASIGNACION_AUMENTADA:
+            previo = i - 1
+            while previo >= 0 and tokens[previo].type in _TRIVIA:
+                previo -= 1
+            if previo >= 0 and tokens[previo].type == token.NAME and not es_atributo(previo):
+                ligados.add(tokens[previo].string)
+
+    # Objetivos de asignacion simple (incluye desempaquetado y encadenado).
+    inicio = 0
+    profundidad = 0
+    for i, actual in enumerate(tokens):
+        if actual.type in (token.NEWLINE, token.INDENT, token.DEDENT, token.ENDMARKER):
+            inicio = i + 1
+            profundidad = 0
+        elif actual.type == token.OP and actual.string in _OPS_ABRE:
+            profundidad += 1
+        elif actual.type == token.OP and actual.string in _OPS_CIERRA:
+            profundidad -= 1
+        elif actual.type == token.OP and actual.string == ";" and profundidad == 0:
+            inicio = i + 1
+        elif actual.type == token.OP and actual.string == "=" and profundidad == 0:
+            ligados |= _nombres_en_objetivo(tokens, inicio, i)
+            inicio = i + 1
+    return ligados
+
+
+def _nombres_en_objetivo(tokens: list[tokenize.TokenInfo], inicio: int, fin: int) -> set[str]:
+    """NAMEs que liga un objetivo `tokens[inicio:fin]` de una asignacion. Solo
+    cuentan los de listas/tuplas (`a, (b, c)`); los que van dentro de una
+    llamada o subindice (`f(x)[i] =`) no ligan nada."""
+    resultado: set[str] = set()
+    pila: list[bool] = []
+    for k in range(inicio, fin):
+        tok = tokens[k]
+        if tok.type == token.OP and tok.string in _OPS_ABRE:
+            anterior = _anterior_significativo(tokens, k)
+            es_visualizacion = not (
+                anterior is not None
+                and (
+                    (anterior.type == token.NAME and anterior.string not in HARD_KEYWORDS)
+                    or (anterior.type == token.OP and anterior.string in {")", "]", "}"})
+                )
+            )
+            pila.append(es_visualizacion)
+        elif tok.type == token.OP and tok.string in _OPS_CIERRA:
+            if pila:
+                pila.pop()
+        elif tok.type == token.NAME and all(pila):
+            anterior = _anterior_significativo(tokens, k)
+            if anterior is not None and anterior.type == token.OP and anterior.string == ".":
+                continue
+            sig = _siguiente_significativo(tokens, k)
+            if sig is not None and sig.type == token.OP and sig.string in {"(", "[", "."}:
+                continue
+            resultado.add(tok.string)
+    return resultado
 
 
 def _es_carga_builtin(
@@ -529,6 +686,9 @@ def analizar_tokens(
         raise PitonSyntaxError(archivo, str(error.args[0]), ubicacion[0], ubicacion[1]) from error
 
     asignados = _nombre_asignado_en_scope(tokens)
+    # SHADOW_BINDING_V1: `tipo` (soft keyword -> type) ligado por el programa
+    # (`tipo = 5`, `funcion f(tipo)`) no es el tipo builtin.
+    _tipo_ligado = "tipo" in _nombres_ligados_por_binding(tokens)
     _IDENTIFICADORES_DECIDIDOS.clear()
     mapa = MapaFuente()
     salida: list[tokenize.TokenInfo] = []
@@ -676,9 +836,11 @@ def analizar_tokens(
                         pending_match_column = actual.start[1]
                     elif actual.string == "caso" and match_depth > 0 and _es_contexto_caso(tokens, indice):
                         es_keyword = True
-                    elif actual.string == "tipo" and _es_contexto_tipo(tokens, indice):
+                    elif actual.string == "tipo" and _es_contexto_tipo(tokens, indice) and (
+                        not _tipo_ligado or _siguiente_es_nombre(tokens, indice)
+                    ):
                         es_keyword = True
-                elif actual.string == "tipo" and _es_llamada_builtin(tokens, indice):
+                elif actual.string == "tipo" and not _tipo_ligado and _es_llamada_builtin(tokens, indice):
                     # TIPO_CALL_V1: `tipo(x)` is the builtin `type` even in the
                     # middle of an expression. The native backends implement
                     # `tipo`, so the translation must be `type(x)`; leaving it

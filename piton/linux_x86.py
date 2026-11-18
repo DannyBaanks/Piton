@@ -9829,6 +9829,18 @@ def _raise_or_propagate(out, function):
 # program error (they have no C value), but as a NAME they must not shadow a
 # user variable of the same name (`suma = 0`).
 _FUNC_ONLY_BUILTINS = frozenset({"suma", "redondear"})
+# SHADOW_ALIAS_V1: nombres (en espanol o python) que el programa puede volver a
+# ligar. Un load de uno de estos nombres ligado por el usuario no conserva el
+# alias de builtin (ver el load en _emit_instruction).
+_SHADOWABLE_BUILTIN_NAMES = frozenset(_BUILTINS) | frozenset({
+    "objeto", "diccionario", "octetos", "arreglo_bytes", "rebanada",
+    "conjunto_inmutable", "vista_memoria", "metodo_estatico", "metodo_clase",
+    "propiedad", "booleano", "complejo", "decimal", "entero", "texto",
+    "tupla", "lista", "conjunto", "rango", "longitud", "enumerar",
+    "imprimir", "entrada", "abrir", "ordenar", "suma", "redondear",
+    "es_instancia", "es_subclase", "tiene_atr", "obtener_atr",
+    "fijar_atr", "establecer_atr", "formato", "tipo",
+})
 # ISINSTANCE_BUILTIN_CLASS_V1: clases builtin ESTANDAR. Se cargan con el
 # prefijo "class:" igual que las clases de protocolo (os.PathLike), pero su
 # isinstance se resuelve por TIPO (dict/list/object/...), no por nombre de
@@ -17183,7 +17195,19 @@ class LinuxCEmitter:
                 # DEL_NAME_V1: borrado estatico -> NameError en build modelado
                 raise NativeBuildError(f"NameError: name '{source}' is not defined")
 
-            aliases[result] = source
+            # SHADOW_ALIAS_V1: un nombre del programa (parametro, local, loop
+            # o global del modulo) que tapa un builtin homonimo deja de ser
+            # ese builtin, igual que en CPython (LEGB). Sin alias, el call
+            # posterior no despacha al builtin (`objeto = lambda x: x`, o un
+            # parametro `lista` llamado con una lambda).
+            _user_bound_name = (
+                source in function.params
+                or source in getattr(function, "cell_params", ())
+                or source in self._cur_slots
+                or self._shadowed_name(source, function)
+            )
+            if not (_user_bound_name and source in _SHADOWABLE_BUILTIN_NAMES):
+                aliases[result] = source
             _unbound_value = self._unbound_builtin_values.get(source) or self._module_unbound_builtin_values.get(source)
             if _unbound_value is not None:
                 self._unbound_builtin_values[result] = _unbound_value
@@ -17272,7 +17296,10 @@ class LinuxCEmitter:
                 types[result] = f"class:{source}"
                 out.append(f'    {_name(result)}=(long)piton_object_new("{source}",0); ((PitonObject*){_name(result)})->is_class=1;')
                 return out
-            if source in {"object", "objeto"}:
+            # SHADOW_ALIAS_V1 (ver arriba): los ramos de tipo builtin de abajo
+            # no deben tomar un nombre ligado por el programa: `funcion
+            # f(objeto)` devolvia el marcador de `object` en vez del argumento.
+            if source in {"object", "objeto"} and not _user_bound_name:
                 # OBJECT_CLASS_V1: `object` es la clase base. Como VALOR debe
                 # ser una clase (repr "<class 'object'>"), pero como
                 # CONSTRUCTOR debe crear una instancia (dataclasses usa
@@ -17282,17 +17309,17 @@ class LinuxCEmitter:
                 aliases[result] = source
                 out.append(f"    {_name(result)}=(long)piton_builtin_class_marker(\"object\");")
                 return out
-            if source in {"bytes", "octetos"}:
+            if source in {"bytes", "octetos"} and not _user_bound_name:
                 types[result] = "class:bytes"
                 aliases[result] = source
                 out.append(f"    {_name(result)}=0;")
                 return out
-            if source in {"bytearray", "arreglo_bytes"}:
+            if source in {"bytearray", "arreglo_bytes"} and not _user_bound_name:
                 types[result] = "class:bytearray"
                 aliases[result] = source
                 out.append(f"    {_name(result)}=0;")
                 return out
-            if source in {"dict", "diccionario", "slice", "rebanada"}:
+            if source in {"dict", "diccionario", "slice", "rebanada"} and not _user_bound_name:
                 # CLASS_LOAD_V1: dict.fromkeys / slice(...) necesitan el tipo
                 # de clase para rutear el classmethod.
                 _cn = "dict" if source in {"dict", "diccionario"} else "slice"
