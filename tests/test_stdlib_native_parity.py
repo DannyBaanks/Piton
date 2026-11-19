@@ -98,11 +98,14 @@ class ZlibOsNativeV1(StdlibParityCase):
         )
 
     def test_compress_decompress_round_trip(self):
+        import zlib as _py_zlib
         native = _native(
             "importar zlib\ns = b\"x\"\nt = zlib .compress (s )\n"
             "imprimir (zlib .decompress (t ) == s )\nimprimir (len (t ))\n"
         )
-        self.assertEqual((native.returncode, native.stdout), (0, "True\n12\n"), native.stderr)
+        # Wave 19 zlib_native matches CPython's compressed length (9 bytes for b"x").
+        expected = f"True\n{len(_py_zlib.compress(b'x'))}\n"
+        self.assertEqual((native.returncode, native.stdout), (0, expected), native.stderr)
 
 
 class StatisticsNativeV1(StdlibParityCase):
@@ -178,7 +181,7 @@ class SilentStubsFailClosedV1(StdlibParityCase):
 
     CALLS = [
         "pickle .dumps (1 )",
-        "timeit .timeit ('x' )",
+        # timeit.timeit fue implementado en 26898e8 (feat(stdlib): run literal timeit sources natively)
         "filecmp .cmp ('a' ,'b' )",
         "unicodedata .name ('a' )",
         "unicodedata .digit ('1' )",

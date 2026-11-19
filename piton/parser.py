@@ -215,7 +215,9 @@ class Parser:
             elif val == "continuar":
                 self._advance()
                 return ContinueStmt().set_pos(tok)
-            elif val == "tipo":
+            elif val == "tipo" and self._peek_n(1).type == TokenType.NAME:
+                # SHADOW_BINDING_V1: `tipo` solo es la sentencia `type X = ...`
+                # cuando un NAME le sigue; `tipo = 5` es una variable comun.
                 return self._parse_type_alias()
 
         # Expression statement / assignment / annotated assign

@@ -56,9 +56,8 @@ class CaseV1(unittest.TestCase):
             compare_native_to_cpython("imprimir('a'.upper('x'))\n")
 
     def test_non_ascii_case_fails_closed_at_runtime(self):
-        result = compare_native_to_cpython("imprimir('á'.upper())\n")
-        self.assertEqual(result.native.returncode, 1)
-        self.assertIn(b"ValueError", result.native.stderr)
+        # Actualizado: upper() sobre Latin-1 ('á' -> 'Á') ahora coincide con CPython.
+        _assert_matches(self, "imprimir('á'.upper())\n")
 
 
 class FindV1(unittest.TestCase):

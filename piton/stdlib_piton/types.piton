@@ -70,8 +70,10 @@ clase MethodWrapperType :
     pasar
 
 
-clase ModuleType :
-    pasar
+# ModuleType is the runtime class of module objects. Reuse the class object
+# returned by type(sys), matching CPython's types.ModuleType identity.
+importar sys
+ModuleType = type(sys)
 
 
 clase NoneType :

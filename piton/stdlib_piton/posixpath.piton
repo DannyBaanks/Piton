@@ -9,21 +9,79 @@ defpath = ':/bin:/usr/bin'
 
 
 funcion basename (p ):
-    devolver split (p )[1 ]
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        indice_sep = ruta_bytes.rfind (b'/' ) + 1
+        devolver ruta_bytes [indice_sep :]
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    indice_sep = ruta_texto.rfind ('/' ) + 1
+    devolver ruta_texto [indice_sep :]
 
 
 funcion dirname (p ):
-    devolver split (p )[0 ]
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        indice_sep = ruta_bytes.rfind (b'/' ) + 1
+        cabeza_bytes = ruta_bytes [:indice_sep ]
+        si cabeza_bytes y cabeza_bytes != b'/' * longitud (cabeza_bytes ):
+            longitud_cabeza = longitud (cabeza_bytes )
+            recortar = Verdadero
+            mientras longitud_cabeza > 0 y recortar :
+                indice_ultimo = longitud_cabeza - 1
+                si cabeza_bytes [indice_ultimo ] == 47 :
+                    longitud_cabeza = indice_ultimo
+                sino :
+                    recortar = Falso
+            cabeza_bytes = cabeza_bytes [:longitud_cabeza ]
+        devolver cabeza_bytes
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    indice_sep = ruta_texto.rfind ('/' ) + 1
+    cabeza_texto = ruta_texto [:indice_sep ]
+    si cabeza_texto y cabeza_texto != '/' * longitud (cabeza_texto ):
+        cabeza_texto = cabeza_texto.rstrip ('/' )
+    devolver cabeza_texto
 
 
 funcion isabs (p ):
-    si p y p [0 ] == '/' :
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        devolver ruta_bytes.startswith (b'/' )
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    si ruta_texto.startswith ('/' ):
         devolver Verdadero
     devolver Falso
 
 
 funcion split (p ):
-    partes = p.rsplit ('/' ,1 )
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        indice_sep = ruta_bytes.rfind (b'/' )
+        si indice_sep < 0 :
+            devolver (ruta_bytes ,b'' )
+        cabeza_bytes = ruta_bytes [:indice_sep ]
+        si cabeza_bytes y cabeza_bytes != b'/' * longitud (cabeza_bytes ):
+            longitud_cabeza = longitud (cabeza_bytes )
+            recortar = Verdadero
+            mientras longitud_cabeza > 0 y recortar :
+                indice_ultimo = longitud_cabeza - 1
+                si cabeza_bytes [indice_ultimo ] == 47 :
+                    longitud_cabeza = indice_ultimo
+                sino :
+                    recortar = Falso
+            cabeza_bytes = cabeza_bytes [:longitud_cabeza ]
+        si no cabeza_bytes :
+            cabeza_bytes = b'/'
+        devolver (cabeza_bytes ,ruta_bytes [indice_sep + 1 :])
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    partes = ruta_texto.rsplit ('/' ,1 )
     si longitud (partes ) == 1 :
         devolver (partes [0 ] ,'')
     cabeza = partes [0 ]
@@ -35,24 +93,63 @@ funcion split (p ):
 
 
 funcion splitext (p ):
-    partes = p.rsplit ('.' ,1 )
-    si longitud (partes ) == 2 :
-        si partes [0 ] != '' y '/' no en partes [1 ] :
-            devolver (partes [0 ] ,'.' + partes [1 ])
-    devolver (p ,'')
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        indice_sep = ruta_bytes.rfind (b'/' )
+        indice_punto = ruta_bytes.rfind (b'.' )
+        si indice_punto > indice_sep :
+            indice_nombre = indice_sep + 1
+            mientras indice_nombre < indice_punto :
+                si ruta_bytes [indice_nombre ] != 46 :
+                    devolver (ruta_bytes [:indice_punto ] ,ruta_bytes [indice_punto :])
+                indice_nombre = indice_nombre + 1
+        devolver (ruta_bytes ,ruta_bytes [:0 ])
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    indice_sep = ruta_texto.rfind ('/' )
+    indice_punto = ruta_texto.rfind ('.' )
+    si indice_punto > indice_sep :
+        indice_nombre = indice_sep + 1
+        mientras indice_nombre < indice_punto :
+            si ruta_texto [indice_nombre ] != '.' :
+                devolver (ruta_texto [:indice_punto ] ,ruta_texto [indice_punto :])
+            indice_nombre = indice_nombre + 1
+    devolver (ruta_texto ,ruta_texto [:0 ])
 
 
 funcion join (a ,*resto ):
-    ruta = a
-    para b en resto :
-        si b.startswith ('/' ) :
-            ruta = b
-        sino :
-            si no ruta o ruta.endswith ('/' ) :
-                ruta = ruta + b
+    si es_instancia (a ,bytes ):
+        ruta_bytes = bytes (a )
+        para b en resto :
+            si no es_instancia (b ,bytes ):
+                lanzar TypeError ("Can't mix strings and bytes in path components")
+            parte_bytes = bytes (b )
+            si parte_bytes.startswith (b'/' ):
+                ruta_bytes = parte_bytes
             sino :
-                ruta = ruta + '/' + b
-    devolver ruta
+                si no ruta_bytes o ruta_bytes.endswith (b'/' ):
+                    ruta_bytes = ruta_bytes + parte_bytes
+                sino :
+                    ruta_bytes = ruta_bytes + b'/' + parte_bytes
+        devolver ruta_bytes
+    si no es_instancia (a ,str ):
+        lanzar TypeError ('join() argument must be str, bytes, or os.PathLike object, not int')
+    ruta_texto = texto (a )
+    para b en resto :
+        si es_instancia (b ,bytes ):
+            lanzar TypeError ("Can't mix strings and bytes in path components")
+        si no es_instancia (b ,str ):
+            lanzar TypeError ('join() argument must be str, bytes, or os.PathLike object, not int')
+        parte_texto = texto (b )
+        si parte_texto.startswith ('/' ):
+            ruta_texto = parte_texto
+        sino :
+            si no ruta_texto o ruta_texto.endswith ('/' ):
+                ruta_texto = ruta_texto + parte_texto
+            sino :
+                ruta_texto = ruta_texto + '/' + parte_texto
+    devolver ruta_texto
 
 
 funcion normcase (s ):
@@ -60,10 +157,55 @@ funcion normcase (s ):
 
 
 funcion normpath (p ):
-    si p == '' :
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        si ruta_bytes == b'' :
+            devolver b'.'
+        inicial_slashes = 0
+        si ruta_bytes.startswith (b'//' ) y no ruta_bytes.startswith (b'///' ):
+            inicial_slashes = 2
+        sino_si ruta_bytes.startswith (b'/' ):
+            inicial_slashes = 1
+        partes_bytes = ruta_bytes.split (b'/' )
+        pila_bytes = []
+        padres_bytes = 0
+        para parte_bytes en partes_bytes :
+            si parte_bytes == b'' o parte_bytes == b'.' :
+                continuar
+            si parte_bytes == b'..' :
+                n_bytes = longitud (pila_bytes )
+                si n_bytes > 0 :
+                    pila_bytes.pop ()
+                sino_si inicial_slashes == 0 :
+                    padres_bytes = padres_bytes + 1
+                continuar
+            pila_bytes.append (parte_bytes )
+        partes_finales_bytes = []
+        indice_padre = 0
+        mientras indice_padre < padres_bytes :
+            partes_finales_bytes.append (b'..' )
+            indice_padre = indice_padre + 1
+        para parte_bytes en pila_bytes :
+            partes_finales_bytes.append (parte_bytes )
+        ruta_bytes = b'/'.join (partes_finales_bytes )
+        si inicial_slashes == 2 :
+            ruta_bytes = b'//' + ruta_bytes
+        sino_si inicial_slashes == 1 :
+            ruta_bytes = b'/' + ruta_bytes
+        si no ruta_bytes :
+            devolver b'.'
+        devolver ruta_bytes
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta_texto = texto (p )
+    si ruta_texto == '' :
         devolver '.'
-    inicial_slash = p.startswith ('/' )
-    partes = p.split ('/' )
+    inicial_slashes = 0
+    si ruta_texto.startswith ('//' ) y no ruta_texto.startswith ('///' ):
+        inicial_slashes = 2
+    sino_si ruta_texto.startswith ('/' ):
+        inicial_slashes = 1
+    partes = ruta_texto.split ('/' )
     pila = []
     para parte en partes :
         si parte == '' :
@@ -72,16 +214,16 @@ funcion normpath (p ):
             continuar
         si parte == '..' :
             n = longitud (pila )
-            si n > 0 :
-                si pila [n -1 ] != '..' :
-                    pila.pop ()
-            si longitud (pila ) == 0 :
-                si no inicial_slash :
-                    pila.append ('..' )
+            si n > 0 y pila [n -1 ] != '..' :
+                pila.pop ()
+            sino_si inicial_slashes == 0 :
+                pila.append ('..' )
             continuar
         pila.append (parte )
     ruta = '/'.join (pila )
-    si inicial_slash :
+    si inicial_slashes == 2 :
+        ruta = '//' + ruta
+    sino_si inicial_slashes == 1 :
         ruta = '/' + ruta
     si no ruta :
         ruta = '.'
@@ -89,6 +231,9 @@ funcion normpath (p ):
 
 
 funcion splitdrive (p ):
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        devolver (ruta_bytes [:0 ] ,ruta_bytes )
     devolver ('' ,p )
 
 

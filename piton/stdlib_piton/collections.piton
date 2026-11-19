@@ -308,7 +308,10 @@ clase _NTInst :
         i = 0
         n = len(self._campos)
         mientras i < n :
-            partes.append (self._campos[i] + "=" + str(self._valores[i]))
+            si self._valores[i] es Nada :
+                partes.append (self._campos[i] + "=None")
+            sino :
+                partes.append (self._campos[i] + "=" + str(self._valores[i]))
             i = i + 1
         devolver self._nombre + "(" + ", ".join(partes) + ")"
 

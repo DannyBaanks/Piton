@@ -1,9 +1,16 @@
-clase AbstractAsyncContextManager :
+desde abc importar ABC, abstractmethod
+
+
+clase AbstractAsyncContextManager(ABC):
     pasar
 
 
-clase AbstractContextManager :
-    pasar
+clase AbstractContextManager(ABC):
+    funcion __enter__(self):
+        devolver self
+    @abstractmethod
+    funcion __exit__(self, exc_type, exc_value, traceback):
+        devolver Nada
 
 
 contextmanager = 0

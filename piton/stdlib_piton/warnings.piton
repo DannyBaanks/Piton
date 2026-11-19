@@ -15,16 +15,19 @@ funcion warn (mensaje,category=Nada,stacklevel=1,source='None'):
     imprimir(mensaje,file=2)
 
 funcion simplefilter (action,category=Nada,lineno=0,append=Falso):
+    global _warn_filtros
     si append:
         _warn_filtros.append([action,category,lineno])
     sino:
         _warn_filtros = [[action,category,lineno]]
 
 funcion filterwarnings (action,message='',category=Nada,module='',lineno=0,append=Falso):
+    global _warn_filtros
     si append:
         _warn_filtros.append([action,category,lineno])
     sino:
         _warn_filtros = [[action,category,lineno]]
 
 funcion resetwarnings ():
+    global _warn_filtros
     _warn_filtros = []

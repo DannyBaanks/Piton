@@ -95,25 +95,41 @@ def test_native_timeit_number_must_be_int():
 
 
 def test_native_measurement_fails_closed_not_a_fake_float():
+    # Actualizado tras 26898e8 (feat(stdlib): run literal timeit sources natively):
+    # los literales validos miden en nativo y devuelven float >= 0 como CPython;
+    # las fuentes con nombres libres ('x', 'y') fallan cerrado en compilacion.
+    import pytest
+    from piton.x86 import NativeBuildError
+
     code = (
         "desde timeit importar Timer\n"
         "importar timeit\n"
-        + _probe("Timer('a=1').timeit()", "NotImplementedError")
-        + _probe("Timer('a=1').timeit(number=10)", "NotImplementedError")
-        + _probe("timeit.timeit('x', 'y', 100)", "NotImplementedError")
-        + _probe("timeit.timeit()", "NotImplementedError")
+        "t1 = Timer('a=1').timeit(10)\n"
+        "t2 = Timer('a=1').timeit(number=10)\n"
+        "t3 = timeit.timeit(number=10)\n"
+        "imprimir (isinstance(t1, float), t1 >= 0)\n"
+        "imprimir (isinstance(t2, float), t2 >= 0)\n"
+        "imprimir (isinstance(t3, float), t3 >= 0)\n"
     )
-    assert _run_native(code) == "NotImplementedError\n" * 4
+    assert _run_native(code) == "True True\nTrue True\nTrue True\n"
+    with pytest.raises(NativeBuildError):
+        _run_native("importar timeit\ntimeit.timeit('x', 'y', 100)\n")
 
 
 def test_native_module_timeit_validates_before_failing_closed():
+    # Actualizado tras 26898e8: stmt no literal falla cerrado en build; number no int lanza TypeError.
+    import pytest
+    from piton.x86 import NativeBuildError
+
+    with pytest.raises(NativeBuildError):
+        _run_native("importar timeit\ntimeit.timeit(3)\n")
     code = (
         "importar timeit\n"
-        + _probe("timeit.timeit(3)", "ValueError")
-        + _probe("timeit.timeit('x', 'y', 'n')", "TypeError")
-        + _probe("timeit.timeit('x', 'y', 5)", "NotImplementedError")
+        + _probe("timeit.timeit('a=1', 'a=0', 'n')", "TypeError")
+        + "t = timeit.timeit('a=1', 'a=0', 5)\n"
+        + "imprimir (isinstance(t, float), t >= 0)\n"
     )
-    assert _run_native(code) == "ValueError\nTypeError\nNotImplementedError\n"
+    assert _run_native(code) == "TypeError\nTrue True\n"
 
 
 def test_ejecutar_timer_returns_non_negative_float():

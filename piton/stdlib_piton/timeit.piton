@@ -1,10 +1,9 @@
 # timeit.piton — API de timeit.Timer y timeit.timeit (fase de validacion).
 #
-# Limitacion honesta del backend nativo: PITON no tiene eval()/exec() en tiempo de
-# ejecucion, asi que no puede ejecutar el texto de stmt/setup, y time.perf_counter /
-# time.monotonic lanzan NotImplementedError (no hay reloj de alta resolucion expuesto).
-# Por eso Timer valida sus argumentos como CPython y timeit()/Timer.timeit() fallan
-# cerrado con NotImplementedError en lugar de devolver tiempos inventados.
+# El backend Linux compila los call-sites con stmt/setup literales a MIR y los
+# ejecuta en un loop nativo con CLOCK_MONOTONIC. Los call-sites con fuente
+# dinamica fallan cerrado durante el build; este metodo conserva el error como
+# defensa para llamadas indirectas que el compilador no puede especializar.
 #
 # Nota de compilacion: los parametros usan Nada como defecto y los valores por defecto
 # reales ('pass', 1000000) se aplican dentro. Con un defecto str/int el compilador nativo

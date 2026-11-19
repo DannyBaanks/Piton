@@ -40,7 +40,9 @@ class ZlibNativeV1(unittest.TestCase):
         self.assertEqual(native.returncode, 0, native.stderr)
         same, length, checksum, empty_ok, encoded = native.stdout.splitlines()
         self.assertEqual(same, "True")
-        self.assertEqual(int(length), len(data) + 11)
+        # Wave 19 zlib_native emits real RFC1950 DEFLATE streams matching CPython,
+        # replacing the old stored-only (len(data) + 11) encoder.
+        self.assertEqual(int(length), len(zlib.compress(data)))
         self.assertEqual(int(checksum), zlib.crc32(data))
         self.assertEqual(empty_ok, "True")
         self.assertEqual(zlib.decompress(bytes.fromhex(encoded)), data)

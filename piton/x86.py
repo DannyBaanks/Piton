@@ -1085,6 +1085,13 @@ class Win64NasmEmitter:
 
     def _emit_instruction(self, instruction: MIRInstruction, labels: dict[str, str]) -> None:
         op, args, result = instruction.op, instruction.args, instruction.result
+        if op == "yf_step":
+            # YF_STEP_V1 (Windows): sin reenvio de send al delegado; se emite
+            # como el iter_next previo (comportamiento Windows sin cambios).
+            op, args = "iter_next", (args[0], args[2])
+        if op == "yf_close":
+            # YF_CLOSE_V1 (Windows): sin cierre del delegado (como antes).
+            return
         if op == "iter_new":
             source = args[0]
             source_type = self.types.get(source, "")
@@ -2968,6 +2975,10 @@ class Win64NasmEmitter:
             self.types[result] = "int"
         elif op == "gen_send":
             gen_ref, send_value, handler_label = args
+            if isinstance(handler_label, list):
+                # GEN_SEND_EXC_V2 (Windows): el despacho por clase de varios
+                # handlers aun no esta portado; fallar cerrado en vez de enrutar mal.
+                raise NativeBuildError("Windows backend: generator send() inside multi-except try is not supported yet")
             self._load_operand(gen_ref, "rcx")
             self._load_operand(send_value, "rdx")
             self.lines.append("    call piton_gen_send")

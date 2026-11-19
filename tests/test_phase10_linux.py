@@ -1223,8 +1223,13 @@ class Phase10LinuxGates(unittest.TestCase):
                 linux_run_cmd([linux_path]),
                 capture_output=True, check=False, timeout=10,
             )
-        self.assertEqual(run.returncode, 2)
-        self.assertIn(b"TypeError: closure called with wrong number of arguments", run.stderr)
+        # Wave 18 (decorator_segfault, 20742cf): a closure called with the
+        # wrong arity used to abort with a native-only rc 2 that no `excepto`
+        # could catch. It now raises a real TypeError (rc 1), like CPython.
+        # The caught message still differs (see the w18 pending list), so this
+        # gate checks the uncaught behaviour only: rc 1 and a TypeError.
+        self.assertEqual(run.returncode, 1)
+        self.assertIn(b"TypeError", run.stderr)
 
     # ── Linux packages (IMPORT_PACKAGE_V1) ──────────────────────────────
 
