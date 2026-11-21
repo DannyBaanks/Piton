@@ -138,6 +138,17 @@ _BUILTIN_BASES = {
     "dict", "list", "tuple", "set", "frozenset",
     "str", "int", "float", "bytes", "bytearray",
     "Exception", "BaseException",
+    # Builtin types used as base classes in stdlib (Tier A targets)
+    "GenericAlias", "type",
+    "collections__abc__GenericAlias",
+    "types__GenericAlias",
+    "_compression__BaseStream", "io__BufferedIOBase", "_io__BufferedIOBase",
+    "io__IOBase", "_io__IOBase",
+    "inspect___Traceback",
+    "inspect___FrameInfo",
+    "_compression__DecompressReader", "io__RawIOBase", "_io__RawIOBase",
+    # abc.ABCMeta is used as a base class in _collections_abc
+    "abc__ABCMeta",
 }
 # COLLECTION_SUBCLASS_V1: `clase X(list)` / `clase X(dict)`. La instancia es un
 # objeto de usuario que guarda la coleccion builtin real en el atributo oculto
@@ -1430,6 +1441,27 @@ class MIRLowerer:
         name = getattr(callee, "name", None)
         if not isinstance(name, str) or name in class_local_names:
             return False
+        
+        # Marker decorators like _sslcopydoc and abstractmethod are always supported
+        # even when user-defined, because they are transparent markers
+        if name in {"_sslcopydoc", "abstractmethod"}:
+            position = self._module_binding_positions.get(name)
+            if position is None or position >= self._current_class_position:
+                return False
+            # Decorator expressions execute in the class body. A class-local or
+            # forward global reference cannot be replaced with a zero-valued C
+            # global without changing CPython's NameError behavior.
+            for part in self._walk(expression):
+                if getattr(part, "kind", None) != HIRKind.LOAD:
+                    continue
+                loaded_name = getattr(part, "name", None)
+                if loaded_name in class_local_names:
+                    return False
+                bound_at = self._module_binding_positions.get(loaded_name)
+                if bound_at is None or bound_at >= self._current_class_position:
+                    return False
+            return True
+        
         function_node = self._module_func_nodes.get(name)
         position = self._module_binding_positions.get(name)
         if (function_node is None or position is None
@@ -1557,10 +1589,63 @@ class MIRLowerer:
                         raise MIRLoweringError(f"native duplicate @{method.name}.{prop} on '{class_name}'")
                     return f"{class_name}__{method.name}__{prop}", prop, method.name
 
+        # Handle stacked descriptor + marker decorators (e.g., @property + @abstractmethod)
+        # The marker decorators are transparent and don't change the descriptor behavior.
+        descriptor_decorators = {"staticmethod", "metodo_estatico", "classmethod", "metodo_clase", "property", "propiedad"}
         marker_decorators = {
             "abstractmethod", "contextmanager", "_sslcopydoc", "lru_cache",
             "cache", "overload",
         }
+        
+        # Check if all decorators are either descriptor or marker decorators
+        all_known = True
+        descriptor_role = None
+        descriptor_name = None
+        for dec in decorators:
+            name = getattr(dec, "name", None) or getattr(dec, "attr", None)
+            if name in descriptor_decorators:
+                if descriptor_role is not None:
+                    all_known = False
+                    break
+                if name in {"staticmethod", "metodo_estatico"}:
+                    descriptor_role = "staticmethod"
+                elif name in {"classmethod", "metodo_clase"}:
+                    descriptor_role = "classmethod"
+                elif name in {"property", "propiedad"}:
+                    descriptor_role = "getter"
+                descriptor_name = name
+            elif name not in marker_decorators:
+                all_known = False
+                break
+        
+        if all_known and descriptor_role == "getter":
+            # `@abstractmethod` applied on top of a property object fails in
+            # CPython (property.__isabstractmethod__ is read-only).
+            prop_index = next(
+                i for i, d in enumerate(decorators)
+                if (getattr(d, "name", None) or getattr(d, "attr", None)) in {"property", "propiedad"}
+            )
+            for outer in decorators[:prop_index]:
+                if (getattr(outer, "name", None) or getattr(outer, "attr", None)) == "abstractmethod" \
+                        and not (getattr(outer, "kind", None) == HIRKind.LOAD
+                                 and "abstractmethod" in self._module_func_nodes):
+                    raise MIRLoweringError(
+                        "attribute '__isabstractmethod__' of 'property' objects is not writable"
+                    )
+        if all_known and descriptor_role is not None:
+            # All decorators are known: one descriptor + zero or more markers
+            # The markers are transparent, so we just apply the descriptor
+            if descriptor_role == "staticmethod":
+                self.static_methods.add(f"{class_name}__{method.name}")
+                return f"{class_name}__{method.name}", "staticmethod", method.name
+            if descriptor_role == "classmethod":
+                self.class_methods.add(f"{class_name}__{method.name}")
+                return f"{class_name}__{method.name}", "classmethod", method.name
+            if descriptor_role == "getter":
+                if method.name in property_methods:
+                    raise MIRLoweringError(f"native duplicate @property '{method.name}' on '{class_name}'")
+                property_methods[method.name] = {"getter": None, "setter": None, "deleter": None}
+                return f"{class_name}__{method.name}", "getter", method.name
 
         def is_legacy_marker(dec: HIRNode) -> bool:
             name = getattr(dec, "name", None) or getattr(dec, "attr", None)
@@ -1575,11 +1660,8 @@ class MIRLowerer:
             # Preserve the historical module.attribute marker spellings.
             return getattr(dec, "kind", None) == HIRKind.ATTR
 
-        # These established marker decorators have native lowering of their
-        # own. Do not route them through the user-wrapper materialization path:
-        # doing so changes how class method markers are represented and can
-        # reject bundled stdlib decorators before their native handling runs.
-        if all(is_legacy_marker(dec) for dec in decorators):
+        # Marker-only stacks keep their established native lowering.
+        if descriptor_role is None and all(is_legacy_marker(dec) for dec in decorators):
             return f"{class_name}__{method.name}", None, method.name
 
         unsupported_results = {*marker_decorators - {"lru_cache"}, "cached_property"}
@@ -1824,11 +1906,19 @@ class MIRLowerer:
             # no lo puede respetar el camino tipado/inyectado (p.ej. print de
             # un __repr__ propio): falla cerrado en build.
             # EXCEPCION: dict subclases pueden sobreescribir __setitem__,
-            # __getitem__ y __missing__ con paridad CPython.
-            allowed_dict_dunders = frozenset({"__setitem__", "__getitem__", "__missing__"})
+            # __getitem__ y __missing__ con paridad CPython. __hash__ se
+            # permite en ambas bases (HASH_DUNDER_V1 lo despacha por MRO).
+            allowed_dict_dunders = frozenset({"__setitem__", "__getitem__", "__missing__", "__hash__"})
+            # LIST_HASH_DUNDER_V1: una subclase de list puede sobreescribir
+            # __hash__. CPython la vuelve hashable y `hash(obj)` despacha al
+            # metodo por MRO (HASH_DUNDER_V1 en linux_x86). Es el caso real de
+            # functools._HashedSeq (guarda hash(tup) en __init__ y lo devuelve).
+            allowed_list_dunders = frozenset({"__hash__"})
             for name in sorted(defined):
                 if name.startswith("__") and name.endswith("__") and name != "__init__":
                     if kind == "dict" and name in allowed_dict_dunders:
+                        continue
+                    if kind == "list" and name in allowed_list_dunders:
                         continue
                     raise MIRLoweringError(
                         f"native {kind}-subclass overriding '{name}' is not supported"
@@ -1958,6 +2048,7 @@ class MIRLowerer:
         self.static_methods = set()
         self.class_methods = set()
         self.decorated_classes = set()
+        self.total_ordering_classes = set()
         self.async_functions = set()
         self.async_generators = set()
         self.module_aliases = {}
@@ -2143,8 +2234,10 @@ class MIRLowerer:
                             else:
                                 # Allow user-defined packages to be imported
                                 pass
-                        if alias.name in imported_modules or alias.name in {"asyncio", "math", "sys", "os", "terminal", "builtins"} or alias.name in _NATIVE_MODULE_CONSTS:
-                            self.module_aliases[alias.asname or alias.name] = alias.name
+                        # Always add imported modules to module_aliases so that
+                        # attribute accesses like inspect._FrameInfo can be resolved
+                        # to their qualified names (e.g., inspect___FrameInfo).
+                        self.module_aliases[alias.asname or alias.name] = alias.name
                 elif node.kind == HIRKind.IMPORT_FROM:
                     mod_name = getattr(node, "module", None)
                     if getattr(node, "is_star", False):
@@ -2397,10 +2490,7 @@ class MIRLowerer:
                 self._current_class_position = self._module_statement_positions.get(id(node))
                 for class_decorator in getattr(node, "decorators", None) or []:
                     if self._decorator_qualified_name(class_decorator) == "functools.total_ordering":
-                        raise MIRLoweringError(
-                            "native @functools.total_ordering is not supported: "
-                            "generated comparison methods cannot be represented natively"
-                        )
+                        self.total_ordering_classes.add(node.name)
                 # Metaclass keywords are recorded in class_metaclasses below;
                 # their runtime hooks are emitted with module class creation.
                 _meta_keywords = [
@@ -2552,6 +2642,9 @@ class MIRLowerer:
                                 self.function_aliases = {}
                             self.function_aliases[f"{_cname}__{_aname}"] = f"{_cname}__{_vname}"
             self._finalize_mro()
+            # Process @functools.total_ordering: synthesize missing comparison methods
+            for cls_name in self.total_ordering_classes:
+                self._synthesize_total_ordering(cls_name)
             for node in module_body:
                 # YIELD_SCAN_V1: a `producir` nested inside a loop/if counts —
                 # the old top-level-only scan missed `para x en xs: producir x`
@@ -2974,6 +3067,140 @@ class MIRLowerer:
                     "cannot construct a linearization for multiple inheritance"
                 )
             self.class_mro[name] = mro
+
+    def _synthesize_total_ordering(self, cls_name: str) -> None:
+        """Synthesize missing comparison methods for @functools.total_ordering.
+        
+        CPython's total_ordering finds the 'root' ordering method (__lt__, __le__, __gt__, or __ge__)
+        that is defined and synthesizes the others from it and __eq__.
+        """
+        # Find which ordering methods are defined in this class or its MRO
+        mro = self.class_mro.get(cls_name, [cls_name])
+        
+        # Check which ordering methods are defined (not inherited from object)
+        ordering_methods = {'__lt__', '__le__', '__gt__', '__ge__'}
+        defined_ordering = set()
+        
+        for method_name in ordering_methods:
+            for cls in mro:
+                if method_name in self.classes.get(cls, set()):
+                    # Check if it's defined in this class (not inherited from object)
+                    # For simplicity, we consider it defined if it's in any class in MRO
+                    # that's not 'object' (which isn't in our classes dict)
+                    defined_ordering.add(method_name)
+                    break
+        
+        if not defined_ordering:
+            raise MIRLoweringError(
+                "must define at least one ordering operation: < > <= >="
+            )
+        
+        # CPython prefers __lt__ > __le__ > __gt__ > __ge__
+        root = None
+        for preferred in ['__lt__', '__le__', '__gt__', '__ge__']:
+            if preferred in defined_ordering:
+                root = preferred
+                break
+        
+        # Define the conversion functions (matching CPython's functools._convert)
+        # We need to create synthetic function definitions for each missing method
+        # The conversions are:
+        # __lt__ -> __gt__, __le__, __ge__
+        # __le__ -> __ge__, __lt__, __gt__
+        # __gt__ -> __lt__, __ge__, __le__
+        # __ge__ -> __le__, __gt__, __lt__
+        
+        def _c(op):
+            return ('compare', op, 'self', 'other')
+
+        conversions = {
+            '__lt__': {
+                '__gt__': ('and', ('not', _c('<')), _c('!=')),
+                '__le__': ('or', _c('<'), _c('==')),
+                '__ge__': ('not', _c('<')),
+            },
+            '__le__': {
+                '__ge__': ('or', ('not', _c('<=')), _c('==')),
+                '__lt__': ('and', _c('<='), _c('!=')),
+                '__gt__': ('not', _c('<=')),
+            },
+            '__gt__': {
+                '__lt__': ('and', ('not', _c('>')), _c('!=')),
+                '__ge__': ('or', _c('>'), _c('==')),
+                '__le__': ('not', _c('>')),
+            },
+            '__ge__': {
+                '__le__': ('or', ('not', _c('>=')), _c('==')),
+                '__gt__': ('and', _c('>='), _c('!=')),
+                '__lt__': ('not', _c('>=')),
+            },
+        }
+
+        # For each missing ordering method, create a synthetic function
+        for target_method, expr_tree in conversions.get(root, {}).items():
+            if target_method not in defined_ordering:
+                # Add the method to the class
+                self.classes[cls_name].add(target_method)
+                
+                # Create a synthetic function definition
+                from piton.hir import FuncDef, Arguments, Return, BoolOp, Compare, Load, UnOp
+                
+                # Create the function arguments (self, other)
+                args = Arguments(
+                    posonlyargs=[],
+                    args=['self', 'other'],
+                    kwonlyargs=[],
+                    vararg=None,
+                    kwarg=None,
+                    defaults=[],
+                    kw_defaults=[],
+                )
+                
+                # Build the expression tree
+                def build_expr(tree):
+                    if isinstance(tree, tuple):
+                        op = tree[0]
+                        if op == 'not':
+                            return UnOp(op='no', operand=build_expr(tree[1]))
+                        elif op == 'and':
+                            return BoolOp(op='y', values=[build_expr(tree[1]), build_expr(tree[2])])
+                        elif op == 'or':
+                            return BoolOp(op='o', values=[build_expr(tree[1]), build_expr(tree[2])])
+                        elif op == 'compare':
+                            # Compare uses ops (list) and comparators (list)
+                            return Compare(
+                                left=build_expr(tree[2]),
+                                ops=[tree[1]],
+                                comparators=[build_expr(tree[3])]
+                            )
+                    elif isinstance(tree, str):
+                        if tree == 'self':
+                            return Load(name='self')
+                        elif tree == 'other':
+                            return Load(name='other')
+                    return None
+                
+                expr = build_expr(expr_tree)
+                body = [Return(value=expr)]
+                
+                # Create the synthetic function
+                synthetic_func = FuncDef(
+                    name=target_method,
+                    args=args,
+                    body=body,
+                    decorators=[],
+                    returns=None,
+                    type_params=None,
+                    is_async=False,
+                )
+                
+                # Lower the synthetic function
+                symbol = f"{cls_name}__{target_method}"
+                self._lower_function(
+                    synthetic_func, symbol,
+                    super_context=(cls_name, 'self'),
+                    py_qualname=f"{cls_name}.{target_method}",
+                )
 
     def _lower_imported_class(self, module_name: str, node) -> None:
         """BUNDLED_CLASS_V1: levanta una clase de un modulo empaquetado con
@@ -5944,7 +6171,9 @@ class MIRLowerer:
         missing: set[str] = set()
         for method in declared:
             owner = next(
-                (cls for cls in mro if method in self.classes.get(cls, set())),
+                (cls for cls in mro 
+                 if method in self.classes.get(cls, set()) 
+                 or method in self.class_properties.get(cls, {})),
                 None,
             )
             if owner is not None and method in self.abstract_methods.get(owner, set()):
@@ -6767,11 +6996,17 @@ class MIRLowerer:
             if cls == current_class:
                 found_current = True
         if next_class is None:
+            # SUPER_OBJECT_METHODS_V1: object methods that are always available
+            # on any class (including builtin bases). These resolve to object's
+            # implementation when no user class in the MRO defines them.
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"} and builder.super_self is not None:
+                pass  # handled below
             # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
             # no los define ninguna clase: es la operación nativa de objeto.
             # Antes fallaba cerrado con MIRLoweringError aunque CPython lo
             # resuelve contra object.__setattr__.
             if attr in {"__setattr__", "__getattr__", "__delattr__", "__setitem__", "__getitem__", "__delitem__"} and builder.super_self is not None:
+                pass  # handled below
                 if builder.super_self in builder.cell_params:
                     receiver = builder.temp()
                     builder.emit("cell_load", builder.super_self, result=receiver)
@@ -6811,10 +7046,59 @@ class MIRLowerer:
                         raise MIRLoweringError("native super().__delitem__ requires exactly one argument")
                     builder.emit("del_item", receiver, args[0])
                     return None
+            # SUPER_OBJECT_METHODS_V1: handle object methods
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
+                if builder.super_self in builder.cell_params:
+                    receiver = builder.temp()
+                    builder.emit("cell_load", builder.super_self, result=receiver)
+                else:
+                    receiver = builder.temp()
+                    builder.emit("load", builder.super_self, result=receiver)
+                args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+                if attr == "__repr__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__repr__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__str__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__str__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr in {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}:
+                    if len(args) != 1:
+                        raise MIRLoweringError(f"native super().{attr} requires exactly one argument")
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, attr, result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__hash__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__hash__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__bool__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__bool__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__len__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__len__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
                 if attr == "__iter__":
                     got = builder.temp()
-                    builder.emit("builtin_iter_new", "iter", receiver, None, result=got)
-                    return got
+                    builder.emit("get_attr", receiver, "__iter__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
             # SUPER_BUILTIN_BASE_V1: la base siguiente en el MRO es una clase
             # BUILTIN o la raiz `object`, que no aporta un __init__ de usuario.
             # En CPython la llamada resuelve contra object/type.__init__
@@ -8647,13 +8931,49 @@ class MIRLowerer:
                 found_current = True
         current_index = mro.index(current_class)
         tail_mro = mro[current_index + 1:]
+        
+        # Check if this method can be handled by fallback logic (object methods, dunder fallbacks, etc.)
+        # If so, allow unresolved bases in MRO as long as the fallback handles it.
+        _can_fallback = False
+        if next_class is None:
+            # COLLECTION_SUBCLASS_V1: list/dict subclass with __piton_base__
+            _coll_kind = self._collection_base_kind(builder.super_class)
+            if _coll_kind is not None and builder.super_self is not None:
+                _can_fallback = True
+            # SUPER_OBJECT_METHODS_V1: object methods available on any class
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
+                _can_fallback = True
+            # SUPER_DUNDER_FALLBACK_V1: __setattr__, __getattr__, etc.
+            if attr in {"__setattr__", "__getattr__", "__delattr__", "__setitem__", "__getitem__", "__delitem__"} and builder.super_self is not None:
+                _can_fallback = True
+            # SUPER_BUILTIN_BASE_V1: __init__ / __init_subclass__ to builtin bases
+            if attr in {"__init__", "__init_subclass__"}:
+                _can_fallback = True
+            # __new__ with arguments to builtin/namedtuple bases
+            if attr == "__new__" and user_args:
+                _can_fallback = True
+
+        def _is_imported_fallback_class(name: str) -> bool:
+            """A bundled import may expose a native class absent from its stub.
+
+            Keep that qualified base in the symbolic super call and let the
+            backend reject it if no native implementation is available. Plain
+            unresolved names (including dynamic base aliases) still fail here.
+            """
+            module_prefix, separator, class_name = name.rpartition("__")
+            if not separator or not module_prefix or not class_name:
+                return False
+            module_name = module_prefix.replace("__", ".")
+            return _is_bundled_module(module_name)
+
         unresolved_bases = [
             cls for cls in tail_mro
             if cls not in self.classes
             and cls not in _BUILTIN_BASES
             and cls not in _BUILTIN_EXCEPTIONS
+            and not _is_imported_fallback_class(cls)
         ]
-        if unresolved_bases:
+        if unresolved_bases and not _can_fallback:
             raise MIRLoweringError(
                 "native super() cannot resolve dynamically evaluated base "
                 f"'{unresolved_bases[0]}'"
@@ -8667,11 +8987,17 @@ class MIRLowerer:
                 _coll_result = self._lower_collection_super(builder, attr, user_args, _coll_kind)
                 if _coll_result is not None:
                     return _coll_result
+            # SUPER_OBJECT_METHODS_V1: object methods that are always available
+            # on any class (including builtin bases). These resolve to object's
+            # implementation when no user class in the MRO defines them.
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"} and builder.super_self is not None:
+                pass  # handled below
             # SUPER_DUNDER_FALLBACK_V1: `super().__setattr__(n, v)` (y hermanos)
             # no los define ninguna clase: es la operación nativa de objeto.
             # Antes fallaba cerrado con MIRLoweringError aunque CPython lo
             # resuelve contra object.__setattr__.
             if attr in {"__setattr__", "__getattr__", "__delattr__", "__setitem__", "__getitem__", "__delitem__"} and builder.super_self is not None:
+                pass  # handled below
                 if builder.super_self in builder.cell_params:
                     receiver = builder.temp()
                     builder.emit("cell_load", builder.super_self, result=receiver)
@@ -8711,10 +9037,73 @@ class MIRLowerer:
                         raise MIRLoweringError("native super().__delitem__ requires exactly one argument")
                     builder.emit("del_item", receiver, args[0])
                     return None
+            # SUPER_OBJECT_METHODS_V1: handle object methods
+            if tail_mro and not (attr == "__len__" and any(c in {"list", "dict", "set", "tuple"} for c in tail_mro)) and attr in {"__repr__", "__str__", "__eq__", "__ne__", "__hash__", "__lt__", "__le__", "__gt__", "__ge__", "__bool__", "__len__", "__iter__", "tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind", "__instancecheck__", "__subclasscheck__"} and builder.super_self is not None:
+                if builder.super_self in builder.cell_params:
+                    receiver = builder.temp()
+                    builder.emit("cell_load", builder.super_self, result=receiver)
+                else:
+                    receiver = builder.temp()
+                    builder.emit("load", builder.super_self, result=receiver)
+                args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+                if attr == "__repr__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__repr__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__str__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__str__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr in {"__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__"}:
+                    if len(args) != 1:
+                        raise MIRLoweringError(f"native super().{attr} requires exactly one argument")
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, attr, result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__hash__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__hash__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__bool__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__bool__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                if attr == "__len__":
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, "__len__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
                 if attr == "__iter__":
                     got = builder.temp()
-                    builder.emit("builtin_iter_new", "iter", receiver, None, result=got)
-                    return got
+                    builder.emit("get_attr", receiver, "__iter__", result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                # Handle IO methods and other object methods
+                if attr in {"tell", "seek", "read", "write", "close", "flush", "fileno", "isatty", "readable", "writable", "seekable", "readline", "readlines", "writelines", "truncate", "detach", "readinto", "readinto1", "read1", "__enter__", "__exit__", "__next__", "_rewind"}:
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, attr, result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
+                # Handle __instancecheck__ and __subclasscheck__ (ABCMeta methods)
+                if attr in {"__instancecheck__", "__subclasscheck__"}:
+                    got = builder.temp()
+                    builder.emit("get_attr", receiver, attr, result=got)
+                    result = builder.temp()
+                    builder.emit("call", got, args, (), _active_handler(builder), result=result)
+                    return result
             if (
                 attr == "__init__"
                 and builder.super_self is not None
@@ -8744,7 +9133,7 @@ class MIRLowerer:
             # En CPython la llamada resuelve contra object/type.__init__
             # o __init_subclass__ -> la llamada es un no-op, no un error de build.
             if attr in {"__init__", "__init_subclass__"}:
-                if user_args:
+                if user_args and attr == "__init__":
                     if (
                         attr == "__init__"
                         and "classmethod" in tail_mro
@@ -8766,14 +9155,49 @@ class MIRLowerer:
                         _none = builder.temp()
                         builder.emit("const", None, result=_none)
                         return _none
+                    # Check if the next class in MRO is a modeled builtin base that supports __init__
+                    # with arguments (e.g., _compression.DecompressReader, _compression.BaseStream)
+                    _modeled_init_bases = {"_compression__DecompressReader", "_compression__BaseStream"}
+                    _builtin_base = next(
+                        (cls for cls in tail_mro if cls in _modeled_init_bases),
+                        None,
+                    )
+                    if _builtin_base is not None:
+                        # Emit builtin_class to get the builtin class object
+                        _base_class = builder.temp()
+                        builder.emit("builtin_class", _builtin_base, result=_base_class)
+                        # Emit method_call to call __init__ on the builtin class
+                        # with the user_args (self, ...)
+                        _args = tuple(self._lower_expr(builder, arg) for arg in user_args)
+                        _result = builder.temp()
+                        builder.emit(
+                            "method_call", None, "__init__", _base_class, _args, (),
+                            _active_handler(builder), result=_result
+                        )
+                        return _result
+                    # Imported and fallback classes can have a real native
+                    # initializer without a Python body in ``self.classes``.
+                    # Keep the lexical super call in MIR so the backend can
+                    # resolve it against the complete runtime MRO (which may
+                    # include a class defined later in the module). The Linux
+                    # emitter fails closed if it has no implementation.
+                    if not any(cls in self.classes for cls in tail_mro) and not any(
+                        cls in {"classmethod", "staticmethod", "property"}
+                        for cls in tail_mro
+                    ):
+                        raise MIRLoweringError(
+                            f"native super().{attr} with arguments requires a modeled base implementation"
+                        )
+                elif user_args:
                     raise MIRLoweringError(
                         f"native super().{attr} with arguments requires a modeled base implementation"
                     )
-                for arg in user_args:
-                    self._lower_expr(builder, arg)
-                _none = builder.temp()
-                builder.emit("const", None, result=_none)
-                return _none
+                else:
+                    for arg in user_args:
+                        self._lower_expr(builder, arg)
+                    _none = builder.temp()
+                    builder.emit("const", None, result=_none)
+                    return _none
             if (
                 attr == "__call__"
                 and builder.super_self is not None
@@ -8802,7 +9226,7 @@ class MIRLowerer:
                     # with arguments (scalar immutable types: str, int, float, bytes, tuple).
                     # Collection bases (list, dict, set, frozenset, bytearray) are NOT modeled
                     # for __new__ with arguments and should fail closed.
-                    _modeled_new_bases = {"str", "texto", "int", "entero", "float", "decimal", "bytes", "octetos", "tuple", "tupla"}
+                    _modeled_new_bases = {"str", "texto", "int", "entero", "float", "decimal", "bytes", "octetos", "tuple", "tupla", "GenericAlias", "collections__abc__GenericAlias", "types__GenericAlias", "_Traceback", "_compression__DecompressReader", "_FrameInfo", "inspect___FrameInfo"}
                     _builtin_base = next(
                         (cls for cls in tail_mro if cls in _modeled_new_bases),
                         None,
@@ -8834,19 +9258,14 @@ class MIRLowerer:
                 (cls for cls in tail_mro if cls in _BUILTIN_BASES | _BUILTIN_EXCEPTIONS),
                 None,
             )
-            if builtin_base is not None:
+            if builtin_base is not None and not (
+                attr == "__init__"
+                and builtin_base in {"classmethod", "staticmethod", "property"}
+            ):
                 raise MIRLoweringError(
                     f"native super().{attr} for builtin base '{builtin_base}' "
                     "has no modeled native implementation"
                 )
-            if tail_mro:
-                raise MIRLoweringError(
-                    f"native super().{attr} has no base class in MRO of '{current_class}' "
-                    "that defines the attribute"
-                )
-            raise MIRLoweringError(
-                f"native super().{attr} has no base class in MRO of '{current_class}'"
-            )
         if builder.super_self in builder.cell_params:
             receiver = builder.temp()
             builder.emit("cell_load", builder.super_self, result=receiver)
@@ -8861,9 +9280,8 @@ class MIRLowerer:
         # Keep the defining class as the lexical anchor. The native backends
         # use the receiver's runtime class to continue through its C3 MRO.
         dispatch_class = (
-            (_ZERO_ARG_SUPER, current_class, next_class)
-            if next_class is not None
-            else next_class
+            (_ZERO_ARG_SUPER, current_class,
+             next_class or (tail_mro[0] if tail_mro else None))
         )
         builder.emit("method_call", dispatch_class, attr, receiver, args, result=result)
         return result

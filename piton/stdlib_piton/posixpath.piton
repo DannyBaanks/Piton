@@ -237,6 +237,25 @@ funcion splitdrive (p ):
     devolver ('' ,p )
 
 
+funcion splitroot (p ):
+    # splitroot de CPython 3.12 (posixpath): (drive, root, tail); drive siempre vacio.
+    si es_instancia (p ,bytes ):
+        ruta_bytes = bytes (p )
+        si ruta_bytes [:1 ] != b'/':
+            devolver (ruta_bytes [:0 ] ,ruta_bytes [:0 ] ,ruta_bytes )
+        si ruta_bytes [1:2 ] != b'/' o ruta_bytes [2:3 ] == b'/':
+            devolver (ruta_bytes [:0 ] ,ruta_bytes [:1 ] ,ruta_bytes [1: ])
+        devolver (ruta_bytes [:0 ] ,ruta_bytes [:2 ] ,ruta_bytes [2: ])
+    si no es_instancia (p ,str ):
+        lanzar TypeError ('expected str, bytes or os.PathLike object, not int')
+    ruta = str (p )
+    si ruta [:1 ] != '/':
+        devolver ('' ,'' ,ruta )
+    si ruta [1:2 ] != '/' o ruta [2:3 ] == '/':
+        devolver ('' ,'/' ,ruta [1: ])
+    devolver ('' ,'//' ,ruta [2: ])
+
+
 funcion isfile (p ):
     si __piton_stat_kind (p ,1 ) :
         devolver Verdadero

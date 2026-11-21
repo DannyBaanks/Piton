@@ -22,7 +22,9 @@ funcion wraps (envuelta ) :
 
 
 funcion total_ordering (clase ) :
-    lanzar NotImplementedError ('functools.total_ordering no esta implementado en el backend nativo')
+    # The native MIR lowering handles @functools.total_ordering by synthesizing
+    # missing comparison methods. This function is a no-op at runtime.
+    devolver clase
 
 
 funcion partial (_fn_objetivo ,*args ) :
