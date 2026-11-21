@@ -1,0 +1,4 @@
+importar decimal
+d1 = decimal.Decimal("0.70")
+d2 = decimal.Decimal("1.05")
+r = d1 + d2

@@ -1,0 +1,35 @@
+diff --git a/piton/linux_x86.py b/piton/linux_x86.py
+index 49a5880..32ec3ce 100644
+--- a/piton/linux_x86.py
++++ b/piton/linux_x86.py
+@@ -8064,7 +8064,11 @@ class LinuxCEmitter:
+         # False). El objeto se crea la primera vez que se usa.
+         # METACLASS_INTROSPECT_V1: las metaclases también tienen su objeto
+         # internado: `type(A) es Meta` compara la misma variable estática.
+-        for cls_name in sorted(set(self.classes) | set(self.class_metaclasses.values())):
++        for cls_name in sorted(
++            set(self.classes)
++            | set(self.class_metaclasses.values())
++            | set(_BUILTIN_EXCEPTIONS)
++        ):
+             lines.append(f"static long {_name('_clsobj_' + cls_name)};")
+         for alias_sym, real_sym in getattr(self, "function_aliases", {}).items():
+             _r_params = self.function_params.get(real_sym) or []
+diff --git a/piton/mir.py b/piton/mir.py
+index 96c248d..b6fbb14 100644
+--- a/piton/mir.py
++++ b/piton/mir.py
+@@ -853,6 +853,13 @@ class MIRLowerer:
+             return f"{class_name}__{method.name}", None, method.name
+         if decorator.kind == HIRKind.ATTR and getattr(decorator, "attr", None) in {"abstractmethod", "contextmanager", "_sslcopydoc", "lru_cache", "cache", "overload"}:
+             return f"{class_name}__{method.name}", None, method.name
++        if (
++            decorator.kind == HIRKind.LOAD
++            and getattr(decorator, "name", None) in self._module_function_names
++        ):
++            # A user-defined native function can be applied as a pass-through
++            # decorator. Unknown names still fail closed below.
++            return f"{class_name}__{method.name}", None, method.name
+         if decorator.kind == HIRKind.ATTR:
+             prop = getattr(decorator, "attr", "")
+             if getattr(getattr(decorator, "value", None), "kind", None) != HIRKind.LOAD or getattr(decorator.value, "name", None) != method.name or prop not in {"setter", "deleter"}:

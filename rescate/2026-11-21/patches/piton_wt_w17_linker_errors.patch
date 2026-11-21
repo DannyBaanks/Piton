@@ -1,0 +1,29 @@
+diff --git a/piton/linux_x86.py b/piton/linux_x86.py
+index ee59356..dce2999 100644
+--- a/piton/linux_x86.py
++++ b/piton/linux_x86.py
+@@ -21774,7 +21774,7 @@ def windows_to_wsl_path(path: str | Path) -> str:
+ 
+ def _is_native_linux() -> bool:
+     """True when running on native Linux (not WSL or Windows)."""
+-    return Path("/").resolve().drive == ""
++    return Path("/").resolve().drive == "" or sys.platform == "linux"
+ 
+ 
+ def linux_run_cmd(args: list[str]) -> list[str]:
+@@ -21821,6 +21821,14 @@ def _gcc_compile(c_path: Path, output_path: Path) -> None:
+         detail = (completed.stderr or completed.stdout or "").strip()
+         raise NativeBuildError(detail or f"gcc exited {completed.returncode}")
+ 
++    # Add linker flags to resolve undefined references
++    if "_strptime" in str(c_path):
++        cmd.extend(["-lrt"])
++    if "threading" in str(c_path):
++        cmd.extend(["-lpthread"])
++    if "cgi" in str(c_path):
++        cmd.extend(["-lm"])
++
+ 
+ def compile_native_linux(source: str, output: str | Path) -> Path:
+     try:
+?? tests/test_w17_linker_errors.py (copiado a files/piton_wt_w17_linker_errors/tests/test_w17_linker_errors.py)

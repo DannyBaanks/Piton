@@ -1,0 +1,220 @@
+diff --git a/piton/linux_x86.py b/piton/linux_x86.py
+index 8aab4c4..2ae6c11 100644
+--- a/piton/linux_x86.py
++++ b/piton/linux_x86.py
+@@ -15217,6 +15217,17 @@ class LinuxCEmitter:
+                             elif op == "native_call" and result:
+                                 origins[result] = ("kind", "slot") if iargs[0] == "statistics" else (
+                                     ("kind", "str") if iargs[1] == "getcwd" else ("kind", "int"))
++                            elif op == "timeit_clock" and result:
++                                # TIMEIT_LITERAL_SOURCE_V1: CLOCK_MONOTONIC
++                                # devuelve un double. Sin este origen, el
++                                # resultado de `Timer.timeit()` que cruza la
++                                # frontera de una funcion se tipaba "int" y el
++                                # llamador imprimia los bits crudos.
++                                origins[result] = ("kind", "float")
++                            elif op == "timeit_number" and result:
++                                # El contador de iteraciones ya salio del
++                                # validador: es un entero (o TypeError).
++                                origins[result] = ("kind", "int")
+                             elif op == "heapq_op" and result:
+                                 origins[result] = ("kind", "none") if iargs[0] in {"heapify", "heappush"} else ("kind", "slot")
+                             elif op.startswith("math_") and result:
+diff --git a/piton/mir.py b/piton/mir.py
+index 5dafb7a..81dea3e 100644
+--- a/piton/mir.py
++++ b/piton/mir.py
+@@ -833,7 +833,10 @@ class MIRLowerer:
+         else:
+             builder.emit("store", target, value)
+ 
+-    def _store(self, builder: _Builder, target: HIRNode, value: str) -> None:
++    def _store(
++        self, builder: _Builder, target: HIRNode, value: str,
++        value_node: HIRNode | None = None,
++    ) -> None:
+         if target.kind == HIRKind.STORE:
+             _binding_name = self._module_function_binding(builder, target.name)
+             _class_name = builder.value_classes.get(value)
+@@ -867,8 +870,27 @@ class MIRLowerer:
+             ):
+                 _timeit_object = builder.timeit_object_names.get(target.value.name)
+                 if _timeit_object is not None:
+-                    builder.timeit_object_sources[_timeit_object] = None
+-                    builder.timeit_dynamic_objects.add(_timeit_object)
++                    # TIMEIT_RESOURCE_V1: asignar un fuente LITERAL a .stmt /
++                    # .setup re-especializa el timer (CPython recompila la
++                    # fuente); cualquier otro valor lo vuelve dinamico.
++                    _literal = (
++                        value_node.value
++                        if value_node is not None
++                        and value_node.kind == HIRKind.CONST
++                        and type(value_node.value) is str
++                        else None
++                    )
++                    _current = builder.timeit_object_sources.get(_timeit_object)
++                    if _literal is not None and isinstance(_current, tuple):
++                        _stmt, _setup = _current
++                        builder.timeit_object_sources[_timeit_object] = (
++                            _literal if target.attr == "stmt" else _stmt,
++                            _literal if target.attr == "setup" else _setup,
++                        )
++                        builder.timeit_dynamic_objects.discard(_timeit_object)
++                    else:
++                        builder.timeit_object_sources[_timeit_object] = None
++                        builder.timeit_dynamic_objects.add(_timeit_object)
+             # ATTR_CHAIN_STORE_V1: el dueño puede ser cualquier expresion, no
+             # solo un LOAD (`self._module.filters = x` es ATTR(ATTR(self,
+             # _module), filters) y caia al runtime_call set_target, que el
+@@ -3778,7 +3800,7 @@ class MIRLowerer:
+                     # support (`a, *resto = ...`). See _store_tuple_target.
+                     self._store_tuple_target(builder, target, value)
+                 else:
+-                    self._store(builder, target, value)
++                    self._store(builder, target, value, value_node=node.value)
+         elif kind == HIRKind.ANN_ASSIGN:
+             value = self._lower_expr(builder, node.value) if node.value else self._lower_expr(builder, node.annotation)
+             self._store(builder, node.target, value)
+@@ -5958,6 +5980,39 @@ class MIRLowerer:
+                 target = getattr(item, "target", None)
+                 if getattr(target, "kind", None) in {HIRKind.LOAD, HIRKind.STORE}:
+                     bound.add(target.name)
++            if item.kind in {HIRKind.FOR}:
++                # TIMEIT_BINDING_TARGETS_V1: el target de un `para` (y de un
++                # generador de comprension) liga el nombre, pero el HIR lo
++                # representa como LOAD (no hay ctx Store). Sin esto, un bucle
++                # valido dentro de stmt/setup parecia usar un nombre libre y la
++                # compilacion fallaba cerrada por un falso positivo.
++                target = getattr(item, "target", None)
++                if getattr(target, "kind", None) in {HIRKind.LOAD, HIRKind.STORE} and getattr(
++                    target, "name", None
++                ):
++                    bound.add(target.name)
++            if item.kind == HIRKind.WITH:
++                for with_item in getattr(item, "items", ()) or ():
++                    optional = getattr(with_item, "optional_vars", None)
++                    if getattr(optional, "kind", None) in {HIRKind.LOAD, HIRKind.STORE} and getattr(
++                        optional, "name", None
++                    ):
++                        bound.add(optional.name)
++                    else:
++                        # `con x como (a, b)` guarda los nombres como STOREs.
++                        for inner in _iter_hir(optional):
++                            if inner.kind == HIRKind.STORE and getattr(inner, "name", None):
++                                bound.add(inner.name)
++            if item.kind == HIRKind.DELETE:
++                for target in getattr(item, "targets", ()) or ():
++                    if getattr(target, "kind", None) in {HIRKind.LOAD, HIRKind.STORE} and getattr(
++                        target, "name", None
++                    ):
++                        bound.add(target.name)
++                    else:
++                        for inner in _iter_hir(target):
++                            if inner.kind in {HIRKind.LOAD, HIRKind.STORE} and getattr(inner, "name", None):
++                                bound.add(inner.name)
+             if item.kind == HIRKind.TRY:
+                 for handler in getattr(item, "handlers", ()) or ():
+                     if getattr(handler, "name", None):
+diff --git a/tests/test_w18_timeit_timer.py b/tests/test_w18_timeit_timer.py
+index 282fadb..780cae6 100644
+--- a/tests/test_w18_timeit_timer.py
++++ b/tests/test_w18_timeit_timer.py
+@@ -121,5 +121,98 @@ class TimeitTimerNativeParity(unittest.TestCase):
+             )
+ 
+ 
++class TimeitSourceStatementKinds(unittest.TestCase):
++    """stmts that bind names inside the isolated source namespace."""
++
++    def test_for_loop_target_is_source_local(self):
++        _assert_matches(
++            self,
++            "desde timeit importar Timer\n"
++            "t = Timer('for i in range(3):\\n    x = i')\n"
++            "v = t.timeit(number=2)\n"
++            "imprimir(type(v).__name__, v >= 0)\n",
++        )
++
++    def test_while_loop_and_try_in_source(self):
++        _assert_matches(
++            self,
++            "desde timeit importar Timer\n"
++            "t = Timer('i = 0\\nwhile i < 3:\\n    i = i + 1')\n"
++            "v = t.timeit(number=2)\n"
++            "u = Timer(\"try:\\n    x = 1\\nexcept ValueError as e:\\n    x = 2\")\n"
++            "w = u.timeit(number=2)\n"
++            "imprimir(type(v).__name__, type(w).__name__)\n",
++        )
++
++    def test_comprehension_and_del_in_source(self):
++        _assert_matches(
++            self,
++            "desde timeit importar Timer\n"
++            "t = Timer('xs = [k for k in range(3)]\\ndel xs')\n"
++            "v = t.timeit(number=2)\n"
++            "imprimir(type(v).__name__)\n",
++        )
++
++    def test_for_target_does_not_leak_to_the_caller(self):
++        _assert_matches(
++            self,
++            "desde timeit importar Timer\n"
++            "t = Timer('for i in range(2):\\n    a = i')\n"
++            "t.timeit(number=2)\n"
++            "intentar:\n"
++            "    imprimir(i)\n"
++            "excepto NameError:\n"
++            "    imprimir('NameError')\n",
++        )
++
++
++class TimeitMeasureValueType(unittest.TestCase):
++    """The elapsed seconds cross function boundaries as a float."""
++
++    def test_elapsed_returned_from_a_function_is_a_float(self):
++        _assert_matches(
++            self,
++            "desde timeit importar Timer\n"
++            "funcion medir():\n"
++            "    t = Timer('a = 1')\n"
++            "    devolver t.timeit(number=3)\n"
++            "v = medir()\n"
++            "imprimir(type(v).__name__, v >= 0)\n",
++        )
++
++    def test_elapsed_returned_from_a_method_is_a_float(self):
++        _assert_matches(
++            self,
++            "desde timeit importar Timer\n"
++            "clase C:\n"
++            "    funcion medir(este):\n"
++            "        t = Timer('a = 1')\n"
++            "        devolver t.timeit(number=2)\n"
++            "c = C()\n"
++            "v = c.medir()\n"
++            "imprimir(type(v).__name__, v >= 0)\n",
++        )
++
++    def test_zero_and_negative_counts_return_a_float(self):
++        _assert_matches(
++            self,
++            "desde timeit importar Timer\n"
++            "t = Timer('a = 1')\n"
++            "cero = t.timeit(0)\n"
++            "negativo = t.timeit(-3)\n"
++            "imprimir(type(cero).__name__, type(negativo).__name__)\n",
++        )
++
++    def test_reassigning_a_literal_source_keeps_the_timer_measurable(self):
++        _assert_matches(
++            self,
++            "desde timeit importar Timer\n"
++            "t = Timer('a = 1')\n"
++            "t.stmt = 'b = 2'\n"
++            "v = t.timeit(number=2)\n"
++            "imprimir(type(v).__name__, v >= 0)\n",
++        )
++
++
+ if __name__ == "__main__":
+     unittest.main()

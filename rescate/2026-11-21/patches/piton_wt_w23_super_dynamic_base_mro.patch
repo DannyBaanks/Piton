@@ -1,0 +1,41 @@
+diff --git a/piton/namedtuple_bases.py b/piton/namedtuple_bases.py
+index d511aea..5303359 100644
+--- a/piton/namedtuple_bases.py
++++ b/piton/namedtuple_bases.py
+@@ -271,8 +271,13 @@ def _match_namedtuple_assign(
+     typename_node, fields_node = call.args
+     typename = stmt.targets[0].id
+     if not _is_str_const(typename_node) or typename_node.value != typename:
+-        return None
+-    if not _IDENT.match(typename) or typename in _RESERVED_FIELDS or keyword.iskeyword(typename):
++        # Allow underscore prefix in the string literal (e.g., '_Traceback' vs _Traceback)
++        if typename_node.value == typename or typename_node.value == '_' + typename or typename == '_' + typename_node.value:
++            pass
++        else:
++            return None
++    # Allow underscore prefix for internal namedtuple types like _Traceback
++    if not (_IDENT.match(typename) or (typename.startswith('_') and _IDENT.match(typename[1:]))) or typename in _RESERVED_FIELDS or keyword.iskeyword(typename):
+         return None
+     fields = _field_names(fields_node)
+     if fields is None:
+@@ -306,15 +311,16 @@ def _derived_class_nodes(module: _cst.Module, name: str) -> list[Any]:
+ 
+ 
+ def _subclass_overrides_construction(module: _cst.Module, name: str) -> bool:
+-    """True si alguna subclase (directa o transitiva) define __init__/__new__.
++    """True si alguna subclase (directa o transitiva) define __init__.
+ 
+     CPython construye un namedtuple en __new__ y un __init__ de usuario que
+-    llama a super().__init__(args) falla con TypeError (object.__init__). No
+-    lo modelamos: esos modulos conservan el camino de siempre (fail closed).
++    llama a super().__init__(args) falla con TypeError (object.__init__).
++    Pero __new__ es el metodo correcto para subclases de namedtuple (como
++    inspect.Traceback), asi que solo __init__ hace fail-closed.
+     """
+     for cls in _derived_class_nodes(module, name):
+         for stmt in cls.body:
+-            if isinstance(stmt, _cst.FuncDef) and stmt.name in {"__init__", "__new__"}:
++            if isinstance(stmt, _cst.FuncDef) and stmt.name == "__init__":
+                 return True
+     return False
+ 

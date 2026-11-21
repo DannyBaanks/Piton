@@ -1,0 +1,132 @@
+# experimento: seed de params en el bundle nativo
+funcion _seq (patron ,cadena ,ci ,n ,m ,pi ,fin ,caps ,prof ):
+    si prof > 2000 :
+        devolver -1
+    snap = _copiar (caps )
+    splits = _splits (patron ,m ,pi ,fin )
+    si longitud (splits ) > 0 :
+        ini = pi
+        b = 0
+        mientras b <= longitud (splits ) :
+            si b < longitud (splits ) :
+                bf = splits [b ]
+            sino :
+                bf = fin
+            r = _seq (patron ,cadena ,ci ,n ,m ,ini ,bf ,caps ,prof + 1 )
+            si r >= 0 :
+                devolver r
+            _restaurar (caps ,snap )
+            ini = bf + 1
+            b = b + 1
+        devolver -1
+    mientras pi < fin :
+        c = patron [pi ]
+        sig = pi + 1
+        q = ''
+        si sig < fin y _cuant (patron [sig ]) :
+            q = patron [sig ]
+            sig = sig + 1
+        si q != '' :
+            devolver _cuan (patron ,cadena ,ci ,n ,m ,pi ,pi + 1 ,q ,sig ,fin ,caps ,prof + 1 ,0 )
+        si ci < n y cadena [ci ] == c :
+            ci = ci + 1
+            pi = pi + 1
+        sino :
+            _restaurar (caps ,snap )
+            devolver -1
+    devolver ci
+
+
+funcion _cuan (patron ,cadena ,ci ,n ,m ,ai ,af ,q ,sig ,fin ,caps ,prof ,k ):
+    si prof > 2000 :
+        devolver -1
+    snap = _copiar (caps )
+    r = _seq (patron ,cadena ,ci ,n ,m ,ai ,af ,caps ,prof + 1 )
+    si r < 0 :
+        si q == '+' y k < 1 :
+            devolver -1
+        devolver _seq (patron ,cadena ,ci ,n ,m ,sig ,fin ,caps ,prof + 1 )
+    si r > ci :
+        r2 = _cuan (patron ,cadena ,r ,n ,m ,ai ,af ,q ,sig ,fin ,caps ,prof + 1 ,k + 1 )
+        si r2 >= 0 :
+            devolver r2
+        _restaurar (caps ,snap )
+    devolver _seq (patron ,cadena ,r ,n ,m ,sig ,fin ,caps ,prof + 1 )
+
+
+funcion _cuant (c ):
+    si c == '*' :
+        devolver Verdadero
+    si c == '+' :
+        devolver Verdadero
+    si c == '?' :
+        devolver Verdadero
+    devolver Falso
+
+
+funcion _splits (patron ,m ,ini ,fin ):
+    out = []
+    i = ini
+    prof = 0
+    mientras i < fin :
+        c = patron [i ]
+        si c == '\\' :
+            i = i + 2
+            continuar
+        si c == '(' :
+            prof = prof + 1
+        sino_si c == ')' :
+            prof = prof - 1
+        sino_si c == '|' y prof == 0 :
+            out.append (i )
+        i = i + 1
+    devolver out
+
+
+funcion _copiar (lst ):
+    o = []
+    i = 0
+    n = longitud (lst )
+    mientras i < n :
+        o.append (lst [i ])
+        i = i + 1
+    devolver o
+
+
+funcion _restaurar (caps ,snap ):
+    i = 0
+    n = longitud (snap )
+    mientras i < n :
+        caps [i ] = snap [i ]
+        i = i + 1
+    devolver 0
+
+
+funcion findall (patron ,cadena ,banderas =0 ):
+    caps = []
+    caps.append (-1 )
+    caps.append (-1 )
+    res = []
+    n = longitud (cadena )
+    pos = 0
+    m = longitud (patron )
+    mientras pos <= n :
+        r = _seq (patron ,cadena ,pos ,n ,m ,0 ,m ,caps ,0 )
+        si r >= 0 :
+            res.append (_trozo (cadena ,pos ,r ))
+            si r > pos :
+                pos = r
+            sino :
+                pos = pos + 1
+        sino :
+            pos = pos + 1
+    devolver res
+
+
+funcion _trozo (s ,a ,b ):
+    t = ''
+    i = a
+    mientras i < b :
+        t = t + s [i ]
+        i = i + 1
+    devolver t

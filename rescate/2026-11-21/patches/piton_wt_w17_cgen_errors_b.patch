@@ -1,0 +1,63 @@
+diff --git a/piton/linux_x86.py b/piton/linux_x86.py
+index ee59356..296af48 100644
+--- a/piton/linux_x86.py
++++ b/piton/linux_x86.py
+@@ -10211,7 +10211,7 @@ class LinuxCEmitter:
+                         out.append(
+                             f"    {{PitonSlot*_gp=piton_slot_box_new("
+                             f"piton_dict_get_d((PitonDict*){operand},"
+-                            f"{self._slot(call_args[0], types)},{default});"
++                            f"{self._slot(call_args[0], types)},{default}));"
+                             f" {_name(result)}=(long)_gp;}}"
+                         )
+                         types[result] = "slot"
+@@ -10220,19 +10220,22 @@ class LinuxCEmitter:
+                         "native dict.get requires a statically known value type"
+                     )
+                 if len(call_args) == 2:
++                    if default_type is not None and default_type != val_type:
++                        # DICT_GET_SLOT_V1: el hit da el tipo del valor y el
++                        # miss el del default; no caben en la palabra sin
++                        # etiqueta, asi que el resultado es un slot boxed.
++                        out.append(
++                            f"    {{PitonSlot*_gp=piton_slot_box_new("
++                            f"piton_dict_get_d((PitonDict*){operand},"
++                            f"{self._slot(call_args[0], types)},{default}));"
++                            f" {_name(result)}=(long)_gp;}}"
++                        )
++                        types[result] = "slot"
++                        return out
+                     out.append(
+                         f"    {_name(result)}=piton_dict_get_d((PitonDict*){operand},"
+                         f"{self._slot(call_args[0], types)},{default}).bits;"
+                     )
+-                if default_type is not None and default_type != val_type:
+-                    out.append(
+-                        f"    {{PitonSlot*_gp=piton_slot_box_new("
+-                        f"piton_dict_get_d((PitonDict*){operand},"
+-                        f"{self._slot(call_args[0], types)},{default});"
+-                        f" {_name(result)}=(long)_gp;}}"
+-                    )
+-                    types[result] = "slot"
+-                    return out
+                 types[result] = val_type
+                 if val_type == "builtin" and aliases is not None:
+                     aliases[result] = aliases.get(call_args[1], call_args[1])
+@@ -19996,6 +19999,17 @@ class LinuxCEmitter:
+                     resolved_cls = self._find_class_method(unbound_class, method) or unbound_class
+                     target = f"{resolved_cls}__{method}"
+                     if target not in self.function_names:
++                        # UNBOUND_METHOD_UNDEFINED_V1: `Cls.m(...)` explicito
++                        # (weakref.py: `ref.__eq__(self, other)`) resuelto a un
++                        # simbolo que el emisor NUNCA produjo. Emitir la
++                        # llamada igual deja una referencia sin definir y el
++                        # enlace muere con un error opaco de ld. Se falla
++                        # cerrado nombrando el metodo exacto: sin stub, sin
++                        # referencia colgando.
++                        if method != "register" and method != "__init__":
++                            raise NativeBuildError(
++                                f"native method not found: {unbound_class}.{method}"
++                            )
+                         if method == "register":
+                             if call_args:
+                                 out.append(f"    {_name(result)}={self._value(call_args[0])};")

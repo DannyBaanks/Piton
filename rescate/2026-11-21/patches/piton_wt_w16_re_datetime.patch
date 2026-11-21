@@ -1,0 +1,206 @@
+diff --git a/piton/linux_x86.py b/piton/linux_x86.py
+index 49a5880..8b5fb4a 100644
+--- a/piton/linux_x86.py
++++ b/piton/linux_x86.py
+@@ -8064,7 +8064,26 @@ class LinuxCEmitter:
+         # False). El objeto se crea la primera vez que se usa.
+         # METACLASS_INTROSPECT_V1: las metaclases también tienen su objeto
+         # internado: `type(A) es Meta` compara la misma variable estática.
+-        for cls_name in sorted(set(self.classes) | set(self.class_metaclasses.values())):
++        _class_object_names = set(self.classes) | set(self.class_metaclasses.values())
++        # EXCEPT_BUILTIN_CLASS_OBJECT_V1: `type(exc).__name__` can lower a
++        # caught exception's statically known base class through `_clsobj_X`
++        # even though builtin exception classes are not in `self.classes`.
++        # Declare class-object slots for the exception types named by handlers
++        # so those valid references compile alongside user-defined classes.
++        for _function in module.functions:
++            for _block in _function.blocks:
++                for _instruction in _block.instructions:
++                    if _instruction.op != "catch_bind" or len(_instruction.args) < 2:
++                        continue
++                    _accepted = _instruction.args[1]
++                    if isinstance(_accepted, str):
++                        _class_object_names.add(_accepted)
++                    elif isinstance(_accepted, (list, tuple)):
++                        for _entry in _accepted:
++                            _exception_name = _entry[0] if isinstance(_entry, tuple) else _entry
++                            if isinstance(_exception_name, str):
++                                _class_object_names.add(_exception_name)
++        for cls_name in sorted(_class_object_names):
+             lines.append(f"static long {_name('_clsobj_' + cls_name)};")
+         for alias_sym, real_sym in getattr(self, "function_aliases", {}).items():
+             _r_params = self.function_params.get(real_sym) or []
+@@ -14300,7 +14319,7 @@ class LinuxCEmitter:
+                 self._builtin_loads[result] = source
+                 return out
+             if (
+-                source in _BUILTINS
++                (source in _BUILTINS or source in {"globals", "locals"})
+                 and source not in function.params
+                 and source not in getattr(self, "_cur_slots", set())
+                 and source not in _FUNC_ONLY_BUILTINS
+@@ -16195,6 +16214,11 @@ class LinuxCEmitter:
+             out.append(f"    goto {_name(function.name + '_' + args[0])};")
+         elif op == "call":
+             function_name = aliases.get(args[0], args[0])
++            # GLOBALS_NS_V1: globals/locals are C-backed builtins loaded as
++            # values before this generic call op. Recover their source name
++            # so the namespace call can retain its dict result type.
++            if function_name == args[0] and self._builtin_loads.get(args[0]) in {"globals", "locals", "vars"}:
++                function_name = self._builtin_loads[args[0]]
+             values = list(args[1])
+             # BUILTIN_BOUND_METHOD_V1: una llamada a un `xs.append` ligado
+             # tipa el elemento de la lista igual que el append directo (sin
+@@ -18329,7 +18353,12 @@ class LinuxCEmitter:
+                 f"    {_name(result)}=piton_call_dynamic({self._value(callee)},"
+                 f"{_dyn(pos_seq)},{_dyn(star_seq)},{_dyn(kwargs_dict)});"
+             )
+-            types[result] = "int"
++            # The callee is unknown here and may return a PitonSlot box (for
++            # example, a dict lookup followed by arithmetic in a **kwargs
++            # function). Preserve the dynamic kind so callers unbox the value
++            # instead of printing the box address as an integer.
++            types[result] = "slot"
++            self._dyn_slot_temps.add((function.name, result))
+             self._emit_exc_check(out, function, args[4] if len(args) > 4 else None)
+             return out
+         elif op == "frame_call":
+diff --git a/piton/mir.py b/piton/mir.py
+index 96c248d..308a5e0 100644
+--- a/piton/mir.py
++++ b/piton/mir.py
+@@ -1130,7 +1130,12 @@ class MIRLowerer:
+                                     ):
+                                         _es_constante = True
+                                         break
+-                            if mod_name == "os" and alias.name == "name":
++                            if mod_name == "os" and alias.name == "PathLike":
++                                # OS_PATHLIKE_V1: PathLike es un protocolo
++                                # builtin del backend aunque os.piton provea
++                                # el resto del modulo empaquetado.
++                                self.from_import_aliases[local] = "os.PathLike"
++                            elif mod_name == "os" and alias.name == "name":
+                                 self.from_import_aliases[local] = "os.name"
+                             elif _es_constante:
+                                 self.from_import_aliases[local] = _module_state_name(mod_name, alias.name)
+@@ -3453,7 +3458,11 @@ class MIRLowerer:
+                 for alias in getattr(node, "names", ()) or ():
+                     local = alias.asname or alias.name
+                     qualified = None
+-                    if mod_name == "os" and alias.name == "name":
++                    if mod_name == "os" and alias.name == "PathLike":
++                        # OS_PATHLIKE_V1: el protocolo builtin no es un
++                        # simbolo os__PathLike del stub bundled.
++                        qualified = "os.PathLike"
++                    elif mod_name == "os" and alias.name == "name":
+                         qualified = "os.name"
+                     _mod_hir = self.imported_modules.get(mod_name)
+                     if qualified is None and _mod_hir is not None:
+diff --git a/piton/stdlib_piton/datetime.piton b/piton/stdlib_piton/datetime.piton
+index 43731fd..95a8e67 100644
+--- a/piton/stdlib_piton/datetime.piton
++++ b/piton/stdlib_piton/datetime.piton
+@@ -216,8 +216,10 @@ clase date :
+ 
+     @classmethod
+     funcion today (clase ):
+-        t = time.time()
+-        local = time.localtime(t)
++        # time.time() is a float; the bundled localtime path currently accepts
++        # integer epoch seconds when an explicit value is supplied. Let the
++        # no-argument path read the current clock directly instead.
++        local = time.localtime()
+         devolver date(local[0], local[1], local[2])
+     
+     @classmethod
+@@ -246,4 +248,4 @@ funcion now (*args , **kwargs):
+     lanzar NotImplementedError ('datetime.now no esta implementado en el backend nativo')
+ 
+ funcion timezone (*args , **kwargs):
+-    lanzar NotImplementedError ('datetime.timezone no esta implementado en el backend nativo')
+\ No newline at end of file
++    lanzar NotImplementedError ('datetime.timezone no esta implementado en el backend nativo')
+diff --git a/piton/stdlib_piton/re.piton b/piton/stdlib_piton/re.piton
+index 3918c7c..17c9249 100644
+--- a/piton/stdlib_piton/re.piton
++++ b/piton/stdlib_piton/re.piton
+@@ -256,18 +256,18 @@ funcion _cuenta_grupos (patron ):
+     devolver cuenta
+ 
+ 
+-funcion _coincide_escape_clase (escape ,c ,banderas ):
+-    si escape == 'd' :
++funcion _coincide_escape_clase (codigo_escape ,c ,banderas ):
++    si codigo_escape == 'd' :
+         devolver _es_decimal (c ,banderas )
+-    si escape == 'D' :
++    si codigo_escape == 'D' :
+         devolver no _es_decimal (c ,banderas )
+-    si escape == 'w' :
++    si codigo_escape == 'w' :
+         devolver _es_palabra (c ,banderas )
+-    si escape == 'W' :
++    si codigo_escape == 'W' :
+         devolver no _es_palabra (c ,banderas )
+-    si escape == 's' :
++    si codigo_escape == 's' :
+         devolver _es_espacio (c ,banderas )
+-    si escape == 'S' :
++    si codigo_escape == 'S' :
+         devolver no _es_espacio (c ,banderas )
+     devolver Falso
+ 
+@@ -283,14 +283,14 @@ funcion _coincide_clase (c ,patron ,apertura ,cierre ,banderas ):
+         especial = Falso
+         valor = ''
+         si patron[i] == '\\' y i + 1 < cierre :
+-            escape = patron[i + 1 ]
+-            si escape == 'd' o escape == 'D' o escape == 'w' o escape == 'W' o escape == 's' o escape == 'S' :
++            codigo_escape = patron[i + 1 ]
++            si codigo_escape == 'd' o codigo_escape == 'D' o codigo_escape == 'w' o codigo_escape == 'W' o codigo_escape == 's' o codigo_escape == 'S' :
+                 especial = Verdadero
+-                si _coincide_escape_clase (escape ,c ,banderas ):
++                si _coincide_escape_clase (codigo_escape ,c ,banderas ):
+                     encontrado = Verdadero
+                 i = i + 2
+             sino :
+-                valor = _escapar_literal (escape )
++                valor = _escapar_literal (codigo_escape )
+                 i = i + 2
+         sino :
+             valor = patron[i]
+@@ -423,8 +423,8 @@ funcion _atomos_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valo
+                 salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
+         devolver salida
+     si clase_atomo == 'escape' :
+-        escape = valor_texto
+-        si escape == 'b' o escape == 'B' :
++        codigo_escape = valor_texto
++        si codigo_escape == 'b' o codigo_escape == 'B' :
+             palabra_antes = Falso
+             palabra_despues = Falso
+             si pos > 0 :
+@@ -432,18 +432,18 @@ funcion _atomos_todos (patron ,cadena ,clase_atomo ,valor_texto ,valor_uno ,valo
+             si pos < n :
+                 palabra_despues = _es_palabra (cadena[pos] ,banderas )
+             limite = palabra_antes != palabra_despues
+-            si escape == 'B' :
++            si codigo_escape == 'B' :
+                 limite = no limite
+-            si escape == 'B' y n == 0 :
++            si codigo_escape == 'B' y n == 0 :
+                 limite = Falso
+             si limite :
+                 salida.append (estado )
+             devolver salida
+-        si escape == 'd' o escape == 'D' o escape == 'w' o escape == 'W' o escape == 's' o escape == 'S' :
+-            si pos < n y _coincide_escape_clase (escape ,cadena[pos] ,banderas ):
++        si codigo_escape == 'd' o codigo_escape == 'D' o codigo_escape == 'w' o codigo_escape == 'W' o codigo_escape == 's' o codigo_escape == 'S' :
++            si pos < n y _coincide_escape_clase (codigo_escape ,cadena[pos] ,banderas ):
+                 salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
+             devolver salida
+-        literal = _escapar_literal (escape )
++        literal = _escapar_literal (codigo_escape )
+         si pos < n y _igual_caracter (cadena[pos] ,literal ,banderas ):
+             salida.append (_estado_avanzar (estado ,pos + 1 ,base ))
+         devolver salida
