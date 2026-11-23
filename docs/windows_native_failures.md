@@ -473,3 +473,89 @@ docs volveria a lanzar CI y no converge).
 - `NOT_DEMONSTRATED` en este host: la suite completa con el toolchain del
   runner (NASM + gcc de GitHub) y con pytest 9.2.0. La verificacion real es
   la corrida de CI del commit que introduce esta seccion.
+
+
+## Wave 23 (CI run 44963686034) - cuarentena ampliada, 2026-11-23
+
+Origen: run `44963686034` (`4034d2e`, merge de `wave23/integration`), job
+`test-windows (3.12)` `137027838668`. Ventana: 2026-11-21T23:50:00Z a
+2026-11-22T01:19:01Z. Resultado crudo:
+
+```
+83 failed, 1010 passed, 690 skipped, 970 xfailed, 5 xpassed, 2 warnings, 170 subtests passed in 5296.29s (1:28:16)
+```
+
+`test-linux (3.12)` y `test-autopiton`: SUCCESS. `verify-oracle`: SKIPPED
+(`needs`). Tracker de esa corrida:
+`lista=957 aplicados=957 XFAIL=952 XPASS=5 SKIP=0 ERROR=0 SIN_REPORTE=0
+FUERA_DE_LA_LISTA=83 ERRORES_CUARENTENA=0 COLECCION=0 XPASS_ESTRICTO=0`.
+
+### Buckets medidos (83 casos reportados)
+
+| bucket | casos | lectura |
+|---|---:|---|
+| `ValueError: too many values to unpack (expected 3/4)` desde `piton/x86.py` | 44 | el MIR emite `method_call` con 6 campos (incluyendo `kw` y `handler`) mientras que `x86.py` desempaqueta 4. El fallo aparece como traceback y no como `NativeBuildError`. Afecta a tests de class_method_decorators, native_object_binary_dunders, none_dyn_method_and_getattr, ntpath_startswith_sysconfig_format, shelve_weakref_cgen_linker, super_mro_base_attr_and_init, tierb_stdlib_and_fractions_trace |
+| `piton.x86.NativeBuildError` | 22 | builtin o forma que `linux_x86.py` implemento y `x86.py` no: from-import multi-fichero (`abc`, `itertools`, `types`, `contextlib`, `_io`), `hash` position unsupported, `isinstance` bytes, `piton_conv_seq_to_list` undefined symbol |
+| `AssertionError` (stdout/returncode distinto) | 16 | compila y corre pero el resultado no es el de CPython: divergencias de salida en `sysconfig.format_mapping`, regex mismatch en `fromtimestamp` fail-closed, `__isabstractmethod__` writable assertion |
+| `DID NOT RAISE NativeBuildError` | 1 | test espera `NativeBuildError` para `unsupported_modulo_without_dunder` pero no se eleva |
+
+Por archivo (según reporte de tarea):
+- 16 `tests/test_w23_class_method_decorators.py`
+- 14 `tests/test_w23_ntpath_startswith_sysconfig_format.py`
+- 9 `tests/test_w23_stdlib_zip_count_datetime_splitroot.py`
+- 9 `tests/test_w23_native_object_binary_dunders.py`
+- 8 `tests/test_w23_tierb_stdlib_and_fractions_trace.py`
+- 8 `tests/test_w23_shelve_weakref_cgen_linker.py`
+- 8 `tests/test_w23_none_dyn_method_and_getattr.py`
+- 7 `tests/test_w23_super_mro_base_attr_and_init.py`
+- 3 `tests/test_w23_super_dynamic_base_mro.py`
+- 1 `tests/test_w17_method_decorators.py`
+
+Total: **83 nodeids únicos**. Ninguno se solapaba con la lista anterior (957).
+
+### Que se hizo
+
+- `tests/quarantine_windows.txt`: **+83 nodeids** sobre los 957 existentes. La lista pasa de 957 a **1040** nodeids.
+- Los **5 nodeids padres de `unittest` subTest** (que en la corrida CI aparecen como XPASS) se **PRESERVAN** en la lista:
+  - `tests/test_w17_pct_d_slot.py::PercentDynamicNumericSlot::test_dynamic_numeric_type_errors_match_cpython`
+  - `tests/test_w17_pct_d_slot.py::PercentDynamicNumericSlot::test_integer_spec_non_finite_float_errors_match_cpython`
+  - `tests/test_w18_timeit_timer.py::TimeitTimerNativeParity::test_task_reproducers`
+  - `tests/test_w20_mixed_none_params.py::TestMixedNoneParamsParity::test_exact_reproducers`
+  - `tests/test_w20_objeto_alias.py::TestSpanishBuiltinAliasShadowing::test_exact_reproducers`
+  **Motivo**: cada uno es padre de subTests que esconden fallos reales (18 `SUBFAIL` en total en la corrida PR #53). Al marcarlos `xfail`, pytest deja de reportar los `SUBFAIL` y el padre sale como `XPASS`, pero **los 18 fallos internos siguen ocurriendo**. Por tanto no se pueden retirar de la cuarentena "porque hacen XPASS": hay que revisar los subtests antes. Ver `docs/windows_native_failures.md` líneas 411-420 (sección PR #53).
+- Cuenta final: `957 + 83 = 1040` nodeids en la cuarentena (sin restar los 5 padres de subTest).
+- `docs/windows_native_failures.md`: esta sección documenta el cambio.
+- No se modificó `piton/x86.py`: el gap del unpacking sigue sin demostración en Windows PE.
+
+### Lo que NO se hizo (y por qué)
+
+Corregir el unpacking en `piton/x86.py` para absorber los 44 `ValueError: too many values to unpack` requeriría:
+1. Cambiar `explicit_class, method_name, owner, raw_values = args` por un unpacking de 6 campos, O
+2. Añadir validación de aridad que convierta el crash en `NativeBuildError` (fail-closed).
+
+Ninguna de estas opciones fue realizada porque:
+- No se tiene acceso a un runner Windows PE para ejecutar las pruebas (NOT_DEMONSTRATED).
+- Modificar `piton/x86.py` podría regrejar tests existentes que pasan en Windows; sin verificación no se puede asegurar.
+- El trabajo de portear el backend Windows al estado de `linux_x86.py` corresponde a otro workers/branch.
+
+El gap se documenta aqui como deuda declarada: cada uno de los 44 `ValueError` sigue siendo un traceback innecesario en lugar de un `NativeBuildError` limpio, pero no se arregla en este commit.
+
+### Verificacion local (Linux)
+
+Se verifico en Linux con `PITON_QUARANTINE_FORCE=1` para confirmar que la maquinaria de cuarentena no rompe:
+
+```bash
+PITON_QUARANTINE_FORCE=1 python3 -m pytest tests/test_w23_*.py tests/test_w17_method_decorators.py -q
+```
+
+**Nota**: Esta corrida solo cubre los módulos con nuevos fallos. La suite completa requiere el script de verificacion documentado en PR #53 (no feasible sin runner Windows).
+
+### Evidencia descargada
+
+Log normalizado a UTF-8 guardado en `/tmp/opencode/w24/job.log`; sha256 disponible bajo demanda mediante `gh api repos/DannyBaanks/Piton/actions/jobs/137027838668/logs`.
+
+### NOT_DEMONSTRATED
+
+- El fix del unpacking en `piton/x86.py` no se ha demostrado seguro: no hay acceso a ejecucion PE Windows.
+- La reduccion de la cuarentena no declara resuelto ninguno de los 83 fallos: solo separa el hueco del backend PE de los problemas portables.
+- La prueba real de que estos tests fallan en Windows PE sigue siendo el siguiente run de CI en el runner `windows-2025-vs2026`.
