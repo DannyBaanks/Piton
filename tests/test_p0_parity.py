@@ -1216,12 +1216,25 @@ class SuperAndDunderV1(unittest.TestCase):
             _assert_matches(self, source)
 
     def test_missing_dunder_fails_closed(self):
-        try:
-            compare_native_to_cpython("clase P:\n    pasar\nimprimir(P() + 1)\n")
-        except NativeBuildError:
-            pass
-        else:
-            self.fail("arithmetic without dunder not closed")
+        source = "clase P:\n    pasar\nimprimir(P() + 1)\n"
+        if sys.platform.startswith("win32"):
+            try:
+                compare_native_to_cpython(source)
+            except NativeBuildError:
+                pass
+            else:
+                self.fail("arithmetic without dunder not closed")
+            return
+        # W23 (744800b): Linux backend dispatches binary `+` on native objects
+        # through piton_object_binary_dunder and raises CPython's TypeError at runtime.
+        result = compare_native_to_cpython(source)
+        self.assertEqual(result.native.returncode, result.oracle.returncode)
+        self.assertEqual(result.native.returncode, 1)
+        self.assertEqual(result.native.stdout, result.oracle.stdout)
+        self.assertIn(
+            b"TypeError: unsupported operand type(s) for +: 'P' and 'int'",
+            result.native.stderr,
+        )
 
 
 class ChrNulV1(unittest.TestCase):

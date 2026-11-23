@@ -99,6 +99,27 @@ class UnboundBuiltinTypeAttrsV1(unittest.TestCase):
             "    imprimir(str(error))\n",
         )
 
+    def test_int_new_unrelated_user_class_raises_typeerror(self):
+        _assert_matches(
+            self,
+            "clase MiInt:\n"
+            "    funcion __new__(cls, valor):\n"
+            "        devolver int.__new__(cls, valor)\n"
+            "intentar:\n"
+            "    MiInt.__new__(MiInt, 3)\n"
+            "excepto TypeError como error:\n"
+            "    imprimir(str(error))\n",
+        )
+
+    def test_int_new_non_type_str_reports_actual_type(self):
+        _assert_matches(
+            self,
+            "intentar:\n"
+            "    int.__new__('x', 2)\n"
+            "excepto TypeError como error:\n"
+            "    imprimir(str(error))\n",
+        )
+
     def test_int_new_wrong_arity_fails_closed(self):
         with pytest.raises(NativeBuildError, match="requires exactly 2 positional argument"):
             compare_native_to_cpython("imprimir(int.__new__(int))\n")

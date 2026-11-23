@@ -925,7 +925,7 @@ static void piton_raise_unsupported_power(PitonSlot base,PitonSlot exponent,
   piton_raise_set("TypeError",message.d);
 }
 static const char*const piton_binop_text[13]={"+","-","*","/","//","%","**","<<",">>","&","|","^","@"};
-static const char*const piton_aug_op_text[13]={"+=","-=","*=","/=","//=","%=","**=","<<=",">>=","&=","|=","^=","@"};
+static const char*const piton_aug_op_text[13]={"+=","-=","*=","/=","//=","%=","**=","<<=",">>=","&=","|=","^=","@="};
 static PitonSlot piton_object_binary_dunder(long opcode,PitonSlot left,
                                              PitonSlot right,PitonSlot modulo,
                                              int ternary,int right_first){
@@ -5695,8 +5695,14 @@ static long piton_unbound_ref_ne(long a,long b){
 static long piton_unbound_int_aenter(long receiver,int hint){if(!piton_unbound_receiver_matches(receiver,"int",hint)){piton_raise_unbound_descriptor("__aenter__","int",receiver,hint);return 0;}return receiver;}
 static long piton_unbound_int_aenter_frame(long*frame){return piton_unbound_int_aenter(frame[0],-1);}
 static long piton_unbound_int_new(long cls,long value,int hint){
-  if(!(piton_is_type_value(cls)||piton_type_repr_is(cls,"int")||piton_type_repr_is(cls,"bool"))){
-    if(piton_is_type_repr_value(cls)){
+  int is_int_subtype=piton_type_repr_is(cls,"int")||piton_type_repr_is(cls,"bool");
+  if(!is_int_subtype&&piton_is_type_value(cls)){
+    const char*nm=((PitonObject*)cls)->class_name;
+    if(nm&&(!piton_strcmp(nm,"int")||piton_class_is_strict_subclass(nm,"int")))
+      is_int_subtype=1;
+  }
+  if(!is_int_subtype){
+    if(piton_is_type_value(cls)||piton_is_type_repr_value(cls)){
       const char*nm=piton_type_value_name(cls);
       usize a=piton_strlen("int.__new__("),b=piton_strlen(nm),c=piton_strlen("): "),d=piton_strlen(" is not a subtype of int");
       char*m=(char*)piton_alloc(a+b+c+b+d+2);usize o=0;
@@ -5704,7 +5710,15 @@ static long piton_unbound_int_new(long cls,long value,int hint){
       APP("int.__new__(");APP(nm);APP("): ");APP(nm);APP(" is not a subtype of int");m[o]=0;
       #undef APP
       piton_raise_set("TypeError",m);
-    }else piton_raise_set("TypeError","int.__new__(X): X is not a type object (int)");
+    }else{
+      const char*actual=piton_unbound_value_type(cls,hint);
+      usize a=piton_strlen("int.__new__(X): X is not a type object ("),b=piton_strlen(actual);
+      char*m=(char*)piton_alloc(a+b+3);usize o=0;
+      #define APP(S) do{const char*_s=(S);usize _n=piton_strlen(_s);piton_memcpy(m+o,_s,_n);o+=_n;}while(0)
+      APP("int.__new__(X): X is not a type object (");APP(actual);APP(")");m[o]=0;
+      #undef APP
+      piton_raise_set("TypeError",m);
+    }
     return 0;
   }
   return value;
