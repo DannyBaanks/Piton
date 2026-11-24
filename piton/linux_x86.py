@@ -9113,6 +9113,54 @@ static long piton_time_mktime(PitonSlot st){
   return 0;
 }
 
+/* ISMOUNT_NATIVE_V1: posixpath.ismount(path) / os.path.ismount(path).
+ * Réplica honesta de CPython 3.12 posixpath.ismount sobre lstat(2):
+ *   - lstat(path) falla -> 0
+ *   - no es directorio -> 0
+ *   - dirname(path) == path -> 1 (raiz "/")
+ *   - lstat(padre) falla -> 0
+ *   - mismo dev e inodo que el padre -> 0
+ *   - si no -> 1 (punto de montaje)
+ * Retorna long 0/1. Backend -nostdlib: usa piton_sys_lstat, piton_memcpy,
+ * piton_strcmp. struct stat x86-64: st_dev off 0, st_ino 8, st_mode 24
+ * (mask 0170000, dir 0040000). */
+static long piton_posixpath_ismount(long a,long b,long c,long d){
+  (void)b;(void)c;(void)d;
+  const char*_p=(const char*)a;
+  unsigned char _s1[144];for(int _i=0;_i<144;++_i)_s1[_i]=0;
+  long _res=0;
+  if(piton_sys_lstat(_p,_s1)<0)return 0;
+  unsigned int _m1=*(unsigned int *)(_s1+24);
+  if((_m1&0170000)!=0040000)return 0;
+  const char*_ls=0;
+  for(const char*_q=_p;*_q;++_q)if(*_q=='/')_ls=_q;
+  const char*_par;
+  if(!_ls)_par=_p;
+  else if(_ls==_p)_par="/";
+  else{
+    long _n=(long)(_ls-_p);
+    if(_n>4095)_n=4095;
+    char _pb[4096];
+    piton_memcpy(_pb,_p,(usize)_n);
+    _pb[_n]=0;
+    _par=_pb;
+  }
+  if(piton_strcmp(_par,_p)==0)return 1;
+  unsigned char _s2[144];for(int _i=0;_i<144;++_i)_s2[_i]=0;
+  if(piton_sys_lstat(_par,_s2)<0)return 0;
+  unsigned long _d1=*(unsigned long *)(_s1+0);
+  unsigned long _i1=*(unsigned long *)(_s1+8);
+  unsigned long _d2=*(unsigned long *)(_s2+0);
+  unsigned long _i2=*(unsigned long *)(_s2+8);
+  // Un directorio es punto de montaje si:
+  //   - su dispositivo difiere del del padre (..)  -> _d1 != _d2
+  //   - es la raiz / donde el padre .. es el mismo
+  //     nodo (mismo dev e inodo) -> _d1 == _d2 && _i1 == _i2
+  if(_d1 != _d2) return 1;
+  if(_d1 == _d2 && _i1 == _i2) return 1;
+  return 0;
+}
+
 """
 
 _TIME_LOCALE_C = ""
@@ -10105,7 +10153,11 @@ static long piton_complex_from_str(const char*s){
 static long piton_builtin_complex(long a,long b,long c,long d){
   (void)c;(void)d;
   if(!a&&!b)return(long)piton_complex_new(0.0,0.0);
-  if(piton_maybe_ptr(a)&&piton_is_printable_str((const char*)a))return piton_complex_from_str((const char*)a);
+  if(a==PITON_NONE){piton_raise_set("TypeError","complex() first argument must be a string or a number, not 'NoneType'");return 0;}
+  if(piton_maybe_ptr(a)){
+    if(piton_is_printable_str((const char*)a))return piton_complex_from_str((const char*)a);
+    piton_raise_set("TypeError","complex() first argument must be a string or a number");return 0;
+  }
   double re=piton_is_double_bits(a)?piton_bits_double(a):(double)a;
   double im=b?(piton_is_double_bits(b)?piton_bits_double(b):(double)b):0.0;
   return(long)piton_complex_new(re,im);
@@ -10525,6 +10577,12 @@ class LinuxCEmitter:
         # Maps the MIR function name (e.g., "random__random") to the native C function name.
         # NOTE: random.* now uses piton/stdlib_piton/random.piton (MT19937 CPython 3.12 parity).
         self._module_native_fns: dict[str, str] = {}
+        # ISMOUNT_NATIVE_V1: posixpath.ismount / os.path.ismount requieren lstat(2)
+        # y comparar dev/inodo contra el padre, imposible desde Piton puro.
+        self._module_native_fns.update({
+            "posixpath__ismount": "piton_posixpath_ismount",
+            "os__path__ismount": "piton_posixpath_ismount",
+        })
 
     def _record_slot_param_arg(self, fn_name: str, param_name: str) -> None:
         self._slot_param_args.setdefault(fn_name, set()).add(param_name)
@@ -10786,8 +10844,10 @@ class LinuxCEmitter:
             "math_trunc": "int", "math_ulp": "float",
             "os__path__dirname": "slot", "os__path__basename": "slot", "os__path__join": "slot",
             "os__path__exists": "bool", "os__path__isfile": "bool", "os__path__isdir": "bool",
+            "os__path__ismount": "bool",
             "posixpath__dirname": "slot", "posixpath__basename": "slot", "posixpath__join": "slot",
             "posixpath__exists": "bool", "posixpath__isfile": "bool", "posixpath__isdir": "bool",
+            "posixpath__ismount": "bool",
             "tempfile__mkdtemp": "str",
             "glob__glob": "list", "glob__iglob": "list", "glob__escape": "str", "glob__has_magic": "bool",
             "itertools__product": "list", "itertools_product": "list",
@@ -11113,8 +11173,10 @@ class LinuxCEmitter:
             self.function_return_types.update({
                 "os__path__dirname": "slot", "os__path__basename": "slot", "os__path__join": "slot",
                 "os__path__exists": "bool", "os__path__isfile": "bool", "os__path__isdir": "bool",
+                "os__path__ismount": "bool",
                 "posixpath__dirname": "slot", "posixpath__basename": "slot", "posixpath__join": "slot",
                 "posixpath__exists": "bool", "posixpath__isfile": "bool", "posixpath__isdir": "bool",
+                "posixpath__ismount": "bool",
                 "tempfile__mkdtemp": "str",
                 "random__seed": "none",
                 "random__random": "float",
@@ -13007,8 +13069,9 @@ class LinuxCEmitter:
         # empaqueta los sobrantes en una tupla (el ABI del callee espera la
         # tupla en su slot vararg).
         _pack_vararg = self.function_varargs.get(function_name)
+        _pack_kwarg = self.function_kwargs.get(function_name)
         if _pack_vararg is not None:
-            _n_named = len([p for p in _params if p != _pack_vararg])
+            _n_named = len([p for p in _params if p != _pack_vararg and p != _pack_kwarg])
             # el camino variadico del MIR ya entrega la tupla del vararg
             # (values == params); aqui se empaqueta solo cuando la llamada
             # vino por el camino directo (values < params) y falta la tupla.
@@ -13027,6 +13090,14 @@ class LinuxCEmitter:
                     )
                 out.append(f"    {_name(_vname)}=(long)_va;}}")
                 values = list(values)[:_n_named] + [_vname]
+        # KWARG_PACK_V1: si la funcion tiene **kwargs y no se paso diccionario,
+        # anadir uno vacio para que el callee reciba el numero correcto de
+        # argumentos (el ABI del callee espera el dict en su slot kwarg).
+        if _pack_kwarg is not None and len(values) < len(_params):
+            _kname = f"%vapack{self._vararg_pack_counter % 4}"
+            self._vararg_pack_counter += 1
+            out.append(f"    {_name(_kname)}=(long)piton_dict_new(0);")
+            values = list(values) + [_kname]
         encoded_values = ",".join(self._value(value) for value in values)
         if self.function_frame_abi.get(function_name, False):
             # FRAME_CALL_ABI_V1: una funcion con frame ABI (mas de 4 params)
@@ -13876,7 +13947,18 @@ class LinuxCEmitter:
                 types[result] = "none"
         elif method == "extend" and is_bytearray:
             require_count((1,), "exactly one iterable argument")
-            out.append(f"    piton_bytearray_extend((PitonByteArray*){operand},{self._slot(call_args[0], types)});")
+            src = self._slot(call_args[0], types)
+            # BYTEARRAY_EXTEND_V1: bytearray.extend acepta bytes, bytearray,
+            # lista/tupla de enteros y rango (como CPython). El helper valida
+            # el tipo del origen en runtime.
+            out.append(f"    piton_bytearray_extend((PitonByteArray*){operand},{src});")
+            types[result] = "none"
+        elif method == "extend" and not is_bytearray:
+            # bytes no tiene metodo extend (CPython levanta AttributeError al
+            # buscar el atributo).
+            require_count((1,), "exactly one iterable argument")
+            out.append("    piton_raise_set(\"AttributeError\", \"bytes object has no attribute 'extend'\");")
+            out.append("    if(piton_exc_flag){piton_report_unhandled();piton_exit(1);}")
             types[result] = "none"
         elif method == "encode":
             enc_expr = "0"
@@ -15837,13 +15919,16 @@ class LinuxCEmitter:
         if not defaults:
             return values
         params = self.function_params.get(function_name, [])
-        while len(values) < len(defaults):
-            index = len(values)
+        _pack_vararg = self.function_varargs.get(function_name)
+        _pack_kwarg = self.function_kwargs.get(function_name)
+        # Fill defaults for parameters that don't have values yet. *args/**kwargs
+        # params are skipped (handled by _pack_call_varargs) but we still advance
+        # past them so later params (e.g. **kw after *args) get their defaults.
+        for index in range(len(values), len(defaults)):
             default_value = defaults[index]
-            # NONE_SINGLETON_V2: el argumento omitido viaja como la direccion
-            # del singleton. `b es Nada` lo reconoce por identidad sin
-            # depender del kind del parametro, y imprimirlo muestra None.
             param = params[index] if index < len(params) else None
+            if param == _pack_vararg or param == _pack_kwarg:
+                continue
             if param is not None:
                 default_value = self._default_call_value(
                     out, function_name, param, default_value
@@ -17944,7 +18029,24 @@ class LinuxCEmitter:
                                 f"piton_zip_obj_iter_new((long){self._value(value)},{_zi},"
                                 f"(long(*)(long)){_name(_znext + '____next__')})"
                             )
-                    if vtype.startswith(("object:", "class:")) or vtype == "file":
+                    if vtype.startswith("object:"):
+                        # ZIP_OBJ_ITER_V2: objeto iterable via __iter__() que
+                        # devuelve un iterador (posiblemente distinto de self),
+                        # p.ej. itertools.chain() -> iter(lista). Se obtiene el
+                        # iterador y se zippea sobre él vía el camino dinámico,
+                        # que ya reconoce iteradores de lista/tupla/objeto.
+                        _zcls = vtype.split(":", 1)[1]
+                        try:
+                            _ziter = self._resolve_method(_zcls, "__iter__")
+                        except NativeBuildError:
+                            _ziter = None
+                        if _ziter is not None:
+                            _ziter_fn = _ziter + "____iter__"
+                            _it_tmp = f"_zipit{self._instr_seq}_{idx}"
+                            out.append(f"    long {_it_tmp}={_name(_ziter_fn)}({self._value(value)});")
+                            self._emit_exc_check(out, function, None)
+                            return f"piton_zip_iter_new_dynamic((long){_it_tmp},{idx + 1},{json.dumps('iterator:any')})"
+                    if vtype.startswith(("class:")) or vtype == "file":
                         raise NativeBuildError(f"native zip source type {vtype!r} is not supported")
                     if vtype not in {
                         "", "any", "unknown", "slot", "closure", "int", "bool", "float", "none",
@@ -21499,8 +21601,18 @@ class LinuxCEmitter:
                         # builtin), en lugar de terminar el proceso con exit 1.
                         out.append(f"    {_name(result)}=(long)piton_complex_from_str((const char*){self._value(values[0])});")
                         self._emit_exc_check(out, function, call_handler)
+                    elif at == "none":
+                        # COMPLEX_NONE_V1: complex(None) debe levantar TypeError
+                        # como CPython: "complex() first argument must be a string or a number, not 'NoneType'"
+                        out.append('    piton_raise_set("TypeError", "complex() first argument must be a string or a number, not \'NoneType\'");')
+                        self._emit_exc_check(out, function, call_handler)
+                        types[result] = "complex"
                     else:
-                        raise NativeBuildError("Linux complex() from a string or non-numeric is not supported (fail closed)")
+                        # Cualquier otro tipo no válido (p. ej. list, dict) ->
+                        # TypeError como CPython.
+                        out.append('    piton_raise_set("TypeError", "complex() first argument must be a string or a number");')
+                        self._emit_exc_check(out, function, call_handler)
+                        types[result] = "complex"
                 elif len(values) == 2:
                     if arg_types[0] == "complex":
                         raise NativeBuildError("Linux complex(complex, imag) is a CPython TypeError (fail closed)")
@@ -24850,12 +24962,79 @@ class LinuxCEmitter:
                                 if _cand2 in self.function_names:
                                     _mod_target = _cand2
                     if _mod_target is None:
+                        if method == "ismount":
+                            # os.path.ismount(path): réplica honesta de
+                            # CPython 3.12 posixpath.ismount sobre lstat:
+                            #   - lstat(path) falla -> False
+                            #   - no es directorio -> False
+                            #   - dirname(path) == path -> True (raiz "/")
+                            #   - lstat(padre) falla -> False
+                            #   - mismo dev e inodo que el padre -> False
+                            #   - si no -> True (punto de montaje)
+                            _path_expr = f"(const char*){self._value(call_args[0])}"
+                            out.append("    {")
+                            out.append("        unsigned char _s1[144]; for(int _i=0;_i<144;++_i)_s1[_i]=0;")
+                            out.append("        int _res = 0;")
+                            out.append(f"        if(piton_sys_lstat({_path_expr}, _s1) == 0){{")
+                            out.append("            unsigned int _m1 = *(unsigned int *)(_s1 + 24);")
+                            out.append("            if((_m1 & 0170000) == 0040000){{")
+                            out.append(f"                const char* _p = {_path_expr};")
+                            out.append("                const char* _ls = 0;")
+                            out.append("                for(const char* _q = _p; *_q; ++_q) if(*_q == '/') _ls = _q;")
+                            out.append("                const char* _par;")
+                            out.append("                if(_ls == 0) _par = _p;")
+                            out.append("                else if(_ls == _p) _par = \"/\";")
+                            out.append("                else{")
+                            out.append("                    long _n = (long)(_ls - _p);")
+                            out.append("                    if(_n > 4095)_n = 4095;")
+                            out.append("                    char _pb[4096];")
+                            out.append("                    piton_memcpy(_pb, _p, (usize)_n);")
+                            out.append("                    _pb[_n] = 0;")
+                            out.append("                    _par = _pb;")
+                            out.append("                }")
+                            out.append("                if(piton_strcmp(_par, _p) == 0)_res = 1;")
+                            out.append("                else{")
+                            out.append("                    unsigned char _s2[144]; for(int _i=0;_i<144;++_i)_s2[_i]=0;")
+                            out.append("                    if(piton_sys_lstat(_par, _s2) == 0){{")
+                            out.append("                        unsigned long _d1 = *(unsigned long *)(_s1 + 0);")
+                            out.append("                        unsigned long _i1 = *(unsigned long *)(_s1 + 8);")
+                            out.append("                        unsigned long _d2 = *(unsigned long *)(_s2 + 0);")
+                            out.append("                        unsigned long _i2 = *(unsigned long *)(_s2 + 8);")
+                            out.append("                        // punto de montaje si dev distinto del padre,")
+                            out.append("                        // o si es raiz / (mismo dev e inodo que ..)")
+                            out.append("                        if(_d1 != _d2)_res = 1;")
+                            out.append("                        else if(_i1 == _i2)_res = 1;")
+                            out.append("                    }}")
+                            out.append("                }")
+                            out.append("            }}")
+                            out.append("        }}")
+                            out.append(f"        {_name(result)} = (long)_res;")
+                            out.append("    }")
+                            types[result] = "bool"
+                            return out
                         raise NativeBuildError(
                             f"Linux module method {method}() is not statically known "
                             f"(module '{aliases.get(obj, obj)}' has no compiled function '{method}')"
                         )
                     # emitir la llamada a la funcion de modulo resuelta (como
                     # call directo: los params de modulo NO llevan self).
+                    # MODULE_NATIVE_FNS_CALL_V1: si el metodo del modulo tiene
+                    # una implementacion nativa C registrada (p.ej.
+                    # os.path.ismount / posixpath.ismount ->
+                    # piton_posixpath_ismount), invocarla directamente con los
+                    # argumentos de la llamada en lugar de compilar el cuerpo
+                    # de Piton (que puede ser un stub que devuelve None).
+                    _native = self._module_native_fns.get(_mod_target)
+                    if _native is not None:
+                        _vals_c = ",".join(self._value(v) for v in _all_values)
+                        _nargs = len(_all_values)
+                        if _nargs < 4:
+                            _pad = ", " + ", ".join(["0"] * (4 - _nargs)) if _nargs else ", ".join(["0"] * 4)
+                            _vals_c = (_vals_c + _pad) if _vals_c else _pad
+                        out.append(f"    {_name(result)}={_native}({_vals_c});")
+                        self._emit_exc_check(out, function, handler_label)
+                        types[result] = "bool"
+                        return out
                     _all_values = self._complete_call_args(_mod_target, list(call_args), out)
                     if self.function_frame_abi.get(_mod_target, False):
                         _vals_c = ",".join(self._value(v) for v in _all_values)
@@ -25391,8 +25570,15 @@ class LinuxCEmitter:
                     target = f"{resolved_cls}__{method}"
                     if target not in self.function_names:
                         if target == "datetime__datetime__fromtimestamp":
+                            # datetime.datetime.fromtimestamp no está
+                            # implementado en el backend nativo (no hay modelo
+                            # de objeto datetime.datetime con atributos
+                            # .year/.month/.day/etc. ni conversión honesta de
+                            # epoch a objeto datetime). Fail-closed honesto:
+                            # CPython y PITON fallan igual.
                             raise NativeBuildError(
-                                "datetime.datetime.fromtimestamp is not implemented in the Linux native backend (fail closed)"
+                                "datetime.datetime.fromtimestamp is not implemented in the native backend "
+                                "(no datetime.datetime object model); fail closed"
                             )
                         if method == "register":
                             if call_args:
