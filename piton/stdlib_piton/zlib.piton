@@ -19,9 +19,9 @@ funcion decompress (data ):
     lanzar NotImplementedError ("zlib.decompress requiere una llamada directa en el backend nativo")
 
 
-funcion compressobj (*args ,**kwargs ):
+funcion compressobj (nivel =-1 ,metodo =8 ,wbits =15 ,memoria =8 ,estrategia =0 ):
     lanzar NotImplementedError ("zlib.compressobj no esta implementado en el backend nativo")
 
 
-funcion decompressobj (*args ,**kwargs ):
+funcion decompressobj (wbits =15 ):
     lanzar NotImplementedError ("zlib.decompressobj no esta implementado en el backend nativo")

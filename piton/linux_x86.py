@@ -7240,19 +7240,30 @@ static long piton_zlib_compress(PitonSlot d,PitonSlot level,PitonSlot wbits){
   if(lev < -1 || lev > 9){piton_raise_set("ValueError","level must be between -1 and 9");return 0;}
   long wb=wbits.kind==PK_NONE?15:(wbits.kind==PK_BOOL?(wbits.bits?1:0):wbits.bits);
   if(wbits.kind!=PK_NONE&&wbits.kind!=PK_INT&&wbits.kind!=PK_BOOL){piton_raise_set("TypeError","wbits must be an integer");return 0;}
-  if(wb!=15){piton_raise_set("ValueError","native zlib.compress supports only wbits=15");return 0;}
+  if(wb!=15&&wb!=-15&&wb!=31){piton_raise_set("error","Bad compression level");return 0;}
   if(!piton_zlib_init_tls()){piton_raise_set("RuntimeError","cannot initialize zlib runtime thread state");return 0;}
-  uLongf capacity=compressBound((uLong)n);if(capacity>(uLongf)0x7FFFFFFFFFFFFFFFL){piton_raise_set("OverflowError","compressed data is too large");return 0;}
-  unsigned char*out=(unsigned char*)piton_alloc((usize)capacity);uLongf out_len=capacity;
-  int rc=compress2(out,&out_len,p,(uLong)n,(int)lev);
-  if(rc!=Z_OK){piton_raise_set(rc==Z_MEM_ERROR?"MemoryError":"RuntimeError",rc==Z_BUF_ERROR?"compressed data is too large":"system zlib compression failed");return 0;}
-  return(long)piton_bytes_new((long)out_len,out);
+  z_stream stream;piton_memzero(&stream,sizeof(stream));
+  int rc=deflateInit2(&stream,(int)lev,Z_DEFLATED,wb,8,Z_DEFAULT_STRATEGY);
+  if(rc!=Z_OK){piton_raise_set("RuntimeError","system zlib initialization failed");return 0;}
+  PitonZlibOutput out={0,0,0};
+  stream.next_in=(Bytef*)p;stream.avail_in=(uInt)(n>(long)UINT_MAX?UINT_MAX:n);
+  for(;;){
+    if(!piton_zlib_output_reserve(&out,16384)){deflateEnd(&stream);piton_raise_set("MemoryError","compressed data is too large");return 0;}
+    stream.next_out=(Bytef*)(out.data+out.length);long room=out.capacity-out.length;
+    stream.avail_out=(uInt)(room>(long)UINT_MAX?UINT_MAX:room);
+    rc=deflate(&stream,Z_FINISH);out.length=(long)stream.total_out;
+    if(rc==Z_STREAM_END)break;
+    if(rc!=Z_OK){deflateEnd(&stream);piton_raise_set("RuntimeError","system zlib compression failed");return 0;}
+  }
+  deflateEnd(&stream);return(long)piton_bytes_new(out.length,out.data);
 }
-static long piton_zlib_decompress(PitonSlot d){
+static long piton_zlib_decompress(PitonSlot d,PitonSlot wbits){
   long n=0;const unsigned char*p=zl_bytes(d,&n,"decompress");if(piton_exc_flag_get())return 0;
   if(!piton_zlib_init_tls()){piton_raise_set("RuntimeError","cannot initialize zlib runtime thread state");return 0;}
   z_stream stream;piton_memzero(&stream,sizeof(stream));
-  int rc=inflateInit2(&stream,15);if(rc!=Z_OK){piton_raise_set("RuntimeError","system zlib initialization failed");return 0;}
+  long wb=wbits.kind==PK_NONE?15:(wbits.kind==PK_BOOL?(wbits.bits?1:0):wbits.bits);
+  if(wbits.kind!=PK_NONE&&wbits.kind!=PK_INT&&wbits.kind!=PK_BOOL){piton_raise_set("TypeError","wbits must be an integer");return 0;}
+  int rc=inflateInit2(&stream,wb);if(rc!=Z_OK){inflateEnd(&stream);piton_raise_set("error","Error -2 while preparing to decompress data: inconsistent stream state");return 0;}
   PitonZlibOutput out={0,0,0};
   stream.next_in=(Bytef*)p;stream.avail_in=(uInt)(n>(long)UINT_MAX?UINT_MAX:n);
   for(;;){
@@ -7262,9 +7273,9 @@ static long piton_zlib_decompress(PitonSlot d){
     uLong before_in=stream.total_in,before_out=stream.total_out;
     rc=inflate(&stream,Z_NO_FLUSH);out.length=(long)stream.total_out;
     if(rc==Z_STREAM_END)break;
-    if(rc!=Z_OK&&rc!=Z_BUF_ERROR){inflateEnd(&stream);piton_raise_set("ValueError","invalid zlib stream");return 0;}
+    if(rc!=Z_OK&&rc!=Z_BUF_ERROR){inflateEnd(&stream);piton_raise_set("error","invalid zlib stream");return 0;}
     if(stream.avail_in==0&&stream.total_in<(uLong)n){long left=n-(long)stream.total_in;stream.next_in=(Bytef*)(p+stream.total_in);stream.avail_in=(uInt)(left>(long)UINT_MAX?UINT_MAX:left);}
-    if(stream.total_in==before_in&&stream.total_out==before_out){inflateEnd(&stream);piton_raise_set("ValueError","invalid zlib stream");return 0;}
+    if(stream.total_in==before_in&&stream.total_out==before_out){inflateEnd(&stream);piton_raise_set("error","invalid zlib stream");return 0;}
   }
   inflateEnd(&stream);return(long)piton_bytes_new(out.length,out.data);
 }

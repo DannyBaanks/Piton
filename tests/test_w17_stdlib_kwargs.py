@@ -36,17 +36,18 @@ class NativeStdlibKeywordArguments(unittest.TestCase):
             "imprimir(zlib.decompress(packed_kw) == data)\n",
         )
 
-    def test_zlib_unimplemented_compression_modes_fail_closed(self):
-        with pytest.raises(NativeBuildError, match="raw DEFLATE and gzip wrappers are unsupported"):
-            compare_native_to_cpython(
-                "importar zlib\n"
-                "imprimir(zlib.compress(b'data', level=0, wbits=-15))\n"
-            )
-        with pytest.raises(NativeBuildError, match="requires explicit level=0"):
-            compare_native_to_cpython(
-                "importar zlib\n"
-                "imprimir(zlib.compress(b'data', wbits=15))\n"
-            )
+    def test_zlib_compression_modes_match_cpython(self):
+        """wbits=-15 (raw DEFLATE) and wbits=15 (zlib) now match CPython."""
+        _assert_matches(
+            self,
+            "importar zlib\n"
+            "imprimir(zlib.compress(b'data', level=0, wbits=-15))\n",
+        )
+        _assert_matches(
+            self,
+            "importar zlib\n"
+            "imprimir(zlib.compress(b'data', wbits=15))\n",
+        )
 
     def test_zlib_compress_data_remains_positional_only(self):
         with pytest.raises(NativeBuildError, match="positional-only argument 'data'"):

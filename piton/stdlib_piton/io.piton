@@ -62,7 +62,8 @@ clase BufferedWriter :
 
 
 clase BufferedReader :
-    pasar
+    funcion __init__ (self ,fileobj ):
+        pasar
 
 
 clase UnsupportedOperation :
