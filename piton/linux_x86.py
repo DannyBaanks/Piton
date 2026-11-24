@@ -151,11 +151,12 @@ static void piton_object_repr_hook_set(const char*cls,long fn){
   if(g_repr_hook_n>=PITON_REPR_HOOK_MAX)return;
   g_repr_hook_cls[g_repr_hook_n]=cls;g_repr_hook_fn[g_repr_hook_n]=fn;++g_repr_hook_n;
 }
+static long piton_dyn_unwrap_bits(long raw);
 static long piton_object_repr_hook(long obj,const char*cls){
   if(!cls)return 0;
   for(long i=0;i<g_repr_hook_n;++i)if(g_repr_hook_cls[i]&&piton_strcmp(g_repr_hook_cls[i],cls)==0){
     if(!g_repr_hook_fn[i])return 0;
-    return((long(*)(long))g_repr_hook_fn[i])(obj);
+    return piton_dyn_unwrap_bits(((long(*)(long))g_repr_hook_fn[i])(obj));
   }
   return 0;
 }
@@ -209,7 +210,7 @@ static long piton_object_str_hook(long obj,const char*cls){
   if(!cls)return 0;
   for(long i=0;i<g_str_hook_n;++i)if(g_str_hook_cls[i]&&piton_strcmp(g_str_hook_cls[i],cls)==0){
     if(!g_str_hook_fn[i])return 0;
-    return((long(*)(long))g_str_hook_fn[i])(obj);
+    return piton_dyn_unwrap_bits(((long(*)(long))g_str_hook_fn[i])(obj));
   }
   if(piton_is_exception_object((PitonObject*)obj))return piton_exception_str(obj);
   /* EXC_STR_V1: legacy objects with an explicit message attribute. */
@@ -8039,9 +8040,7 @@ static long piton_slice_dynamic(long bits,long lo,long hi,long has_step,long ste
                        :(long)piton_range_slice((PitonRange*)bits,lo,hi);
     }
     if(piton_is_printable_str((const char*)bits)){
-      piton_write(2,"TypeError: slice of a dynamically typed str is not supported in the native subset\n",88);
-      piton_exit(2);
-      return 0;
+      return piton_str_slice_step((const char*)bits,lo,hi,has_step?step:1);
     }
   }
   piton_raise_set("TypeError","object is not subscriptable");
@@ -17536,26 +17535,38 @@ class LinuxCEmitter:
                         inferred = "slot"
                     elif len(candidates) == 1:
                         inferred = next(iter(candidates))
+                    elif len(candidates) > 1 and (None in candidates or "none" in candidates):
+                        # MUTUAL_RECURSION_V1 + MIXED_RESULT_TYPES_V1:
+                        # - Un return None sintetico (`return None (None,)`) o ciclo
+                        #   mutuo (`None`) con 1 solo tipo conocido propaga ese tipo.
+                        # - Un `devolver None` explicito (`op is not None` y
+                        #   `operand_type(op) == "none"`) o 2+ tipos escalares
+                        #   distintos (todos <= _scalar) se boxea como "slot".
+                        known = {c for c in candidates if c is not None and c != self._UNKNOWN and c != "none"}
+                        _explicit_none = any(
+                            op is not None and operand_type(op) == "none"
+                            for op in returns
+                        )
+                        _known = {c for c in candidates if c is not None and c != self._UNKNOWN and c != "slot"}
+                        _scalar = {"int", "str", "float", "bool", "none"}
+                        if _known and _known <= _scalar and (len(known) > 1 or _explicit_none):
+                            inferred = "slot"
+                        elif len(known) == 1:
+                            inferred = next(iter(known))
+                        else:
+                            inferred = None
                     elif len(candidates) > 1:
                         # MIXED_RESULT_TYPES_V1: una funcion que devuelve mas de
-                        # un tipo escalar (int/str/float/bool/none) segun la
-                        # rama se tipa "slot" para que cada retorno se caja con
-                        # su kind real en runtime y type()/imprimir coincidan
-                        # con CPython. Las mezclas con tipos no escalares se
-                        # dejan como estaban (fail-closed "int").
+                        # un tipo escalar (int/str/float/bool) segun la rama se
+                        # tipa "slot" para que cada retorno se boxee con su kind
+                        # real en runtime y type()/imprimir coincidan con CPython.
+                        # Las mezclas con tipos no escalares se dejan fail-closed.
                         _known = {c for c in candidates if c is not None and c != self._UNKNOWN and c != "slot"}
                         _scalar = {"int", "str", "float", "bool", "none"}
                         if _known and _known <= _scalar:
                             inferred = "slot"
                         else:
                             inferred = None
-                    elif len(candidates) > 1 and (None in candidates or "none" in candidates):
-                        # MUTUAL_RECURSION_V1: un return sin resolver (llamada
-                        # mutua en ciclo) o un return None sintetico no debe
-                        # descartar el tipo de los returns SI resueltos: se propaga
-                        # el unico conocido si no es ambiguo.
-                        known = {c for c in candidates if c is not None and c != self._UNKNOWN and c != "none"}
-                        inferred = next(iter(known)) if len(known) == 1 else None
                     else:
                         inferred = None
                 if inferred is None or inferred == self._UNKNOWN:
