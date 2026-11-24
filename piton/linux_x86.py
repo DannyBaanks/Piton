@@ -1207,7 +1207,7 @@ static long piton_dyn_cmp(long opc,PitonSlot a,PitonSlot b){
     if(hk){
       long rv=piton_dunder_invoke(hk,2,av);
       if(piton_exc_flag_get())return 0;
-      return rv?1:0;
+      return piton_slot_truthy(piton_dyn_unbox(rv))?1:0;
     }
     if(opc==11){
       PitonDunderHook*ehk=0;
@@ -1216,7 +1216,7 @@ static long piton_dyn_cmp(long opc,PitonSlot a,PitonSlot b){
       if(ehk){
         long rv=piton_dunder_invoke(ehk,2,av);
         if(piton_exc_flag_get())return 0;
-        return rv?0:1;
+        return piton_slot_truthy(piton_dyn_unbox(rv))?0:1;
       }
     }
   }
@@ -4823,7 +4823,7 @@ static int piton_dict_eq(PitonDict*a,PitonDict*b){
 static void piton_print_set(PitonSet*s){if(s->kind==PK_SET&&s->length==0){piton_write(piton_print_fd,"set()",5);return;}piton_write(piton_print_fd,"{",1);for(long i=0;i<s->length;++i){if(i)piton_write(piton_print_fd,", ",2);piton_print_slot_repr(s->items[i]);}piton_write(piton_print_fd,"}",1);}
 static long piton_object_repr_hook(long obj,const char*cls);
 static long piton_object_str_hook(long obj,const char*cls);
-static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(v.bits==PITON_NOTIMPLEMENTED){piton_write(piton_print_fd,"NotImplemented",14);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{if(((PitonObject*)v.bits)->is_class){piton_write(piton_print_fd,"<class '",9);piton_write(piton_print_fd,((PitonObject*)v.bits)->class_name,piton_strlen((const char*)((PitonObject*)v.bits)->class_name));piton_write(piton_print_fd,"'>",2);break;}long _pr=piton_object_str_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)_pr);break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
+static void piton_print_slot(PitonSlot v){if(v.bits==(long)&piton_none_singleton){piton_write(piton_print_fd,"None",4);return;}if(v.bits==PITON_NOTIMPLEMENTED){piton_write(piton_print_fd,"NotImplemented",14);return;}switch(v.kind){case PK_NONE:piton_write(piton_print_fd,"None",4);break;case PK_BOOL:piton_write(piton_print_fd,v.bits?"True":"False",v.bits?4:5);break;case PK_INT:piton_write_int(v.bits);break;case PK_FLOAT:{char r[PITON_REPR_MAX];int n=piton_repr_double(r,(unsigned long long)v.bits);piton_write(piton_print_fd,r,(usize)n);break;}case PK_STR:piton_write(piton_print_fd,"'",1);piton_write(piton_print_fd,(const char*)v.bits,piton_strlen((const char*)v.bits));piton_write(piton_print_fd,"'",1);break;case PK_LIST:case PK_TUPLE:piton_print_seq((PitonSeq*)v.bits);break;case PK_DICT:piton_print_dict((PitonDict*)v.bits);break;case PK_SET:piton_print_set((PitonSet*)v.bits);break;case PK_BIGINT:piton_bigint_print_raw((void*)v.bits);break;case PK_RANGE:piton_range_print((PitonRange*)v.bits);break;case PK_BYTES:piton_bytes_print((PitonBytes*)v.bits);break;case PK_BYTEARRAY:piton_bytearray_print((PitonByteArray*)v.bits);break;case PK_COMPLEX:piton_print_complex_raw(v.bits);break;case PK_FROZENSET:if(((PitonSet*)v.bits)->length==0){piton_write(piton_print_fd,"frozenset()",11);break;}piton_write(piton_print_fd,"frozenset(",10);piton_print_set((PitonSet*)v.bits);piton_write(piton_print_fd,")",1);break;case PK_SLICE:piton_print_slice((PitonSlice*)v.bits);break;case PK_MEMORYVIEW:piton_print_memoryview((PitonMemoryView*)v.bits);break;case PK_OBJECT:{if(((PitonObject*)v.bits)->is_class){piton_write(piton_print_fd,"<class '",9);piton_write(piton_print_fd,((PitonObject*)v.bits)->class_name,piton_strlen((const char*)((PitonObject*)v.bits)->class_name));piton_write(piton_print_fd,"'>",2);break;}long _pr=piton_object_str_hook(v.bits,((PitonObject*)v.bits)->class_name);if(_pr){piton_print_str_raw((const char*)piton_dyn_unwrap_bits(_pr));break;}piton_write(piton_print_fd,"<object>",8);break;}default:piton_write(piton_print_fd,"<object>",8);}}
 /* SEQ_ELEM_REPR_V1: los elementos de una coleccion se imprimen con el
    repr completo de CPython (escapes de backslash/comillas); el camino
    viejo escribia el str raw dentro de [ ] y print(["a\\b"]) divergiaba.
@@ -4901,9 +4901,9 @@ static int piton_object_truthy_rt(long raw){
   if(!raw||!piton_maybe_ptr(raw)||((long*)raw)[1]!=PK_OBJECT)return raw!=0;
   PitonObject*o=(PitonObject*)raw;
   PitonDunderHook*hk=piton_object_dunder_hook_find(o->class_name,"__bool__");
-  if(hk)return piton_dunder_invoke(hk,1,&raw)!=0;
+  if(hk)return piton_slot_truthy(piton_dyn_unbox(piton_dunder_invoke(hk,1,&raw)));
   hk=piton_object_dunder_hook_find(o->class_name,"__len__");
-  if(hk)return piton_dunder_invoke(hk,1,&raw)!=0;
+  if(hk)return piton_slot_truthy(piton_dyn_unbox(piton_dunder_invoke(hk,1,&raw)));
   return 1;
 }
 static int piton_slot_truthy(PitonSlot v){switch(v.kind){case PK_NONE:return 0;case PK_BOOL:return v.bits?1:0;case PK_INT:return v.bits!=0;case PK_BIGINT:return !piton_bigint_is_zero((void*)v.bits);case PK_FLOAT:return piton_bits_double(v.bits)!=0.0;case PK_COMPLEX:return piton_cx_truthy_bits(v.bits);case PK_DICT:return ((PitonDict*)v.bits)->length>0;case PK_SET:return ((PitonSet*)v.bits)->length>0;case PK_FROZENSET:return ((PitonSet*)v.bits)->length>0;case PK_STR:return v.bits&&((const char*)v.bits)[0]!=0;case PK_LIST:case PK_TUPLE:return ((PitonSeq*)v.bits)->length>0;case PK_RANGE:return piton_range_len((PitonRange*)v.bits)>0;case PK_OBJECT:return piton_object_truthy_rt(v.bits);default:return v.bits!=0;}}
@@ -6042,6 +6042,13 @@ static PitonSlot piton_slot_guess(long bits){
    que las claves string comparen lexicográficamente) y escribe los originales
    de vuelta en la lista (sort es in-place). */
 static PitonSlot piton_sort_key_slot(long bits){
+  /* SORT_KEY_SLOT_UNBOX_V1: una lambda cuyo resultado es dinamico devuelve
+     una caja PitonSlot. La comparacion necesita el valor y su kind real;
+     interpretar la caja como un entero ordenaba por su direccion. */
+  if(bits==PITON_NONE)return (PitonSlot){0,PK_NONE};
+  if(bits==PITON_NOTIMPLEMENTED)return (PitonSlot){bits,PK_NOTIMPLEMENTED};
+  if(piton_maybe_ptr(bits)&&((long*)bits)[2]==0x4A534F4E424F5821LL)
+    return *(PitonSlot*)bits;
   /* Derivacion de kind para una CLAVE de sort: STR primero (un literal de
      rodata como 'b' tiene bytes basura en ptr[1] que piton_slot_guess leia
      como kind de coleccion). Luego cabecera de coleccion, luego int. */
@@ -10740,6 +10747,9 @@ class LinuxCEmitter:
         # valor (repr "<class 'X'>") y temps que contienen una union de tipos
         # (`int | str`). tipo()/callable() los distinguen de un str normal.
         self._typeobj_names: dict[str, str] = {}
+        # TYPE_SLOT_RUNTIME_V1: resultado de tipo(slot) -> operando slot
+        # original, para resolver __name__ sin perder la repr comparable.
+        self._dynamic_type_slots: dict[str, str] = {}
         self._unbound_builtin_values: dict[str, tuple[str, str, int, str]] = {}
         self._module_unbound_builtin_values: dict[str, tuple[str, str, int, str]] = {}
         self._union_type_temps: set[str] = set()
@@ -11259,6 +11269,7 @@ class LinuxCEmitter:
         # <module> (%18 = complex) no debe alcanzar al %18 de otra funcion
         # (_reconstructor: base.__init__).
         self._typeobj_names = {}
+        self._dynamic_type_slots = {}
         self._unbound_builtin_values = {}
         self._union_type_temps = set()
         self._unpack_counter = 0
@@ -18041,11 +18052,11 @@ class LinuxCEmitter:
                                 f"(long(*)(long)){_name(_znext + '____next__')})"
                             )
                     if vtype.startswith("object:"):
-                        # ZIP_OBJ_ITER_V2: objeto iterable via __iter__() que
-                        # devuelve un iterador (posiblemente distinto de self),
-                        # p.ej. itertools.chain() -> iter(lista). Se obtiene el
-                        # iterador y se zippea sobre él vía el camino dinámico,
-                        # que ya reconoce iteradores de lista/tupla/objeto.
+                        # ZIP_OBJ_ITER_V2: solo un iterable cuyo __iter__
+                        # devuelve un ITERADOR nativo conocido puede usar el
+                        # camino dinamico. Un objeto arbitrario con __iter__
+                        # pero sin __next__ propio conserva el contrato
+                        # fail-closed de W17 (no se inventa un iterador).
                         _zcls = vtype.split(":", 1)[1]
                         try:
                             _ziter = self._resolve_method(_zcls, "__iter__")
@@ -18053,10 +18064,38 @@ class LinuxCEmitter:
                             _ziter = None
                         if _ziter is not None:
                             _ziter_fn = _ziter + "____iter__"
-                            _it_tmp = f"_zipit{self._instr_seq}_{idx}"
-                            out.append(f"    long {_it_tmp}={_name(_ziter_fn)}({self._value(value)});")
-                            self._emit_exc_check(out, function, None)
-                            return f"piton_zip_iter_new_dynamic((long){_it_tmp},{idx + 1},{json.dumps('iterator:any')})"
+                            _ziter_rt = self.function_return_types.get(_ziter_fn)
+                            if _ziter_rt is None or not (
+                                _ziter_rt.startswith("iterator:")
+                                or _ziter_rt in {"generator", "genexpr"}
+                            ):
+                                # ITER_NEW_RETURN_V1: la inferencia generica
+                                # puede dejar `return iter_new(...)` como int;
+                                # el MIR es la evidencia de que es un iterador
+                                # nativo (p.ej. itertools.chain.__iter__).
+                                _zmir = next(
+                                    (_f for _f in self._module_funcs if _f.name == _ziter_fn),
+                                    None,
+                                )
+                                if _ziter_fn == "itertools__chain____iter__" and _zmir is not None and any(
+                                    _i.op == "return"
+                                    and _i.args
+                                    and any(
+                                        _j.op == "iter_new" and _j.result == _i.args[0]
+                                        for _bb in _zmir.blocks for _j in _bb.instructions
+                                    )
+                                    for _bb in _zmir.blocks for _i in _bb.instructions
+                                ):
+                                    _ziter_rt = "iterator:any"
+                            if _ziter_rt is not None and (
+                                _ziter_rt.startswith("iterator:")
+                                or _ziter_rt in {"generator", "genexpr"}
+                            ):
+                                _it_tmp = f"_zipit{self._instr_seq}_{idx}"
+                                out.append(f"    long {_it_tmp}={_name(_ziter_fn)}({self._value(value)});")
+                                self._emit_exc_check(out, function, None)
+                                return f"piton_zip_iter_new_dynamic((long){_it_tmp},{idx + 1},{json.dumps(_ziter_rt)})"
+                        raise NativeBuildError(f"native zip source type {vtype!r} is not supported")
                     if vtype.startswith(("class:")) or vtype == "file":
                         raise NativeBuildError(f"native zip source type {vtype!r} is not supported")
                     if vtype not in {
@@ -18704,6 +18743,8 @@ class LinuxCEmitter:
                 self._typeobj_names[result] = self._typeobj_names[source]
                 if source in self._union_type_temps:
                     self._union_type_temps.add(result)
+            if source in self._dynamic_type_slots:
+                self._dynamic_type_slots[result] = self._dynamic_type_slots[source]
             if source in self._dict_val_types:
                 self._dict_val_types[result] = self._dict_val_types[source]
             if source in self._closure_origin:
@@ -19326,7 +19367,14 @@ class LinuxCEmitter:
                 vtype = types.get(operand, "int")
                 if vtype.startswith("class:"):
                     vtype = vtype.split(":", 1)[1]
-                if vtype in {"int", "bool"}:
+                if (function.name, operand) in self._dyn_slot_temps:
+                    # DYN_TRUTH_TEMP_V1: una llamada dinamica puede devolver
+                    # una caja aunque el tipo local sea int; no evaluar la
+                    # direccion de la caja como verdadera.
+                    out.append(
+                        f"    {_name(result)}=!piton_slot_truthy(piton_dyn_unbox({self._value(operand)}));"
+                    )
+                elif vtype in {"int", "bool"}:
                     # NONE_NOT_V1: a value of static kind int may be the
                     # PITON_NONE singleton (a None default/param shares the
                     # int slot); it is falsy, so `no X` must be True there.
@@ -20802,6 +20850,8 @@ class LinuxCEmitter:
                         out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},{len(call_args)},_rc_args);}}')
                     else:
                         out.append(f"    {_name(result)}={target}({frame_args});")
+                    if self.function_return_types.get(target_fn) == "slot":
+                        out.append(f"    {_name(result)}=piton_slot_truthy(piton_dyn_unbox({_name(result)}));")
                     self._emit_exc_check(out, function, compare_handler)
                     types[result] = "bool"
                     return out
@@ -20834,9 +20884,13 @@ class LinuxCEmitter:
                         eq_call_args = self._complete_call_args(target_fn, list(eq_call_args), out)
                         frame_args = ",".join(self._value(v) for v in eq_call_args)
                         if self.function_frame_abi.get(target_fn, False):
-                            out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=!(piton_frame_call((long)&{target},{len(eq_call_args)},_rc_args));}}')
+                            out.append(f'    {{long _rc_args[]={{ {frame_args} }}; {_name(result)}=piton_frame_call((long)&{target},{len(eq_call_args)},_rc_args);}}')
                         else:
-                            out.append(f"    {_name(result)}=!({target}({frame_args}));")
+                            out.append(f"    {_name(result)}={target}({frame_args});")
+                        if self.function_return_types.get(target_fn) == "slot":
+                            out.append(f"    {_name(result)}=!piton_slot_truthy(piton_dyn_unbox({_name(result)}));")
+                        else:
+                            out.append(f"    {_name(result)}=!({_name(result)});")
                         self._emit_exc_check(out, function, compare_handler)
                         types[result] = "bool"
                         return out
@@ -21113,6 +21167,8 @@ class LinuxCEmitter:
                     return out
                 else:
                     types[result] = "int"
+                    if self.function_return_types.get(function.name) == "slot":
+                        self._dyn_slot_temps.add((function.name, result))
                 # NAMEDTUPLE_CTOR_V1: namedtuple() devuelve la closure ctor;
                 # quien la reciba (Punto) debe tiparse como closure con origen
                 # collections__namedtuple__ctor para que Punto(px, py)
@@ -21227,12 +21283,20 @@ class LinuxCEmitter:
                                 if repr_cls is None and _getopt_cls + "____repr__" in self.function_names:
                                     repr_cls = _getopt_cls
                             if str_cls is not None:
-                                out.append(f'    piton_print_str_raw((const char*){_name(str_cls+"__"+"__str__")}({self._cval(value)}));')
+                                _print_str_fn = str_cls + "____str__"
+                                _print_str_expr = f'{_name(_print_str_fn)}({self._cval(value)})'
+                                if self.function_return_types.get(_print_str_fn) == "slot":
+                                    _print_str_expr = f'piton_dyn_unwrap_bits({_print_str_expr})'
+                                out.append(f'    piton_print_str_raw((const char*){_print_str_expr});')
                                 continue
                             if repr_cls is not None:
                                 # REPR_FALLBACK_V1: CPython usa __repr__ cuando
                                 # no hay __str__; mismo contrato de retorno str.
-                                out.append(f'    piton_print_str_raw((const char*){_name(repr_cls+"__"+"__repr__")}({self._cval(value)}));')
+                                _print_repr_fn = repr_cls + "____repr__"
+                                _print_repr_expr = f'{_name(_print_repr_fn)}({self._cval(value)})'
+                                if self.function_return_types.get(_print_repr_fn) == "slot":
+                                    _print_repr_expr = f'piton_dyn_unwrap_bits({_print_repr_expr})'
+                                out.append(f'    piton_print_str_raw((const char*){_print_repr_expr});')
                                 continue
                             is_exc = cls_name in _BUILTIN_EXCEPTIONS or any(
                                 c in {"Exception", "BaseException"} or c in _BUILTIN_EXCEPTIONS
@@ -21367,6 +21431,8 @@ class LinuxCEmitter:
                             len_cls = cls_name
                         if len_cls is not None:
                             out.append(f'    {_name(result)}={_name(len_cls+"__"+"__len__")}({self._value(values[0])});')
+                            if self.function_return_types.get(len_cls + "____len__") == "slot":
+                                out.append(f"    {_name(result)}=piton_dyn_unwrap_bits({_name(result)});")
                             types[result] = "int"
                             return out
                 if len(values) == 1 and values[0] in self._chr_results:
@@ -21682,6 +21748,8 @@ class LinuxCEmitter:
                             out.append(f'    {{long _hh[]={{ {self._value(values[0])} }}; {_name(result)}=piton_frame_call((long)&{target},1,_hh);}}')
                         else:
                             out.append(f"    {_name(result)}={target}({self._value(values[0])});")
+                        if self.function_return_types.get(hit + "____hash__") == "slot":
+                            out.append(f"    {_name(result)}=piton_dyn_unwrap_bits({_name(result)});")
                         types[result] = "int"
                         return out
                 if vtype in {"set", "set:frozen"}:
@@ -22100,6 +22168,8 @@ class LinuxCEmitter:
                                     out.append(f'    {{long _s_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{target},{len(call_args)},_s_args);}}')
                                 else:
                                     out.append(f"    {_name(result)}={target}({args_c});")
+                                if self.function_return_types.get(target_fn) == "slot":
+                                    out.append(f"    {_name(result)}=piton_dyn_unwrap_bits({_name(result)});")
                                 self._emit_exc_check(out, function, call_handler)
                             else:
                                 repr_cls = self._find_class_method(cls_name, "__repr__")
@@ -22117,6 +22187,8 @@ class LinuxCEmitter:
                                         out.append(f'    {{long _r_args[]={{ {args_c} }}; {_name(result)}=piton_frame_call((long)&{target},{len(call_args)},_r_args);}}')
                                     else:
                                         out.append(f"    {_name(result)}={target}({args_c});")
+                                    if self.function_return_types.get(target_fn) == "slot":
+                                        out.append(f"    {_name(result)}=piton_dyn_unwrap_bits({_name(result)});")
                                     self._emit_exc_check(out, function, call_handler)
                                 else:
                                     out.append(f"    {{long _pr=piton_object_str_hook({operand},\"{cls_name}\"); {_name(result)}=_pr?_pr:(long)\"<{cls_name} object>\";}}")
@@ -22893,20 +22965,19 @@ class LinuxCEmitter:
                         # 'object' por el default — divergencia silenciosa).
                         out.append(f"    {_name(result)}=(long)" + json.dumps("<class 'ellipsis'>") + ";")
                     elif value_type == "slot":
-                        # TYPE_SLOT_RUNTIME_V1: el argumento es una caja slot
-                        # (su tipo real solo existe en runtime). Se construye
-                        # un objeto de clase REAL cuyo class_name es el tipo
-                        # vivo de la caja, para que `tipo(x).__name__` y la
-                        # impresion coincidan con CPython.
+                        # TYPE_SLOT_RUNTIME_V1: conservar el mismo valor de
+                        # tipo que usa `tipo([])` / `int`: una repr de clase
+                        # comparable por contenido. Un objeto nuevo por llamada
+                        # perdia la igualdad `tipo(x) == tipo([])` y despachaba
+                        # reprlib por la rama equivocada.
                         out.append(
                             f"    {{PitonSlot _ts={self._slot(values[0], types)};"
-                            f" const char* _tn;"
-                            f" switch(_ts.kind){{case PK_INT:_tn=\"int\";break;case PK_FLOAT:_tn=\"float\";break;case PK_BOOL:_tn=\"bool\";break;case PK_STR:_tn=\"str\";break;case PK_NONE:_tn=\"NoneType\";break;default:_tn=\"object\";break;}}"
-                            f" PitonObject* _to=piton_object_new(_tn,0);_to->is_class=1;"
-                            f" piton_object_set(_to,\"__name__\",piton_slot((long)_tn,PK_STR));"
-                            f" {_name(result)}=(long)_to;}}"
+                            f" {_name(result)}=(long)piton_type_repr(_ts.kind);}}"
                         )
-                        types[result] = "object:object"
+                        types[result] = "str"
+                        self._dynamic_type_slots[result] = values[0]
+                        # La marca estatica no puede representar una union;
+                        # las comparaciones usan la repr viva emitida arriba.
                         return out
                     else:
                         out.append(f"    {_name(result)}=(long)piton_type_repr({self._kind(value_type)});")
@@ -23198,7 +23269,13 @@ class LinuxCEmitter:
                             _rt = types.get(values[_id_idx], _rt)
                         types[result] = _rt
                         if _rt == "int" and not getattr(self, "_dyn_callable_results", False):
-                            out.append(f"    {_name(result)}=piton_dyn_unwrap_bits({_name(result)});")
+                            if self.function_return_types.get(function.name) == "slot":
+                                # DYN_UNWRAP_RETURN_SLOT_V1: conservar la caja
+                                # hasta el return. Desenvolver aqui y reboxar
+                                # despues pierde la etiqueta str/bool real.
+                                self._dyn_slot_temps.add((function.name, result))
+                            else:
+                                out.append(f"    {_name(result)}=piton_dyn_unwrap_bits({_name(result)});")
                         if _rt == "int" and getattr(self, "_dyn_callable_results", False):
                             # JSON_FIRST_CLASS_V1: llamada por valor de funcion con destino no resuelto:
                             # el retorno puede ser una caja json; se desempaca/etiqueta en runtime.
@@ -23244,6 +23321,28 @@ class LinuxCEmitter:
                 return out
             if isinstance(args[0], str) and types.get(args[0]) == "builtin":
                 out.append(f"    return {self._value(args[0])};")
+                return out
+            if (
+                isinstance(args[0], str)
+                and self.function_return_types.get(function.name) == "slot"
+                and types.get(args[0]) == "slot"
+            ):
+                # SLOT_RETURN_PRESERVE_V1: el valor ya es una caja etiquetada.
+                # No desenvolverlo y volverlo a etiquetar como PK_INT: eso
+                # corrompia retornos str/bool de lambdas y dunders decorados.
+                out.append(f"    return {self._value(args[0])};")
+                return out
+            if (
+                isinstance(args[0], str)
+                and self.function_return_types.get(function.name) == "slot"
+                and (function.name, args[0]) in self._dyn_slot_temps
+            ):
+                # SLOT_RETURN_REBOX_V1: el call-site desenvolvio una caja
+                # porque el tipo local era desconocido. Re-etiquetar desde
+                # los bits conserva str/bool/float/None en vez de PK_INT.
+                out.append(
+                    f"    return (long)piton_slot_box_new(piton_dyn_unbox({self._value(args[0])}));"
+                )
                 return out
             if (
                 isinstance(args[0], str)
@@ -23746,6 +23845,20 @@ class LinuxCEmitter:
             # MODULE_ATTR_MISSING_V1: nombre real del modulo (4.o argumento, literal).
             module_display = args[3] if len(args) > 3 and isinstance(args[3], str) else None
             owner_type = types.get(obj, "")
+            if attr in {"__name__", "__qualname__"} and obj in self._dynamic_type_slots:
+                # TYPE_SLOT_NAME_V1: la repr de clase sigue siendo el valor
+                # comparable; el nombre se deriva de la kind viva del slot.
+                _dts = self._dynamic_type_slots[obj]
+                out.append(
+                    f"    {{PitonSlot _dt=piton_dyn_unbox({self._value(_dts)});"
+                    f" const char* _dn=piton_type_repr(_dt.kind);"
+                    f" const char* _db=_dn+8; usize _dl=piton_strlen(_db);"
+                    f" char* _dc=(char*)piton_alloc(_dl);"
+                    f" piton_memcpy(_dc,_db,_dl-2);_dc[_dl-2]=0;"
+                    f" {_name(result)}=(long)_dc;}}"
+                )
+                types[result] = "str"
+                return out
             _builtin_owner = self._typeobj_names.get(obj)
             # dict se carga por la ruta CLASS_LOAD_V1 (tipo `class:dict`) para
             # enrutar dict.fromkeys y no queda en _typeobj_names; permitir que
@@ -26608,7 +26721,12 @@ class LinuxCEmitter:
             # (non-null pointers are always truthy).
             value = args[0]
             vtype = types.get(value, "int")
-            out.append(f"    {_name(result)}=({self._truth_expr(value, vtype, strict=True)});")
+            if (function.name, value) in self._dyn_slot_temps:
+                out.append(
+                    f"    {_name(result)}=piton_slot_truthy(piton_dyn_unbox({self._value(value)}));"
+                )
+            else:
+                out.append(f"    {_name(result)}=({self._truth_expr(value, vtype, strict=True)});")
             types[result] = "bool"
         elif op == "unpack_check":
             # UNPACK_ARITY_V1: CPython verifies the element count on
@@ -27011,8 +27129,21 @@ class LinuxCEmitter:
                 self._emit_exc_check(out, function, _gi_handler)
                 return out
             else:
-                out.append(f'    {_name(result)}=piton_getitem_dyn({self._value(coll)},{self._slot(idx, types)});')
-                types[result] = "int"
+                if self.function_return_types.get(function.name) == "slot":
+                    # DYN_GETITEM_RETURN_SLOT_V1: piton_getitem_dyn devuelve
+                    # bits crudos; una funcion slot debe devolver una caja
+                    # con la kind real para que sort/decoradores no lean la
+                    # direccion de la caja como un entero.
+                    out.append(
+                        f"    {{PitonSlot*_gi=piton_slot_box_new(piton_dyn_unbox("
+                        f"piton_getitem_dyn({self._value(coll)},{self._slot(idx, types)})));"
+                        f" {_name(result)}=(long)_gi;}}"
+                    )
+                    types[result] = "slot"
+                    self._dyn_slot_temps.add((function.name, result))
+                else:
+                    out.append(f'    {_name(result)}=piton_getitem_dyn({self._value(coll)},{self._slot(idx, types)});')
+                    types[result] = "int"
                 self._emit_exc_check(out, function, _gi_handler)
                 return out
         elif op == "get_slice":

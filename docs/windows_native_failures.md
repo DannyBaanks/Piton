@@ -559,3 +559,63 @@ Log normalizado a UTF-8 guardado en `/tmp/opencode/w24/job.log`; sha256 disponib
 - El fix del unpacking en `piton/x86.py` no se ha demostrado seguro: no hay acceso a ejecucion PE Windows.
 - La reduccion de la cuarentena no declara resuelto ninguno de los 83 fallos: solo separa el hueco del backend PE de los problemas portables.
 - La prueba real de que estos tests fallan en Windows PE sigue siendo el siguiente run de CI en el runner `windows-2025-vs2026`.
+
+## Wave 24 (PR #54, CI run 45335431850) - cuarentena ampliada, 2026-11-24
+
+Origen: PR #54, head `0471d11`, run `45335431850`, job `test-windows (3.12)`
+`138246275822`. Resultado crudo del job:
+
+```
+34 failed, 1009 passed, 692 skipped, 1053 xfailed, 5 xpassed, 2 warnings, 170 subtests passed in 4205.58s (1:10:05)
+```
+
+El tracker de esa corrida fue:
+
+```
+lista=1040 aplicados=1040 XFAIL=1035 XPASS=5 SKIP=0 ERROR=0 SIN_REPORTE=0
+FUERA_DE_LA_LISTA=34 ERRORES_CUARENTENA=0 COLECCION=0 XPASS_ESTRICTO=0
+```
+
+Los 34 nodeids se reprodujeron tambien localmente en Windows 11 con CPython
+3.12.10 y pytest 9.1.1, usando el worktree del PR y los mismos tests W24 mas
+los dos tests zlib actualizados. El resultado local fue **34 failed, 1 passed**;
+el unico test que paso fue
+`TestLinuxDynObjects::test_set_attr_uncaught_none_raises_attribute_error`, que
+no se anade a la lista.
+
+### Clasificacion medida
+
+| bucket | casos | lectura |
+|---|---:|---|
+| `ValueError: too many values to unpack` desde `piton/x86.py` | 8 | el MIR de W24 emite formas de `method_call`, `get_attr`, `set_attr` y `closure_new` que el emitter PE no desempaqueta |
+| `piton.x86.NativeBuildError` | 12 | from-import multi-fichero (`io`, `datetime`, `itertools`), `complex`/`bytes`/`bytearray` en posicion no soportada, `len` de celda, `isinstance` de parametro sin tipo y payload de excepcion |
+| `AssertionError` de salida/returncode | 14 | retornos mixtos impresos como direcciones o `0`, `setattr(None)` con mensaje distinto, zlib `wbits` sin paridad y `open(fileobj=...)` sin el TypeError esperado |
+
+Los 34 IDs se desglosan asi: 15 en `test_w24_linux_dyn_objects.py`, 12 en
+`test_w24_mir_and_super.py`, 6 en `test_w24_stdlib_builtins_parity.py` y 1 en
+`test_w17_stdlib_kwargs.py` + 1 en `test_w19_zlib_native.py` (los dos tests
+zlib actualizados por W24). La suma por archivos es 34; la tabla de buckets se
+conserva como clasificacion del log de CI, no como una afirmacion de que el
+backend PE haya quedado corregido.
+
+### Que se hizo
+
+- `tests/quarantine_windows.txt`: **+34 nodeids** sobre los 1040 existentes;
+  total **1074 IDs unicos**, sin duplicados. Cada test sigue ejecutandose en
+  Windows como `xfail(strict=False)` y el tracker sigue fallando ante cualquier
+  rojo fuera de la lista.
+- `docs/windows_native_failures.md`: esta seccion registra el run, la
+  reproduccion local y la diferencia entre el hueco PE y las regresiones Linux.
+- `piton/linux_x86.py`: las 22 regresiones Linux de W24 se corrigieron en el
+  backend Linux y se verificaron en Ubuntu 24.04 (63/63 en la bateria focalizada
+  de regresiones + W24). Ese arreglo no se presenta como soporte PE.
+
+### NOT_DEMONSTRATED
+
+No se portaron a `piton/x86.py` el boxing de retornos mixtos, `setattr`
+dinamico, `zlib.deflateInit2/inflateInit2`, `open(fileobj=...)`, el modelo de
+`io.BufferedReader`, `itertools.chain`, `os.path.ismount` ni las posiciones de
+`bytes`/`bytearray`. La cuarentena declara el hueco medido; no declara esos
+features resueltos en Windows. La prueba de aceptacion es el siguiente run de
+CI: deben quedar **0 fallos fuera de la lista** y los 34 tests deben aparecer
+como `XFAIL`, no desaparecer de la ejecucion.
