@@ -4,10 +4,7 @@ from __future__ import annotations
 import unittest
 import zlib
 
-import pytest
-
 from piton.native_differential import compare_native_to_cpython
-from piton.x86 import NativeBuildError
 
 
 def _assert_matches(testcase: unittest.TestCase, source: str) -> None:
@@ -78,12 +75,12 @@ class ZlibNativeParity(unittest.TestCase):
             "imprimir(zlib.decompress(packed) == expected)\n",
         )
 
-    def test_raw_wbits_stays_fail_closed(self):
-        with pytest.raises(NativeBuildError, match="raw DEFLATE and gzip wrappers are unsupported"):
-            compare_native_to_cpython(
-                "importar zlib\n"
-                "imprimir(zlib.compress(b'data', level=0, wbits=-15))\n"
-            )
+    def test_raw_wbits_matches_cpython(self):
+        _assert_matches(
+            self,
+            "importar zlib\n"
+            "imprimir(zlib.compress(b'data', level=0, wbits=-15))\n",
+        )
 
 
 if __name__ == "__main__":

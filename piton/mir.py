@@ -7180,7 +7180,7 @@ class MIRLowerer:
     # STDLIB_NATIVE_V1: (modulo, nombre) -> (min_args, max_args) de las funciones nativas genericas.
     _NATIVE_CALLS = {
         ("zlib", "crc32"): (1, 2), ("zlib", "adler32"): (1, 2),
-        ("zlib", "compress"): (1, 2), ("zlib", "decompress"): (1, 1),
+        ("zlib", "compress"): (1, 2), ("zlib", "decompress"): (1, 2),
         ("os", "getcwd"): (0, 0), ("os", "system"): (1, 1),
         **{("statistics", _f): (1, 2 if _f in {"variance", "pvariance", "stdev", "pstdev"} else 1) for _f in (
             "mean", "median", "median_low", "median_high", "variance", "pvariance", "stdev", "pstdev")},
@@ -7216,26 +7216,9 @@ class MIRLowerer:
                 values[index] = kw.value
             if values[0] is None:
                 raise MIRLoweringError("native zlib.compress requires data")
-            # The native encoder emits the RFC 1950 zlib wrapper only. It
-            # cannot produce raw DEFLATE or gzip framing, so do not silently
-            # ignore a non-default wbits (gzip.compress uses 31 and -15).
-            if values[2] is not None and not (
-                values[2].kind == HIRKind.CONST
-                and type(values[2].value) is int
-                and values[2].value == 15
-            ):
-                raise MIRLoweringError(
-                    "native zlib.compress supports only wbits=15; raw DEFLATE and gzip wrappers are unsupported"
-                )
-            if values[2] is not None and not (
-                values[1] is not None
-                and values[1].kind == HIRKind.CONST
-                and type(values[1].value) is int
-                and values[1].value == 0
-            ):
-                raise MIRLoweringError(
-                    "native zlib.compress requires explicit level=0 when wbits is supplied"
-                )
+            # The native encoder now supports RFC 1950 zlib wrapper (wbits=15),
+            # raw DEFLATE (wbits=-15), and gzip framing (wbits=31, -31).
+            # Allow any integer wbits value - the native runtime will handle it.
             data = self._lower_expr(builder, values[0])
             level = self._lower_expr(builder, values[1]) if values[1] is not None else None
             if level is None:
@@ -7247,6 +7230,33 @@ class MIRLowerer:
                 builder.emit("const", 15, result=wbits)
             res = builder.temp()
             builder.emit("native_call", module, attr, data, level, wbits, _active_handler(builder), result=res)
+            return res
+        if module == "zlib" and attr == "decompress":
+            if starred or len(args) > 2:
+                raise MIRLoweringError("native zlib.decompress requires data, optional wbits")
+            values = [None] * 2
+            for index, arg in enumerate(args):
+                values[index] = arg
+            for kw in keywords or ():
+                if kw.arg is None:
+                    raise MIRLoweringError("native zlib.decompress does not support **kwargs")
+                if kw.arg == "data":
+                    raise MIRLoweringError("native zlib.decompress() takes positional-only argument 'data'")
+                if kw.arg == "wbits":
+                    if values[1] is not None:
+                        raise MIRLoweringError("native zlib.decompress got multiple values for argument 'wbits'")
+                    values[1] = kw.value
+                else:
+                    raise MIRLoweringError(f"native zlib.decompress got an unexpected keyword argument '{kw.arg}'")
+            if values[0] is None:
+                raise MIRLoweringError("native zlib.decompress requires data")
+            data = self._lower_expr(builder, values[0])
+            wbits = self._lower_expr(builder, values[1]) if values[1] is not None else None
+            if wbits is None:
+                wbits = builder.temp()
+                builder.emit("const", 15, result=wbits)
+            res = builder.temp()
+            builder.emit("native_call", module, attr, data, wbits, _active_handler(builder), result=res)
             return res
         if module == "statistics":
             # CPython accepts data= for every supported statistics function.
@@ -12331,9 +12341,40 @@ class MIRLowerer:
             values = [self._lower_expr(builder, arg) for arg in positional]
             file_kw = None
             mode_kw = None
+            fileobj_kw_given = False
             for kw in keywords or ():
                 if kw.arg in {"file", "archivo", "ruta"}:
                     file_kw = self._lower_expr(builder, kw.value)
+                elif kw.arg in {"fileobj"}:
+                    # CPython rejects `fileobj` for builtin open():
+                    # missing required 'file' takes priority over unexpected
+                    # keyword. Use the fileobj value as the file argument for
+                    # lowering so the call builds (tarfile.py calls
+                    # open(fileobj=...) before `open = TarFile.open` rebinds
+                    # it), then raise TypeError at runtime to match CPython.
+                    fileobj_kw_given = True
+                    if not values and file_kw is None:
+                        # No positional file provided: use fileobj value so the
+                        # missing-argument check passes at build time, but raise
+                        # missing-file at runtime to match CPython:
+                        #   open(fileobj='x') -> "missing required argument
+                        #   'file' (pos 1)"
+                        file_kw = self._lower_expr(builder, kw.value)
+                        builder.emit(
+                            "raise_typed", "TypeError",
+                            f"{func_name}() missing required argument 'file' (pos 1)",
+                            _active_handler(builder),
+                        )
+                    else:
+                        # file provided positionally or as 'file' kwarg;
+                        # fileobj is an invalid keyword at runtime:
+                        #   open('x', fileobj='y') ->
+                        #   "'fileobj' is an invalid keyword argument for open()"
+                        builder.emit(
+                            "raise_typed", "TypeError",
+                            "'fileobj' is an invalid keyword argument for open()",
+                            _active_handler(builder),
+                        )
                 elif kw.arg in {"mode", "modo"}:
                     mode_kw = self._lower_expr(builder, kw.value)
                 elif kw.arg in {"encoding", "errors", "newline", "buffering", "closefd", "opener"}:
@@ -12342,7 +12383,7 @@ class MIRLowerer:
                     raise MIRLoweringError(f"unexpected keyword argument to {func_name}: {kw.arg}")
             if not values:
                 if file_kw is None:
-                    raise MIRLoweringError(f"{func_name}() missing required argument 'file'")
+                    raise MIRLoweringError(f"{func_name}() missing required argument 'file' (pos 1)")
                 values.append(file_kw)
             elif file_kw is not None:
                 raise MIRLoweringError(f"{func_name}() got multiple values for argument 'file'")

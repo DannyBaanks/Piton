@@ -288,3 +288,6 @@ funcion expandvars (p ):
 
 funcion abspath (p ):
     lanzar NotImplementedError ('posixpath.abspath no esta implementado en el backend nativo: no hay cwd')
+
+funcion ismount (p ):
+    pasar
