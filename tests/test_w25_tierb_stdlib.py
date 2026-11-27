@@ -45,7 +45,9 @@ def _load_corpus_module():
 
 PC4 = _load_corpus_module()
 
-from piton.linux_x86 import compile_native_linux  # noqa: E402  (tras ROOT en sys.path)
+# Vía el helper de tests/native_linux.py: en Windows sin WSL con distro Linux
+# el test se SALTA (require_linux_native) en vez de fallar con "gcc" ausente.
+from native_linux import compile_native_linux  # noqa: E402  (tras ROOT en sys.path)
 
 
 def _page_source() -> str:
@@ -197,8 +199,13 @@ class HelpOsNotClosableV1(unittest.TestCase):
             stdin=subprocess.DEVNULL,
         )
         self.assertEqual(process.returncode, 0, process.stderr)
-        return process.stdout.decode("utf-8", "replace")
+        # En Windows CPython emite CRLF: normalizar para comparar por lineas.
+        return process.stdout.decode("utf-8", "replace").replace("\r\n", "\n")
 
+    # En Windows CPython 3.12 no imprime `environ` en la pagina de help(os)
+    # (medido en CI: salida identica con y sin el centinela), asi que la
+    # premisa solo se verifica en POSIX.
+    @unittest.skipIf(sys.platform == "win32", "help(os) no lista os.environ en Windows")
     def test_oracle_output_is_environment_dependent_not_a_constant(self):
         base = self._oracle_help_os()
         with_sentinel = self._oracle_help_os({"PITON_W25_SENTINEL": "w25"})
@@ -220,8 +227,9 @@ class HelpOsNotClosableV1(unittest.TestCase):
         # primera linea del docstring de CPython (os.__doc__)
         self.assertIn("OS routines for NT or Posix", output)
         # seccion FILE: la ruta de la stdlib instalada en este equipo
-        stdlib_dir = os.path.dirname(os.__file__)
-        self.assertIn(f"    {stdlib_dir}/os.py", output)
+        # En Windows pydoc imprime la ruta en minusculas (normcase la iguala).
+        stdlib_file = os.path.normcase(os.path.join(os.path.dirname(os.__file__), "os.py"))
+        self.assertIn(f"    {stdlib_file}", os.path.normcase(output))
         self.assertGreater(len(output.splitlines()), 1000)
 
     def test_native_help_runs_but_keeps_the_documented_os_gap(self):
