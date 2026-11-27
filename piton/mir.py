@@ -440,6 +440,8 @@ class MIRFunction:
     # ARITY_QUALNAME_V1: __qualname__ de CPython ("fab.<locals>.doble",
     # "C.m", "<lambda>"). Solo lo usan los mensajes de ligadura de argumentos.
     qualname: Optional[str] = None
+    # INTROSPECTION_DOC_V1: leading string literal in this scope, or None.
+    docstring: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -455,6 +457,7 @@ class MIRFunction:
             "is_generator": self.is_generator,
             "is_coroutine": self.is_coroutine,
             "is_async_generator": self.is_async_generator,
+            "docstring": self.docstring,
             "blocks": [block.to_dict() for block in self.blocks],
         }
 
@@ -482,6 +485,10 @@ class MIRModule:
     # CLASS_ATTR_TYPES_V1: {clase: {atributo: tipo literal}} — lo llena el
     # lowerer desde los class_attrs; los backends lo consultan en get_attr.
     class_attr_types: dict = field(default_factory=dict)
+    # INTROSPECTION_DOC_V1: metadata captured from source literals only.
+    class_docstrings: dict = field(default_factory=dict)
+    module_docstrings: dict = field(default_factory=dict)
+    class_attributes: dict = field(default_factory=dict)
     # INJECTED_ATTR_TYPES_V1: attr_name -> tipo, para attrs escritos en
     # runtime sobre un receiver sin tipo estatico (decoradores: cls.author
     # = "PITON"). Clave global: el get_attr no sabe que clase recibe la
@@ -490,7 +497,12 @@ class MIRModule:
     function_aliases: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"functions": [function.to_dict() for function in self.functions]}
+        return {
+            "functions": [function.to_dict() for function in self.functions],
+            "class_docstrings": dict(self.class_docstrings),
+            "module_docstrings": dict(self.module_docstrings),
+            "class_attributes": {k: sorted(v) for k, v in self.class_attributes.items()},
+        }
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -601,6 +613,8 @@ MIR_OP_EFFECTS: dict[str, str] = {
     "event_run": "OPAQUE", "coro_run": "OPAQUE",
     "sys_exit": "OPAQUE",
     "sys_argv": "OPAQUE",
+    # NATIVE_HELP_V1 writes captured source documentation to stdout.
+    "native_help_info": "IO",
     "terminal_init": "OPAQUE", "terminal_cleanup": "OPAQUE", "terminal_write": "OPAQUE", "terminal_read": "OPAQUE",
 }
 
@@ -969,6 +983,19 @@ class MIRLowerer:
         self._module_function_names: set[str] = set()
         self._module_function_bindings: dict[str, str] = {}
         self._timeit_namespace_counter = 0
+        self.function_docstrings: dict[str, str | None] = {}
+        self.class_docstrings: dict[str, str | None] = {}
+        self.module_docstrings: dict[str, str | None] = {}
+        self.class_attributes: dict[str, set[str]] = {}
+
+    @staticmethod
+    def _leading_docstring(body: Any) -> str | None:
+        """Return a real leading string literal, never inferred documentation."""
+        items = list(body or [])
+        if (items and getattr(items[0], "kind", None) == HIRKind.CONST
+                and isinstance(getattr(items[0], "value", None), str)):
+            return items[0].value
+        return None
 
     def _mod_prefix(self, module_name: str) -> str:
         norm = module_name.replace('.', '__')
@@ -2185,6 +2212,10 @@ class MIRLowerer:
         self._json_alias_assign_ids = set()
         self._collect_json_aliases(hir)
         self.functions = []
+        self.function_docstrings = {}
+        self.class_docstrings = {}
+        self.module_docstrings = {}
+        self.class_attributes = {}
         self.generators = {}
         self.classes = {}
         self.class_parents = {}
@@ -2237,6 +2268,13 @@ class MIRLowerer:
         self.function_qualnames: dict[str, str] = {}
         imported_modules = modules or {}
         self.imported_modules = imported_modules
+        self.module_docstrings["__main__"] = self._leading_docstring(
+            getattr(hir, "body", []) or []
+        )
+        for _module_name, _module_hir in imported_modules.items():
+            self.module_docstrings[_module_name] = self._leading_docstring(
+                getattr(_module_hir, "body", []) or []
+            )
         self._validate_nonlocal_bindings(hir)
         for imported in (modules or {}).values():
             if getattr(imported, "kind", None) == HIRKind.MODULE:
@@ -2641,6 +2679,10 @@ class MIRLowerer:
 
             for node in _find_classes(module_body):
                 self._current_class_position = self._module_statement_positions.get(id(node))
+                self.class_docstrings[node.name] = self._leading_docstring(
+                    getattr(node, "body", []) or []
+                )
+                self.class_attributes.setdefault(node.name, set())
                 for class_decorator in getattr(node, "decorators", None) or []:
                     if self._decorator_qualified_name(class_decorator) == "functools.total_ordering":
                         self.total_ordering_classes.add(node.name)
@@ -2794,6 +2836,7 @@ class MIRLowerer:
                                 if not hasattr(self, "class_attrs"):
                                     self.class_attrs = {}
                                 self.class_attrs.setdefault(node.name, {})[target.name] = method.value
+                                self.class_attributes.setdefault(node.name, set()).add(target.name)
                         continue
                     if method.kind == HIRKind.ANN_ASSIGN:
                         target = getattr(method, "target", None)
@@ -2836,6 +2879,7 @@ class MIRLowerer:
                         self._lower_decorated_dunder_forwarder(node.name, method, is_gen_method)
                     if role in (None, "staticmethod", "classmethod", "decorated"):
                         self.classes[node.name].add(method.name)
+                        self.class_attributes.setdefault(node.name, set()).add(method.name)
                     elif role == "decorated_getter":
                         self.class_properties.setdefault(node.name, {}).setdefault(
                             prop_name, {}
@@ -3167,6 +3211,12 @@ class MIRLowerer:
         module = MIRModule(self.functions)
         module.classes = dict(self.classes)
         module.class_parents = dict(self.class_parents)
+        module.class_docstrings = dict(self.class_docstrings)
+        module.module_docstrings = dict(self.module_docstrings)
+        module.class_attributes = {
+            name: set(attributes)
+            for name, attributes in self.class_attributes.items()
+        }
         module.class_dynamic_bases = set(self.class_dynamic_bases)
         # CLASS_ATTR_TYPES_V1: tipos literales de los atributos de clase,
         # para que el backend tipa `obj.attr` / `Cls.attr` y no imprima un
@@ -3473,6 +3523,10 @@ class MIRLowerer:
         metodos simples, atributos de clase y `pasar`. Las bases se validan
         igual (un base nativo sin definir sigue fail-closed)."""
         qualified = f"{module_name.replace('.', '__')}__{node.name}"
+        self.class_docstrings[qualified] = self._leading_docstring(
+            getattr(node, "body", []) or []
+        )
+        self.class_attributes.setdefault(qualified, set())
         def _extract_imported_base(_b):
             if getattr(_b, "kind", None) == HIRKind.SUBSCR:
                 _b = _b.value
@@ -3529,6 +3583,7 @@ class MIRLowerer:
                 for target in method.targets:
                     if target.kind in (HIRKind.STORE, HIRKind.LOAD):
                         self.class_attrs.setdefault(qualified, {})[target.name] = method.value
+                        self.class_attributes.setdefault(qualified, set()).add(target.name)
                 continue
             if method.kind != HIRKind.FUNC_DEF:
                 raise MIRLoweringError(
@@ -3552,6 +3607,7 @@ class MIRLowerer:
             )
             if role in (None, "staticmethod", "classmethod"):
                 self.classes[qualified].add(method.name)
+                self.class_attributes.setdefault(qualified, set()).add(method.name)
             else:
                 self.class_properties.setdefault(qualified, {}).setdefault(prop_name, {})[role] = symbol
 
@@ -3955,12 +4011,40 @@ class MIRLowerer:
             builder.emit("object_new", "module", None, result=obj)
             builder.emit("set_attr", obj, "__name__", emit_const(name))
             builder.emit("set_attr", obj, "__package__", emit_const(package))
+            builder.emit(
+                "set_attr", obj, "__doc__",
+                emit_const(self.module_docstrings.get(name)),
+            )
             if file is not None:
                 builder.emit("set_attr", obj, "__file__", emit_const(file))
+            source_module = self.imported_modules.get(name)
+            if source_module is not None:
+                for item in getattr(source_module, "body", []) or []:
+                    if item.kind == HIRKind.FUNC_DEF:
+                        symbol = self._mod_func_symbol(name, item.name)
+                        value = builder.temp()
+                        builder.emit("load", symbol, result=value)
+                        builder.emit("set_attr", obj, item.name, value)
+                    elif item.kind == HIRKind.CLASS_DEF:
+                        symbol = f"{name.replace('.', '__')}__{item.name}"
+                        value = builder.temp()
+                        builder.emit("load", symbol, result=value)
+                        builder.emit("set_attr", obj, item.name, value)
+                    elif item.kind == HIRKind.ASSIGN:
+                        node = getattr(item, "value", None)
+                        if getattr(node, "kind", None) != HIRKind.CONST:
+                            continue
+                        for target in getattr(item, "targets", []) or []:
+                            attr = getattr(target, "name", None)
+                            if not isinstance(attr, str):
+                                continue
+                            value = builder.temp()
+                            builder.emit("const", node.value, result=value)
+                            builder.emit("set_attr", obj, attr, value)
             return obj
 
         emit_store("__name__", emit_const("__main__"))
-        emit_store("__doc__", emit_const(None))
+        emit_store("__doc__", emit_const(self.module_docstrings.get("__main__")))
         emit_store("__package__", emit_const(None))
         # __loader__: CPython reporta el cargador del modulo (__main__). Piton no
         # tiene importlib, pero str(format) necesita el texto <class ...>.
@@ -4028,8 +4112,11 @@ class MIRLowerer:
         vararg_name = getattr(args, "vararg", None) if args else None
         kwarg_name = getattr(args, "kwarg", None) if args else None
         body = list(getattr(node, "body", []))
+        docstring = self._leading_docstring(body)
         builder = _Builder(qualified_name or node.name, [*captures, *positional_params])
         builder.function.qualname = py_qualname or node.name
+        builder.function.docstring = docstring
+        self.function_docstrings[qualified_name or node.name] = docstring
         self.function_qualnames[qualified_name or node.name] = builder.function.qualname
         # JSON_SPECIALIZE_V1: en una especializacion, el parametro que recibia json.dumps/dump es un alias.
         builder.json_param_alias = dict(getattr(self, "_json_spec_alias_for", {}).get(qualified_name or node.name, {}))
@@ -9978,6 +10065,72 @@ class MIRLowerer:
         if kind == HIRKind.CALL:
             if (
                 node.func.kind == HIRKind.LOAD
+                and node.func.name == "help"
+                and not node.keywords
+                and len(node.args) == 1
+            ):
+                target = node.args[0]
+                help_info = None
+                if target.kind == HIRKind.LOAD:
+                    local_name = target.name
+                    module_name = builder.module_aliases.get(local_name)
+                    if module_name is not None:
+                        help_info = (
+                            "module", module_name,
+                            self.module_docstrings.get(module_name),
+                        )
+                    candidate = builder.from_import_aliases.get(local_name, local_name)
+                    class_name = builder.name_classes.get(local_name)
+                    if class_name is None and candidate in self.class_docstrings:
+                        class_name = candidate
+                    if class_name is not None and class_name in self.class_docstrings:
+                        help_info = (
+                            "class", class_name,
+                            self.class_docstrings[class_name],
+                        )
+                    if candidate in self.function_docstrings:
+                        help_info = (
+                            "function", local_name,
+                            self.function_docstrings[candidate],
+                        )
+                elif target.kind == HIRKind.ATTR:
+                    root = target.value
+                    class_name = None
+                    if root.kind == HIRKind.LOAD:
+                        root_name = root.name
+                        class_name = builder.name_classes.get(root_name)
+                        if class_name is None:
+                            class_name = builder.from_import_aliases.get(root_name, root_name)
+                    elif root.kind == HIRKind.CALL and root.func.kind == HIRKind.LOAD:
+                        class_name = builder.from_import_aliases.get(
+                            root.func.name, root.func.name,
+                        )
+                        # Preserve constructor side effects before resolving
+                        # the statically known bound method's documentation.
+                        self._lower_expr(builder, root)
+                    if class_name is not None:
+                        method_symbol = f"{class_name}__{target.attr}"
+                        if method_symbol in self.function_docstrings:
+                            help_info = (
+                                "function", target.attr,
+                                self.function_docstrings[method_symbol],
+                            )
+                elif target.kind == HIRKind.CALL and target.func.kind == HIRKind.LOAD:
+                    class_name = builder.from_import_aliases.get(
+                        target.func.name, target.func.name,
+                    )
+                    if class_name in self.class_docstrings:
+                        self._lower_expr(builder, target)
+                        help_info = (
+                            "class", class_name,
+                            self.class_docstrings[class_name],
+                        )
+                if help_info is not None:
+                    result = builder.temp()
+                    builder.emit("native_help_info", *help_info, result=result)
+                    return result
+            if (
+                node.func.kind == HIRKind.LOAD
                 and node.func.name in self._module_function_names
                 and (
                     node.func.name in builder.local_names
@@ -11397,11 +11550,11 @@ class MIRLowerer:
                     result = builder.temp()
                     builder.emit("load", _mmod.replace('.', '__'), result=result)
                     return result
-                # Soporte minimo para __doc__ de atributos de modulo
+                # The module object's docstring comes only from its leading
+                # source literal; native modules without one expose None.
                 if _mattrs and _mattrs[-1] == '__doc__':
-                    # Devuelve cadena vacia verificable
                     result = builder.temp()
-                    builder.emit("const", "", result=result)
+                    builder.emit("const", self.module_docstrings.get(_mmod), result=result)
                     return result
                 if len(_mattrs) == 1 and _mmod in _NATIVE_MODULE_CONSTS and _mattrs[0] in _NATIVE_MODULE_CONSTS[_mmod]:
                     result = builder.temp()
@@ -11470,6 +11623,78 @@ class MIRLowerer:
                         )
                     result = builder.temp()
                     builder.emit("const", metadata[node.attr], result=result)
+                    return result
+            if node.attr == "__doc__":
+                # __doc__ comes only from source docstrings captured in this
+                # module. Resolve names and instances where the receiver is
+                # statically known; leave dynamic receivers on ordinary object
+                # lookup so runtime values keep their own documentation.
+                receiver = getattr(node, "value", None)
+                doc_value: Any = None
+                found_doc = False
+                if getattr(receiver, "kind", None) == HIRKind.LOAD:
+                    local_name = getattr(receiver, "name", None)
+                    class_name = builder.name_classes.get(local_name)
+                    if class_name is None:
+                        candidate = builder.from_import_aliases.get(local_name, local_name)
+                        if candidate in self.class_docstrings:
+                            class_name = candidate
+                        elif candidate in self.classes:
+                            class_name = candidate
+                    if class_name is not None and class_name in self.class_docstrings:
+                        doc_value = self.class_docstrings[class_name]
+                        found_doc = True
+                    if not found_doc:
+                        module_name = builder.module_aliases.get(local_name)
+                        if module_name is not None and module_name in self.module_docstrings:
+                            doc_value = self.module_docstrings[module_name]
+                            found_doc = True
+                    if not found_doc:
+                        candidates = [local_name]
+                        binding = builder.module_function_bindings.get(local_name)
+                        if binding:
+                            candidates.append(binding)
+                        imported = builder.from_import_aliases.get(local_name)
+                        if imported:
+                            candidates.append(imported)
+                        for candidate in candidates:
+                            if candidate in self.function_docstrings:
+                                doc_value = self.function_docstrings[candidate]
+                                found_doc = True
+                                break
+                elif getattr(receiver, "kind", None) == HIRKind.CALL:
+                    constructor = getattr(receiver, "func", None)
+                    if getattr(constructor, "kind", None) == HIRKind.LOAD:
+                        local_name = getattr(constructor, "name", None)
+                        class_name = builder.from_import_aliases.get(local_name, local_name)
+                        if class_name in self.class_docstrings:
+                            doc_value = self.class_docstrings[class_name]
+                            found_doc = True
+                elif getattr(receiver, "kind", None) == HIRKind.ATTR:
+                    class_name = None
+                    root = getattr(receiver, "value", None)
+                    if getattr(root, "kind", None) == HIRKind.LOAD:
+                        local_name = getattr(root, "name", None)
+                        class_name = builder.name_classes.get(local_name)
+                        if class_name is None:
+                            class_name = builder.from_import_aliases.get(local_name, local_name)
+                        if class_name not in self.classes:
+                            class_name = builder.module_aliases.get(local_name, class_name)
+                    elif getattr(root, "kind", None) == HIRKind.CALL:
+                        constructor = getattr(root, "func", None)
+                        if getattr(constructor, "kind", None) == HIRKind.LOAD:
+                            local_name = getattr(constructor, "name", None)
+                            class_name = builder.from_import_aliases.get(local_name, local_name)
+                    if class_name is None and builder.super_class:
+                        class_name = builder.super_class
+                    if class_name:
+                        method_symbol = f"{class_name}__{receiver.attr}"
+                        if method_symbol in self.function_docstrings:
+                            doc_value = self.function_docstrings[method_symbol]
+                            found_doc = True
+                if found_doc:
+                    result = builder.temp()
+                    builder.emit("const", doc_value, result=result)
                     return result
             if builder.super_class and node.value.kind == HIRKind.LOAD and node.value.name == "super":
                 # Permitir super() como carga para progresar

@@ -4401,6 +4401,127 @@ static PitonSlot piton_object_get(PitonObject*o,const char*name){
   }
   piton_raise_set("AttributeError",name?name:"");return (PitonSlot){0,PK_NONE};
 }
+/* INTROSPECTION_V1: dir() se forma en runtime con nombres vivos del objeto y
+   metadata literal de clases/funciones generada por LinuxCEmitter. help() usa
+   exclusivamente los docstrings reales capturados por el lowerer; no fabrica
+   la salida completa de pydoc ni inventarios de módulos del host. */
+static const char*piton_user_class_attr_name(const char*class_name,long index);
+static const char*piton_user_global_name(long index);
+static int piton_introspection_function_info(long raw,const char**name,const char**doc);
+static void piton_dir_add(const char**names,long*count,const char*name){
+  if(!name||!*name||*count>=512)return;
+  for(long i=0;i<*count;++i)if(!piton_strcmp(names[i],name))return;
+  names[(*count)++]=name;
+}
+static void piton_dir_add_many(const char**names,long*count,const char*const*items){
+  for(long i=0;items[i];++i)piton_dir_add(names,count,items[i]);
+}
+static int piton_dir_name_order(const char*a,const char*b){return piton_strcmp(a,b)>0;}
+static long piton_builtin_dir(PitonSlot subject,int has_subject){
+  static const char*const object_names[]={
+    "__class__","__delattr__","__dict__","__dir__","__doc__","__eq__",
+    "__format__","__ge__","__getattribute__","__getstate__","__gt__",
+    "__hash__","__init__","__init_subclass__","__le__","__lt__",
+    "__module__","__ne__","__new__","__reduce__","__reduce_ex__",
+    "__repr__","__setattr__","__sizeof__","__str__","__subclasshook__",
+    "__weakref__",0};
+  static const char*const module_names[]={
+    "__doc__","__loader__","__name__","__package__","__spec__",0};
+  static const char*const function_names[]={
+    "__annotations__","__builtins__","__call__","__class__","__closure__",
+    "__code__","__defaults__","__delattr__","__dict__","__dir__","__doc__",
+    "__eq__","__format__","__ge__","__get__","__getattribute__",
+    "__getstate__","__globals__","__gt__","__hash__","__init__",
+    "__init_subclass__","__kwdefaults__","__le__","__lt__","__module__",
+    "__name__","__ne__","__new__","__qualname__","__reduce__",
+    "__reduce_ex__","__repr__","__setattr__","__sizeof__","__str__",
+    "__subclasshook__","__type_params__",0};
+  const char*names[512];long count=0;
+  if(!has_subject){
+    if(piton_globals_ns&&piton_maybe_ptr(piton_globals_ns)&&((long*)piton_globals_ns)[1]==PK_DICT){
+      PitonDict*d=(PitonDict*)piton_globals_ns;
+      for(long i=0;i<d->length;++i)if(d->items[i].key.kind==PK_STR)
+        piton_dir_add(names,&count,(const char*)d->items[i].key.bits);
+    }
+    piton_dir_add_many(names,&count,module_names);
+    for(long i=0;;++i){const char*n=piton_user_global_name(i);if(!n)break;piton_dir_add(names,&count,n);}
+  }else if(piton_is_closure(subject.bits)||piton_introspection_function_info(subject.bits,0,0)){
+    piton_dir_add_many(names,&count,function_names);
+    if(piton_is_closure(subject.bits)){
+      PitonObject*a=piton_closure_attrs(subject.bits,0);
+      for(long i=0;a&&i<a->length;++i)piton_dir_add(names,&count,a->attrs[i].name);
+    }
+  }else if(piton_builtin_is_marker(subject.bits)){
+    piton_dir_add_many(names,&count,object_names);
+    piton_dir_add(names,&count,"__name__");
+  }else if(subject.kind==PK_OBJECT&&subject.bits&&piton_maybe_ptr(subject.bits)&&((long*)subject.bits)[1]==PK_OBJECT){
+    PitonObject*o=(PitonObject*)subject.bits;
+    if(o->class_name&&!piton_strcmp(o->class_name,"module")){
+      piton_dir_add_many(names,&count,module_names);
+      for(long i=0;i<o->length;++i)piton_dir_add(names,&count,o->attrs[i].name);
+    }else if(o->is_class){
+      piton_dir_add_many(names,&count,object_names);
+      for(long i=0;i<o->length;++i){
+        const char*n=o->attrs[i].name;
+        if(piton_strcmp(n,"__name__")&&piton_strcmp(n,"__qualname__")&&
+           piton_strcmp(n,"__bases__")&&piton_strcmp(n,"__mro__"))piton_dir_add(names,&count,n);
+      }
+      for(long i=0;;++i){const char*n=piton_user_class_attr_name(o->class_name,i);if(!n)break;piton_dir_add(names,&count,n);}
+    }else{
+      piton_dir_add_many(names,&count,object_names);
+      for(long i=0;i<o->length;++i){
+        const char*n=o->attrs[i].name;
+        if(piton_strcmp(n,"__bases__")&&piton_strcmp(n,"__mro__"))piton_dir_add(names,&count,n);
+      }
+      for(long i=0;;++i){const char*n=piton_user_class_attr_name(o->class_name,i);if(!n)break;piton_dir_add(names,&count,n);}
+    }
+  }else{
+    piton_dir_add_many(names,&count,object_names);
+  }
+  for(long i=1;i<count;++i){const char*key=names[i];long j=i;while(j>0&&piton_dir_name_order(names[j-1],key)){names[j]=names[j-1];--j;}names[j]=key;}
+  PitonSeq*out=piton_seq_new(PK_LIST,count);
+  for(long i=0;i<count;++i)out->items[i]=(PitonSlot){(long)names[i],PK_STR};
+  return(long)out;
+}
+static long piton_builtin_help_named(const char*kind,const char*name,const char*doc){
+  if(!kind)kind="object";if(!name)name="object";
+  piton_write(piton_print_fd,"Help on ",8);
+  piton_write(piton_print_fd,kind,piton_strlen(kind));
+  piton_write(piton_print_fd," ",1);
+  piton_write(piton_print_fd,name,piton_strlen(name));
+  piton_write(piton_print_fd,":\n\n",3);
+  if(doc&&*doc){piton_write(piton_print_fd,doc,piton_strlen(doc));if(doc[piton_strlen(doc)-1]!='\n')piton_write(piton_print_fd,"\n",1);}
+  else{
+    const char*missing="No source documentation available.\n";
+    piton_write(piton_print_fd,missing,piton_strlen(missing));
+  }
+  return PITON_NONE;
+}
+static long piton_builtin_help(PitonSlot subject,int has_subject){
+  if(!has_subject){
+    const char*intro="Welcome to the native PITON help utility.\nUse help(object) to inspect source documentation.\n";
+    piton_write(piton_print_fd,intro,piton_strlen(intro));
+    return PITON_NONE;
+  }
+  const char*name=0;const char*doc=0;const char*kind="object";long raw=subject.bits;
+  if(piton_introspection_function_info(raw,&name,&doc))kind="function";
+  else if(piton_builtin_is_marker(raw)){
+    name=((PitonBuiltinObj*)raw)->name;kind="built-in";
+  }else if(subject.kind==PK_OBJECT&&raw&&piton_maybe_ptr(raw)&&((long*)raw)[1]==PK_OBJECT){
+    PitonObject*o=(PitonObject*)raw;
+    if(o->is_class){kind="class";name=o->class_name;}
+    else if(o->class_name&&!piton_strcmp(o->class_name,"module")){kind="module";}
+    else{kind="object";name=o->class_name;}
+    for(long i=0;i<o->length;++i){
+      if(!piton_strcmp(o->attrs[i].name,"__name__")&&o->attrs[i].value.kind==PK_STR)
+        name=(const char*)o->attrs[i].value.bits;
+      if(!piton_strcmp(o->attrs[i].name,"__doc__")&&o->attrs[i].value.kind==PK_STR)
+        doc=(const char*)o->attrs[i].value.bits;
+    }
+  }
+  if(!name)name=js_type_name(subject);
+  return piton_builtin_help_named(kind,name,doc);
+}
 /* MODULE_ATTR_MISSING_V1: atributo ausente de un modulo -> AttributeError con el
    mensaje exacto de CPython: "module 'M' has no attribute 'a'". */
 static PitonSlot piton_object_get_mod(PitonObject*o,const char*name,const char*mod){
@@ -10710,6 +10831,13 @@ class LinuxCEmitter:
         # leave a generated C reference undeclared.
         self._clsobj_references: set[str] = set()
         self.classes = getattr(module, "classes", {})
+        self.class_docstrings = getattr(module, "class_docstrings", {})
+        self.module_docstrings = getattr(module, "module_docstrings", {})
+        self.class_attributes = getattr(module, "class_attributes", {})
+        self.function_docstrings = {
+            function.name: getattr(function, "docstring", None)
+            for function in module.functions
+        }
         # Register module-level classes as object types for cross-module attr access
         for _cls_name in self.classes:
             if _cls_name not in self.module_attr_types:
@@ -11086,6 +11214,7 @@ class LinuxCEmitter:
             instruction.op in {"object_new", "object_new_dynamic", "object_format", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv", "builtin_class", "os_fspath", "os_stat_check", "os_makedirs", "tempfile_mkdtemp", "fs_glob"}
             or (instruction.op == "const" and instruction.args and isinstance(instruction.args[0], (bytes, bytearray)))
             or (instruction.op == "load" and instruction.args and instruction.args[0] in _BUILTIN_C_FNS)
+            or (instruction.op == "load" and instruction.args and instruction.args[0] in {"dir", "help"})
             for function in module.functions
             for block in function.blocks
             for instruction in block.instructions
@@ -11155,6 +11284,76 @@ class LinuxCEmitter:
                     continue
                 params = "long *__piton_frame" if function.frame_abi else ", ".join(f"long {_name(param)}" for param in function.params) or "void"
                 lines.append(f"static long {_name(function.name)}({params});")
+        if self._has_rich_runtime:
+            # INTROSPECTION_V1: only names collected from class definitions
+            # and docstrings attached to real MIR functions are exposed.
+            global_names: set[str] = set()
+            for candidate in module.functions:
+                if candidate.name == "<module>":
+                    for block in candidate.blocks:
+                        for instruction in block.instructions:
+                            if instruction.op != "store" or not instruction.args:
+                                continue
+                            if len(instruction.args) > 2 and instruction.args[2] == "internal":
+                                continue
+                            stored_name = instruction.args[0]
+                            if isinstance(stored_name, str) and not stored_name.startswith("%"):
+                                global_names.add(stored_name)
+                else:
+                    qualname = getattr(candidate, "qualname", None) or candidate.name
+                    if "." not in qualname:
+                        global_names.add(qualname)
+            lines.append("static const char*piton_user_global_name(long index){")
+            if global_names:
+                ordered_globals = sorted(global_names)
+                encoded_globals = ",".join(
+                    json.dumps(name, ensure_ascii=False) for name in ordered_globals
+                )
+                lines.append(
+                    f"static const char*names[]={{{encoded_globals}}};"
+                    f"return index>=0&&index<{len(ordered_globals)}?names[index]:0;"
+                )
+            else:
+                lines.append("(void)index;return 0;")
+            lines.append("}")
+            lines.append("static const char*piton_user_class_attr_name(const char*class_name,long index){")
+            for class_name in sorted(self.class_attributes):
+                attrs = set(self.class_attributes.get(class_name, ()))
+                for ancestor in self.class_mro.get(class_name, (class_name,)):
+                    attrs.update(self.class_attributes.get(ancestor, ()))
+                ordered = sorted(attrs)
+                encoded = ",".join(json.dumps(attr, ensure_ascii=False) for attr in ordered)
+                if encoded:
+                    lines.append(
+                        f"if(class_name&&!piton_strcmp(class_name,{json.dumps(class_name, ensure_ascii=False)})){{"
+                        f"static const char*names[]={{{encoded}}};"
+                        f"return index>=0&&index<{len(ordered)}?names[index]:0;}}"
+                    )
+                else:
+                    lines.append(
+                        f"if(class_name&&!piton_strcmp(class_name,{json.dumps(class_name, ensure_ascii=False)}))return 0;"
+                    )
+            lines.append("return 0;}")
+            lines.append(
+                "static int piton_introspection_function_info(long raw,const char**name,const char**doc){"
+                "long addr=raw;"
+                "if(piton_is_closure(raw))addr=((PitonClosure*)raw)->addr;"
+                "else if(raw&&piton_maybe_ptr(raw)&&((long*)raw)[0]==PITON_BOUND_METHOD_MAGIC)"
+                "addr=((PitonBoundMethod*)raw)->addr;"
+            )
+            for function in module.functions:
+                if function.name == "<module>":
+                    continue
+                py_name = getattr(function, "qualname", None) or function.name
+                py_name = py_name.rsplit(".", 1)[-1]
+                doc = getattr(function, "docstring", None)
+                doc_expr = "0" if doc is None else json.dumps(doc, ensure_ascii=False)
+                lines.append(
+                    f"if(addr==(long)&{_name(function.name)}){{"
+                    f"if(name)*name={json.dumps(py_name, ensure_ascii=False)};"
+                    f"if(doc)*doc={doc_expr};return 1;}}"
+                )
+            lines.append("return 0;}")
         if self._shared_globals:
             # GLOBAL_DECL_V1: module-level names shared cross-function live
             # in file scope so every function references the same variable.
@@ -13453,6 +13652,13 @@ class LinuxCEmitter:
             f"    piton_object_set((PitonObject*){_cvar},\"__name__\","
             f"piton_slot((long)\"{cls_name}\",PK_STR));"
         )
+        class_doc = self.class_docstrings.get(cls_name)
+        doc_slot = (
+            "piton_slot((long)&piton_none_singleton,PK_NONE)"
+            if class_doc is None
+            else f"piton_slot((long){_str_c_literal(class_doc)},PK_STR)"
+        )
+        out.append(f'    piton_object_set((PitonObject*){_cvar},"__doc__",{doc_slot});')
         if hasattr(self, "_class_attrs_map"):
             merged_attrs = {}
             for ancestor in reversed(self.class_mro.get(cls_name, [cls_name])):
@@ -21443,7 +21649,7 @@ class LinuxCEmitter:
             # GLOBALS_NS_V1: globals/locals are C-backed builtins loaded as
             # values before this generic call op. Recover their source name
             # so the namespace call can retain its dict result type.
-            if function_name == args[0] and self._builtin_loads.get(args[0]) in {"globals", "locals", "vars"}:
+            if function_name == args[0] and self._builtin_loads.get(args[0]) in {"globals", "locals", "vars", "dir", "help"}:
                 function_name = self._builtin_loads[args[0]]
             values = list(args[1])
             # COLLECTION_SUBCLASS_V1: ver _COLLECTION_SAFE_CALLEES.
@@ -21802,6 +22008,29 @@ class LinuxCEmitter:
                 else:
                     out.append(f"    {_name(result)}=(long)piton_str_apply_spec((const char*){_conv},(const char*){self._value(values[1])});")
                 types[result] = "str"
+                return out
+            elif function_name == "dir":
+                if len(values) > 1:
+                    self._runtime_type_error(out, "dir expected at most 1 argument", function, call_handler)
+                    types[result] = "list"
+                    return out
+                subject = self._slot(values[0], types) if values else "(PitonSlot){0,PK_NONE}"
+                out.append(
+                    f"    {_name(result)}=piton_builtin_dir({subject},{1 if values else 0});"
+                )
+                types[result] = "list"
+                self._coll_elems[result] = "str"
+                return out
+            elif function_name == "help":
+                if len(values) > 1:
+                    self._runtime_type_error(out, "help expected at most 1 argument", function, call_handler)
+                    types[result] = "none"
+                    return out
+                subject = self._slot(values[0], types) if values else "(PitonSlot){0,PK_NONE}"
+                out.append(
+                    f"    {_name(result)}=piton_builtin_help({subject},{1 if values else 0});"
+                )
+                types[result] = "none"
                 return out
             elif function_name in {"longitud", "len"}:
                 if values:
@@ -23841,6 +24070,15 @@ class LinuxCEmitter:
                     return out
                 self._slot_return_fns.add(function.name)
             out.append(f"    return {self._value(args[0])};")
+        elif op == "native_help_info":
+            kind, name, doc = args[:3]
+            kind_expr = _str_c_literal(kind)
+            name_expr = _str_c_literal(name)
+            doc_expr = "0" if doc is None else _str_c_literal(doc)
+            out.append(
+                f"    {_name(result)}=piton_builtin_help_named({kind_expr},{name_expr},{doc_expr});"
+            )
+            types[result] = "none"
         elif op == "type_new":
             values = args[0] if args else ()
             handler_label = args[1] if len(args) > 1 else None
@@ -23954,7 +24192,16 @@ class LinuxCEmitter:
                     f'    if(!{_class_obj}){{{_class_obj}=(long)piton_object_new("{cls_name}",{parent_str});'
                     f'((PitonObject*){_class_obj})->is_class=1;'
                     f'piton_object_set((PitonObject*){_class_obj},"__name__",'
-                    f'piton_slot((long)"{cls_name}",PK_STR));}}'
+                    f'piton_slot((long)"{cls_name}",PK_STR));'
+                )
+                class_doc = self.class_docstrings.get(cls_name)
+                doc_slot = (
+                    "piton_slot((long)&piton_none_singleton,PK_NONE)"
+                    if class_doc is None
+                    else f"piton_slot((long){_str_c_literal(class_doc)},PK_STR)"
+                )
+                out.append(
+                    f'    piton_object_set((PitonObject*){_class_obj},"__doc__",{doc_slot});}}'
                 )
                 out.append(f"    {_name(result)}={_class_obj};")
                 self._emit_class_bases_attribute(out, result, cls_name)
@@ -23998,6 +24245,15 @@ class LinuxCEmitter:
                     out.append(f'    {_name(result)}=(long)piton_object_new_finalized("{cls_name}",{parent_str},(long)&{wrap_name});')
             else:
                 out.append(f'    {_name(result)}=(long)piton_object_new("{cls_name}",{parent_str});')
+            class_doc = self.class_docstrings.get(cls_name)
+            doc_slot = (
+                "piton_slot((long)&piton_none_singleton,PK_NONE)"
+                if class_doc is None
+                else f"piton_slot((long){_str_c_literal(class_doc)},PK_STR)"
+            )
+            out.append(
+                f'    piton_object_set((PitonObject*){_name(result)},"__doc__",{doc_slot});'
+            )
             # CLASS_ATTR_V1: instances of a class with class-level assignments
             # get those attributes set at creation (matching CPython default).
             if hasattr(self, "_class_attrs_map"):

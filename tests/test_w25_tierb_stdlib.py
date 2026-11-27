@@ -6,10 +6,9 @@ regresion para dos cosas opuestas:
 
 1. que los otros 51 ejemplos sigan siendo byte a byte identicos a CPython 3.12
    (si uno deja de serlo, el test dice CUAL, no solo "algo cambio");
-2. que el ejemplo divergente (`help(os)`) NO se "cierre" con un falso verde
-   (hacer de `help` un no-op silencioso daria EXC-less en PITON y el corpus
-   pasaria por accidente: `test_native_help_is_name_error_not_a_silent_noop` lo
-   impide).
+2. que el ejemplo divergente (`help(os)`) no se marque como paridad: PITON
+   imprime ayuda nativa basada en metadata disponible, mientras CPython genera
+   una pagina pydoc con el docstring, el inventario y el entorno del host.
 
 Evidencia completa (comando + salida cruda) en
 `docs/TIER_B_STD_LIB_HELP_GAP_2026-11-27.md`.
@@ -167,8 +166,9 @@ class TierBStdlibPageV1(unittest.TestCase):
             f"obtenido: {[(i['chunk'], i['source']) for i in divergent]}",
         )
         self.assertEqual(divergent[0]["source"], "help(os)")
-        self.assertEqual(divergent[0]["piton"], ["EXC"])
+        self.assertEqual(divergent[0]["piton"][0], "Help on module os:")
         self.assertEqual(divergent[0]["cpython"][0], "Help on module os:")
+        self.assertNotEqual(divergent[0]["piton"], divergent[0]["cpython"])
         self.assertGreater(len(divergent[0]["cpython"]), 1000)
 
     def test_every_other_example_is_byte_identical(self):
@@ -180,13 +180,12 @@ class TierBStdlibPageV1(unittest.TestCase):
 
 
 class HelpOsNotClosableV1(unittest.TestCase):
-    """Por que `help(os)` NO es cerrable de forma honesta.
+    """Por que `help(os)` NO es paridad completa aunque help() ya exista.
 
-    No es "una funcion que falta": es un ejemplo cuya salida esperada NO es una
-    constante. Igualarla exigiria copiar dentro de PITON el docstring y el
-    inventario completos del modulo `os` de CPython, mas su pagina FILE con la
-    ruta de la stdlib instalada: eso es escribir la salida esperada a mano
-    (AGENTS2 §1, tabla de falsos verdes), no paridad.
+    La salida esperada NO es una constante. CPython imprime el docstring y el
+    inventario completos del modulo `os`, además de su pagina FILE con la ruta
+    de la stdlib instalada. PITON conserva únicamente la metadata real que sus
+    fuentes modelan; sustituirla por un golden file no sería paridad.
     """
 
     def _oracle_help_os(self, extra_env: dict[str, str] | None = None) -> str:
@@ -225,7 +224,7 @@ class HelpOsNotClosableV1(unittest.TestCase):
         self.assertIn(f"    {stdlib_dir}/os.py", output)
         self.assertGreater(len(output.splitlines()), 1000)
 
-    def test_native_help_is_name_error_not_a_silent_noop(self):
+    def test_native_help_runs_but_keeps_the_documented_os_gap(self):
         native = _native_run(
             "intentar:\n"
             "    importar os\n"
@@ -234,12 +233,9 @@ class HelpOsNotClosableV1(unittest.TestCase):
             "    imprimir ('EXC',type (e ).__name__ )\n"
         )
         self.assertEqual(native.returncode, 0, native.stderr)
-        self.assertEqual(
-            native.stdout, b"EXC NameError\n",
-            "PITON debe fallar de forma honesta (NameError). Un no-op silencioso "
-            "no imprimiria nada y el ejemplo del corpus daria un falso verde.",
-        )
-        self.assertNotIn(b"Help on module os:", native.stdout)
+        self.assertTrue(native.stdout.startswith(b"Help on module os:\n"), native.stdout)
+        self.assertNotIn(b"EXC", native.stdout)
+        self.assertNotIn(b"OS routines for NT or Posix", native.stdout)
 
     def test_bundled_piton_stdlib_has_no_module_docstrings(self):
         """Lo que habria que fabricar: la stdlib bundled de PITON no tiene
@@ -272,10 +268,9 @@ class KnownGapsV1(unittest.TestCase):
 
     @unittest.expectedFailure
     def test_dir_consumed_returns_the_attribute_names(self):
-        # GAP_DIR_V1: `dir` no esta implementado (devuelve int 0 / None), y
-        # `len(dir(os))` levanta TypeError. Incluso implementado, `dir(os)` no
-        # seria byte-identico (CPython lista los 402 nombres de su modulo os),
-        # asi que queda documentado como brecha, no como paridad.
+        # GAP_DIR_OS_V1: dir() ya ordena los atributos conocidos por PITON,
+        # pero el modulo bundled de os no exporta el inventario completo de
+        # CPython. `dir(os)` sigue siendo una brecha documentada, no paridad.
         self.assert_parity(
             "intentar:\n"
             "    importar os\n"
