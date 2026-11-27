@@ -2979,8 +2979,35 @@ class MIRLowerer:
                 | _classes_with_metaclass
                 | _metaclass_objects
             )
-            for cls_node in (n for n in module_body if n.kind == HIRKind.CLASS_DEF and n.name in needed_classes):
-                cls_name = cls_node.name
+            class_nodes_to_initialize = [
+                (node.name, node, None)
+                for node in module_body
+                if node.kind == HIRKind.CLASS_DEF and node.name in needed_classes
+            ]
+            for _mod_name, _imported in sorted(imported_modules.items()):
+                if not _is_bundled_module(_mod_name):
+                    continue
+                for _node in getattr(_imported, "body", []) or []:
+                    if _node.kind != HIRKind.CLASS_DEF:
+                        continue
+                    _qualified = f"{_mod_name.replace('.', '__')}__{_node.name}"
+                    if _qualified in needed_classes:
+                        class_nodes_to_initialize.append((_qualified, _node, _mod_name))
+
+            for cls_name, cls_node, _imported_mod_name in class_nodes_to_initialize:
+                _saved_class_scope = None
+                if _imported_mod_name:
+                    _scope_names, _scope_modules, _scope_vars = self._build_module_scope(
+                        _imported_mod_name, imported_modules[_imported_mod_name]
+                    )
+                    _saved_class_scope = (
+                        module_builder.module_aliases,
+                        module_builder.from_import_aliases,
+                        module_builder.module_state_vars,
+                    )
+                    module_builder.module_aliases = dict(_scope_modules)
+                    module_builder.from_import_aliases = dict(_scope_names)
+                    module_builder.module_state_vars = dict(_scope_vars)
                 merged_attrs = {}
                 for anc in reversed(self.class_mro.get(cls_name, [cls_name])):
                     merged_attrs.update(getattr(self, "class_attrs", {}).get(anc, {}))
@@ -3049,7 +3076,10 @@ class MIRLowerer:
                             None, result=_ignored,
                         )
                 else:
-                    module_builder.emit("object_new", cls_name, parent_name, result=cls_obj)
+                    module_builder.emit(
+                        "object_new", cls_name, parent_name,
+                        *([True] if _imported_mod_name else []), result=cls_obj,
+                    )
                     for attr_name, value_node in merged_attrs.items():
                         val = self._lower_expr(module_builder, value_node)
                         module_builder.emit("set_attr", cls_obj, attr_name, val)
@@ -3057,6 +3087,12 @@ class MIRLowerer:
                             self._class_attr_temps = {}
                         self._class_attr_temps.setdefault(cls_name, {})[attr_name] = val
                 module_builder.emit("store", cls_name, cls_obj)
+                if _saved_class_scope is not None:
+                    (
+                        module_builder.module_aliases,
+                        module_builder.from_import_aliases,
+                        module_builder.module_state_vars,
+                    ) = _saved_class_scope
             self._lower_module_metadata(module, entry_file, module_meta)
             # MODULE_STATE_V1: el estado de los modulos importados se
             # inicializa aqui (en el entry del modulo principal, con nombres

@@ -12,7 +12,6 @@ for _p in (ROOT, ROOT / "tools"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from piton.linux_x86 import NativeBuildError
 from piton.native_differential import compare_native_to_cpython
 
 
@@ -96,14 +95,15 @@ def test_class_attribute_holding_module_method_call():
     )
 
 
-# --- fail-closed: datetime.datetime.fromtimestamp sigue sin implementarse -----
+# --- datetime.fromtimestamp ---------------------------------------------------
 
-def test_datetime_datetime_fromtimestamp_still_fails_closed():
-    with pytest.raises(NativeBuildError, match="fromtimestamp is not implemented.*fail closed"):
-        compare_native_to_cpython(
-            "desde datetime importar datetime\n"
-            "imprimir(datetime.fromtimestamp(1.5))\n"
-        )
+def test_datetime_datetime_fromtimestamp_matches_cpython(monkeypatch):
+    monkeypatch.setenv("TZ", "UTC")
+    result = compare_native_to_cpython(
+        "desde datetime importar datetime\n"
+        "imprimir(datetime.fromtimestamp(1.5))\n"
+    )
+    assert result.equivalent, (result.native, result.oracle)
 
 
 # --- etapa de build de la stdlib ------------------------------------------------

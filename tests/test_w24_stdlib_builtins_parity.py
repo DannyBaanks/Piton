@@ -7,19 +7,13 @@ def test_complex_string():
     assert result.equivalent, (result.native, result.oracle)
 
 
-def test_datetime_fromtimestamp_fail_closed():
-    # datetime.datetime.fromtimestamp no está implementado en el backend
-    # nativo: falla cerrado igual que CPython fallaría al no existir el
-    # objeto datetime.datetime real.
-    from piton.linux_x86 import NativeBuildError
-    try:
-        compare_native_to_cpython(
-            "desde datetime importar datetime\n"
-            "imprimir(datetime.fromtimestamp(0))\n"
-        )
-        assert False, "Expected NativeBuildError"
-    except NativeBuildError as e:
-        assert "fromtimestamp" in str(e) and "fail closed" in str(e), e
+def test_datetime_fromtimestamp_matches_cpython(monkeypatch):
+    monkeypatch.setenv("TZ", "UTC")
+    result = compare_native_to_cpython(
+        "desde datetime importar datetime\n"
+        "imprimir(datetime.fromtimestamp(0))\n"
+    )
+    assert result.equivalent, (result.native, result.oracle)
 
 
 def test_zip_itertools_chain():
