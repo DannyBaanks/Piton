@@ -13398,19 +13398,21 @@ class LinuxCEmitter:
         # cls, name, bases y namespace a una firma (cls, *args, **kwargs).
         _pack_vararg = self.function_varargs.get(function_name)
         _pack_kwarg = self.function_kwargs.get(function_name)
-        if _pack_vararg is not None:
+        if _pack_vararg is not None and _pack_vararg in _params:
+            _vararg_idx = _params.index(_pack_vararg)
             _n_named = len([p for p in _params if p != _pack_vararg and p != _pack_kwarg])
             # el camino variadico del MIR ya entrega la tupla del vararg
-            # (values == params con tupla en el slot); en la llamada directa
-            # hay que empaquetar los sobrantes SIEMPRE que falte la tupla —
-            # tambien cuando llegan MAS argumentos que params (W25: la llamada
-            # al __init__ de una metaclase `__init__(cls, *args)` con 4 valores
+            # (values == params con tupla en el slot del vararg, que puede ir
+            # ANTES de parametros keyword-only); en la llamada directa hay que
+            # empaquetar los sobrantes SIEMPRE que falte la tupla — tambien
+            # cuando llegan MAS argumentos que params (W25: la llamada al
+            # __init__ de una metaclase `__init__(cls, *args)` con 4 valores
             # quedaba sin empaquetar y gcc moria con "too many arguments").
             _already_packed = (
                 len(values) == len(_params)
-                and _n_named < len(values)
-                and isinstance(values[_n_named], str)
-                and types.get(values[_n_named]) == "tuple"
+                and _vararg_idx < len(values)
+                and isinstance(values[_vararg_idx], str)
+                and types.get(values[_vararg_idx]) == "tuple"
             )
             if not _already_packed and len(values) >= _n_named:
                 # la tupla se construye como TEMPORAL (una expresion inline
@@ -24252,7 +24254,7 @@ class LinuxCEmitter:
                 else f"piton_slot((long){_str_c_literal(class_doc)},PK_STR)"
             )
             out.append(
-                f'    piton_object_set((PitonObject*){_name(result)},"__doc__",{doc_slot});'
+                f'    piton_object_copy_class_attr((PitonObject*){_name(result)},"__doc__",{doc_slot});'
             )
             # CLASS_ATTR_V1: instances of a class with class-level assignments
             # get those attributes set at creation (matching CPython default).
