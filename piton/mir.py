@@ -441,6 +441,10 @@ class MIRModule:
     classes: dict = field(default_factory=dict)
     class_parents: dict = field(default_factory=dict)
     class_mro: dict = field(default_factory=dict)
+    # Bases produced by calls such as ``collections.namedtuple(...)`` cannot
+    # be named statically. Keep that fact for super() so the backend can emit
+    # an explicit runtime failure instead of misreporting an absent MRO.
+    class_dynamic_bases: set = field(default_factory=set)
     # CLASS_BASES_V1: las bases DIRECTAS de cada clase (`cls.__bases__`).
     class_bases: dict = field(default_factory=dict)
     # METACLASS_CONFLICT_V1: metaclase efectiva por clase ("type" por defecto);
@@ -903,6 +907,7 @@ class MIRLowerer:
         self.classes: dict[str, set[str]] = {}
         self.class_parents: dict[str, str | None] = {}
         self.class_base_list: dict[str, list[str]] = {}
+        self.class_dynamic_bases: set[str] = set()
         # METACLASS_CONFLICT_V1: metaclase efectiva por clase (nombre de
         # clase o "type"); sirve para fallar cerrado ante bases incompatibles.
         self.class_metaclasses: dict[str, str] = {}
@@ -2040,6 +2045,7 @@ class MIRLowerer:
         self.classes = {}
         self.class_parents = {}
         self.class_base_list = {}
+        self.class_dynamic_bases = set()
         self.class_mro = {}
         self._mro_memo = {}
         self.abstract_methods: dict[str, set[str]] = {}
@@ -2519,6 +2525,8 @@ class MIRLowerer:
                             return f"{mod.replace('.', '__')}__{_b.attr}"
                     return None
                 bases = [_name for base in node.bases for _name in [_extract_base_name(base)] if _name]
+                if any(_extract_base_name(base) is None for base in node.bases):
+                    self.class_dynamic_bases.add(node.name)
                 # SUBMODULE_FROMIMPORT_BASE_V1: `clase Mi(Callable)` con
                 # Callable salido de `desde collections.abc importar Callable`:
                 # el nombre LOCAL se traduce al cualificado del from-import,
@@ -2918,6 +2926,7 @@ class MIRLowerer:
         module = MIRModule(self.functions)
         module.classes = dict(self.classes)
         module.class_parents = dict(self.class_parents)
+        module.class_dynamic_bases = set(self.class_dynamic_bases)
         # CLASS_ATTR_TYPES_V1: tipos literales de los atributos de clase,
         # para que el backend tipa `obj.attr` / `Cls.attr` y no imprima un
         # str como puntero-int (el MIR replica los attrs en instancias
@@ -10808,10 +10817,11 @@ class MIRLowerer:
                 upper = self._lower_expr(builder, slice_info["upper"]) if slice_info["upper"] is not None else None
                 step = self._lower_expr(builder, slice_info["step"]) if slice_info.get("step") is not None else None
                 result = builder.temp()
-                if step is None:
-                    builder.emit("get_slice", value, lower, upper, result=result)
-                else:
-                    builder.emit("get_slice", value, lower, upper, step, result=result)
+                slice_handler = self._getitem_handler_label(builder, node)
+                builder.emit(
+                    "get_slice", value, lower, upper, step, None,
+                    slice_handler, result=result,
+                )
                 return result
             result = builder.temp()
             # GETITEM_HANDLER_V1: d[k] puede lanzar KeyError y l[i] IndexError
