@@ -57,7 +57,13 @@ def compare_native_to_cpython(source: str) -> DifferentialResult:
             [sys.executable, "-c", translated], capture_output=True, check=False,
             env=oracle_env,
         )
+    oracle_stdout, oracle_stderr = oracle_run.stdout, oracle_run.stderr
+    if sys.platform == "win32":
+        # ORACLE_LF_V1: en Windows el stdout de CPython en modo texto emite CRLF;
+        # el oraculo de referencia (Linux) emite LF. Se normaliza el oraculo.
+        oracle_stdout = oracle_stdout.replace(b"\r\n", b"\n")
+        oracle_stderr = oracle_stderr.replace(b"\r\n", b"\n")
     return DifferentialResult(
         native=Observation(native_run.returncode, native_run.stdout, native_run.stderr),
-        oracle=Observation(oracle_run.returncode, oracle_run.stdout, oracle_run.stderr),
+        oracle=Observation(oracle_run.returncode, oracle_stdout, oracle_stderr),
     )

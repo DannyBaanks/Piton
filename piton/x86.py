@@ -346,7 +346,7 @@ class Win64NasmEmitter:
             if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
                 self.generator_layouts[function.name] = self._generator_layout(function)
         self.lines = [
-            "default rel", "extern printf", "extern strcmp", "extern strlen",
+            "default rel", "extern printf", "extern strcmp", "extern strlen", "extern _setmode",
             "extern malloc", "extern memcpy", "section .text",
         ]
         self.lines[0:0] = [
@@ -595,6 +595,11 @@ class Win64NasmEmitter:
         frame = max(48, ((self.next_slot + 32 + 15) // 16) * 16)
         label = "main" if function.name == "<module>" else function.name
         self.lines.extend([f"global {label}", f"{label}:", "    push rbp", "    mov rbp, rsp", f"    sub rsp, {frame}"])
+        if label == "main":
+            # STDOUT_BINARY_V1: printf en Windows escribe CRLF en modo texto; el
+            # oraculo (Linux) emite LF. Se pone stdout (fd 1) en binario
+            # (_O_BINARY = 0x8000) al entrar en el modulo.
+            self.lines.extend(["    mov ecx, 1", "    mov edx, 0x8000", "    call _setmode"])
         for slot, _ in self.owned_slots:
             self.lines.append(f"    mov qword {self._address(slot)}, 0")
         if not function.frame_abi and len(function.params) > 4:
@@ -3100,7 +3105,8 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = f"object:{class_name}"
         elif op == "set_attr":
-            owner, name, value = args
+            # MIR añade el handler de try activo como cuarto argumento (Linux lo ignora).
+            owner, name, value = args[:3]
             owner_type = self.types.get(owner, "")
             prop_class = self._resolve_property_class(owner_type, name)
             if prop_class is not None:
@@ -3142,7 +3148,7 @@ class Win64NasmEmitter:
                     else:
                         self.lines.append("    call piton_object_set")
         elif op == "get_attr":
-            owner, name = args
+            owner, name = args[:2]
             owner_type = self.types.get(owner, "")
             prop_class = self._resolve_property_class(owner_type, name)
             module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
@@ -3248,7 +3254,7 @@ class Win64NasmEmitter:
                         or "int"
                     )
         elif op == "del_attr":
-            owner, name = args
+            owner, name = args[:2]
             owner_type = self.types.get(owner, "")
             prop_class = self._resolve_property_class(owner_type, name)
             if prop_class is not None:
@@ -3280,7 +3286,11 @@ class Win64NasmEmitter:
                         f"native del on '{name}' is not a property of a natively-typed object"
                     )
         elif op == "method_call":
-            explicit_class, method_name, owner, raw_values = args
+            # MIR emite (clase, nombre, dueño, args, kw, handler): la aridad creció
+            # tras el backend Windows; Windows solo consume los cuatro primeros.
+            explicit_class, method_name, owner, raw_values = args[:4]
+            if len(args) > 4 and args[4]:
+                raise NativeBuildError(f"native keyword arguments on method call '{method_name}' not supported")
             if (
                 isinstance(explicit_class, tuple)
                 and len(explicit_class) == 3
@@ -3491,7 +3501,10 @@ class Win64NasmEmitter:
             self._load_operand(value_arg, "r11")
             self.lines.extend(["    mov [r10], r11", "    mov qword [r10+8], 0"])
         elif op == "closure_new":
-            lifted_name, n_args, capture_ops, has_vararg = args
+            # MIR añade el flag de kwonly como quinto argumento.
+            lifted_name, n_args, capture_ops, has_vararg = args[:4]
+            if len(args) > 4 and args[4]:
+                raise NativeBuildError(f"native closure '{lifted_name}' with keyword-only parameters not supported")
             frame_size = ((len(capture_ops) * 8 + 48 + 15) // 16) * 16
             self.lines.append(f"    sub rsp, {frame_size}")
             for i, cell in enumerate(capture_ops):
