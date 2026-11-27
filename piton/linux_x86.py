@@ -5666,6 +5666,24 @@ static long piton_type_instancecheck(long cls_bits,long instance,int cls_hint,in
   const char*instance_type=piton_unbound_value_type(instance,instance_hint);
   return piton_class_has_instance_type(cls,instance,instance_hint,instance_type);
 }
+static long piton_type_subclasscheck(long cls_bits,long subclass_bits,int cls_hint,int subclass_hint){
+  if(!piton_unbound_receiver_matches(cls_bits,"type",cls_hint)){
+    piton_raise_unbound_descriptor("__subclasscheck__","type",cls_bits,cls_hint);return 0;
+  }
+  if(!piton_unbound_receiver_matches(subclass_bits,"type",subclass_hint)){
+    piton_raise_set("TypeError","issubclass() arg 1 must be a class");return 0;
+  }
+  const char*base_name=piton_type_value_name(cls_bits);
+  const char*sub_name=piton_type_value_name(subclass_bits);
+  if(!piton_strcmp(base_name,sub_name)||!piton_strcmp(base_name,"object"))return 1;
+  if(!piton_strcmp(base_name,"int")&&!piton_strcmp(sub_name,"bool"))return 1;
+  if(piton_is_type_value(subclass_bits))
+    return piton_class_mro_contains((PitonObject*)subclass_bits,base_name);
+  return 0;
+}
+static long piton_unbound_type_subclasscheck_frame(long*frame){
+  return piton_type_subclasscheck(frame[0],frame[1],-1,-1);
+}
 static long piton_unbound_str_upper(long receiver,int hint){
   if(!piton_unbound_receiver_matches(receiver,"str",hint)){
     piton_raise_unbound_descriptor("upper","str",receiver,hint);return 0;
@@ -10708,6 +10726,8 @@ class LinuxCEmitter:
         # devuelve el objeto de la metaclase, no una representacion str.
         self.class_metaclasses = getattr(module, "class_metaclasses", {})
         self.class_properties = getattr(module, "class_properties", {})
+        self.class_property_shadows = getattr(module, "class_property_shadows", {})
+        self.decorated_class_methods = getattr(module, "decorated_class_methods", {})
         self.static_methods = getattr(module, "static_methods", set())
         self.class_methods = getattr(module, "class_methods", set())
         self._module_funcs = list(module.functions)
@@ -11063,7 +11083,7 @@ class LinuxCEmitter:
         # Rich runtime (with __argc/__argv/_start and object/dict/set structs) needed for
         # bigint or sys.argv/os.name or any object/dict/set/bytes operations
         self._has_rich_runtime = self._has_bigint or _uses_repr_runtime or any(
-            instruction.op in {"object_new", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv", "builtin_class", "os_fspath", "os_stat_check", "os_makedirs", "tempfile_mkdtemp", "fs_glob"}
+            instruction.op in {"object_new", "object_new_dynamic", "object_format", "set_attr", "build_collection", "get_attr", "get_item", "collection_len", "list_append", "set_add", "dict_put", "sys_argv", "builtin_class", "os_fspath", "os_stat_check", "os_makedirs", "tempfile_mkdtemp", "fs_glob"}
             or (instruction.op == "const" and instruction.args and isinstance(instruction.args[0], (bytes, bytearray)))
             or (instruction.op == "load" and instruction.args and instruction.args[0] in _BUILTIN_C_FNS)
             for function in module.functions
@@ -11331,8 +11351,8 @@ class LinuxCEmitter:
             _runtime_dispatch_safe = (
                 _p in (self._runtime_type_params.get(_fn) or set())
                 and (
-                    _seen <= {"int", "str", "bytes", "none", "float", "bool", "list", "tuple", "dict", "set"}
-                    or ("none" in _seen and _seen <= {"int", "str", "bytes", "none", "float", "bool", "list", "tuple", "dict", "set"})
+                    _seen <= {"int", "bigint", "str", "bytes", "none", "float", "bool", "list", "tuple", "dict", "set"}
+                    or ("none" in _seen and _seen <= {"int", "bigint", "str", "bytes", "none", "float", "bool", "list", "tuple", "dict", "set"})
                 )
                 # Un literal escalar contra str sigue fail-closed (test w17);
                 # con None en la mezcla (caso nuevo) el literal se dispatcha.
@@ -13174,15 +13194,17 @@ class LinuxCEmitter:
                 values[_i] = _vname
         # VARARG_PACK_V1: una llamada directa a una funcion con `*args`
         # empaqueta los sobrantes en una tupla (el ABI del callee espera la
-        # tupla en su slot vararg).
+        # tupla en su slot vararg), incluso si la llamada tiene más valores
+        # planos que parámetros C. Las llamadas a __init__ de metaclase pasan
+        # cls, name, bases y namespace a una firma (cls, *args, **kwargs).
         _pack_vararg = self.function_varargs.get(function_name)
         _pack_kwarg = self.function_kwargs.get(function_name)
         if _pack_vararg is not None:
             _n_named = len([p for p in _params if p != _pack_vararg and p != _pack_kwarg])
             # el camino variadico del MIR ya entrega la tupla del vararg
             # (values == params); aqui se empaqueta solo cuando la llamada
-            # vino por el camino directo (values < params) y falta la tupla.
-            if len(values) < len(_params) and len(values) >= _n_named:
+            # vino por el camino directo y no coincide con la aridad del ABI.
+            if len(values) != len(_params) and len(values) >= _n_named:
                 # la tupla se construye como TEMPORAL (una expresion inline
                 # entrecomillada por _value seria un literal de string).
                 _extra = list(values)[_n_named:]
@@ -14182,6 +14204,7 @@ class LinuxCEmitter:
             ("dict", "copy"): (1, "dict"),
             ("set", "copy"): (1, "set"),
             ("type", "__instancecheck__"): (2, "bool"),
+            ("type", "__subclasscheck__"): (2, "bool"),
             # W23: unbound builtin type attributes as values/calls
             ("int", "__aenter__"): (1, "int"),
             ("int", "__new__"): (2, "int"),
@@ -14272,6 +14295,12 @@ class LinuxCEmitter:
                 f"    {_name(result)}=piton_unbound_type_subclasses({value(0)},{receiver_kind(0)});"
             )
             types[result] = "list"
+        elif owner == "type" and method == "__subclasscheck__":
+            out.append(
+                f"    {_name(result)}=piton_type_subclasscheck({value(0)},{value(1)},"
+                f"{receiver_kind(0)},{receiver_kind(1)});"
+            )
+            types[result] = "bool"
         elif owner == "int" and method == "__aexit__":
             out.append(
                 f"    {_name(result)}=piton_unbound_int_aexit({value(0)},{receiver_kind(0)});"
@@ -15633,7 +15662,7 @@ class LinuxCEmitter:
         if (
             haystack_type != "str"
             and needle_type not in {"int", "bool", "str", "bytes", "bytearray", "complex",
-                                    "tuple", "list", "none", "slot", "any", "unknown", "", "float", "bigint", "object", "builtin"}
+                                    "tuple", "list", "none", "slot", "any", "unknown", "", "float", "bigint", "object", "builtin", "closure"}
             and not needle_type.startswith(("object:", "class:"))
         ):
             # IN_STR_DYNAMIC_V1: con haystack str el needle lo decide el
@@ -15739,8 +15768,22 @@ class LinuxCEmitter:
         if not owner_type.startswith("object:"):
             return None
         class_name = owner_type.split(":", 1)[1]
+        # A method typed against a base class can still run on an instance of
+        # a subclass that replaces an inherited property with a class value.
+        # In that case resolve the access dynamically so the runtime object's
+        # MRO decides whether the descriptor or the replacement wins.
+        if any(
+            descendant != class_name
+            and class_name in mro
+            and name in self.class_property_shadows.get(descendant, set())
+            for descendant, mro in self.class_mro.items()
+        ):
+            return None
         for candidate in self.class_mro.get(class_name, []):
-            if name in self.class_properties.get(candidate, {}):
+            if name in self.class_property_shadows.get(candidate, set()):
+                return None
+            property_info = self.class_properties.get(candidate, {}).get(name)
+            if property_info is not None:
                 return candidate
         return None
 
@@ -15755,7 +15798,7 @@ class LinuxCEmitter:
         if obj_t is not None and obj_t != "int":
             slot = self._slot(obj_val, types)
             if target_clean in {"int", "entero"}:
-                return f"({slot}.kind==PK_INT||{slot}.kind==PK_BOOL)"
+                return f"({slot}.kind==PK_INT||{slot}.kind==PK_BOOL||{slot}.kind==PK_BIGINT)"
             elif target_clean in {"bool", "booleano"}:
                 return f"({slot}.kind==PK_BOOL)"
             elif target_clean in {"float", "decimal", "flotante"}:
@@ -16412,6 +16455,14 @@ class LinuxCEmitter:
                             and name not in func_stored
                         ):
                             read_anywhere.add(name)
+                    elif instruction.op == "decorated_method_load" and len(instruction.args) > 1:
+                        method_name = instruction.args[1]
+                        read_anywhere.update(
+                            storage
+                            for (_class_name, decorated_name), storage
+                            in getattr(module, "decorated_class_methods", {}).items()
+                            if decorated_name == method_name and storage in self._module_stored
+                        )
         self._shared_globals = self._module_stored & (declared_anywhere | read_anywhere)
 
     def _scan_usage_param_types(self, module: MIRModule) -> None:
@@ -23588,6 +23639,80 @@ class LinuxCEmitter:
             )
             types[result] = "object:dynamic"
             self._emit_exc_check(out, function, handler_label)
+        elif op == "object_new_dynamic":
+            class_value = args[0]
+            handler_label = args[1] if len(args) > 1 else None
+            out.append("    {")
+            out.append(f"        long _ond_value={self._value(class_value)};")
+            out.append(
+                "        PitonObject*_ond_class=0;"
+                "if(_ond_value&&piton_maybe_ptr(_ond_value)&&"
+                "((long*)_ond_value)[1]==PK_OBJECT)_ond_class=(PitonObject*)_ond_value;"
+            )
+            out.append("        if(_ond_class&&_ond_class->is_class&&_ond_class->class_name){")
+            out.append("            const char*_ond_parent=_ond_class->parent_name;")
+            for class_name, parent_name in sorted(self.class_parents.items()):
+                parent_expr = "0" if parent_name is None else json.dumps(parent_name)
+                out.append(
+                    f"            if(!piton_strcmp(_ond_class->class_name,{json.dumps(class_name)}))"
+                    f"_ond_parent={parent_expr};"
+                )
+            out.append(
+                f"            {_name(result)}=(long)piton_object_new(_ond_class->class_name,_ond_parent);"
+            )
+            out.append("        }else{")
+            out.append(
+                "            const char*_ond_actual=piton_unbound_value_type(_ond_value,-1);"
+                "PitonStrBuf _ond_msg;sb_init(&_ond_msg);"
+                "sb_puts(&_ond_msg,\"object.__new__(X): X is not a type object (\");"
+                "sb_puts(&_ond_msg,_ond_actual);sb_putc(&_ond_msg,')');"
+                "piton_raise_set(\"TypeError\",_ond_msg.d);"
+            )
+            out.append("        }")
+            out.append("    }")
+            types[result] = "object:dynamic"
+            self._emit_exc_check(out, function, handler_label)
+            return out
+        elif op == "object_format":
+            obj, format_spec = args[0], args[1]
+            handler_label = args[2] if len(args) > 2 else None
+            owner_type = types.get(obj, "")
+            if not owner_type.startswith("object:"):
+                raise NativeBuildError(
+                    "native object.__format__ requires a statically known object receiver"
+                )
+            owner_class = owner_type.split(":", 1)[1]
+            if (self._find_class_method(owner_class, "__str__") is None
+                    and self._find_class_method(owner_class, "__repr__") is None):
+                raise NativeBuildError(
+                    "native object.__format__ needs a modeled __str__ or __repr__ implementation"
+                )
+            out.append("    {")
+            out.append(f"        PitonSlot _of_spec={self._slot(format_spec, types)};")
+            out.append(f"        PitonObject*_of_obj=(PitonObject*){self._value(obj)};")
+            out.append("        if(_of_spec.kind!=PK_STR||!_of_spec.bits){")
+            out.append(
+                "            const char*_of_actual=piton_unbound_value_type(_of_spec.bits,_of_spec.kind);"
+                "PitonStrBuf _of_msg;sb_init(&_of_msg);"
+                "sb_puts(&_of_msg,\"__format__() argument must be str, not \");"
+                "sb_puts(&_of_msg,_of_actual);piton_raise_set(\"TypeError\",_of_msg.d);"
+            )
+            out.append("        }else if(!((const char*)_of_spec.bits)[0]){")
+            out.append(
+                f"            {_name(result)}=piton_object_str_hook({self._value(obj)},_of_obj->class_name);"
+            )
+            out.append("        }else{")
+            out.append(
+                "            PitonStrBuf _of_msg;sb_init(&_of_msg);"
+                "sb_puts(&_of_msg,\"unsupported format string passed to \");"
+                "sb_puts(&_of_msg,_of_obj->class_name?_of_obj->class_name:\"object\");"
+                "sb_puts(&_of_msg,\".__format__\");piton_raise_set(\"TypeError\",_of_msg.d);"
+            )
+            out.append("        }")
+            out.append("    }")
+            types[result] = "str"
+            self._emit_exc_check(out, function, handler_label)
+            return out
         elif op == "object_new":
             cls_name = args[0]
             parent = args[1] if len(args) > 1 else None
@@ -23693,6 +23818,70 @@ class LinuxCEmitter:
             out.append("    }")
             self._closure_origin[result] = lifted_name
             types[result] = "closure"
+        elif op == "decorated_method_load":
+            obj, method = args[0], args[1]
+            handler_label = args[2] if len(args) > 2 else None
+            _receiver = (
+                f"piton_dyn_unbox({self._value(obj)}).bits"
+                if types.get(obj) == "slot" else self._value(obj)
+            )
+            out.append(f"    {{long _dm_raw={_receiver};PitonObject*_dm_obj=0;")
+            out.append(
+                "    if(_dm_raw&&piton_maybe_ptr(_dm_raw)&&"
+                "((long*)_dm_raw)[1]==PK_OBJECT){_dm_obj=(PitonObject*)_dm_raw;}"
+            )
+            _targets: dict[str, str] = {}
+            for _class_name in self.classes:
+                _mro = self.class_mro.get(_class_name, [_class_name])
+                for _candidate in _mro:
+                    _storage = self.decorated_class_methods.get((_candidate, method))
+                    if _storage is not None:
+                        _targets[_class_name] = _storage
+                        break
+                    if method in self.classes.get(_candidate, set()):
+                        _target = f"{_candidate}__{method}"
+                        if _target in self.function_names:
+                            _targets[_class_name] = f"&{_name(_target)}"
+                            break
+            out.append("    if(!_dm_obj||_dm_obj->is_class){")
+            out.append(
+                f"        const char*_dm_type=piton_unbound_value_type(_dm_raw,-1);"
+                "PitonStrBuf _dm_msg;sb_init(&_dm_msg);sb_putc(&_dm_msg,'\\'');"
+                "sb_puts(&_dm_msg,_dm_type);sb_puts(&_dm_msg,\"' object has no attribute '\");"
+                f"sb_puts(&_dm_msg,{json.dumps(method)});sb_putc(&_dm_msg,'\\'');"
+                "piton_raise_set(\"AttributeError\",_dm_msg.d);"
+            )
+            out.append("    }else{")
+            for _index, (_class_name, _target_expr) in enumerate(sorted(_targets.items())):
+                _branch = "if" if _index == 0 else "else if"
+                _expr = (
+                    _name(_target_expr)
+                    if not _target_expr.startswith("&") else f"(long){_target_expr}"
+                )
+                out.append(
+                    f"        {_branch}(_dm_obj->class_name&&"
+                    f"!piton_strcmp(_dm_obj->class_name,{json.dumps(_class_name)}))"
+                    f"{{{_name(result)}={_expr};}}"
+                )
+            if _targets:
+                out.append("        else{")
+            out.append(
+                f"        {'    ' if _targets else ''}PitonStrBuf _dm_msg;sb_init(&_dm_msg);"
+                "sb_putc(&_dm_msg,'\\'');sb_puts(&_dm_msg,_dm_obj->class_name?_dm_obj->class_name:\"?\");"
+                "sb_puts(&_dm_msg,\"' object has no attribute '\");"
+                f"sb_puts(&_dm_msg,{json.dumps(method)});sb_putc(&_dm_msg,'\\'');"
+                "piton_raise_set(\"AttributeError\",_dm_msg.d);"
+            )
+            if _targets:
+                out.append("        }")
+            out.append("    }")
+            out.append("    }")
+            # The selected value is either the wrapper callable stored by the
+            # class decorator or an unbound native method function. Both take
+            # the receiver explicitly in the dynamic call's positional tuple.
+            types[result] = "int"
+            self._emit_exc_check(out, function, handler_label)
+            return out
         elif op == "dynamic_call":
             # DYNAMIC_CALL_V1: llamada a un callable desconocido en build time;
             # el runtime arma el frame con los args y el dict de keywords.
@@ -24065,6 +24254,7 @@ class LinuxCEmitter:
                     ("dict", "copy"): ("piton_unbound_dict_copy_frame", 1, "dict"),
                     ("set", "copy"): ("piton_unbound_set_copy_frame", 1, "set"),
                     ("type", "__instancecheck__"): ("piton_unbound_type_instancecheck_frame", 2, "bool"),
+                    ("type", "__subclasscheck__"): ("piton_unbound_type_subclasscheck_frame", 2, "bool"),
                     # from_bytes: vararg (ver piton_unbound_int_from_bytes_frame); aridad 1 para map/filter.
                     ("int", "from_bytes"): ("piton_unbound_int_from_bytes_frame", 1, "bigint"),
                     # W23: unbound builtin type attributes as values/calls
