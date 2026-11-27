@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import gzip
+import copy
 import os
 import re
 import subprocess
@@ -131,6 +132,23 @@ typedef struct{long magic;PitonSeq*source;long index;}PitonGenExpr;
 #define PITON_GEN_MAGIC 0x5049544E47654ELL
 #endif
 static int piton_maybe_ptr(long bits);
+/* FREESTANDING_FLOOR_V1: libm cannot be linked into the static -nostdlib
+   executable (glibc's static IFUNC pulls in the dynamic-loader CPU table).
+   Implement IEEE-754 binary64 floor by clearing fractional mantissa bits. */
+static double piton_floor(double x){
+  union{double d;uint64_t u;}v;v.d=x;
+  unsigned long long exp=(v.u>>52)&0x7ffULL;
+  if(exp==0x7ffULL)return x;
+  int e=(int)exp-1023;
+  if(e<0){if((v.u>>63)==0)return 0.0;return x==0.0?x:-1.0;}
+  if(e>=52)return x;
+  unsigned shift=(unsigned)(52-e);
+  uint64_t mask=(1ULL<<shift)-1ULL;
+  if((v.u&mask)==0)return x;
+  if(v.u>>63)v.u=(v.u&~mask)+(1ULL<<shift);
+  else v.u&=~mask;
+  return v.d;
+}
 static PitonSlot piton_genexpr_next_slot(PitonGenExpr*g);
 static long piton_genexpr_next(PitonGenExpr*g);
 static PitonSlot piton_gen_next_slot(long raw);
@@ -937,8 +955,8 @@ static PitonSlot piton_object_binary_dunder(long opcode,PitonSlot left,
     piton_raise_unsupported_power(left,right,modulo,1);
     return (PitonSlot){0,PK_NONE};
   }
-  const char*primary=opcode==0?"__add__":opcode==1?"__sub__":opcode==4?"__floordiv__":opcode==5?"__mod__":"__pow__";
-  const char*reflected=opcode==0?"__radd__":opcode==1?"__rsub__":opcode==4?"__rfloordiv__":opcode==5?"__rmod__":"__rpow__";
+  const char*primary=opcode==0?"__add__":opcode==1?"__sub__":opcode==2?"__mul__":opcode==3?"__truediv__":opcode==4?"__floordiv__":opcode==5?"__mod__":"__pow__";
+  const char*reflected=opcode==0?"__radd__":opcode==1?"__rsub__":opcode==2?"__rmul__":opcode==3?"__rtruediv__":opcode==4?"__rfloordiv__":opcode==5?"__rmod__":"__rpow__";
   PitonSlot result;
   if(right_first){
     result=piton_call_object_dunder(right,reflected,left,(PitonSlot){0,PK_NONE},2);
@@ -1073,8 +1091,8 @@ static PitonSlot piton_binop_object_add(PitonSlot a,PitonSlot b){
 static PitonSlot piton_dyn_binop(long opc,PitonSlot a,PitonSlot b){
   static const char*names[]={"+","-","*","/","//","%","**","<<",">>","&","|","^"};
   PitonSlot r={0,PK_NONE};
-  if((opc==0||opc==1||opc==4||opc==5||opc==6)&&(a.kind==PK_OBJECT||b.kind==PK_OBJECT)){
-    const char*refl=opc==0?"__radd__":opc==1?"__rsub__":opc==4?"__rfloordiv__":opc==5?"__rmod__":"__rpow__";
+  if((opc==0||opc==1||opc==2||opc==3||opc==4||opc==5||opc==6)&&(a.kind==PK_OBJECT||b.kind==PK_OBJECT)){
+    const char*refl=opc==0?"__radd__":opc==1?"__rsub__":opc==2?"__rmul__":opc==3?"__rtruediv__":opc==4?"__rfloordiv__":opc==5?"__rmod__":"__rpow__";
     int right_first=piton_aug_reflected_first(a,b,refl);
     return piton_object_binary_dunder(opc,a,b,(PitonSlot){0,PK_NONE},0,right_first);
   }
@@ -1867,7 +1885,7 @@ static void piton_object_free(void*raw){piton_collection_free(raw);}
 static PitonSlot piton_slot(long bits,int kind){PitonSlot v={bits,kind};return v;}
 static long piton_double_bits(double d){union{double d;unsigned long u;}v={d};return(long)v.u;}
 static double piton_bits_double(long bits){union{double d;unsigned long u;}v;v.u=(unsigned long)bits;return v.d;}
-static double piton_round_h(double x){return __builtin_floor(x + (x < 0.0 ? -0.5 : 0.5));}
+static double piton_round_h(double x){return piton_floor(x + (x < 0.0 ? -0.5 : 0.5));}
 static long piton_float_add(long a,long b){return piton_double_bits(piton_bits_double(a)+piton_bits_double(b));}
 static long piton_float_sub(long a,long b){return piton_double_bits(piton_bits_double(a)-piton_bits_double(b));}
 static long piton_float_mul(long a,long b){return piton_double_bits(piton_bits_double(a)*piton_bits_double(b));}
@@ -1879,7 +1897,7 @@ static long piton_float_fmt_fixed(long bits,int prec){double x=piton_bits_double
 static long piton_float_fmt_pct(long bits,int prec){double x=piton_bits_double(bits)*100.0;long s=piton_float_fmt_fixed(piton_double_bits(x),prec>=0?prec:6);char*p=(char*)s;usize n=piton_strlen(p);char*r=piton_alloc(n+2);piton_memcpy(r,p,n+1);r[n]='%';r[n+1]=0;return(long)r;}
 static long piton_float_fmt_exp(long bits,int prec,int upper){double x=piton_bits_double(bits);int p=prec>=0?prec:6;int neg=x<0;if(neg)x=-x;int exp=0;double m=x;while(m>=10.0){m/=10.0;++exp;}while(m<1.0&&m>0.0){m*=10.0;--exp;}double scaled=piton_round_h(m*piton_pow10(p));char digits[80];int rn=piton_frac_digits((long)scaled,p+2,digits);char*out=piton_alloc(64);int o=0;if(neg)out[o++]='-';if(rn>p+1){out[o++]='1';if(p>0){out[o++]='.';for(int i=0;i<p;++i)out[o++]=digits[1+i];}++exp;}else{out[o++]=rn>0?digits[0]:'0';if(p>0){out[o++]='.';for(int i=1;i<=p;++i)out[o++]=i<rn?digits[i]:'0';}}out[o++]=upper?'E':'e';out[o++]=exp<0?'-':'+';int ae=exp<0?-exp:exp;if(ae<10){out[o++]='0';out[o++]=(char)('0'+ae);}else{out[o++]=(char)('0'+ae/10);out[o++]=(char)('0'+ae%10);}out[o]=0;return(long)out;}
 static long piton_float_fmt_g(long bits,int upper){double x=piton_bits_double(bits);if(x==0.0){char*z=piton_alloc(2);z[0]='0';z[1]=0;return(long)z;}int neg=x<0;if(neg)x=-x;int exp=0;double m=x;while(m>=10.0){m/=10.0;++exp;}while(m<1.0){m*=10.0;--exp;}if(exp<-4||exp>=6){char*s=(char*)piton_float_fmt_exp(bits,5,upper);/* trim zeros */char*d=s+1;while(d<s+50&&*d&&*d!='e'&&*d!='E')++d;char*e=d;while(e>s&&*(e-1)=='0')--e;if(e>s&&*(e-1)=='.')--e;for(char*q=d;*q;++q)e++[0]=q[0];return(long)s;}int p2=6-1-exp;if(p2<0)p2=0;char*s=(char*)piton_float_fmt_fixed(bits,p2);char*d=s;while(*d&&*d!='.')++d;if(*d=='.'){char*q=d+piton_strlen(d)-1;while(q>d&&*q=='0')--q;if(*q=='.')*q++=0;else *(q+1)=0;}else {}return(long)s;}
-static long piton_float_floor(long a){double x=piton_bits_double(a);if(x!=x){piton_write(2,"ValueError: cannot convert float NaN to integer\n",48);piton_exit(1);}double f=__builtin_floor(x);if(f>9.2233720368547758e18||f<-9.2233720368547758e18){piton_write(2,"OverflowError: cannot convert float infinity to integer\n",56);piton_exit(1);}return(long)f;}
+static long piton_float_floor(long a){double x=piton_bits_double(a);if(x!=x){piton_write(2,"ValueError: cannot convert float NaN to integer\n",48);piton_exit(1);}double f=piton_floor(x);if(f>9.2233720368547758e18||f<-9.2233720368547758e18){piton_write(2,"OverflowError: cannot convert float infinity to integer\n",56);piton_exit(1);}return(long)f;}
 static long piton_float_ceil(long a){double x=piton_bits_double(a);if(x!=x){piton_write(2,"ValueError: cannot convert float NaN to integer\n",48);piton_exit(1);}double f=__builtin_ceil(x);if(f>9.2233720368547758e18||f<-9.2233720368547758e18){piton_write(2,"OverflowError: cannot convert float infinity to integer\n",56);piton_exit(1);}return(long)f;}
 /* ── freestanding math: PITON's own sin/cos/log (no libm, -nostdlib) ──────
    __builtin_sin/cos/log have no definition to call under -nostdlib, so these
@@ -4271,6 +4289,15 @@ static long piton_builtin_get(const char* name) {
 static PitonBuiltinObj*piton_builtin_class_marker(const char* name){
   return (PitonBuiltinObj*)piton_builtin_get(name);
 }
+static int piton_builtin_is_marker(long raw){
+  if(!piton_maybe_ptr(raw))return 0;
+  PitonBuiltinObj*bo=(PitonBuiltinObj*)raw;
+  return bo->magic==0x5049544E424C544EL;
+}
+static int piton_builtin_obj_is(long raw,const char*name){
+  return piton_builtin_is_marker(raw)&&
+    piton_strcmp(((PitonBuiltinObj*)raw)->name,name)==0;
+}
 static PitonObject*piton_object_new_finalized(const char*name,const char*parent,long finalizer){PitonObject*o=piton_alloc(sizeof(*o));o->refcount=1;o->kind=PK_OBJECT;o->class_name=name;o->parent_name=parent;o->finalizer=finalizer;o->finalizer_called=0;o->next_all=piton_all_objects;o->dict_cache=0;piton_all_objects=o;return o;}
 static PitonObject*piton_object_new(const char*name,const char*parent){return piton_object_new_finalized(name,parent,0);}
 static void piton_finalize_objects(void){PitonObject*o=piton_all_objects;while(o){if(o->finalizer&&!o->finalizer_called){o->finalizer_called=1;((long(*)(long))o->finalizer)((long)o);}o=o->next_all;}}
@@ -4290,12 +4317,17 @@ static long piton_type_new(long raw_name,long raw_bases,long raw_namespace){
   const char*name=(const char*)raw_name;const char*parent=0;
   if(raw_bases&&piton_maybe_ptr(raw_bases)&&((long*)raw_bases)[1]==PK_TUPLE){
     PitonSeq*bases=(PitonSeq*)raw_bases;
-    if(bases->length>0&&bases->items[0].kind==PK_OBJECT&&bases->items[0].bits)
-      parent=((PitonObject*)bases->items[0].bits)->class_name;
+    if(bases->length>0&&bases->items[0].kind==PK_OBJECT&&bases->items[0].bits){
+      long base=bases->items[0].bits;
+      if(piton_builtin_obj_is(base,"object"))parent="object";
+      else if(!piton_builtin_is_marker(base)&&((PitonObject*)base)->is_class)
+        parent=((PitonObject*)base)->class_name;
+    }
   }
   if(!name){piton_raise_set("TypeError","type.__new__() name must be str");return 0;}
   PitonObject*cls=piton_object_new(name,parent);cls->is_class=1;
   piton_object_set(cls,"__name__",piton_slot((long)name,PK_STR));
+  piton_object_set(cls,"__qualname__",piton_slot((long)name,PK_STR));
   if(raw_namespace&&piton_maybe_ptr(raw_namespace)&&((long*)raw_namespace)[1]==PK_DICT){
     PitonDict*ns=(PitonDict*)raw_namespace;
     for(long i=0;i<ns->length;++i){
@@ -4305,6 +4337,23 @@ static long piton_type_new(long raw_name,long raw_bases,long raw_namespace){
     }
   }
   return(long)cls;
+}
+static long piton_type_new_slots(PitonSlot name,PitonSlot bases,PitonSlot namespace){
+  if(name.kind!=PK_STR){piton_raise_set("TypeError","type() argument 1 must be str");return 0;}
+  if(bases.kind!=PK_TUPLE){piton_raise_set("TypeError","type() argument 2 must be tuple");return 0;}
+  if(namespace.kind!=PK_DICT){piton_raise_set("TypeError","type() argument 3 must be dict");return 0;}
+  PitonSeq*seq=(PitonSeq*)bases.bits;
+  if(seq&&seq->length>1){piton_raise_set("NotImplementedError","dynamic type() multiple inheritance is not modeled");return 0;}
+  if(seq)for(long i=0;i<seq->length;++i){
+    PitonSlot base=seq->items[i];
+    if(base.kind!=PK_OBJECT||!base.bits||
+       (!piton_builtin_obj_is(base.bits,"object")&&
+        (piton_builtin_is_marker(base.bits)||
+         !((PitonObject*)base.bits)->is_class))){
+      piton_raise_set("TypeError","type() bases must be classes");return 0;
+    }
+  }
+  return piton_type_new(name.bits,bases.bits,namespace.bits);
 }
 static long piton_exception_make(const char*type,const char*message,long args,long cause,long context,long suppress){
   PitonObject*o=piton_object_new(type?type:"Exception",piton_exc_parent_of(type));
@@ -6805,7 +6854,7 @@ static long piton_int_sub(long a,long b){i64 r;if(__builtin_sub_overflow(a,b,&r)
 static long piton_int_mul(long a,long b){i64 r;if(__builtin_mul_overflow(a,b,&r)){piton_raise_set("OverflowError","integer arithmetic result too large for the native int subset");}return r;}
 static long piton_int_truediv(long a,long b){if(b==0){piton_raise_set("ZeroDivisionError","division by zero");return 0;}return piton_double_bits((double)a/(double)b);}
 static long piton_float_div(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float division by zero");return 0;}return piton_double_bits(x/y);}
-static long piton_float_floor_div(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float floor division by zero");return 0;}return piton_double_bits(__builtin_floor(x/y));}
+static long piton_float_floor_div(long a,long b){double x=piton_bits_double(a),y=piton_bits_double(b);if(y==0.0){piton_raise_set("ZeroDivisionError","float floor division by zero");return 0;}return piton_double_bits(piton_floor(x/y));}
 static void piton_raise_chain_set(const char*type,const char*message,const char*cause_type,const char*cause_msg,long cause_value,int cause_is_value){
   piton_raise_set(type,message);
   if(cause_type){piton_exc_cause_type=cause_type;piton_exc_cause_msg=cause_msg;piton_exc_cause_value=cause_value;piton_exc_cause_is_value=cause_is_value;}
@@ -6997,7 +7046,7 @@ static long piton_range_slice_step(PitonRange*r,long lo,long hi,long st){if(!r)r
 /* DIVMOD_FLOAT_V1: divmod(a, b) con floats -> tupla (q, r). */
 static long piton_divmod_float(double a,double b){
   if(b==0.0){piton_raise_set("ZeroDivisionError","float divmod()");return 0;}
-  double q=__builtin_floor(a/b);
+  double q=piton_floor(a/b);
   double r=a-q*b;
   if(r!=0.0&&((r<0.0)!=(b<0.0))){q-=1.0;r+=b;}
   PitonSeq*p=piton_seq_new(PK_TUPLE,2);
@@ -10599,6 +10648,42 @@ class LinuxCEmitter:
         self._next_dyn_slot_vars.setdefault(fn_name, set()).add(var_name)
 
     def emit(self, module: MIRModule) -> str:
+        # MODULE_IMPORT_REDEFINITION_V1: a bundled module may deliberately
+        # repeat an identical stub declaration (for example `_random.randint`).
+        # C cannot contain two definitions with the same symbol. Collapse only
+        # byte-equivalent MIR definitions; conflicting redefinitions stay
+        # fail-closed rather than choosing one silently.
+        _function_by_name: dict[str, MIRFunction] = {}
+        _unique_functions: list[MIRFunction] = []
+        _conflicting_class_methods: set[str] = set()
+        for _function in module.functions:
+            _previous = _function_by_name.get(_function.name)
+            if _previous is None:
+                _function_by_name[_function.name] = _function
+                _unique_functions.append(_function)
+                continue
+            if _previous.to_dict() != _function.to_dict():
+                if (
+                    _previous.self_class
+                    and _previous.self_class == _function.self_class
+                    and not getattr(_previous, "is_generator", False)
+                    and not getattr(_function, "is_generator", False)
+                ):
+                    # CLASS_SCOPE_REDEFINITION_V1: nested classes can reuse a
+                    # Python name in separate function scopes (pydoc defines
+                    # HorizontalRule twice). Their method symbols collide in
+                    # the flat MIR namespace. Keep the first symbol but make
+                    # its runtime behavior fail closed below; never pick one
+                    # conflicting body and pretend the other is equivalent.
+                    _conflicting_class_methods.add(_function.name)
+                    continue
+                raise NativeBuildError(
+                    f"duplicate native function '{_function.name}' has conflicting MIR bodies"
+                )
+        if len(_unique_functions) != len(module.functions):
+            module = copy.copy(module)
+            module.functions = _unique_functions
+        self._conflicting_class_methods = _conflicting_class_methods
         self.mir_module = module
         # CLASS_OBJECT_SLOT_DECL_V1: collect every interned class-object slot
         # emitted by _emit_class_object. Some runtime object classes (notably
@@ -10613,6 +10698,7 @@ class LinuxCEmitter:
                 self.module_attr_types[_cls_name] = f"object:{_cls_name}"
         self.class_parents = getattr(module, "class_parents", {})
         self.class_mro = getattr(module, "class_mro", {})
+        self.class_dynamic_bases = getattr(module, "class_dynamic_bases", set())
         # CLASS_BASES_V1: las bases directas de cada clase (`cls.__bases__`).
         self.class_bases = getattr(module, "class_bases", {})
         self.function_aliases = getattr(module, "function_aliases", {})
@@ -11287,6 +11373,17 @@ class LinuxCEmitter:
         is_main = function.name == "<module>"
         params = "long *__piton_frame" if function.frame_abi else ", ".join(f"long {_name(param)}" for param in function.params) or "void"
         signature = "long piton_main(void)" if is_main else f"static long {_name(function.name)}({params})"
+        if function.name in getattr(self, "_conflicting_class_methods", set()):
+            return [
+                signature + " {",
+                "    piton_raise_set(\"NotImplementedError\", "
+                + _str_c_literal(
+                    f"conflicting definitions of native class method '{function.name}' are not modeled"
+                )
+                + ");",
+                "    return 0;",
+                "}",
+            ]
         slots = set(function.params)
         for block in function.blocks:
             for instruction in block.instructions:
@@ -15153,11 +15250,26 @@ class LinuxCEmitter:
                 # y atributo se resuelven por _emit_file_method / los handlers
                 # de atributo de fichero (ver _emit_file_method).
                 continue
-            if not (_c.startswith("object:") and _c.split(":", 1)[1] in self.classes):
+            if not (
+                _c.startswith("object:")
+                and (
+                    _c.split(":", 1)[1] in self.classes
+                    or _c.split(":", 1)[1] in _BUILTIN_EXCEPTIONS
+                )
+            ):
                 raise NativeBuildError(
                     f"Linux {op} sobre '{key[1]}': tipo '{_c}' no soportado en despacho dinamico"
                 )
-        if len(_object_cands) > 1:
+        _generic_exception_setattr = (
+            op == "set_attr"
+            and len(_object_cands) > 1
+            and all(
+                _c.startswith("object:")
+                and _c.split(":", 1)[1] in _BUILTIN_EXCEPTIONS
+                for _c in _object_cands
+            )
+        )
+        if len(_object_cands) > 1 and not _generic_exception_setattr:
             raise NativeBuildError(
                 f"Linux {op} sobre '{key[1]}': varias clases {_object_cands} en despacho dinamico no soportado: fail closed"
             )
@@ -15212,7 +15324,12 @@ class LinuxCEmitter:
             if result is not None:
                 result_types.add(_branch_rt)
 
-        for _cand in sorted(self._nonnone_stored_types.get(key, ())):
+        _dispatch_candidates = (
+            [_object_cands[0]]
+            if _generic_exception_setattr
+            else sorted(self._nonnone_stored_types.get(key, ()))
+        )
+        for _cand in _dispatch_candidates:
             _capture_known_branch(_cand)
 
         # Handle unknown non-None types for get_slice/del_slice using dynamic helper
@@ -17665,6 +17782,42 @@ class LinuxCEmitter:
         )
         if not targets:
             current_mro = self.class_mro.get(current_class, [current_class])
+            # These stdlib bases have real implementations outside this
+            # compilation unit. Allow their method bodies to compile, while
+            # keeping execution fail-closed until the external implementation
+            # is linked into the native runtime.
+            deferred_bases = {
+                ("distutils__command__install__install", "initialize_options"),
+                ("distutils__command__install__install", "select_scheme"),
+                ("distutils__command__install__install", "finalize_unix"),
+                ("distutils__command__install_egg_info__install_egg_info", "initialize_options"),
+                ("distutils__command__install_egg_info__install_egg_info", "finalize_options"),
+                ("classmethod", "__init__"),
+                ("staticmethod", "__init__"),
+                ("_random__Random", "seed"),
+                ("_random__Random", "getstate"),
+                ("_random__Random", "setstate"),
+            }
+            dynamic_base = (
+                current_class in self.class_dynamic_bases
+                and fallback_class is None
+            )
+            if dynamic_base or (fallback_class, method) in deferred_bases:
+                message = f"super().{method} has no modeled runtime implementation"
+                out = ["    {"]
+                out.append(
+                    "    piton_raise_set(\"NotImplementedError\", "
+                    f"{_str_c_literal(message)});"
+                )
+                out.append(f"    {_name(instruction.result)}=0;")
+                self._emit_exc_check(
+                    out,
+                    function,
+                    instruction.args[5] if len(instruction.args) > 5 else None,
+                )
+                out.append("    }")
+                types[instruction.result] = "none"
+                return out
             if len(current_mro) <= 1 and method != "__init__":
                 raise NativeBuildError("super(): no base class in MRO")
             raise NativeBuildError(
@@ -20214,7 +20367,7 @@ class LinuxCEmitter:
                 types[result] = "complex"
                 return out
             if "none" in {left_type, right_type} or "object" in {left_type, right_type} or any(str(t).startswith("object:") for t in (left_type, right_type)):
-                if operator in {"+", "-", "//", "%", "**"} and any(
+                if operator in {"+", "-", "*", "/", "//", "%", "**"} and any(
                     str(t).startswith("object:") for t in (left_type, right_type)
                 ):
                     if operator == "%":
@@ -20237,9 +20390,9 @@ class LinuxCEmitter:
                             raise NativeBuildError(
                                 f"Linux % on a native object without a matching dunder is not supported"
                             )
-                    _opcode_map = {"+": 0, "-": 1, "//": 4, "%": 5, "**": 6}
+                    _opcode_map = {"+": 0, "-": 1, "*": 2, "/": 3, "//": 4, "%": 5, "**": 6}
                     _opcode = _opcode_map[operator]
-                    _refl_map = {"+": "__radd__", "-": "__rsub__", "//": "__rfloordiv__", "%": "__rmod__", "**": "__rpow__"}
+                    _refl_map = {"+": "__radd__", "-": "__rsub__", "*": "__rmul__", "/": "__rtruediv__", "//": "__rfloordiv__", "%": "__rmod__", "**": "__rpow__"}
                     _reflected = _refl_map[operator]
                     _right_first = int(
                         self._right_reflected_method_first(left_type, right_type, _reflected)
@@ -20330,9 +20483,9 @@ class LinuxCEmitter:
                                 raise NativeBuildError(
                                     f"Linux % on a native object without a matching dunder is not supported"
                                 )
-                        _opcode = {"+": 0, "-": 1, "%": 5, "//": 4, "**": 6}.get(operator)
+                        _opcode = {"+": 0, "-": 1, "*": 2, "/": 3, "%": 5, "//": 4, "**": 6}.get(operator)
                         if _opcode is not None:
-                            _reflected = {"+": "__radd__", "-": "__rsub__", "%": "__rmod__", "//": "__rfloordiv__", "**": "__rpow__"}[operator]
+                            _reflected = {"+": "__radd__", "-": "__rsub__", "*": "__rmul__", "/": "__rtruediv__", "%": "__rmod__", "//": "__rfloordiv__", "**": "__rpow__"}[operator]
                             _right_first = int(
                                 self._right_reflected_method_first(left_type, right_type, _reflected)
                             )
@@ -22894,6 +23047,20 @@ class LinuxCEmitter:
                     _tsrc = aliases.get(values[0], values[0])
                     if isinstance(_tsrc, str) and _tsrc in function.params:
                         self._type_sensitive_params.add((function.name, _tsrc))
+                if len(values) == 3:
+                    # TYPE_DYNAMIC_CLASS_V1: preserve argument kinds for the
+                    # native class constructor. This file uses the untagged
+                    # freestanding ABI, so the helper receives PitonSlots and
+                    # validates them before creating the class object.
+                    out.append(
+                        f"    {_name(result)}=piton_type_new_slots("
+                        f"{self._slot(values[0], types)},"
+                        f"{self._slot(values[1], types)},"
+                        f"{self._slot(values[2], types)});"
+                    )
+                    types[result] = "class:dynamic"
+                    self._emit_exc_check(out, function, call_handler)
+                    return out
                 if len(values) != 1:
                     raise NativeBuildError(
                         "Linux type requires one argument (dynamic class creation is not supported)"
@@ -23845,6 +24012,26 @@ class LinuxCEmitter:
             # MODULE_ATTR_MISSING_V1: nombre real del modulo (4.o argumento, literal).
             module_display = args[3] if len(args) > 3 and isinstance(args[3], str) else None
             owner_type = types.get(obj, "")
+            if owner_type == "slot" and attr in {"start", "stop", "step"}:
+                # SLICE_SLOT_ATTR_V1: user __getitem__ parameters can receive
+                # either an integer index or a slice. Their runtime slot keeps
+                # that distinction and exposes absent bounds as None.
+                _has_field = {"start": "has_start", "stop": "has_stop", "step": "has_step"}[attr]
+                _field = attr
+                out.append(
+                    f"    {{PitonSlot _slice_slot=piton_dyn_unbox({self._value(obj)});"
+                    f"if(_slice_slot.kind==PK_SLICE){{PitonSlice*_slice=(PitonSlice*)_slice_slot.bits;"
+                    f"PitonSlot _bound=_slice->{_has_field}?piton_slot(_slice->{_field},PK_INT):piton_slot(PITON_NONE,PK_NONE);"
+                    f"{_name(result)}=(long)piton_slot_box_new(_bound);"
+                    "}else{PitonStrBuf _msg;sb_init(&_msg);sb_putc(&_msg,'\\'');"
+                    "sb_puts(&_msg,js_type_name(_slice_slot));sb_puts(&_msg,\"' object has no attribute '\");"
+                    f"sb_puts(&_msg,{json.dumps(attr)});sb_putc(&_msg,'\\'');"
+                    "piton_raise_set(\"AttributeError\",_msg.d);}}"
+                )
+                types[result] = "slot"
+                self._dyn_slot_temps.add((function.name, result))
+                self._emit_exc_check(out, function, handler_label)
+                return out
             if attr in {"__name__", "__qualname__"} and obj in self._dynamic_type_slots:
                 # TYPE_SLOT_NAME_V1: la repr de clase sigue siendo el valor
                 # comparable; el nombre se deriva de la kind viva del slot.
@@ -23956,6 +24143,17 @@ class LinuxCEmitter:
                 types[result] = "str"
                 return out
             if owner_type.startswith("class:") and attr in {"__name__", "__qualname__"}:
+                if owner_type == "class:dynamic":
+                    if attr == "__name__":
+                        out.append(
+                            f"    {_name(result)}=(long)((PitonObject*){self._value(obj)})->class_name;"
+                        )
+                    else:
+                        out.append(
+                            f'    {_name(result)}=piton_object_get((PitonObject*){self._value(obj)},"__qualname__").bits;'
+                        )
+                    types[result] = "str"
+                    return out
                 # CLASS_NAME_ATTR_V1: `A.__name__` y `type(categoria).__name__`
                 # — el nombre de la clase como literal. El objeto de clase lo
                 # lleva en runtime, pero el get generico tipo int y se
@@ -27121,6 +27319,21 @@ class LinuxCEmitter:
                 target_fn = hit + "____getitem__"
                 target = _name(target_fn)
                 _gi_idx = self._plain(idx, types)
+                _target_params = self.function_params.get(target_fn, [])
+                if len(_target_params) > 1:
+                    _key_param = _target_params[1]
+                    _dynamic_key_params = (
+                        (self._multi_type_params.get(target_fn) or set())
+                        | (self._slot_param_args.get(target_fn) or set())
+                    )
+                    if _key_param in _dynamic_key_params:
+                        self._record_slot_param_arg(target_fn, _key_param)
+                        _gi_idx = f"_{_name(result)}_index_slot"
+                        out.append(f"    long {_gi_idx};")
+                        out.append(
+                            f"    {{PitonSlot*_gib=piton_slot_box_new({self._slot(idx, types)});"
+                            f" {_gi_idx}=(long)_gib;}}"
+                        )
                 if self.function_frame_abi.get(target_fn, False):
                     out.append(f'    {{long _gi_args[]={{ {self._value(coll)},{_gi_idx} }}; {_name(result)}=piton_frame_call((long)&{target},2,_gi_args);}}')
                 else:
@@ -27158,20 +27371,72 @@ class LinuxCEmitter:
             # STARRED_SLICE_LIST_V1: `as_list` llega como 5to arg (MIR starred
             # unpack); step=None via args[3].
             as_list = len(args) > 4 and args[4] == "as_list"
+            slice_handler = args[5] if len(args) > 5 else None
             collection_type = types.get(coll)
             if collection_type is not None and collection_type.startswith("object:"):
-                # OBJECT_SLICE_FAIL_CLOSED_V1: obj[a:b] con __getitem__ de
-                # usuario: el slice no llega a __getitem__ (el backend lo
-                # trata como objeto no subscriptable en runtime). Fail closed.
+                # OBJECT_SLICE_DUNDER_V1: obj[a:b:c] calls the user's
+                # __getitem__ with a native slice value.
                 _scls = collection_type.split(":", 1)[1]
-                if any(
-                    "__getitem__" in self.classes.get(_c, set())
-                    for _c in self.class_mro.get(_scls, [_scls])
-                ):
-                    raise NativeBuildError(
-                        f"Linux slicing of user object '{_scls}' (__getitem__) "
-                        "is not supported natively"
+                _getitem_classes = [
+                    _c for _c in self.class_mro.get(_scls, [_scls])
+                    if "__getitem__" in self.classes.get(_c, set())
+                ]
+                if not _getitem_classes and "__getitem__" in self.classes.get(_scls, set()):
+                    _getitem_classes = [_scls]
+                _getitem_owner = next(
+                    (
+                        _c for _c in _getitem_classes
+                        if _c == _scls and f"{_c}____getitem__" in self.function_params
+                    ),
+                    None,
+                )
+                if _getitem_owner is not None:
+                    _slice_value = f"_{_name(result)}_slice"
+                    _lo = self._plain(lower, types) if lower is not None else "0"
+                    _hi = self._plain(upper, types) if upper is not None else "0"
+                    _st = self._plain(step, types) if step is not None else "1"
+                    out.append(
+                        f"    long {_slice_value}=piton_slice_new({_lo},{_hi},{_st},"
+                        f"{int(lower is not None)},{int(upper is not None)},"
+                        f"{int(step is not None)});"
                     )
+                    _target_fn = f"{_getitem_owner}____getitem__"
+                    _target = _name(_target_fn)
+                    _self = self._value(coll)
+                    _target_params = self.function_params.get(_target_fn, [])
+                    _slice_arg = _slice_value
+                    if len(_target_params) > 1:
+                        self._record_slot_param_arg(_target_fn, _target_params[1])
+                        _slice_arg = f"_{_name(result)}_slice_arg"
+                        out.append(
+                            f"    long {_slice_arg};"
+                            f" {{PitonSlot*_sab=piton_slot_box_new(piton_slot({_slice_value},PK_SLICE));"
+                            f" {_slice_arg}=(long)_sab;}}"
+                        )
+                    if self.function_frame_abi.get(_target_fn, False):
+                        out.append(
+                            f"    {{long _slice_args[]={{ {_self}, {_slice_arg} }};"
+                            f"{_name(result)}=piton_frame_call((long)&{_target},2,_slice_args);}}"
+                        )
+                    else:
+                        out.append(
+                            f"    {_name(result)}={_target}({_self},{_slice_arg});"
+                        )
+                    types[result] = self.function_return_types.get(_target_fn, "int")
+                    self._emit_exc_check(out, function, slice_handler)
+                    return out
+                if _getitem_classes:
+                    raise NativeBuildError(
+                        f"Linux slicing of user object '{_scls}' (__getitem__) is not supported natively"
+                    )
+                self._runtime_type_error(
+                    out,
+                    f"'{_scls}' object is not subscriptable",
+                    function,
+                    slice_handler,
+                )
+                types[result] = "int"
+                return out
             if step is None:
                 lower_value = self._value(lower) if lower is not None else "0"
                 upper_value = self._value(upper) if upper is not None else "0x7FFFFFFFFFFFFFFFL"
