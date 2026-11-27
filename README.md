@@ -47,7 +47,7 @@ Pitón **no es**:
   el objetivo es correcto, no rápido.
 - Self-hosted: el compilador está escrito en Python, no en Pitón.
 
-## Qué SÍ hace (estado verificado 2026-10-24; AutoPiton añadido 2026-10-30)
+## Qué SÍ hace (estado verificado 2026-11-27; Ola 25)
 
 - **Traduce superficie español → Python ordinario** (source-to-source,
   líneas 1:1) y lo ejecuta con CPython: `piton ejecutar`, `piton traducir`,
@@ -74,9 +74,13 @@ Pitón **no es**:
     y fallan por gaps del emisor que el muro de imports ocultaba
     (`conjunto()` de entero en `bdb`, `input()` con prompt no-str en `cmd`,
     `pickle()` con un parámetro usado como str en `copyreg`, `tupla()` de un
-    `map` en `operator`). Reporte vivo:
-    `docs/parity_corpus_v4_report_2026-10-24.{json,md}`
-    (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier a`).
+    `map` en `operator`). Reporte histórico 2026-10-24:
+    `docs/parity_corpus_v4_report_2026-10-24.{json,md}`.
+    - **Actualización Ola 25 (2026-11-27, Linux x86-64 nativo, oráculo CPython 3.12.3)**:
+      - **Tier A (167 archivos stdlib)**: **adapt 167/167 (100.0%) | parse 167/167 (100.0%) | MIR 167/167 (100.0%) | build 167/167 (100.0%)** (`0 MIR_FAIL`, `0 BUILD_FAIL`).
+      - **Tier B (11 scripts tutorial)**: **10/11 EQUIV (90.9%)**, 1 divergente honesto (`corpus_v4/tutorial/stdlib.py`, únicamente en `help(os)` — 51/52 ejemplos byte a byte idénticos; brecha documentada en `docs/TIER_B_STDLIB_HELP_GAP_2026-11-27.md`).
+      - **Introspección nativa**: preservación de `__doc__` (módulos, clases, funciones, métodos), `dir()` real ordenado sobre atributos vivos/MRO, y `help()` nativo estructurado basado exclusivamente en metadata de fuente (retorna `None`, sin fabricar salidas de `pydoc` de CPython).
+      - Reporte vivo: `docs/parity_corpus_v4_report_2026-11-27.{json,md}` (re-ejecutable: `python3 tools/parity_corpus_v4.py run --tier all --workers 4 --isolate`).
   - **corpus v4 recursivo** (`--recursive`, stdlib completa con subpaquetes,
     588 archivos): adapt 99.8%, parse 97.8%, **mir 92 (15.6%), build 73
     (12.4%)**; `MIR_FAIL` 483, `PARSE_FAIL` 12 (anotaciones `match/case`,
