@@ -230,19 +230,107 @@ clase date :
         devolver date(local[0], local[1], local[2])
 
 clase datetime :
-    pasar
+    funcion __init__ (este ,year ,month ,day ,hour =0 ,minute =0 ,second =0 ,microsecond =0 ,tzinfo =Nada ,fold =0 ):
+        fecha = date(year, month, day)
+        si hour < 0 o hour > 23:
+            lanzar ValueError('hour must be in 0..23')
+        si minute < 0 o minute > 59:
+            lanzar ValueError('minute must be in 0..59')
+        si second < 0 o second > 59:
+            lanzar ValueError('second must be in 0..59')
+        si microsecond < 0 o microsecond > 999999:
+            lanzar ValueError('microsecond must be in 0..999999')
+        si fold < 0 o fold > 1:
+            lanzar ValueError('fold must be either 0 or 1')
+        este.year = year
+        este.month = month
+        este.day = day
+        este.hour = hour
+        este.minute = minute
+        este.second = second
+        este.microsecond = microsecond
+        este.tzinfo = tzinfo
+        este.fold = fold
+        este._ordinal = fecha._ordinal
+
+    funcion __repr__ (este):
+        devolver 'datetime.datetime(' + str(este.year) + ', ' + str(este.month) + ', ' + str(este.day) + ', ' + str(este.hour) + ', ' + str(este.minute) + ', ' + str(este.second) + ', ' + str(este.microsecond) + ')'
+
+    funcion __str__ (este):
+        text = este.strftime('%Y-%m-%d %H:%M:%S')
+        si este.microsecond:
+            fraction = str(este.microsecond)
+            mientras len(fraction) < 6:
+                fraction = '0' + fraction
+            text = text + '.' + fraction
+        devolver text
+
+    funcion strftime (este ,formato ):
+        fecha = date(este.year, este.month, este.day)
+        st = [este.year, este.month, este.day, este.hour, este.minute, este.second, fecha.weekday(), este._ordinal - _days_before_year(este.year), 0]
+        devolver time.strftime(formato, st)
+
+    funcion astimezone (este ,tz =Nada ):
+        si tz es Nada:
+            stamp = time.localtime(este._timestamp)
+            devolver datetime(stamp[0], stamp[1], stamp[2], stamp[3], stamp[4], stamp[5], este.microsecond)
+        devolver datetime.fromtimestamp(este._timestamp, tz)
+
+    @classmethod
+    funcion fromtimestamp (clase ,timestamp ,tz =Nada ):
+        whole = int(timestamp)
+        si timestamp < whole:
+            whole -= 1
+        fraction = timestamp - whole
+        scaled = fraction * 1000000
+        microsecond = int(scaled)
+        remainder = scaled - microsecond
+        si remainder > 0.5 o (remainder == 0.5 y microsecond % 2 == 1):
+            microsecond += 1
+        si microsecond >= 1000000:
+            whole += 1
+            microsecond -= 1000000
+        si tz es Nada:
+            stamp = time.localtime(whole)
+            zone = Nada
+        sino:
+            delta = tz.utcoffset(Nada)
+            si delta es Nada:
+                lanzar ValueError('fromutc: non-None utcoffset() result required')
+            stamp = time.gmtime(whole + delta.total_seconds())
+            zone = tz
+        result = datetime(stamp[0], stamp[1], stamp[2], stamp[3], stamp[4], stamp[5], microsecond, zone)
+        result._timestamp = timestamp
+        devolver result
 
 clase timezone :
-    pasar
+    utc = timezone(timedelta(0), 'UTC')
 
-funcion datetime (*args , **kwargs):
-    lanzar NotImplementedError ('datetime.datetime no esta implementado en el backend nativo')
+    funcion __init__ (este ,offset ,name =Nada ):
+        seconds = offset.total_seconds()
+        si seconds <= -86400 o seconds >= 86400:
+            lanzar ValueError('offset must be a timedelta strictly between -timedelta(hours=24) and timedelta(hours=24)')
+        este._offset = offset
+        este._name = name
 
-funcion fromtimestamp (*args , **kwargs):
-    lanzar NotImplementedError ('datetime.fromtimestamp no esta implementado en el backend nativo')
+    funcion utcoffset (este ,dt ):
+        devolver este._offset
+
+    funcion dst (este ,dt ):
+        devolver timedelta(0)
+
+    funcion tzname (este ,dt ):
+        si este._name es Nada:
+            devolver 'UTC'
+        devolver este._name
+
+    funcion __repr__ (este):
+        si este._offset.days == 0 y este._offset.seconds == 0 y este._offset.microseconds == 0:
+            devolver 'datetime.timezone.utc'
+        devolver 'datetime.timezone(' + str(este._offset) + ')'
+
+    funcion __str__ (este):
+        devolver este.tzname(Nada)
 
 funcion now (*args , **kwargs):
     lanzar NotImplementedError ('datetime.now no esta implementado en el backend nativo')
-
-funcion timezone (*args , **kwargs):
-    lanzar NotImplementedError ('datetime.timezone no esta implementado en el backend nativo')

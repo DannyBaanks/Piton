@@ -215,7 +215,7 @@ class DecoratedDunderMethods(unittest.TestCase):
         ):
             compare_native_to_cpython(source)
 
-    def test_decorated_dunder_outside_dispatch_set_fails_closed(self):
+    def test_decorated_getitem_matches_cpython(self):
         source = (
             "funcion prefijo(fn):\n"
             "    funcion envuelto(self, clave):\n"
@@ -227,8 +227,7 @@ class DecoratedDunderMethods(unittest.TestCase):
             "        devolver clave\n"
             "imprimir(T()[1])\n"
         )
-        with pytest.raises(
-            NativeBuildError,
-            match="decorated special method '__getitem__' is not supported by runtime dispatch",
-        ):
-            compare_native_to_cpython(source)
+        result = compare_native_to_cpython(source)
+        self.assertEqual(result.native.returncode, result.oracle.returncode)
+        self.assertEqual(result.native.stdout, result.oracle.stdout)
+        self.assertEqual(result.native.stderr, result.oracle.stderr)

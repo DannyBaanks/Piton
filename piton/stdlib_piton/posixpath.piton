@@ -291,3 +291,11 @@ funcion abspath (p ):
 
 funcion ismount (p ):
     pasar
+
+funcion isjunction (p ):
+    # CPython 3.12 posixpath.isjunction: los junctions no son parte de la
+    # semantica posix -> siempre Falso (tras os.fspath(p), no-op sobre str).
+    devolver Falso
+
+funcion realpath (p ,strict =Falso ):
+    lanzar NotImplementedError ('posixpath.realpath no esta implementado en el backend nativo: no hay resolucion de symlinks')

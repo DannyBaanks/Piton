@@ -1,10 +1,7 @@
 """Float timestamp parity for the Linux native time and date paths."""
 from __future__ import annotations
 
-import pytest
-
 from piton.native_differential import compare_native_to_cpython
-from piton.x86 import NativeBuildError
 
 
 def _assert_matches(source: str, monkeypatch) -> None:
@@ -89,12 +86,9 @@ def test_non_timestamp_and_non_struct_time_arguments_fail_closed(monkeypatch):
     )
 
 
-def test_datetime_datetime_fromtimestamp_stays_fail_closed():
-    with pytest.raises(
-        NativeBuildError,
-        match="datetime.datetime.fromtimestamp is not implemented.*fail closed",
-    ):
-        compare_native_to_cpython(
-            "desde datetime importar datetime\n"
-            "imprimir(datetime.fromtimestamp(1.5))\n"
-        )
+def test_datetime_datetime_fromtimestamp_matches_cpython(monkeypatch):
+    _assert_matches(
+        "desde datetime importar datetime\n"
+        "imprimir(datetime.fromtimestamp(1.5))\n",
+        monkeypatch,
+    )

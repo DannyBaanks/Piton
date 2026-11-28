@@ -147,7 +147,7 @@ class MethodDecoratorParity(unittest.TestCase):
             "imprimir(repr(item), item.__repr__())\n",
         )
 
-    def test_unknown_receiver_keeps_failing_closed(self):
+    def test_unknown_receiver_uses_dynamic_decorated_dispatch(self):
         source = (
             "funcion doble(fn):\n"
             "    funcion envoltura(este, valor):\n"
@@ -159,13 +159,10 @@ class MethodDecoratorParity(unittest.TestCase):
             "        devolver valor + 10\n"
             "funcion invocar(obj):\n"
             "    devolver obj.process(5)\n"
+            "imprimir(invocar(Handler()))\n"
             ""
         )
-        with pytest.raises(
-            NativeBuildError,
-            match="decorated method 'process' requires a statically known receiver class",
-        ):
-            compare_native_to_cpython(source)
+        _assert_matches(self, source)
 
     def test_cached_property_keeps_failing_closed(self):
         source = (

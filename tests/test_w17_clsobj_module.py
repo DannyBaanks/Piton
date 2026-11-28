@@ -42,15 +42,12 @@ class ModuleClassObjectParity(unittest.TestCase):
             "imprimir(isinstance(1, types.ModuleType))\n",
         )
 
-    def test_three_argument_type_call_still_fails_closed(self):
-        with pytest.raises(
-            NativeBuildError,
-            match="Linux type requires one argument",
-        ):
-            compare_native_to_cpython(
-                "Dynamic = type('Dynamic', (), {})\n"
-                "imprimir(Dynamic)\n"
-            )
+    def test_three_argument_type_call_matches_cpython(self):
+        _assert_matches(
+            self,
+            "Dynamic = type('Dynamic', (), {'x': 7})\n"
+            "imprimir(Dynamic.__name__, Dynamic.__qualname__, Dynamic.x)\n",
+        )
 
 
 if __name__ == "__main__":
