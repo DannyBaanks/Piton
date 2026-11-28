@@ -7010,32 +7010,44 @@ class Win64NasmEmitter:
                         self._module_instance_classes[ins.args[0]] = temps[ins.args[1]]
         for function in module.functions:
             temp_classes: dict[str, str] = {}
+            ambiguous: set[str] = set()
             load_names: dict[str, str] = {}
+
+            def note_class(temp: str, cls: str) -> bool:
+                # Un slot con dos clases en ramas distintas es ambiguo, no
+                # oscila: marcarlo como conflictivo hace converger el barrido.
+                if temp in ambiguous:
+                    return False
+                known = temp_classes.get(temp)
+                if known == cls:
+                    return False
+                if known is not None:
+                    temp_classes.pop(temp, None)
+                    ambiguous.add(temp)
+                else:
+                    temp_classes[temp] = cls
+                return True
+
             if function.params and function.self_class:
-                temp_classes[function.params[0]] = function.self_class
+                note_class(function.params[0], function.self_class)
             changed = True
             while changed:
                 changed = False
                 for block in function.blocks:
                     for ins in block.instructions:
                         if ins.op == "object_new" and ins.result and ins.args and ins.args[0] in self.classes:
-                            if temp_classes.get(ins.result) != ins.args[0]:
-                                temp_classes[ins.result] = ins.args[0]
-                                changed = True
+                            changed = note_class(ins.result, ins.args[0]) or changed
                         elif ins.op == "load" and ins.result and isinstance(ins.args[0], str):
                             load_names[ins.result] = ins.args[0]
                             cls = self._module_instance_classes.get(ins.args[0])
-                            if cls and temp_classes.get(ins.result) != cls:
-                                temp_classes[ins.result] = cls
-                                changed = True
+                            if cls:
+                                changed = note_class(ins.result, cls) or changed
                         elif ins.op == "store" and len(ins.args) >= 2 and isinstance(ins.args[1], str):
                             cls = temp_classes.get(ins.args[1])
                             if cls and not ins.args[0].startswith("%"):
                                 if function.name == "<module>":
                                     self._module_instance_classes.setdefault(ins.args[0], cls)
-                                if temp_classes.get(ins.args[0]) != cls:
-                                    temp_classes[ins.args[0]] = cls
-                                    changed = True
+                                changed = note_class(ins.args[0], cls) or changed
             for temp, name in load_names.items():
                 self._load_names.setdefault(temp, name)
             for block in function.blocks:

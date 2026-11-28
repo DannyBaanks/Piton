@@ -50,6 +50,9 @@ jobs:
 
   test-windows:
     runs-on: windows-latest
+    # Un compilador en bucle (o un binario nativo colgado) no debe quemar
+    # seis horas de runner: el job tarda ~22 min en verde, 60 min es holgura.
+    timeout-minutes: 60
     strategy:
       matrix:
         python-version: ['3.12']
