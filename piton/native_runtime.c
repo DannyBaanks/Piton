@@ -42,6 +42,10 @@ enum {
     SUB_TAG_BIGINT  = 10,
     SUB_TAG_OBJECT  = 11,
     SUB_TAG_RANGE   = 12,
+    /* SLICE_SLOT_ATTR_V1 (Windows): `obj[a:b:c]` hands the user's
+     * __getitem__ a real slice value; its .start/.stop/.step expose None
+     * for omitted bounds (mirrors Linux PK_SLICE). */
+    SUB_TAG_SLICE   = 13,
 };
 
 /* Encoded wire format: same as ABI — 3-bit tag in high bits, 61-bit payload. */
@@ -203,6 +207,35 @@ typedef struct {
     int64_t stop;
     int64_t step;
 } PitonRange;
+
+/* ── PitonSlice ───────────────────────────────────────────────────────── */
+
+/* SLICE_SLOT_ATTR_V1 (Windows): the slice value a user __getitem__ receives
+ * from `obj[a:b:c]`. Bounds are raw ints; has_* record which were omitted so
+ * the attribute access can answer None exactly like CPython. */
+typedef struct {
+    PitonHeader header;
+    int64_t start;
+    int64_t stop;
+    int64_t step;
+    int has_start;
+    int has_stop;
+    int has_step;
+} PitonSlice;
+
+void *piton_slice_new(int64_t start, int64_t stop, int64_t step,
+                      int64_t has_start, int64_t has_stop, int64_t has_step) {
+    PitonSlice *s = calloc(1, sizeof(*s));
+    s->header.sub_tag = SUB_TAG_SLICE;
+    s->header.refcount = 1;
+    s->start = start;
+    s->stop = stop;
+    s->step = step;
+    s->has_start = has_start != 0;
+    s->has_stop = has_stop != 0;
+    s->has_step = has_step != 0;
+    return s;
+}
 
 int64_t piton_range_len(PitonRange *r) {
     if (!r) return 0;
@@ -946,6 +979,7 @@ typedef struct PitonObject {
     PitonAttribute attributes[16];
     int64_t finalizer;        /* generated __del__ function, or 0 */
     int64_t finalizer_called;
+    int64_t is_class;         /* TYPE_DYNAMIC_CLASS_V1: set by type(name, bases, ns) */
 } PitonObject;
 
 static int64_t live_objects = 0;
@@ -1297,6 +1331,10 @@ static void piton_value_deep_free(int64_t v) {
         free(bi->limbs); free(bi);
         break;
     }
+    case SUB_TAG_SLICE: {
+        free(ptr);
+        break;
+    }
     case SUB_TAG_OBJECT: {
         PitonObject *o = ptr;
         piton_gc_unregister(o);
@@ -1384,6 +1422,17 @@ static void piton_value_print_inner(int64_t v, int recursing) {
         }
         case SUB_TAG_RANGE: {
             piton_range_print_raw(ptr);
+            break;
+        }
+        case SUB_TAG_SLICE: {
+            PitonSlice *s = ptr;
+            fputs("slice(", stdout);
+            if (s->has_start) printf("%lld", (long long)s->start); else fputs("None", stdout);
+            fputs(", ", stdout);
+            if (s->has_stop) printf("%lld", (long long)s->stop); else fputs("None", stdout);
+            fputs(", ", stdout);
+            if (s->has_step) printf("%lld", (long long)s->step); else fputs("None", stdout);
+            putchar(')');
             break;
         }
         case SUB_TAG_BIGINT: {
@@ -4001,6 +4050,270 @@ int64_t piton_isinstance_class(void *raw, const char *target_name) {
 void piton_object_free(void *raw) {
     if (!raw) return;
     piton_value_deep_free(pv_encode(PITON_TAG_OBJECT, (int64_t)raw));
+}
+
+/* TYPE_DYNAMIC_CLASS_V1 (Windows): read an attribute as the TAGGED value it
+ * was stored with (no INT/BOOL decoding). Dynamic classes built by
+ * type(name, bases, ns) carry mixed-kind namespace entries, so the emitter
+ * types the result "slot" and print/compare dispatch by tag, exactly like the
+ * Linux piton_object_get PitonSlot contract. */
+int64_t piton_object_get_slot(void *raw, const char *name) {
+    PitonObject *o = raw;
+    if (!o || !name) return pv_none();
+    for (int64_t i = 0; i < o->length; ++i)
+        if (strcmp(o->attributes[i].name, name) == 0)
+            return o->attributes[i].value;
+    return pv_none();
+}
+
+/* Store an already-tagged value verbatim (bumping the refcount of an OBJECT
+ * payload); used by type(name, bases, ns) for the namespace entries. */
+static void piton_object_set_slot(PitonObject *o, const char *name, int64_t value) {
+    if (!o || !name) return;
+    for (int64_t i = 0; i < o->length; ++i)
+        if (strcmp(o->attributes[i].name, name) == 0) {
+            piton_value_deep_free(o->attributes[i].value);
+            o->attributes[i].value = value;
+            piton_value_incref(value);
+            return;
+        }
+    if (o->length >= 16) {
+        piton_raise_unhandled("AttributeError", "attribute limit exceeded");
+        return;
+    }
+    o->attributes[o->length].name = name;
+    o->attributes[o->length].value = value;
+    ++o->length;
+    piton_value_incref(value);
+}
+
+/* TYPE_DYNAMIC_CLASS_V1 (Windows): `type(name, bases, namespace)` builds a
+ * real class object. The namespace dict must hold string keys (boxed PitonStr)
+ * and every entry becomes a class attribute with its tag preserved, so
+ * `Dynamic.answer` prints 42 and `Dynamic.__name__` prints the string.
+ * Bases: empty tuple / object marker -> parent "object"; a class object ->
+ * its name. Anything else is the CPython TypeError (fail closed). */
+void *piton_type_new(const char *name, void *bases_raw, void *ns_raw) {
+    if (!name) {
+        piton_raise_unhandled("TypeError", "type.__new__() name must be str");
+        return NULL;
+    }
+    const char *parent = NULL;
+    if (bases_raw) {
+        PitonCollection *bases = (PitonCollection *)bases_raw;
+        if (bases->header.sub_tag != SUB_TAG_LIST && bases->header.sub_tag != SUB_TAG_TUPLE) {
+            piton_raise_unhandled("TypeError", "type() argument 2 must be tuple");
+            return NULL;
+        }
+        for (int64_t i = 0; i < bases->length; ++i) {
+            int64_t item = bases->items[i];
+            if (pv_tag(item) == PITON_TAG_INT && pv_payload_signed(item) == 0) continue; /* object marker */
+            if (pv_tag(item) == PITON_TAG_OBJECT) {
+                PitonHeader *h = (PitonHeader *)pv_payload(item);
+                if (h && h->sub_tag == SUB_TAG_OBJECT && ((PitonObject *)h)->is_class) {
+                    if (parent) {
+                        piton_raise_unhandled("NotImplementedError", "dynamic type() multiple inheritance is not modeled");
+                        return NULL;
+                    }
+                    parent = ((PitonObject *)h)->class_name;
+                    continue;
+                }
+            }
+            piton_raise_unhandled("TypeError", "type() bases must be classes");
+            return NULL;
+        }
+    }
+    /* parent == NULL means "inherits from object" (the Windows model has no
+     * explicit object parent), exactly like a `clase X:` definition. */
+    PitonObject *cls = piton_object_new_with_parent(name, parent);
+    cls->is_class = 1;
+    int64_t name_v = pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_box(name));
+    piton_object_set_slot(cls, "__name__", name_v);
+    int64_t qual_v = pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_box(name));
+    piton_object_set_slot(cls, "__qualname__", qual_v);
+    if (ns_raw) {
+        PitonDict *ns = (PitonDict *)ns_raw;
+        if (ns->header.sub_tag != SUB_TAG_DICT) {
+            piton_raise_unhandled("TypeError", "type() argument 3 must be dict");
+            return cls;
+        }
+        for (int64_t i = 0; i < ns->length; ++i) {
+            int64_t key = ns->entries[i].key;
+            const char *kname = NULL;
+            if (pv_tag(key) == PITON_TAG_OBJECT) {
+                PitonStr *k = (PitonStr *)pv_payload(key);
+                if (((PitonHeader *)k)->sub_tag == SUB_TAG_STR) kname = k->data;
+            }
+            if (!kname) {
+                piton_raise_unhandled("TypeError", "type.__new__() namespace keys must be strings");
+                return cls;
+            }
+            piton_object_set_slot(cls, kname, ns->entries[i].value);
+        }
+    }
+    return cls;
+}
+
+/* SLICE_SLOT_ATTR_V1 (Windows): attribute read on a slot value that a user
+ * __getitem__ received. which: 0=start, 1=stop, 2=step. A slice answers the
+ * bound or None; any other kind is the CPython AttributeError. */
+int64_t piton_slot_attr(int64_t v, int64_t which, const char *attr) {
+    if (pv_tag(v) == PITON_TAG_OBJECT) {
+        PitonHeader *h = (PitonHeader *)pv_payload(v);
+        if (h && h->sub_tag == SUB_TAG_SLICE) {
+            PitonSlice *s = (PitonSlice *)h;
+            int has = which == 0 ? s->has_start : which == 1 ? s->has_stop : s->has_step;
+            if (!has) return pv_none();
+            int64_t bound = which == 0 ? s->start : which == 1 ? s->stop : s->step;
+            return pv_int(bound);
+        }
+    }
+    char msg[96];
+    snprintf(msg, sizeof(msg), "'%s' object has no attribute '%s'",
+             pv_tag(v) == PITON_TAG_NONE ? "NoneType" : "int", attr ? attr : "");
+    piton_raise_unhandled("AttributeError", msg);
+    return pv_none();
+}
+
+/* ── Introspection builtins: dir() / help() (Windows) ──────────────────── */
+
+/* DIR_TABLES_V1: per-module metadata the emitter registers from the generated
+ * main(). The host-side runtime tests link native_runtime.c alone, so the
+ * tables cannot be extern NASM labels; they are plain pointers set at startup
+ * (NULL tables = no user globals / no class attribute names). */
+static const char **g_piton_dir_globals = NULL;   /* NULL-terminated module-level names */
+static const char **g_piton_dir_class_names = NULL; /* class_name per entry, NULL-terminated */
+static const char **g_piton_dir_class_attrs = NULL; /* parallel: attr name array per class */
+
+void piton_dir_set_sources(const char **globals, const char **class_names, const char **class_attrs) {
+    g_piton_dir_globals = globals;
+    g_piton_dir_class_names = class_names;
+    g_piton_dir_class_attrs = class_attrs;
+}
+
+static void piton_dir_add(const char **names, int64_t *count, const char *name) {
+    if (!name || !*name || *count >= 512) return;
+    for (int64_t i = 0; i < *count; ++i)
+        if (strcmp(names[i], name) == 0) return;
+    names[(*count)++] = name;
+}
+
+static void piton_dir_add_many(const char **names, int64_t *count, const char *const *items) {
+    for (int64_t i = 0; items[i]; ++i) piton_dir_add(names, count, items[i]);
+}
+
+static int piton_dir_name_order(const char *a, const char *b) { return strcmp(a, b) > 0; }
+
+static const char *const k_piton_dir_object_names[] = {
+    "__class__", "__delattr__", "__dict__", "__dir__", "__doc__", "__eq__",
+    "__format__", "__ge__", "__getattribute__", "__getstate__", "__gt__",
+    "__hash__", "__init__", "__init_subclass__", "__le__", "__lt__",
+    "__module__", "__ne__", "__new__", "__reduce__", "__reduce_ex__",
+    "__repr__", "__setattr__", "__sizeof__", "__str__", "__subclasshook__",
+    "__weakref__", NULL};
+static const char *const k_piton_dir_module_names[] = {
+    "__doc__", "__loader__", "__name__", "__package__", "__spec__", NULL};
+static const char *const k_piton_dir_function_names[] = {
+    "__annotations__", "__builtins__", "__call__", "__class__", "__closure__",
+    "__code__", "__defaults__", "__delattr__", "__dict__", "__dir__", "__doc__",
+    "__eq__", "__format__", "__ge__", "__get__", "__getattribute__",
+    "__getstate__", "__globals__", "__gt__", "__hash__", "__init__",
+    "__init_subclass__", "__kwdefaults__", "__le__", "__lt__", "__module__",
+    "__name__", "__ne__", "__new__", "__qualname__", "__reduce__",
+    "__reduce_ex__", "__repr__", "__setattr__", "__sizeof__", "__str__",
+    "__subclasshook__", "__type_params__", NULL};
+
+static void piton_dir_add_class_source_attrs(const char **names, int64_t *count, const char *class_name) {
+    if (!class_name || !g_piton_dir_class_names || !g_piton_dir_class_attrs) return;
+    for (int64_t i = 0; g_piton_dir_class_names[i]; ++i) {
+        if (strcmp(g_piton_dir_class_names[i], class_name) != 0) continue;
+        piton_dir_add_many(names, count, g_piton_dir_class_attrs[i]);
+        return;
+    }
+}
+
+/* kind: 0 = no argument, 1 = class object, 2 = function / bound method,
+ * 3 = instance (PitonObject*), 4 = module object, 5 = anything else. The
+ * emitter knows the static kind of the subject; the runtime never guesses it
+ * from a raw word. */
+int64_t piton_builtin_dir(int64_t subject, int64_t has_subject, int64_t kind) {
+    const char *names[512];
+    int64_t count = 0;
+    if (!has_subject || kind == 0) {
+        piton_dir_add_many(names, &count, k_piton_dir_module_names);
+        if (g_piton_dir_globals)
+            for (int64_t i = 0; g_piton_dir_globals[i]; ++i)
+                piton_dir_add(names, &count, g_piton_dir_globals[i]);
+    } else if (kind == 2) {
+        piton_dir_add_many(names, &count, k_piton_dir_function_names);
+    } else if (kind == 4) {
+        PitonObject *o = (PitonObject *)subject;
+        piton_dir_add_many(names, &count, k_piton_dir_module_names);
+        if (o)
+            for (int64_t i = 0; i < o->length; ++i) piton_dir_add(names, &count, o->attributes[i].name);
+    } else {
+        piton_dir_add_many(names, &count, k_piton_dir_object_names);
+        if (kind == 1) {
+            piton_dir_add(names, &count, "__name__");
+            PitonObject *o = (PitonObject *)subject;
+            if (o)
+                for (int64_t i = 0; i < o->length; ++i) {
+                    const char *n = o->attributes[i].name;
+                    if (strcmp(n, "__name__") && strcmp(n, "__qualname__") &&
+                        strcmp(n, "__bases__") && strcmp(n, "__mro__"))
+                        piton_dir_add(names, &count, n);
+                }
+            if (o) piton_dir_add_class_source_attrs(names, &count, o->class_name);
+        } else if (kind == 3) {
+            PitonObject *o = (PitonObject *)subject;
+            if (o)
+                for (int64_t i = 0; i < o->length; ++i) {
+                    const char *n = o->attributes[i].name;
+                    if (strcmp(n, "__bases__") && strcmp(n, "__mro__")) piton_dir_add(names, &count, n);
+                }
+            if (o) piton_dir_add_class_source_attrs(names, &count, o->class_name);
+        }
+    }
+    for (int64_t i = 1; i < count; ++i) {
+        const char *key = names[i];
+        int64_t j = i;
+        while (j > 0 && piton_dir_name_order(names[j - 1], key)) { names[j] = names[j - 1]; --j; }
+        names[j] = key;
+    }
+    PitonCollection *out = piton_collection_new(1 /*list*/, count);
+    for (int64_t i = 0; i < count; ++i)
+        out->items[i] = pv_encode(PITON_TAG_OBJECT, (int64_t)piton_str_box(names[i]));
+    out->length = count;
+    return (int64_t)out;
+}
+
+/* HELP_DOCS_V1 (Windows): help() prints only the source docstrings captured
+ * by the lowerer (the emitter passes them literally); it never fabricates
+ * pydoc output. Output is written through the module's binary stdout. */
+int64_t piton_builtin_help_named(const char *kind, const char *name, const char *doc) {
+    if (!kind) kind = "object";
+    if (!name) name = "object";
+    fputs("Help on ", stdout);
+    fputs(kind, stdout);
+    putchar(' ');
+    fputs(name, stdout);
+    fputs(":\n\n", stdout);
+    if (doc && *doc) {
+        fputs(doc, stdout);
+        if (doc[strlen(doc) - 1] != '\n') putchar('\n');
+    } else {
+        fputs("No source documentation available.\n", stdout);
+    }
+    return pv_none();
+}
+
+int64_t piton_builtin_help(int64_t has_subject) {
+    if (!has_subject) {
+        fputs("Welcome to the native PITON help utility.\n"
+              "Use help(object) to inspect source documentation.\n", stdout);
+        return pv_none();
+    }
+    return piton_builtin_help_named("object", NULL, NULL);
 }
 
 /* ── M13 cycle collector (Windows runtime) ───────────────────────────── */
