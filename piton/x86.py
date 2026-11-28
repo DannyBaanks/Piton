@@ -33,6 +33,14 @@ class NativeBuildError(RuntimeError):
     pass
 
 
+# BUNDLED_STDLIB_FROM_IMPORT_V1 (mirrors Linux): stdlib modules that the MIR
+# lowering inlines from piton/stdlib_piton/*.piton (or serves natively), so a
+# top-level `desde <mod> importar x` needs no multi-file compilation. `datetime`
+# was missing here, which failed closed with "native from-import requires
+# multi-file compilation: datetime" for `desde datetime importar datetime`.
+_BUNDLED_FROM_IMPORT_MODULES = frozenset({"asyncio", "math", "sys", "terminal", "datetime"})
+
+
 # IS_IDENTITY_V1: a distinct tag per static type, so identity between two
 # differently typed values (1 vs True, both "1" as a raw word) is False, as in
 # CPython.
@@ -266,6 +274,13 @@ class Win64NasmEmitter:
         self.class_parents = getattr(module, "class_parents", {})
         self.class_mro = getattr(module, "class_mro", {})
         self.class_properties = getattr(module, "class_properties", {})
+        # W25 DECORATED_METHODS_V1: storage global per (class, decorated
+        # method) and per decorated @property getter (mirrors linux_x86
+        # ~10858). Read by the decorated_method_load dispatch.
+        self.decorated_class_methods = dict(getattr(module, "decorated_class_methods", {}) or {})
+        self.decorated_class_properties = dict(getattr(module, "decorated_class_properties", {}) or {})
+        # DIR_TABLES_V1: mirror of class_metadata; _build_dir_tables reads it.
+        self.class_attributes = getattr(module, "class_attributes", {})
         self.static_methods = getattr(module, "static_methods", set())
         self.class_methods = getattr(module, "class_methods", set())
         # CLASS_ATTR_TYPES_V1: tipos literales de atributos de clase.
@@ -316,6 +331,9 @@ class Win64NasmEmitter:
         self.function_defaults = {function.name: list(function.defaults) for function in module.functions}
         self.function_param_map = {function.name: list(function.params) for function in module.functions}
         self.function_frame_abi = {function.name: bool(function.frame_abi) for function in module.functions}
+        # GETITEM_DUNDER_V1 (Windows): module-wide slot-parameter table for
+        # __getitem__ keys, before any function body is emitted.
+        self._prescan_getitem_slot_params(module)
         self._scan_module_globals(module)
         # CALL_UNPACKING_DYNAMIC4_V1: temp/local names of dicts proven to be
         # built from constant-string keys (the only **-unpackable dicts).
@@ -346,7 +364,7 @@ class Win64NasmEmitter:
             if getattr(function, "is_generator", False) or getattr(function, "is_coroutine", False):
                 self.generator_layouts[function.name] = self._generator_layout(function)
         self.lines = [
-            "default rel", "extern printf", "extern strcmp", "extern strlen",
+            "default rel", "extern printf", "extern strcmp", "extern strlen", "extern _setmode",
             "extern malloc", "extern memcpy", "section .text",
         ]
         self.lines[0:0] = [
@@ -456,6 +474,10 @@ class Win64NasmEmitter:
             "extern piton_object_new", "extern piton_object_new_with_parent", "extern piton_object_new_with_finalizer", "extern piton_object_set", "extern piton_object_set_tagged", "extern piton_object_get", "extern piton_object_lookup",
 
             "extern piton_object_free", "extern piton_object_live_count",
+            "extern piton_object_get_slot", "extern piton_type_new",
+            "extern piton_slice_new", "extern piton_slot_attr", "extern piton_value_decref",
+            "extern piton_builtin_dir", "extern piton_dir_set_sources",
+            "extern piton_builtin_help", "extern piton_builtin_help_named",
             "extern piton_print_float", "extern piton_print_float_raw",
             "extern piton_print_value", "extern piton_print_value_raw",
             "extern piton_bigint_from_str", "extern piton_bigint_from_i64", "extern piton_bigint_free",
@@ -494,7 +516,16 @@ class Win64NasmEmitter:
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
             "extern piton_frame_call",
             "extern piton_unpack_seq4", "extern piton_dict_unpack4",
+            # TIME_NATIVE_V1: `time.*` natives (MIR native_call, same table as
+            # linux_x86.py) live in native_runtime.c under the Win64 ABI.
+            "extern piton_time_time", "extern piton_time_localtime", "extern piton_time_gmtime",
+            "extern piton_time_strftime",
         ]
+        # DIR_TABLES_V1 (Windows): module-level names and per-class attribute
+        # names for dir(), as NULL-terminated pointer tables the runtime
+        # walks (piton_dir_set_sources). Mirrors Linux piton_user_global_name
+        # / piton_user_class_attr_name, which are generated C functions.
+        self._dir_tables = self._build_dir_tables(module)
         for function in module.functions:
             self._emit_function(function)
         self.lines.append("section .rdata")
@@ -508,6 +539,9 @@ class Win64NasmEmitter:
         for table_label, table_names in self.unpack_tables:
             refs = ", ".join(self._string(name) for name in table_names)
             self.lines.append(f"{table_label}: dq {refs}")
+        # DIR_TABLES_V1 (Windows): emit after the string table so every name
+        # label referenced below is already defined.
+        self.lines.extend(self._dir_tables)
         self.lines.extend([
             'fmt_int: db "%lld", 10, 0',
             'fmt_float: db "%.17g", 10, 0',
@@ -576,6 +610,27 @@ class Win64NasmEmitter:
                     self.owned_slots.append((instruction.result, "piton_gen_free"))
                 if instruction.op == "object_new" and instruction.result:
                     self.owned_slots.append((instruction.result, "piton_object_free"))
+                if instruction.op in {"get_item", "get_slice"} and instruction.result:
+                    # GETITEM_DUNDER_V1 (Windows): the user's __getitem__ may
+                    # return a heap collection; own it so cleanup releases it
+                    # (the module exit tripwire requires zero live objects).
+                    _gi_target = self._getitem_target_for(instruction)
+                    if _gi_target is not None:
+                        _gi_kind = self.function_return_types.get(_gi_target, "int")
+                        _gi_free = {"list": "piton_collection_free", "tuple": "piton_collection_free",
+                                    "dict": "piton_dict_free", "set": "piton_set_free"}.get(_gi_kind)
+                        if _gi_free:
+                            self.owned_slots.append((instruction.result, _gi_free))
+                if instruction.op == "call" and instruction.result:
+                    if self._is_builtin_call(instruction, {"dir", "ayuda"}):
+                        # DIR_LIST_V1 (Windows): dir() builds a fresh list; own it.
+                        self.owned_slots.append((instruction.result, "piton_collection_free"))
+                    elif self._is_builtin_call(instruction, {"type", "tipo"}) and len(instruction.args) > 1 \
+                            and isinstance(instruction.args[1], tuple) and len(instruction.args[1]) == 3:
+                        # TYPE_DYNAMIC_CLASS_V1: the dynamic class object is
+                        # heap allocated; release it at function exit like an
+                        # object_new result.
+                        self.owned_slots.append((instruction.result, "piton_object_free"))
                 if instruction.op == "store":
                     self._reserve(instruction.args[0])
                 if instruction.op == "call_unpack":
@@ -595,6 +650,18 @@ class Win64NasmEmitter:
         frame = max(48, ((self.next_slot + 32 + 15) // 16) * 16)
         label = "main" if function.name == "<module>" else function.name
         self.lines.extend([f"global {label}", f"{label}:", "    push rbp", "    mov rbp, rsp", f"    sub rsp, {frame}"])
+        if label == "main":
+            # STDOUT_BINARY_V1: printf en Windows escribe CRLF en modo texto; el
+            # oraculo (Linux) emite LF. Se pone stdout (fd 1) en binario
+            # (_O_BINARY = 0x8000) al entrar en el modulo.
+            self.lines.extend(["    mov ecx, 1", "    mov edx, 0x8000", "    call _setmode"])
+            # DIR_TABLES_V1 (Windows): hand dir() its per-module name tables.
+            self.lines.extend([
+                "    lea rcx, [piton_dir_globals_tbl]",
+                "    lea rdx, [piton_dir_class_names_tbl]",
+                "    lea r8, [piton_dir_class_attrs_tbl]",
+                "    call piton_dir_set_sources",
+            ])
         for slot, _ in self.owned_slots:
             self.lines.append(f"    mov qword {self._address(slot)}, 0")
         if not function.frame_abi and len(function.params) > 4:
@@ -610,12 +677,22 @@ class Win64NasmEmitter:
                 self._store_slot(name, register)
         if function.self_class and function.params:
             self.types[function.params[0]] = f"object:{function.self_class}"
+        # SLOT_PARAM_V1 (Windows): a __getitem__ key that some call-site hands
+        # a tagged slice (or tagged int) is a slot inside the callee, so
+        # `key.start` and tuple building dispatch by tag (mirrors Linux
+        # _slot_param_args; computed by _prescan_getitem_slot_params before
+        # any function is emitted, so function order does not matter).
+        for _sp_param in self._slot_param_args.get(function.name, ()):
+            if _sp_param in function.params:
+                self.types[_sp_param] = "slot"
         # WITH_PROTOCOL_V1: __exit__(self, tipo, mensaje, tb) receives the
         # exception type-name and message as strings (V1: type NAME, not the
         # exception object; traceback is passed as None).
         if function.name.endswith("__exit__") and len(function.params) >= 3:
             self.types[function.params[1]] = "str"
             self.types[function.params[2]] = "str"
+        if function.name == "datetime__datetime__fromtimestamp" and len(function.params) >= 2:
+            self.types[function.params[1]] = "float"
         labels = {block.label: f"{label}_{block.label}" for block in function.blocks}
         labels["__exit"] = f"{label}__exit"
         for block in function.blocks:
@@ -1064,8 +1141,19 @@ class Win64NasmEmitter:
             else:
                 if len(values) > 6:
                     raise NativeBuildError("native method calls support at most six total arguments")
-                for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
-                    self._load_operand(value, register)
+                callee_params = self.function_param_map.get(target) or []
+                for idx, register in enumerate(("rcx", "rdx", "r8", "r9")):
+                    if idx < len(values):
+                        self._load_operand(values[idx], register)
+                        if (
+                            target == "datetime__datetime__fromtimestamp"
+                            and idx == 1
+                            and self.types.get(values[idx], "int") != "float"
+                        ):
+                            self.lines.append(f"    cvtsi2sd xmm0, {register}")
+                            self.lines.append(f"    movq {register}, xmm0")
+                    elif idx < len(callee_params):
+                        self.lines.append(f"    xor {register}, {register}")
                 self.lines.append(f"    call {target}")
             self.lines.append(f"    mov {self._address(instruction.result)}, rax")
             self.lines.append(f"    jmp {done}")
@@ -1324,6 +1412,12 @@ class Win64NasmEmitter:
                     f"    mov {self._address(result)}, rax",
                 ])
                 self.bigint_slots.append(result)
+            elif self.types[result] == "str":
+                # Emit string constants directly via _string() so literals
+                # starting with '%' (e.g. '%Y-%m-%d %H:%M:%S') are never
+                # mistaken for SSA temporaries in _load_operand().
+                self.lines.append(f"    lea rax, [{self._string(value)}]")
+                self.lines.append(f"    mov {self._address(result)}, rax")
             else:
                 self._load_operand(value)
                 self.lines.append(f"    mov {self._address(result)}, rax")
@@ -1441,6 +1535,7 @@ class Win64NasmEmitter:
                 return
             if (
                 name in self._module_stored
+                and name not in self._shared_globals
                 and fname != "<module>"
                 and name not in getattr(self.function, "params", ())
                 and name not in self._func_stores.get(fname, ())
@@ -1448,6 +1543,28 @@ class Win64NasmEmitter:
                 raise NativeBuildError(
                     f"native '{name}' is assigned at module level; declare it global to read it inside '{self.function.name}'"
                 )
+            if (
+                name in self._shared_globals
+                and fname != "<module>"
+                and name not in self._func_globals.get(fname, ())
+                and name not in getattr(self.function, "params", ())
+                and name not in self._func_stores.get(fname, ())
+            ):
+                # MODULE_GLOBAL_READ_V1 (mirrors linux_x86): CPython lets a
+                # function READ a module-level name without `global` (only
+                # assignment is local). Promoted to a shared cell by
+                # _scan_module_globals (read_anywhere), used by decorated-method
+                # forwarders and stdlib module state (e.g. datetime).
+                if self._is_gen_function():
+                    raise NativeBuildError(f"native global '{name}' inside generators is not supported yet")
+                self.lines.append(f"    mov rax, [{self._global_label(name)}]")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = self._module_types.get(name, self.types.get(name, "int"))
+                if name in self.tuple_etypes:
+                    self.tuple_etypes[result] = self.tuple_etypes[name]
+                if name in self.dict_elems:
+                    self.dict_elems[result] = self.dict_elems[name]
+                return
             if name in self._shared_globals and getattr(self.function, "name", "<module>") == "<module>":
                 # module-level access to the shared cell (the module store
                 # went to the data label, so the load must too — otherwise
@@ -2239,12 +2356,16 @@ class Win64NasmEmitter:
                 # scalar compare.
                 left_tag = _KIND_TAGS.get(self.types.get(left, "int"), 0)
                 right_tag = _KIND_TAGS.get(self.types.get(right, "int"), 0)
+                _none_vs_untyped = (
+                    (self.types.get(left, "int") == "none" and self._is_untyped_param_operand(right))
+                    or (self.types.get(right, "int") == "none" and self._is_untyped_param_operand(left))
+                )
                 self._load_operand(left, "rax")
                 self._load_operand(right, "rcx")
                 self.lines.append("    cmp rax, rcx")
                 self.lines.append("    sete al")
                 self.lines.append("    movzx rax, al")
-                if left_tag != right_tag:
+                if left_tag != right_tag and not _none_vs_untyped:
                     self.lines.extend(["    xor eax, eax"])
                 elif operator == "no es":
                     self.lines.extend(["    xor eax, 1"])
@@ -2513,6 +2634,101 @@ class Win64NasmEmitter:
                 else:
                     # str u otros no-numéricos -> TypeError
                     self._non_int_elem_colls.add(result)
+        elif op == "native_call":
+            # STDLIB_NATIVE_V1 (mirrors Linux): args = (module, name, values..., handler).
+            # Win64 had no handler for this op at all, so every native call
+            # emitted nothing and its result temp stayed untyped (int): the
+            # bundled datetime.piton (`time.localtime(...)` then `local[0]`)
+            # died with "native subscription not supported for int". Only the
+            # time family is wired here; anything else still fails closed.
+            _nmod, _nattr = args[0], args[1]
+            _nvals = list(args[2:-1])
+            _nh = args[-1]
+            try:
+                _cfn, _crt, _nmax = {
+                    ("time", "time"): ("piton_time_time", "float", 0),
+                    ("time", "localtime"): ("piton_time_localtime", "list", 1),
+                    ("time", "gmtime"): ("piton_time_gmtime", "list", 1),
+                    ("time", "strftime"): ("piton_time_strftime", "str", 2),
+                }[(_nmod, _nattr)]
+            except KeyError:
+                raise NativeBuildError(
+                    f"native call to {_nmod}.{_nattr} is not supported by the Windows backend"
+                ) from None
+            if len(_nvals) > _nmax:
+                raise NativeBuildError(
+                    f"native {_nmod}.{_nattr} takes at most {_nmax} argument(s), got {len(_nvals)}"
+                )
+            if _cfn == "piton_time_strftime":
+                # strftime(fmt, st): fmt is a raw C string (emitter type str),
+                # st the PitonCollection* built by localtime/gmtime or a list
+                # literal. A missing st means "now" (CPython); this backend
+                # has no None-tagged operand, so it fails closed like Linux's
+                # arity table (strftime takes 1..2 args, the 1-arg form is
+                # handled by the bundled time.piton, not here).
+                if len(_nvals) != 2:
+                    raise NativeBuildError(
+                        "native time.strftime requires a format and a time tuple on the Windows backend"
+                    )
+                # The format is a raw C string in the Win64 ABI. A str
+                # literal is typed "str"; a parameter forwarding one (the
+                # bundled `datetime.strftime(este, formato)`) is an untyped
+                # param that only resolves at runtime, like the `segun`
+                # subject (MATCH_DYNAMIC_V1). Anything statically numeric is
+                # CPython's TypeError, so it keeps failing closed at build.
+                if (
+                    self.types.get(_nvals[0]) not in {"str", "str-boxed"}
+                    and not self._is_untyped_param_operand(_nvals[0])
+                    and not (
+                        isinstance(_nvals[0], str)
+                        and not _nvals[0].startswith("%")
+                        and self.types.get(_nvals[0]) is None
+                    )
+                ):
+                    raise NativeBuildError(
+                        f"native time.strftime requires a str format, not {self.types.get(_nvals[0], 'int')}"
+                    )
+                self._load_operand(_nvals[0], "rcx")
+                self._load_operand(_nvals[1], "rdx")
+                self.lines.append("    call piton_time_strftime")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "str"
+                self._emit_exc_routing(_nh, labels)
+                return
+            if _cfn == "piton_time_time":
+                self.lines.append("    call piton_time_time")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "float"
+                return
+            # localtime/gmtime: the timestamp travels with a kind word because
+            # the Win64 ABI cannot tell int 0 from None (both are 0 in a GPR):
+            # 0 = raw int, 1 = IEEE double bits, 2 = None (current time).
+            if not _nvals:
+                # `time.localtime()` / `time.gmtime()`: MIR lowered the omitted
+                # argument as nothing to pass; CPython uses the current time.
+                self.lines.extend([
+                    "    xor ecx, ecx",
+                    "    mov edx, 2",
+                ])
+            else:
+                _val = _nvals[0]
+                _vt = self.types.get(_val, "int")
+                self._load_operand(_val, "rcx")
+                if _vt == "float":
+                    self.lines.append("    mov edx, 1")
+                elif _vt == "none":
+                    self.lines.append("    xor ecx, ecx")
+                    self.lines.append("    mov edx, 2")
+                elif _vt in {"int", "bool"}:
+                    self.lines.append("    xor edx, edx")
+                else:
+                    raise NativeBuildError(
+                        f"native {_nmod}.{_nattr} requires an int or float timestamp, not {_vt}"
+                    )
+            self.lines.append(f"    call {_cfn}")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "list"
+            self._emit_exc_routing(_nh, labels)
         elif op == "unpack_check":
             # UNPACK_ARITY_V1: CPython verifies the element count on
             # unpacking (ValueError: too many / not enough values).
@@ -2663,6 +2879,16 @@ class Win64NasmEmitter:
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = "slot"
                 return
+            if container_type is not None and container_type.startswith("object:") \
+                    and container_type != "object:module":
+                # GETITEM_DUNDER_V1 (Windows): obj[i] -> the user's __getitem__
+                # (MRO, including decorated __getitem__ forwarders), as on Linux.
+                _cls = container_type.split(":", 1)[1]
+                if self._emit_getitem_call(result, container, _cls, instruction, labels):
+                    return
+                self._runtime_type_error(f"'{_cls}' object is not subscriptable")
+                self.types[result] = "int"
+                return
             if container_type not in {"list", "tuple", "dict", "dict:module"}:
                 raise NativeBuildError(f"native subscription not supported for {container_type}")
             if container_type in {"dict", "dict:module"}:
@@ -2809,6 +3035,17 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_seq_slice_step")
                 self.lines.append(f"    mov {self._address(result)}, rax")
                 self.types[result] = container_type
+            elif container_type is not None and container_type.startswith("object:") \
+                    and container_type != "object:module":
+                # OBJECT_SLICE_DUNDER_V1 (Windows): obj[a:b:c] -> the user's
+                # __getitem__ receives a native slice value whose .start/.stop/
+                # .step expose None for omitted bounds (mirrors Linux).
+                _scls = container_type.split(":", 1)[1]
+                if self._emit_getitem_call(result, container, _scls, instruction, labels,
+                                           lower=lower, upper=upper, step=step):
+                    return
+                self._runtime_type_error(f"'{_scls}' object is not subscriptable")
+                self.types[result] = "int"
             else:
                 raise NativeBuildError(f"native slice not supported for {container_type}")
         elif op == "collection_len":
@@ -3069,7 +3306,17 @@ class Win64NasmEmitter:
             self._load_operand(value, "r8")
             self.lines.append("    call piton_dict_put")
         elif op == "object_new":
-            class_name, parent_name = args
+            # BUNDLED_CLASS_ATTR_OBJECT_V1 (mirrors Linux): the MIR emits a
+            # third argument (True) for classes imported from a bundled
+            # stdlib module (`desde datetime importar datetime`). They are
+            # initialized through their interned class object; the extra flag
+            # needs no special ABI here (the class object is created by the
+            # same piton_object_new_with_finalizer path below).
+            class_name, parent_name = args[:2]
+            if len(args) > 2 and args[2] is not None and not isinstance(args[2], bool):
+                raise NativeBuildError(
+                    f"native object_new for '{class_name}' has an unsupported third argument"
+                )
             finalizer_class = None
             for candidate in self.mir_module_class_mro.get(class_name, []):
                 if "__del__" in self.mir_module_classes.get(candidate, set()):
@@ -3100,7 +3347,8 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = f"object:{class_name}"
         elif op == "set_attr":
-            owner, name, value = args
+            # MIR añade el handler de try activo como cuarto argumento (Linux lo ignora).
+            owner, name, value = args[:3]
             owner_type = self.types.get(owner, "")
             prop_class = self._resolve_property_class(owner_type, name)
             if prop_class is not None:
@@ -3142,7 +3390,7 @@ class Win64NasmEmitter:
                     else:
                         self.lines.append("    call piton_object_set")
         elif op == "get_attr":
-            owner, name = args
+            owner, name = args[:2]
             owner_type = self.types.get(owner, "")
             prop_class = self._resolve_property_class(owner_type, name)
             module_attr_types = {"__name__": "str", "__file__": "str", "__package__": "module-pkg", "modules": "dict:module"}
@@ -3158,6 +3406,29 @@ class Win64NasmEmitter:
                     self.lines.append("    call piton_bound_method_self")
                     self.lines.append(f"    mov {self._address(result)}, rax")
                     self.types[result] = "int"
+                    return
+                if owner_type == "class:dynamic":
+                    # TYPE_DYNAMIC_CLASS_V1: a class built by type(name, bases,
+                    # ns) carries mixed-kind attributes (__name__ str, namespace
+                    # values of any kind); the tagged read types the result as a
+                    # slot so print/compare dispatch by tag, exactly like Linux.
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    lea rdx, [{self._string(name)}]")
+                    self.lines.append("    call piton_object_get_slot")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
+                    return
+                if owner_type == "slot" and name in self._SLICE_ATTRS:
+                    # SLICE_SLOT_ATTR_V1 (Windows): a __getitem__ key that is a
+                    # slice exposes .start/.stop/.step (None for omitted
+                    # bounds); anything else is the CPython AttributeError.
+                    which = self._SLICE_ATTRS[name]
+                    self._load_operand(owner, "rcx")
+                    self.lines.append(f"    mov edx, {which}")
+                    self.lines.append(f"    lea r8, [{self._string(name)}]")
+                    self.lines.append("    call piton_slot_attr")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "slot"
                     return
                 resolved_method = None
                 if owner_type.startswith("object:"):
@@ -3248,7 +3519,7 @@ class Win64NasmEmitter:
                         or "int"
                     )
         elif op == "del_attr":
-            owner, name = args
+            owner, name = args[:2]
             owner_type = self.types.get(owner, "")
             prop_class = self._resolve_property_class(owner_type, name)
             if prop_class is not None:
@@ -3280,7 +3551,11 @@ class Win64NasmEmitter:
                         f"native del on '{name}' is not a property of a natively-typed object"
                     )
         elif op == "method_call":
-            explicit_class, method_name, owner, raw_values = args
+            # MIR emite (clase, nombre, dueño, args, kw, handler): la aridad creció
+            # tras el backend Windows; Windows solo consume los cuatro primeros.
+            explicit_class, method_name, owner, raw_values = args[:4]
+            if len(args) > 4 and args[4]:
+                raise NativeBuildError(f"native keyword arguments on method call '{method_name}' not supported")
             if (
                 isinstance(explicit_class, tuple)
                 and len(explicit_class) == 3
@@ -3420,8 +3695,19 @@ class Win64NasmEmitter:
             else:
                 if len(values) > 6:
                     raise NativeBuildError("native method calls support at most six total arguments")
-                for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
-                    self._load_operand(value, register)
+                callee_params = self.function_param_map.get(target) or []
+                for idx, register in enumerate(("rcx", "rdx", "r8", "r9")):
+                    if idx < len(values):
+                        self._load_operand(values[idx], register)
+                        if (
+                            target == "datetime__datetime__fromtimestamp"
+                            and idx == 1
+                            and self.types.get(values[idx], "int") != "float"
+                        ):
+                            self.lines.append(f"    cvtsi2sd xmm0, {register}")
+                            self.lines.append(f"    movq {register}, xmm0")
+                    elif idx < len(callee_params):
+                        self.lines.append(f"    xor {register}, {register}")
                 self.lines.append(f"    call {target}")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = self.function_return_types.get(target, "int")
@@ -3490,8 +3776,167 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov r10, {self._address(cell_ptr_name)}")
             self._load_operand(value_arg, "r11")
             self.lines.extend(["    mov [r10], r11", "    mov qword [r10+8], 0"])
+        elif op == "decorated_method_load":
+            # DECORATED_METHOD_LOAD_V1 (mirrors linux_x86 ~24325): resolve a
+            # decorated method from a RUNTIME receiver and hand back the
+            # callable the following dynamic_call invokes. MIR emits this for
+            # `obj.m(...)` when `obj` has no static class (a bare parameter, a
+            # value bound by `con ... como nombre`) and `m` is a known decorated
+            # method name. The receiver travels as a raw PitonObject* (Win64
+            # untagged object model; class_name lives at offset 16). The value
+            # selected per class is either the wrapper callable stored under the
+            # class's storage global by <module> when the class was built, or
+            # the unbound native method function -- both take the receiver
+            # explicitly in the dynamic call's positional tuple, exactly like
+            # the Linux backend. Before this op was handled on Windows it was
+            # silently skipped: the callee slot stayed uninitialized and the
+            # program printed a pointer (W25 decorator parity, Windows CI).
+            obj, method = args[0], args[1]
+            handler_label = args[2] if len(args) > 2 else None
+            _targets: dict[str, str] = {}
+            for _class_name in self.classes:
+                _mro = self.mir_module_class_mro.get(_class_name, [_class_name])
+                for _candidate in _mro:
+                    _storage = self.decorated_class_methods.get((_candidate, method))
+                    if _storage is not None and _storage in self._shared_globals:
+                        _targets[_class_name] = self._global_label(_storage)
+                        break
+                    if method in self.mir_module_classes.get(_candidate, set()):
+                        _target = f"{_candidate}__{method}"
+                        if _target in self.function_names:
+                            _targets[_class_name] = _target
+                            break
+            miss = self._internal_label("dml_miss")
+            done = self._internal_label("dml_done")
+            not_object = self._internal_label("dml_notobj")
+            self.lines.append(f"    mov qword {self._address(result)}, 0")
+            self._load_operand(obj, "rax")
+            self.lines.append("    test rax, rax")
+            self.lines.append(f"    jz {not_object}")
+            self.lines.append("    cmp byte [rax], 11")
+            self.lines.append(f"    jne {not_object}")
+            self.lines.append("    mov rax, qword [rax+16]")
+            self.lines.append("    test rax, rax")
+            self.lines.append(f"    jz {not_object}")
+            # strcmp may clobber every volatile register (r11 included):
+            # park the class_name pointer in a scratch slot first.
+            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+            cand_labels = [self._internal_label(f"dml_m{index}") for index in range(len(_targets))]
+            for index, candidate in enumerate(_targets):
+                self.lines.append(f"    lea rcx, [{self._string(candidate)}]")
+                self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+                self.lines.append("    call strcmp")
+                self.lines.append("    test eax, eax")
+                self.lines.append(f"    jz {cand_labels[index]}")
+            self.lines.append(f"    jmp {miss}")
+            for index, (candidate, target_expr) in enumerate(_targets.items()):
+                self.lines.append(f"{cand_labels[index]}:")
+                if target_expr.startswith("piton_g_"):
+                    # storage cell written by the class decorator (<module>)
+                    self.lines.append(f"    mov rax, [{target_expr}]")
+                else:
+                    self.lines.append(f"    lea rax, [{target_expr}]")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.lines.append(f"    jmp {done}")
+            self.lines.append(f"{not_object}:")
+            # CPython: "'<type>' object has no attribute '<m>'". A receiver
+            # that is not a PitonObject contributes its tagged type name
+            # (None/int/str...); an object that fell through the strcmp chain
+            # keeps its parked class_name.
+            self._load_operand(obj, "rcx")
+            self.lines.append("    call piton_type_name")
+            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+            self.lines.append(f"    jmp {miss}")
+            self.lines.append(f"{miss}:")
+            # AttributeError message assembled at run time: "'<type>' object
+            # has no attribute '<method>'".
+            tmpl = self._string("'{0}' object has no attribute '" + method + "'")
+            self.lines.append(f"    lea rcx, [{tmpl}]")
+            self.lines.append("    mov edx, 1")
+            self.lines.append("    sub rsp, 40")
+            self.lines.append(f"    mov rax, {self._address('@scratch0')}")
+            self.lines.append("    mov qword [rsp+32], rax")
+            self.lines.append("    lea r8, [rsp+32]")
+            self.lines.append("    call piton_str_format")
+            self.lines.append("    add rsp, 40")
+            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+            exc_type = self._string("AttributeError")
+            self.lines.append(f"    lea rcx, [{exc_type}]")
+            self.lines.append(f"    mov rdx, {self._address('@scratch0')}")
+            if handler_label:
+                self.lines.append("    call piton_raise")
+                self.lines.append("    call piton_catch_flag")
+                self.lines.append("    test rax, rax")
+                self.lines.append(f"    jne {labels.get(handler_label, handler_label)}")
+            else:
+                self.lines.append("    call piton_raise_unhandled")
+            self.lines.append(f"{done}:")
+            self.types[result] = "closure"
+            return
+        elif op == "dynamic_call":
+            # DYNAMIC_CALL_V1 (mirrors linux_x86 ~24380): call a callable that
+            # is only known at run time (a decorated wrapper, a bound method,
+            # a plain function value) with the positional tuple MIR built.
+            # The callee is the raw value of decorated_method_load / a load:
+            # piton_closure_call_frame accepts a PitonClosure*, a bound
+            # method, or a code address. Arguments are decoded from the tuple
+            # with piton_collection_get (INT/BOOL -> raw, OBJECT -> tagged
+            # pointer), so a closure passed as an argument keeps its bits.
+            callee, pos_seq, star_seq, kwargs_dict = args[0], args[1], args[2], args[3]
+            handler_label = args[4] if len(args) > 4 else None
+            if star_seq is not None or kwargs_dict is not None:
+                raise NativeBuildError(
+                    "native dynamic call with *args/**kwargs is not supported yet"
+                )
+            if pos_seq is None:
+                raise NativeBuildError("native dynamic call without a positional tuple")
+            _dyn_call = self._internal_label("dyn_call")
+            self._load_operand(callee, "rcx")
+            self.lines.append("    test rcx, rcx")
+            self.lines.append(f"    jnz {_dyn_call}")
+            # A null callee is never callable: fail closed (TypeError, exit 1).
+            self.lines.append("    call piton_raise_not_callable")
+            self.lines.append(f"{_dyn_call}:")
+            frame_size = ((4 * 8 + 32 + 15) // 16) * 16
+            self.lines.append(f"    sub rsp, {frame_size}")
+            self.lines.append(f"    mov {self._address('@scratch1')}, rcx")
+            # Fill the 4-slot argument frame; slots beyond the tuple length
+            # stay zero (the callee's arity check only reads what it needs).
+            for index in range(4):
+                self.lines.append(f"    mov rcx, {self._address(pos_seq)}")
+                self.lines.append(f"    mov rdx, {index}")
+                self.lines.append("    call piton_collection_get")
+                self.lines.append(f"    mov qword [rsp+32+{index * 8}], rax")
+            self.lines.append(f"    mov rcx, {self._address(pos_seq)}")
+            self.lines.append("    call piton_collection_len")
+            self.lines.append(f"    mov rdx, rax")
+            self.lines.append(f"    mov rcx, {self._address('@scratch1')}")
+            self.lines.append("    lea r8, [rsp+32]")
+            self.lines.append("    call piton_closure_call_frame")
+            self.lines.append(f"    add rsp, {frame_size}")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "int"
+            # CALL_PROPAGATE_V1: the callee is user code -- route a raise to
+            # the active handler, or propagate/exit (same as the `call` op).
+            self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+            self.lines.append("    call piton_catch_flag")
+            self.lines.append("    test rax, rax")
+            if handler_label:
+                self.lines.append(f"    jne {labels.get(handler_label, handler_label)}")
+                self.lines.append(f"    mov rax, {self._address('@scratch0')}")
+            else:
+                _ok = self._internal_label("dyn_noexc")
+                self.lines.append(f"    jz {_ok}")
+                self._emit_propagate_or_exit()
+                self.lines.append(f"{_ok}:")
+                self.lines.append(f"    mov rax, {self._address('@scratch0')}")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            return
         elif op == "closure_new":
-            lifted_name, n_args, capture_ops, has_vararg = args
+            # MIR añade el flag de kwonly como quinto argumento.
+            lifted_name, n_args, capture_ops, has_vararg = args[:4]
+            if len(args) > 4 and args[4]:
+                raise NativeBuildError(f"native closure '{lifted_name}' with keyword-only parameters not supported")
             frame_size = ((len(capture_ops) * 8 + 48 + 15) // 16) * 16
             self.lines.append(f"    sub rsp, {frame_size}")
             for i, cell in enumerate(capture_ops):
@@ -4253,6 +4698,29 @@ class Win64NasmEmitter:
                     self.lines.append("    test rax, rax")
                     self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
             elif function_name in {"type", "tipo"}:
+                if len(values) == 3:
+                    # TYPE_DYNAMIC_CLASS_V1 (Windows): type(name, bases, ns)
+                    # builds a real class object at runtime (piton_type_new).
+                    # The three operands keep their static kinds: a str name,
+                    # a tuple of bases and a dict namespace; anything else is
+                    # rejected at build time instead of reinterpreting bits.
+                    if self.types.get(values[0]) != "str":
+                        raise NativeBuildError("native type() argument 1 must be a str literal/value")
+                    if self.types.get(values[1]) != "tuple":
+                        raise NativeBuildError("native type() argument 2 must be a tuple")
+                    if self.types.get(values[2]) != "dict":
+                        raise NativeBuildError("native type() argument 3 must be a dict")
+                    self._load_operand(values[0], "rcx")
+                    self._load_operand(values[1], "rdx")
+                    self._load_operand(values[2], "r8")
+                    self.lines.append("    call piton_type_new")
+                    self.lines.append(f"    mov {self._address(result)}, rax")
+                    self.types[result] = "class:dynamic"
+                    if call_handler is not None:
+                        self.lines.append("    call piton_catch_flag")
+                        self.lines.append("    test rax, rax")
+                        self.lines.append(f"    jne {labels.get(call_handler, call_handler)}")
+                    return
                 if len(values) != 1:
                     raise NativeBuildError("native type requires one argument")
                 vtype = self.types.get(values[0], "int")
@@ -4442,6 +4910,56 @@ class Win64NasmEmitter:
                 # program (WIN64_PTR_V1).
                 self.lines.append(f"    mov qword {self._address(result)}, 0")
                 self.types[result] = "none"
+            elif function_name in {"dir", "ayuda"}:
+                # DIR_BUILTIN_V1 (Windows): dir() lists the module globals (no
+                # argument), or the sorted attribute names of a function /
+                # class / instance / module, like the Linux piton_builtin_dir.
+                if len(values) > 1:
+                    self._runtime_type_error("dir expected at most 1 argument")
+                    self.types[result] = "list"
+                    return
+                if values:
+                    subject = values[0]
+                    stype = self.types.get(subject, "int")
+                    if stype.startswith("class:") or stype == "class:object":
+                        kind = 1
+                    elif stype in {"closure", "builtin"} or subject in self._function_temps or self.aliases.get(subject, subject) in self.function_names:
+                        kind = 2
+                    elif stype == "object:module":
+                        kind = 4
+                    elif stype.startswith("object:"):
+                        kind = 3
+                    else:
+                        kind = 5
+                    self._load_operand(subject, "rcx")
+                    self.lines.append("    mov edx, 1")
+                    self.lines.append(f"    mov r8d, {kind}")
+                else:
+                    self.lines.append("    xor ecx, ecx")
+                    self.lines.append("    xor edx, edx")
+                    self.lines.append("    xor r8d, r8d")
+                self.lines.append("    call piton_builtin_dir")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "list"
+                return
+            elif function_name in {"help", "ayuda"}:
+                # HELP_BUILTIN_V1 (Windows): help() prints the intro and
+                # returns None. help(<subject>) is lowered by the MIR to the
+                # static native_help_info op (source docstrings only); a
+                # dynamic subject reaching here has no captured docs.
+                if len(values) > 1:
+                    self._runtime_type_error("help expected at most 1 argument")
+                    self.types[result] = "none"
+                    return
+                if values:
+                    raise NativeBuildError(
+                        "native help() of a subject without captured source documentation is not supported"
+                    )
+                self.lines.append("    xor ecx, ecx")
+                self.lines.append("    call piton_builtin_help")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "none"
+                return
             elif function_name in {"isinstance", "es_instancia"}:
                 if len(values) != 2:
                     raise NativeBuildError("isinstance requires 2 arguments")
@@ -4695,6 +5213,19 @@ class Win64NasmEmitter:
                     # WRETURNTYPE_V1: statically-known callees propagate
                     # their inferred return type (none/str/float/bool).
                     self.types[result] = self.function_return_types.get(function_name, "int")
+        elif op == "native_help_info":
+            # HELP_DOCS_V1 (Windows): the MIR resolved help(subject) to the
+            # docstring captured from source (class / function / module).
+            kind, name, doc = args[:3]
+            self.lines.append(f"    lea rcx, [{self._string(kind)}]")
+            self.lines.append(f"    lea rdx, [{self._string(name)}]")
+            if doc is None:
+                self.lines.append("    xor r8d, r8d")
+            else:
+                self.lines.append(f"    lea r8, [{self._string(doc)}]")
+            self.lines.append("    call piton_builtin_help_named")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "none"
         elif op == "truth_test":
             # BOOL_SHORT_V1 / TRUTHY_FIX_V1: full truthiness per static kind
             # (CPython bool()). Reuses the collection len helpers.
@@ -5001,7 +5532,10 @@ class Win64NasmEmitter:
                     "    leave", "    ret",
                 ])
             else:
-                if self.types.get(args[0]) in {"list", "tuple", "dict", "set", "bigint"}:
+                if (
+                    self.types.get(args[0]) in {"list", "tuple", "dict", "set", "bigint"}
+                    or str(self.types.get(args[0], "")).startswith("object:")
+                ):
                     # COLL_RETURN_V1: transfer ownership to the caller. The
                     # pointer is stashed, cleanup frees everything EXCEPT
                     # slots still holding it (value-compared skip: any alias
@@ -5317,7 +5851,8 @@ class Win64NasmEmitter:
                                     elif origin[0] == "literal":
                                         changed = note_var(target, literal_type(origin[1])) or changed
                                     elif origin[0] in {"kind", "object"}:
-                                        changed = note_var(target, origin[1]) or changed
+                                        _ot = origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
+                                        changed = note_var(target, _ot) or changed
                                     elif origin[0] == "var":
                                         kinds = var_sets.get(origin[1], set())
                                         if not kinds:
@@ -6291,6 +6826,289 @@ class Win64NasmEmitter:
         else:
             raise NativeBuildError(f"native str.format() does not support {arg_type} arguments")
 
+    def _emit_getitem_call(self, result: Any, container: Any, class_name: str,
+                           instruction: MIRInstruction, labels: dict[str, str],
+                           lower: Any = None, upper: Any = None, step: Any = None) -> bool:
+        """Emit `container.__getitem__(key)` for a statically typed instance of
+        `class_name` (MRO-resolved). `instruction.op` selects the key shape:
+        get_item -> tagged int (only when the key param is a slot) else raw int;
+        get_slice -> a tagged slice object (obj[a:b:c] -> __getitem__(slice)).
+        Returns False when the class has no __getitem__ (caller fails closed)."""
+        owner = self._resolve_getitem_owner(class_name)
+        if owner is None:
+            return False
+        target_fn = f"{owner}____getitem__"
+        target = target_fn
+        params = self.function_param_map.get(target_fn) or []
+        if len(params) < 2:
+            raise NativeBuildError(
+                f"native __getitem__ of '{class_name}' must take (self, key)"
+            )
+        key_is_slot = params[1] in (self._slot_param_args.get(target_fn) or ())
+        self._load_operand(container, "r10")
+        self.lines.append(f"    mov {self._address('@scratch1')}, r10")
+        if instruction.op == "get_slice":
+            # SLICE_SLOT_ATTR_V1: bounds arrive as raw ints or None (omitted).
+            # The callee always receives the slice TAGGED; the box is released
+            # right after the call (refcount 1 -> freed).
+            if lower is not None:
+                self._load_operand(lower, "rcx")
+            else:
+                self.lines.append("    xor ecx, ecx")
+            if upper is not None:
+                self._load_operand(upper, "rdx")
+            else:
+                self.lines.append("    xor edx, edx")
+            if step is not None:
+                self._load_operand(step, "r8")
+            else:
+                self.lines.append("    mov r8d, 1")
+            self.lines.append(f"    mov r9d, {int(lower is not None)}")
+            self.lines.append(f"    mov r10, {int(upper is not None)}")
+            self.lines.append("    mov qword [rsp+32], r10")
+            self.lines.append(f"    mov r10, {int(step is not None)}")
+            self.lines.append("    mov qword [rsp+40], r10")
+            self.lines.append("    call piton_slice_new")
+            self.lines.append(f"    mov {self._address('@scratch2')}, rax")
+            self.lines.append("    mov ecx, 4")          # PITON_TAG_OBJECT
+            self.lines.append("    shl rcx, 61")
+            self.lines.append("    or rax, rcx")
+            self.lines.append(f"    mov {self._address('@scratch3')}, rax")   # tagged slice
+        else:
+            key = instruction.args[1] if len(instruction.args) > 1 else None
+            if key_is_slot:
+                self._load_operand(key, "rcx")
+                self.lines.append("    xor edx, edx")
+                self.lines.append("    call piton_slot")     # pv_int(raw)
+                self.lines.append(f"    mov {self._address('@scratch3')}, rax")
+            else:
+                self._load_operand(key, "rax")
+                self.lines.append(f"    mov {self._address('@scratch3')}, rax")
+        # call Class____getitem__(self, key)
+        if self.function_frame_abi.get(target_fn, False):
+            frame_size = ((2 * 8 + 32 + 15) // 16) * 16
+            self.lines.append(f"    sub rsp, {frame_size}")
+            self.lines.append(f"    mov r10, {self._address('@scratch1')}")
+            self.lines.append("    mov qword [rsp+32], r10")
+            self.lines.append(f"    mov r10, {self._address('@scratch3')}")
+            self.lines.append("    mov qword [rsp+40], r10")
+            self.lines.extend([f"    lea rcx, [{target}]", "    mov edx, 2", "    lea r8, [rsp+32]",
+                               "    call piton_frame_call", f"    add rsp, {frame_size}"])
+        else:
+            self.lines.append(f"    mov rcx, {self._address('@scratch1')}")
+            self.lines.append(f"    mov rdx, {self._address('@scratch3')}")
+            self.lines.append(f"    call {target}")
+        # SLICE_RESULT_SAVE_V1: stash the callee's result BEFORE the get_slice
+        # path runs. The piton_value_decref below is a C call that clobbers
+        # rax, so saving after it stored a garbage value and every slice
+        # subscription silently printed nothing (empty stdout, rc 0).
+        self.lines.append(f"    mov {self._address('@scratch0')}, rax")
+        if instruction.op == "get_slice":
+            # release the slice box now that the callee returned
+            self.lines.append(f"    mov rcx, {self._address('@scratch3')}")
+            self.lines.append("    call piton_value_decref")
+            self.lines.append(f"    mov qword {self._address('@scratch3')}, 0")
+        self.lines.append("    call piton_catch_flag")
+        self.lines.append("    test rax, rax")
+        handler = instruction.args[2] if instruction.op == "get_item" and len(instruction.args) > 2 else None
+        if instruction.op == "get_slice":
+            handler = instruction.args[5] if len(instruction.args) > 5 else None
+        if handler:
+            self.lines.append(f"    jne {labels.get(handler, handler)}")
+            self.lines.append(f"    mov rax, {self._address('@scratch0')}")
+        else:
+            _ok = self._internal_label("getitem_noexc")
+            self.lines.append(f"    jz {_ok}")
+            self._emit_propagate_or_exit()
+            self.lines.append(f"{_ok}:")
+            self.lines.append(f"    mov rax, {self._address('@scratch0')}")
+        if result:
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = self.function_return_types.get(target_fn, "int")
+        return True
+
+    # ── GETITEM_DUNDER_V1 (Windows) ─────────────────────────────────────
+    # Mirrors Linux GETITEM_DUNDER_V1 / OBJECT_SLICE_DUNDER_V1: `obj[i]` and
+    # `obj[a:b:c]` on a statically known user class route to its __getitem__
+    # (MRO). The key travels TAGGED (pv_int / slice object) whenever the
+    # callee's key parameter is a recorded slot parameter, which a module-wide
+    # pre-scan decides from the call-sites before any function is emitted.
+
+    _SLICE_ATTRS = {"start": 0, "stop": 1, "step": 2}
+
+    def _resolve_getitem_owner(self, class_name: str) -> str | None:
+        """Class (MRO) that defines __getitem__ for `class_name`, or None."""
+        for candidate in self.class_mro.get(class_name, [class_name]):
+            if "__getitem__" in self.mir_module_classes.get(candidate, set()):
+                return candidate
+        if "__getitem__" in self.mir_module_classes.get(class_name, set()):
+            return class_name
+        return None
+
+    def _getitem_target_for(self, instruction: MIRInstruction) -> str | None:
+        """Static `Class____getitem__` symbol for a get_item/get_slice whose
+        container is proven an instance of a user class with __getitem__.
+        Returns None when the container type is not statically known at this
+        point (the emitter decides later with its live types table)."""
+        container = instruction.args[0] if instruction.args else None
+        class_name = self._static_instance_class(container)
+        if class_name is None:
+            return None
+        owner = self._resolve_getitem_owner(class_name)
+        return f"{owner}____getitem__" if owner else None
+
+    def _static_instance_class(self, operand: Any) -> str | None:
+        """User class of an operand proven to be an INSTANCE (object_new of a
+        user class, or a module variable stored from one). Class objects
+        (`class:Name`) are not instances."""
+        if not isinstance(operand, str) or operand.startswith("%"):
+            return self._module_instance_classes.get(operand)
+        origin = self._object_new_classes.get(operand)
+        if origin is not None:
+            return origin
+        return None
+
+    def _is_builtin_call(self, instruction: MIRInstruction, names: set[str]) -> bool:
+        """True when a `call` instruction calls one of `names` through the
+        BUILTIN_MARKER_V1 path (load name -> temp -> call temp)."""
+        if instruction.op != "call" or not instruction.args:
+            return False
+        callee = instruction.args[0]
+        return isinstance(callee, str) and self._load_names.get(callee) in names
+
+    def _prescan_getitem_slot_params(self, module: MIRModule) -> None:
+        """Record, module-wide, the __getitem__ key parameters that receive a
+        TAGGED argument at some call-site (a slice from `obj[a:b:c]`, or a
+        tagged int once the parameter is a slot). Populates
+        self._slot_param_args {fn: {param}}, self._load_names {temp: name},
+        self._object_new_classes {temp: class} and
+        self._module_instance_classes {module var: class}."""
+        self._slot_param_args: dict[str, set[str]] = {}
+        self._load_names: dict[str, str] = {}
+        self._object_new_classes: dict[str, str] = {}
+        self._module_instance_classes: dict[str, str] = {}
+        module_fn = next((f for f in module.functions if f.name == "<module>"), None)
+
+        def instance_class_of(operand: Any, temp_classes: dict[str, str]) -> str | None:
+            if not isinstance(operand, str):
+                return None
+            if operand.startswith("%"):
+                return temp_classes.get(operand)
+            return self._module_instance_classes.get(operand)
+
+        # Module-level `store name <- object_new(C)` makes `name` an instance
+        # of C for every function that loads it (Linux gets this from its
+        # module scope typing; here it is a small explicit table).
+        if module_fn is not None:
+            temps: dict[str, str] = {}
+            for block in module_fn.blocks:
+                for ins in block.instructions:
+                    if ins.op == "object_new" and ins.result and ins.args:
+                        if ins.args[0] in self.classes:
+                            temps[ins.result] = ins.args[0]
+                    elif ins.op == "store" and len(ins.args) >= 2 and ins.args[1] in temps:
+                        self._module_instance_classes[ins.args[0]] = temps[ins.args[1]]
+        for function in module.functions:
+            temp_classes: dict[str, str] = {}
+            load_names: dict[str, str] = {}
+            if function.params and function.self_class:
+                temp_classes[function.params[0]] = function.self_class
+            changed = True
+            while changed:
+                changed = False
+                for block in function.blocks:
+                    for ins in block.instructions:
+                        if ins.op == "object_new" and ins.result and ins.args and ins.args[0] in self.classes:
+                            if temp_classes.get(ins.result) != ins.args[0]:
+                                temp_classes[ins.result] = ins.args[0]
+                                changed = True
+                        elif ins.op == "load" and ins.result and isinstance(ins.args[0], str):
+                            load_names[ins.result] = ins.args[0]
+                            cls = self._module_instance_classes.get(ins.args[0])
+                            if cls and temp_classes.get(ins.result) != cls:
+                                temp_classes[ins.result] = cls
+                                changed = True
+                        elif ins.op == "store" and len(ins.args) >= 2 and isinstance(ins.args[1], str):
+                            cls = temp_classes.get(ins.args[1])
+                            if cls and not ins.args[0].startswith("%"):
+                                if function.name == "<module>":
+                                    self._module_instance_classes.setdefault(ins.args[0], cls)
+                                if temp_classes.get(ins.args[0]) != cls:
+                                    temp_classes[ins.args[0]] = cls
+                                    changed = True
+            for temp, name in load_names.items():
+                self._load_names.setdefault(temp, name)
+            for block in function.blocks:
+                for ins in block.instructions:
+                    if ins.op not in {"get_item", "get_slice"}:
+                        continue
+                    cls = instance_class_of(ins.args[0] if ins.args else None, temp_classes)
+                    if cls is None:
+                        continue
+                    owner = self._resolve_getitem_owner(cls)
+                    if owner is None:
+                        continue
+                    target_fn = f"{owner}____getitem__"
+                    params = self.function_param_map.get(target_fn) or []
+                    if len(params) > 1 and ins.op == "get_slice":
+                        # Only a slice forces the slot contract; a plain int
+                        # index keeps the raw-int ABI unless already a slot.
+                        self._slot_param_args.setdefault(target_fn, set()).add(params[1])
+
+    def _build_dir_tables(self, module: MIRModule) -> list[str]:
+        """DIR_TABLES_V1 (Windows): .rdata lines for dir()'s metadata.
+
+        piton_dir_globals_tbl     : module-level user names (CPython dir()
+                                    without arguments), NULL-terminated.
+        piton_dir_class_names_tbl : class names, NULL-terminated.
+        piton_dir_class_attrs_tbl : parallel array; entry i is a NULL-terminated
+                                    attribute-name array for class i (class
+                                    attributes plus every MRO ancestor's).
+        """
+        global_names: set[str] = set()
+        for function in module.functions:
+            if function.name == "<module>":
+                for block in function.blocks:
+                    for instruction in block.instructions:
+                        if instruction.op != "store" or not instruction.args:
+                            continue
+                        if len(instruction.args) > 2 and instruction.args[2] == "internal":
+                            continue
+                        stored_name = instruction.args[0]
+                        if isinstance(stored_name, str) and not stored_name.startswith("%"):
+                            global_names.add(stored_name)
+            else:
+                qualname = getattr(function, "qualname", None) or function.name
+                if "." not in qualname:
+                    global_names.add(qualname)
+        lines: list[str] = []
+        if global_names:
+            refs = ", ".join(self._string(name) for name in sorted(global_names))
+            lines.append(f"piton_dir_globals_tbl: dq {refs}, 0")
+        else:
+            lines.append("piton_dir_globals_tbl: dq 0")
+        class_names = sorted(self.class_attributes)
+        attr_lines: list[str] = []
+        for index, class_name in enumerate(class_names):
+            attrs: set[str] = set(self.class_attributes.get(class_name, ()))
+            for ancestor in self.class_mro.get(class_name, (class_name,)):
+                attrs.update(self.class_attributes.get(ancestor, ()))
+            if attrs:
+                refs = ", ".join(self._string(attr) for attr in sorted(attrs))
+                attr_lines.append(f"piton_dir_attrs_{index}: dq {refs}, 0")
+            else:
+                attr_lines.append(f"piton_dir_attrs_{index}: dq 0")
+        if class_names:
+            refs = ", ".join(self._string(name) for name in class_names)
+            lines.append(f"piton_dir_class_names_tbl: dq {refs}, 0")
+            refs = ", ".join(f"piton_dir_attrs_{i}" for i in range(len(class_names)))
+            lines.append(f"piton_dir_class_attrs_tbl: dq {refs}, 0")
+        else:
+            lines.append("piton_dir_class_names_tbl: dq 0")
+            lines.append("piton_dir_class_attrs_tbl: dq 0")
+        lines.extend(attr_lines)
+        return lines
+
     def _prescan_slot_captures(self, function: MIRFunction) -> set[str]:
         """MATCH_DYNAMIC_V1: el cuerpo de un `caso` se EMITE antes que el
         bloque que almacena la captura (el orden de bloques del MIR no es el
@@ -6774,7 +7592,39 @@ class Win64NasmEmitter:
         declared_anywhere: set[str] = set()
         for names in self._func_globals.values():
             declared_anywhere |= names
-        self._shared_globals = self._module_stored & declared_anywhere
+        # MODULE_GLOBAL_READ_V1 (mirrors linux_x86._scan_module_globals): CPython
+        # reads the module binding when a function neither assigns the name
+        # locally nor declares `global` (only the WRITE is local without a
+        # declaration). Covers MIR decorated-method forwarders and bundled
+        # stdlib module state (e.g. datetime__var__MINYEAR).
+        read_anywhere: set[str] = set()
+        for function in module.functions:
+            if function.name == "<module>":
+                continue
+            func_params = set(function.params or ())
+            func_stored = self._func_stores.get(function.name, ())
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    if (
+                        instruction.op == "load" and instruction.args
+                        and isinstance(instruction.args[0], str)
+                    ):
+                        name = instruction.args[0]
+                        if (
+                            name in self._module_stored
+                            and name not in func_params
+                            and name not in func_stored
+                        ):
+                            read_anywhere.add(name)
+                    elif instruction.op == "decorated_method_load" and len(instruction.args) > 1:
+                        method_name = instruction.args[1]
+                        read_anywhere.update(
+                            storage
+                            for (_class_name, decorated_name), storage
+                            in getattr(module, "decorated_class_methods", {}).items()
+                            if decorated_name == method_name and storage in self._module_stored
+                        )
+        self._shared_globals = self._module_stored & (declared_anywhere | read_anywhere)
 
     def _is_gen_function(self) -> bool:
         function = self.function
@@ -7091,13 +7941,17 @@ def compile_native(source: str, output: str | Path) -> Path:
     except (MIRLoweringError, LoweringError) as error:
         raise NativeBuildError(str(error)) from error
     from_imports = {}
+    # BUNDLED_STDLIB_FROM_IMPORT_V1 (mirrors Linux): bundled stdlib modules
+    # (`datetime` among them, see _BUNDLED_FROM_IMPORT_MODULES) are inlined by
+    # the MIR lowering, so they only need to be recorded as from-import
+    # bindings; every other module still fails closed as before.
     for statement in hir.body:
         if getattr(statement, "kind", None) == HIRKind.IMPORT_FROM:
             mod_name = getattr(statement, "module", None)
-            if mod_name and mod_name not in {"asyncio", "math", "sys", "terminal"}:
+            if mod_name and mod_name not in _BUNDLED_FROM_IMPORT_MODULES:
                 raise NativeBuildError(f"native from-import requires multi-file compilation: {mod_name}")
             for alias in getattr(statement, "names", []):
-                if mod_name in {"asyncio", "math", "sys", "terminal"}:
+                if mod_name in _BUNDLED_FROM_IMPORT_MODULES:
                     from_imports[(mod_name, alias.asname or alias.name)] = True
     try:
         mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
