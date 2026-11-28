@@ -6561,12 +6561,16 @@ class Win64NasmEmitter:
             self.lines.append(f"    mov rcx, {self._address('@scratch1')}")
             self.lines.append(f"    mov rdx, {self._address('@scratch3')}")
             self.lines.append(f"    call {target}")
+        # SLICE_RESULT_SAVE_V1: stash the callee's result BEFORE the get_slice
+        # path runs. The piton_value_decref below is a C call that clobbers
+        # rax, so saving after it stored a garbage value and every slice
+        # subscription silently printed nothing (empty stdout, rc 0).
+        self.lines.append(f"    mov {self._address('@scratch0')}, rax")
         if instruction.op == "get_slice":
             # release the slice box now that the callee returned
             self.lines.append(f"    mov rcx, {self._address('@scratch3')}")
             self.lines.append("    call piton_value_decref")
             self.lines.append(f"    mov qword {self._address('@scratch3')}, 0")
-        self.lines.append(f"    mov {self._address('@scratch0')}, rax")
         self.lines.append("    call piton_catch_flag")
         self.lines.append("    test rax, rax")
         handler = instruction.args[2] if instruction.op == "get_item" and len(instruction.args) > 2 else None

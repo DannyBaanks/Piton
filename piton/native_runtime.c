@@ -4254,7 +4254,8 @@ int64_t piton_builtin_dir(int64_t subject, int64_t has_subject, int64_t kind) {
     } else {
         piton_dir_add_many(names, &count, k_piton_dir_object_names);
         if (kind == 1) {
-            piton_dir_add(names, &count, "__name__");
+            /* CPython's type.__dir__ excludes the __name__/__qualname__
+             * getsets of the metaclass; add nothing extra here. */
             PitonObject *o = (PitonObject *)subject;
             if (o)
                 for (int64_t i = 0; i < o->length; ++i) {
