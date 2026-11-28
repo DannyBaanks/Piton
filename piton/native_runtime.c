@@ -1,8 +1,14 @@
+/* TIME_NATIVE_V1: strict -std=c11 hides clock_gettime/CLOCK_REALTIME on
+ * POSIX hosts unless a feature-test macro is visible before <time.h>. */
+#ifndef _WIN32
+#define _POSIX_C_SOURCE 199309L
+#endif
 #include <stdint.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -5515,6 +5521,266 @@ int64_t piton_terminal_write(int64_t str_val) { (void)str_val; return 0; }
 int64_t piton_terminal_read(int64_t max_bytes) { (void)max_bytes; return 0; }
 int64_t piton_terminal_size(void) { return 0; }
 #endif  /* !_WIN32 */
+
+/* ── TIME_NATIVE_V1: time module natives for the Win64 emitter ───────────
+ * `piton/x86.py` lowers `time.time()/localtime()/gmtime()/strftime()` (the
+ * MIR `native_call` op, the same table linux_x86.py uses) to these helpers.
+ * They return Win64-emitter values directly (never the PitonSlot ABI of the
+ * legacy block below):
+ *   - time.time()      -> IEEE double bits in rax (emitter type "float")
+ *   - localtime/gmtime -> PitonCollection* of 9 tagged ints, CPython order
+ *                        (tm_year, tm_mon, tm_mday, tm_hour, tm_min, tm_sec,
+ *                        tm_wday 0=Monday, tm_yday 1-based, tm_isdst=0)
+ *   - strftime(fmt, t) -> malloc'ed C string (emitter type "str")
+ *
+ * Timestamp argument: the emitter passes the value plus a kind word because
+ * the Win64 ABI cannot tell int 0 from None (both are 0 in a GPR):
+ *   kind 0 = raw int, 1 = IEEE double bits, 2 = None (current time).
+ * Negative floats floor to whole seconds like CPython (localtime(-1.9) is
+ * 1969-12-31 23:59:59). NaN -> ValueError, inf / out-of-range -> OverflowError
+ * with CPython's messages, routed through piton_raise like every other native.
+ *
+ * Timezone: UTC. The Linux oracle is a freestanding backend with no TZ
+ * database (localtime == gmtime == UTC) and the parity tests pin TZ=UTC, so
+ * the Win64 runtime computes the civil decomposition itself (Howard Hinnant's
+ * civil_from_days / days_from_civil) instead of calling libc localtime(), which
+ * would depend on the host's TZ and diverge from the oracle byte-for-byte.
+ */
+static double piton_tm_bits_double(int64_t bits) {
+    union { double d; int64_t u; } v;
+    v.u = bits;
+    return v.d;
+}
+
+static int64_t piton_tm_is_leap(int64_t y) { return (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)); }
+
+static int64_t piton_tm_yday(int64_t y, int64_t m, int64_t d) {
+    static const int64_t days[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+    int64_t r = days[m - 1] + d;
+    if (m > 2 && piton_tm_is_leap(y)) r += 1;
+    return r;
+}
+
+/* 0 = Monday .. 6 = Sunday (CPython tm_wday convention). */
+static int64_t piton_tm_wday(int64_t y, int64_t m, int64_t d) {
+    static const int64_t t[12] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+    if (m < 3) y -= 1;
+    int64_t w = (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7; /* 0 = Sunday */
+    return (w + 6) % 7;
+}
+
+/* Validate a timestamp (raw int / double bits / None) and convert it to whole
+ * seconds since the epoch. Returns 1 on success, 0 after piton_raise. */
+static int piton_tm_seconds(int64_t value, int64_t kind, int64_t *out) {
+    if (kind == 2) {
+        time_t now = time(NULL);
+        *out = (int64_t)now;
+        return 1;
+    }
+    if (kind == 1) {
+        double v = piton_tm_bits_double(value);
+        if (isnan(v)) {
+            piton_raise("ValueError", "Invalid value NaN (not a number)");
+            return 0;
+        }
+        if (isinf(v) || v >= 9223372036854775808.0 || v < -9223372036854775808.0) {
+            piton_raise("OverflowError", "timestamp out of range for platform time_t");
+            return 0;
+        }
+        int64_t seconds = (int64_t)v;
+        if (v < 0.0 && (double)seconds > v) --seconds;
+        *out = seconds;
+        return 1;
+    }
+    *out = value;
+    return 1;
+}
+
+/* CPython stores tm_year in a C int and libc reports EOVERFLOW (OSError)
+ * for values that do not fit; keep the same boundary as linux_x86.py. */
+static PitonCollection *piton_tm_build(int64_t epoch) {
+    int64_t days = epoch / 86400;
+    int64_t sod = epoch % 86400;
+    if (sod < 0) { sod += 86400; days -= 1; }
+    int64_t z = days + 719468;
+    int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+    int64_t doe = z - era * 146097;
+    int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    int64_t y = yoe + era * 400;
+    int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    int64_t mp = (5 * doy + 2) / 153;
+    int64_t dd = doy - (153 * mp + 2) / 5 + 1;
+    int64_t m = mp + (mp < 10 ? 3 : -9);
+    if (m <= 2) y += 1;
+    if (y < -2147481748LL || y > 2147485547LL) {
+        piton_raise("OSError", "Value too large for defined data type");
+        return NULL;
+    }
+    int64_t wday = piton_tm_wday(y, m, dd);
+    int64_t yday = piton_tm_yday(y, m, dd);
+    PitonCollection *s = piton_collection_new(1, 9);
+    if (!s) return NULL;
+    s->items[0] = pv_int(y);
+    s->items[1] = pv_int(m);
+    s->items[2] = pv_int(dd);
+    s->items[3] = pv_int(sod / 3600);
+    s->items[4] = pv_int((sod % 3600) / 60);
+    s->items[5] = pv_int(sod % 60);
+    s->items[6] = pv_int(wday);
+    s->items[7] = pv_int(yday);
+    s->items[8] = pv_int(0);
+    s->length = 9;
+    return s;
+}
+
+int64_t piton_time_time(void) {
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = 0;
+#ifdef _WIN32
+    /* 100ns ticks since 1601-01-01 (UTC); 11644473600s to the Unix epoch. */
+    FILETIME ft;
+    ULARGE_INTEGER u;
+    GetSystemTimeAsFileTime(&ft);
+    u.LowPart = ft.dwLowDateTime;
+    u.HighPart = ft.dwHighDateTime;
+    int64_t ticks = (int64_t)u.QuadPart - 116444736000000000LL;
+    ts.tv_sec = ticks / 10000000LL;
+    ts.tv_nsec = (ticks % 10000000LL) * 100;
+#else
+    clock_gettime(CLOCK_REALTIME, &ts);
+#endif
+    return piton_double_bits((double)ts.tv_sec + (double)ts.tv_nsec / 1e9);
+}
+
+/* time.localtime(seconds=None) / time.gmtime(seconds=None): UTC on this
+ * backend (see the section comment). */
+int64_t piton_time_localtime(int64_t value, int64_t kind) {
+    int64_t seconds;
+    if (!piton_tm_seconds(value, kind, &seconds)) return 0;
+    return (int64_t)piton_tm_build(seconds);
+}
+
+int64_t piton_time_gmtime(int64_t value, int64_t kind) {
+    int64_t seconds;
+    if (!piton_tm_seconds(value, kind, &seconds)) return 0;
+    return (int64_t)piton_tm_build(seconds);
+}
+
+static int64_t piton_tm_item(int64_t v) {
+    if (pv_tag(v) == PITON_TAG_INT) return pv_payload_signed(v);
+    if (pv_tag(v) == PITON_TAG_BOOL) return pv_payload(v) ? 1 : 0;
+    return 0;
+}
+
+static int64_t piton_tm_append(char **buf, int64_t *cap, int64_t *len, const char *s, int64_t n) {
+    if (*len + n + 1 > *cap) {
+        int64_t nc = *cap ? *cap : 64;
+        while (nc < *len + n + 1) nc *= 2;
+        char *nb = (char *)realloc(*buf, (size_t)nc);
+        if (!nb) return 0;
+        *buf = nb;
+        *cap = nc;
+    }
+    memcpy(*buf + *len, s, (size_t)n);
+    *len += n;
+    (*buf)[*len] = '\0';
+    return 1;
+}
+
+static int64_t piton_tm_append_int(char **buf, int64_t *cap, int64_t *len, int64_t v, int width, int pad_zero) {
+    char tmp[24];
+    int i = 0, neg = 0;
+    int64_t x = v;
+    if (x < 0) { neg = 1; x = -x; }
+    do { tmp[i++] = (char)('0' + x % 10); x /= 10; } while (x);
+    while (i < width - neg) tmp[i++] = (char)(pad_zero ? '0' : ' ');
+    if (neg) tmp[i++] = '-';
+    /* digits were collected least-significant first: reverse in place */
+    for (int a = neg, b = i - 1; a < b; ++a, --b) { char c = tmp[a]; tmp[a] = tmp[b]; tmp[b] = c; }
+    if (neg) { if (!piton_tm_append(buf, cap, len, "-", 1)) return 0; return piton_tm_append(buf, cap, len, tmp + 1, i - 1); }
+    return piton_tm_append(buf, cap, len, tmp, i);
+}
+
+/* strftime subset shared with linux_x86.py: %Y %y %m %d %e %H %M %S %a %A %b
+ * %B %j %u %w %U %W %% (anything else is emitted verbatim like CPython). */
+int64_t piton_time_strftime(int64_t fmt, int64_t st) {
+    const char *f = (const char *)fmt;
+    if (!f) {
+        piton_raise("TypeError", "strftime() argument 1 must be str");
+        return 0;
+    }
+    PitonCollection *s = NULL;
+    if (st) {
+        if (pv_tag(st) == PITON_TAG_OBJECT) s = (PitonCollection *)pv_payload(st);
+        else s = (PitonCollection *)st;
+    }
+    if (!s) {
+        piton_raise("TypeError", "Tuple or struct_time argument required");
+        return 0;
+    }
+    if ((s->header.sub_tag != SUB_TAG_LIST && s->header.sub_tag != SUB_TAG_TUPLE) || s->length < 9) {
+        piton_raise("TypeError", "Tuple or struct_time argument required");
+        return 0;
+    }
+    /* INT/BOOL items decode to their raw value (what piton_time_localtime
+     * and the emitter's list literals both store); anything else is 0 like
+     * the Linux reader, which casts the slot bits blindly. */
+    int64_t Y = piton_tm_item(s->items[0]);
+    int64_t mo = piton_tm_item(s->items[1]);
+    int64_t d = piton_tm_item(s->items[2]);
+    int64_t H = piton_tm_item(s->items[3]);
+    int64_t Mi = piton_tm_item(s->items[4]);
+    int64_t Se = piton_tm_item(s->items[5]);
+    int64_t wday = piton_tm_item(s->items[6]);
+    int64_t yday = piton_tm_item(s->items[7]);
+    static const char *abbr[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+    static const char *full[7] = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};
+    static const char *mon_abbr[13] = {"", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    static const char *mon_full[13] = {"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+    int64_t w = wday % 7;
+    if (w < 0) w += 7;
+    char *buf = (char *)malloc(64);
+    if (!buf) return 0;
+    int64_t cap = 64, len = 0;
+    buf[0] = '\0';
+    for (const char *p = f; *p; ++p) {
+        if (*p != '%') {
+            if (!piton_tm_append(&buf, &cap, &len, p, 1)) goto fail;
+            continue;
+        }
+        ++p;
+        if (*p == '%') {
+            if (!piton_tm_append(&buf, &cap, &len, "%", 1)) goto fail;
+            continue;
+        }
+        if (!*p) break;
+        int ok = 1;
+        switch (*p) {
+            case 'Y': ok = (int)piton_tm_append_int(&buf, &cap, &len, Y, 4, 1); break;
+            case 'y': ok = (int)piton_tm_append_int(&buf, &cap, &len, ((Y % 100) + 100) % 100, 2, 1); break;
+            case 'm': ok = (int)piton_tm_append_int(&buf, &cap, &len, mo, 2, 1); break;
+            case 'd': ok = (int)piton_tm_append_int(&buf, &cap, &len, d, 2, 1); break;
+            case 'e': ok = (int)piton_tm_append_int(&buf, &cap, &len, d, 2, 0); break;
+            case 'H': ok = (int)piton_tm_append_int(&buf, &cap, &len, H, 2, 1); break;
+            case 'M': ok = (int)piton_tm_append_int(&buf, &cap, &len, Mi, 2, 1); break;
+            case 'S': ok = (int)piton_tm_append_int(&buf, &cap, &len, Se, 2, 1); break;
+            case 'a': ok = (int)piton_tm_append(&buf, &cap, &len, abbr[w], (int64_t)strlen(abbr[w])); break;
+            case 'A': ok = (int)piton_tm_append(&buf, &cap, &len, full[w], (int64_t)strlen(full[w])); break;
+            case 'b': ok = (mo >= 1 && mo <= 12) ? (int)piton_tm_append(&buf, &cap, &len, mon_abbr[mo], (int64_t)strlen(mon_abbr[mo])) : 0; break;
+            case 'B': ok = (mo >= 1 && mo <= 12) ? (int)piton_tm_append(&buf, &cap, &len, mon_full[mo], (int64_t)strlen(mon_full[mo])) : 0; break;
+            case 'j': ok = (int)piton_tm_append_int(&buf, &cap, &len, yday, 3, 1); break;
+            case 'u': ok = (int)piton_tm_append_int(&buf, &cap, &len, w + 1, 1, 0); break;
+            case 'w': ok = (int)piton_tm_append_int(&buf, &cap, &len, (w + 1) % 7, 1, 0); break;
+            default: ok = (int)piton_tm_append(&buf, &cap, &len, p, 1); break;
+        }
+        if (!ok) goto fail;
+    }
+    return (int64_t)buf;
+fail:
+    free(buf);
+    return 0;
+}
 
 /* The Linux emitter owns these stdlib implementations in linux_x86.py.
  * This legacy duplicate expects the emitter's PitonSeq/PitonSlot ABI, which
