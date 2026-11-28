@@ -33,6 +33,14 @@ class NativeBuildError(RuntimeError):
     pass
 
 
+# BUNDLED_STDLIB_FROM_IMPORT_V1 (mirrors Linux): stdlib modules that the MIR
+# lowering inlines from piton/stdlib_piton/*.piton (or serves natively), so a
+# top-level `desde <mod> importar x` needs no multi-file compilation. `datetime`
+# was missing here, which failed closed with "native from-import requires
+# multi-file compilation: datetime" for `desde datetime importar datetime`.
+_BUNDLED_FROM_IMPORT_MODULES = frozenset({"asyncio", "math", "sys", "terminal", "datetime"})
+
+
 # IS_IDENTITY_V1: a distinct tag per static type, so identity between two
 # differently typed values (1 vs True, both "1" as a raw word) is False, as in
 # CPython.
@@ -508,6 +516,10 @@ class Win64NasmEmitter:
             "extern piton_closure_new_frame", "extern piton_closure_call_frame", "extern piton_bound_method_new", "extern piton_bound_method_self",
             "extern piton_frame_call",
             "extern piton_unpack_seq4", "extern piton_dict_unpack4",
+            # TIME_NATIVE_V1: `time.*` natives (MIR native_call, same table as
+            # linux_x86.py) live in native_runtime.c under the Win64 ABI.
+            "extern piton_time_time", "extern piton_time_localtime", "extern piton_time_gmtime",
+            "extern piton_time_strftime",
         ]
         # DIR_TABLES_V1 (Windows): module-level names and per-class attribute
         # names for dir(), as NULL-terminated pointer tables the runtime
@@ -1504,20 +1516,26 @@ class Win64NasmEmitter:
                 return
             if (
                 name in self._module_stored
+                and name not in self._shared_globals
                 and fname != "<module>"
                 and name not in getattr(self.function, "params", ())
                 and name not in self._func_stores.get(fname, ())
             ):
-                if name not in self._shared_globals:
-                    raise NativeBuildError(
-                        f"native '{name}' is assigned at module level; declare it global to read it inside '{self.function.name}'"
-                    )
-                # MODULE_GLOBAL_READ_V1 (mirrors linux_x86): the function
-                # neither assigns the name locally nor declares it, so the
-                # load is the module binding -- the shared cell the module
-                # `store` wrote (see _scan_module_globals). Reachable for the
-                # MIR decorated-method forwarders, whose callees
-                # (`__piton_decorated_*`) are module-stored storage names.
+                raise NativeBuildError(
+                    f"native '{name}' is assigned at module level; declare it global to read it inside '{self.function.name}'"
+                )
+            if (
+                name in self._shared_globals
+                and fname != "<module>"
+                and name not in self._func_globals.get(fname, ())
+                and name not in getattr(self.function, "params", ())
+                and name not in self._func_stores.get(fname, ())
+            ):
+                # MODULE_GLOBAL_READ_V1 (mirrors linux_x86): CPython lets a
+                # function READ a module-level name without `global` (only
+                # assignment is local). Promoted to a shared cell by
+                # _scan_module_globals (read_anywhere), used by decorated-method
+                # forwarders and stdlib module state (e.g. datetime).
                 if self._is_gen_function():
                     raise NativeBuildError(f"native global '{name}' inside generators is not supported yet")
                 self.lines.append(f"    mov rax, [{self._global_label(name)}]")
@@ -2593,6 +2611,101 @@ class Win64NasmEmitter:
                 else:
                     # str u otros no-numéricos -> TypeError
                     self._non_int_elem_colls.add(result)
+        elif op == "native_call":
+            # STDLIB_NATIVE_V1 (mirrors Linux): args = (module, name, values..., handler).
+            # Win64 had no handler for this op at all, so every native call
+            # emitted nothing and its result temp stayed untyped (int): the
+            # bundled datetime.piton (`time.localtime(...)` then `local[0]`)
+            # died with "native subscription not supported for int". Only the
+            # time family is wired here; anything else still fails closed.
+            _nmod, _nattr = args[0], args[1]
+            _nvals = list(args[2:-1])
+            _nh = args[-1]
+            try:
+                _cfn, _crt, _nmax = {
+                    ("time", "time"): ("piton_time_time", "float", 0),
+                    ("time", "localtime"): ("piton_time_localtime", "list", 1),
+                    ("time", "gmtime"): ("piton_time_gmtime", "list", 1),
+                    ("time", "strftime"): ("piton_time_strftime", "str", 2),
+                }[(_nmod, _nattr)]
+            except KeyError:
+                raise NativeBuildError(
+                    f"native call to {_nmod}.{_nattr} is not supported by the Windows backend"
+                ) from None
+            if len(_nvals) > _nmax:
+                raise NativeBuildError(
+                    f"native {_nmod}.{_nattr} takes at most {_nmax} argument(s), got {len(_nvals)}"
+                )
+            if _cfn == "piton_time_strftime":
+                # strftime(fmt, st): fmt is a raw C string (emitter type str),
+                # st the PitonCollection* built by localtime/gmtime or a list
+                # literal. A missing st means "now" (CPython); this backend
+                # has no None-tagged operand, so it fails closed like Linux's
+                # arity table (strftime takes 1..2 args, the 1-arg form is
+                # handled by the bundled time.piton, not here).
+                if len(_nvals) != 2:
+                    raise NativeBuildError(
+                        "native time.strftime requires a format and a time tuple on the Windows backend"
+                    )
+                # The format is a raw C string in the Win64 ABI. A str
+                # literal is typed "str"; a parameter forwarding one (the
+                # bundled `datetime.strftime(este, formato)`) is an untyped
+                # param that only resolves at runtime, like the `segun`
+                # subject (MATCH_DYNAMIC_V1). Anything statically numeric is
+                # CPython's TypeError, so it keeps failing closed at build.
+                if (
+                    self.types.get(_nvals[0]) not in {"str", "str-boxed"}
+                    and not self._is_untyped_param_operand(_nvals[0])
+                    and not (
+                        isinstance(_nvals[0], str)
+                        and not _nvals[0].startswith("%")
+                        and self.types.get(_nvals[0]) is None
+                    )
+                ):
+                    raise NativeBuildError(
+                        f"native time.strftime requires a str format, not {self.types.get(_nvals[0], 'int')}"
+                    )
+                self._load_operand(_nvals[0], "rcx")
+                self._load_operand(_nvals[1], "rdx")
+                self.lines.append("    call piton_time_strftime")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "str"
+                self._emit_exc_routing(_nh, labels)
+                return
+            if _cfn == "piton_time_time":
+                self.lines.append("    call piton_time_time")
+                self.lines.append(f"    mov {self._address(result)}, rax")
+                self.types[result] = "float"
+                return
+            # localtime/gmtime: the timestamp travels with a kind word because
+            # the Win64 ABI cannot tell int 0 from None (both are 0 in a GPR):
+            # 0 = raw int, 1 = IEEE double bits, 2 = None (current time).
+            if not _nvals:
+                # `time.localtime()` / `time.gmtime()`: MIR lowered the omitted
+                # argument as nothing to pass; CPython uses the current time.
+                self.lines.extend([
+                    "    xor ecx, ecx",
+                    "    mov edx, 2",
+                ])
+            else:
+                _val = _nvals[0]
+                _vt = self.types.get(_val, "int")
+                self._load_operand(_val, "rcx")
+                if _vt == "float":
+                    self.lines.append("    mov edx, 1")
+                elif _vt == "none":
+                    self.lines.append("    xor ecx, ecx")
+                    self.lines.append("    mov edx, 2")
+                elif _vt in {"int", "bool"}:
+                    self.lines.append("    xor edx, edx")
+                else:
+                    raise NativeBuildError(
+                        f"native {_nmod}.{_nattr} requires an int or float timestamp, not {_vt}"
+                    )
+            self.lines.append(f"    call {_cfn}")
+            self.lines.append(f"    mov {self._address(result)}, rax")
+            self.types[result] = "list"
+            self._emit_exc_routing(_nh, labels)
         elif op == "unpack_check":
             # UNPACK_ARITY_V1: CPython verifies the element count on
             # unpacking (ValueError: too many / not enough values).
@@ -3170,7 +3283,17 @@ class Win64NasmEmitter:
             self._load_operand(value, "r8")
             self.lines.append("    call piton_dict_put")
         elif op == "object_new":
-            class_name, parent_name = args
+            # BUNDLED_CLASS_ATTR_OBJECT_V1 (mirrors Linux): the MIR emits a
+            # third argument (True) for classes imported from a bundled
+            # stdlib module (`desde datetime importar datetime`). They are
+            # initialized through their interned class object; the extra flag
+            # needs no special ABI here (the class object is created by the
+            # same piton_object_new_with_finalizer path below).
+            class_name, parent_name = args[:2]
+            if len(args) > 2 and args[2] is not None and not isinstance(args[2], bool):
+                raise NativeBuildError(
+                    f"native object_new for '{class_name}' has an unsupported third argument"
+                )
             finalizer_class = None
             for candidate in self.mir_module_class_mro.get(class_name, []):
                 if "__del__" in self.mir_module_classes.get(candidate, set()):
@@ -7434,19 +7557,9 @@ class Win64NasmEmitter:
         # MODULE_GLOBAL_READ_V1 (mirrors linux_x86._scan_module_globals): CPython
         # reads the module binding when a function neither assigns the name
         # locally nor declares `global` (only the WRITE is local without a
-        # declaration). Those names are promoted to shared cells exactly like
-        # the declared ones, so a `load` of the name inside the function reaches
-        # the file-scope slot the module `store` wrote. This is what the MIR
-        # decorated-method forwarders rely on: `C__valor` /
-        # `C____getitem__` load `__piton_decorated_property__C__valor` /
-        # `__piton_decorated__C__valor` (stored by <module> when the class is
-        # built) and used to fail with "assigned at module level; declare it
-        # global" (W25 decorator parity, Windows CI).
+        # declaration). Covers MIR decorated-method forwarders and bundled
+        # stdlib module state (e.g. datetime__var__MINYEAR).
         read_anywhere: set[str] = set()
-        _decorated_storages = {
-            storage
-            for storage in getattr(module, "decorated_class_methods", {}).values()
-        } | set(getattr(module, "decorated_class_properties", {}).values())
         for function in module.functions:
             if function.name == "<module>":
                 continue
@@ -7790,13 +7903,17 @@ def compile_native(source: str, output: str | Path) -> Path:
     except (MIRLoweringError, LoweringError) as error:
         raise NativeBuildError(str(error)) from error
     from_imports = {}
+    # BUNDLED_STDLIB_FROM_IMPORT_V1 (mirrors Linux): bundled stdlib modules
+    # (`datetime` among them, see _BUNDLED_FROM_IMPORT_MODULES) are inlined by
+    # the MIR lowering, so they only need to be recorded as from-import
+    # bindings; every other module still fails closed as before.
     for statement in hir.body:
         if getattr(statement, "kind", None) == HIRKind.IMPORT_FROM:
             mod_name = getattr(statement, "module", None)
-            if mod_name and mod_name not in {"asyncio", "math", "sys", "terminal"}:
+            if mod_name and mod_name not in _BUNDLED_FROM_IMPORT_MODULES:
                 raise NativeBuildError(f"native from-import requires multi-file compilation: {mod_name}")
             for alias in getattr(statement, "names", []):
-                if mod_name in {"asyncio", "math", "sys", "terminal"}:
+                if mod_name in _BUNDLED_FROM_IMPORT_MODULES:
                     from_imports[(mod_name, alias.asname or alias.name)] = True
     try:
         mir = lower_hir_to_mir(hir, from_imports=from_imports or None)
