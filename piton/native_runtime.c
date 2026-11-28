@@ -3891,7 +3891,8 @@ int64_t piton_callback_invoke(int64_t callback, int64_t value) {
 }
 
 int64_t piton_frame_call(int64_t addr, int64_t argc, const int64_t *args) {
-    int64_t *frame = calloc((size_t)argc, sizeof(*frame));
+    size_t cap = (argc > 64) ? (size_t)argc : 64u;
+    int64_t *frame = calloc(cap, sizeof(*frame));
     if (argc > 0) memcpy(frame, args, (size_t)argc * sizeof(*frame));
     int64_t result = ((int64_t(*)(int64_t *))addr)(frame);
     free(frame);

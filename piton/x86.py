@@ -691,6 +691,8 @@ class Win64NasmEmitter:
         if function.name.endswith("__exit__") and len(function.params) >= 3:
             self.types[function.params[1]] = "str"
             self.types[function.params[2]] = "str"
+        if function.name == "datetime__datetime__fromtimestamp" and len(function.params) >= 2:
+            self.types[function.params[1]] = "float"
         labels = {block.label: f"{label}_{block.label}" for block in function.blocks}
         labels["__exit"] = f"{label}__exit"
         for block in function.blocks:
@@ -1139,8 +1141,19 @@ class Win64NasmEmitter:
             else:
                 if len(values) > 6:
                     raise NativeBuildError("native method calls support at most six total arguments")
-                for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
-                    self._load_operand(value, register)
+                callee_params = self.function_param_map.get(target) or []
+                for idx, register in enumerate(("rcx", "rdx", "r8", "r9")):
+                    if idx < len(values):
+                        self._load_operand(values[idx], register)
+                        if (
+                            target == "datetime__datetime__fromtimestamp"
+                            and idx == 1
+                            and self.types.get(values[idx], "int") != "float"
+                        ):
+                            self.lines.append(f"    cvtsi2sd xmm0, {register}")
+                            self.lines.append(f"    movq {register}, xmm0")
+                    elif idx < len(callee_params):
+                        self.lines.append(f"    xor {register}, {register}")
                 self.lines.append(f"    call {target}")
             self.lines.append(f"    mov {self._address(instruction.result)}, rax")
             self.lines.append(f"    jmp {done}")
@@ -1399,6 +1412,12 @@ class Win64NasmEmitter:
                     f"    mov {self._address(result)}, rax",
                 ])
                 self.bigint_slots.append(result)
+            elif self.types[result] == "str":
+                # Emit string constants directly via _string() so literals
+                # starting with '%' (e.g. '%Y-%m-%d %H:%M:%S') are never
+                # mistaken for SSA temporaries in _load_operand().
+                self.lines.append(f"    lea rax, [{self._string(value)}]")
+                self.lines.append(f"    mov {self._address(result)}, rax")
             else:
                 self._load_operand(value)
                 self.lines.append(f"    mov {self._address(result)}, rax")
@@ -2337,12 +2356,16 @@ class Win64NasmEmitter:
                 # scalar compare.
                 left_tag = _KIND_TAGS.get(self.types.get(left, "int"), 0)
                 right_tag = _KIND_TAGS.get(self.types.get(right, "int"), 0)
+                _none_vs_untyped = (
+                    (self.types.get(left, "int") == "none" and self._is_untyped_param_operand(right))
+                    or (self.types.get(right, "int") == "none" and self._is_untyped_param_operand(left))
+                )
                 self._load_operand(left, "rax")
                 self._load_operand(right, "rcx")
                 self.lines.append("    cmp rax, rcx")
                 self.lines.append("    sete al")
                 self.lines.append("    movzx rax, al")
-                if left_tag != right_tag:
+                if left_tag != right_tag and not _none_vs_untyped:
                     self.lines.extend(["    xor eax, eax"])
                 elif operator == "no es":
                     self.lines.extend(["    xor eax, 1"])
@@ -3672,8 +3695,19 @@ class Win64NasmEmitter:
             else:
                 if len(values) > 6:
                     raise NativeBuildError("native method calls support at most six total arguments")
-                for register, value in zip(("rcx", "rdx", "r8", "r9"), values):
-                    self._load_operand(value, register)
+                callee_params = self.function_param_map.get(target) or []
+                for idx, register in enumerate(("rcx", "rdx", "r8", "r9")):
+                    if idx < len(values):
+                        self._load_operand(values[idx], register)
+                        if (
+                            target == "datetime__datetime__fromtimestamp"
+                            and idx == 1
+                            and self.types.get(values[idx], "int") != "float"
+                        ):
+                            self.lines.append(f"    cvtsi2sd xmm0, {register}")
+                            self.lines.append(f"    movq {register}, xmm0")
+                    elif idx < len(callee_params):
+                        self.lines.append(f"    xor {register}, {register}")
                 self.lines.append(f"    call {target}")
             self.lines.append(f"    mov {self._address(result)}, rax")
             self.types[result] = self.function_return_types.get(target, "int")
@@ -5498,7 +5532,10 @@ class Win64NasmEmitter:
                     "    leave", "    ret",
                 ])
             else:
-                if self.types.get(args[0]) in {"list", "tuple", "dict", "set", "bigint"}:
+                if (
+                    self.types.get(args[0]) in {"list", "tuple", "dict", "set", "bigint"}
+                    or str(self.types.get(args[0], "")).startswith("object:")
+                ):
                     # COLL_RETURN_V1: transfer ownership to the caller. The
                     # pointer is stashed, cleanup frees everything EXCEPT
                     # slots still holding it (value-compared skip: any alias
@@ -5814,7 +5851,8 @@ class Win64NasmEmitter:
                                     elif origin[0] == "literal":
                                         changed = note_var(target, literal_type(origin[1])) or changed
                                     elif origin[0] in {"kind", "object"}:
-                                        changed = note_var(target, origin[1]) or changed
+                                        _ot = origin[1] if origin[0] == "kind" else f"object:{origin[1]}"
+                                        changed = note_var(target, _ot) or changed
                                     elif origin[0] == "var":
                                         kinds = var_sets.get(origin[1], set())
                                         if not kinds:
